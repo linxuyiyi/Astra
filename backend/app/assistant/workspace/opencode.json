@@ -1,0 +1,11 @@
+{
+  "mcp": {
+    "nexus-assistant": {
+      "command": "python",
+      "args": ["-m", "app.mcp_server_assistant"],
+      "env": {
+        "PYTHONPATH": "../../.."
+      }
+    }
+  }
+}

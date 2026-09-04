@@ -29,9 +29,12 @@
       <RouterView />
     </main>
   </div>
+  <AssistantLauncher />
 </template>
 
 <script setup lang="ts">
+import AssistantLauncher from '@/features/assistant/components/AssistantLauncher.vue'
+
 import { Bell, BookOpen, Bot, ChevronDown, CircleGauge, ClipboardList, Hand, History, Menu, RefreshCw, Settings, TriangleAlert } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'

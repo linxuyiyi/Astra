@@ -21,7 +21,7 @@ artifacts:
       proposal and specs phases. Research existing specs before filling this in.
       Each capability listed here will need a corresponding spec file.
 
-      Keep it concise (1-2 pages). Focus on the "why" not the "how" -
+      Keep it concise (typically under 500 words). Focus on the "why" not the "how" -
       implementation details belong in design.md.
 
       This is the foundation - specs, design, and tasks all build on this.
@@ -89,11 +89,11 @@ artifacts:
     instruction: |
       Create the design document that explains HOW to implement the change.
 
-      When to include design.md (create only if any apply):
-      - Cross-cutting change (multiple services/modules) or new architectural pattern
-      - New external dependency or significant data model changes
-      - Security, performance, or migration complexity
-      - Ambiguity that benefits from technical decisions before coding
+      Every OpenSpec change using this project's spec-driven schema includes
+      a design.md before tasks.md (the schema requires it). Keep it brief when
+      there is no significant architectural decision. Cover extra detail only
+      for cross-module design, new dependencies, migrations, security or
+      non-obvious runtime state and recovery decisions.
 
       Sections:
       - **Context**: Background, current state, constraints, stakeholders

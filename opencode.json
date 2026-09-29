@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "instructions": ["AGENTS.md", "openspec/AGENTS.md"],
+  "instructions": ["AGENTS.md"],
   "mcp": {
     "nexus-assistant": {
       "type": "local",

@@ -1,0 +1,36 @@
+# Astra 的 OpenSpec 规划约束；不要把整份 AGENTS.md 复制到每个产物。
+schema: spec-driven
+
+context: |
+  使用简体中文编写 proposal、spec、design 和 tasks；技术标识符保留原文。
+  Astra 是任务与数字员工管理平台，不编排数字员工内部的 Agent/Skill/Tool。
+  Task 是业务闭环；OpenCode Session 是执行事实源；RuntimeSession 仅为绑定及索引，不重建 Run 状态机。
+  正式执行通过 OpenCode Server / Session / Event；需兼顾 Windows 与 Linux SSH 公司环境。
+  后端 FastAPI + SQLAlchemy async + Celery + Alembic；前端 Vue 3 + Element Plus，沿用 Astra 绿色主题。
+  先查现有 openspec/specs、代码和测试；优先收敛现有设计，不创造并行状态或重复实现。
+  本项目只对行为契约、跨模块架构、数据模型、权限与核心 Runtime 变更使用 OpenSpec；小修复直接走代码及针对性验证。
+
+rules:
+  proposal:
+    - "用简短段落交代问题、变更范围、非目标与影响；不得重述整个项目背景。"
+    - "只列真实新增或修改的 capability；不因代码重构虚构新的业务需求。"
+  specs:
+    - "只描述外部可观察的需求和可验证场景；每项 Requirement 至少一个 WHEN/THEN Scenario。"
+    - "优先修改已有 capability；状态与恢复类需求必须覆盖失败、取消、重试、人工介入及旧轮次隔离。"
+    - "不写类名、函数名、工具选型或具体实施步骤；不对既有要求降级。"
+  design:
+    - "只记录必要的设计决策、被舍弃方案和影响；单模块变更保持极简。"
+    - "跨 Runtime、持久化、权限或迁移时，写明状态事实源、异常恢复及回滚边界。"
+  tasks:
+    - "与 spec 场景对应，按依赖分组；每项有明确的完成和验证标准。"
+    - "只保留一个 tasks.md；不把每次工具调用、每次提交或每个文件阅读拆为任务。"
+    - "优先先做针对性测试，再扩大回归；注明真实环境无法验证的项目。"
+
+operations:
+  apply:
+    guidance:
+      - "先确认分支和未提交修改；基于已有代码实施最小方案，完成一项核对一项。"
+      - "避免重复规划和不必要的子代理；只有改动复杂度确实需要时才调用相应 Skill。"
+  archive:
+    guidance:
+      - "在真实验证通过、delta spec 已 sync 或明确注明不 sync 后归档；如实记录未验证风险。"

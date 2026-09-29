@@ -34,6 +34,10 @@ const superpowersSkillsDir = path.resolve(__dirname, '../skills');
 const ASTRA_ROOT = path.resolve(__dirname, '..', '..');
 
 const isAssistantRuntime = () => process.env.ASTRA_RUNTIME_ROLE === 'platform-assistant';
+// Project default: keep skills discoverable, but avoid injecting the full
+// controller workflow into every top-level development session.
+// Opt in for the upstream automatic skill-check workflow when needed.
+const isBootstrapEnabled = () => process.env.ASTRA_SUPERPOWERS_BOOTSTRAP === '1';
 
 // Simple frontmatter extraction (avoid dependency on skills-core for
 // bootstrap). Handles plain `key: value` lines, quoted values (including
@@ -244,7 +248,7 @@ export const SuperpowersPlugin = async ({ client, directory }) => {
     'experimental.chat.messages.transform': async (_input, output) => {
       // Only repository-root sessions get the Superpowers bootstrap, and never
       // the platform assistant runtime.
-      if (path.resolve(directory) !== ASTRA_ROOT || isAssistantRuntime()) return;
+      if (path.resolve(directory) !== ASTRA_ROOT || isAssistantRuntime() || !isBootstrapEnabled()) return;
       const bootstrap = getBootstrapContent(V1_MAPPING);
       if (!bootstrap || !output.messages.length) return;
       const firstUser = output.messages.find(m => m.info.role === 'user');
@@ -343,7 +347,7 @@ async function setup(ctx) {
       try {
         // Never inject the developer controller workflow into the platform
         // assistant runtime.
-        if (isAssistantRuntime()) return;
+        if (isAssistantRuntime() || !isBootstrapEnabled()) return;
         const bootstrap = getBootstrapContent(V2_MAPPING);
         if (!bootstrap || !event.messages || !event.messages.length) return;
         const firstUser = event.messages.find(m => m.role === 'user');

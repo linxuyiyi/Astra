@@ -1,13 +1,10 @@
 ---
-description: Superpowers writing-plans - turn an approved design/spec into a bite-sized implementation plan
+description: Superpowers planning - turn an agreed change into one executable task list
 ---
 
-使用原生 `skill` 工具加载并执行 `writing-plans` skill，然后处理下面的输入。
+使用原生 `skill` 工具按需加载 `writing-plans`，处理输入：$ARGUMENTS
 
-要求：
-
-- 每个任务保持 2-5 分钟粒度，给出准确文件路径、完整代码或明确改动、验证步骤。
-- 不要并行混改；先输出计划，再按计划执行。
-- 如果输入来自 OpenSpec change，读取该 change 的 design/spec/tasks，把计划与 `tasks.md` 对齐，避免两套任务清单。
-
-输入：$ARGUMENTS
+- 先判断是否已有 OpenSpec change；如有，直接使用对应 `specs/design/tasks.md`，只补足缺失的可执行步骤，不输出第二份计划。
+- 任务按可独立验证的交付单元拆解；不要把每次工具调用、文件阅读或提交拆成任务。
+- 不涉及 Spec 的局部修改，直接给出简短改动与验证办法，不强制写计划文档。
+- 计划与实际代码路径、现有测试相符，避免未确认的技术假设。

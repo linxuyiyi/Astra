@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>Nexus v1.0.1 · 数字员工基础能力交互原型</title>
+<style>
+:root{--ink:#203830;--muted:#7b9386;--soft-ink:#547263;--green:#188b69;--deep:#08654c;--mint:#e6f7ee;--line:#e1ece5;--wash:#f5faf7;--white:#fff;--shadow:0 18px 65px rgba(31,92,70,.065);--radius:18px}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#f1f7f5;color:var(--ink);font-family:Inter,"PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-size:13px}button,input,textarea,select{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.4}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #64c8a6;outline-offset:2px}input,textarea,select{color:var(--ink)}
+.app{min-height:100vh;background:radial-gradient(ellipse 70% 50% at 82% 0,#e3f8f0,transparent 75%),radial-gradient(ellipse 60% 40% at 0 100%,#eaf4ff,transparent 75%),#f3f8f5;padding:21px 28px 105px;position:relative}.app:before{content:"";position:fixed;inset:0;pointer-events:none;background-image:linear-gradient(rgba(13,101,75,.022) 1px, transparent 1px),linear-gradient(90deg,rgba(13,101,75,.022) 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.22),transparent 85%)}
+.top{height:54px;max-width:1560px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:15px;position:relative;z-index:2}.brand{display:flex;align-items:center;gap:11px}.mark{width:39px;height:39px;border-radius:12px;background:linear-gradient(135deg,#1ea87b,#066448);display:grid;place-items:center;box-shadow:0 8px 17px #258e692e;color:white;font-size:23px;font-weight:700}.brandname{font-weight:850;letter-spacing:2px;font-size:20px}.version{color:#2d9c74;font-size:10px;font-weight:800;letter-spacing:.6px;margin-left:5px}.brandtag{font-size:10px;color:#8ba89b;letter-spacing:1.4px;margin-top:1px}.top-right{display:flex;align-items:center;gap:10px}.env-banner{display:inline-flex;align-items:center;gap:7px;background:#fff9;border:1px solid #e1eee6;border-radius:999px;padding:8px 12px;color:#638374;font-size:11px}.dot{width:7px;height:7px;background:#1cac7e;border-radius:50%;display:inline-block;box-shadow:0 0 0 3px #23ae7f1f}.dot.grey{background:#9aaea1;box-shadow:0 0 0 3px #9aaea11e}.icon-btn{height:34px;min-width:34px;border-radius:10px;border:1px solid #dfece5;background:#fff;color:#456e5d;display:inline-grid;place-items:center}.icon-btn:hover,.btn:hover{filter:brightness(.985)}.btn{border:1px solid #d5e7dc;border-radius:11px;background:white;padding:9px 13px;color:#345c4c;font-weight:650;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:6px}.btn.primary{background:linear-gradient(135deg,#169672,#117154);border-color:#148362;color:white;box-shadow:0 8px 18px #11876726}.btn.danger{background:#fff5f2;color:#a95d57;border-color:#f0d9d2}.btn.quiet{background:transparent;border-color:transparent;color:#618171}.btn.sm{padding:6px 9px;font-size:11px;border-radius:9px}.btn:active{transform:translateY(1px)}.page{max-width:1560px;margin:22px auto 0;position:relative;z-index:1}.screen{display:none;animation:fadein .25s ease}.screen.active{display:block}@keyframes fadein{from{opacity:.5;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.title-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:15px}.h-title{font-size:25px;font-weight:820;letter-spacing:-.55px;margin:0 0 5px}.h-sub{color:var(--muted);font-size:12px;line-height:1.7}.eyebrow{letter-spacing:2.1px;text-transform:uppercase;font-size:10px;color:#249576;font-weight:750;margin-bottom:7px}.panel{border:1px solid #e2eee7;background:rgba(255,255,255,.92);border-radius:20px;box-shadow:var(--shadow)}.panel-head{padding:16px 18px 12px;display:flex;justify-content:space-between;align-items:center}.panel-title{font-size:14px;font-weight:780}.panel-inner{padding:10px 18px 18px}.row{display:flex;align-items:center;gap:8px}.spread{display:flex;align-items:center;justify-content:space-between;gap:9px}.divider{height:1px;background:#e9efeb;margin:15px 0}.tag{display:inline-flex;align-items:center;border-radius:7px;background:#eef8f2;color:#2a8c69;padding:4px 8px;gap:4px;font-size:10px;white-space:nowrap;font-weight:600}.tag.ash{background:#f1f5f2;color:#82988b}.tag.gold{background:#fff5e7;color:#b38443}.tag.rose{background:#fff1f0;color:#c76c69}.avatar{width:38px;height:38px;display:inline-grid;place-items:center;background:linear-gradient(135deg,#e5f3e9,#d9eee7);border:1px solid #cee9dc;border-radius:13px;flex:none;font-size:20px}.avatar.blue{background:linear-gradient(135deg,#e6f1fc,#dceafc);border-color:#d2e3f4}.avatar.gold{background:linear-gradient(135deg,#fff4e3,#f5ebd5);border-color:#f1e1c6}.avatar.purple{background:linear-gradient(135deg,#f0eafc,#e4edfa);border-color:#e4daf4}.avatar.off{filter:grayscale(1);opacity:.55}.section-label{font-size:11px;font-weight:800;color:#537264;margin:16px 0 9px}.subinfo{font-size:11px;color:var(--muted);line-height:1.8}.smalllink{color:var(--green);font-weight:650;cursor:pointer;font-size:11px}.smalllink:hover{text-decoration:underline}.soft{background:#f5faf7;border:1px solid #eaf2ed;border-radius:13px;padding:12px}.kv{display:flex;justify-content:space-between;gap:10px;align-items:baseline;border-bottom:1px solid #edf3ee;padding:10px 0}.kv:last-child{border:0}.kv>span{color:#88a094;font-size:11px;white-space:nowrap}.kv>strong{font-size:11px;font-weight:650;text-align:right;line-height:1.7}.chips{display:flex;gap:7px;flex-wrap:wrap}.chip{border:1px solid #dfebe3;background:#fff;color:#6b8979;border-radius:8px;padding:6px 9px;font-size:10px;cursor:pointer}.chip:hover{background:#e8f7ee;color:#1f7e5f}.chip.sel{background:#e5f6ed;border-color:#aad8c2;color:#187956}.muted{color:var(--muted)}.small{font-size:11px}.inline-note{color:#9bafa2;font-size:10px}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
+/* management */
+.management-grid{display:grid;grid-template-columns:minmax(550px,1fr) 345px;gap:16px}.management-main{padding:18px;min-height:625px}.manage-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}.search{background:#fbfdfb;border:1px solid #dfece4;border-radius:10px;padding:9px 12px;min-width:200px;width:265px;outline:none}.overview-count{font-size:12px;color:#839b8c}.employee-table{width:100%;border-collapse:collapse}.employee-table th{text-align:left;padding:13px 9px;color:#91a59a;background:#f8fbf9;border-top:1px solid #edf2ee;border-bottom:1px solid #edf2ee;font-size:10px;font-weight:650;white-space:nowrap}.employee-table td{padding:14px 9px;border-bottom:1px solid #eff4f0;font-size:11px}.employee-table tbody tr{cursor:pointer}.employee-table tbody tr:hover{background:#f8fcf9}.employee-table tbody tr.selected{background:#f3faf6}.employee-table .person-cell{display:flex;align-items:center;gap:11px}.employee-table .person-cell b{font-size:12px;display:block;margin-bottom:4px}.employee-table .person-cell small{font-size:10px;color:#8ba093}.role-desc{max-width:310px;line-height:1.7;color:#617f70}.table-actions{display:flex;align-items:center;gap:5px;justify-content:flex-end}.link-btn{border:0;background:transparent;padding:6px;color:#318963;font-size:11px;white-space:nowrap}.link-btn.danger{color:#c37e75}.empty{padding:75px 15px;text-align:center;color:#829d8c}.management-side{padding:18px;min-height:625px}.profile-hero{padding:19px;border-radius:16px;background:linear-gradient(135deg,#f1fbf6,#edf6f6 67%,#f7fcfc);border:1px solid #e3f2e9;position:relative;overflow:hidden}.profile-hero:after{content:'◌';position:absolute;font-size:165px;right:-17px;top:-52px;color:#cdebdc55;pointer-events:none}.profile-hero>*{position:relative;z-index:1}.profile-hero h3{font-size:17px;margin:10px 0 5px}.profile-hero p{font-size:11px;line-height:1.7;color:#668879;margin:0}.resource-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}.mini-chip{border:1px solid #dfede4;background:#f8fcf9;border-radius:7px;font-size:10px;padding:5px 7px;color:#527d65}.detail-excerpt{color:#547264;font-size:11px;line-height:1.9;white-space:pre-wrap;max-height:128px;overflow:auto}.statline{display:flex;gap:8px;margin:0 0 13px}.statitem{flex:1;border:1px solid #e6f0e9;background:#fbfdfc;border-radius:12px;padding:10px}.statitem strong{display:block;font-size:20px;color:#246a50}.statitem span{font-size:10px;color:#95a69b}
+/* chat */
+.workspace{display:grid;grid-template-columns:245px minmax(380px,1fr) 295px;gap:15px;height:calc(100vh - 240px);min-height:560px;max-height:850px}.left-rail,.aside{min-height:0;overflow:auto}.left-rail{padding:17px}.rail-item{display:flex;gap:10px;align-items:center;padding:11px 9px;border-radius:13px;cursor:pointer;margin-bottom:5px;transition:background .15s}.rail-item:hover{background:#f4faf7}.rail-item.active{background:#eaf6ee;color:#1b7155}.rail-item b{font-size:12px;display:block}.rail-item small{display:block;color:#92a69c;font-size:10px;margin-top:4px;line-height:1.5}.rail-item .trailing{margin-left:auto;font-size:9px;color:#9bafa4}.rail-item .trailing.off{color:#be9995}.chat{display:flex;flex-direction:column;overflow:hidden;min-height:0}.chat-head{padding:16px 19px;display:flex;justify-content:space-between;align-items:center;gap:13px;border-bottom:1px solid #edf2ee;flex:none}.chat-head h2{font-size:15px;margin:0 0 5px}.chat-head p{font-size:11px;color:var(--muted);margin:0;line-height:1.55}.chat-messages{flex:1;padding:24px;overflow-y:auto;display:flex;flex-direction:column;gap:17px;background:radial-gradient(ellipse 85% 50% at 50% 0,#fbfefa,transparent)}.msg{display:flex;gap:10px;align-items:flex-start;max-width:94%}.msg.user{align-self:flex-end;flex-direction:row-reverse}.msg.system{align-self:center;max-width:100%}.msg.system .bubble{background:#f4f8f5;color:#91a89c;font-size:10px;padding:5px 11px;border-radius:100px;border:1px solid #e7efe9}.msg.system .msg-icon{display:none}.msg-icon{width:28px;height:28px;border-radius:10px;display:grid;place-items:center;background:#eef8f2;border:1px solid #dcece2;flex:none;font-size:14px}.msg.user .msg-icon{background:#e9f0fc;border-color:#dce6f7}.msg-body{max-width:100%}.msginfo{font-size:10px;color:#98ada0;margin-bottom:5px;display:flex;gap:8px;align-items:center}.msg.user .msginfo{justify-content:flex-end}.bubble{background:#f6faf7;border:1px solid #e9f1ec;padding:12px 15px;line-height:1.9;border-radius:13px;border-top-left-radius:3px;font-size:12px;max-width:680px;white-space:pre-wrap;overflow-wrap:anywhere}.msg.user .bubble{background:#dff5e9;border-color:#c9e8d7;border-radius:13px;border-top-right-radius:3px}.msg.typing .bubble{color:#8ca797}.demo-mark{background:#eff6f0;color:#83a393;border-radius:5px;padding:2px 5px;font-size:9px}.chat-compose{padding:12px 17px 16px;border-top:1px solid #edf2ef;flex:none}.compose-box{display:flex;align-items:flex-end;gap:9px;background:#fbfdfb;border:1px solid #dfece4;border-radius:13px;padding:9px 10px;position:relative}.compose-box:focus-within{border-color:#9acdb0;box-shadow:0 0 0 3px #c9efdd48}.compose-box textarea{background:transparent;border:none;outline:none;resize:none;line-height:1.7;flex:1;min-height:43px;max-height:120px;font-size:12px;padding:4px 3px}.send-btn{width:35px;height:35px;border:0;border-radius:10px;color:white;background:linear-gradient(135deg,#19a47b,#128366);font-size:19px}.right-tabs{display:flex;gap:6px;padding:14px 16px 0;border-bottom:1px solid #edf2ee}.right-tab{background:none;border:0;padding:8px 12px 12px;font-size:11px;color:#829a8c;border-bottom:2px solid transparent}.right-tab.active{font-weight:750;color:#198963;border-bottom-color:#198963}.right-content{padding:16px}.member{display:flex;align-items:center;gap:9px;padding:9px 0}.member b{font-size:11px;display:block}.member small{display:block;font-size:10px;color:#95a69b;margin-top:4px}.statusline{margin-left:auto;display:flex;gap:5px;align-items:center}.statusline i{height:6px;width:6px;background:#23ae7f;border-radius:50%;display:inline-block}.statusline.off i{background:#a4b6a9}.shortcut-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:14px}.shortcut{border:1px solid #e7f0e9;border-radius:12px;padding:9px;color:#658575;background:#fbfdfb;text-align:left;font-size:10px}.shortcut:hover{background:#eff9f2}.channel-topic{border-radius:12px;background:#eff9f3;border:1px solid #dceee3;padding:11px 13px;color:#58846c;font-size:11px;line-height:1.7}.mentions{position:absolute;left:11px;right:50px;bottom:calc(100% + 8px);background:#fff;border:1px solid #dbece0;border-radius:12px;box-shadow:0 15px 35px #123c2c22;padding:7px;display:none;z-index:15;max-height:200px;overflow:auto}.mention-option{width:100%;border:0;background:transparent;text-align:left;padding:9px;border-radius:9px;color:#436450;font-size:11px}.mention-option:hover{background:#eff8f1}.chat-blank{margin:auto;text-align:center;color:#8ba698;max-width:300px;line-height:1.9}.chat-blank .big{font-size:32px;margin-bottom:8px}.group-rule{margin-top:14px;padding:11px;border:1px solid #e8f0ea;background:#f8fbf9;border-radius:12px;font-size:10px;line-height:1.8;color:#739182}
+/* drawer */
+.overlay{position:fixed;inset:0;background:#14392c66;z-index:50;display:none;backdrop-filter:blur(3px)}.overlay.open{display:block}.drawer{position:absolute;right:0;top:0;bottom:0;width:min(610px,100%);background:#fff;box-shadow:-26px 0 90px #0e302c33;display:flex;flex-direction:column;animation:slide .25s ease}@keyframes slide{from{transform:translateX(25px);opacity:.65}to{transform:translateX(0);opacity:1}}.drawer-head{padding:24px 27px 19px;border-bottom:1px solid #e8f0ea;display:flex;justify-content:space-between;align-items:flex-start}.drawer-head h2{margin:0 0 7px;font-size:21px}.drawer-body{padding:18px 28px 26px;overflow:auto;flex:1}.drawer-foot{padding:17px 27px;border-top:1px solid #edf1ed;display:flex;justify-content:space-between;align-items:center;gap:12px}.field{display:flex;flex-direction:column;gap:7px;margin:0 0 17px}.field label{font-size:11px;font-weight:750;color:#527263}.field input,.field textarea,.field select{width:100%;border:1px solid #dce8df;border-radius:10px;padding:10px 12px;background:#fbfdfb;color:#335b49;outline:none}.field textarea{min-height:89px;resize:vertical;line-height:1.7}.field input:focus,.field textarea:focus,.field select:focus{border-color:#9ecdb4}.field-hint{font-size:10px;color:#93a89b;line-height:1.6}.form-2{display:grid;grid-template-columns:1fr 1fr;gap:13px}.form-cap{font-size:10px;letter-spacing:1.4px;font-weight:750;color:#319875;margin:16px 0}.form-section{margin-bottom:22px}.side-warning{padding:10px 12px;background:#f7faf5;border:1px solid #e7eee3;border-radius:10px;color:#829889;font-size:11px;line-height:1.8}.field.error input{border-color:#d69a91}.switch{position:relative;display:inline-block;width:39px;height:23px;vertical-align:middle;cursor:pointer}.switch input{opacity:0;width:0;height:0}.switch span{position:absolute;inset:0;border-radius:99px;background:#d8e3dc;transition:.2s}.switch span:before{position:absolute;content:"";height:17px;width:17px;left:3px;top:3px;background:white;border-radius:50%;transition:.2s;box-shadow:0 2px 6px #1112}.switch input:checked+span{background:#1b9b73}.switch input:checked+span:before{transform:translateX(16px)}
+.modal-back{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#14392c66;z-index:60;padding:20px;backdrop-filter:blur(3px)}.modal-back.open{display:flex}.modal{background:#fff;border:1px solid #d7eadc;border-radius:22px;box-shadow:0 28px 85px #092b2150;padding:25px 27px;width:min(510px,100%);max-height:85vh;overflow:auto}.modal h2{margin:0 0 8px;font-size:19px}.modal p{font-size:12px;color:#719080;line-height:1.8}.modal .field{margin:14px 0}.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:21px}.toast{position:fixed;z-index:90;top:87px;right:28px;background:#165b44;color:white;border-radius:11px;padding:12px 17px;box-shadow:0 16px 40px #1a5c4240;display:none;font-size:12px;max-width:360px}.toast.show{display:block}.footer-note{text-align:center;font-size:10px;color:#9fb5a6;margin:16px 0 0}
+.dock{position:fixed;z-index:20;bottom:17px;left:50%;transform:translateX(-50%);background:#fafffbea;border:1px solid #d5e9dc;border-radius:19px;box-shadow:0 13px 42px #26714a25;display:flex;align-items:center;gap:5px;padding:7px;backdrop-filter:blur(20px)}.dock-btn{border:none;background:transparent;color:#7a9b89;border-radius:13px;padding:9px 17px;min-width:89px;display:flex;align-items:center;gap:5px;flex-direction:column;font-size:10px;white-space:nowrap}.dock-btn .di{font-size:18px}.dock-btn:hover{background:#eaf7ef}.dock-btn.active{background:#dff3e7;color:#147d59;font-weight:750}.dock-sep{width:1px;height:31px;background:#e2eee6;margin:0 4px}
+@media(max-width:1250px){.workspace{grid-template-columns:215px minmax(330px,1fr) 255px}.management-grid{grid-template-columns:minmax(500px,1fr) 300px}}@media(max-width:1000px){.app{padding:13px 14px 102px}.workspace{grid-template-columns:215px minmax(340px,1fr)}.workspace>.aside{display:none}.management-grid{grid-template-columns:1fr}.management-side{min-height:0}.management-main{min-height:0}.top-right .env-banner{display:none}}@media(max-width:650px){.workspace{grid-template-columns:1fr;height:calc(100vh - 230px)}.workspace>.left-rail{display:none}.h-title{font-size:21px}.title-row{align-items:flex-start}.employee-table th:nth-child(3),.employee-table td:nth-child(3){display:none}.employee-table th:nth-child(2),.employee-table td:nth-child(2){display:none}.management-main{padding:10px}.search{width:165px;min-width:130px}.form-2{grid-template-columns:1fr}.brandtag{display:none}.top-right .small{display:none}.dock-btn{padding:8px;min-width:78px}}
+
+/* Compact product UI: remove obsolete editorial spacing. */
+.page{margin-top:20px}.title-row{margin-bottom:18px}.h-title{margin-bottom:0}.management-main{min-height:510px}.workspace{height:calc(100vh - 204px);min-height:570px}.management-grid{align-items:stretch}.manage-toolbar{margin-bottom:10px}.panel-inner>.member:last-child{margin-bottom:0}.drawer-head{padding-bottom:18px}
+
+/* Skill resource selection: compact and searchable, no free-form Skill editing. */
+.skill-picker{position:relative}
+.skill-picker-trigger{width:100%;border:1px solid #d5e4d9;border-radius:10px;background:#fff;padding:11px 13px;font:inherit;color:#436853;display:flex;align-items:center;justify-content:space-between;text-align:left;cursor:pointer}
+.skill-picker-trigger:hover,.skill-picker.open .skill-picker-trigger{border-color:#81c9a2}
+.picker-chevron{font-size:19px;color:#78a18a;line-height:1}
+.skill-picker-menu{display:none;position:relative;background:#fff;border:1px solid #d6e8dc;border-radius:12px;box-shadow:0 14px 35px #16482d19;padding:9px;margin-top:6px;z-index:2}
+.skill-picker.open .skill-picker-menu{display:block}
+.skill-picker-menu input[type="search"]{width:100%;box-sizing:border-box;border:1px solid #e0e9e2;border-radius:9px;padding:9px 11px;background:#f9fcfa;outline:0;color:#284d3a}
+.skill-option-list{max-height:204px;overflow-y:auto;margin-top:6px}
+.skill-option{display:flex;align-items:center;gap:9px;padding:10px 8px;border-radius:8px;cursor:pointer;font-size:12px}
+.skill-option:hover{background:#edf8f1}.skill-option input{accent-color:#168357;width:15px;height:15px}
+.skill-option span{font-weight:650;white-space:nowrap}.skill-option small{color:#89a595;margin-left:auto;font-size:10px;white-space:nowrap}
+.skill-empty{padding:16px;text-align:center;color:#9ab1a1;font-size:12px}
+.skill-selected{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.skill-selected:empty{display:none}
+.skill-tag{font-size:11px;color:#286a4b;background:#edf8f2;border:1px solid #d5eade;padding:4px 7px 4px 9px;border-radius:7px;display:inline-flex;align-items:center;gap:7px}
+.skill-tag button{background:transparent;border:0;font-size:16px;cursor:pointer;color:#61977b;padding:0 1px;line-height:1}
+.skill-tag button:hover{color:#ce524e}
+
+/* Persistent employee, multiple chat threads. Chat actions live in its header. */
+#page-chat .chat-header-actions #privateStatus{display:none}
+#page-chat .chat-head>.row:first-child{min-width:0;flex:1}
+#page-chat #privateSubtitle{max-width:350px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#page-chat .chat-header-actions{flex:none;flex-wrap:nowrap}
+@media(max-width:1170px){#page-chat .chat-head{flex-wrap:wrap}#page-chat .chat-header-actions{width:100%;justify-content:flex-end}}
+
+.chat-header-actions{gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.thread-picker{position:relative}
+.thread-select{max-width:175px;min-width:114px;display:flex;justify-content:space-between;gap:8px}
+.thread-select #privateThreadTitle{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chevron{font-size:14px;color:#9ab0a1}
+.thread-menu{display:none;position:absolute;top:calc(100% + 7px);right:0;width:285px;max-width:min(85vw,320px);max-height:330px;overflow-y:auto;padding:6px;background:white;border:1px solid var(--line);box-shadow:0 18px 48px #1b664b21;border-radius:13px;z-index:9}
+.thread-menu.open{display:block}
+.thread-option{display:flex;flex-direction:column;gap:4px;width:100%;background:transparent;border:0;border-radius:9px;padding:11px 12px;text-align:left;color:var(--ink)}
+.thread-option:hover{background:#f4faf7}
+.thread-option.active{background:#edf8f1}
+.thread-option .thread-name{font-size:12px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.thread-option .thread-meta{font-size:10px;color:#8da79a}
+@media (max-width:870px){.chat-header-actions .tag{display:none}.thread-select{max-width:125px}}
+
+/* Chat attachments — shared by private and group conversations. */
+.attach-btn{width:35px;height:35px;border:1px solid #e2eee6;border-radius:10px;background:#fff;color:#618d78;display:grid;place-items:center;font-size:19px;flex:none;cursor:pointer}
+.attach-btn:hover{background:#e9f6ee;border-color:#b6deca;color:#147c5c}
+.attach-btn:disabled{opacity:.45;cursor:not-allowed}
+.draft-attachments{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 9px;max-height:112px;overflow:auto}
+.draft-attachments[hidden]{display:none}
+.draft-file{max-width:270px;display:flex;gap:8px;align-items:center;background:#f4faf6;border:1px solid #dcebe1;border-radius:10px;padding:6px 7px 6px 8px;min-width:0}
+.draft-file img{width:35px;height:35px;border-radius:7px;object-fit:cover;background:#e8efed}
+.draft-file-icon{width:35px;height:35px;border-radius:7px;background:#e5f0ea;color:#288469;display:grid;place-items:center;font-size:16px;flex:none}
+.draft-file-info{min-width:0;flex:1;font-size:11px}
+.draft-file-info b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:650;max-width:142px}
+.draft-file-info small{display:block;color:#8aa697;margin-top:3px}
+.remove-file{border:0;background:transparent;color:#879d92;font-size:18px;line-height:1;padding:3px;flex:none}
+.remove-file:hover{color:#c44f4f}
+.chat.drop-active .chat-compose{background:#eefbf1;box-shadow:inset 0 0 0 2px #61be93}
+.message-attachments{display:flex;flex-wrap:wrap;gap:8px;margin-top:7px;max-width:640px}
+.sent-attachment{display:flex;align-items:center;gap:9px;border:1px solid #ddebe2;background:#fff;padding:7px;border-radius:10px;text-align:left;cursor:pointer;max-width:280px;color:var(--ink)}
+.sent-attachment:hover{border-color:#a9d5bd;background:#f9fffa}
+.sent-attachment img{width:88px;height:68px;object-fit:cover;border-radius:7px;background:#eff4f1}
+.sent-attachment .file-mark{width:38px;height:40px;display:grid;place-items:center;background:#e9f4ec;border-radius:8px;color:#3b896c;font-size:20px;flex:none}
+.sent-attachment .file-detail{min-width:0;flex:1;max-width:175px}
+.sent-attachment .file-detail b{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px}
+.sent-attachment .file-detail small{display:block;color:#8ca799;font-size:10px;margin-top:4px}
+.msg .bubble:empty{display:none}
+.msg .bubble{overflow-wrap:anywhere}
+.attachment-viewer{position:fixed;inset:0;background:#102920e0;display:none;align-items:center;justify-content:center;z-index:200;padding:34px;flex-direction:column;gap:14px}
+.attachment-viewer.open{display:flex}
+.attachment-viewer img{object-fit:contain;max-height:78vh;max-width:90vw;border-radius:10px;background:white}
+.viewer-toolbar{display:flex;align-items:center;gap:14px;color:white;font-size:13px;max-width:90vw}
+.viewer-toolbar .viewer-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.viewer-toolbar button{border:1px solid #ffffff66;background:#ffffff24;color:#fff;border-radius:8px;padding:6px 11px;font-size:13px;cursor:pointer}
+@media(max-width:650px){.sent-attachment img{width:75px;height:60px}.draft-file{max-width:205px}}
+</style></head><body>
+<div class="app">
+<header class="top"><div class="brand"><div class="mark">✦</div><div><div class="brandname">NEXUS <span class="version">v1.0.1</span></div></div></div><div class="top-right"><span class="env-banner">交互预览 · 模拟数据</span><button class="icon-btn" id="resetDemo" title="重置原型数据">↻</button></div></header>
+<main class="page">
+<!-- PAGE 1 -->
+<section class="screen active" id="page-manage"><div class="title-row"><div><h1 class="h-title">员工管理</h1></div><button class="btn primary" id="addEmployee">＋ 创建数字员工</button></div>
+<div class="management-grid"><div class="panel management-main"><div class="manage-toolbar"><div class="row"><b style="font-size:14px">员工列表</b><span class="overview-count" id="listCount">共 3 位员工</span></div><input aria-label="搜索员工" class="search" id="employeeSearch" placeholder="搜索员工 / 职责"/></div><div style="overflow-x:auto"><table class="employee-table"><thead><tr><th>数字员工</th><th>职责</th><th>技能</th><th>状态</th><th style="text-align:right">操作</th></tr></thead><tbody id="employeeTable"></tbody></table></div></div>
+<aside class="panel management-side" id="manageDetail"></aside></div></section>
+<!-- PAGE 2 -->
+<section class="screen" id="page-chat"><div class="title-row"><div><h1 class="h-title">数字员工</h1></div></div>
+<div class="workspace"><aside class="panel left-rail"><div class="spread" style="margin-bottom:15px"><b>我的数字员工</b><span class="tag" id="chatEmployeeCount">3 位</span></div><div id="chatEmployeeList"></div></aside>
+<article class="panel chat"><div class="chat-head"><div class="row" style="gap:11px"><div class="avatar" id="chatAvatar">👩🏻‍💻</div><div><h2 id="privateTitle">星河 · 测试自动化工程师</h2><p id="privateSubtitle">自动化脚本开发、故障分析与维护</p></div></div><div class="row chat-header-actions"><span class="tag" id="privateStatus">已启用</span><div class="thread-picker" id="threadPicker"><button class="btn sm thread-select" id="privateHistoryBtn" type="button" title="切换历史对话" aria-expanded="false"><span id="privateThreadTitle">当前对话</span><span class="chevron">⌄</span></button><div class="thread-menu" id="privateThreadMenu" role="menu"></div></div><button class="btn sm" id="newPrivateChat" type="button">＋ 新对话</button></div></div><div class="chat-messages" id="privateMessages"></div><div class="chat-compose"><div class="chips"><button class="chip" data-private-prompt="你负责哪些工作？">你的职责</button><button class="chip" data-private-prompt="你能访问哪些知识和工具？">你的能力</button><button class="chip" data-private-prompt="版本资源文件变化会影响自动化脚本吗？">技术咨询</button></div><div class="draft-attachments" id="privateDrafts" hidden></div><div class="compose-box"><button class="attach-btn" id="privateAttachBtn" type="button" title="添加图片或文件" aria-label="添加图片或文件">📎</button><input id="privateFile" type="file" multiple hidden><textarea id="privateInput" placeholder="发送消息…" rows="2"></textarea><button class="send-btn" id="privateSend" title="发送消息">↗</button></div></div></article>
+<aside class="panel aside"><div class="right-tabs"><button class="right-tab active" data-person-tab="responsibility">职责</button><button class="right-tab" data-person-tab="capability">能力</button><button class="right-tab" data-person-tab="memory">记忆</button></div><div class="right-content" id="personAside"></div></aside></div></section>
+<!-- PAGE 3 -->
+<section class="screen" id="page-team"><div class="title-row"><div><h1 class="h-title">团队交流</h1></div><button class="btn primary" id="addChannel">＋ 新建讨论</button></div>
+<div class="workspace"><aside class="panel left-rail"><div class="spread" style="margin-bottom:15px"><b>团队频道</b><span class="tag" id="channelCount">2</span></div><div id="channelList"></div></aside>
+<article class="panel chat"><div class="chat-head"><div><h2 id="groupTitle"># 版本交付协同</h2><p id="groupSubtitle">讨论自动化测试、测试工具与防线运营的跨领域问题</p></div><div class="row"><span class="tag" id="groupMemberCount">3 位员工</span><button class="icon-btn" id="channelSettings" title="讨论设置">⚙</button></div></div><div class="chat-messages" id="groupMessages"></div><div class="chat-compose"><div class="chips" id="groupQuickTags"></div><div class="draft-attachments" id="groupDrafts" hidden></div><div class="compose-box"><div class="mentions" id="mentionBox"></div><button class="attach-btn" id="groupAttachBtn" type="button" title="添加图片或文件" aria-label="添加图片或文件">📎</button><input id="groupFile" type="file" multiple hidden><textarea id="groupInput" placeholder="发送消息，@数字员工…" rows="2"></textarea><button class="send-btn" id="groupSend" title="发送团队消息">↗</button></div></div></article>
+<aside class="panel aside"><div class="panel-head"><span class="panel-title">讨论参与者</span><button class="btn sm" id="editMembers">＋ 调整成员</button></div><div class="panel-inner"><div id="groupMembers"></div></div></aside></div></section>
+</main>
+<nav aria-label="页面导航" class="dock"><button class="dock-btn active" data-nav="manage"><span class="di">◎</span><span>员工管理</span></button><button class="dock-btn" data-nav="chat"><span class="di">◉</span><span>数字员工</span></button><button class="dock-btn" data-nav="team"><span class="di">☷</span><span>团队交流</span></button></nav>
+<div class="overlay" id="drawerOverlay"><div aria-labelledby="drawerTitle" aria-modal="true" class="drawer" role="dialog"><div class="drawer-head"><div><h2 id="drawerTitle">创建数字员工</h2></div><button class="icon-btn" id="drawerClose" title="关闭">✕</button></div><div class="drawer-body"><form id="employeeForm"><div class="form-cap">身份与职责</div><div class="form-2"><div class="field"><label for="fName">员工名称 *</label><input id="fName" maxlength="24" placeholder="例如：星河" required=""/></div><div class="field"><label for="fDomain">责任领域 *</label><input id="fDomain" maxlength="42" placeholder="例如：测试自动化工程师" required=""/></div></div><div class="field"><label for="fAvatar">员工形象</label><select id="fAvatar"><option value="👩🏻‍💻">👩🏻‍💻 工程师</option><option value="🧑🏻‍🔬">🧑🏻‍🔬 分析师</option><option value="👩🏽‍🚀">👩🏽‍🚀 技术专家</option><option value="🤖">🤖 数字员工</option><option value="🧑🏽‍💻">🧑🏽‍💻 工程师 B</option></select></div><div class="field"><label for="fDescription">职责说明 *</label><textarea id="fDescription" placeholder="负责什么工作、处理什么问题、需要交付什么" required=""></textarea></div><div class="field"><label for="fInstructions">工作指令 *</label><textarea id="fInstructions" placeholder="定义什么时候直接回答、什么时候追问、什么时候联系其他员工" required="" style="min-height:138px"></textarea></div><div class="form-cap">知识与工具</div><div class="field"><label for="fKnowledge">知识（每行一个）</label><textarea id="fKnowledge" placeholder="自动化框架 Wiki
+历史故障经验"></textarea></div><div class="field"><label for="skillPickerTrigger">技能</label>
+<div class="skill-picker" id="skillPicker">
+<button aria-controls="skillPickerMenu" aria-expanded="false" class="skill-picker-trigger" id="skillPickerTrigger" type="button">
+<span id="skillPickerSummary">选择技能</span><span class="picker-chevron">⌄</span>
+</button>
+<div class="skill-picker-menu" id="skillPickerMenu">
+<input aria-label="搜索技能" autocomplete="off" id="skillSearch" placeholder="搜索技能" type="search"/>
+<div class="skill-option-list" id="skillOptions"></div>
+</div>
+<div class="skill-selected" id="skillSelected"></div>
+</div>
+</div><div class="field"><label for="fTools">工具（每行一个）</label><textarea id="fTools" placeholder="search_knowledge
+contact_employee"></textarea></div></form></div><div class="drawer-foot"><div class="row"><label class="switch"><input checked="" id="fEnabled" type="checkbox"/><span></span></label><span class="small muted">启用此员工</span></div><div class="row"><button class="btn" id="drawerCancel">取消</button><button class="btn primary" id="saveEmployee">保存员工</button></div></div></div></div>
+<div class="modal-back" id="modalBack"><div aria-modal="true" class="modal" role="dialog"><div class="spread"><div><h2 id="modalTitle">创建团队讨论</h2></div><button class="icon-btn" id="modalClose">✕</button></div><div id="modalBody"></div><div class="modal-actions"><button class="btn" id="modalCancel">取消</button><button class="btn primary" id="modalConfirm">确认</button></div></div></div>
+<div class="toast" id="toast" role="status"></div>
+</div>
+<div class="attachment-viewer" id="attachmentViewer" role="dialog" aria-modal="true" aria-label="图片预览"><div class="viewer-toolbar"><span class="viewer-name" id="viewerFilename"></span><button id="viewerSave" type="button">保存</button><button id="viewerClose" type="button">关闭 ✕</button></div><img id="viewerImage" alt="附件图片预览"></div>
+<script>
+(()=>{
+'use strict';
+const KEY='nexus_101_proto_v2';
+// Prototype: localStorage is scoped to this browser profile. Later, a logged-in UID
+// will replace the anonymous browser ID as the server-side conversation owner.
+const ANON_KEY='nexus_101_browser_id';
+let anonymousId=localStorage.getItem(ANON_KEY);
+if(!anonymousId){anonymousId='browser_'+(globalThis.crypto?.randomUUID?.()||(''+Date.now()+'_'+Math.random().toString(36).slice(2)));localStorage.setItem(ANON_KEY,anonymousId)}
+const defaults=()=>({employees:[
+{id:'emp_automation',name:'星河',domain:'测试自动化工程师',description:'负责自动化脚本开发、自动化框架维护、执行失败定位与修复。遇到测试工具接口变更时主动联系测试工具工程师。',instructions:'能够直接回答的技术问题直接回答；需要实际工程操作时说明执行需求；必要时联系其他数字员工。所有分析应说明依据，不得编造验证结果。',knowledge:['自动化框架 Wiki','测试业务知识','历史故障经验'],skills:['automation-development','failure-analysis','test-debugging'],tools:['search_knowledge','contact_employee','query_task'],avatar:'👩🏻‍💻',enabled:true},
+{id:'emp_operations',name:'知微',domain:'防线运营人员',description:'负责一级、二级、三级自动化防线的执行情况分析、异常原因初步定位、质量风险追踪及复验。',instructions:'先分析失败原因和已有证据。若涉及自动化框架适配，联系测试自动化工程师；持续关注防线复验结果。缺少执行数据时明确说明无法下结论。',knowledge:['防线运行规范','测试报告与日志知识','常见异常经验'],skills:['failure-triage','defense-analysis'],tools:['search_knowledge','contact_employee','query_task'],avatar:'🧑🏻‍🔬',enabled:true},
+{id:'emp_tools',name:'初禾',domain:'测试工具工程师',description:'负责测试工具开发维护、工具接口兼容性、门户功能与服务质量。处理由自动化工程师转来的工具侧适配问题。',instructions:'对工具及接口相关问题提供技术说明。需要跨岗位协助时直接联系有关员工，避免重复接管对方职责。',knowledge:['测试工具接口说明','测试工具维护知识'],skills:['tool-development','api-compatibility'],tools:['search_knowledge','contact_employee','query_task'],avatar:'👩🏽‍🚀',enabled:true}
+],privateChats:{},privateConversations:{},activePrivateConversation:{},channels:[
+{id:'ch_release',name:'版本交付协同',description:'跨岗位讨论版本资源变化、自动化框架与测试工具适配问题',members:['emp_operations','emp_automation','emp_tools'],messages:[{who:'system',text:''},{who:'user',text:'@知微 昨天的自动化执行异常，先看看可能是什么问题？',time:'09:20'},{who:'emp_operations',text:'从讨论中的现象看，可能与版本资源文件变更有关。这个判断仍需结合实际日志确认。我联系星河一起看框架适配方向。',time:'09:21',demo:true},{who:'emp_automation',text:'收到。若资源结构或 OCL 约束发生变化，需要核查自动化框架解析逻辑；若工具接口也变化，再请初禾协助。',time:'09:21',demo:true},{who:'emp_tools',text:'可以。我负责确认测试工具侧接口契约及兼容性，但需要先拿到版本差异信息。',time:'09:22',demo:true}]},
+{id:'ch_failure',name:'防线异常分析',description:'集中讨论防线运行异常、原因归属与跨员工技术咨询',members:['emp_operations','emp_automation'],messages:[{who:'system',text:''},{who:'user',text:'@知微 本周防线异常的分析重点是什么？',time:'10:12'},{who:'emp_operations',text:'优先区分环境因素、版本资源变化与真实脚本缺陷，再决定是否请自动化工程师协助定位。',time:'10:13',demo:true}]}
+],currentEmployee:'emp_automation',currentChannel:'ch_release',selectedEmployee:'emp_automation',page:'manage'});
+let state;try{state=JSON.parse(localStorage.getItem(KEY))}catch{}if(!state||!Array.isArray(state.employees))state=defaults();state.employees.forEach(e=>delete e.model);
+const el=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Preview catalog. In the actual product this list comes from AgentScope's registered skills.
+const skillCatalog=[
+  {id:'automation-development',name:'自动化开发'},
+  {id:'failure-analysis',name:'失败分析'},
+  {id:'test-debugging',name:'测试调试'},
+  {id:'failure-triage',name:'异常分诊'},
+  {id:'defense-analysis',name:'防线分析'},
+  {id:'tool-development',name:'测试工具开发'},
+  {id:'api-compatibility',name:'接口兼容性'}
+];
+let selectedSkills=new Set();
+function skillName(id){return skillCatalog.find(x=>x.id===id)?.name||id}
+function renderSkillPicker(){
+  const query=el('skillSearch').value.trim().toLowerCase();
+  const matches=skillCatalog.filter(x=>`${x.name} ${x.id}`.toLowerCase().includes(query));
+  el('skillOptions').innerHTML=matches.length?matches.map(x=>`<label class="skill-option"><input type="checkbox" value="${esc(x.id)}" ${selectedSkills.has(x.id)?'checked':''}><span>${esc(x.name)}</span><small>${esc(x.id)}</small></label>`).join(''):'<div class="skill-empty">未找到技能</div>';
+  const items=[...selectedSkills];
+  el('skillSelected').innerHTML=items.map(x=>`<span class="skill-tag">${esc(skillName(x))}<button type="button" data-remove-skill="${esc(x)}" aria-label="移除${esc(skillName(x))}">×</button></span>`).join('');
+  el('skillPickerSummary').textContent=items.length?`已选 ${items.length} 项技能`:'选择技能';
+}
+function closeSkillPicker(){el('skillPicker').classList.remove('open');el('skillPickerTrigger').setAttribute('aria-expanded','false')}
+
+const getEmp=id=>state.employees.find(x=>x.id===id); const enabled=()=>state.employees.filter(x=>x.enabled); const getChan=()=>state.channels.find(x=>x.id===state.currentChannel);const lines=s=>String(s||'').split(/\n|,|，/).map(v=>v.trim()).filter(Boolean);const t=()=>new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}); const short=v=>String(v||'').length>90?String(v).slice(0,90)+'…':String(v||'');
+// One human/browser + one employee can own several separate chat threads.
+function freshThread(name='新对话',messages=[]){const now=Date.now();return {id:'conv_'+now.toString(36)+'_'+Math.random().toString(36).slice(2,7),name,ownerId:anonymousId,createdAt:now,updatedAt:now,messages}}
+function ensureThreadData(){
+  if(!state.privateConversations||typeof state.privateConversations!=='object')state.privateConversations={};
+  if(!state.activePrivateConversation||typeof state.activePrivateConversation!=='object')state.activePrivateConversation={};
+  // Migrate older per-employee single-chat data without losing previous messages.
+  for(const [eid,messages] of Object.entries(state.privateChats||{})){
+    if(!Array.isArray(state.privateConversations[eid])||!state.privateConversations[eid].length){
+      state.privateConversations[eid]=[freshThread('历史对话',Array.isArray(messages)?messages:[])];
+      state.activePrivateConversation[eid]=state.privateConversations[eid][0].id;
+    }
+  }
+  delete state.privateChats;
+}
+function ensureEmployeeThread(employeeId){
+  ensureThreadData();
+  if(!employeeId)return null;
+  if(!Array.isArray(state.privateConversations[employeeId]))state.privateConversations[employeeId]=[];
+  let items=state.privateConversations[employeeId];
+  if(!items.length){items.push(freshThread());state.activePrivateConversation[employeeId]=items[0].id}
+  let current=items.find(x=>x.id===state.activePrivateConversation[employeeId]);
+  if(!current){current=items[items.length-1];state.activePrivateConversation[employeeId]=current.id}
+  return current;
+}
+function renderThreadPicker(employeeId){
+  const cur=ensureEmployeeThread(employeeId);
+  const button=el('privateHistoryBtn');
+  button.disabled=!cur;
+  el('newPrivateChat').disabled=!cur;
+  el('privateThreadTitle').textContent=cur?.name||'当前对话';
+  const items=(state.privateConversations[employeeId]||[]).slice().reverse();
+  el('privateThreadMenu').innerHTML=items.map(item=>`<button type="button" class="thread-option ${cur?.id===item.id?'active':''}" data-select-private-thread="${esc(item.id)}" role="menuitem"><span class="thread-name">${esc(item.name)}</span><span class="thread-meta">${esc(new Date(item.createdAt).toLocaleDateString('zh-CN'))} · ${(item.messages||[]).length} 条消息</span></button>`).join('');
+  button.setAttribute('aria-expanded',String(el('privateThreadMenu').classList.contains('open')));
+}
+function closeThreadMenu(){el('privateThreadMenu').classList.remove('open');el('privateHistoryBtn').setAttribute('aria-expanded','false')}
+
+function save(){localStorage.setItem(KEY,JSON.stringify(state))}let toastTimer;function toast(message){el('toast').textContent=message;el('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el('toast').classList.remove('show'),2800)}
+function navigate(page){closeThreadMenu();state.page=page;save();document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id==='page-'+page));document.querySelectorAll('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===page));if(page==='manage')renderManage();if(page==='chat')renderChat();if(page==='team')renderTeam()}
+function avatar(e,extra=''){return `<span class="avatar ${e?.avatar==='🧑🏻‍🔬'?'blue':e?.avatar==='👩🏽‍🚀'?'gold':''} ${!e?.enabled?'off':''} ${extra}">${esc(e?.avatar||'🤖')}</span>`}
+function employeeName(e){return e?`${e.name} · ${e.domain}`:'未知员工'}
+function ensureSelection(){if(!getEmp(state.selectedEmployee))state.selectedEmployee=state.employees[0]?.id||null;if(!getEmp(state.currentEmployee))state.currentEmployee=state.employees[0]?.id||null;if(!getChan())state.currentChannel=state.channels[0]?.id||null}
+function renderManage(){ensureSelection();let q=el('employeeSearch').value.trim().toLowerCase();let items=state.employees.filter(e=>(e.name+' '+e.domain+' '+e.description).toLowerCase().includes(q));el('listCount').textContent=`${items.length} 位员工`;
+el('employeeTable').innerHTML=items.length?items.map(e=>`<tr data-select-employee="${esc(e.id)}" class="${state.selectedEmployee===e.id?'selected':''}"><td><div class="person-cell">${avatar(e)}<span><b>${esc(e.name)}</b><small class="mono">${esc(e.id)}</small></span></div></td><td><b>${esc(e.domain)}</b><div class="role-desc">${esc(short(e.description))}</div></td><td><div class="chips">${e.skills.slice(0,2).map(s=>`<span class="mini-chip" title="${esc(s)}">${esc(skillName(s))}</span>`).join('')} ${e.skills.length>2?`<span class="inline-note">+${e.skills.length-2}</span>`:''}</div></td><td><label class="switch" title="${e.enabled?'禁用':'启用'}"><input type="checkbox" data-toggle-employee="${esc(e.id)}" ${e.enabled?'checked':''} aria-label="启用 ${esc(e.name)}"/><span></span></label></td><td><div class="table-actions"><button class="link-btn" data-chat-employee="${esc(e.id)}">对话</button><button class="link-btn" data-edit-employee="${esc(e.id)}">编辑</button><button class="link-btn danger" data-delete-employee="${esc(e.id)}">删除</button></div></td></tr>`).join(''):`<tr><td colspan="5"><div class="empty">没有找到符合条件的员工</div></td></tr>`;
+const e=getEmp(state.selectedEmployee);el('manageDetail').innerHTML=e?`<div class="spread"><b class="panel-title">员工档案</b><button class="btn sm" data-edit-employee="${esc(e.id)}">编辑</button></div><div class="profile-hero" style="margin-top:14px">${avatar(e)}<h3>${esc(e.name)}</h3><p>${esc(e.domain)}</p><div style="margin-top:12px"><span class="tag ${e.enabled?'':'ash'}">${e.enabled?'● 已启用':'○ 已禁用'}</span></div></div><div class="section-label">职责范围</div><div class="detail-excerpt">${esc(e.description)}</div><div class="divider"></div><div class="section-label">知识资源</div><div class="resource-list">${e.knowledge.map(s=>`<span class="mini-chip" title="${esc(s)}">${esc(skillName(s))}</span>`).join('')||'<span class="muted small">暂无配置</span>'}</div><div class="section-label">技能与工具</div><div class="resource-list">${e.skills.map(s=>`<span class="mini-chip" title="${esc(s)}">${esc(skillName(s))}</span>`).join('')}</div><div class="resource-list">${e.tools.map(s=>`<span class="mini-chip">⚙ ${esc(s)}</span>`).join('')}</div><div class="divider"></div><div class="kv"><span>员工 ID</span><strong class="mono">${esc(e.id)}</strong></div><div style="margin-top:18px"><button class="btn primary" data-chat-employee="${esc(e.id)}" style="width:100%">与 ${esc(e.name)} 交流 ↗</button></div>`:'<div class="empty">创建第一个数字员工，直接定义他的职责与能力</div>';
+}
+let editingId=null;function showDrawer(id=null){editingId=id;const e=id?getEmp(id):null;if(id&&!e)return;el('drawerTitle').textContent=e?'编辑数字员工':'创建数字员工';el('fName').value=e?.name||'';el('fDomain').value=e?.domain||'';el('fDescription').value=e?.description||'';el('fInstructions').value=e?.instructions||'收到消息后先判断能否直接回答；信息不足时追问；需要其他员工帮助时联系相应员工；不得编造真实执行结果。';el('fKnowledge').value=e?.knowledge?.join('\n')||'';selectedSkills=new Set(e?.skills||[]);el('skillSearch').value='';closeSkillPicker();renderSkillPicker();el('fTools').value=e?.tools?.join('\n')||'search_knowledge\ncontact_employee';el('fAvatar').value=e?.avatar||'👩🏻‍💻';el('fEnabled').checked=e?.enabled??true;el('drawerOverlay').classList.add('open');setTimeout(()=>el('fName').focus(),100)}
+function closeDrawer(){closeSkillPicker();el('drawerOverlay').classList.remove('open');editingId=null}
+function saveEmployee(){let name=el('fName').value.trim(),domain=el('fDomain').value.trim(),description=el('fDescription').value.trim(),instructions=el('fInstructions').value.trim();if(!name||!domain||!description||!instructions){toast('请完善必填信息');return}if(state.employees.some(e=>e.domain.toLowerCase()===domain.toLowerCase()&&e.id!==editingId)){toast('该职责已有员工');return}if(state.employees.some(e=>e.name.toLowerCase()===name.toLowerCase()&&e.id!==editingId)){toast('员工名称不可重复');return}const data={name,domain,description,instructions,knowledge:lines(el('fKnowledge').value),skills:[...selectedSkills],tools:lines(el('fTools').value),avatar:el('fAvatar').value,enabled:el('fEnabled').checked};if(editingId){Object.assign(getEmp(editingId),data);state.selectedEmployee=editingId}else{let id='emp_'+Date.now().toString(36);state.employees.push({id,...data});state.selectedEmployee=id}save();closeDrawer();renderManage();toast('员工已保存')}
+function toggleEmployee(id,val){let e=getEmp(id);if(!e)return;e.enabled=val;save();renderManage();toast(`${e.name} 已${val?'启用':'禁用'}`)}
+function deleteEmployee(id){const e=getEmp(id);if(!e)return;showModal('删除数字员工',`<p>确定删除 <b>${esc(e.name)}</b> 吗？删除后将不再显示该员工，历史对话仍保留。</p>`,'确认删除',()=>{state.employees=state.employees.filter(x=>x.id!==id);state.channels.forEach(c=>c.members=c.members.filter(m=>m!==id));ensureSelection();save();renderManage();toast('员工已删除')},true)}
+// Files are kept in IndexedDB; localStorage holds only per-message attachment metadata.
+// This is a local UI prototype, not an upload endpoint or model document parser.
+const DRAFT_ATTACHMENTS={private:[],group:[]};
+const ATTACHMENT_FALLBACK=new Map();
+const ATTACHMENT_URLS=new Map();
+const MAX_ATTACHMENT_BYTES=20*1024*1024;
+const MAX_ATTACHMENT_COUNT=6;
+let idbPromise;
+function attachmentDB(){
+  if(idbPromise)return idbPromise;
+  idbPromise=new Promise(resolve=>{
+    if(!window.indexedDB){resolve(null);return}
+    try{
+      const req=indexedDB.open('nexus_101_chat_attachments',1);
+      req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('files'))req.result.createObjectStore('files')};
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>resolve(null);
+      req.onblocked=()=>resolve(null);
+    }catch(e){resolve(null)}
+  });
+  return idbPromise;
+}
+async function putAttachment(id,file){
+  const db=await attachmentDB();
+  if(!db){ATTACHMENT_FALLBACK.set(id,file);return false}
+  return new Promise(resolve=>{
+    try{const tx=db.transaction('files','readwrite');tx.objectStore('files').put(file,id);tx.oncomplete=()=>resolve(true);tx.onerror=()=>{ATTACHMENT_FALLBACK.set(id,file);resolve(false)};tx.onabort=()=>{ATTACHMENT_FALLBACK.set(id,file);resolve(false)}}
+    catch(e){ATTACHMENT_FALLBACK.set(id,file);resolve(false)}
+  });
+}
+async function getAttachment(id){
+  if(ATTACHMENT_FALLBACK.has(id))return ATTACHMENT_FALLBACK.get(id);
+  const db=await attachmentDB();if(!db)return null;
+  return new Promise(resolve=>{try{const tx=db.transaction('files','readonly');const req=tx.objectStore('files').get(id);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>resolve(null)}catch(e){resolve(null)}});
+}
+async function deleteAttachment(id){
+  ATTACHMENT_FALLBACK.delete(id);
+  const url=ATTACHMENT_URLS.get(id);if(url){URL.revokeObjectURL(url);ATTACHMENT_URLS.delete(id)}
+  const db=await attachmentDB();if(!db)return;
+  try{db.transaction('files','readwrite').objectStore('files').delete(id)}catch(e){}
+}
+function formatSize(n){return n<1024?'小于 1 KB':n<1024*1024?(n/1024).toFixed(0)+' KB':(n/1048576).toFixed(1)+' MB'}
+function isPhoto(a){return a.type?.startsWith('image/')}
+async function attachmentURL(id){
+  if(ATTACHMENT_URLS.has(id))return ATTACHMENT_URLS.get(id);
+  const file=await getAttachment(id);if(!file)return null;
+  const url=URL.createObjectURL(file);ATTACHMENT_URLS.set(id,url);return url;
+}
+let draftBusy=0;
+async function handleFiles(mode,items){
+  const list=Array.from(items||[]);if(!list.length)return;
+  const room=MAX_ATTACHMENT_COUNT-DRAFT_ATTACHMENTS[mode].length;
+  if(room<=0){toast('每条消息最多添加 6 个附件');return}
+  draftBusy++;
+  try{
+    let warned=false;
+    for(const file of list.slice(0,room)){
+      if(file.size>MAX_ATTACHMENT_BYTES){toast('单个附件不能超过 20 MB');continue}
+      if(!file.size){toast('不能添加空文件');continue}
+      const id='att_'+(crypto.randomUUID?.()||Date.now()+'_'+Math.random().toString(36).slice(2));
+      const a={id,name:file.name||'未命名文件',type:file.type||'application/octet-stream',size:file.size};
+      const saved=await putAttachment(id,file);
+      if(!saved&&!warned){warned=true;toast('此浏览器无法持久保存附件，刷新页面后可能丢失')}
+      DRAFT_ATTACHMENTS[mode].push(a);
+    }
+    if(list.length>room)toast('每条消息最多添加 6 个附件');
+    renderDrafts(mode);
+  }finally{draftBusy--}
+}
+function draftMarkup(a){return `<div class="draft-file" title="${esc(a.name)}">${isPhoto(a)?`<img data-attach-thumb="${esc(a.id)}" alt="">`:'<span class="draft-file-icon">▤</span>'}<div class="draft-file-info"><b>${esc(a.name)}</b><small>${formatSize(a.size)}</small></div><button class="remove-file" type="button" title="移除附件" data-remove-attachment="${esc(a.id)}" aria-label="移除 ${esc(a.name)}">×</button></div>`}
+function renderDrafts(mode){
+  const container=el(mode+'Drafts'),arr=DRAFT_ATTACHMENTS[mode];
+  container.hidden=!arr.length;container.innerHTML=arr.map(draftMarkup).join('');
+  fillThumbnails(container);
+}
+function fillThumbnails(container){
+  container.querySelectorAll('img[data-attach-thumb]').forEach(async img=>{
+    const url=await attachmentURL(img.dataset.attachThumb);
+    if(img.isConnected&&url)img.src=url;
+  });
+}
+function clearDraft(mode){DRAFT_ATTACHMENTS[mode]=[];renderDrafts(mode)}
+function attachmentMarkup(a){
+  return `<button class="sent-attachment" type="button" data-open-attachment="${esc(a.id)}" title="${esc(a.name)}">${isPhoto(a)?`<img data-attach-thumb="${esc(a.id)}" alt="${esc(a.name)}">`:'<span class="file-mark">▤</span>'}<span class="file-detail"><b>${esc(a.name)}</b><small>${formatSize(a.size)} · ${isPhoto(a)?'查看图片':'打开文件'}</small></span></button>`;
+}
+function messageAttachmentMarkup(m){return m.attachments?.length?`<div class="message-attachments">${m.attachments.map(attachmentMarkup).join('')}</div>`:''}
+function hydrateSentThumbnails(container){fillThumbnails(container)}
+async function openAttachment(id){
+  let a;
+  const conversations=Object.values(state.privateConversations||{}).flatMap(x=>x||[]).flatMap(x=>x.messages||[]);
+  const team=state.channels.flatMap(c=>c.messages||[]);
+  for(const m of [...conversations,...team]){a=m.attachments?.find(x=>x.id===id);if(a)break}
+  if(!a)return;
+  const url=await attachmentURL(id);
+  if(!url){toast('附件内容不存在，可能已清理浏览器数据');return}
+  if(isPhoto(a)){
+    el('viewerFilename').textContent=a.name;el('viewerImage').src=url;
+    el('viewerSave').onclick=()=>downloadAttachment(url,a.name);el('attachmentViewer').classList.add('open');
+  }else downloadAttachment(url,a.name);
+}
+function downloadAttachment(url,name){const anchor=document.createElement('a');anchor.href=url;anchor.download=name;document.body.appendChild(anchor);anchor.click();anchor.remove()}
+function closeAttachmentViewer(){el('attachmentViewer').classList.remove('open');el('viewerImage').removeAttribute('src')}
+function wireAttachmentControls(){
+  for(const mode of ['private','group']){
+    el(mode+'AttachBtn').onclick=()=>el(mode+'File').click();
+    el(mode+'File').onchange=e=>{handleFiles(mode,e.target.files);e.target.value=''};
+    const chat=el(mode==='private'?'page-chat':'page-team').querySelector('article.chat');
+    chat.addEventListener('dragenter',e=>{if(e.dataTransfer?.types?.includes('Files')){e.preventDefault();chat.classList.add('drop-active')}});
+    chat.addEventListener('dragover',e=>{if(e.dataTransfer?.types?.includes('Files')){e.preventDefault();e.dataTransfer.dropEffect='copy';chat.classList.add('drop-active')}});
+    chat.addEventListener('dragleave',e=>{if(!chat.contains(e.relatedTarget))chat.classList.remove('drop-active')});
+    chat.addEventListener('drop',e=>{e.preventDefault();chat.classList.remove('drop-active');handleFiles(mode,e.dataTransfer?.files)});
+    el(mode+'Input').addEventListener('paste',e=>{
+      const clips=Array.from(e.clipboardData?.items||[]).filter(x=>x.kind==='file').map(x=>x.getAsFile()).filter(Boolean);
+      if(clips.length){e.preventDefault();handleFiles(mode,clips)}
+    });
+  }
+  document.addEventListener('click',e=>{
+    const remove=e.target.closest('[data-remove-attachment]');
+    if(remove){const id=remove.dataset.removeAttachment,mode=remove.closest('#groupDrafts')?'group':'private';DRAFT_ATTACHMENTS[mode]=DRAFT_ATTACHMENTS[mode].filter(x=>x.id!==id);deleteAttachment(id);renderDrafts(mode);return}
+    const open=e.target.closest('[data-open-attachment]');if(open)openAttachment(open.dataset.openAttachment);
+  });
+  el('viewerClose').onclick=closeAttachmentViewer;
+  el('attachmentViewer').onclick=e=>{if(e.target===el('attachmentViewer'))closeAttachmentViewer()};
+}
+
+function msgMarkup(m){if(m.who==='system')return m.text?`<div class="msg system"><div class="bubble">${esc(m.text)}</div></div>`:'';const own=m.who==='user',e=getEmp(m.who);return `<div class="msg ${own?'user':''}"><div class="msg-icon">${own?'你':esc(e?.avatar||'🤖')}</div><div class="msg-body"><div class="msginfo"><span>${own?'你':esc(e?.name||'已删除员工')}</span><span>${esc(m.time||'')}</span>${m.demo?'<span class="demo-mark">模拟</span>':''}</div><div class="bubble">${esc(m.text)}</div>${messageAttachmentMarkup(m)}</div></div>`}
+function scrollToBottom(id){const d=el(id);requestAnimationFrame(()=>d.scrollTop=d.scrollHeight)}
+let personTab='responsibility';function renderChat(){ensureSelection();const e=getEmp(state.currentEmployee);el('chatEmployeeCount').textContent=`${state.employees.length} 位`;el('chatEmployeeList').innerHTML=state.employees.map(e=>`<div class="rail-item ${state.currentEmployee===e.id?'active':''}" data-person="${esc(e.id)}">${avatar(e)}<div style="min-width:0"><b>${esc(e.name)}</b><small>${esc(e.domain)}</small></div><span class="trailing ${!e.enabled?'off':''}">${e.enabled?'●':'已禁用'}</span></div>`).join('')||'<div class="subinfo">还没有数字员工</div>';
+if(!e){el('privateTitle').textContent='尚未创建员工';el('privateSubtitle').textContent='请前往员工管理';el('privateMessages').innerHTML='<div class="chat-blank">还没有员工可以交流</div>';el('personAside').innerHTML='';return}el('chatAvatar').textContent=e.avatar;el('privateTitle').textContent=employeeName(e);el('privateSubtitle').textContent=short(e.description);el('privateStatus').textContent=e.enabled?'● 已启用':'○ 已禁用';el('privateStatus').className='tag '+(e.enabled?'':'ash');el('privateInput').disabled=!e.enabled;el('privateSend').disabled=!e.enabled;el('privateAttachBtn').disabled=!e.enabled;el('privateInput').placeholder=e.enabled?`向 ${e.name} 发消息…（Enter 发送，Shift+Enter 换行）`:'该员工已禁用，历史消息仍可查看';const conversation=ensureEmployeeThread(e.id);renderThreadPicker(e.id);const history=conversation?.messages||[];el('privateMessages').innerHTML=history.length?history.map(msgMarkup).join(''):`<div class="chat-blank"><div class="big">${esc(e.avatar)}</div><b>与 ${esc(e.name)} 开始交流</b><div></div></div>`;hydrateSentThumbnails(el('privateMessages'));scrollToBottom('privateMessages');renderPersonAside()}
+function renderPersonAside(){const e=getEmp(state.currentEmployee);if(!e)return;document.querySelectorAll('[data-person-tab]').forEach(x=>x.classList.toggle('active',x.dataset.personTab===personTab));let out='';if(personTab==='responsibility')out=`<div class="row">${avatar(e)}<div><b>${esc(e.name)}</b><div class="subinfo">${esc(e.domain)}</div></div></div><div class="section-label">职责范围</div><div class="detail-excerpt">${esc(e.description)}</div><div class="section-label">工作指令</div><div class="detail-excerpt">${esc(e.instructions)}</div>`;else if(personTab==='capability')out=`<div class="section-label">知识</div><div class="resource-list">${e.knowledge.map(x=>`<span class="mini-chip">${esc(x)}</span>`).join('')||'未配置'}</div><div class="section-label">Skill</div><div class="resource-list">${e.skills.map(x=>`<span class="mini-chip">${esc(x)}</span>`).join('')||'未配置'}</div><div class="section-label">Tools</div><div class="resource-list">${e.tools.map(x=>`<span class="mini-chip">⚙ ${esc(x)}</span>`).join('')||'未配置'}</div><div class="divider"></div><div class="subinfo"></div>`;else out=`<div class="soft subinfo">暂无长期记忆</div><div class="kv"><span>对话消息</span><strong>${(state.privateConversations?.[e.id]||[]).reduce((n,c)=>n+(c.messages?.length||0),0)} 条</strong></div><div class="kv"><span>员工 ID</span><strong class="mono">${esc(e.id)}</strong></div>`;el('personAside').innerHTML=out}
+function privateReply(e,q){if(/职责|负责|工作范围|你是谁/.test(q))return `我是${e.name}，负责${e.domain}。\n${e.description}`;if(/知识|工具|技能|能力/.test(q))return `我配置的知识资源：${e.knowledge.join('、')||'暂无'}。\n可用技能：${e.skills.join('、')||'暂无'}。\n工具：${e.tools.join('、')||'暂无'}。\n`;if(/修复|修改|开发|执行|部署|检查服务器/.test(q))return `这属于需要实际工程执行的工作。我会先确认目标和验收依据；当前无法执行工程操作。`;if(/版本|资源|OCL|脚本|接口|故障|异常/.test(q))return `这个问题需要结合具体版本信息和执行日志分析。就我的职责而言，我会先判断是否涉及${e.domain}，再查看关联知识；若涉及其他员工的职责，再与对方沟通。没有相关执行数据，暂时无法确认根因。`;return `收到。我会按“${e.domain}”的职责范围理解这个问题。请告诉我具体问题。`}
+function sendPrivate(){
+  const q=el('privateInput').value.trim(),e=getEmp(state.currentEmployee),attachments=DRAFT_ATTACHMENTS.private.slice();
+  if((!q&&!attachments.length)||!e||!e.enabled||draftBusy)return;
+  const conv=ensureEmployeeThread(e.id);
+  if(conv.messages.length===0)conv.name=q?(q.length>20?q.slice(0,20)+'…':q):attachments[0].name;
+  conv.messages.push({who:'user',text:q,attachments,time:t()});
+  const reply=attachments.length?'收到附件：'+attachments.map(a=>a.name).join('、')+'。当前是交互原型，尚未连接文件解析或模型理解能力。':privateReply(e,q);
+  conv.messages.push({who:e.id,text:reply,time:t(),demo:true});
+  conv.updatedAt=Date.now();el('privateInput').value='';clearDraft('private');save();renderChat();
+}
+function startPrivate(id){state.currentEmployee=id;ensureEmployeeThread(id);save();navigate('chat')}
+function newPrivateChat(){
+  clearDraft('private');const e=getEmp(state.currentEmployee);if(!e)return;
+  ensureThreadData();const conv=freshThread();
+  (state.privateConversations[e.id]||(state.privateConversations[e.id]=[])).push(conv);
+  state.activePrivateConversation[e.id]=conv.id;closeThreadMenu();save();renderChat();el('privateInput').focus();
+}
+function renderTeam(){ensureSelection();el('channelCount').textContent=state.channels.length;el('channelList').innerHTML=state.channels.map(c=>`<div class="rail-item ${state.currentChannel===c.id?'active':''}" data-channel="${esc(c.id)}"><span class="avatar ${c.id==='ch_failure'?'blue':'purple'}">☷</span><div><b>${esc(c.name)}</b><small>${c.members.filter(x=>getEmp(x)).length} 位数字员工 · ${esc(short(c.description))}</small></div></div>`).join('');const c=getChan();if(!c){el('groupTitle').textContent='暂无频道';el('groupMessages').innerHTML='<div class="chat-blank">创建一个团队讨论</div>';return}el('groupTitle').textContent='# '+c.name;el('groupSubtitle').textContent=c.description;el('groupMemberCount').textContent=`${c.members.filter(x=>getEmp(x)).length} 位员工`;el('groupMessages').innerHTML=c.messages.filter(m=>m.who!=='system'||!/(频道已建立|这是一条普通讨论消息)/.test(m.text)).map(msgMarkup).join('');hydrateSentThumbnails(el('groupMessages'));el('groupMembers').innerHTML=`<div class="member"><span class="avatar">👤</span><div><b>你</b><small>人类成员 · 发起人</small></div><span class="tag ash" style="margin-left:auto">在线</span></div>`+c.members.map(id=>getEmp(id)).filter(Boolean).map(e=>`<div class="member">${avatar(e)}<div><b>${esc(e.name)}</b><small>${esc(e.domain)}</small></div><span class="statusline ${e.enabled?'':'off'}"><i></i><span class="inline-note">${e.enabled?'启用':'禁用'}</span></span></div>`).join('');el('groupQuickTags').innerHTML=c.members.map(id=>getEmp(id)).filter(e=>e&&e.enabled).slice(0,3).map(e=>`<button class="chip" data-mention="${esc(e.id)}">@${esc(e.name)}</button>`).join('')+`<button class="chip" id="groupExplain">分析协同</button>`;scrollToBottom('groupMessages')}
+function groupReply(e,q){if(/职责|负责|你是谁/.test(q))return `我是${e.name}，负责${e.domain}。${e.description}`;if(e.id==='emp_operations')return /异常|失败|版本|分析|防线/.test(q)?'我负责先梳理防线异常现象及原因。针对版本资源变化，我会优先排除环境与版本差异；如果确认需要框架适配，再请自动化工程师分析。当前没有执行日志，无法确认原因。':'防线运营会先确认执行现状和证据，再判断是否需要跨员工协助。';if(e.id==='emp_automation')return /异常|失败|版本|资源|OCL|脚本|适配|接口/.test(q)?'自动化侧需要核查资源解析、OCL 约束与脚本兼容性；若工具 API 契约也变化，需要测试工具工程师一起确认。仍需结合代码和日志确认。':'我负责自动化脚本开发、问题定位与维护。可以继续讨论具体技术细节。';if(e.id==='emp_tools')return '测试工具侧会重点核查接口契约、参数定义和兼容变更。需要版本差异或接口文档才能形成可靠结论。';return `请提供需要分析的信息。`}
+function sendGroup(){const c=getChan();if(!c)return;const q=el('groupInput').value.trim(),attachments=DRAFT_ATTACHMENTS.group.slice();if((!q&&!attachments.length)||draftBusy)return;c.messages.push({who:'user',text:q,attachments,time:t()});el('groupInput').value='';clearDraft('group');const active=c.members.map(id=>getEmp(id)).filter(e=>e&&e.enabled);let targets=active.filter(e=>q.includes('@'+e.name));if(targets.length){targets=targets.slice(0,3);targets.forEach(e=>c.messages.push({who:e.id,text:groupReply(e,q),time:t(),demo:true}));if(targets.length===1&&/协助|一起|跨|失败|异常|版本|资源|接口|适配|联系/.test(q)){const first=targets[0];let next=first.id==='emp_operations'?active.find(e=>e.id==='emp_automation'):first.id==='emp_automation'?active.find(e=>e.id==='emp_tools'):null;if(next){c.messages.push({who:first.id,text:`这个问题涉及${next.domain}的职责，我联系${next.name}补充判断。`,time:t(),demo:true});c.messages.push({who:next.id,text:groupReply(next,q),time:t(),demo:true});}}}save();renderTeam()}
+function insertMention(id){const e=getEmp(id);if(!e)return;const box=el('groupInput');const v=box.value.trim();box.value=(v?v+' ':'')+'@'+e.name+' ';box.focus();el('mentionBox').style.display='none'}
+function mentionHint(){const box=el('groupInput'),m=box.value.match(/(?:^|\s)@([^\s]*)$/),hint=el('mentionBox');const c=getChan();if(!m||!c){hint.style.display='none';return}const matches=c.members.map(getEmp).filter(e=>e&&e.enabled&&e.name.includes(m[1]));hint.innerHTML=matches.map(e=>`<button class="mention-option" data-pick-mention="${esc(e.id)}">${esc(e.avatar)} ${esc(e.name)} <span class="muted">· ${esc(e.domain)}</span></button>`).join('');hint.style.display=matches.length?'block':'none'}
+function showModal(title,html,ok='确认',onConfirm=null,danger=false){el('modalTitle').textContent=title;el('modalBody').innerHTML=html;el('modalConfirm').textContent=ok;el('modalConfirm').className='btn '+(danger?'danger':'primary');modalAction=onConfirm;el('modalBack').classList.add('open')}let modalAction=null;function closeModal(){el('modalBack').classList.remove('open');modalAction=null}
+function showChannelModal(edit=false){const c=edit?getChan():null;if(edit&&!c)return;const members=c?c.members:enabled().map(e=>e.id);showModal(edit?'编辑讨论':'新建团队讨论',`<div class="field"><label>讨论名称 *</label><input id="channelNameInput" maxlength="32" value="${esc(c?.name||'')}" placeholder="例如：版本质量专项讨论"/></div><div class="field"><label>讨论目标 *</label><textarea id="channelDescInput" placeholder="明确讨论范围与目标">${esc(c?.description||'')}</textarea></div><div class="field"><label>参与的数字员工</label><div class="soft" style="display:grid;gap:11px">${state.employees.map(e=>`<label class="row" style="font-size:11px;cursor:pointer"><input type="checkbox" data-member-checkbox="${esc(e.id)}" ${members.includes(e.id)?'checked':''}/>${esc(e.avatar)} <b>${esc(e.name)}</b><span class="muted">${esc(e.domain)}</span></label>`).join('')||'尚无员工'}</div></div>`,edit?'保存讨论':'创建讨论',()=>{const name=el('channelNameInput').value.trim(),description=el('channelDescInput').value.trim();if(!name||!description){toast('请填写讨论名称和目标');return false}const ms=[...document.querySelectorAll('[data-member-checkbox]:checked')].map(x=>x.dataset.memberCheckbox);if(!ms.length){toast('至少选择一名员工');return false}if(c){Object.assign(c,{name,description,members:ms})}else{const n={id:'ch_'+Date.now().toString(36),name,description,members:ms,messages:[{who:'system',text:''}]};state.channels.unshift(n);state.currentChannel=n.id}save();renderTeam();toast('讨论已保存')})}
+function showGroupExplanation(){const c=getChan();if(!c)return;const examples=c.members.map(getEmp).filter(x=>x&&x.enabled);const operations=examples.find(x=>x.id==='emp_operations')||examples[0];if(!operations){toast('频道没有可用员工');return}el('groupInput').value=`@${operations.name} 请分析版本资源变更导致的自动化失败，并联系其他相关员工一起判断。`;el('groupInput').focus();toast('已填入讨论内容')}
+// event delegation
+document.addEventListener('click',ev=>{const b=ev.target.closest('[data-nav],[data-select-employee],[data-toggle-employee],[data-edit-employee],[data-delete-employee],[data-chat-employee],[data-person],[data-channel],[data-private-prompt],[data-mention],[data-pick-mention],[data-person-tab],[data-select-private-thread]');if(!b)return;if(b.hasAttribute('data-nav'))navigate(b.dataset.nav);else if(b.hasAttribute('data-select-employee')){state.selectedEmployee=b.dataset.selectEmployee;save();renderManage()}else if(b.hasAttribute('data-edit-employee'))showDrawer(b.dataset.editEmployee);else if(b.hasAttribute('data-delete-employee'))deleteEmployee(b.dataset.deleteEmployee);else if(b.hasAttribute('data-chat-employee'))startPrivate(b.dataset.chatEmployee);else if(b.hasAttribute('data-person')){clearDraft('private');state.currentEmployee=b.dataset.person;save();renderChat()}else if(b.hasAttribute('data-channel')){clearDraft('group');state.currentChannel=b.dataset.channel;save();renderTeam()}else if(b.hasAttribute('data-private-prompt')){el('privateInput').value=b.dataset.privatePrompt;sendPrivate()}else if(b.hasAttribute('data-mention'))insertMention(b.dataset.mention);else if(b.hasAttribute('data-pick-mention')){const id=b.dataset.pickMention;const box=el('groupInput');box.value=box.value.replace(/(?:^|\s)@[^\s]*$/,'').trim();insertMention(id)}else if(b.hasAttribute('data-person-tab')){personTab=b.dataset.personTab;renderPersonAside()}else if(b.hasAttribute('data-select-private-thread')){clearDraft('private');state.activePrivateConversation[state.currentEmployee]=b.dataset.selectPrivateThread;closeThreadMenu();save();renderChat()}});
+document.addEventListener('change',e=>{if(e.target.matches('[data-toggle-employee]'))toggleEmployee(e.target.dataset.toggleEmployee,e.target.checked)});
+el('skillPickerTrigger').onclick=()=>{
+  let p=el('skillPicker');let opened=p.classList.toggle('open');
+  el('skillPickerTrigger').setAttribute('aria-expanded',String(opened));
+  if(opened){renderSkillPicker();el('skillSearch').focus()}
+};
+el('skillSearch').oninput=renderSkillPicker;
+el('skillOptions').addEventListener('change',e=>{
+  if(e.target.matches('input[type="checkbox"]')){
+    if(e.target.checked)selectedSkills.add(e.target.value);
+    else selectedSkills.delete(e.target.value);
+    renderSkillPicker();
+  }
+});
+el('skillSelected').addEventListener('click',e=>{
+  const b=e.target.closest('[data-remove-skill]');
+  if(b){selectedSkills.delete(b.dataset.removeSkill);renderSkillPicker()}
+});
+document.addEventListener('click',e=>{
+  if(!el('skillPicker').contains(e.target))closeSkillPicker();
+});
+el('addEmployee').onclick=()=>showDrawer();el('employeeSearch').oninput=renderManage;el('drawerClose').onclick=closeDrawer;el('drawerCancel').onclick=closeDrawer;el('drawerOverlay').onclick=e=>{if(e.target===el('drawerOverlay'))closeDrawer()};el('saveEmployee').onclick=saveEmployee;el('employeeForm').onsubmit=e=>{e.preventDefault();saveEmployee()};el('privateSend').onclick=sendPrivate;el('privateInput').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendPrivate()}};el('newPrivateChat').onclick=newPrivateChat;el('privateHistoryBtn').onclick=()=>{const menu=el('privateThreadMenu');const opened=menu.classList.toggle('open');el('privateHistoryBtn').setAttribute('aria-expanded',String(opened))};document.addEventListener('click',e=>{if(!el('threadPicker').contains(e.target))closeThreadMenu()});el('groupSend').onclick=sendGroup;el('groupInput').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendGroup()}};el('groupInput').oninput=mentionHint;el('addChannel').onclick=()=>showChannelModal();el('channelSettings').onclick=()=>showChannelModal(true);el('editMembers').onclick=()=>showChannelModal(true);el('groupQuickTags').addEventListener('click',e=>{if(e.target.closest('#groupExplain'))showGroupExplanation()});el('modalClose').onclick=closeModal;el('modalCancel').onclick=closeModal;el('modalBack').onclick=e=>{if(e.target===el('modalBack'))closeModal()};el('modalConfirm').onclick=()=>{const r=modalAction?.();if(r!==false)closeModal()};document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDrawer();closeModal();closeAttachmentViewer();el('mentionBox').style.display='none'}});el('resetDemo').onclick=()=>showModal('重置演示数据','<p>恢复三位员工、两个团队频道和预置交流内容。已在本地编辑的员工、频道和聊天记录将被清空。</p>','重置',()=>{state=defaults();save();navigate('manage');el('employeeSearch').value='';renderManage();toast('已重置')},true);
+wireAttachmentControls();ensureThreadData();ensureSelection();navigate(['manage','chat','team'].includes(state.page)?state.page:'manage');
+})();
+</script></body></html>

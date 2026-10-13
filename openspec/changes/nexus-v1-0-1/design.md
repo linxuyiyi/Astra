@@ -1,0 +1,97 @@
+## Context
+
+新仓库位于 `/Users/niuniu/程序/Nexus`，分支 `codex/nexus-v1.0.1`。Astra 只提供研发规范；用户原始需求及完整原型保存在 `docs/reference/`。原生接口研究见 `docs/AGENTSCOPE_RESEARCH.md`，UI 细节见 `docs/UI_ACCEPTANCE.md`。
+
+AgentScope Python 固定 `2.0.10`，tag commit `e6c014f0be49b2a6f6f62a9453082a0b975484e1`。官网文档版本与发布版本有漂移，以该版本源码和真实服务 `/openapi.json` 为契约。已在隔离 Python 3.12 环境安装正式包，验证官方 ASGI 生命周期、Agent/Session CRUD 和 SQLite 重开恢复；尚不代表真实进程重启或模型推理通过。
+
+## Goals / Non-Goals
+
+**Goals:** 三个页面保留原型布局，所有操作真实连接服务；一个员工对应一个长期原生 Agent；私聊和团队会话可恢复；平等员工通过真实模型工具调用联系；匿名会话与附件隔离；证据驱动验收。
+
+**Non-Goals:** 旧业务兼容、旧数据迁移、第四个产品页面、模型配置页面、复杂协作编排，以及 proposal 列出的版本外能力。
+
+## Decisions
+
+### 1. 两个进程，模块化业务单体
+
+`frontend/` 使用 Vue 3、TypeScript、Element Plus、Vite；`backend/` 使用 FastAPI、SQLAlchemy async、SQLite。`agent-service/` 仅使用官方 `agentscope.app.create_app` 和公开扩展，作为独立进程部署。Nexus 后端通过 HTTP 调用官方路由，不导入其私有执行服务，不复制官方核心源码。
+
+最小验证部署使用官方 `AsyncSQLAlchemyStorage` + `aiosqlite`、单进程 `InMemoryMessageBus`、持久化 `LocalWorkspaceManager`。无跨进程事件总线要求时不引入 Redis、Celery 或新微服务。服务仅监听回环地址，前端经 Nexus 访问。生产多副本不在本版本验收范围。
+
+### 2. 明确数据事实源
+
+| 数据 | 事实源 |
+| --- | --- |
+| Agent 姓名、实际执行 prompt、原生配置 | AgentScope AgentRecord |
+| 员工领域、职责/指令编辑字段、头像、enabled、资源默认关联、删除标记 | Nexus Employee 扩展；保存时编译执行 prompt 并真实更新 AgentScope |
+| 模型凭据与 Session 模型绑定 | AgentScope；服务部署配置提供默认绑定，Nexus 页面不显示模型选项 |
+| 活动会话消息、AgentState、运行状态、原生记忆 | AgentScope |
+| Conversation owner、员工/Session 关联、讨论、成员、投递 envelope、附件归属 | Nexus SQLite |
+| 删除后的只读历史 | 删除前一次性归档的原生消息快照，永久不可执行，不形成第二套活动会话 |
+
+绑定必须使用 AgentRecord **顶层 `id`**。实测它与 `data.id` 不同；`POST /agent/` 返回值指向顶层记录。`GET /sessions/` 的元素是 `{session, status, is_running, team}`。后端始终从已授权 Conversation 解析 Agent 和 Session，不接受浏览器自由指定原生 ID。
+
+职责/指令作为必要的可编辑业务分栏，不再建立独立 Agent 执行配置层。跨服务写入用短数据库事务、明确成功/失败与可重试状态处理；禁止本地先展示成功再吞掉上游错误。网络 I/O 不放在数据库锁内。
+
+### 3. 匿名所有者与 workspace 隔离
+
+浏览器只存匿名 UUID、选中项和草稿；后端验证 UUID 并将其作为 owner。采用统一内部 AgentScope 服务租户共享长期员工与原生资源；Conversation 和 Discussion 的读取、流、写入、附件均先由 Nexus 按 owner 过滤。
+
+匿名 UUID 可以被冒用，不是认证。部署说明必须限定受控验证环境。AgentScope 不直接暴露给浏览器；内部扩展回调使用服务端秘密，不把模型凭据或内部密钥发给前端。
+
+原生 workspace 采用 `PER_SESSION`，避免统一租户下不同匿名用户共享文件、附件或个人记忆。原生短期上下文随 Session 持久化；UI 只显示实际可读取的原生记忆信息，没有长期记忆时如实空态，不建设自有 Memory 系统。
+
+### 4. 原生资源选择与员工删除
+
+Skill、MCP Tools、Knowledge 从官方目录列出，空目录显示空态，不补假目录。员工存资源 ID 默认关联；新建 Session 时通过官方 workspace 关联接口与 `knowledge_config` 落实绑定。能力失效必须报错，不能只存标签。工具适配器以明确允许目录控制实际暴露能力，不默认把官方所有 shell/file/team/schedule 工具交给模型。
+
+官方 DELETE Agent 会级联删除其 Session，而原型明确承诺历史保留。删除先冻结新触发和在途投递，向原生运行发中断请求，并等待真实运行退出、原生状态 idle 与最终持久化完成；202 中断受理和 REPLY_END 事件均不能代替这一屏障。随后完整分页导出该员工原生历史和附件引用为只读归档，再真实调用原生 DELETE；成功后标记已删除并从可运行列表/讨论成员中移除。私聊历史菜单提供已删除员工历史入口，不新增页面。归档失败禁止执行 DELETE；上游删除失败保留可重试删除状态，禁止发起新运行。不能用单纯 soft-delete 冒充已删除原生 Agent。
+
+### 5. 私聊流、断线与幂等
+
+Conversation 与原生 Session 一一稳定绑定。同一员工允许多个 Conversation。创建会话先落原生 Session 及模型、能力绑定，失败清理未完成资源并明确报错。
+
+`POST /chat/` 是触发接口，返回 `started`；输出由 `GET /sessions/{sid}/stream` SSE 提供。历史接口提供 `event_cursor`，先加载历史，再从 cursor 续订，按原生 event/message/reply ID 去重；不把 `started` 或 HTTP 流关闭当成模型完成。官方瞬时 replay 最多保留 1000 条事件，assistant 消息在运行 finally 才写入 SQL；长回复重连仅靠 cursor 可能漏掉中间增量，因此流内容只作为临时显示，运行实际 idle 后再次读取完整原生历史，按 reply/message ID 校准最终内容。运行状态以官方状态接口与终态事件结合确认；重连后补历史及状态，避免旧流污染新会话。发送使用客户端幂等键，重复请求不启动第二次推理。取消/服务异常不得伪造成功回复。
+
+### 6. 平等员工的薄消息扩展
+
+官方 Team 的被邀请长期员工仍受 worker 强制汇报规则限制，因此不将该机制当作平等讨论。每名讨论成员使用同一长期 AgentRecord 下的独立原生 Session，`team_id=None`。
+
+使用公开 `extra_agent_tools` 工厂注册 `PeerSend`，公开 middleware 移除/拒绝 native leader-worker、schedule 等版本外工具。工具闭包绑定实际 Agent/Session；模型仅选择接收员工 ID 和消息内容，不能自报发信人。Nexus 的内部投递接口验证实际成员、enabled、owner、Session 绑定、exchange 预算及幂等键。
+
+人类 @ 选择稳定员工 ID。每次人类输入建立 exchange，明确 @ 的员工收到消息；无 @ 仅保存讨论消息，不强制轮流发言。是否联系其他员工由 Agent 真实推理决定。
+
+PeerSend 先持久化投递 envelope，再异步触发目标原生 Session，立即返回投递确认。它不在源 Agent 等待目标模型完成，避免 A→B→A 同步锁环。B 自行推理，可以用 PeerSend 回 A 或联系 C；所有人的消息均实时进入同一讨论时间线。目标 Session 仍运行时原生 `/chat/` 返回 409，不能丢弃回信：envelope 保持 pending，按目标 Session 串行、有界地等待 idle 后投递，以该 envelope 表作为最小持久待投递队列，不另建协作状态机。按原生工具调用 ID 去重，每 exchange 限制投递数、推理次数和总时间；达到限制明确终止并展示原因。发送失败与重启中断可见，不无限自动重试，不建立复杂工作流引擎。
+
+讨论历史以人类/peer envelope 和原生消息引用聚合，不复制活动 AgentState 或建立员工从属关系。每次投递及真实回复必须保留可核对的源 Agent、Session、exchange 和 native message/reply ID。
+
+### 7. 附件真实读取
+
+Nexus 保存随机存储名、原始文件名、MIME、大小、owner 和 Conversation/Discussion 归属。单个最多 20 MiB、每消息最多 6 个、拒绝空文件；服务端流式限量，不信 MIME、扩展名或前端检查。下载/预览仍校验 owner，拒绝路径穿越及未归属附件；HTML/SVG 等主动内容按下载或安全内容策略处理。
+
+图片使用原生 `DataBlock` 传给实际支持视觉的模型；文本/代码/日志由服务真实读取并标明截断，不以文件名推测内容。二进制及不支持格式明确提示。DeepSeek 官方说明 `deepseek-flash` 当前为 V4.1 Flash，具备原生视觉能力，但须通过真实图片联调证明集成正确。
+
+### 8. UI 与验证
+
+三个页面及底部导航、绿色主题、员工抽屉、讨论弹窗、多对话切换、附件预览与 mentions 参照原型。共享消息列表、编辑器、附件组件，使用 Element Plus 原生控件，不复制 mock 或 IndexedDB 业务持久化。
+
+每阶段由 OpenCode 小步实现，Codex 独立检查代码、执行验证、发现问题后明确修复任务。唯一任务清单是本 change `tasks.md`。模拟测试与真实模型/服务测试分开报告；模型失败、缺凭据或无法验证时保持未完成并记录原因。只有全部 Scenario 满足才同步并归档 OpenSpec。
+
+## Risks / Trade-offs
+
+- [官方 API 快速变化] → 固定 release 与依赖锁，保存真实 OpenAPI 契约并针对性测试。
+- [原生 Agent 与业务数据跨服务写入] → 显式失败处理、必要幂等和补偿，不长期保留猜测式 fallback。
+- [匿名 UUID 可冒用] → 回环服务/受控验证部署；未来真实 UID 绑定保持 owner 字段可扩展。
+- [单进程消息总线重启丢瞬时事件] → 原生消息/状态持久化，重新订阅补历史；不宣称多进程恢复。
+- [删除级联与历史承诺冲突] → 先完成只读归档，再执行真实删除；对失败路径测试。
+- [PeerSend 循环或并发冲突] → 持久幂等 envelope、exchange 预算、目标单 Session 运行约束，不同步等待。
+- [Knowledge 依赖真实 embedding 配置] → 服务侧配置并实际验证；缺配置时资源空态及能力限制如实披露，不构造假知识检索。
+- [本地 workspace 工具可接触宿主文件] → 默认仅允许本版本需要的目录/工具，所有员工启停在服务实际运行前再次检查。
+
+## Migration Plan
+
+无旧业务迁移。先完成规范和契约，再依次部署 AgentScope、员工管理、私聊、团队、联调。各进程可独立停止；持久数据保存在新仓库 ignored 的 `data/`，部署前备份。回滚停止新服务并恢复对应版本数据，不操作 Astra。
+
+## Open Questions
+
+没有需要改变产品设计的已确认阻塞。官方扩展 peer 方案须在阶段五通过三名长期 Agent 的真实模型消息链验证；不足时再按用户要求确认，不以模拟代替。

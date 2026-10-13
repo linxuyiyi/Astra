@@ -1,0 +1,138 @@
+{
+  "run_at": "2026-10-13T16:48:51.841342+00:00",
+  "service": "agentscope",
+  "data_dir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-smoke-6kpf9bhq",
+  "crud": {
+    "scenario": "crud_no_model_key",
+    "steps": [
+      {
+        "step": "start",
+        "ok": true,
+        "port": 59743
+      },
+      {
+        "step": "openapi_contract",
+        "ok": true,
+        "version": "2.0.10",
+        "paths": 79
+      },
+      {
+        "step": "model_unconfigured_reported",
+        "ok": true
+      },
+      {
+        "step": "agent_create",
+        "ok": true,
+        "agent_id": "15f7815152f04f41a1a6310a8c5f3760"
+      },
+      {
+        "step": "agent_top_level_id",
+        "ok": true,
+        "two_ids_differ": true
+      },
+      {
+        "step": "agent_update",
+        "ok": true,
+        "agent_name": "冒烟员工-已改名"
+      },
+      {
+        "step": "session_create",
+        "ok": true,
+        "session_ids": [
+          "465ae263341342809f30f091791f51eb",
+          "349e8a7b2d5a4520ab47a7a2aa53b165"
+        ]
+      },
+      {
+        "step": "per_session_workspace_isolation",
+        "ok": true
+      },
+      {
+        "step": "stop_before_restart",
+        "ok": true
+      },
+      {
+        "step": "restart",
+        "ok": true
+      },
+      {
+        "step": "restart_recovery",
+        "ok": true
+      },
+      {
+        "step": "agent_delete",
+        "ok": true
+      }
+    ],
+    "openapi": {
+      "version": "2.0.10",
+      "path_count": 79
+    },
+    "model_configured": false,
+    "agent": {
+      "id": "15f7815152f04f41a1a6310a8c5f3760",
+      "data_id": "7e985731ce88412aa4b057ab9b370003",
+      "two_ids_differ": true
+    },
+    "sessions": [
+      {
+        "id": "349e8a7b2d5a4520ab47a7a2aa53b165",
+        "workspace_id": "316aa8a92e1b4cb58d7704dc174754d2"
+      },
+      {
+        "id": "465ae263341342809f30f091791f51eb",
+        "workspace_id": "e681323c278d47b9aa0194d8538bbbd3"
+      }
+    ],
+    "restart_recovery": {
+      "agent_id": "15f7815152f04f41a1a6310a8c5f3760",
+      "name": "冒烟员工-已改名",
+      "session_ids": [
+        "349e8a7b2d5a4520ab47a7a2aa53b165",
+        "465ae263341342809f30f091791f51eb"
+      ]
+    },
+    "agent_deleted": true,
+    "status": "passed"
+  },
+  "model_bootstrap": {
+    "scenario": "model_bootstrap_placeholder_key",
+    "steps": [
+      {
+        "step": "start",
+        "ok": true,
+        "port": 59827
+      },
+      {
+        "step": "defaults_with_model_configured",
+        "ok": true
+      },
+      {
+        "step": "credential_persisted_once",
+        "ok": true,
+        "credential_id": "nexus-default-deepseek-credential"
+      },
+      {
+        "step": "credential_idempotent_after_restart",
+        "ok": true
+      }
+    ],
+    "default_chat_model_config": {
+      "credential_id": "nexus-default-deepseek-credential",
+      "type": "deepseek_chat",
+      "model": "deepseek-flash",
+      "parameters": {}
+    },
+    "restart_idempotent_credential": {
+      "count": 1,
+      "credential_id": "nexus-default-deepseek-credential"
+    },
+    "status": "passed"
+  },
+  "limitations": [
+    "未注入真实模型密钥：仅验证原生 CRUD/Session/隔离/重启恢复与凭据引导，不声称模型推理通过。",
+    "单进程 InMemoryMessageBus：未验证多进程事件总线恢复。",
+    "未验证多轮流式聊天、附件、Knowledge 与员工删除归档。"
+  ],
+  "status": "passed"
+}

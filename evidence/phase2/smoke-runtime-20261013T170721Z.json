@@ -1,0 +1,8 @@
+{
+  "mode": "full",
+  "run_at": "2026-10-13T17:07:21.747098+00:00",
+  "status": "unverified",
+  "reason": "未提供 AGENTSCOPE_MODEL_API_KEY，真实模型联调未运行。不 fallback 假模型、不伪造回复。",
+  "evidence_path": "evidence/phase2/smoke-runtime-20261013T170721Z.json",
+  "key_recorded": false
+}

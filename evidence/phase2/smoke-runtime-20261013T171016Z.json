@@ -1,0 +1,129 @@
+{
+  "mode": "full",
+  "run_at": "2026-10-13T17:10:01.362724+00:00",
+  "checks": {
+    "model_configured": true,
+    "backend_health_ok": true,
+    "agent_top_level_id": true,
+    "per_session_workspace_isolated": true,
+    "round2_context_recall": true,
+    "session_b_isolated": true,
+    "credential_reused_without_env": true,
+    "restart_persistence_recall": true,
+    "cleanup_agent_deleted": true
+  },
+  "agentscope": {
+    "base_url": "http://127.0.0.1:62301",
+    "version": "2.0.10"
+  },
+  "backend": {
+    "base_url": "http://127.0.0.1:62302",
+    "status": "ok"
+  },
+  "default_chat_model_config": {
+    "type": "deepseek_chat",
+    "credential_id": "nexus-default-deepseek-credential",
+    "model": "deepseek-flash",
+    "parameters": {
+      "max_tokens": 1024,
+      "thinking": {
+        "type": "disabled"
+      }
+    }
+  },
+  "agent": {
+    "id": "3247424c33d64e6493dc2e1427646ddb",
+    "data_id": "30268d6ce5614545a34d3eb97b5956e6",
+    "two_ids_differ": true
+  },
+  "sessions": [
+    {
+      "role": "A",
+      "id": "96e2bc46d1254a6fb443007cc35627ff",
+      "workspace_id": "126bd2e4e71d445ab54f405efc951b87"
+    },
+    {
+      "role": "B",
+      "id": "46485c87c2cb47a5824fde5ae14fe342",
+      "workspace_id": "bddbcaf5ee3140768a9256c343c4e7f1"
+    }
+  ],
+  "token": "ZQcdf627d0",
+  "rounds": {
+    "A1": {
+      "reply_id": "c504aa0a526f4a03bb8fa1fc5c0e0e0d",
+      "finished_reason": "completed",
+      "event_types": [
+        "REPLY_START",
+        "HINT_BLOCK",
+        "MODEL_CALL_START",
+        "TEXT_BLOCK_START",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_END",
+        "MODEL_CALL_END",
+        "REPLY_END"
+      ],
+      "reply_preview": "已记住"
+    },
+    "A2": {
+      "reply_id": "d0f4ee7fa943480296134b578f4539b6",
+      "finished_reason": "completed",
+      "event_types": [
+        "REPLY_START",
+        "MODEL_CALL_START",
+        "TEXT_BLOCK_START",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_END",
+        "MODEL_CALL_END",
+        "REPLY_END"
+      ],
+      "reply_preview": "ZQcdf627d0"
+    },
+    "B1": {
+      "reply_id": "8c9ef4b6c8ce41a7ba14f20c70a379d4",
+      "finished_reason": "completed",
+      "event_types": [
+        "REPLY_START",
+        "HINT_BLOCK",
+        "MODEL_CALL_START",
+        "TEXT_BLOCK_START",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_END",
+        "MODEL_CALL_END",
+        "REPLY_END"
+      ],
+      "reply_preview": "不知道。"
+    },
+    "A3_after_restart": {
+      "reply_id": "3b68656b47194f93bd87ab82fc54d80c",
+      "finished_reason": "completed",
+      "event_types": [
+        "REPLY_START",
+        "MODEL_CALL_START",
+        "TEXT_BLOCK_START",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_DELTA",
+        "TEXT_BLOCK_END",
+        "MODEL_CALL_END",
+        "REPLY_END"
+      ],
+      "reply_preview": "ZQcdf627d0"
+    }
+  },
+  "status": "passed",
+  "evidence_path": "evidence/phase2/smoke-runtime-20261013T171016Z.json",
+  "key_recorded": false
+}

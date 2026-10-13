@@ -1,0 +1,29 @@
+{
+  "mode": "connectivity_only",
+  "run_at": "2026-10-13T17:01:57.871901+00:00",
+  "checks": {
+    "backend_health_ok": true,
+    "agentscope_version_ok": true,
+    "upstream_stopped_reports_unavailable": true
+  },
+  "backend": {
+    "base_url": "http://127.0.0.1:61715",
+    "status": "ok",
+    "instance_id": "d6982f00390e4822b781d2b87d36f414"
+  },
+  "agentscope": {
+    "base_url": "http://127.0.0.1:61714",
+    "version": "2.0.10",
+    "reachable": true,
+    "model_configured": false
+  },
+  "after_stop": {
+    "http_status": 503,
+    "status": "unavailable",
+    "reachable": false,
+    "reason": "无法连接 AgentScope 服务：ConnectError: All connection attempts failed"
+  },
+  "status": "passed",
+  "evidence_path": "evidence/phase2/smoke-runtime-20261013T170204Z.json",
+  "key_recorded": false
+}

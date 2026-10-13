@@ -1,0 +1,35 @@
+# Nexus 的 OpenSpec 规划约束。
+#
+# 这里是产物规则的唯一事实源，AGENTS.md 只保留项目级硬规则。
+# 内置 CLI（.opencode/tools/openspec.mjs）只解析 schema / context / rules 三个字段，
+# 写入其他顶层键会被静默忽略；rules 的键必须是当前 schema 的合法 artifact ID
+# （spec-driven 下为 proposal / specs / design / tasks）。
+
+schema: spec-driven
+
+context: |
+  使用简体中文编写 proposal、spec、design 和 tasks；技术标识符保留原文。
+  Nexus v1.0.1 是模块化单体业务系统，正式业务只有员工管理、数字员工私聊和团队交流。
+  交互基线是 docs/reference/Nexus_v1.0.1.html 原型，保留已确认布局与交互，不做重新设计。
+  AgentScope 独立部署，Nexus 通过稳定接口集成；优先使用官方 Agent Service / SDK / API，
+  不复制、Fork 或修改 AgentScope 核心源码，不根据框架名或示例臆测 API。
+  员工身份、Agent、Session、Memory 优先复用 AgentScope 原生机制；模型配置只在 AgentScope。
+  团队交流中的数字员工长期存在、身份平等、职责独立，由真实推理与工具调用驱动，禁止模拟回复。
+  先查现有 openspec/specs、代码和测试；优先收敛现有设计，不创造并行状态或重复实现。
+  本项目只对行为契约、跨模块架构、数据模型、权限与 AgentScope 集成边界使用 OpenSpec；小修复直接走代码及针对性验证。
+
+rules:
+  proposal:
+    - "用简短段落交代问题、变更范围、非目标与影响；不得重述整个项目背景。"
+    - "只列真实新增或修改的 capability；不因代码重构虚构新的业务需求。"
+  specs:
+    - "只描述外部可观察的需求和可验证场景；每项 Requirement 至少一个 WHEN/THEN Scenario。"
+    - "优先修改已有 capability；涉及 AgentScope 集成时写明真实接口边界与失败处理。"
+    - "不写类名、函数名、工具选型或具体实施步骤；不对既有要求降级。"
+  design:
+    - "只记录必要的设计决策、被舍弃方案和影响；单模块变更保持极简，不重复 proposal 的动机。"
+    - "跨 AgentScope、持久化、权限或迁移时，写明状态事实源、异常恢复及回滚边界。"
+  tasks:
+    - "与 spec 场景对应，按依赖分组；每项有明确的完成和验证标准。"
+    - "只保留一个 tasks.md；不把每次工具调用、每次提交或每个文件阅读拆为任务。"
+    - "优先先做针对性测试，再扩大回归；注明真实环境无法验证的项目。"

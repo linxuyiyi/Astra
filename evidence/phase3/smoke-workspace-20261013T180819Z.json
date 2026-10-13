@@ -1,0 +1,90 @@
+{
+  "run_at": "2026-10-13T18:08:13.136087+00:00",
+  "service": "agentscope",
+  "scope": "physical_workspace_isolation",
+  "data_dir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-ws-smoke-ehug6ncy",
+  "physical_isolation": {
+    "scenario": "physical_workspace_isolation",
+    "steps": [
+      {
+        "step": "start",
+        "ok": true,
+        "port": 50360
+      },
+      {
+        "step": "agent_create",
+        "ok": true,
+        "agent_id": "08e388d62938495ea1ae134f2e2cd7fa"
+      },
+      {
+        "step": "session_create",
+        "ok": true,
+        "session_ids": [
+          "3af5a882157b4c2b81dcd23c068a12e1",
+          "7c37cacd8aa8457c8d326f53d7d7d349"
+        ]
+      },
+      {
+        "step": "workspace_ids_differ",
+        "ok": true,
+        "wsid_a": "e6bfe8e497194cac9a3ac36268fba3fe",
+        "wsid_b": "b4d2d5e896c1437482c9baea59e0d7ae"
+      },
+      {
+        "step": "in_process_physical_isolation",
+        "ok": true,
+        "workdirs_differ": true,
+        "traversal": true,
+        "concurrent": true,
+        "lifecycle": true
+      },
+      {
+        "step": "official_workspace_file_read",
+        "ok": true,
+        "a_status": 200,
+        "b_status": 404
+      },
+      {
+        "step": "stop_before_restart",
+        "ok": true
+      },
+      {
+        "step": "restart",
+        "ok": true
+      },
+      {
+        "step": "restart_persistence_after_process_restart",
+        "ok": true,
+        "a_status": 200,
+        "b_status": 404
+      },
+      {
+        "step": "agent_delete",
+        "ok": true
+      }
+    ],
+    "in_process_checks": {
+      "workdir_a": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-ws-smoke-ehug6ncy/workspaces/3a2e9feb456f3d2e5e0f7dce259eabceecedf93635438b53d0e3a0c58dbdd4a8",
+      "workdir_b": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-ws-smoke-ehug6ncy/workspaces/8aecdb603c0f7a33f28216772bd4d58698e726032a1991517b6d40c8cb07f210",
+      "workdirs_differ": true,
+      "workdir_a_matches_id": true,
+      "a_file_written": true,
+      "b_file_absent": true,
+      "path_traversal_contained": true,
+      "concurrent_same_instance": true,
+      "close_then_reinit_same_workdir": true,
+      "close_all_clears_cache": true
+    },
+    "restart_persistence": {
+      "session_a_read_status": 200,
+      "session_b_read_status": 404
+    },
+    "status": "passed"
+  },
+  "limitations": [
+    "未注入真实模型密钥：只验证物理目录/文件隔离与重启恢复，不声称模型推理通过。",
+    "只覆盖单进程部署与本脚本自己的隔离临时 data_dir。",
+    "不验证多进程事件总线恢复、附件、Knowledge 与员工删除归档。"
+  ],
+  "status": "passed"
+}

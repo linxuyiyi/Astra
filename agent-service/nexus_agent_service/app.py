@@ -5,7 +5,8 @@
 
 * ``AsyncSQLAlchemyStorage``（SQLite + aiosqlite）持久化原生记录；
 * 单进程 ``InMemoryMessageBus``；
-* ``LocalWorkspaceManager``，显式 ``IsolationPolicy.PER_SESSION``；
+* ``SessionWorkspaceManager``（公开 ``WorkspaceManagerBase`` 扩展），显式
+  ``IsolationPolicy.PER_SESSION``，按原生持久 workspace ID 建立独立物理目录；
 * 关闭 scheduler 与 channel worker。
 
 不导入官方私有模块，不复制或 Fork 官方核心源码，也不替换原生路由；
@@ -21,15 +22,13 @@ from typing import Any, AsyncIterator
 from agentscope.app import create_app
 from agentscope.app.message_bus import InMemoryMessageBus
 from agentscope.app.storage import AsyncSQLAlchemyStorage
-from agentscope.app.workspace_manager import (
-    IsolationPolicy,
-    LocalWorkspaceManager,
-)
+from agentscope.app.workspace_manager import IsolationPolicy
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware import Middleware
 
 from .bootstrap import ModelBootstrapStatus, bootstrap_default_model
 from .config import ServiceConfig
+from .workspace import SessionWorkspaceManager
 from .write_barrier import NativeWriteBarrierMiddleware
 
 
@@ -48,7 +47,9 @@ def build_app(config: ServiceConfig, instance_id: str | None = None) -> FastAPI:
         # 日志/异常中隐藏 SQL 绑定参数，避免模型密钥随参数泄露。
         engine_kwargs={"hide_parameters": True},
     )
-    workspace_manager = LocalWorkspaceManager(
+    # 官方 LocalWorkspaceManager 2.0.10 的 workdir 固定为 basedir/agent_id，
+    # 同员工不同 Session 仍共用目录；这里用公开扩展按持久 workspace_id 分目录。
+    workspace_manager = SessionWorkspaceManager(
         basedir=str(config.workspace_dir),
         isolation=IsolationPolicy.PER_SESSION,
     )

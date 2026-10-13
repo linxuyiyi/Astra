@@ -1,0 +1,97 @@
+{
+  "run_at": "2026-10-13T18:12:32.306593+00:00",
+  "service": "agentscope",
+  "scope": "physical_workspace_isolation",
+  "data_dir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-ws-smoke-cypbyfsl",
+  "physical_isolation": {
+    "scenario": "physical_workspace_isolation",
+    "steps": [
+      {
+        "step": "start",
+        "ok": true,
+        "port": 50830
+      },
+      {
+        "step": "agent_create",
+        "ok": true,
+        "agent_id": "d5984b9d827a40969b333d39443a8932"
+      },
+      {
+        "step": "session_create",
+        "ok": true,
+        "session_ids": [
+          "de5676e89352448296f257c2cd97e0a7",
+          "e0ad1f224ea544fc923a965738a1825b"
+        ]
+      },
+      {
+        "step": "workspace_ids_differ",
+        "ok": true,
+        "wsid_a": "c4b5e87c4d624bd58c9ccfefd8432b0f",
+        "wsid_b": "5e0b9c39998746a8890461bcd6114448"
+      },
+      {
+        "step": "in_process_physical_isolation",
+        "ok": true,
+        "workdirs_differ": true,
+        "traversal": true,
+        "concurrent": true,
+        "lifecycle": true
+      },
+      {
+        "step": "official_workspace_file_read",
+        "ok": true,
+        "a_status": 200,
+        "b_status": 404
+      },
+      {
+        "step": "stop_before_restart",
+        "ok": true
+      },
+      {
+        "step": "restart_new_generation",
+        "ok": true,
+        "before": "a6db083e698e4c6f88963b3743367087",
+        "after": "8576759975e3416fa4ee659a765d8a67"
+      },
+      {
+        "step": "restart_persistence_after_process_restart",
+        "ok": true,
+        "a_status": 200,
+        "b_status": 404
+      },
+      {
+        "step": "agent_delete",
+        "ok": true
+      }
+    ],
+    "in_process_checks": {
+      "workdir_a": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-ws-smoke-cypbyfsl/workspaces/32b4d611589d8dc6023fd3d2c83ea3a0b23226f815830a03132c6bc729ae8cb3",
+      "workdir_b": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-ws-smoke-cypbyfsl/workspaces/706d622dd81d9ae366ebab637d611e0916689aa1116b14b83354c2216578585d",
+      "workdirs_differ": true,
+      "workdir_a_matches_id": true,
+      "a_file_written": true,
+      "b_file_absent": true,
+      "path_traversal_contained": true,
+      "concurrent_same_instance": true,
+      "close_then_reinit_same_workdir": true,
+      "close_all_clears_cache": true
+    },
+    "restart_generation": {
+      "before": "a6db083e698e4c6f88963b3743367087",
+      "after": "8576759975e3416fa4ee659a765d8a67",
+      "changed": true
+    },
+    "restart_persistence": {
+      "session_a_read_status": 200,
+      "session_b_read_status": 404
+    },
+    "status": "passed"
+  },
+  "limitations": [
+    "未注入真实模型密钥：只验证物理目录/文件隔离与重启恢复，不声称模型推理通过。",
+    "只覆盖单进程部署与本脚本自己的隔离临时 data_dir。",
+    "不验证多进程事件总线恢复、附件、Knowledge 与员工删除归档。"
+  ],
+  "status": "passed"
+}

@@ -1,0 +1,153 @@
+{
+  "run_at": "2026-10-13T18:08:22.185473+00:00",
+  "service": "agentscope",
+  "data_dir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-smoke-h5r30b66",
+  "crud": {
+    "scenario": "crud_no_model_key",
+    "steps": [
+      {
+        "step": "start",
+        "ok": true,
+        "port": 50425
+      },
+      {
+        "step": "openapi_contract",
+        "ok": true,
+        "version": "2.0.10",
+        "paths": 79
+      },
+      {
+        "step": "model_unconfigured_reported",
+        "ok": true
+      },
+      {
+        "step": "agent_create",
+        "ok": true,
+        "agent_id": "8e13332e72ec4dfba0e74cc63ab6f97f"
+      },
+      {
+        "step": "agent_top_level_id",
+        "ok": true,
+        "two_ids_differ": true
+      },
+      {
+        "step": "agent_update",
+        "ok": true,
+        "agent_name": "冒烟员工-已改名"
+      },
+      {
+        "step": "session_create",
+        "ok": true,
+        "session_ids": [
+          "65a641f467b44354b764780703c937a2",
+          "f0d2b20c81c041e5b6841e17af987c07"
+        ]
+      },
+      {
+        "step": "per_session_physical_isolation",
+        "ok": true,
+        "workdirs_differ": true
+      },
+      {
+        "step": "stop_before_restart",
+        "ok": true
+      },
+      {
+        "step": "restart",
+        "ok": true
+      },
+      {
+        "step": "restart_recovery",
+        "ok": true
+      },
+      {
+        "step": "restart_workspace_persistence",
+        "ok": true
+      },
+      {
+        "step": "agent_delete",
+        "ok": true
+      }
+    ],
+    "openapi": {
+      "version": "2.0.10",
+      "path_count": 79
+    },
+    "model_configured": false,
+    "agent": {
+      "id": "8e13332e72ec4dfba0e74cc63ab6f97f",
+      "data_id": "f6eccf77df454ed88a45f07a84b82eda",
+      "two_ids_differ": true
+    },
+    "physical_isolation": {
+      "session_a": {
+        "id": "65a641f467b44354b764780703c937a2",
+        "workspace_id": "7c00af06a80e48dd96600018e66faf47",
+        "workdir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-smoke-h5r30b66/workspaces/07348a5cb4f3e29d9c8e4378db8e62654d25c91a23def95a060d6df56c769c07"
+      },
+      "session_b": {
+        "id": "f0d2b20c81c041e5b6841e17af987c07",
+        "workspace_id": "c41ee4b7f23649e39e498c4a1b6f1fba",
+        "workdir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-smoke-h5r30b66/workspaces/de81d13a4b754a5a67862b21f67ee9ce79c9ea2e34c8218673e078e9b021c166"
+      },
+      "workdirs_differ": true,
+      "b_read_status": 404,
+      "a_read_status": 200
+    },
+    "restart_recovery": {
+      "agent_id": "8e13332e72ec4dfba0e74cc63ab6f97f",
+      "name": "冒烟员工-已改名",
+      "session_ids": [
+        "65a641f467b44354b764780703c937a2",
+        "f0d2b20c81c041e5b6841e17af987c07"
+      ]
+    },
+    "restart_workspace_persistence": {
+      "session_a_read_status": 200,
+      "session_b_read_status": 404
+    },
+    "agent_deleted": true,
+    "status": "passed"
+  },
+  "model_bootstrap": {
+    "scenario": "model_bootstrap_placeholder_key",
+    "steps": [
+      {
+        "step": "start",
+        "ok": true,
+        "port": 50487
+      },
+      {
+        "step": "defaults_with_model_configured",
+        "ok": true
+      },
+      {
+        "step": "credential_persisted_once",
+        "ok": true,
+        "credential_id": "nexus-default-deepseek-credential"
+      },
+      {
+        "step": "credential_idempotent_after_restart",
+        "ok": true
+      }
+    ],
+    "default_chat_model_config": {
+      "credential_id": "nexus-default-deepseek-credential",
+      "type": "deepseek_chat",
+      "model": "deepseek-flash",
+      "parameters": {}
+    },
+    "restart_idempotent_credential": {
+      "count": 1,
+      "credential_id": "nexus-default-deepseek-credential"
+    },
+    "status": "passed"
+  },
+  "limitations": [
+    "未注入真实模型密钥：仅验证原生 CRUD/Session/物理目录隔离/重启恢复与凭据引导，不声称模型推理通过。",
+    "文件隔离验证只覆盖本脚本自己的隔离临时 data_dir 与单进程部署。",
+    "单进程 InMemoryMessageBus：未验证多进程事件总线恢复。",
+    "未验证多轮流式聊天、附件、Knowledge 与员工删除归档。"
+  ],
+  "status": "passed"
+}

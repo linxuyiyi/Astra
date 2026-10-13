@@ -1,0 +1,161 @@
+{
+  "run_at": "2026-10-13T18:12:41.138524+00:00",
+  "service": "agentscope",
+  "data_dir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-smoke-g3qz_3cf",
+  "crud": {
+    "scenario": "crud_no_model_key",
+    "steps": [
+      {
+        "step": "start",
+        "ok": true,
+        "port": 50876
+      },
+      {
+        "step": "openapi_contract",
+        "ok": true,
+        "version": "2.0.10",
+        "paths": 79
+      },
+      {
+        "step": "model_unconfigured_reported",
+        "ok": true
+      },
+      {
+        "step": "agent_create",
+        "ok": true,
+        "agent_id": "f17797ed4d3a42eba43cd2c579c3ccc8"
+      },
+      {
+        "step": "agent_top_level_id",
+        "ok": true,
+        "two_ids_differ": true
+      },
+      {
+        "step": "agent_update",
+        "ok": true,
+        "agent_name": "冒烟员工-已改名"
+      },
+      {
+        "step": "session_create",
+        "ok": true,
+        "session_ids": [
+          "9dc64b6047d54f83a8a453323fcfd719",
+          "d88528290bfe479985e3779915a6408b"
+        ]
+      },
+      {
+        "step": "per_session_physical_isolation",
+        "ok": true,
+        "workdirs_differ": true
+      },
+      {
+        "step": "stop_before_restart",
+        "ok": true
+      },
+      {
+        "step": "restart_new_generation",
+        "ok": true
+      },
+      {
+        "step": "restart_recovery",
+        "ok": true
+      },
+      {
+        "step": "restart_workspace_persistence",
+        "ok": true
+      },
+      {
+        "step": "agent_delete",
+        "ok": true
+      }
+    ],
+    "openapi": {
+      "version": "2.0.10",
+      "path_count": 79
+    },
+    "model_configured": false,
+    "agent": {
+      "id": "f17797ed4d3a42eba43cd2c579c3ccc8",
+      "data_id": "ff11ee54800c435d8e3d4afe49825eec",
+      "two_ids_differ": true
+    },
+    "physical_isolation": {
+      "session_a": {
+        "id": "9dc64b6047d54f83a8a453323fcfd719",
+        "workspace_id": "8975fb7c034c40348ac072d1d6294943",
+        "workdir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-smoke-g3qz_3cf/workspaces/32e4a7268f6d5dcfe3b856a4d7fcbf1b6c1916bee33ba0ab49e3eae3c525269d"
+      },
+      "session_b": {
+        "id": "d88528290bfe479985e3779915a6408b",
+        "workspace_id": "718f5c48b1b747ef85fabd1c9d352619",
+        "workdir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-smoke-g3qz_3cf/workspaces/30eaeead61c992a90d1e754b3ad4a94455aa3b77e23b9a1871bf91fedd59c398"
+      },
+      "workdirs_differ": true,
+      "b_read_status": 404,
+      "a_read_status": 200
+    },
+    "restart_generation": {
+      "before": "5792a790d5e8494fa6e6590d7785fe54",
+      "after": "4ece0bc87eb44b619b7f96f28d00b25d",
+      "changed": true
+    },
+    "restart_recovery": {
+      "agent_id": "f17797ed4d3a42eba43cd2c579c3ccc8",
+      "name": "冒烟员工-已改名",
+      "session_ids": [
+        "9dc64b6047d54f83a8a453323fcfd719",
+        "d88528290bfe479985e3779915a6408b"
+      ]
+    },
+    "restart_workspace_persistence": {
+      "session_a_read_status": 200,
+      "session_b_read_status": 404
+    },
+    "agent_deleted": true,
+    "status": "passed"
+  },
+  "model_bootstrap": {
+    "scenario": "model_bootstrap_placeholder_key",
+    "steps": [
+      {
+        "step": "start",
+        "ok": true,
+        "port": 50938
+      },
+      {
+        "step": "defaults_with_model_configured",
+        "ok": true
+      },
+      {
+        "step": "credential_persisted_once",
+        "ok": true,
+        "credential_id": "nexus-default-deepseek-credential"
+      },
+      {
+        "step": "credential_idempotent_after_restart",
+        "ok": true
+      }
+    ],
+    "default_chat_model_config": {
+      "credential_id": "nexus-default-deepseek-credential",
+      "type": "deepseek_chat",
+      "model": "deepseek-flash",
+      "parameters": {}
+    },
+    "restart_idempotent_credential": {
+      "count": 1,
+      "credential_id": "nexus-default-deepseek-credential",
+      "generation_before": "3acc16f0c1e144a788339fb9097bc805",
+      "generation_after": "4dcd5831d6c142249e125ff593fac509",
+      "generation_changed": true
+    },
+    "status": "passed"
+  },
+  "limitations": [
+    "未注入真实模型密钥：仅验证原生 CRUD/Session/物理目录隔离/重启恢复与凭据引导，不声称模型推理通过。",
+    "文件隔离验证只覆盖本脚本自己的隔离临时 data_dir 与单进程部署。",
+    "单进程 InMemoryMessageBus：未验证多进程事件总线恢复。",
+    "未验证多轮流式聊天、附件、Knowledge 与员工删除归档。"
+  ],
+  "status": "passed"
+}

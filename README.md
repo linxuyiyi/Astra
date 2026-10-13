@@ -5,8 +5,9 @@ Nexus v1.0.1：数字员工管理、数字员工私聊、团队交流。
 当前处于阶段三（员工管理）。本仓库已包含独立部署的 **AgentScope Agent
 Service**（`agent-service/`）与 **Nexus 业务后端**（`backend/`）。阶段 3.1
 已实现员工业务存储、真实原生 Agent 创建/修改、列表/搜索/详情与服务端校验；
-资源真实绑定、启停执行约束、删除归档（3.2）与前端页面（3.3）尚未开发，
-私聊与团队交流随后进行。
+3.2.1 已通过公开 WorkspaceManager 扩展修复同员工双 Session 的物理 workspace
+目录隔离并补真实写入与进程重启证据；资源真实绑定、启停执行约束、删除归档
+（3.2.2/3.2.3）与前端页面（3.3）尚未开发，私聊与团队交流随后进行。
 
 ## 架构与边界
 
@@ -40,7 +41,11 @@ evidence/phase3/                     员工管理脱敏验证证据
 原生数据持久化在 AgentScope 服务下：
 
 - SQLite：`data/agentscope/agentscope.db`
-- 每会话 workspace：`data/agentscope/workspaces/`（`PER_SESSION` 隔离）
+- 每会话 workspace：`data/agentscope/workspaces/`。原生 Session 持久化
+  `PER_SESSION` workspace ID，Nexus 用公开 `WorkspaceManagerBase` 扩展
+  （`SessionWorkspaceManager`）按该 ID 的 SHA-256 建独立目录，因此同员工
+  不同 Session 的物理文件互不复用；官方 `LocalWorkspaceManager` 2.0.10 的
+  workdir 固定为 `basedir/agent_id`，不能提供这一隔离。
 - PID：`data/agentscope/run/agentscope.pid`
 - 日志：`data/agentscope/logs/agentscope.log`
 
@@ -212,8 +217,11 @@ DeepSeek 凭据，则复用该持久凭据并仍视为已配置，无需每次�
 # 配置、适配器合同与扩展边界单元测试（含真实官方 ASGI 服务合同）
 uv run pytest
 
-# 真实进程冒烟：原生 Agent CRUD、Session、PER_SESSION 隔离、重启恢复
+# 真实进程冒烟：原生 Agent CRUD、Session、同员工双 Session 物理目录隔离、重启恢复
 uv run python tests/agent_service/smoke_service.py
+
+# 物理隔离专项冒烟：真实进程 start/stop/start + 官方 /workspace/files 读写核对
+uv run python tests/agent_service/smoke_workspace.py
 
 # 后端真实健康连通（无需模型密钥；实际启动两个真实进程并核对版本）
 uv run python scripts/smoke_runtime.py --connectivity-only
@@ -238,6 +246,18 @@ uv run python scripts/smoke_employees.py --with-model
 复现“PATCH 受理后客户端超时取消 → 重放/新编辑排队 → 迟到旧写被拒”，验证
 锁保持到真实写入结束、受管修订头一致性、未管理原生 CRUD 兼容与 DELETE 串行；
 不调用真实模型。
+
+workspace 物理隔离由 `tests/agent_service/test_workspace_manager.py`（真实
+`LocalWorkspace` + 真实 SQLite + 官方 ASGI）与
+`tests/agent_service/smoke_workspace.py`（真实服务进程 start/stop/start + 官方
+`/workspace/files`）覆盖：同员工双 Session 的 workspace ID 与实际物理目录不同，
+A 写入的文件 B 经公开 workspace 读取能力不可读，真实进程重启后同 ID 重建同目录
+且文件仍在，并核对路径穿越防护、并发同 ID 只初始化一次与 `close`/`close_all`。
+`get_workspace`/`close`/`close_all` 共用一把生命周期锁：暂停初始化时并发关闭会
+等待初始化结束，不会复活、漏关或产生同路径双实例。冒烟严格要求 `start`/`stop`
+退出码为 0，并在重启前后核对服务 `generation_id` 已变化（否则视为未真实重启）。
+**阶段二 `evidence/phase2/` 的早期证据只证明两个 Session 的 workspace ID 不同，
+不证明物理文件隔离**；物理隔离以 3.2.1 的上述证据为准。
 
 `scripts/smoke_runtime.py` 通过适配器实际创建原生测试 Agent 与两个
 `PER_SESSION` Session；每轮先读历史游标，再触发 `POST /chat`，随后按该
@@ -269,10 +289,11 @@ REPLY_END，等待 `/status` 真正 `idle` 后再按历史校准回复；验证�
 **不 fallback 假模型**、不写整体模型通过。证据写入 `evidence/phase3/`（脱敏，
 不含密钥）。
 
-当前限制：阶段 3.1 只实现员工业务存储、真实创建/修改与列表/搜索/详情及
-校验；资源真实绑定、`enabled` 启停执行约束、删除前只读历史归档（3.2）与
-前端页面（3.3）尚未实现，因此尚未用真实模型证明“改职责后新对话生效”
-（脚本已就绪，待注入密钥验证）。原生写屏障、单调写入修订与创建代次释放只在
+当前限制：阶段 3.1 实现员工业务存储、真实创建/修改与列表/搜索/详情及校验；
+3.2.1 已用公开 `WorkspaceManagerBase` 扩展修复同员工双 Session 的物理目录
+隔离并补真实写入与进程重启证据；资源真实绑定、`enabled` 启停执行约束、删除前
+只读历史归档（3.2.2/3.2.3）与前端页面（3.3）尚未实现，因此尚未用真实模型证明
+“改职责后新对话生效”（脚本已就绪，待注入密钥验证）。原生写屏障、单调写入修订与创建代次释放只在
 **单进程部署**范围内成立：锁与高水位保存在 AgentScope 服务进程内存中，不做
 多副本协调；`reconcile` 对未知编辑结果要求先通过同修订幂等 `PATCH` 写屏障再
 确认 `desired`，未带 Nexus 标记的原生探针不受影响。其余未验证：真实 Uvicorn

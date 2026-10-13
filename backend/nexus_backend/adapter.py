@@ -158,14 +158,18 @@ class AgentScopeHTTPClient:
         params: dict | None = None,
         json_body: dict | None = None,
         expected: tuple[int, ...] = (200,),
+        extra_headers: dict[str, str] | None = None,
     ) -> dict:
+        headers = dict(self.headers)
+        if extra_headers:
+            headers.update(extra_headers)
         try:
             response = await self._client.request(
                 method,
                 path,
                 params=params,
                 json=json_body,
-                headers=self.headers,
+                headers=headers,
             )
         except httpx.HTTPError as exc:
             raise UpstreamError(
@@ -266,29 +270,92 @@ class AgentScopeHTTPClient:
         name: str,
         system_prompt: str,
         chat_config: dict | None = None,
+        generation_id: str | None = None,
     ) -> str:
+        """``POST /agent/``。
+
+        ``generation_id`` 非空时以公开头 ``X-Nexus-Service-Generation`` 携带
+        创建预检得到的服务代次；服务侧写屏障在任何托管 POST 写入前与当前实例
+        代次比较，不一致则 ``409`` 且不执行原生创建（避免预检后重启错代）。
+        原生独立 CRUD 探针不传该头，维持官方行为。
+        """
         body: dict[str, Any] = {
             "name": name,
             "system_prompt": system_prompt,
         }
         if chat_config is not None:
             body["chat_config"] = chat_config
+        extra_headers = (
+            {"X-Nexus-Service-Generation": generation_id}
+            if generation_id is not None
+            else None
+        )
         result = await self._request(
             "POST",
             "/agent/",
             json_body=body,
             expected=(201,),
+            extra_headers=extra_headers,
         )
-        return result["agent_id"]
+        # 异常 2xx 协议响应（缺 agent_id）无法证明创建是否被受理，收敛为
+        # UpstreamError 交由调用方按“结果未知”处理，绝不冒认成功。
+        agent_id = result.get("agent_id") if isinstance(result, dict) else None
+        if not isinstance(agent_id, str) or not agent_id:
+            raise UpstreamError(
+                "POST",
+                "/agent/",
+                201,
+                "创建响应缺少有效 agent_id",
+            )
+        return agent_id
 
     async def list_agents(self) -> dict:
         return await self._request("GET", "/agent/")
 
-    async def update_agent(self, agent_id: str, **fields: Any) -> dict:
+    async def find_agent(self, agent_id: str) -> dict | None:
+        """按原生顶层 id 查找 AgentView；不存在返回 ``None``。
+
+        官方没有 ``GET /agent/{id}``，只能列目录过滤。响应形状非法时显式
+        抛出 :class:`UpstreamError`（视为上游契约失败），绝不用空结果冒充
+        “不存在”。
+        """
+        listing = await self.list_agents()
+        agents = listing.get("agents")
+        if not isinstance(agents, list):
+            raise UpstreamError(
+                "GET",
+                "/agent/",
+                200,
+                "Agent 列表响应缺少 agents 数组",
+            )
+        for agent in agents:
+            if isinstance(agent, dict) and agent.get("id") == agent_id:
+                return agent
+        return None
+
+    async def update_agent(
+        self,
+        agent_id: str,
+        *,
+        write_revision: int | None = None,
+        **fields: Any,
+    ) -> dict:
+        """``PATCH /agent/{id}``。
+
+        ``write_revision`` 非空时以公开头 ``X-Nexus-Write-Revision`` 携带单调
+        写入修订，服务侧写屏障据此拒绝迟到的旧写请求；该值必须与目标
+        ``system_prompt`` 内的修订标记一致。原生独立 CRUD 不传该头。
+        """
+        extra_headers = (
+            {"X-Nexus-Write-Revision": str(write_revision)}
+            if write_revision is not None
+            else None
+        )
         return await self._request(
             "PATCH",
             f"/agent/{agent_id}",
             json_body=fields,
+            extra_headers=extra_headers,
         )
 
     async def delete_agent(

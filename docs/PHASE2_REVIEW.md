@@ -21,3 +21,5 @@ Codex 独立审查发现的 PID 归属、配置范围、敏感错误、readiness
 ## 风险与未完成范围
 
 这里只验收官方服务与后端集成底座，员工业务、匿名 Conversation、附件、页面和 peer 通信尚未实现。单进程内存总线不承诺多进程恢复；进程控制依赖 macOS/Linux 的 fcntl 与 ps。匿名 UUID 最终仍只适用于受控验证环境。
+
+后续源码审查更正：本阶段只验证了两个 Session 的 workspace ID 不同，尚不能证明物理文件隔离。官方 LocalWorkspaceManager 2.0.10 实际按 Agent ID 共用 workdir。任务 3.2 必须通过公开 WorkspaceManager 扩展修复，并补真实写入与重启隔离证据；此前 PER_SESSION 配置不作为文件隔离通过依据。

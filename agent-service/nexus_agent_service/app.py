@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
@@ -25,9 +26,11 @@ from agentscope.app.workspace_manager import (
     LocalWorkspaceManager,
 )
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware import Middleware
 
 from .bootstrap import ModelBootstrapStatus, bootstrap_default_model
 from .config import ServiceConfig
+from .write_barrier import NativeWriteBarrierMiddleware
 
 
 def build_app(config: ServiceConfig, instance_id: str | None = None) -> FastAPI:
@@ -50,12 +53,24 @@ def build_app(config: ServiceConfig, instance_id: str | None = None) -> FastAPI:
         isolation=IsolationPolicy.PER_SESSION,
     )
 
+    # 每次 build/start 生成新的服务代次标识（非空 UUID）。Nexus 用它区分
+    # “旧单进程请求是否已随重启退出”，不作为可空的控制脚本实例标识。
+    generation_id = uuid.uuid4().hex
+
     app = create_app(
         storage=storage,
         message_bus=InMemoryMessageBus(),
         workspace_manager=workspace_manager,
         enable_scheduler=False,
         enable_channel_worker=False,
+        extra_middlewares=[
+            Middleware(
+                NativeWriteBarrierMiddleware,
+                storage=storage,
+                user_id=config.internal_user_id,
+                generation_id=generation_id,
+            ),
+        ],
         title="Nexus AgentScope Service",
     )
 
@@ -80,6 +95,8 @@ def build_app(config: ServiceConfig, instance_id: str | None = None) -> FastAPI:
     app.router.lifespan_context = nexus_lifespan
 
     app.state.nexus_config = config
+    # 本次 build/start 的服务代次标识（每次构建新生成，永不为 None）。
+    app.state.nexus_generation_id = generation_id
     # 由 scripts/services.py 注入的本次启动随机实例标识（手动启动为 None）。
     app.state.nexus_instance_id = instance_id
     # 就绪状态由真实 lifespan 推进：未完成前不为 ok，退出后清除。
@@ -112,6 +129,11 @@ def _register_nexus_routes(app: FastAPI) -> None:
         return {
             "status": "ok" if ready else "initializing",
             "ready": ready,
+            "generation_id": getattr(
+                request.app.state,
+                "nexus_generation_id",
+                None,
+            ),
             "instance_id": getattr(
                 request.app.state,
                 "nexus_instance_id",

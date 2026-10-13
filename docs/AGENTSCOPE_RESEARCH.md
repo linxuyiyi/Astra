@@ -31,7 +31,7 @@
 - 原生 `AsyncSQLAlchemyStorage`，使用 `sqlite+aiosqlite:///绝对路径/agentscope.db`。
 - 原生 `InMemoryMessageBus`，承载当前进程的会话锁、事件和唤醒。
 - 原生 `LocalWorkspaceManager`，根目录使用持久化路径。
-- 明确使用 `IsolationPolicy.PER_SESSION`；统一内部租户下的不同 Conversation 不共用 workspace。
+- 明确使用 `IsolationPolicy.PER_SESSION` 分配持久 workspace ID，并通过公开 WorkspaceManager 扩展将物理目录按 workspace ID 隔离。官方 2.0.10 LocalWorkspaceManager 实际按 Agent ID 建目录，仅配置 PER_SESSION 不足以隔离文件。
 - Nexus Backend 与 Agent Service 为独立进程；不引入 Celery、Worker Pool 或 Task 业务状态机。
 
 公开导入路径为 `agentscope.app`、`agentscope.app.storage`、`agentscope.app.message_bus`、`agentscope.app.workspace_manager`。多进程或多节点才考虑官方 RedisMessageBus；不能在多进程部署中继续用 InMemoryMessageBus 假定共享锁和消息正常。[服务入口](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_app.py#L166)、[MessageBus 导出](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/message_bus/__init__.py)
@@ -320,7 +320,7 @@ Skill 在 workspace 内按 Agent 归属，MCP 按 Agent/Session 归属；Knowled
 
 短期上下文由原生 AgentState/Session 持久化，不重建一份 Nexus Memory。长期记忆可用官方 AgenticMemoryMiddleware，数据为 workspace 下 `Memory/MEMORY.md` 和 Markdown 记忆文件；也有 Mem0/ReMe 扩展，但不是现成的统一 Memory CRUD 服务。右侧只能展示实际存在的记忆，不能塞入演示条目。[AgenticMemoryMiddleware](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/middleware/_longterm_memory/_agentic_memory/_middleware.py#L359)
 
-原生 workspace 默认 PER_AGENT，实际共享范围是 `(user_id, agent_id)`；在统一内部租户下直接使用默认值会把不同浏览器的文件或个人记忆混到同一员工目录。最终设计显式选 PER_SESSION，使每个私聊 Conversation、每个讨论成员 Session 都拥有独立持久化工作区。短期上下文随原生 Session 保存；此版本不承诺跨 Conversation 共享个人长期记忆。[workspace 隔离分配](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/workspace_manager/_base.py#L85)
+原生 workspace 默认 PER_AGENT，实际共享范围是 `(user_id, agent_id)`；在统一内部租户下直接使用默认值会把不同浏览器的文件或个人记忆混到同一员工目录。最终设计显式选 PER_SESSION 分配持久工作区 ID；后续源码审查发现官方 LocalWorkspaceManager 实际将 workdir 固定为 basedir/agent_id，忽略不同 workspace_id。因此必须用公开 WorkspaceManagerBase 与 LocalWorkspace 扩展按持久 workspace_id 建立独立物理目录，并验证真实写入隔离及重启恢复。仅验证 ID 不同不能证明文件隔离。短期上下文随原生 Session 保存；此版本不承诺跨 Conversation 共享个人长期记忆。[workspace 隔离分配](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/workspace_manager/_base.py#L85)
 
 AgenticMemory 的默认指令鼓励主动写入；本版本不开发经验自动沉淀，因此不默认启用其整套行为。UI 只展示实际可读取的原生记忆信息，没有长期记忆文件时显示空态；不建立 Nexus 自有 Memory 系统，也不写模拟条目。
 
@@ -362,3 +362,13 @@ HTML 原型 `/Users/niuniu/Downloads/Nexus_v1.0.1.html:224` 明确提示删除�
 6. 文本与图片附件实际被读取，其他类型明确限制。
 7. A 通过真实模型工具调用联系 B，B 基于自己的职责和上下文回复，需要时联系 C；去重、预算、中断和重启后的待投递恢复有证据。
 8. 删除策略符合最终确认的历史保留契约，不能以模拟回复、假接口或纯前端状态通过验收。
+
+## 12. 后续源码审查更正与实施边界
+
+物理工作区：固定版本的 `LocalWorkspaceManager.get_workspace` 将磁盘目录设为 `basedir/agent_id`，即使 `IsolationPolicy.PER_SESSION` 生成了不同 ID 也仍共用目录。必须通过公开 `WorkspaceManagerBase`、`LocalWorkspace` 按原生持久 workspace ID 分目录，补实际文件写入隔离与重启验证。阶段二的不同 ID 证据不作为文件隔离通过依据。[官方实现](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/workspace_manager/_local_workspace_manager.py#L128)
+
+资源及工具：未配置 Knowledge manager 时目录接口返回 503 feature-disabled，不能伪装成成功空目录；当前 DeepSeek chat credential 不支持 embedding。MCP workspace 返回包含完整配置，Nexus 必须只投影名称、工具名、健康状态，不能转发凭据、环境变量和认证 URL。原生工具默认包含宿主文件、Shell、Task、Team、Schedule，关闭 scheduler worker 也不会移除工具。保留真实所选 MCP、原生专用 `Skill` 文本读取工具及后续 PeerSend；模型 schema 过滤与权限检查共同限制，不能只移除 toolkit 工具。脚本型技能不因读取 Markdown 就算执行成功。[工具装配](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_service/_toolkit.py#L139)
+
+运行退出与归档：原生先发布 REPLY_END，再在 finally 保存消息与 Session state，最后解除运行锁；保存异常会被外层日志处理，idle 本身不证明成功落盘。慢速 MCP 默认十秒后可能继续作为后台任务，普通 interrupt 不取消后台任务。可通过公开 MessageBus、MessageBusKeys 取消 run/background，等待 session lock 释放且 bg_tasks registry 清空，再对照已观察尾部 reply_id、持久消息与 checkpoint 核对，失败或无法确认时禁止 DELETE。原生 DELETE 自身取消等待超时后仍可能继续删除，不能把它当作归档前屏障。[保存顺序](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_service/_chat.py#L1476)
+
+游标：SSE payload 的 `id` 是 Event ID，`after` 接受的是 MessageBus transport entry ID；原生 SSE 没有暴露 `_entry_id` 或 SSE id。恢复应使用 messages 返回的 `event_cursor`，或公开服务扩展直接取得 bus `(entry_id, event)`，不能将 payload.id 当作 after。replay 最多一千条、成功 checkpoint 会裁剪、重启会清空，因此最终历史仍以原生 SQL 消息校准。[原生 stream](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_router/_session.py#L893)

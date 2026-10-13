@@ -137,6 +137,11 @@ class BackendConfig:
     def expected_agentscope_version(self) -> str:
         return EXPECTED_AGENTSCOPE_VERSION
 
+    @property
+    def database_path(self) -> Path:
+        """Nexus 业务扩展 SQLite 位置（受 ``NEXUS_BACKEND_DATA_DIR`` 控制）。"""
+        return self.data_dir / "nexus.db"
+
 
 def load_config(env: dict | None = None) -> BackendConfig:
     """从环境（及根 ``.env``）构建 :class:`BackendConfig`。"""

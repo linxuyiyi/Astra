@@ -18,6 +18,8 @@ from fastapi import FastAPI, Request, Response
 
 from .adapter import AgentScopeHTTPClient
 from .config import EXPECTED_AGENTSCOPE_VERSION, BackendConfig
+from .db import Database
+from .employees import register_employee_routes
 
 
 def build_app(
@@ -39,15 +41,19 @@ def build_app(
         request_timeout=config.request_timeout,
         connect_timeout=config.connect_timeout,
     )
+    database = Database(config.database_path)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
         app.state.adapter = adapter
+        # 新库直接建表；不做旧模型迁移。
+        await database.init()
         app.state.nexus_backend_ready = True
         try:
             yield
         finally:
             app.state.nexus_backend_ready = False
+            await database.dispose()
             await adapter.aclose()
 
     app = FastAPI(
@@ -57,10 +63,15 @@ def build_app(
     )
     app.state.nexus_config = config
     app.state.adapter = adapter
+    app.state.db = database
+    # 单进程每员工串行锁：覆盖读/校验/上游/本地/补偿的整个业务操作（含原生
+    # 网络调用序列）；只有数据库事务保持短小、不在事务内做网络 I/O。
+    app.state.employee_locks = {}
     app.state.nexus_backend_ready = False
     app.state.nexus_instance_id = instance_id
 
     _register_routes(app)
+    register_employee_routes(app)
     return app
 
 

@@ -918,6 +918,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "python-dotenv" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "uvicorn" },
 ]
 
@@ -934,6 +935,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
 

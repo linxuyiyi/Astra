@@ -16,7 +16,7 @@ AgentScope Python 固定 `2.0.10`，tag commit `e6c014f0be49b2a6f6f62a9453082a0b
 
 `frontend/` 使用 Vue 3、TypeScript、Element Plus、Vite；`backend/` 使用 FastAPI、SQLAlchemy async、SQLite。`agent-service/` 仅使用官方 `agentscope.app.create_app` 和公开扩展，作为独立进程部署。Nexus 后端通过 HTTP 调用官方路由，不导入其私有执行服务，不复制官方核心源码。
 
-最小验证部署使用官方 `AsyncSQLAlchemyStorage` + `aiosqlite`、单进程 `InMemoryMessageBus`、持久化 `LocalWorkspaceManager`。无跨进程事件总线要求时不引入 Redis、Celery 或新微服务。服务仅监听回环地址，前端经 Nexus 访问。生产多副本不在本版本验收范围。
+最小验证部署使用官方 `AsyncSQLAlchemyStorage` + `aiosqlite`、单进程 `InMemoryMessageBus`、持久化工作区；通过公开 `WorkspaceManagerBase` + `LocalWorkspace` 按原生持久 workspace ID 分目录（官方 `LocalWorkspaceManager` 2.0.10 实际按 Agent 分目录，仅设置 PER_SESSION 不足以隔离文件）。无跨进程事件总线要求时不引入 Redis、Celery 或新微服务。服务仅监听回环地址，前端经 Nexus 访问。生产多副本不在本版本验收范围。
 
 ### 2. 明确数据事实源
 
@@ -33,17 +33,19 @@ AgentScope Python 固定 `2.0.10`，tag commit `e6c014f0be49b2a6f6f62a9453082a0b
 
 职责/指令作为必要的可编辑业务分栏，不再建立独立 Agent 执行配置层。跨服务写入用短数据库事务、明确成功/失败与可重试状态处理；禁止本地先展示成功再吞掉上游错误。网络 I/O 不放在数据库锁内。
 
+员工创建及编辑先持久化必要的未完成写入意图，再进行原生调用；所有未确认关联禁止用于新运行。同一员工的编辑在单进程内串行，防止上游与本地提交顺序相反。原生调用超时不代表未提交，保留未完成状态并核对真实记录后才恢复 ready。创建结果未知时用稳定业务员工 ID 的明确关联标记识别本次创建，不按名称近似、时间戳或事件数量猜测，也不盲目再 POST。只保留这一最小写入关联机制，不引入第二套 Agent 管理或分布式事务框架。为防止超时的旧请求迟到覆盖后续编辑，员工必要扩展保存单调写入修订号，写入意图及原生关联标记携带同一修订号；服务公开 ASGI middleware 按 Agent 串行 PATCH/DELETE 的完整处理，并拒绝低于已接受或已持久化修订的写入。恢复通过同修订幂等 PATCH 屏障与精确读取确认，不以一次读到旧值推断失败。创建结果未知的占位，仅在按标记找到唯一原生记录时绑定；释放未创建占位须核对原生确实缺失，且服务启动代次已变化，保证旧单进程请求已退出。
+
 ### 3. 匿名所有者与 workspace 隔离
 
 浏览器只存匿名 UUID、选中项和草稿；后端验证 UUID 并将其作为 owner。采用统一内部 AgentScope 服务租户共享长期员工与原生资源；Conversation 和 Discussion 的读取、流、写入、附件均先由 Nexus 按 owner 过滤。
 
 匿名 UUID 可以被冒用，不是认证。部署说明必须限定受控验证环境。AgentScope 不直接暴露给浏览器；内部扩展回调使用服务端秘密，不把模型凭据或内部密钥发给前端。
 
-原生 workspace 采用 `PER_SESSION`，避免统一租户下不同匿名用户共享文件、附件或个人记忆。原生短期上下文随 Session 持久化；UI 只显示实际可读取的原生记忆信息，没有长期记忆时如实空态，不建设自有 Memory 系统。
+原生 workspace ID 采用 `PER_SESSION`；通过公开 manager 扩展按该持久 ID 建立不同物理目录，避免官方 LocalWorkspaceManager 按 Agent 共用目录导致不同匿名用户共享文件、附件或个人记忆。原生短期上下文随 Session 持久化；UI 只显示实际可读取的原生记忆信息，没有长期记忆时如实空态，不建设自有 Memory 系统。
 
 ### 4. 原生资源选择与员工删除
 
-Skill、MCP Tools、Knowledge 从官方目录列出，空目录显示空态，不补假目录。员工存资源 ID 默认关联；新建 Session 时通过官方 workspace 关联接口与 `knowledge_config` 落实绑定。能力失效必须报错，不能只存标签。工具适配器以明确允许目录控制实际暴露能力，不默认把官方所有 shell/file/team/schedule 工具交给模型。
+Skill、MCP Tools、Knowledge 从官方目录列出，空目录显示空态，不补假目录。员工存资源 ID 默认关联；新建 Session 时通过官方 workspace 关联接口与 `knowledge_config` 落实绑定。能力失效必须报错，不能只存标签。工具适配器以明确允许目录控制实际暴露能力；保留原生专用 Skill 读取工具、实际所选 MCP 工具及阶段五 PeerSend，并在模型 schema 与权限检查两处约束。默认不开放 Bash/PowerShell、任意宿主文件读写、Task、Team、Schedule 和 reset_tools。读取 Skill 文本不等同执行其脚本，脚本型能力缺少允许工具时明确报告限制，不假称运行成功。
 
 官方 DELETE Agent 会级联删除其 Session，而原型明确承诺历史保留。删除先冻结新触发和在途投递，向原生运行发中断请求，并等待真实运行退出、原生状态 idle 与最终持久化完成；202 中断受理和 REPLY_END 事件均不能代替这一屏障。随后完整分页导出该员工原生历史和附件引用为只读归档，再真实调用原生 DELETE；成功后标记已删除并从可运行列表/讨论成员中移除。私聊历史菜单提供已删除员工历史入口，不新增页面。归档失败禁止执行 DELETE；上游删除失败保留可重试删除状态，禁止发起新运行。不能用单纯 soft-delete 冒充已删除原生 Agent。
 

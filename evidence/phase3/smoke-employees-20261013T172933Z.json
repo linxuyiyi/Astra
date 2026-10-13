@@ -1,0 +1,79 @@
+{
+  "mode": "full",
+  "run_at": "2026-10-13T17:29:26.531654+00:00",
+  "scope": "crud",
+  "model_check": {
+    "status": "skipped",
+    "reason": "未提供 AGENTSCOPE_MODEL_API_KEY，真实模型新会话校验未运行；本证据仅证明真实进程 CRUD，不代表模型行为。"
+  },
+  "checks": {
+    "backend_health_ok": true,
+    "upstream_down_reports_failure": true
+  },
+  "agentscope": {
+    "base_url": "http://127.0.0.1:63862",
+    "version": "2.0.10",
+    "reachable": true
+  },
+  "backend": {
+    "base_url": "http://127.0.0.1:63863",
+    "status": "ok"
+  },
+  "created": {
+    "id": "emp_17a6c5ecf3c74a02a3de89d0b26b03a3",
+    "agent_id": "e1cfc41f0b2a48c0be4a777d5a0a8b98",
+    "name": "星河",
+    "name_source": "native",
+    "domain": "测试自动化工程师",
+    "responsibilities": "负责自动化脚本开发、框架维护与失败定位。",
+    "instructions": "收到消息后先判断能否直接回答；信息不足时追问。",
+    "avatar": "👩🏻‍💻",
+    "enabled": true,
+    "native_available": true,
+    "sync_state": "ready",
+    "created_at": "2026-10-13T17:29:29.867282",
+    "updated_at": "2026-10-13T17:29:29.872859"
+  },
+  "native_after_create": {
+    "id": "e1cfc41f0b2a48c0be4a777d5a0a8b98",
+    "data_id": "bfcc5b639a674b50b75cfab9b7f47b5e",
+    "two_ids_differ": true,
+    "name": "星河",
+    "prompt_has_domain": true,
+    "prompt_has_responsibilities": true
+  },
+  "readback": {
+    "list_total": 1,
+    "search_name_total": 1,
+    "search_domain_total": 1,
+    "detail_name": "星河",
+    "detail_enabled": true
+  },
+  "native_after_patch": {
+    "prompt_has_new_responsibilities": true,
+    "prompt_dropped_old": true
+  },
+  "errors": {
+    "duplicate_name_status": 409,
+    "duplicate_domain_status": 409,
+    "long_name_status": 422,
+    "bad_avatar_status": 422
+  },
+  "concurrency": {
+    "statuses": [
+      201,
+      409
+    ],
+    "native_before": 1,
+    "native_after": 2,
+    "native_delta": 1
+  },
+  "upstream_down": {
+    "create_status": 504,
+    "list_status": 504
+  },
+  "crud_status": "passed",
+  "status": "passed",
+  "evidence_path": "evidence/phase3/smoke-employees-20261013T172933Z.json",
+  "key_recorded": false
+}

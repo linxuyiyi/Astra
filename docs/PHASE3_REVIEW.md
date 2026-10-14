@@ -45,3 +45,11 @@ Codex亲自执行全量pytest：283 passed；OpenSpec strict validate与diff che
 Codex亲自通过交付控制脚本启动两真实进程并注入真实DeepSeek凭据，执行 `scripts/smoke_knowledge.py --with-model`；`evidence/phase3/smoke-knowledge-20261014T151147Z.json` 全部13项检查passed。两份真实TXT各ready且chunk_count=1，实际embedding/search命中目标文档校验值；用户提问与员工指令没有该值，真实模型基于检索回答 ZS8d9f867a 并出现原生HINT_BLOCK。空库零结果仍可调用模型；embedding不可达、部分KB不可构建、KB删除均明确error，模型前中止。真实stop/start后generation变化，KB/文档chunk/search/原Session绑定恢复，真实模型再次按文档作答。密钥未写入证据。
 
 3.2.2验收已覆盖资源目录/真实绑定、启停guard、共同factory、物理隔离、MCP真实模型调用及Knowledge真实检索，允许勾选。限制仍为单进程受控环境、无状态Streamable HTTP MCP、所选脚本Skill不自动获得Shell能力；删除归档与三个页面仍未实现，不据此声称完整员工管理阶段或系统完成。
+
+## 任务 3.2.3.1：内容摘要基础，完整屏障仍未完成
+
+外部 Coding Agent 已实现公开 Msg/AgentState 的纯摘要函数。消息保留身份、顺序、实际附件 source、工具参数/输出/metadata、合法 Thinking extra 与权限规则；仅按公开 block 路径去除构建时间及工具输出临时文本 ID。State 对实际完整 model_dump 计算摘要，不复制内容到业务存储。
+
+Codex 独立审查复现并闭环四项问题：多模态 Hint 与非空 PermissionRule 原先无法 JSON 序列化，Thinking 的 signature/redacted_thinking_data 原先漏入摘要，metadata/structured_output 内合法 Pydantic 值原先也无法编码。修复后 Codex 亲自运行回归探针及全量 `.venv/bin/python -m pytest -q`，297 passed（12.34s）；OpenSpec strict validate通过。新增14项测试使用真实公开事件重建，验证随机嵌套ID/时间差异不误报，实际文本、工具payload、权限规则、附件内容和State变化仍可区分，嵌套 Pydantic 值与原生 JSON 安全等价对象摘要相同。
+
+本小步没有调用模型，尚未装配存储观察、持久索引或冻结/排空接口，不作为真实保存、重启或删除验收证据。3.2.3.1保持未完成；后续仍须真实存储提交/失败、未确认记录重启、慢保存与重复取消、独立进程和真实模型尾部验证。

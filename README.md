@@ -34,6 +34,7 @@ scripts/services.py                  两个服务的统一 start/stop/status 控
 scripts/smoke_runtime.py             真实进程 + 真实模型运行时联调脚本
 scripts/smoke_employees.py           员工管理真实进程冒烟脚本
 scripts/smoke_resources.py           资源目录/Session 绑定/运行 guard 真实进程冒烟
+scripts/smoke_knowledge.py           知识库本地 embedding 真实索引/检索/重启冒烟
 tests/backend/fixtures.py            公开 SkillHubBase 测试夹具（真实 tar.gz 归档）
 tests/backend/mcp_fixture_http.py    测试用真实无状态 Streamable HTTP MCP（正向）
 tests/backend/mcp_fixture_stdio.py   测试用 stdio MCP（明确不支持的负向夹具）
@@ -52,6 +53,9 @@ evidence/phase3/                     员工管理脱敏验证证据
   （`SessionWorkspaceManager`）按该 ID 的 SHA-256 建独立目录，因此同员工
   不同 Session 的物理文件互不复用；官方 `LocalWorkspaceManager` 2.0.10 的
   workdir 固定为 `basedir/agent_id`，不能提供这一隔离。
+- 知识库（可选，启用时）：向量库与文档 blob 默认从实际
+  `AGENTSCOPE_DATA_DIR` 派生为 `<data_dir>/knowledge/vector` 与
+  `<data_dir>/knowledge/blobs`，隔离实例不会落入项目默认目录。
 - PID：`data/agentscope/run/agentscope.pid`
 - 日志：`data/agentscope/logs/agentscope.log`
 
@@ -93,9 +97,13 @@ AgentScope 服务关键变量：
 | `AGENTSCOPE_MODEL_PARAMETERS` | 空 | 可选，默认模型 parameters（JSON 对象） |
 | `NEXUS_INTERNAL_TOKEN` | 空 | 服务端内部秘密（运行 guard 回调鉴权），两进程共享；留空时控制脚本生成并复用 |
 | `NEXUS_GUARD_URL` | `http://127.0.0.1:8765` | AgentScope 回调 Nexus 内部授权端点地址（仅回环） |
-| `AGENTSCOPE_KNOWLEDGE_ENABLED` | `false` | 是否启用官方知识库（需可选依赖与 embedding 凭据） |
-| `AGENTSCOPE_KNOWLEDGE_VECTOR_DIR` | `data/agentscope/knowledge/vector` | 持久化 Qdrant 向量库目录 |
-| `AGENTSCOPE_KNOWLEDGE_BLOB_DIR` | `data/agentscope/knowledge/blobs` | 知识文档 BlobStore 目录 |
+| `AGENTSCOPE_KNOWLEDGE_ENABLED` | `false` | 是否启用官方知识库 |
+| `AGENTSCOPE_KNOWLEDGE_VECTOR_DIR` | 由 `AGENTSCOPE_DATA_DIR` 派生 | 持久化 Qdrant 向量库目录（显式覆盖时按项目根解析） |
+| `AGENTSCOPE_KNOWLEDGE_BLOB_DIR` | 由 `AGENTSCOPE_DATA_DIR` 派生 | 知识文档 BlobStore 目录 |
+| `AGENTSCOPE_EMBEDDING_HOST` | `http://127.0.0.1:11434` | 外部 Ollama 地址（模型层依赖，本服务不管理该进程） |
+| `AGENTSCOPE_EMBEDDING_MODEL` | `embeddinggemma:300m` | embedding 模型 |
+| `AGENTSCOPE_EMBEDDING_DIMENSIONS` | `768` | 向量维度 |
+| `AGENTSCOPE_EMBEDDING_CREDENTIAL_ID` | `nexus-default-ollama-embedding` | 固定凭据 id（重启复用） |
 
 Nexus 后端关键变量：
 
@@ -314,6 +322,62 @@ DeepSeek 凭据，则复用该持久凭据并仍视为已配置，无需每次�
   （含 Skill），长工具随原生 run 等待/可取消，不转入后台任务、不冒充 external。
   读取 Skill Markdown 不等同执行脚本，脚本型技能缺少允许工具时明确能力限制。
 
+## 知识库本地检索（阶段 3.2.2）
+
+原生知识库（建库/上传/索引/检索）由 AgentScope 服务管理，Nexus **不新增知识
+库管理页面或第二套 CRUD**；Nexus 只做三件事：把资源目录和员工默认关联暴露给
+产品路径、在共同 Session factory 里把所选 KB 落到原生 Session 的
+`knowledge_config`（显式 `{"mode":"static","top_k":3,"emit_hint_event":true}`，
+官方默认 `agentic` 不保证首轮检索）、并在运行 guard 里核实所选 KB 都已真实
+检索。
+
+- **模型层依赖（Ollama，非业务微服务、非模型配置页面）**：官方
+  `OllamaEmbeddingModel` 经 `OllamaCredential` 记录连接信息；服务启动时按固定
+  id `nexus-default-ollama-embedding` 用公开 `storage.upsert_credential` 引导
+  凭据（重启同 id 复用），配置只从服务环境读取：
+
+  | 变量 | 默认 | 说明 |
+  | --- | --- | --- |
+  | `AGENTSCOPE_KNOWLEDGE_ENABLED` | `false` | 是否启用官方知识库 |
+  | `AGENTSCOPE_EMBEDDING_HOST` | `http://127.0.0.1:11434` | 外部 Ollama 地址 |
+  | `AGENTSCOPE_EMBEDDING_MODEL` | `embeddinggemma:300m` | embedding 模型 |
+  | `AGENTSCOPE_EMBEDDING_DIMENSIONS` | `768` | 向量维度 |
+  | `AGENTSCOPE_EMBEDDING_CREDENTIAL_ID` | `nexus-default-ollama-embedding` | 固定凭据 id |
+
+  向量库（官方公开 `QdrantStore`）与文档 blob（公开 `LocalBlobStore`）目录由
+  Nexus 从实际 `AGENTSCOPE_DATA_DIR` 派生，其进入/退出由官方 `create_app`
+  生命周期管理；不重复进入、不另建资源层。Ollama 服务由部署方提供并启停，
+  **本服务不自动管理外部 Ollama 进程**。标准启停/下载：
+
+  ```bash
+  ollama serve                       # 启动本地模型服务（默认 127.0.0.1:11434）
+  ollama pull embeddinggemma:300m    # 下载 embedding 模型
+  curl -s http://127.0.0.1:11434/api/tags   # 健康检查
+  ```
+
+- **回环代理绕过**：官方 `OllamaEmbeddingModel` 直接构造
+  `ollama.AsyncClient(host=...)`，没有公开的 `trust_env`/`client_kwargs` 入口，
+  无法在其内部禁用代理。`scripts/services.py` 启动子进程时会合并标准
+  `NO_PROXY`/`no_proxy`（保留用户既有列表与云端代理）并补入
+  `127.0.0.1,localhost,::1`；手动 `python -m nexus_agent_service` 时需自行导出
+  等价 `NO_PROXY`（模板见 `.env.example`），不做全局禁用代理或改系统设置。
+- **严格检索边界（公开最小扩展，不重做 RAG）**：官方装配会**跳过**无法解析的
+  KB，并在 static 检索异常时 log-and-skip 继续裸模型调用。服务用公开子类
+  `ObservedCollectionPerKbManager`（继承官方 `CollectionPerKbManager`，只覆写
+  `get_knowledge`）把原生 `KnowledgeBase` 包一层，`search` **仍委托原生实现**，
+  仅在成功/失败时把本轮结果写入模块级 `ContextVar`（按轮独立、原生
+  `asyncio.gather` 并发检索共享同一记录、结束清理）。运行 guard 在**模型调用
+  之前**（下游首个事件、`MODEL_CALL_START` 之前）用可信授权快照中的 KB id
+  核对：漏装/被跳过/检索异常一律 `RunNotAuthorizedError`，**不发布
+  `MODEL_CALL_START`、不进入模型**；零结果的成功检索允许继续。不全局/session
+  共享最近检索标记、不持久检索副本、不另建 RAG 状态机、不改核心。
+- **知识库原生资源管理入口（官方公开 HTTP，供部署/联调）**：
+  `POST /credential/` 引导 embedding 凭据；`POST /knowledge_bases/` 建库；
+  `POST /knowledge_bases/{kb}/documents`（multipart `file`，`content_type`）
+  上传；`GET /knowledge_bases/{kb}/documents/status?ids=` 轮询到 `ready` 且
+  `chunk_count>0`（没有 `indexed` 枚举）；`POST /knowledge_bases/{kb}/search`
+  按 `query`/`top_k` 检索。这些是 AgentScope 原生路由，不是 Nexus 产品接口。
+
 ## 测试与验证
 
 ```bash
@@ -344,6 +408,12 @@ uv run python scripts/smoke_resources.py
 
 # 追加真实模型启用轮与所选 MCP 真实工具轮（需 Root 注入 AGENTSCOPE_MODEL_API_KEY）
 uv run python scripts/smoke_resources.py --with-model
+
+# 知识库本地 embedding 真实索引/检索/失败边界/重启恢复冒烟（需外部只读 Ollama）
+uv run python scripts/smoke_knowledge.py
+
+# 追加真实模型 Knowledge 回答轮（需注入 AGENTSCOPE_MODEL_API_KEY）
+uv run python scripts/smoke_knowledge.py --with-model
 ```
 
 `pytest` 覆盖三类：不启动服务的纯单元测试；`httpx.MockTransport` 标记的
@@ -397,6 +467,20 @@ MCP**（`mcp_fixture_http.py`，`is_stateful=False`、`http_mcp`、`enable_tools
 与所选 MCP 真实工具轮（要求 `TOOL_CALL_START` 且回复含真实 MCP `compute_plus`
 计算的 `42`），重启后真实再次调用所选工具；未注入时明确标记 `skipped`，不以
 “错误密钥无回复”冒充 guard 生效。脚本不读取用户 Home，密钥由 Root 注入。
+
+知识库冒烟 `scripts/smoke_knowledge.py` 通过真实两个进程与**外部只读**的本地
+Ollama 实例验证完整原生 RAG：两个不同主题 KB + 真实 TXT 上传、轮询
+`documents/status` 到 `ready`（`chunk_count>0`）、真实 `search` 命中含文档独有
+随机值的 chunk；经产品路径把 KB 关联员工并用共同 factory 建会话，核对 Nexus
+目录投影、员工关联与原生 Session `knowledge_config`（`static` 参数）对齐。运行
+边界无需真实 chat 模型：空库零结果检索必须进入模型（出现 `MODEL_CALL_START`），
+而 embedding 不可达（凭据 host 指向未监听端口）、两个所选 KB 之一不可构建、KB
+被删除三种情形都必须真实流 `error` 且**没有** `MODEL_CALL_START`/成功回答（不
+以“错误密钥无回复”冒充 guard 生效）。随后 stop/start 两个进程（严格退出码 0、
+`generation_id` 变化）核对 KB/文档 chunk/检索/Session 关联仍恢复。`--with-model`
+（Root 注入密钥）追加真实 SSE 含 `HINT_BLOCK` 且回答含文档独有值，重启后再次
+验证；未注入时 `model_check` 明确 `skipped`。脚本只使用隔离 data_dir，绝不
+停止/删除外部 Ollama 实例或模型目录；清理只删除本次创建的 KB/Agent。
 证据写入 `evidence/phase3/`（脱敏）。
 
 新增/更新自动化测试：`tests/backend/test_resources.py`（真实/模拟目录投影、
@@ -449,14 +533,19 @@ DENY、授权响应字段非法即拒绝、recording model 证明鉴权失败不
 启停、共同 Session factory（Conversation 绑定、能力读回）与服务端运行 guard
 （工具允许目录 + 内部授权回调，含真实进程冒烟）；删除前只读历史归档（3.2.3）
 与前端页面（3.3）尚未实现，因此尚未用真实模型证明“改职责后新对话生效”（脚本
-已就绪，待注入密钥验证）。知识库默认未启用，未配置 embedding 时目录明确不可用，
-**不声称 RAG 已验证**；启用入口为可选依赖 `qdrant-client` 与
-`AGENTSCOPE_KNOWLEDGE_ENABLED`，仍需服务端真实 embedding 凭据与知识库。
+已就绪，待注入密钥验证）。知识库默认未启用，未配置 embedding 时目录明确不可用；
+3.2.2 已用 `scripts/smoke_knowledge.py` 在本机隔离进程对**外部只读** Ollama
+（`embeddinggemma:300m`，768 维）完成**真实本地 embedding → 索引 → 原生
+static 检索 → 员工 KB 绑定/会话 → 进程重启恢复**验证，并覆盖 embedding 不可达/
+部分 KB 不可构建/KB 删除时模型调用前严格中止；**真实模型据检索内容作答**与
+`HINT_BLOCK` 仍待 Root 注入密钥后由 `--with-model` 验收。启用入口为 `qdrant-client`
+与 `agentscope[model-ollama]`（已在交付依赖内）及 `AGENTSCOPE_KNOWLEDGE_ENABLED`。
 原生写屏障、单调写入修订与创建代次释放只在 **单进程部署**范围内成立：锁与高
 水位保存在 AgentScope 服务进程内存中，不做多副本协调；`reconcile` 对未知编辑
 结果要求先通过同修订幂等 `PATCH` 写屏障再确认 `desired`，未带 Nexus 标记的原生
 探针不受影响。运行 guard 与工具允许目录同样只在单进程、单服务实例语义下保证。
-剩余未验证：真实模型多轮推理（待密钥）、附件实际读取、知识检索、三员工主动
+剩余未验证：真实模型多轮推理（待密钥）、附件实际读取、真实模型据知识库作答
+（本地 embedding/索引/检索已由隔离冒烟验证，待密钥验收模型段）、三员工主动
 通信；单进程 `InMemoryMessageBus` 不保证多进程事件总线恢复。所有 Agent 运行都
 必须绑定到已授权 Conversation；直接裸建原生会话的旧探针会被 guard 拒绝。
 

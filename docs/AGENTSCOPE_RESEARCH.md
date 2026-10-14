@@ -388,3 +388,13 @@ Knowledge manager启用后官方已有默认 TextParser/ApproxTokenChunker；Col
 v1.0.1 明确只支持官方无状态 Streamable HTTP 客户端：`is_stateful=False`、`mcp_config.type=http_mcp`，有效 HTTP(S) URL，path 不以 `/sse` 或 `/messages/` 结尾，并通过真实握手。stdio、SSE 与 stateful 条目安全投影为不可选及原因，保存/恢复/运行均拒绝；不修改核心、不复制 MCP 实现，也不让用户把 stdio 错配成无状态。该边界是当前版本限制，不意味着所有 MCP 传输均可用。
 
 无状态 list_raw_tools 与 MCPTool.call 在当前调用 task 中以嵌套 async with 进入并退出 transport/ClientSession，不持有跨请求 scopes。后续必须实测发现/工具调用、协议失败/超时/取消后的再次调用，以及服务重启后恢复；远端操作取消不承诺回滚。受控 facade 去掉框架 state 参数后委托原 MCPTool，并保留原权限决策，不把本地允许目录等同于强制 ALLOW。[发现](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/mcp/_mcp_client.py#L439)、[执行](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/tool/_adapters.py#L330)
+
+Knowledge hook 顺序补充：固定版本先加入 extra_agent_middlewares，最后 append 原生 RAG；hook 按注册顺序由前者包裹后者。额外 audit.on_reply 可以先建立本轮 ContextVar，原生 static search 在 RAG.on_reasoning(cur_iter==0) 中完成。reasoning core 先 yield ModelCallStartEvent，再进入 on_model_call；所以严格禁止检索失败时流中出现 MODEL_CALL_START，需要额外公开 audit.on_reasoning 在向外 yield 该事件前检查检索事实，失败中止并关闭下游生成器。on_model_call保留二次检查；不改核心、不重排私有列表、不另做检索。
+
+## 15. 删除屏障进一步核实
+
+官方 POST /chat 在取得Session运行锁前先 registry.spawn，因此 lock=false 不足以证明没有已受理任务。公开 agentscope.app.deps.get_chat_run_registry/get_session_service/get_message_bus/get_storage 可取得真实Task与公开服务；该模块无__all__，但这些是无下划线模块的显式公开函数。registry.get(sid)的Task只在done callback移除，done涵盖shielded persist finally，但保存异常被ChatService.run吞掉。需要冻结admission后取消并等待实际Task、Session锁释放和bg registry空，超时禁止DELETE，不对落盘Task再次强制取消。
+
+额外公开InMemoryMessageBus.acquire_lock扩展可在等待前/获得锁后按冻结事实拒绝Session lock；该锁在内部error reporter try之外，不会再合成assistant error尾部，也覆盖直接native wakeup。服务侧freeze仅临时栅栏，重启从Nexus deleting事实核对，查询失败拒绝。
+
+Middleware没有after_persist hook。公开AsyncSQLAlchemyStorage子类可在await super.upsert_message/update_session_state真实commit返回后记录确认，异常记录未确认并重抛；最小持久观察索引只保存reply/message ID、摘要和写入确认，原生内容仍从公开storage读取。不能仅核对最新checkpoint，因为旧轮次保存失败可能被后续成功覆盖/裁剪；需核对全部已观察未确认回复，重启不能清零冒充成功。按需以公开AssistantMsg.append_event观察实际事件摘要，不能将中断时最终fallback Msg当作按events保存的部分回复。该屏障及归档目前仍未实现，以上为固定源码的设计依据。

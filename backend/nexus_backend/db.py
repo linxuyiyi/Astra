@@ -154,9 +154,11 @@ class Conversation(Base):
     session_marker: Mapped[str] = mapped_column(String(128))
     title: Mapped[str] = mapped_column(String(72))
     capability_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
-    # 最小创建意图：占位落盘时持久化本次创建的目标（原生 Agent id、期望模型
-    # 配置、Knowledge/Skill/MCP 稳定 ID、创建时服务代次）。恢复只按此意图核对
-    # 原生 Session，绝不从后续可能被编辑的 Employee 默认值重新猜目标。
+    # 最小创建意图（瞬时）：占位落盘时持久化本次创建的目标（原生 Agent id、
+    # 期望模型配置、Knowledge/Skill/MCP 稳定 ID、创建时服务代次）。恢复只按此
+    # 意图核对原生 Session，绝不从后续可能被编辑的 Employee 默认值重新猜目标。
+    # 同一字段同时承载 Knowledge 创建目标，不另建机制。**转为 ready 时清空**：
+    # 已核对的原生绑定即事实源，不再复制原生模型参数；未完成必须保留以核对。
     create_intent: Mapped[dict | None] = mapped_column(
         JSON,
         nullable=True,

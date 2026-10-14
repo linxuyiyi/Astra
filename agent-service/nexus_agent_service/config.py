@@ -32,6 +32,18 @@ DEFAULT_CHAT_MODEL_TYPE = "deepseek_chat"
 # 原生 DeepSeekCredential 的类型标识，用于复用已持久化凭据时校验。
 DEFAULT_CREDENTIAL_TYPE = "deepseek_credential"
 
+# ---- 可选知识库的本地 embedding（Ollama）依赖配置 ----
+# 模型层依赖：Ollama 服务由部署方提供，本服务只通过官方 OllamaCredential 记录
+# 连接信息，不管理也不自动启停该外部进程。
+DEFAULT_EMBEDDING_HOST = "http://127.0.0.1:11434"
+DEFAULT_EMBEDDING_MODEL = "embeddinggemma:300m"
+DEFAULT_EMBEDDING_DIMENSIONS = 768
+# 固定凭据 ID 使每次启动命中同一原生记录（upsert 幂等），重启后复用。
+DEFAULT_EMBEDDING_CREDENTIAL_ID = "nexus-default-ollama-embedding"
+DEFAULT_EMBEDDING_CREDENTIAL_NAME = "nexus-default-embedding"
+# 原生 OllamaCredential 的类型标识。
+EMBEDDING_CREDENTIAL_TYPE = "ollama_credential"
+
 MIN_PORT = 1
 MAX_PORT = 65535
 
@@ -90,6 +102,22 @@ def _parse_bool(raw: str | None) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _parse_dimensions(raw: str | None) -> int:
+    """解析 embedding 维度，必须为正整数；非法明确报错。"""
+    try:
+        value = int(raw) if raw is not None else DEFAULT_EMBEDDING_DIMENSIONS
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "AGENTSCOPE_EMBEDDING_DIMENSIONS 必须是正整数，"
+            f"实际为 {raw!r}",
+        ) from exc
+    if value <= 0:
+        raise ValueError(
+            f"AGENTSCOPE_EMBEDDING_DIMENSIONS 必须为正，实际为 {value}",
+        )
+    return value
+
+
 def _parse_model_parameters(raw: str | None) -> dict:
     """解析 ``AGENTSCOPE_MODEL_PARAMETERS``（JSON 对象）。
 
@@ -131,11 +159,18 @@ class ServiceConfig:
     # 前端、不写日志；为空表示不启用 guard。
     nexus_internal_token: str | None = field(default=None, repr=False)
     nexus_guard_url: str = DEFAULT_GUARD_URL
-    # 可选：知识库功能开关与持久化目录。默认关闭（不配置 embedding 凭据时
-    # 目录接口返回 503 feature-disabled，不伪造空目录）。
+    # 可选：知识库功能开关与持久化目录。目录**必须从实际 AGENTSCOPE_DATA_DIR
+    # 派生**，隔离实例不得落入项目默认 data。默认关闭（未启用时目录接口返回
+    # 503 feature-disabled，不伪造空目录）。
     knowledge_enabled: bool = False
     knowledge_vector_dir: Path | None = None
     knowledge_blob_dir: Path | None = None
+    # 知识库使用的本地 Ollama embedding 依赖（非密钥、非模型配置页面）。
+    embedding_host: str = DEFAULT_EMBEDDING_HOST
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL
+    embedding_dimensions: int = DEFAULT_EMBEDDING_DIMENSIONS
+    embedding_credential_id: str = DEFAULT_EMBEDDING_CREDENTIAL_ID
+    embedding_credential_name: str = DEFAULT_EMBEDDING_CREDENTIAL_NAME
 
     @property
     def database_path(self) -> Path:
@@ -202,6 +237,21 @@ def load_config(env: dict | None = None) -> ServiceConfig:
 
     data_dir = _env_path(get("AGENTSCOPE_DATA_DIR", "data/agentscope"))
 
+    # 知识库目录默认从实际 AGENTSCOPE_DATA_DIR 派生，避免隔离实例写入项目
+    # 默认 data；显式配置时按项目根解析（绝对路径按原样）。
+    raw_vector_dir = get("AGENTSCOPE_KNOWLEDGE_VECTOR_DIR")
+    raw_blob_dir = get("AGENTSCOPE_KNOWLEDGE_BLOB_DIR")
+    vector_dir = (
+        _env_path(raw_vector_dir)
+        if raw_vector_dir
+        else (data_dir / "knowledge" / "vector")
+    )
+    blob_dir = (
+        _env_path(raw_blob_dir)
+        if raw_blob_dir
+        else (data_dir / "knowledge" / "blobs")
+    )
+
     return ServiceConfig(
         host=host,
         port=port,
@@ -229,16 +279,25 @@ def load_config(env: dict | None = None) -> ServiceConfig:
         knowledge_enabled=_parse_bool(
             get("AGENTSCOPE_KNOWLEDGE_ENABLED"),
         ),
-        knowledge_vector_dir=_env_path(
-            get(
-                "AGENTSCOPE_KNOWLEDGE_VECTOR_DIR",
-                "data/agentscope/knowledge/vector",
-            ),
+        knowledge_vector_dir=vector_dir,
+        knowledge_blob_dir=blob_dir,
+        embedding_host=get(
+            "AGENTSCOPE_EMBEDDING_HOST",
+            DEFAULT_EMBEDDING_HOST,
         ),
-        knowledge_blob_dir=_env_path(
-            get(
-                "AGENTSCOPE_KNOWLEDGE_BLOB_DIR",
-                "data/agentscope/knowledge/blobs",
-            ),
+        embedding_model=get(
+            "AGENTSCOPE_EMBEDDING_MODEL",
+            DEFAULT_EMBEDDING_MODEL,
+        ),
+        embedding_dimensions=_parse_dimensions(
+            get("AGENTSCOPE_EMBEDDING_DIMENSIONS"),
+        ),
+        embedding_credential_id=get(
+            "AGENTSCOPE_EMBEDDING_CREDENTIAL_ID",
+            DEFAULT_EMBEDDING_CREDENTIAL_ID,
+        ),
+        embedding_credential_name=get(
+            "AGENTSCOPE_EMBEDDING_CREDENTIAL_NAME",
+            DEFAULT_EMBEDDING_CREDENTIAL_NAME,
         ),
     )

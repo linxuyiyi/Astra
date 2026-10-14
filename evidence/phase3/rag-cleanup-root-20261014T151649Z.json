@@ -1,0 +1,9 @@
+{
+  "status": "passed",
+  "scope": "real_framework_unit_recording_model_not_ai_integration",
+  "rag_hints_actually_generated": 1,
+  "rag_hints_remaining": 0,
+  "recording_model_calls": 0,
+  "start_event_seen": false,
+  "context_var_cleared": true
+}

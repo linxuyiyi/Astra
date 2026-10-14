@@ -47,6 +47,10 @@ AgentScope Python 固定 `2.0.10`，tag commit `e6c014f0be49b2a6f6f62a9453082a0b
 
 Skill、MCP Tools、Knowledge 从官方目录列出，空目录显示空态，不补假目录。员工存资源 ID 默认关联；新建 Session 时通过官方 workspace 关联接口与 `knowledge_config` 落实绑定。能力失效必须报错，不能只存标签。工具适配器以明确允许目录控制实际暴露能力；保留原生专用 Skill 读取工具、实际所选 MCP 工具及阶段五 PeerSend，并在模型 schema 与权限检查两处约束。默认不开放 Bash/PowerShell、任意宿主文件读写、Task、Team、Schedule 和 reset_tools。读取 Skill 文本不等同执行其脚本，脚本型能力缺少允许工具时明确报告限制，不假称运行成功。
 
+原生运行退出屏障还须覆盖已登记但尚未取得 Session 锁的任务：通过公开依赖读取真实 chat task registry，冻结 admission 后等待已受理 Task、Session lock 与后台 registry 全部排空。公开 MessageBus 扩展在取得运行锁前后拒绝冻结 Session，覆盖原生 wakeup，避免冻结后再生成错误消息尾部。服务内临时冻结集合由 Nexus 持久 deleting 事实恢复，状态查询失败拒绝放行，不另建服务侧员工状态表。
+
+原生保存异常可能被日志吞掉，idle/Task done 不能证明历史提交。通过公开 Storage 子类观察原生 upsert_message/update_session_state 的真实提交结果，并持久保存最小的待确认 reply/message ID、内容摘要及写入确认索引；归档前从原生 storage 读回核对全部未确认尾部。此索引不保存输出全文、不承担运行编排或另一套 Runtime 状态，原生消息仍是唯一内容事实源。重启不能把丢失观察当作提交成功；无法确认或已有未收敛保存失败时阻止 DELETE。
+
 官方 DELETE Agent 会级联删除其 Session，而原型明确承诺历史保留。删除先冻结新触发和在途投递，向原生运行发中断请求，并等待真实运行退出、原生状态 idle 与最终持久化完成；202 中断受理和 REPLY_END 事件均不能代替这一屏障。随后完整分页导出该员工原生历史和附件引用为只读归档，再真实调用原生 DELETE；成功后标记已删除并从可运行列表/讨论成员中移除。私聊历史菜单提供已删除员工历史入口，不新增页面。归档失败禁止执行 DELETE；上游删除失败保留可重试删除状态，禁止发起新运行。不能用单纯 soft-delete 冒充已删除原生 Agent。
 
 ### 5. 私聊流、断线与幂等

@@ -242,6 +242,11 @@ async def _set_status(
             row.agent_id = agent_id
         if snapshot is not None:
             row.capability_snapshot = snapshot
+        if status == STATUS_READY:
+            # 转 ready 即已核对原生绑定与能力：瞬时创建意图（含期望模型参数、
+            # Knowledge/Skill/MCP 目标、创建代次）不再需要，清理以免残留即成为
+            # 第二份事实源。未完成（creating/incomplete）必须保留以供恢复核对。
+            row.create_intent = None
         await session.commit()
 
 
@@ -505,15 +510,25 @@ async def _verify_and_bind(
             502,
             "原生 Session 的模型绑定与预期不一致。",
         )
-    native_knowledge = (config.get("knowledge_config") or {}).get(
-        "knowledge_base_ids",
-        [],
-    )
-    if set(native_knowledge) != set(target.knowledge):
+    native_kb_config = config.get("knowledge_config") or {}
+    native_knowledge = native_kb_config.get("knowledge_base_ids", [])
+    if list(native_knowledge) != list(target.knowledge):
         raise ConversationError(
             502,
             "原生 Session 的 Knowledge 关联与所选不一致。",
         )
+    if target.knowledge:
+        # 非空选择必须落实约定的 static RAG 参数；实际读回不一致即不返回 ready，
+        # 避免默认 agentic 不保证首轮检索而被误当已绑定。
+        native_params = native_kb_config.get("parameters")
+        if not isinstance(native_params, dict) or any(
+            native_params.get(key) != value
+            for key, value in _KNOWLEDGE_SEARCH_PARAMETERS.items()
+        ):
+            raise ConversationError(
+                502,
+                "原生 Session 的 Knowledge 检索参数与约定不一致。",
+            )
     await _check_catalog(adapter, "knowledge", target.knowledge)
     await _verify_workspace_capability(
         adapter,
@@ -1321,12 +1336,21 @@ def _cleanup_suffix(outcome: str) -> str:
     return "；清理未确认，请用相同 client_key 重试核对。"
 
 
+# 显式 static RAG 参数：官方默认 agentic 不保证首轮检索；selected KB 的检索
+# 失败必须在本轮模型调用前被 guard 发现并中止。
+_KNOWLEDGE_SEARCH_PARAMETERS = {
+    "mode": "static",
+    "top_k": 3,
+    "emit_hint_event": True,
+}
+
+
 def _knowledge_config(target: _CreateTarget) -> dict | None:
     if not target.knowledge:
         return None
     return {
         "knowledge_base_ids": list(target.knowledge),
-        "parameters": {},
+        "parameters": dict(_KNOWLEDGE_SEARCH_PARAMETERS),
     }
 
 

@@ -760,11 +760,21 @@ async def test_recovery_reuses_marker_without_new_post(tmp_path, monkeypatch):
         assert created["status"] == "ready"
         original_session = created["session_id"]
 
-        # 模拟“已 POST 但未回填关联”：清空 session_id 与状态，保留精确标记。
+        # 模拟“已 POST 但未回填关联”：清空 session_id 与状态，保留精确标记与
+        # 创建意图（真实未完成会话在 POST 前已持久化意图；ready 会清理它）。
+        defaults = await adapter.service_defaults()
         async with backend.state.db.session() as session:
             row = await session.get(Conversation, created["id"])
             row.status = "creating"
             row.session_id = None
+            row.create_intent = {
+                "agent_id": employee["agent_id"],
+                "chat_model_config": dict(defaults["chat_model_config"]),
+                "knowledge": [],
+                "skills": [],
+                "tools": [],
+                "generation_id": "recovery-test-gen",
+            }
             await session.commit()
 
         calls = {"n": 0}
@@ -1367,3 +1377,124 @@ async def test_recover_malformed_session_list_is_unavailable(tmp_path):
     assert excinfo.value.status_code == 503
     assert await conv_mod._reload_conversation(db, "conv_race") is not None
     await db.dispose()
+
+
+def test_knowledge_config_uses_explicit_static_parameters():
+    """所选 KB 时 knowledge_config 显式携带 static RAG 参数。"""
+    from nexus_backend import conversations as conv_mod
+
+    target = conv_mod._CreateTarget(
+        agent_id="agent-1",
+        chat_model_config={"type": "deepseek_chat", "model": "m"},
+        knowledge=("kb-1",),
+        skills=(),
+        tools=(),
+    )
+    config = conv_mod._knowledge_config(target)
+    assert config == {
+        "knowledge_base_ids": ["kb-1"],
+        "parameters": {
+            "mode": "static",
+            "top_k": 3,
+            "emit_hint_event": True,
+        },
+    }
+    # 未选 KB 时不安装中间件参数，保持官方默认行为。
+    empty = conv_mod._CreateTarget(
+        agent_id="agent-1",
+        chat_model_config={"type": "deepseek_chat", "model": "m"},
+        knowledge=(),
+        skills=(),
+        tools=(),
+    )
+    assert conv_mod._knowledge_config(empty) is None
+
+
+@pytest.mark.asyncio
+async def test_ready_clears_transient_create_intent(tmp_path):
+    """转 ready 清理瞬时创建意图；未完成保留。"""
+    from nexus_backend import conversations as conv_mod
+    from nexus_backend.db import Conversation, Database
+
+    db = Database(tmp_path / "intent.db")
+    await db.init()
+    async with db.session() as session:
+        session.add(
+            Conversation(
+                id="conv_intent",
+                owner=OWNER,
+                employee_id="emp_x",
+                agent_id=None,
+                session_id="sess-1",
+                session_marker="nexus-conv-conv_intent",
+                title="新对话",
+                capability_snapshot={},
+                create_intent={"agent_id": "agent-1"},
+                client_key="k",
+                status="creating",
+            ),
+        )
+        await session.commit()
+
+    await conv_mod._set_status(db, "conv_intent", status="creating")
+    assert (await conv_mod._reload_conversation(db, "conv_intent")).create_intent
+
+    await conv_mod._set_status(db, "conv_intent", status="incomplete")
+    assert (await conv_mod._reload_conversation(db, "conv_intent")).create_intent
+
+    await conv_mod._set_status(db, "conv_intent", status="ready")
+    assert (
+        await conv_mod._reload_conversation(db, "conv_intent")
+    ).create_intent is None
+    await db.dispose()
+
+
+@pytest.mark.asyncio
+async def test_verify_and_bind_rejects_knowledge_param_drift(tmp_path):
+    """原生 Session 的 Knowledge 检索参数漂移：factory 读回不得返回 ready。"""
+    from nexus_backend import conversations as conv_mod
+
+    _MODEL = {
+        "type": "deepseek_chat",
+        "credential_id": "c1",
+        "model": "deepseek-flash",
+        "parameters": {},
+    }
+
+    class FakeAdapter:
+        async def list_sessions(self, agent_id):
+            return {
+                "sessions": [
+                    {
+                        "session": {
+                            "id": "sess-1",
+                            "agent_id": agent_id,
+                            "config": {
+                                "name": "nexus-conv-test",
+                                "workspace_id": "ws-1",
+                                "chat_model_config": dict(_MODEL),
+                                "knowledge_config": {
+                                    "knowledge_base_ids": ["kb-1"],
+                                    "parameters": {"mode": "agentic"},
+                                },
+                            },
+                        },
+                    },
+                ],
+                "total": 1,
+            }
+
+    target = conv_mod._CreateTarget(
+        agent_id="agent-1",
+        chat_model_config=dict(_MODEL),
+        knowledge=("kb-1",),
+        skills=(),
+        tools=(),
+    )
+    with pytest.raises(conv_mod.ConversationError):
+        await conv_mod._verify_and_bind(
+            FakeAdapter(),
+            target,
+            "sess-1",
+            "nexus-conv-test",
+        )

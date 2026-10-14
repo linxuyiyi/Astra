@@ -412,3 +412,29 @@ def test_ensure_internal_token_concurrent_same_value(tmp_path, monkeypatch):
         thread.join()
     assert results[0] == results[1]
     assert token_file.stat().st_mode & 0o777 == 0o600
+
+
+def test_build_child_env_merges_loopback_into_no_proxy(monkeypatch):
+    """子进程 env 在既有 NO_PROXY 上补入回环地址，保留用户列表与代理。"""
+    child = services.build_child_env(
+        {
+            "NO_PROXY": "example.com,.internal",
+            "HTTP_PROXY": "http://cloud-proxy:8080",
+        },
+    )
+    tokens = [t.strip() for t in child["NO_PROXY"].split(",") if t.strip()]
+    assert tokens[0] == "example.com"
+    assert ".internal" in tokens
+    assert "127.0.0.1" in tokens
+    assert "localhost" in tokens
+    assert "::1" in tokens
+    assert child["no_proxy"] == child["NO_PROXY"]
+    # 不覆盖/不删除既有代理设置。
+    assert child["HTTP_PROXY"] == "http://cloud-proxy:8080"
+    print("no_proxy merge ok")
+
+
+def test_build_child_env_adds_loopback_when_no_proxy_absent():
+    child = services.build_child_env({})
+    for host in ("127.0.0.1", "localhost", "::1"):
+        assert host in child["NO_PROXY"]

@@ -31,9 +31,17 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from agentscope.event import ModelCallStartEvent
 from agentscope.middleware import MiddlewareBase
 from agentscope.permission import PermissionBehavior, PermissionDecision
 from agentscope.tool import ToolBase, Toolkit
+
+from .knowledge import (
+    KnowledgeSearchObservation,
+    current_observation,
+    reset_observation,
+    set_observation,
+)
 
 AUTHORIZE_PATH = "/api/internal/authorize-run"
 TOKEN_HEADER = "X-Nexus-Internal-Token"
@@ -86,6 +94,9 @@ class RunAuthorization:
     # 本次可信授权所选的 MCP 名称（客户端身份）；工具名可能跨所选冲突，装配
     # 必须按名字精确筛选客户端，绝不靠工具名前缀推断 MCP 身份。
     mcps: tuple[str, ...] = ()
+    # 本次可信授权所选的 Knowledge 知识库 id：模型调用前必须确认这些知识库
+    # 都已发生真实检索且无失败，否则明确中止，不沿用官方 log-and-skip。
+    knowledge: tuple[str, ...] = ()
     # 仅内部诊断使用，不参与放行判断。
     conversation_id: str | None = None
     employee_id: str | None = None
@@ -121,6 +132,7 @@ def _parse_authorization(payload: dict) -> RunAuthorization:
         skills = _strict_str_tuple(payload, "skills")
         tools = _strict_str_tuple(payload, "tools")
         mcps = _strict_str_tuple(payload, "mcps")
+        knowledge = _strict_str_tuple(payload, "knowledge")
     except ValueError:
         return RunAuthorization(allowed=False, reason="authorization_invalid")
     # 所选工具必须且只能归属所选 MCP：tools 非空时 mcps 不得为空，否则无法
@@ -133,6 +145,7 @@ def _parse_authorization(payload: dict) -> RunAuthorization:
         skills=skills,
         tools=tools,
         mcps=mcps,
+        knowledge=knowledge,
         conversation_id=payload.get("conversation_id"),
         employee_id=payload.get("employee_id"),
     )
@@ -482,8 +495,69 @@ class RunGuardMiddleware(MiddlewareBase):
             raise RunNotAuthorizedError(
                 f"Nexus 运行 guard 无法构建允许目录（{type(exc).__name__}）。",
             ) from exc
+
+        # 本轮临时观察记录：**始终**建立（即便可信选择为空），使每个受控运行
+        # 都有观察上下文，空选择不能 bypass；结束（含异常）必须清理。
+        token = set_observation(
+            KnowledgeSearchObservation(
+                expected=frozenset(authorization.knowledge),
+            ),
+        )
+        try:
+            async for item in next_handler(**input_kwargs):
+                yield item
+        finally:
+            reset_observation(token)
+
+    async def on_reasoning(
+        self,
+        agent: Any,
+        input_kwargs: dict,
+        next_handler: Callable[..., AsyncGenerator],
+    ) -> AsyncGenerator:
+        """在下游真正调用模型前抑制未满足审计的 ``ModelCallStartEvent``。
+
+        官方 static 检索在下游原生 RAG 中间件的 ``on_reasoning`` 完成；reasoning
+        core 先 yield ``ModelCallStartEvent`` 再进入 ``on_model_call``。本 hook
+        **不直接抛错**（那会绕过原生 RAG 的 ``finally``，使已 append 的 Hint 滞留
+        到 GC）：遇到真实的 ``ModelCallStartEvent`` 且本轮审计不满足时，抑制该
+        **尚未真正调用**的 START 并继续消费下游，异常随后由 ``on_model_call`` 的
+        严格复核抛出，自然沿 core→RAG 展开其 ``finally`` 清理。有效检索与无
+        Knowledge 正常运行，零结果成功允许继续。
+        """
         async for item in next_handler(**input_kwargs):
+            if isinstance(item, ModelCallStartEvent) and not (
+                self._knowledge_satisfied()
+            ):
+                continue
             yield item
+
+    def _knowledge_satisfied(self) -> bool:
+        """本轮审计是否满足（授权有效、有观察且所选 KB 全部成功、无未选漂移）。"""
+        authorization = self._authorization
+        if authorization is None or not authorization.allowed:
+            return False
+        observation = current_observation()
+        if observation is None:
+            return False
+        return observation.unsatisfied_reason() is None
+
+    def _verify_knowledge_search(self) -> None:
+        authorization = self._authorization
+        if authorization is None or not authorization.allowed:
+            raise RunNotAuthorizedError("缺少可信运行授权，拒绝模型调用。")
+        observation = current_observation()
+        if observation is None:
+            # 每个受控运行都必须在 on_reply 建立观察；缺失即 fail-closed，空
+            # 选择的运行同样不得绕过。
+            raise RunNotAuthorizedError(
+                "缺少本轮知识库检索观察记录，拒绝模型调用。",
+            )
+        reason = observation.unsatisfied_reason()
+        if reason is not None:
+            raise RunNotAuthorizedError(
+                f"所选知识库未完成真实检索，已中止本轮运行：{reason}",
+            )
 
     async def on_model_call(
         self,
@@ -491,6 +565,10 @@ class RunGuardMiddleware(MiddlewareBase):
         input_kwargs: dict,
         next_handler: Callable[..., Awaitable],
     ) -> Any:
+        # 二次检查（防御性）：主检查在 on_reasoning 于 MODEL_CALL_START 之前完成，
+        # 这里再次核对所选 KB 均已成功真实检索，任何路径都不得在检索失败时调用
+        # 模型。正常流程不会触发，仅作为不变量兜底。
+        self._verify_knowledge_search()
         tools = input_kwargs.get("tools")
         if isinstance(tools, list):
             filtered = [

@@ -56,6 +56,28 @@ LOCK_TIMEOUT_SECONDS = 30.0
 # 服务仅回环通信：显式禁用系统代理，避免代理把不可达伪装成可达。
 _DIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
+# 回环地址必须绕过系统/环境代理：官方 OllamaEmbeddingModel 直接构造
+# ``ollama.AsyncClient(host=...)``，没有公开 trust_env/client_kwargs 入口，无法
+# 在其内部禁用代理。为交付服务启动的子进程合并标准 NO_PROXY/no_proxy（保留
+# 用户既有列表与云端代理），使 AgentScope→本机 Ollama 调用不被代理拦截。
+_LOOPBACK_NO_PROXY = ("127.0.0.1", "localhost", "::1")
+
+
+def build_child_env(env: dict | None = None) -> dict:
+    """返回子进程环境：在现有 NO_PROXY/no_proxy 上补入回环地址。"""
+    source = dict(os.environ if env is None else env)
+    existing = source.get("NO_PROXY") or source.get("no_proxy") or ""
+    tokens = [token.strip() for token in existing.split(",") if token.strip()]
+    seen = {token.lower() for token in tokens}
+    for host in _LOOPBACK_NO_PROXY:
+        if host.lower() not in seen:
+            tokens.append(host)
+            seen.add(host.lower())
+    value = ",".join(tokens)
+    source["NO_PROXY"] = value
+    source["no_proxy"] = value
+    return source
+
 
 @dataclass(frozen=True)
 class ServiceSpec:
@@ -570,6 +592,7 @@ def command_start(spec: ServiceSpec, paths: ServicePaths) -> int:
             process = subprocess.Popen(
                 command,
                 cwd=str(ROOT),
+                env=build_child_env(),
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,

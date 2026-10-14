@@ -33,3 +33,15 @@ Codex 再次验证职责更新：`scripts/smoke_employees.py --with-model`，`ev
 保留失败证据 `smoke-resources-20261014T143431Z.json`：工具调用已真实成功，但验收脚本把先前成功历史当作禁用后的新回复误报；已修为完整历史 baseline ID 与本轮 reply/新增消息归因，并要求明确 error 与 idle，成功复跑见上。未删除或改写该失败证据。
 
 限制：当前只支持无状态 Streamable HTTP MCP；stdio/SSE/stateful 项明确不可选。非只读工具仍保留原生 ASK/DENY，不强制 ALLOW，不以只读计算证明所有写工具已经可用。真实 Skill 绑定使用测试专用公开 Hub，未将 Markdown 读取当脚本执行。本地 EmbeddingGemma 300M 已真实生成768维向量，完整 Knowledge 索引/检索/回答尚未通过，因此 tasks.md 的3.2.2保持未完成；删除归档、前端、私聊业务与团队交流仍待后续任务。
+
+## 任务 3.2.2 Knowledge 完整链路独立验收
+
+改动：官方 OllamaCredential 固定ID引导、本机 embeddinggemma:300m；公开 CollectionPerKbManager/QdrantStore/LocalBlobStore，目录从实际 data_dir 派生且生命周期沿用原生；TextParser/ApproxTokenChunker 索引。共同 Session 显式 static 参数并读回核对，ready 清理瞬时创建意图，不长期复制模型参数。子进程 NO_PROXY 合并回环并保留原代理设置。
+
+严格检索仅观察原生 search：公开 KnowledgeBase 包装在受控运行中拒绝未选KB，委托真正检索并记录本轮成功/失败；空选择也建立独立 ContextVar。后端授权核对实际原生KB IDs/参数与可信快照；公开on_reasoning只抑制未真正调用的MODEL_CALL_START，随后on_model_call严格拒绝，异常自然展开原生RAG清理，不重写检索或私有重排。独立REST检索无Agent运行上下文时仍可用。
+
+Codex亲自执行全量pytest：283 passed；OpenSpec strict validate与diff check通过。真实框架单元复核证据 `evidence/phase3/rag-cleanup-root-20261014T151649Z.json`（recording model，明确不算AI联调）：部分KB漏装时实际生成1个KnowledgeBase Hint，结束残留0、模型调用0、无START、ContextVar已清理。单元还覆盖未选KB的inner.search调用0、空选择、部分失败、失败后下一轮及并发Session隔离。
+
+Codex亲自通过交付控制脚本启动两真实进程并注入真实DeepSeek凭据，执行 `scripts/smoke_knowledge.py --with-model`；`evidence/phase3/smoke-knowledge-20261014T151147Z.json` 全部13项检查passed。两份真实TXT各ready且chunk_count=1，实际embedding/search命中目标文档校验值；用户提问与员工指令没有该值，真实模型基于检索回答 ZS8d9f867a 并出现原生HINT_BLOCK。空库零结果仍可调用模型；embedding不可达、部分KB不可构建、KB删除均明确error，模型前中止。真实stop/start后generation变化，KB/文档chunk/search/原Session绑定恢复，真实模型再次按文档作答。密钥未写入证据。
+
+3.2.2验收已覆盖资源目录/真实绑定、启停guard、共同factory、物理隔离、MCP真实模型调用及Knowledge真实检索，允许勾选。限制仍为单进程受控环境、无状态Streamable HTTP MCP、所选脚本Skill不自动获得Shell能力；删除归档与三个页面仍未实现，不据此声称完整员工管理阶段或系统完成。

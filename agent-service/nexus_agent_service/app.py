@@ -26,7 +26,12 @@ from agentscope.app.workspace_manager import IsolationPolicy
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware import Middleware
 
-from .bootstrap import ModelBootstrapStatus, bootstrap_default_model
+from .bootstrap import (
+    EmbeddingBootstrapStatus,
+    ModelBootstrapStatus,
+    bootstrap_default_model,
+    bootstrap_embedding_credential,
+)
 from .config import ServiceConfig
 from .guard import (
     DenyAllAuthorizer,
@@ -34,36 +39,38 @@ from .guard import (
     make_run_guard_factory,
     mcp_client_support,
 )
+from .knowledge import ObservedCollectionPerKbManager
 from .workspace import SessionWorkspaceManager
 from .write_barrier import NativeWriteBarrierMiddleware
 
 
 def _build_knowledge_manager(config: ServiceConfig, storage: object):
-    """按需构建官方 CollectionPerKbManager + 持久 Qdrant/LocalBlobStore。
+    """按需构建**公开观察** manager + 官方 Qdrant/LocalBlobStore。
 
-    默认关闭。开启时要求已安装 ``qdrant-client``；缺失则明确报错（fail
-    closed），不静默降级为假目录。真正可检索还要求服务端存在支持 embedding
-    的凭据并创建知识库，本函数只提供可配置入口，不声称 RAG 已验证。
+    默认关闭。开启时要求已安装 ``qdrant-client`` 与 Ollama embedding 依赖；
+    缺失则明确报错（fail closed），不静默降级为假目录。目录从实际
+    ``AGENTSCOPE_DATA_DIR`` 派生，隔离实例不会写入项目默认 data。真正可检索
+    还要求服务端已引导 embedding 凭据并创建知识库；本函数只装配资源，向量库
+    与 blob 的进入/退出由 ``create_app`` 生命周期管理，不重复进入。
     """
     if not config.knowledge_enabled:
-        return None, None
+        return None, None, None, None
     try:
         from agentscope.app.rag.blob_store import LocalBlobStore
-        from agentscope.app.rag.knowledge_base_manager import (
-            CollectionPerKbManager,
-        )
-        from agentscope.rag import QdrantStore
+        from agentscope.rag import ApproxTokenChunker, QdrantStore, TextParser
     except ImportError as exc:  # pragma: no cover - 取决于可选依赖
         raise RuntimeError(
-            "AGENTSCOPE_KNOWLEDGE_ENABLED 已开启，但缺少 qdrant-client；"
-            "请安装可选依赖后再启用知识库。",
+            "AGENTSCOPE_KNOWLEDGE_ENABLED 已开启，但缺少 qdrant-client 或 "
+            "Ollama embedding 依赖；请同步交付依赖后再启用知识库。",
         ) from exc
     vector_dir = str(config.knowledge_vector_dir)
     blob_dir = str(config.knowledge_blob_dir)
     vector_store = QdrantStore(path=vector_dir)
-    manager = CollectionPerKbManager(storage, vector_store)
+    # 只多用公开子类包装 get_knowledge 观察检索；其余生命周期沿用官方。
+    manager = ObservedCollectionPerKbManager(storage, vector_store)
     blob_store = LocalBlobStore(blob_dir)
-    return manager, blob_store
+    # 显式注册与官方默认相同的公开 parser/chunker，避免依赖隐式默认漂移。
+    return manager, blob_store, [TextParser()], [ApproxTokenChunker]
 
 
 def build_app(
@@ -99,7 +106,12 @@ def build_app(
     # “旧单进程请求是否已随重启退出”，不作为可空的控制脚本实例标识。
     generation_id = uuid.uuid4().hex
 
-    knowledge_manager, blob_store = _build_knowledge_manager(config, storage)
+    (
+        knowledge_manager,
+        blob_store,
+        knowledge_parsers,
+        knowledge_chunkers,
+    ) = _build_knowledge_manager(config, storage)
 
     # 运行 guard：正式 build **始终**安装。配置了内部秘密时使用 HTTP 授权器
     # 回调 Nexus；否则使用 fail-closed 的 DenyAllAuthorizer（拒绝一切运行），
@@ -123,6 +135,8 @@ def build_app(
         message_bus=InMemoryMessageBus(),
         workspace_manager=workspace_manager,
         knowledge_base_manager=knowledge_manager,
+        knowledge_parsers=knowledge_parsers,
+        knowledge_chunkers=knowledge_chunkers,
         blob_store=blob_store,
         enable_scheduler=False,
         enable_channel_worker=False,
@@ -152,6 +166,10 @@ def build_app(
                 storage,
                 config,
             )
+            # 知识库启用时按固定 id 引导原生 OllamaCredential；未启用不写记录。
+            app_.state.nexus_embedding_status = (
+                await bootstrap_embedding_credential(storage, config)
+            )
             app_.state.nexus_ready = True
             try:
                 yield state
@@ -177,6 +195,14 @@ def build_app(
         model_name=config.model_name,
         reason="服务尚未完成启动初始化。",
     )
+    app.state.nexus_embedding_status = EmbeddingBootstrapStatus(
+        enabled=config.knowledge_enabled,
+        configured=False,
+        credential_id=None,
+        model_name=config.embedding_model,
+        dimensions=config.embedding_dimensions,
+        reason="服务尚未完成启动初始化。",
+    )
 
     _register_nexus_routes(app)
     return app
@@ -195,6 +221,9 @@ def _register_nexus_routes(app: FastAPI) -> None:
         """
         ready = bool(getattr(request.app.state, "nexus_ready", False))
         status: ModelBootstrapStatus = request.app.state.nexus_model_status
+        embedding: EmbeddingBootstrapStatus = (
+            request.app.state.nexus_embedding_status
+        )
         response.status_code = 200 if ready else 503
         return {
             "status": "ok" if ready else "initializing",
@@ -215,6 +244,12 @@ def _register_nexus_routes(app: FastAPI) -> None:
             "guard_configured": bool(
                 getattr(request.app.state, "nexus_guard_configured", False),
             ),
+            # 知识库/embedding 引导状态（脱敏；仅连接信息，不含密钥）。
+            "knowledge_enabled": embedding.enabled,
+            "embedding_configured": embedding.configured,
+            "embedding_credential_id": embedding.credential_id,
+            "embedding_model": embedding.model_name,
+            "embedding_dimensions": embedding.dimensions,
         }
 
     @app.get("/nexus/defaults", tags=["nexus"])

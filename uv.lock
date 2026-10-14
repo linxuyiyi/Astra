@@ -53,6 +53,9 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+model-ollama = [
+    { name = "ollama" },
+]
 service = [
     { name = "ag-ui-protocol" },
     { name = "aiortc" },
@@ -949,18 +952,14 @@ name = "nexus"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "agentscope", extra = ["service", "storage-sql"] },
+    { name = "agentscope", extra = ["model-ollama", "service", "storage-sql"] },
     { name = "aiosqlite" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "python-dotenv" },
+    { name = "qdrant-client" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "uvicorn" },
-]
-
-[package.optional-dependencies]
-knowledge = [
-    { name = "qdrant-client" },
 ]
 
 [package.dev-dependencies]
@@ -971,16 +970,15 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agentscope", extras = ["service", "storage-sql"], specifier = "==2.0.10" },
+    { name = "agentscope", extras = ["service", "storage-sql", "model-ollama"], specifier = "==2.0.10" },
     { name = "aiosqlite", specifier = ">=0.20" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
-    { name = "qdrant-client", marker = "extra == 'knowledge'", specifier = ">=1.9" },
+    { name = "qdrant-client", specifier = ">=1.9" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
-provides-extras = ["knowledge"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1005,6 +1003,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6f/c9/47094f597015009f310b8c900def59065ef1ff5a6fe7b51fc65ec58ec2c6/numpy-2.5.4-cp312-cp312-win32.whl", hash = "sha256:9968ab7e49b93ac6e1c3b2239732183152c9150f16308d30b66a372cffe3483c", size = 6138936, upload-time = "2026-10-10T20:03:01.626Z" },
     { url = "https://files.pythonhosted.org/packages/12/33/fefe62073dc8acfd0f2b9ed7c003af2f50aa61555e113e6db02b8f79f145/numpy-2.5.4-cp312-cp312-win_amd64.whl", hash = "sha256:a7b1b6353e36a7e50de2973a38d705c88ee93adcf120673cee7f45a4a3fa223a", size = 12573091, upload-time = "2026-10-10T20:03:04.349Z" },
     { url = "https://files.pythonhosted.org/packages/1a/07/161270b0c2eec56e4c905f6d6d22e1b836887b2cb189d3f5820aa588e9dd/numpy-2.5.4-cp312-cp312-win_arm64.whl", hash = "sha256:aa1cce2ff3f8d953de38b76bf44602caeb69f101430208f64a10067f7cb4b1d3", size = 10521630, upload-time = "2026-10-10T20:03:06.767Z" },
+]
+
+[[package]]
+name = "ollama"
+version = "0.6.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b8/97/eeafe65594e4f4b25e443e068ef7d83aa3105b023e12e1c408c38669fc07/ollama-0.6.3.tar.gz", hash = "sha256:41fc49a8095c4a75939c4c1f8582e4d0671692fb6eac2a5a7ede8c9872b67096", size = 56868, upload-time = "2026-09-29T01:26:51.906Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/64/87505d9e006461233c21c8e66dc1ecee49c996090584b216abd0dd4a8322/ollama-0.6.3-py3-none-any.whl", hash = "sha256:6a20bc42c1a5f889295d7ec490d35e5132fc31f339561530f43a8abd4dbfe508", size = 16603, upload-time = "2026-09-29T01:26:50.451Z" },
 ]
 
 [[package]]

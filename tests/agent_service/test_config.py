@@ -131,3 +131,45 @@ def test_load_project_env_does_not_invent_values(monkeypatch, tmp_path):
     load_project_env(tmp_path)
     config = load_config(env={})
     assert config.model_configured is False
+
+
+def test_knowledge_dirs_derive_from_data_dir():
+    """未显式配置时，vector/blob 目录必须从实际 AGENTSCOPE_DATA_DIR 派生。"""
+    config = load_config(
+        env={
+            "AGENTSCOPE_DATA_DIR": "/tmp/nexus-isolated",
+            "AGENTSCOPE_KNOWLEDGE_ENABLED": "true",
+        },
+    )
+    data_dir = Path("/tmp/nexus-isolated").resolve()
+    assert config.knowledge_enabled is True
+    assert config.knowledge_vector_dir == data_dir / "knowledge" / "vector"
+    assert config.knowledge_blob_dir == data_dir / "knowledge" / "blobs"
+    # 隔离实例绝不落入项目默认 data。
+    assert PROJECT_ROOT not in config.knowledge_vector_dir.parents
+
+
+def test_embedding_config_parsed_and_defaults():
+    config = load_config(env={})
+    assert config.embedding_model == "embeddinggemma:300m"
+    assert config.embedding_dimensions == 768
+    assert config.embedding_credential_id == "nexus-default-ollama-embedding"
+
+    override = load_config(
+        env={
+            "AGENTSCOPE_EMBEDDING_HOST": "http://127.0.0.1:11435",
+            "AGENTSCOPE_EMBEDDING_MODEL": "m",
+            "AGENTSCOPE_EMBEDDING_DIMENSIONS": "1024",
+            "AGENTSCOPE_EMBEDDING_CREDENTIAL_ID": "cid",
+        },
+    )
+    assert override.embedding_host == "http://127.0.0.1:11435"
+    assert override.embedding_model == "m"
+    assert override.embedding_dimensions == 1024
+    assert override.embedding_credential_id == "cid"
+
+
+@pytest.mark.parametrize("raw", ["0", "-3", "abc"])
+def test_invalid_embedding_dimensions_rejected(raw):
+    with pytest.raises(ValueError):
+        load_config(env={"AGENTSCOPE_EMBEDDING_DIMENSIONS": raw})

@@ -10,13 +10,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from agentscope.app.storage import StorageBase
-from agentscope.credential import DeepSeekCredential
+from agentscope.credential import DeepSeekCredential, OllamaCredential
 
-from .config import DEFAULT_CREDENTIAL_TYPE, ServiceConfig
+from .config import (
+    DEFAULT_CREDENTIAL_TYPE,
+    EMBEDDING_CREDENTIAL_TYPE,
+    ServiceConfig,
+)
 
 MODEL_NOT_CONFIGURED_REASON = (
     "未配置 AGENTSCOPE_MODEL_API_KEY，模型推理不可用；服务本身仍可提供"
     "原生 Agent/Session CRUD。请在服务环境或根 .env 中配置后重启。"
+)
+
+# 知识库启用但 embedding 凭据未引导时，如实不可用；不伪装 RAG 已就绪。
+EMBEDDING_NOT_CONFIGURED_REASON = (
+    "知识库已启用但 embedding 凭据未引导，检索不可用。"
 )
 
 # 引导失败的统一对外原因：绝不携带原始异常、SQL 参数或密钥。
@@ -115,3 +124,74 @@ def _is_valid_deepseek_credential(record: object) -> bool:
     if data.get("type") != DEFAULT_CREDENTIAL_TYPE:
         return False
     return bool(data.get("api_key"))
+
+
+@dataclass(frozen=True)
+class EmbeddingBootstrapStatus:
+    """知识库 embedding 凭据引导结果（脱敏，绝不含密钥/主机以外的秘密）。"""
+
+    enabled: bool
+    configured: bool
+    credential_id: str | None
+    model_name: str | None
+    dimensions: int | None
+    reason: str | None
+
+    def to_public_dict(self) -> dict:
+        return {
+            "enabled": self.enabled,
+            "configured": self.configured,
+            "credential_id": self.credential_id,
+            "model_name": self.model_name,
+            "dimensions": self.dimensions,
+            "reason": self.reason,
+        }
+
+
+async def bootstrap_embedding_credential(
+    storage: StorageBase,
+    config: ServiceConfig,
+) -> EmbeddingBootstrapStatus:
+    """知识库启用时按固定 id 引导原生 OllamaCredential。
+
+    只写入连接信息（``id`` 固定、``name``、``host``），使重复启动命中同一条
+    记录（upsert 幂等、重启复用），不在 Nexus 保存模型配置。知识库未启用时
+    返回未启用状态，不写任何记录。宿主地址来自服务环境配置。
+    """
+    if not config.knowledge_enabled:
+        return EmbeddingBootstrapStatus(
+            enabled=False,
+            configured=False,
+            credential_id=None,
+            model_name=config.embedding_model,
+            dimensions=config.embedding_dimensions,
+            reason=None,
+        )
+    try:
+        credential = OllamaCredential(
+            id=config.embedding_credential_id,
+            name=config.embedding_credential_name,
+            host=config.embedding_host,
+        )
+        credential_id = await storage.upsert_credential(
+            config.internal_user_id,
+            credential,
+        )
+    except Exception:  # noqa: BLE001 - 边界统一脱敏
+        raise RuntimeError(BOOTSTRAP_ERROR_REASON) from None
+    return EmbeddingBootstrapStatus(
+        enabled=True,
+        configured=True,
+        credential_id=credential_id,
+        model_name=config.embedding_model,
+        dimensions=config.embedding_dimensions,
+        reason=None,
+    )
+
+
+def is_valid_ollama_credential(record: object) -> bool:
+    """判断记录是否为该内部租户下有效的原生 Ollama 凭据（诊断用）。"""
+    data = getattr(record, "data", None)
+    if not isinstance(data, dict):
+        return False
+    return data.get("type") == EMBEDDING_CREDENTIAL_TYPE

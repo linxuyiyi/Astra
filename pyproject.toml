@@ -5,11 +5,15 @@ description = "Nexus 数字员工系统：AgentScope 服务适配层与业务后
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "agentscope[service,storage-sql]==2.0.10",
+    # model-ollama 提供官方 OllamaEmbeddingModel 所需的 ollama 客户端
+    # （知识库本地 embedding 依赖，模型服务由部署方提供）。
+    "agentscope[service,storage-sql,model-ollama]==2.0.10",
     "aiosqlite>=0.20",
     "fastapi>=0.115",
     "httpx>=0.27",
     "python-dotenv>=1.0.1",
+    # 知识库开启时官方 CollectionPerKbManager 使用的持久化向量库后端。
+    "qdrant-client>=1.9",
     "sqlalchemy[asyncio]>=2.0",
     "uvicorn>=0.30",
 ]
@@ -19,10 +23,6 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
 ]
-
-[project.optional-dependencies]
-# 可选：开启知识库时需要的官方持久化向量库后端（AGENTSCOPE_KNOWLEDGE_ENABLED）。
-knowledge = ["qdrant-client>=1.9"]
 
 [build-system]
 requires = ["hatchling"]

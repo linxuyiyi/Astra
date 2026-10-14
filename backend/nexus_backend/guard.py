@@ -27,9 +27,17 @@ from sqlalchemy import select
 
 from . import resources
 from .adapter import AgentScopeHTTPClient, UpstreamError
+from .conversations import _find_session, _parse_session_views
 from .db import Conversation, Database, Employee
 
 TOKEN_HEADER = "X-Nexus-Internal-Token"
+
+# 非空 Knowledge 选择必须使用的 static RAG 参数（与共同 factory 写入一致）。
+_KNOWLEDGE_PARAMETERS = {
+    "mode": "static",
+    "top_k": 3,
+    "emit_hint_event": True,
+}
 
 
 class AuthorizeRunRequest(BaseModel):
@@ -161,6 +169,81 @@ async def _resolve_capabilities(
     return allowed_skills, allowed_tools, selected_mcps
 
 
+async def _resolve_knowledge(
+    adapter: AgentScopeHTTPClient,
+    conversation: Conversation,
+    agent_id: str,
+    session_id: str,
+) -> list[str]:
+    """核对原生 Session 的 Knowledge 绑定并返回可信所选 KB id。
+
+    不**只**信任本地 ``capability_snapshot``：必须读取真实原生 Session 列表，
+    确认 Session 确实绑定到该 Agent，且其
+    ``knowledge_config.knowledge_base_ids`` 与可信快照**完全一致**；非空选择还
+    须使用约定的 static 参数（``mode=static``/``top_k=3``/``emit_hint_event=true``）。
+    任何漂移/缺失/重复/不可读一律 403，绝不把未选 KB 用于检索；目录有效性用与
+    资源投影同源的 :func:`resources.project_kind` 核对。
+    """
+    snapshot = conversation.capability_snapshot or {}
+    knowledge_ids = snapshot.get("knowledge") or []
+    if (
+        not isinstance(knowledge_ids, list)
+        or not all(isinstance(item, str) and item for item in knowledge_ids)
+        or len(set(knowledge_ids)) != len(knowledge_ids)
+    ):
+        raise _deny("会话知识库快照不可读，拒绝运行。")
+
+    try:
+        views = await adapter.list_sessions(agent_id)
+    except UpstreamError:
+        raise _deny("无法读取原生会话，拒绝运行。") from None
+    sessions = _parse_session_views(views)
+    if sessions is None:
+        raise _deny("原生会话列表不可读，拒绝运行。")
+    session = _find_session(sessions, session_id)
+    if session is None or session.get("agent_id") != agent_id:
+        raise _deny("会话未绑定到该员工 Agent，拒绝运行。")
+    config = session.get("config")
+    if not isinstance(config, dict):
+        raise _deny("原生会话配置不可读，拒绝运行。")
+    # 原生未装配 Knowledge 时 ``knowledge_config`` 为 ``None``，等价于空选择。
+    kb_config = config.get("knowledge_config")
+    if kb_config is None:
+        native_ids: object = []
+        params: object = None
+    elif isinstance(kb_config, dict):
+        native_ids = kb_config.get("knowledge_base_ids", [])
+        params = kb_config.get("parameters")
+    else:
+        raise _deny("原生会话 Knowledge 配置不可读，拒绝运行。")
+    if (
+        not isinstance(native_ids, list)
+        or not all(isinstance(item, str) and item for item in native_ids)
+        or len(set(native_ids)) != len(native_ids)
+    ):
+        raise _deny("原生会话 Knowledge 关联不可读，拒绝运行。")
+    if list(native_ids) != list(knowledge_ids):
+        raise _deny("原生会话 Knowledge 关联与可信快照不一致，拒绝运行。")
+    if knowledge_ids:
+        if not isinstance(params, dict):
+            raise _deny("原生会话 Knowledge 参数不可读，拒绝运行。")
+        for key, expected in _KNOWLEDGE_PARAMETERS.items():
+            if params.get(key) != expected:
+                raise _deny("原生会话 Knowledge 检索参数已漂移，拒绝运行。")
+        try:
+            projected = await resources.project_kind(adapter, "knowledge")
+        except UpstreamError:
+            raise _deny("知识库目录不可用，拒绝运行。") from None
+        if not projected["available"]:
+            raise _deny("知识库目录不可用，拒绝运行。")
+        by_id = {item["id"]: item for item in projected["items"]}
+        for identifier in knowledge_ids:
+            item = by_id.get(identifier)
+            if item is None or not item["enabled"]:
+                raise _deny("会话知识库能力已失效，拒绝运行。")
+    return list(knowledge_ids)
+
+
 def register_guard_routes(app: FastAPI) -> None:
     @app.post("/api/internal/authorize-run", tags=["internal"])
     async def authorize_run(
@@ -206,21 +289,14 @@ def register_guard_routes(app: FastAPI) -> None:
         if not _employee_runnable(employee, agent_id):
             raise _deny("员工当前不可运行，拒绝。")
 
-        # 目录与 Knowledge 能力核对（网络 I/O，不持有数据库事务）。
-        snapshot = conversation.capability_snapshot or {}
-        knowledge_ids = snapshot.get("knowledge") or []
-        if knowledge_ids:
-            try:
-                projected = await resources.project_kind(adapter, "knowledge")
-            except UpstreamError:
-                raise _deny("知识库目录不可用，拒绝运行。") from None
-            if not projected["available"]:
-                raise _deny("知识库目录不可用，拒绝运行。")
-            by_id = {item["id"]: item for item in projected["items"]}
-            for identifier in knowledge_ids:
-                item = by_id.get(identifier)
-                if item is None or not item["enabled"]:
-                    raise _deny("会话知识库能力已失效，拒绝运行。")
+        # Knowledge：核对真实原生 Session 绑定与关联/参数，再核对目录（网络
+        # I/O，不持有数据库事务）。
+        knowledge_ids = await _resolve_knowledge(
+            adapter,
+            conversation,
+            agent_id,
+            session_id,
+        )
 
         allowed_skills, allowed_tools, selected_mcps = await _resolve_capabilities(
             adapter,
@@ -251,4 +327,7 @@ def register_guard_routes(app: FastAPI) -> None:
             "skills": allowed_skills,
             "tools": allowed_tools,
             "mcps": selected_mcps,
+            # 所选 Knowledge 的稳定 id：AgentScope guard 据此核实这些 KB 在
+            # 模型调用前都发生真实检索，且不得沿用官方 log-and-skip。
+            "knowledge": list(knowledge_ids),
         }

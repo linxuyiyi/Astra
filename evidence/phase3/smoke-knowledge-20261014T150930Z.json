@@ -1,0 +1,96 @@
+{
+  "mode": "full",
+  "run_at": "2026-10-14T15:09:12.686738+00:00",
+  "checks": {
+    "knowledge_enabled_and_embedding_ready": true,
+    "real_index_ready": true,
+    "real_search_hits_value": true,
+    "empty_kb_search_zero_success": true,
+    "nexus_catalog_lists_kbs": true,
+    "session_knowledge_aligned": true,
+    "empty_search_not_failure": true,
+    "embedding_unreachable_aborts": true,
+    "partial_kb_failure_aborts": true,
+    "deleted_kb_aborts": true,
+    "restart_recovery": true
+  },
+  "model_check": {
+    "status": "skipped",
+    "reason": "未提供 AGENTSCOPE_MODEL_API_KEY，真实模型回答与 Knowledge hint 未运行；本证据不声称真实 RAG 回答已完成。"
+  },
+  "embedding": {
+    "credential_id": "nexus-default-ollama-embedding",
+    "model": "embeddinggemma:300m",
+    "dimensions": 768,
+    "host": "http://127.0.0.1:11435"
+  },
+  "documents": {
+    "target": {
+      "id": "76dd29b5bb134c0db09daed62c4ae68d",
+      "status": "ready",
+      "chunk_count": 1
+    },
+    "other": {
+      "id": "f4f8b1f39d0a40cca3f357e20f079ac3",
+      "status": "ready",
+      "chunk_count": 1
+    },
+    "verification_value": "ZSd96319d7"
+  },
+  "search": {
+    "result_count": 1,
+    "contains_value": true
+  },
+  "conversation": {
+    "id": "conv_f83d20e83b3244f4979e4ad66ee1e925",
+    "session_id": "50608929b66b439f91ec057963124320",
+    "agent_id": "d9866f0607484735a9f30f83bbd3e00c",
+    "knowledge_snapshot": [
+      "13db013c7ec242f5acc6b18861813e1e",
+      "ced5a8b874c446ec9a6733f79318229d"
+    ],
+    "native_knowledge_config": {
+      "knowledge_base_ids": [
+        "13db013c7ec242f5acc6b18861813e1e",
+        "ced5a8b874c446ec9a6733f79318229d"
+      ],
+      "parameters": {
+        "mode": "static",
+        "top_k": 3,
+        "emit_hint_event": true
+      }
+    }
+  },
+  "zero_result_probe": {
+    "model_call_started": true
+  },
+  "embedding_unreachable": {
+    "finished_reason": "error",
+    "model_call_started": false
+  },
+  "partial_kb_failure": {
+    "finished_reason": "error",
+    "model_call_started": false
+  },
+  "kb_deleted": {
+    "authorize_status": 403,
+    "finished_reason": "error"
+  },
+  "restart": {
+    "generation_before": "2cabeaff11e141baa72739d892e438f9",
+    "generation_after": "4c69698072bd44ab841764e6d44b8f9f",
+    "generation_changed": true,
+    "kb_restored": true,
+    "document_ready": "ready",
+    "chunk_count": 1,
+    "search_restored": true,
+    "session_restored": true,
+    "target_authorize_status": 200,
+    "deleted_kb_authorize_status": 403,
+    "empty_employee_authorize_status": 200,
+    "zero_result_probe_model_call_started": true
+  },
+  "status": "passed",
+  "evidence_path": "evidence/phase3/smoke-knowledge-20261014T150930Z.json",
+  "key_recorded": false
+}

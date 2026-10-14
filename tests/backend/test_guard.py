@@ -75,6 +75,7 @@ async def test_authorize_run_endpoint_real(tmp_path):
         assert ok.json()["skills"] == []
         assert ok.json()["tools"] == []
         assert ok.json()["mcps"] == []
+        assert ok.json()["knowledge"] == []
 
         # 错误 / 缺失秘密。
         assert (
@@ -369,7 +370,18 @@ async def test_guard_rebuilds_toolkit_exact_selection_and_facades():
         {"function": {"name": "mcp__evil__steal"}},
         {"function": {"name": "Skill"}},
     ]
-    await mw.on_model_call(agent, {"tools": schemas}, model_next)
+    # 受控运行在 on_reply 已建立本轮观察（空选择为空 expected）；这里模拟同一
+    # 运行上下文再核对 schema 过滤，缺失观察会 fail-closed。
+    from nexus_agent_service import knowledge as knowledge_mod
+    from nexus_agent_service.knowledge import KnowledgeSearchObservation
+
+    token = knowledge_mod.set_observation(
+        KnowledgeSearchObservation(expected=frozenset()),
+    )
+    try:
+        await mw.on_model_call(agent, {"tools": schemas}, model_next)
+    finally:
+        knowledge_mod.reset_observation(token)
     assert [t["function"]["name"] for t in captured["tools"]] == [
         "mcp__nexus-compute__compute",
         "Skill",
@@ -674,6 +686,52 @@ async def test_authorizer_rejects_malformed_skill_field():
         await client.aclose()
     assert result.allowed is False
     assert result.reason == "authorization_invalid"
+
+
+@pytest.mark.asyncio
+async def test_authorizer_parses_knowledge_and_rejects_malformed():
+    """授权响应 knowledge 字段：合法透传，非法结构 fail-closed。"""
+    import httpx
+
+    from nexus_agent_service.guard import NexusGuardAuthorizer
+
+    def good(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "allowed": True,
+                "skills": [],
+                "tools": [],
+                "mcps": [],
+                "knowledge": ["kb-1", "kb-2"],
+            },
+        )
+
+    def bad(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"allowed": True, "knowledge": "not-a-list"},
+        )
+
+    for handler, expected_allowed, expected_ids in (
+        (good, True, ("kb-1", "kb-2")),
+        (bad, False, ()),
+    ):
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="http://backend.test",
+        )
+        authorizer = NexusGuardAuthorizer(
+            "http://backend.test",
+            "token",
+            client=client,
+        )
+        try:
+            result = await authorizer.authorize("nexus-service", "a", "s")
+        finally:
+            await client.aclose()
+        assert result.allowed is expected_allowed
+        assert result.knowledge == expected_ids
 
 
 @pytest.mark.asyncio
@@ -990,3 +1048,161 @@ async def test_authorizer_rejects_tools_without_mcp_names():
         await client.aclose()
     assert result.allowed is False
     assert result.reason == "authorization_invalid"
+
+
+# ----------------------------------------------------------------------
+# Knowledge 信任边界：原生 Session 配置漂移必须运行前拒绝（任务 3.2.2 审查）
+# ----------------------------------------------------------------------
+def _conversation_row(knowledge_ids):
+    from nexus_backend.db import Conversation
+
+    return Conversation(
+        id="conv-kb",
+        owner="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        employee_id="emp_kb",
+        agent_id="agent-1",
+        session_id="sess-1",
+        session_marker="nexus-conv-conv-kb",
+        title="新对话",
+        capability_snapshot={"knowledge": list(knowledge_ids)},
+        client_key="kb-key",
+        status="ready",
+    )
+
+
+class _SessionAdapter:
+    """只提供 list_sessions，返回给定 native knowledge_config。"""
+
+    def __init__(self, knowledge_config, *, agent_id="agent-1", session_id="sess-1"):
+        self._knowledge_config = knowledge_config
+        self._agent_id = agent_id
+        self._session_id = session_id
+
+    async def list_sessions(self, agent_id):
+        return {
+            "sessions": [
+                {
+                    "session": {
+                        "id": self._session_id,
+                        "agent_id": self._agent_id,
+                        "config": {
+                            "name": "m",
+                            "workspace_id": "ws",
+                            "chat_model_config": {"type": "deepseek_chat"},
+                            "knowledge_config": self._knowledge_config,
+                        },
+                    },
+                },
+            ],
+            "total": 1,
+        }
+
+
+@pytest.mark.asyncio
+async def test_resolve_knowledge_rejects_unselected_native_kb():
+    """snapshot=[] 但原生被 PATCH 加 B：运行前 403，绝不把未选 KB 用于检索。"""
+    from fastapi import HTTPException
+
+    from nexus_backend.guard import _resolve_knowledge
+
+    conversation = _conversation_row([])
+    adapter = _SessionAdapter(
+        {"knowledge_base_ids": ["kb-B"], "parameters": {}},
+    )
+    with pytest.raises(HTTPException) as excinfo:
+        await _resolve_knowledge(adapter, conversation, "agent-1", "sess-1")
+    assert excinfo.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_resolve_knowledge_rejects_snapshot_native_mismatch():
+    """snapshot=[A] 但原生含 [A,B]：运行前 403。"""
+    from fastapi import HTTPException
+
+    from nexus_backend.guard import _resolve_knowledge
+
+    conversation = _conversation_row(["kb-A"])
+    adapter = _SessionAdapter(
+        {
+            "knowledge_base_ids": ["kb-A", "kb-B"],
+            "parameters": {
+                "mode": "static",
+                "top_k": 3,
+                "emit_hint_event": True,
+            },
+        },
+    )
+    with pytest.raises(HTTPException) as excinfo:
+        await _resolve_knowledge(adapter, conversation, "agent-1", "sess-1")
+    assert excinfo.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_resolve_knowledge_rejects_parameter_drift():
+    """snapshot=[A] 原生参数漂移（非 static）：运行前 403。"""
+    from fastapi import HTTPException
+
+    from nexus_backend.guard import _resolve_knowledge
+
+    conversation = _conversation_row(["kb-A"])
+    adapter = _SessionAdapter(
+        {
+            "knowledge_base_ids": ["kb-A"],
+            "parameters": {"mode": "agentic"},
+        },
+    )
+    with pytest.raises(HTTPException) as excinfo:
+        await _resolve_knowledge(adapter, conversation, "agent-1", "sess-1")
+    assert excinfo.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_resolve_knowledge_accepts_exact_match(monkeypatch):
+    """snapshot 与原生 id/static 参数完全一致且目录有效：放行并返回所选 id。"""
+    from nexus_backend import guard as guard_mod
+
+    async def fake_project(adapter, kind):
+        assert kind == "knowledge"
+        return {
+            "available": True,
+            "reason": None,
+            "items": [
+                {"id": "kb-A", "name": "A", "enabled": True, "selectable": True},
+            ],
+        }
+
+    monkeypatch.setattr(guard_mod.resources, "project_kind", fake_project)
+    conversation = _conversation_row(["kb-A"])
+    adapter = _SessionAdapter(
+        {
+            "knowledge_base_ids": ["kb-A"],
+            "parameters": {
+                "mode": "static",
+                "top_k": 3,
+                "emit_hint_event": True,
+            },
+        },
+    )
+    result = await guard_mod._resolve_knowledge(
+        adapter,
+        conversation,
+        "agent-1",
+        "sess-1",
+    )
+    assert result == ["kb-A"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_knowledge_accepts_empty_native_none(monkeypatch):
+    """snapshot=[] 且原生未装配 Knowledge（None）：放行空选择。"""
+    from nexus_backend import guard as guard_mod
+
+    conversation = _conversation_row([])
+    adapter = _SessionAdapter(None)
+    result = await guard_mod._resolve_knowledge(
+        adapter,
+        conversation,
+        "agent-1",
+        "sess-1",
+    )
+    assert result == []

@@ -410,3 +410,13 @@ Continuation 加载旧 reply 后追加事件并复用 reply_id，不能遇到同
 后台边界也不能夸大：公开 cancel_session_tasks/cancel_task 只调用 Task.cancel，不等待结束；Task 的 done callback 与 registry_del 又是不同收尾步骤，必须等待真实 Task 后再确认 registry 空，不主动 drop 条目冒充排空。原生 ToolOffloadMiddleware 的完成投递 Task 和 WakeupDispatcher 重试 timer 不全部登记在 BG registry，且超时前取消可能留下未注册的 drain Task。当前受控工具 facade 为 state-injected，避免通用 native offload；本版以该允许目录为前提，并靠冻结运行锁拒绝迟到 wakeup。不能把 BG registry 空报告为所有原生任意工具后台逻辑均已结束，不为此复制原生调度系统。[原生 offload](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/middleware/_tool_offload_middleware.py#L179)
 
 State 关联补充：公开 `AgentState.reply_id` 读写 `reply_context.reply_id`；可显式构造 `ReplyContext(reply_id=...)`。`AgentState(reply_id=...)` 也会被公开兼容 validator 迁入该嵌套字段，不是忽略。新回复在 START 前设置新 ReplyContext，continuation 保留旧 ID；START 前失败时可能仍是旧 ID 或默认随机 ID，因此非空 ID 不证明本轮开始。一次 ChatService.run 可以产生多条 reply_msgs，finally 保存全部消息后仅提交一次 State；state.reply_id 只指最后一条。不能为每条回复强求同 ID 的 State 提交，也不能用最后 State 成功清除前面的消息保存失败。[公开 State](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/state/_state.py#L226)、[保存顺序](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_service/_chat.py#L1489)
+
+## 16. 单次持锁执行的公开观察关联（2026-10-15）
+
+公开 `InMemoryMessageBus.acquire_lock(self, key, *, ttl_secs=600)` 在整个持锁 scope yield None，退出才释放。ChatService 的 `released=True` 只交还 inbox 消费权，finally 的保存仍在 Session 运行锁 scope 内；`asyncio.create_task(_persist())` 默认继承当前 Context。因此可仅在 Session 运行锁 scope 设置一个共享 ContextVar 对象，用唯一 checkpoint_id 关联多个 on_reply 与一次 State 提交。嵌套 inbox/checkpoint 锁透传，不替换该对象；普通锁探测不创建持久 pending。[公开锁实现](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/message_bus/_in_memory_message_bus.py#L361)、[保存子 Task](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_service/_chat.py#L1539)
+
+State 的期待项不能等到 update_session_state 才创建：前一个消息的确认失败可能使 State 入口根本没有执行。成功装配后、首条 user input upsert 之前，原生 register_inbox_consumer 通过公开 bus.registry_set 写入精确 `MessageBusKeys.inbox_consumer(sid)` / `INBOX_CONSUMER_FIELD` / `"1"`。可在当前运行 scope 的该精确调用处建立单个 unknown-digest State 期待，on_reply 再校验同一条；setup 失败只写诊断 ERROR，不注册 consumer，因此不会生成不存在的 State 要求。[消费者注册](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_service/_chat.py#L1243)
+
+内容摘要与提交证明分开：已验收 message_digest 排除原生 hook 外补的 finished_reason/error，事件观察用于验证实际内容；持久 entry 的最终摘要还须覆盖 writer 入口冻结的实际终态，读回使用相同投影，避免内容相同而错误终态仍被确认。未知摘要、缺失、错绑定或不匹配保持阻断；不能用新 checkpoint 清除旧失败。
+
+以上为固定源码下的设计核对，尚未代表真实 ChatService 集成通过。自主 PeerSend 的既有研究按用户最新要求延后第三阶段；不作为第二阶段前置。

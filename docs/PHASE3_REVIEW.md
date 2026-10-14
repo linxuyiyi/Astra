@@ -53,3 +53,13 @@ Codex亲自通过交付控制脚本启动两真实进程并注入真实DeepSeek�
 Codex 独立审查复现并闭环四项问题：多模态 Hint 与非空 PermissionRule 原先无法 JSON 序列化，Thinking 的 signature/redacted_thinking_data 原先漏入摘要，metadata/structured_output 内合法 Pydantic 值原先也无法编码。修复后 Codex 亲自运行回归探针及全量 `.venv/bin/python -m pytest -q`，297 passed（12.34s）；OpenSpec strict validate通过。新增14项测试使用真实公开事件重建，验证随机嵌套ID/时间差异不误报，实际文本、工具payload、权限规则、附件内容和State变化仍可区分，嵌套 Pydantic 值与原生 JSON 安全等价对象摘要相同。
 
 本小步没有调用模型，尚未装配存储观察、持久索引或冻结/排空接口，不作为真实保存、重启或删除验收证据。3.2.3.1保持未完成；后续仍须真实存储提交/失败、未确认记录重启、慢保存与重复取消、独立进程和真实模型尾部验证。
+
+## 任务 3.2.3.1：持久索引基础独立验收（2026-10-15）
+
+外部 Coding Agent 实现独立 aiosqlite 索引，只存可信绑定、message/checkpoint ID、SHA-256 摘要和提交确认；固定目录内 DB/marker nonce、版本核对，真实短事务提交，旧 pending 不被后续写入覆盖，未知摘要不得确认。尚未装配到官方消息/State 提交。
+
+Codex 先前独立运行曾打印 315 passed，但进程持续不退出，因此明确判为失败。OpenCode 按 Root 复现修复：连接在 PRAGMA 前登记所有权并覆盖 init/verify 取消清理；close 失败明确失效且保留真实句柄可重试；rollback Task 自身取消同样污染失效；父目录 fsync 失败不再伪装初始化成功。线程栈核实原挂起来自损坏库路径泄漏的 aiosqlite 工作线程。
+
+修复后 Codex 亲自执行 23 项索引针对性测试与全量 `.venv/bin/python -m pytest -q`：**320 passed in 12.61s，实际退出码 0**。另用真实临时 SQLite 注入 close 自身取消，验证保留句柄并在恢复后真正关闭。独立审查的真实 Task/Event 探针进一步覆盖 rollback 正在清理时的重复取消，以及 rollback 取消+close 失败组合，旧 pending 经无关写入及重开仍保留。
+
+证据限制：现有重复取消单测连续 cancel，未等待 rollback 进入；独立探针补充了该时序验证。未做断电实测或模型调用，不能将索引单模块验收称为完整落盘屏障、业务删除或第一阶段完成。3.2.3.1仍未勾选，下一步才接真实 Storage、事件观察和读回。

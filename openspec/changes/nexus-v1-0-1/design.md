@@ -81,7 +81,7 @@ Nexus 保存随机存储名、原始文件名、MIME、大小、owner 和 Conver
 
 三个页面及底部导航、绿色主题、员工抽屉、讨论弹窗、多对话切换、附件预览与 mentions 参照原型。共享消息列表、编辑器、附件组件，使用 Element Plus 原生控件，不复制 mock 或 IndexedDB 业务持久化。
 
-每阶段由 OpenCode 小步实现，Codex 独立检查代码、执行验证、发现问题后明确修复任务。唯一任务清单是本 change `tasks.md`。模拟测试与真实模型/服务测试分开报告；模型失败、缺凭据或无法验证时保持未完成并记录原因。只有全部 Scenario 满足才同步并归档 OpenSpec。
+每阶段按 AGENTS.md 的工具优先级由外部 Coding Agent 小步实现，Codex 独立检查代码、执行验证、发现问题后明确修复任务。唯一任务清单是本 change `tasks.md`。模拟测试与真实模型/服务测试分开报告；模型失败、缺凭据或无法验证时保持未完成并记录原因。只有全部 Scenario 满足才同步并归档 OpenSpec。
 
 ## Risks / Trade-offs
 

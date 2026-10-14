@@ -47,6 +47,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .adapter import AgentScopeHTTPClient, UpstreamError
 from .db import Database, Employee
+from . import resources
 
 # 原型固定的五个员工形象（字符串规范枚举）。
 AVATARS: tuple[str, ...] = (
@@ -83,14 +84,21 @@ _INTENT_FIELDS = (
     "responsibilities",
     "instructions",
     "avatar",
+    "enabled",
+    "knowledge",
+    "skills",
+    "tools",
 )
+
+RESOURCE_FIELDS = ("knowledge", "skills", "tools")
+RESOURCE_MAX = 50
 
 
 class EmployeeCreate(BaseModel):
     """创建员工请求体（业务校验在服务端显式执行）。
 
-    创建固定为启用（``enabled=true``）；启停执行约束属于任务 3.2，未知字段
-    （含显式 ``enabled``）一律显式拒绝，不静默接受未实现操作。
+    支持业务字段、``enabled`` 启停与 Knowledge/Skill/MCP Tools 默认关联
+    （列表仅含稳定资源 ID）。未知字段一律显式拒绝。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -100,13 +108,17 @@ class EmployeeCreate(BaseModel):
     responsibilities: str | None = None
     instructions: str | None = None
     avatar: str | None = None
+    enabled: bool | None = None
+    knowledge: list[str] | None = None
+    skills: list[str] | None = None
+    tools: list[str] | None = None
 
 
 class EmployeeUpdate(BaseModel):
     """编辑员工请求体。
 
-    只接受任务 3.1 已实现的员工字段；``enabled`` 启停约束与资源关联属于
-    任务 3.2，未知字段一律显式拒绝，不静默接受未实现操作。
+    只接受已实现的员工字段；``enabled``、``knowledge``/``skills``/``tools``
+    默认关联均为正式字段，未知字段一律显式拒绝。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -116,6 +128,10 @@ class EmployeeUpdate(BaseModel):
     responsibilities: str | None = None
     instructions: str | None = None
     avatar: str | None = None
+    enabled: bool | None = None
+    knowledge: list[str] | None = None
+    skills: list[str] | None = None
+    tools: list[str] | None = None
 
 
 class ReconcileRequest(BaseModel):
@@ -244,6 +260,38 @@ def _validated_avatar(value: object, errors: dict[str, str]) -> str | None:
     return value
 
 
+def _validated_id_list(
+    value: object,
+    field: str,
+    errors: dict[str, str],
+) -> list[str] | None:
+    """校验默认关联资源 ID 列表：仅接受稳定 ID 字符串，去重保序。
+
+    ``None`` 表示字段未提供（创建时按空列表处理）。资源是否真实存在且
+    enabled 由后续目录核对负责。
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        errors[field] = "必须是资源 ID 列表"
+        return None
+    result: list[str] = []
+    seen: set[str] = set()
+    for entry in value:
+        if not isinstance(entry, str) or not entry.strip():
+            errors[field] = "资源 ID 必须是非空文本"
+            return None
+        identifier = entry.strip()
+        if identifier in seen:
+            continue
+        seen.add(identifier)
+        result.append(identifier)
+    if len(result) > RESOURCE_MAX:
+        errors[field] = f"最多关联 {RESOURCE_MAX} 个资源"
+        return None
+    return result
+
+
 def validate_create(payload: EmployeeCreate) -> dict:
     errors: dict[str, str] = {}
     name = _required_text(
@@ -265,6 +313,9 @@ def validate_create(payload: EmployeeCreate) -> dict:
     )
     instructions = _required_text(payload.instructions, "instructions", errors)
     avatar = _validated_avatar(payload.avatar, errors)
+    knowledge = _validated_id_list(payload.knowledge, "knowledge", errors)
+    skills = _validated_id_list(payload.skills, "skills", errors)
+    tools = _validated_id_list(payload.tools, "tools", errors)
     if errors:
         raise EmployeeValidationError(errors)
     return {
@@ -273,7 +324,10 @@ def validate_create(payload: EmployeeCreate) -> dict:
         "responsibilities": responsibilities,
         "instructions": instructions,
         "avatar": avatar,
-        "enabled": True,
+        "enabled": True if payload.enabled is None else payload.enabled,
+        "knowledge": knowledge,
+        "skills": skills,
+        "tools": tools,
     }
 
 
@@ -320,9 +374,76 @@ def validate_update(payload: EmployeeUpdate) -> dict:
         avatar = _validated_avatar(provided["avatar"], errors)
         if avatar is not None:
             updates["avatar"] = avatar
+    if "enabled" in provided:
+        enabled = provided["enabled"]
+        if not isinstance(enabled, bool):
+            errors["enabled"] = "必须是布尔值"
+        else:
+            updates["enabled"] = enabled
+    for field in RESOURCE_FIELDS:
+        if field in provided:
+            parsed = _validated_id_list(provided[field], field, errors)
+            if parsed is not None:
+                updates[field] = parsed
     if errors:
         raise EmployeeValidationError(errors)
     return updates
+
+
+async def _validate_selected_resources(
+    adapter: AgentScopeHTTPClient,
+    updates: dict,
+) -> dict:
+    """核对默认关联资源真实存在且 enabled；目录不可用/资源失效明确失败。
+
+    只处理请求中实际提供的资源字段。目录 unavailable（feature-disabled 或
+    传输/协议错误）时明确返回 503，绝不静默保存只有标签的能力。
+    """
+    checked: dict = {}
+    for field in RESOURCE_FIELDS:
+        if field not in updates:
+            continue
+        ids: list[str] = updates[field]
+        if not ids:
+            checked[field] = []
+            continue
+        kind = resources.FIELD_KIND[field]
+        projected = await resources.project_kind(adapter, kind)
+        if not projected["available"]:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "errors": {
+                        field: f"资源目录不可用：{projected['reason']}",
+                    },
+                },
+            )
+        by_id = {item["id"]: item for item in projected["items"]}
+        missing = [identifier for identifier in ids if identifier not in by_id]
+        disabled = [
+            identifier
+            for identifier in ids
+            if identifier in by_id and not by_id[identifier]["enabled"]
+        ]
+        # 本版本不支持装配的资源（如 stdio/stateful MCP）：明确拒绝保存，绝不
+        # 静默保存一个只存标签、实际无法装配的能力。
+        unsupported = [
+            identifier
+            for identifier in ids
+            if identifier in by_id
+            and not by_id[identifier].get("selectable", True)
+        ]
+        if missing or disabled or unsupported:
+            errors: dict[str, str] = {}
+            if missing:
+                errors[field] = "以下资源不存在：" + "、".join(missing)
+            if disabled:
+                errors[field] = "以下资源未启用：" + "、".join(disabled)
+            if unsupported:
+                errors[field] = "以下资源当前版本不支持：" + "、".join(unsupported)
+            raise HTTPException(status_code=422, detail={"errors": errors})
+        checked[field] = list(ids)
+    return checked
 
 
 def _native_name_prompt(agent: dict | None) -> tuple[str | None, str | None]:
@@ -370,6 +491,9 @@ def _public(row: Employee, *, native: dict | None = None) -> dict:
         "instructions": row.instructions,
         "avatar": row.avatar,
         "enabled": row.enabled,
+        "knowledge": list(row.knowledge or []),
+        "skills": list(row.skills or []),
+        "tools": list(row.tools or []),
         "native_available": native_available,
         "sync_state": sync_state,
         "created_at": row.created_at.isoformat(),
@@ -531,9 +655,9 @@ def _build_placeholder(
         instructions=values["instructions"],
         avatar=values["avatar"],
         enabled=values["enabled"],
-        knowledge=[],
-        skills=[],
-        tools=[],
+        knowledge=list(values.get("knowledge") or []),
+        skills=list(values.get("skills") or []),
+        tools=list(values.get("tools") or []),
         sync_state=SYNC_CREATING,
         write_revision=write_revision,
         write_intent=intent,
@@ -628,6 +752,13 @@ async def _apply_intent_ready(
         row.responsibilities = intent["responsibilities"]
         row.instructions = intent["instructions"]
         row.avatar = intent["avatar"]
+        # 默认资源关联与启停与原生写入在同一恢复点落地：原生未确认前绝不
+        # 先应用本地资源/启停，避免“原生失败但资源已生效”的部分成功。
+        if "enabled" in intent:
+            row.enabled = bool(intent["enabled"])
+        for field in RESOURCE_FIELDS:
+            if field in intent:
+                setattr(row, field, list(intent[field] or []))
         row.sync_state = SYNC_READY
         row.write_intent = None
         await session.commit()
@@ -641,6 +772,29 @@ async def _clear_intent_ready(db: Database, employee_id: str) -> None:
             return
         row.sync_state = SYNC_READY
         row.write_intent = None
+        await session.commit()
+
+
+def _is_disable_only(updates: dict) -> bool:
+    """请求是否只是“禁用”这一可持久的安全操作。"""
+    return (
+        bool(updates)
+        and set(updates) <= {"enabled"}
+        and updates.get("enabled") is False
+    )
+
+
+async def _persist_enabled(
+    db: Database,
+    employee_id: str,
+    enabled: bool,
+) -> None:
+    """只持久化启停本地字段（短事务），不触碰原生写入意图。"""
+    async with db.session() as session:
+        row = await session.get(Employee, employee_id)
+        if row is None:
+            raise RuntimeError("员工记录在持久化启停状态时不存在")
+        row.enabled = enabled
         await session.commit()
 
 
@@ -967,6 +1121,8 @@ def register_employee_routes(app: FastAPI) -> None:
                 status_code=422,
                 detail={"errors": exc.errors},
             ) from exc
+        # 先核对真实目录再落占位/调原生：资源失效或目录不可用明确失败。
+        values.update(await _validate_selected_resources(adapter, values))
 
         employee_id = new_employee_id()
         # 同一员工从落占位到原生 POST→bind 的整个过程都在员工锁内，reconcile
@@ -1204,11 +1360,34 @@ def register_employee_routes(app: FastAPI) -> None:
                 raise HTTPException(status_code=404, detail="员工不存在。")
 
             # 先恢复此前的未完成写入，再在同一串行边界内执行本次编辑。
+            try:
+                updates = validate_update(payload)
+            except EmployeeValidationError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail={"errors": exc.errors},
+                ) from exc
+            # 核对本次请求实际提供的资源关联；目录不可用/资源失效明确失败。
+            updates.update(
+                await _validate_selected_resources(adapter, updates),
+            )
+
             if row.sync_state != SYNC_READY:
                 row, status = await _reconcile_or_http(db, adapter, employee_id)
                 if row is None:
                     raise HTTPException(status_code=404, detail="员工不存在。")
                 if status not in ("ready", "recovered", "reverted"):
+                    # 未完成写入期间只允许“禁用”这一可持久的安全操作；启用、
+                    # 资源或职责编辑必须等 reconcile 到一致状态后再进行。
+                    if _is_disable_only(updates):
+                        await _persist_enabled(db, employee_id, False)
+                        refreshed = await _reload_row(db, employee_id)
+                        if refreshed is None:
+                            raise HTTPException(
+                                status_code=404,
+                                detail="员工不存在。",
+                            )
+                        return await _public_row_safe(adapter, refreshed)
                     raise HTTPException(
                         status_code=409,
                         detail=_pending_detail(
@@ -1221,15 +1400,21 @@ def register_employee_routes(app: FastAPI) -> None:
                         ),
                     )
 
-            try:
-                updates = validate_update(payload)
-            except EmployeeValidationError as exc:
-                raise HTTPException(
-                    status_code=422,
-                    detail={"errors": exc.errors},
-                ) from exc
             if not updates:
                 return await _confirmed_public(adapter, row)
+
+            # 启用只允许在一致（ready）且未删除状态下进行；禁用始终可持久。
+            if updates.get("enabled") is True and row.sync_state != SYNC_READY:
+                raise HTTPException(
+                    status_code=409,
+                    detail=_pending_detail(
+                        employee_id,
+                        sync_state=row.sync_state,
+                        message=(
+                            "员工存在未完成的写入，只有在一致状态后才允许启用。"
+                        ),
+                    ),
+                )
 
             # 编辑前读取真实原生 name/prompt 作为旧值快照，绝不使用本地重编译
             # 值冒充原生旧值；该快照仅用于明确未受理时的精确核对。
@@ -1263,6 +1448,13 @@ def register_employee_routes(app: FastAPI) -> None:
                     row.instructions,
                 ),
                 "avatar": updates.get("avatar", row.avatar),
+                "enabled": updates.get("enabled", row.enabled),
+                "knowledge": updates.get(
+                    "knowledge",
+                    list(row.knowledge or []),
+                ),
+                "skills": updates.get("skills", list(row.skills or [])),
+                "tools": updates.get("tools", list(row.tools or [])),
             }
             conflict = await _find_conflict(
                 db,
@@ -1318,7 +1510,7 @@ def register_employee_routes(app: FastAPI) -> None:
             )
             intent = _build_intent(
                 op="update",
-                values={**merged, "enabled": row.enabled},
+                values=merged,
                 prompt=new_prompt,
                 revision=new_revision,
                 old_native={"name": native_name, "prompt": native_prompt},
@@ -1498,8 +1690,8 @@ def register_employee_routes(app: FastAPI) -> None:
                     else {}
                 )
                 recorded = intent.get("generation_id")
-                current_generation = await _read_generation(adapter)
-                if current_generation is None:
+                gen_before = await _read_generation(adapter)
+                if gen_before is None:
                     raise HTTPException(
                         status_code=503,
                         detail=_pending_detail(
@@ -1514,7 +1706,7 @@ def register_employee_routes(app: FastAPI) -> None:
                 if (
                     not isinstance(recorded, str)
                     or not recorded
-                    or current_generation == recorded
+                    or gen_before == recorded
                 ):
                     raise HTTPException(
                         status_code=409,
@@ -1525,6 +1717,64 @@ def register_employee_routes(app: FastAPI) -> None:
                                 "服务代次未变化，旧创建请求可能仍在进行，不能"
                                 "释放占位。请先重启 AgentScope 服务使代次变化"
                                 "后再核对释放。"
+                            ),
+                        ),
+                    )
+                # 代次已确认变化：**重新扫描**精确标记（绝不复用更早的 absence），
+                # 并核对扫描前后代次稳定。竞态窗口内旧请求可能已在新代次落库为
+                # 既有记录：重新扫到必须按原意图恢复，不能释放占位。
+                try:
+                    rescanned = await _find_agents_by_marker(adapter, employee_id)
+                except UpstreamError as exc:
+                    raise HTTPException(
+                        status_code=504,
+                        detail=_pending_detail(
+                            employee_id,
+                            sync_state=row.sync_state,
+                            message=(
+                                "无法读取原生 Agent 目录核对创建标记，保留未完成"
+                                "状态，请稍后重试。"
+                            ),
+                        ),
+                    ) from exc
+                gen_after = await _read_generation(adapter)
+                if gen_after is None or gen_after != gen_before:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=_pending_detail(
+                            employee_id,
+                            sync_state=row.sync_state,
+                            message=(
+                                "核对期间服务代次再次变化，无法确认创建结果，"
+                                "保留未完成状态，请稍后重试。"
+                            ),
+                        ),
+                    )
+                if rescanned:
+                    # 重新扫到既有记录：按原意图恢复（重新 reconcile 绑定），
+                    # 绝不释放占位、绝不重复 POST。
+                    recovered_row, recovered_status = await _reconcile_or_http(
+                        db,
+                        adapter,
+                        employee_id,
+                    )
+                    if (
+                        recovered_row is not None
+                        and recovered_status in ("ready", "recovered", "reverted")
+                    ):
+                        return await _public_row_safe(adapter, recovered_row)
+                    raise HTTPException(
+                        status_code=409,
+                        detail=_pending_detail(
+                            employee_id,
+                            sync_state=(
+                                recovered_row.sync_state
+                                if recovered_row is not None
+                                else row.sync_state
+                            ),
+                            message=(
+                                "重新核对到原生创建记录但未能恢复一致，保留"
+                                "未完成状态，请稍后重试 reconcile。"
                             ),
                         ),
                     )

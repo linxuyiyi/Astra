@@ -24,7 +24,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncIterator
 
-from sqlalchemy import Boolean, DateTime, Integer, JSON, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -104,6 +112,70 @@ class Employee(Base):
     )
 
 
+class Conversation(Base):
+    """匿名 owner 与原生 Session 的最小业务关联（任务 3.2.2）。
+
+    事实源划分：原生 Agent/Session/消息仍是执行与内容事实源；本表只保存
+    owner 归属、员工关联、唯一原生 Session 绑定、能力快照与必要的创建状态
+    索引，绝不复制原生消息、AgentState、Memory 或模型参数。
+
+    * ``session_id`` 唯一指向原生 Session 顶层 id；创建结果未知时为空，待
+      核对后按稳定业务 id 恢复；
+    * ``status`` 为 ``creating``（原生 Session 已请求但能力未全部确认）、
+      ``ready``（原生 Session、模型、Knowledge/Skill/MCP 全部确认）、
+      ``incomplete``（无法判定，禁止新运行）；
+    * ``capability_snapshot`` 保存创建时实际使用的 Knowledge/Skill/MCP ID，
+      供运行 guard 按会话既有能力核对，不因员工默认关联后续变化而漂移；
+    * ``(owner, client_key)`` 唯一约束实现同一客户端幂等创建键不重复 Session。
+    """
+
+    __tablename__ = "nexus_conversations"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner",
+            "client_key",
+            name="uq_conversation_owner_client_key",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner: Mapped[str] = mapped_column(String(64), index=True)
+    employee_id: Mapped[str] = mapped_column(String(64), index=True)
+    # 创建/绑定后的原生顶层 Agent id 快照；未确认时为空。
+    agent_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # 唯一原生 Session id；创建结果未知时为空，恢复后绑定。
+    session_id: Mapped[str | None] = mapped_column(
+        String(128),
+        unique=True,
+        index=True,
+        nullable=True,
+    )
+    # 精确原生 Session.name 关联标记，用于未知结果时按唯一名称核对恢复。
+    session_marker: Mapped[str] = mapped_column(String(128))
+    title: Mapped[str] = mapped_column(String(72))
+    capability_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    # 最小创建意图：占位落盘时持久化本次创建的目标（原生 Agent id、期望模型
+    # 配置、Knowledge/Skill/MCP 稳定 ID、创建时服务代次）。恢复只按此意图核对
+    # 原生 Session，绝不从后续可能被编辑的 Employee 默认值重新猜目标。
+    create_intent: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+    )
+    # 幂等键：同一 owner 下重复提交返回同一 Conversation，不重复建 Session。
+    client_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="creating")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
 class Database:
     """异步 SQLite 存储：建表、会话工厂与销毁。"""
 
@@ -125,9 +197,24 @@ class Database:
         return self._path
 
     async def init(self) -> None:
-        """建表（仅新库；无旧模型迁移）。"""
+        """建表并做最小 schema 升级，保持当前开发数据库可用。
+
+        只对已存在的 ``nexus_conversations`` 表补齐本版本新增的 ``create_intent``
+        列；不迁移旧工程数据、不引入版本兼容平台。
+        """
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await self._ensure_conversation_columns(conn)
+
+    async def _ensure_conversation_columns(self, conn) -> None:
+        result = await conn.exec_driver_sql(
+            "PRAGMA table_info(nexus_conversations)",
+        )
+        columns = {row[1] for row in result}
+        if columns and "create_intent" not in columns:
+            await conn.exec_driver_sql(
+                "ALTER TABLE nexus_conversations ADD COLUMN create_intent JSON",
+            )
 
     async def dispose(self) -> None:
         await self._engine.dispose()

@@ -1,0 +1,17 @@
+{
+  "status": "passed",
+  "scope": "real_local_embedding_only",
+  "model": "embeddinggemma:300m",
+  "provider": "official Ollama 0.17.5",
+  "vector_count": 2,
+  "dimensions": 768,
+  "distinct": true,
+  "elapsed_seconds": 0.892,
+  "rag_verified": false,
+  "models": [
+    {
+      "name": "embeddinggemma:300m",
+      "digest": "85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1"
+    }
+  ]
+}

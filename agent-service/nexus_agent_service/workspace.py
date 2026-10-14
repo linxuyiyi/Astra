@@ -141,13 +141,15 @@ class SessionWorkspaceManager(WorkspaceManagerBase):
         """关闭并清空所有缓存的 workspace。
 
         持生命周期锁：任何在途初始化结束后才执行，确保关闭后不会被迟到
-        的初始化重新写入缓存。
+        的初始化重新写入缓存。逐个在当前任务内关闭而非 ``gather``：stateful
+        stdio MCP 的连接位于 ``anyio`` cancel scope，必须与关闭处于同一任务，
+        否则跨任务退出 cancel scope 会报错并留下未关闭的进程。
         """
         async with self._lock:
             workspaces = list(self._workspaces.values())
             self._workspaces.clear()
-            if workspaces:
-                await asyncio.gather(
-                    *(workspace.close() for workspace in workspaces),
-                    return_exceptions=True,
-                )
+            for workspace in workspaces:
+                try:
+                    await workspace.close()
+                except Exception:  # noqa: BLE001 - 单个关闭失败不阻断其余
+                    continue

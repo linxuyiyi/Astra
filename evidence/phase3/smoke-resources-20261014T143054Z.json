@@ -1,0 +1,102 @@
+{
+  "mode": "full",
+  "run_at": "2026-10-14T14:30:40.881378+00:00",
+  "checks": {
+    "backend_health_ok": true,
+    "catalog_real_state": true,
+    "employee_resource_default_saved": true,
+    "session_binding_and_capability": true,
+    "disabled_guard_blocks_native_chat": true,
+    "restart_recovery": true
+  },
+  "model_check": {
+    "status": "skipped",
+    "reason": "未提供 AGENTSCOPE_MODEL_API_KEY，真实模型启用/工具轮未运行；本证据仅证明资源目录、Session 绑定与非模型 guard 边界。"
+  },
+  "catalog": {
+    "skills": {
+      "available": true,
+      "reason": null,
+      "items": []
+    },
+    "mcps": {
+      "available": true,
+      "reason": null,
+      "items": []
+    },
+    "knowledge": {
+      "available": false,
+      "reason": "官方功能未启用或暂不可用（feature disabled）。",
+      "items": []
+    }
+  },
+  "employee": {
+    "id": "emp_3d68bf8f6e7f4429a7f1aa66fef40be1",
+    "tools": [
+      "c52ff4bec319454c95c81ab6d5f1043b"
+    ]
+  },
+  "conversation": {
+    "id": "conv_4a541fb292b645a9b756f8e602501409",
+    "session_id": "c8c2fc9f665449f1b880b0a44ba1117c",
+    "agent_id": "48b4a9d924e04b25919a271cd56b930c",
+    "capability_snapshot": {
+      "knowledge": [],
+      "skills": [],
+      "tools": [
+        "c52ff4bec319454c95c81ab6d5f1043b"
+      ]
+    },
+    "mcp_healthy": true
+  },
+  "enabled_probe": {
+    "model_call_started": true,
+    "finished_reason": "error"
+  },
+  "guard": {
+    "enabled_authorize_status": 200,
+    "disabled_authorize_status": 403,
+    "native_chat": {
+      "trigger_status": "started",
+      "event_types": [
+        "REPLY_START",
+        "REPLY_END"
+      ],
+      "end_event": {
+        "id": "14fda1a18d2e43d0b13b8623ccc52adf",
+        "created_at": "2026-10-14T22:30:45.379307",
+        "metadata": {},
+        "type": "REPLY_END",
+        "session_id": "c8c2fc9f665449f1b880b0a44ba1117c",
+        "reply_id": "aa75a54d4eb84e0695bced0b81088cff",
+        "finished_reason": "error",
+        "error": {
+          "type": "setup",
+          "message": "The session could not be prepared — check the agent's model, tools and knowledge bases."
+        }
+      },
+      "finished_reason": "error",
+      "text": "",
+      "model_call_started": false,
+      "tool_call_started": false,
+      "tool_events": [],
+      "assistant_messages": 2,
+      "assistant_texts": [
+        "",
+        ""
+      ]
+    }
+  },
+  "restart": {
+    "employee_restored": true,
+    "authorize_status": 200,
+    "session_restored": true,
+    "mcp_rediscovered_healthy": true,
+    "generation_before": "551b7ca4c17248b6b3ddd2e7aff804cb",
+    "generation_after": "65e15461ebb8480998bbc867124e3d48",
+    "generation_changed": true
+  },
+  "status": "passed",
+  "evidence_path": "evidence/phase3/smoke-resources-20261014T143054Z.json",
+  "key_recorded": false
+}

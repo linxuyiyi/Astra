@@ -18,8 +18,11 @@ from fastapi import FastAPI, Request, Response
 
 from .adapter import AgentScopeHTTPClient
 from .config import EXPECTED_AGENTSCOPE_VERSION, BackendConfig
+from .conversations import register_conversation_routes
 from .db import Database
 from .employees import register_employee_routes
+from .guard import register_guard_routes
+from .resources import register_resource_routes
 
 
 def build_app(
@@ -72,6 +75,9 @@ def build_app(
 
     _register_routes(app)
     register_employee_routes(app)
+    register_resource_routes(app)
+    register_conversation_routes(app)
+    register_guard_routes(app)
     return app
 
 

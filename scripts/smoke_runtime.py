@@ -98,6 +98,10 @@ class ServiceController:
     asc_port: int
     backend_port: int
     steps: list[dict] = field(default_factory=list)
+    # 两个进程共享的服务端内部秘密（运行 guard 回调鉴权），每次冒烟独立。
+    internal_token: str = field(
+        default_factory=lambda: secrets.token_urlsafe(24),
+    )
 
     @property
     def asc_url(self) -> str:
@@ -119,6 +123,9 @@ class ServiceController:
                 "NEXUS_BACKEND_HOST": "127.0.0.1",
                 "NEXUS_BACKEND_PORT": str(self.backend_port),
                 "NEXUS_BACKEND_DATA_DIR": str(self.data_root / "backend"),
+                # 运行 guard：AgentScope 回调 Nexus 后端内部授权端点。
+                "NEXUS_GUARD_URL": self.backend_url,
+                "NEXUS_INTERNAL_TOKEN": self.internal_token,
             },
         )
         return env
@@ -466,46 +473,99 @@ async def _full_smoke(
         chat_model_config = defaults["chat_model_config"]
         evidence["default_chat_model_config"] = chat_model_config
 
-        # 2) 原生测试 Agent + 两个 Session
-        agent_id = await adapter.create_agent(
-            name=f"smoke-runtime-{uuid.uuid4().hex[:8]}",
-            system_prompt=(
-                "你是一个可靠的测试助手。用户会让你记住一个口令，之后询问"
-                "时必须准确回答该口令。回答简洁，只回答被要求的内容。"
-            ),
+        # 2) 通过业务接口创建员工与两个 Conversation（共享原生 Session 绑定）。
+        # 运行 guard 已启用，直接裸建原生 Session 的旧方式会被拒绝，因此模型
+        # 联调必须走正式的业务 Session 绑定，不绕过 guard。
+        owner = str(uuid.uuid4())
+        backend_client = httpx.AsyncClient(
+            base_url=ctrl.backend_url,
+            headers={"X-Nexus-Owner": owner},
+            timeout=60.0,
+            trust_env=False,
         )
-        listing = await adapter.list_agents()
-        matched = next(a for a in listing["agents"] if a["id"] == agent_id)
-        evidence["agent"] = {
-            "id": agent_id,
-            "data_id": matched["data"]["id"],
-            "two_ids_differ": matched["data"]["id"] != matched["id"],
-        }
-        evidence["checks"]["agent_top_level_id"] = (
-            matched["data"]["id"] != matched["id"]
-        )
+        try:
+            employee_resp = await backend_client.post(
+                "/api/employees",
+                json={
+                    "name": f"运行时员工{uuid.uuid4().hex[:6]}",
+                    "domain": "运行时验证领域",
+                    "responsibilities": (
+                        "你是一个可靠的测试助手。用户会让你记住一个口令，之后"
+                        "询问时必须准确回答该口令。回答简洁，只回答被要求的内容。"
+                    ),
+                    "instructions": "只回答被要求的内容，不要扩展。",
+                    "avatar": "🤖",
+                },
+            )
+            if employee_resp.status_code != 201:
+                raise SmokeError(
+                    f"创建员工失败：{employee_resp.status_code} "
+                    f"{employee_resp.text}",
+                )
+            employee = employee_resp.json()
+            agent_id = employee["agent_id"]
+            conversation_a = await backend_client.post(
+                "/api/conversations",
+                json={
+                    "employee_id": employee["id"],
+                    "title": "smoke-A",
+                    "client_key": uuid.uuid4().hex,
+                },
+            )
+            conversation_b = await backend_client.post(
+                "/api/conversations",
+                json={
+                    "employee_id": employee["id"],
+                    "title": "smoke-B",
+                    "client_key": uuid.uuid4().hex,
+                },
+            )
+            if (
+                conversation_a.status_code != 201
+                or conversation_b.status_code != 201
+            ):
+                raise SmokeError(
+                    "创建 Conversation 失败："
+                    f"{conversation_a.status_code}/{conversation_b.status_code} "
+                    f"{conversation_a.text} {conversation_b.text}",
+                )
+            conv_a = conversation_a.json()
+            conv_b = conversation_b.json()
+            if conv_a["status"] != "ready" or conv_b["status"] != "ready":
+                raise SmokeError(f"Conversation 未 ready：{conv_a} {conv_b}")
+            if conv_a["agent_id"] != agent_id:
+                raise SmokeError("Conversation 绑定的 Agent 与员工不一致")
+            session_a = conv_a["session_id"]
+            session_b = conv_b["session_id"]
 
-        session_a = await adapter.create_session(
-            agent_id=agent_id,
-            name="smoke-A",
-            chat_model_config=chat_model_config,
-        )
-        session_b = await adapter.create_session(
-            agent_id=agent_id,
-            name="smoke-B",
-            chat_model_config=chat_model_config,
-        )
-        views = (await adapter.list_sessions(agent_id))["sessions"]
-        by_id = {v["session"]["id"]: v for v in views}
-        ws_a = by_id[session_a]["session"]["config"]["workspace_id"]
-        ws_b = by_id[session_b]["session"]["config"]["workspace_id"]
-        if ws_a == ws_b:
-            raise SmokeError("两个 Session 的 PER_SESSION workspace 相同")
-        evidence["sessions"] = [
-            {"role": "A", "id": session_a, "workspace_id": ws_a},
-            {"role": "B", "id": session_b, "workspace_id": ws_b},
-        ]
-        evidence["checks"]["per_session_workspace_isolated"] = True
+            listing = await adapter.list_agents()
+            matched = next(a for a in listing["agents"] if a["id"] == agent_id)
+            evidence["agent"] = {
+                "id": agent_id,
+                "data_id": matched["data"]["id"],
+                "two_ids_differ": matched["data"]["id"] != matched["id"],
+            }
+            evidence["checks"]["agent_top_level_id"] = (
+                matched["data"]["id"] != matched["id"]
+            )
+            evidence["conversations"] = [
+                {"role": "A", "id": conv_a["id"], "session_id": session_a},
+                {"role": "B", "id": conv_b["id"], "session_id": session_b},
+            ]
+
+            views = (await adapter.list_sessions(agent_id))["sessions"]
+            by_id = {v["session"]["id"]: v for v in views}
+            ws_a = by_id[session_a]["session"]["config"]["workspace_id"]
+            ws_b = by_id[session_b]["session"]["config"]["workspace_id"]
+            if ws_a == ws_b:
+                raise SmokeError("两个 Session 的 PER_SESSION workspace 相同")
+            evidence["sessions"] = [
+                {"role": "A", "id": session_a, "workspace_id": ws_a},
+                {"role": "B", "id": session_b, "workspace_id": ws_b},
+            ]
+            evidence["checks"]["per_session_workspace_isolated"] = True
+        finally:
+            await backend_client.aclose()
 
         # 3) 随机口令两轮上下文
         token = "ZQ" + secrets.token_hex(4)

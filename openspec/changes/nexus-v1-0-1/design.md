@@ -87,7 +87,7 @@ Nexus 保存随机存储名、原始文件名、MIME、大小、owner 和 Conver
 - [单进程消息总线重启丢瞬时事件] → 原生消息/状态持久化，重新订阅补历史；不宣称多进程恢复。
 - [删除级联与历史承诺冲突] → 先完成只读归档，再执行真实删除；对失败路径测试。
 - [PeerSend 循环或并发冲突] → 持久幂等 envelope、exchange 预算、目标单 Session 运行约束，不同步等待。
-- [Knowledge 依赖真实 embedding 配置] → 服务侧配置并实际验证；缺配置时资源空态及能力限制如实披露，不构造假知识检索。
+- [Knowledge 依赖真实 embedding 配置] → 由 AgentScope 引导公开 OllamaCredential，使用本机标准 Ollama 模型服务与 embeddinggemma:300m（768维）完成真实索引/检索；向量与文档存储随 AgentScope data_dir 持久化。该模型服务属于模型层依赖，不增加业务微服务或配置页面。缺配置时明确不可用；所选 KB 检索失败必须在模型调用前中止，不沿用原生 log-and-skip 的裸模型成功行为。
 - [本地 workspace 工具可接触宿主文件] → 默认仅允许本版本需要的目录/工具，所有员工启停在服务实际运行前再次检查。
 
 ## Migration Plan

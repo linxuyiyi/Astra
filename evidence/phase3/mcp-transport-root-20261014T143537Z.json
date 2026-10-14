@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "scope": "root_real_stateless_http_mcp_transport_only",
+  "ai_model_verified": false,
+  "normal_call": true,
+  "timeout": true,
+  "cancelled": true,
+  "call_after_cancel": true,
+  "new_unfinished_client_tasks": 0,
+  "new_live_fixture_threads": 0
+}

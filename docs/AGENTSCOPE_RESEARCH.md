@@ -372,3 +372,19 @@ HTML 原型 `/Users/niuniu/Downloads/Nexus_v1.0.1.html:224` 明确提示删除�
 运行退出与归档：原生先发布 REPLY_END，再在 finally 保存消息与 Session state，最后解除运行锁；保存异常会被外层日志处理，idle 本身不证明成功落盘。慢速 MCP 默认十秒后可能继续作为后台任务，普通 interrupt 不取消后台任务。可通过公开 MessageBus、MessageBusKeys 取消 run/background，等待 session lock 释放且 bg_tasks registry 清空，再对照已观察尾部 reply_id、持久消息与 checkpoint 核对，失败或无法确认时禁止 DELETE。原生 DELETE 自身取消等待超时后仍可能继续删除，不能把它当作归档前屏障。[保存顺序](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_service/_chat.py#L1476)
 
 游标：SSE payload 的 `id` 是 Event ID，`after` 接受的是 MessageBus transport entry ID；原生 SSE 没有暴露 `_entry_id` 或 SSE id。恢复应使用 messages 返回的 `event_cursor`，或公开服务扩展直接取得 bus `(entry_id, event)`，不能将 payload.id 当作 after。replay 最多一千条、成功 checkpoint 会裁剪、重启会清空，因此最终历史仍以原生 SQL 消息校准。[原生 stream](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_router/_session.py#L893)
+
+## 13. Knowledge 真实验收补充
+
+官方公开 OllamaCredential 无云密钥字段，返回 OllamaEmbeddingModel，实际调用标准 Ollama /api/embed；pip客户端不包含模型服务。当前机器已有 Ollama 0.17.5，Codex 在隔离 11435 端口及 ignored data/embedding/models 下载 embeddinggemma:300m，并真实生成两段不同中文的768维向量。证据 `evidence/phase3/embedding-bootstrap-20261013T182311Z.json` 仅证明本地 embedding，不代表 Knowledge 完整链路已通过。
+
+Knowledge manager启用后官方已有默认 TextParser/ApproxTokenChunker；CollectionPerKbManager 生命周期负责 vector store，不重复进入。上传TXT返回pending，文档真实完成状态为ready且chunk_count>0（并无indexed枚举）；状态接口 GET /knowledge_bases/{kb}/documents/status?ids={docid}，检索 POST /knowledge_bases/{kb}/search，body query/top_k。新Session需显式 static RAG 参数，默认agentic不会保证首轮检索。
+
+官方会跳过无法装配的KB，并吞掉static检索异常继续模型调用。最小严格扩展应仅观察原生搜索：公开CollectionPerKbManager.get_knowledge返回公开KnowledgeBase包装，search仍委托原生实现；本轮ContextVar观察成功/失败KB，on_model_call核实所选KB全部成功搜索。零结果可继续，异常或漏装则明确中止；不另做一次检索、不存搜索副本/新RAG状态机。默认vector/blob目录必须从实际AGENTSCOPE_DATA_DIR派生，不能使隔离smoke落入项目默认正式目录。
+
+## 14. MCP 支持范围收敛
+
+2.0.10 原生 stateful MCP 将 AnyIO transport scopes 保存在连接 task，HTTP 后续请求/关闭可能在另一 task；即使 workspace 仅用一个 owner task，多连接 A→B 后先移除 A 仍存在非 LIFO 退出风险。原生连接失败清理还使用 shield 创建新 task；公开 workspace 包装不足以完整修复，不能吞掉关闭异常冒充通过。
+
+v1.0.1 明确只支持官方无状态 Streamable HTTP 客户端：`is_stateful=False`、`mcp_config.type=http_mcp`，有效 HTTP(S) URL，path 不以 `/sse` 或 `/messages/` 结尾，并通过真实握手。stdio、SSE 与 stateful 条目安全投影为不可选及原因，保存/恢复/运行均拒绝；不修改核心、不复制 MCP 实现，也不让用户把 stdio 错配成无状态。该边界是当前版本限制，不意味着所有 MCP 传输均可用。
+
+无状态 list_raw_tools 与 MCPTool.call 在当前调用 task 中以嵌套 async with 进入并退出 transport/ClientSession，不持有跨请求 scopes。后续必须实测发现/工具调用、协议失败/超时/取消后的再次调用，以及服务重启后恢复；远端操作取消不承诺回滚。受控 facade 去掉框架 state 参数后委托原 MCPTool，并保留原权限决策，不把本地允许目录等同于强制 ALLOW。[发现](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/mcp/_mcp_client.py#L439)、[执行](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/tool/_adapters.py#L330)

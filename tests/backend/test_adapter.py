@@ -568,3 +568,49 @@ async def test_adapter_against_real_agentscope_asgi(tmp_path):
             assert await adapter.delete_agent(agent_id) is True
         finally:
             await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_create_session_malformed_201_is_unknown_not_keyerror():
+    """201 缺 session_id 属异常协议响应，收敛为 UpstreamError（结果未知）。"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(201, json={})
+
+    adapter, client = _mock_adapter(handler)
+    try:
+        with pytest.raises(UpstreamError) as excinfo:
+            await adapter.create_session(agent_id="a1", name="x")
+    finally:
+        await client.aclose()
+    assert excinfo.value.status_code == 201
+    assert "session_id" in excinfo.value.public_message
+
+
+@pytest.mark.asyncio
+async def test_list_all_knowledge_bases_paginates_and_validates():
+    pages = {
+        1: {"knowledge_bases": [{"id": "kb1", "name": "n1"}], "total": 2},
+        2: {"knowledge_bases": [{"id": "kb2", "name": "n2"}], "total": 2},
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = int(request.url.params.get("page", "1"))
+        return httpx.Response(200, json=pages[page])
+
+    adapter, client = _mock_adapter(handler)
+    try:
+        result = await adapter.list_all_knowledge_bases(page_size=1)
+    finally:
+        await client.aclose()
+    assert [e["id"] for e in result["knowledge_bases"]] == ["kb1", "kb2"]
+
+    def bad_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"knowledge_bases": []})
+
+    adapter, client = _mock_adapter(bad_handler)
+    try:
+        with pytest.raises(UpstreamError):
+            await adapter.list_all_knowledge_bases()
+    finally:
+        await client.aclose()

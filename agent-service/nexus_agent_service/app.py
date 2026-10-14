@@ -23,16 +23,57 @@ from agentscope.app import create_app
 from agentscope.app.message_bus import InMemoryMessageBus
 from agentscope.app.storage import AsyncSQLAlchemyStorage
 from agentscope.app.workspace_manager import IsolationPolicy
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware import Middleware
 
 from .bootstrap import ModelBootstrapStatus, bootstrap_default_model
 from .config import ServiceConfig
+from .guard import (
+    DenyAllAuthorizer,
+    NexusGuardAuthorizer,
+    make_run_guard_factory,
+    mcp_client_support,
+)
 from .workspace import SessionWorkspaceManager
 from .write_barrier import NativeWriteBarrierMiddleware
 
 
-def build_app(config: ServiceConfig, instance_id: str | None = None) -> FastAPI:
+def _build_knowledge_manager(config: ServiceConfig, storage: object):
+    """按需构建官方 CollectionPerKbManager + 持久 Qdrant/LocalBlobStore。
+
+    默认关闭。开启时要求已安装 ``qdrant-client``；缺失则明确报错（fail
+    closed），不静默降级为假目录。真正可检索还要求服务端存在支持 embedding
+    的凭据并创建知识库，本函数只提供可配置入口，不声称 RAG 已验证。
+    """
+    if not config.knowledge_enabled:
+        return None, None
+    try:
+        from agentscope.app.rag.blob_store import LocalBlobStore
+        from agentscope.app.rag.knowledge_base_manager import (
+            CollectionPerKbManager,
+        )
+        from agentscope.rag import QdrantStore
+    except ImportError as exc:  # pragma: no cover - 取决于可选依赖
+        raise RuntimeError(
+            "AGENTSCOPE_KNOWLEDGE_ENABLED 已开启，但缺少 qdrant-client；"
+            "请安装可选依赖后再启用知识库。",
+        ) from exc
+    vector_dir = str(config.knowledge_vector_dir)
+    blob_dir = str(config.knowledge_blob_dir)
+    vector_store = QdrantStore(path=vector_dir)
+    manager = CollectionPerKbManager(storage, vector_store)
+    blob_store = LocalBlobStore(blob_dir)
+    return manager, blob_store
+
+
+def build_app(
+    config: ServiceConfig,
+    instance_id: str | None = None,
+    *,
+    guard_authorizer: NexusGuardAuthorizer | None = None,
+    skill_hubs: list | None = None,
+    mcp_hubs: list | None = None,
+) -> FastAPI:
     """构建并返回官方 AgentScope FastAPI 应用。"""
     # aiosqlite 的 DEBUG 日志会把绑定参数（含模型密钥）原样打印，且不受
     # SQLAlchemy ``hide_parameters`` 约束；在装配前收紧该 logger 级别。
@@ -58,12 +99,35 @@ def build_app(config: ServiceConfig, instance_id: str | None = None) -> FastAPI:
     # “旧单进程请求是否已随重启退出”，不作为可空的控制脚本实例标识。
     generation_id = uuid.uuid4().hex
 
+    knowledge_manager, blob_store = _build_knowledge_manager(config, storage)
+
+    # 运行 guard：正式 build **始终**安装。配置了内部秘密时使用 HTTP 授权器
+    # 回调 Nexus；否则使用 fail-closed 的 DenyAllAuthorizer（拒绝一切运行），
+    # 不提供“离线跳过 guard”的生产开关。单元测试可显式注入 authorizer。
+    owned_authorizer: NexusGuardAuthorizer | None = None
+    if guard_authorizer is None:
+        if config.nexus_internal_token:
+            owned_authorizer = NexusGuardAuthorizer(
+                config.nexus_guard_url,
+                config.nexus_internal_token,
+            )
+            guard_authorizer = owned_authorizer
+        else:
+            guard_authorizer = DenyAllAuthorizer()
+    guard_configured = not isinstance(guard_authorizer, DenyAllAuthorizer)
+
+    extra_agent_middlewares = make_run_guard_factory(guard_authorizer)
+
     app = create_app(
         storage=storage,
         message_bus=InMemoryMessageBus(),
         workspace_manager=workspace_manager,
+        knowledge_base_manager=knowledge_manager,
+        blob_store=blob_store,
         enable_scheduler=False,
         enable_channel_worker=False,
+        skill_hubs=skill_hubs,
+        mcp_hubs=mcp_hubs,
         extra_middlewares=[
             Middleware(
                 NativeWriteBarrierMiddleware,
@@ -72,6 +136,7 @@ def build_app(config: ServiceConfig, instance_id: str | None = None) -> FastAPI:
                 generation_id=generation_id,
             ),
         ],
+        extra_agent_middlewares=extra_agent_middlewares,
         title="Nexus AgentScope Service",
     )
 
@@ -92,12 +157,16 @@ def build_app(config: ServiceConfig, instance_id: str | None = None) -> FastAPI:
                 yield state
             finally:
                 app_.state.nexus_ready = False
+                if owned_authorizer is not None:
+                    await owned_authorizer.aclose()
 
     app.router.lifespan_context = nexus_lifespan
 
     app.state.nexus_config = config
     # 本次 build/start 的服务代次标识（每次构建新生成，永不为 None）。
     app.state.nexus_generation_id = generation_id
+    # 运行 guard 是否配置了真实授权（缺秘密时为 fail-closed 拒绝一切运行）。
+    app.state.nexus_guard_configured = guard_configured
     # 由 scripts/services.py 注入的本次启动随机实例标识（手动启动为 None）。
     app.state.nexus_instance_id = instance_id
     # 就绪状态由真实 lifespan 推进：未完成前不为 ok，退出后清除。
@@ -143,6 +212,9 @@ def _register_nexus_routes(app: FastAPI) -> None:
             "model_configured": status.configured,
             "model_name": status.model_name,
             "reason": status.reason,
+            "guard_configured": bool(
+                getattr(request.app.state, "nexus_guard_configured", False),
+            ),
         }
 
     @app.get("/nexus/defaults", tags=["nexus"])
@@ -160,4 +232,36 @@ def _register_nexus_routes(app: FastAPI) -> None:
                 config.default_chat_model_config() if status.configured else None
             ),
             "reason": status.reason,
+            "guard_configured": bool(
+                getattr(request.app.state, "nexus_guard_configured", False),
+            ),
         }
+
+    @app.get("/nexus/mcp-support", tags=["nexus"])
+    async def nexus_mcp_support(request: Request) -> list:
+        """按服务端内部租户返回每个已安装 MCP 的安全可选性。
+
+        官方 ``GET /mcp`` 的 ``MCPView`` 刻意隐藏 ``mcp_config``，无法判断
+        传输类型；这里从公开 ``StorageBase.list_mcps`` 读取真实 ``MCPRecord``
+        （其 ``client`` 有公开 ``is_stateful``/``mcp_config``），用同一支持
+        条件计算，仅返回 ``id``/``selectable``/``reason``，**绝不连接 MCP、
+        绝不返回配置/URL/env/header/credential**。调用方必须携带与服务端内部
+        租户一致的 ``X-User-ID``。
+        """
+        config: ServiceConfig = request.app.state.nexus_config
+        user_id = config.internal_user_id
+        if request.headers.get("X-User-ID") != user_id:
+            raise HTTPException(status_code=403, detail="租户不匹配。")
+        storage = request.app.state.storage
+        records = await storage.list_mcps(user_id)
+        result = []
+        for record in records:
+            selectable, reason = mcp_client_support(record.client)
+            result.append(
+                {
+                    "id": record.id,
+                    "selectable": selectable,
+                    "reason": reason,
+                },
+            )
+        return result

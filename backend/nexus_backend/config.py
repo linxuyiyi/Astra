@@ -26,7 +26,6 @@ DEFAULT_AGENTSCOPE_SERVICE_URL = "http://127.0.0.1:8766"
 DEFAULT_INTERNAL_USER_ID = "nexus-service"
 DEFAULT_REQUEST_TIMEOUT = 30.0
 DEFAULT_CONNECT_TIMEOUT = 5.0
-
 # 后端健康检查要求的上游官方服务固定版本。
 EXPECTED_AGENTSCOPE_VERSION = "2.0.10"
 
@@ -125,6 +124,9 @@ class BackendConfig:
     internal_user_id: str
     request_timeout: float
     connect_timeout: float
+    # AgentScope 运行 guard 回调使用的服务端内部秘密。仅服务端配置、恒定时间
+    # 比对，绝不下发前端、不写入日志。为空表示未配置（guard 一律 fail-closed）。
+    internal_token: str | None = None
 
     @property
     def base_url(self) -> str:
@@ -192,4 +194,5 @@ def load_config(env: dict | None = None) -> BackendConfig:
             DEFAULT_CONNECT_TIMEOUT,
             "NEXUS_BACKEND_CONNECT_TIMEOUT",
         ),
+        internal_token=get("NEXUS_INTERNAL_TOKEN"),
     )

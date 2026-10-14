@@ -6,8 +6,10 @@ Nexus v1.0.1：数字员工管理、数字员工私聊、团队交流。
 Service**（`agent-service/`）与 **Nexus 业务后端**（`backend/`）。阶段 3.1
 已实现员工业务存储、真实原生 Agent 创建/修改、列表/搜索/详情与服务端校验；
 3.2.1 已通过公开 WorkspaceManager 扩展修复同员工双 Session 的物理 workspace
-目录隔离并补真实写入与进程重启证据；资源真实绑定、启停执行约束、删除归档
-（3.2.2/3.2.3）与前端页面（3.3）尚未开发，私聊与团队交流随后进行。
+目录隔离并补真实写入与进程重启证据；3.2.2 已实现真实资源目录、员工默认资源
+关联与启停、共同原生 Session factory（Conversation 绑定）与服务端运行 guard
+（工具允许目录 + 内部授权回调）。删除归档（3.2.3）与前端页面（3.3）尚未开发，
+私聊与团队交流随后进行。
 
 ## 架构与边界
 
@@ -31,6 +33,10 @@ backend/nexus_backend/               Nexus 后端（配置、HTTP 适配器、ap
 scripts/services.py                  两个服务的统一 start/stop/status 控制脚本
 scripts/smoke_runtime.py             真实进程 + 真实模型运行时联调脚本
 scripts/smoke_employees.py           员工管理真实进程冒烟脚本
+scripts/smoke_resources.py           资源目录/Session 绑定/运行 guard 真实进程冒烟
+tests/backend/fixtures.py            公开 SkillHubBase 测试夹具（真实 tar.gz 归档）
+tests/backend/mcp_fixture_http.py    测试用真实无状态 Streamable HTTP MCP（正向）
+tests/backend/mcp_fixture_stdio.py   测试用 stdio MCP（明确不支持的负向夹具）
 pyproject.toml / uv.lock             固定依赖
 .env.example                         环境变量模板
 data/                                运行时数据（被忽略）
@@ -85,6 +91,11 @@ AgentScope 服务关键变量：
 | `AGENTSCOPE_MODEL_BASE_URL` | `https://api.deepseek.com` | 模型服务地址 |
 | `AGENTSCOPE_MODEL_NAME` | `deepseek-flash` | 默认模型 |
 | `AGENTSCOPE_MODEL_PARAMETERS` | 空 | 可选，默认模型 parameters（JSON 对象） |
+| `NEXUS_INTERNAL_TOKEN` | 空 | 服务端内部秘密（运行 guard 回调鉴权），两进程共享；留空时控制脚本生成并复用 |
+| `NEXUS_GUARD_URL` | `http://127.0.0.1:8765` | AgentScope 回调 Nexus 内部授权端点地址（仅回环） |
+| `AGENTSCOPE_KNOWLEDGE_ENABLED` | `false` | 是否启用官方知识库（需可选依赖与 embedding 凭据） |
+| `AGENTSCOPE_KNOWLEDGE_VECTOR_DIR` | `data/agentscope/knowledge/vector` | 持久化 Qdrant 向量库目录 |
+| `AGENTSCOPE_KNOWLEDGE_BLOB_DIR` | `data/agentscope/knowledge/blobs` | 知识文档 BlobStore 目录 |
 
 Nexus 后端关键变量：
 
@@ -211,6 +222,98 @@ DeepSeek 凭据，则复用该持久凭据并仍视为已配置，无需每次�
   占位；同一代次返回 `409`，要求先重启 AgentScope 后再核对，不靠用户确认猜测
   旧请求已结束。
 
+## 资源目录、默认关联与运行 guard（阶段 3.2.2）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/resources` | 三类资源目录安全投影（`skills`/`mcps`/`knowledge`） |
+| `GET` | `/api/resources/{kind}` | 单类目录（`kind`＝`skill`/`mcp`/`knowledge`） |
+| `POST` | `/api/conversations` | 创建 Conversation 并调用共同原生 Session factory（需 `X-Nexus-Owner`） |
+| `POST` | `/api/internal/authorize-run` | 内部运行授权（需 `X-Nexus-Internal-Token`，仅服务端） |
+
+- **资源目录投影**：读取官方 `GET /skill`、`GET /mcp`、`GET /knowledge_bases/`，
+  每类区分 `available=true` 的真实条目（可为真实空数组）与 `available=false`
+  的不可用（官方 503 feature-disabled 或传输/协议错误）并给出安全原因；只投影
+  顶层 ID、名称、描述、enabled/可用状态与 `selectable`/`reason`，绝不返回 MCP
+  原始 config、env、认证 URL 或 credential。投影为严格契约：任一官方条目不符合
+  契约（非法 name/enabled）时整类标记不可用，绝不用“少一条的成功空目录”冒充
+  正常；知识库目录按 `total/page/page_size` **完整分页**，第 101 个资源不会被
+  误判为不存在。**MCP 支持范围（v1.0.1）**：只支持官方**无状态 Streamable
+  HTTP**，由最小纯函数 `mcp_support` 统一判定（`is_stateful is False`；
+  `mcp_config.type == 'http_mcp'`；HTTP(S) URL 且 path 不以 `/sse` /
+  `/messages/` 结尾）。官方 `GET /mcp` 的 `MCPView` 刻意隐藏 `mcp_config`，
+  无法据此判断传输类型；因此在独立 AgentScope 应用新增极小只读
+  `GET /nexus/mcp-support`，按同一内部租户从公开 `StorageBase.list_mcps` 读取
+  真实 `MCPRecord.client` 计算，仅返回 `[{id,selectable,reason}]`，不连接 MCP、
+  绝不返回配置/URL/env/header/credential。库目录与该安全支持目录按 ID **一一
+  完整合并**，缺项/重复/非法字段/请求失败一律 `available=false`，绝不 fallback
+  为可选。stdio、SSE 与 stateful 条目安全投影为 `selectable=false` + 安全原因，
+  绝不把 stdio 错配成无状态；Skill/Knowledge 正常 `selectable=true`。
+- **员工默认资源关联与启停**：`POST/PATCH /api/employees` 支持 `enabled` 与
+  `knowledge`/`skills`/`tools`（列表仅稳定 ID，`tools` 对应 MCP）。保存前核对
+  真实目录资源存在且 enabled，MCP 还须 `selectable`；失效、不可选或目录不可用
+  明确失败（`422`/`503`）；禁用可
+  持久，启用只允许在一致（ready）且未删除状态。职责/资源/启停的组合保存复用
+  既有短事务与写入意图：原生未确认前不先应用本地资源/启停，避免部分成功。
+- **共同 Session factory**：`POST /api/conversations` 要求合法 UUID 的
+  `X-Nexus-Owner`（缺失/非法拒绝，不退化为共享默认身份）与**必填**、有界的
+  `client_key`（缺失/空/超长 `422`，保证每次创建可重复定位）。运行 guard 未配置
+  时拒绝创建可运行会话。每个 Conversation 真实创建原生 Session、绑定
+  `/nexus/defaults` 模型、按员工默认关联落实 Knowledge config 与 Skill/MCP
+  from-library，并**再次读回** workspace 实际能力；核对原生实际
+  `chat_model_config`、非空稳定 `workspace_id` 与 Knowledge/Skill/MCP（含 MCP
+  真实 `is_healthy is True` 与传输支持）全部一致前不返回 `ready`。创建意图
+  （原生 Agent id、期望模型、Knowledge/Skill/MCP 稳定 ID、服务代次）在占位落盘
+  时持久化，恢复只按该意图与精确 `nexus-conv-*` Session 名核对，不从后续被编辑
+  的员工默认值重新猜目标。**所有创建/恢复路径进同一员工锁并重新读行**，避免在途
+  能力 I/O 与同 key 重试交错删除已返回 `ready` 的 Session。同一 owner +
+  `client_key`：已 ready 返回 `200`，参数不同返回 `409`，未完成则按精确标记最小
+  核对恢复，**不重复 POST**；异常 2xx/5xx/超时保留稳定标记，仅明确未受理的 4xx
+  清理占位。安全释放必须先确证当前代次与记录代次不同，再**重新扫描**精确标记并
+  核对扫描前后代次稳定（绝不复用更早的 absence）；重扫到既有记录按原意图恢复，
+  代次再变/读取失败保留占位。已知 Session id 且原生确认缺失时同代次即可收敛清理
+  （与未知 POST 的 marker 缺失区分），DELETE 成功或确认原生已不存在都收敛为已清理
+  （不吞任意 404/其他失败、不重建新 Session）。绑定与清理均校验真实
+  `Session.agent_id` 与本 Conversation 精确 `Session.name` marker：不匹配的 Session
+  绝不 DELETE（官方 delete 忽略 agent_id），保留未完成并明确失败。
+- **运行 guard（始终安装、fail-closed）**：AgentScope 服务通过公开
+  `extra_agent_middlewares` 在每次真实运行前（含后台触发）回调
+  `/api/internal/authorize-run`。**正式 build 始终安装 guard**：配置了内部秘密
+  时回调 Nexus，否则使用拒绝一切的 `DenyAllAuthorizer`，没有“离线跳过”的生产
+  开关（测试可显式注入 authorizer 并标记 mock）。`/nexus/health` 与
+  `/nexus/defaults` 返回 `guard_configured`，Nexus 不会创建被当作 ready 却缺
+  guard 的会话。端点核实员工启用/ready/未删除、可信 Conversation/Session 绑定、
+  当前 Knowledge/Skill/MCP 有效性（与资源投影同源，含目录 `enabled`/`selectable`
+  与 MCP workspace `is_healthy is True`）与实际装载，并在目录网络核对
+  **之后**用短事务再读一次 Employee 与 Conversation（禁用/冻结/非 ready 已生效
+  即拒绝）。失联、鉴权失败或资源失效一律 fail-closed。内部秘密仅服务端配置、
+  恒定时间比对、不下发前端、不写日志；控制脚本保证两个进程共享同一秘密，
+  status/stop 不产生秘密文件。
+- **工具允许目录（精确允许集合）**：授权端点返回可信 Session 能力快照对应的
+  **所选 MCP 名称、实际允许 Skill 名与 MCP 工具名**；guard 据此在 `on_reply`
+  **重建** `agent.toolkit`，**只装配精确所选**的 Skill 与受控工具本地 facade，
+  空选择视为空（绝不当作通配），彻底移除 Bash/PowerShell、Read/Write/Edit/Glob/
+  Grep、Task/Team/Schedule、`reset_tools`、未选资源与动态 `mcps` 源。工具名可能
+  跨 MCP 冲突（`a`+`b__c` 与 `a__b`+`c` 都得 `mcp__a__b__c`），因此 guard 先按
+  授权返回的 selected MCP 名称精确筛选客户端（逐项存在/唯一/支持），再仅枚举
+  这些客户端核对 expected 工具完整覆盖与跨所选歧义；未选客户端绝不被
+  `list_tools` 调用，所选 MCP 真实 0 工具也仍核对存在/支持，绝不靠工具名前缀
+  推断 MCP 身份。实际安装必须**完整覆盖**授权返回的 expected 名称：缺 Skill/
+  工具即运行前 fail-closed，绝不因官方 workspace 吞掉失败而退化为裸 LLM 成功。
+  只读夹具工具以官方 `ToolAnnotations(readOnlyHint=True)` 如实声明语义，原生
+  `PermissionEngine` 读取真实 schema 后对只读工具走 ALLOW 快速路径；生产非只读
+  工具的原生 ASK/DENY 语义保持不变，不强制 ALLOW、不设 BYPASS、不伪造工具结果。
+  facade 泛化为受控 `ToolBase`（`is_mcp=False`/`is_state_injected=True`/
+  `is_external_tool=False`），保留原工具属性与安全语义并委托其
+  `__call__`/`check_permissions`/`check_read_only`，以真实 `agent.state` 的
+  session 身份核对闭包 Session；**原生 Skill 工具同样套受控 facade**（委托原
+  技能逻辑），未选不虚构 Skill，`CompressContext` 仅真实存在时保留。
+  `on_model_call` 过滤 schema；`on_check_permission` **只拒绝未选工具**，选中
+  工具交回原生权限链并保留其 DENY/ASK，不把 ALLOW 改成默认绕过。因
+  `is_state_injected=True`，官方 `ToolOffloadMiddleware` 会**同步执行**受控工具
+  （含 Skill），长工具随原生 run 等待/可取消，不转入后台任务、不冒充 external。
+  读取 Skill Markdown 不等同执行脚本，脚本型技能缺少允许工具时明确能力限制。
+
 ## 测试与验证
 
 ```bash
@@ -234,6 +337,13 @@ uv run python scripts/smoke_employees.py
 
 # 追加“经业务 PATCH 更新职责后新会话生效”的真实模型校验（需注入密钥）
 uv run python scripts/smoke_employees.py --with-model
+
+# 资源目录 / 员工默认资源关联 / 共同 Session 绑定 / 运行 guard / 重启恢复冒烟
+# （真实两个进程；默认不推理，用“启用时有 MODEL_CALL_START、禁用后无”对照归因）
+uv run python scripts/smoke_resources.py
+
+# 追加真实模型启用轮与所选 MCP 真实工具轮（需 Root 注入 AGENTSCOPE_MODEL_API_KEY）
+uv run python scripts/smoke_resources.py --with-model
 ```
 
 `pytest` 覆盖三类：不启动服务的纯单元测试；`httpx.MockTransport` 标记的
@@ -259,16 +369,60 @@ A 写入的文件 B 经公开 workspace 读取能力不可读，真实进程重�
 **阶段二 `evidence/phase2/` 的早期证据只证明两个 Session 的 workspace ID 不同，
 不证明物理文件隔离**；物理隔离以 3.2.1 的上述证据为准。
 
-`scripts/smoke_runtime.py` 通过适配器实际创建原生测试 Agent 与两个
-`PER_SESSION` Session；每轮先读历史游标，再触发 `POST /chat`，随后按该
-游标订阅 `GET /sessions/{sid}/stream`（覆盖触发到订阅之间的 replay），
-收集 `REPLY_START`/`TEXT_BLOCK_DELTA`/`REPLY_END`，要求每轮
-`finished_reason=completed` 且含 REPLY_START、非空 TEXT_BLOCK_DELTA 与
-REPLY_END，等待 `/status` 真正 `idle` 后再按历史校准回复；验证随机口令两轮
-上下文、会话隔离，并在 AgentScope 真实进程 stop/start 且**不注入 env 密钥**
-后继续第三轮、验证持久化与凭据复用。未配置密钥时脚本明确退出非零并标记
-未验证，**不 fallback 假模型、不伪造回复**。证据写入 `evidence/phase2/`
-（脱敏，不含密钥）。
+`scripts/smoke_runtime.py` 真实模型段（需密钥）已适配阶段 3.2.2 的共同业务
+Session 绑定：通过后端 `POST /api/employees` 与 `POST /api/conversations` 建立
+员工与两个 Conversation，再在绑定后的原生 Session 上跑随机口令两轮上下文与
+隔离校验；**不再直接裸建原生 Session**（运行 guard 会拒绝未知 Session）。每轮
+先读历史游标，再触发 `POST /chat`，随后按该游标订阅
+`GET /sessions/{sid}/stream`（覆盖触发到订阅之间的 replay），收集
+`REPLY_START`/`TEXT_BLOCK_DELTA`/`REPLY_END`，要求每轮 `finished_reason=
+completed` 且含 REPLY_START、非空 TEXT_BLOCK_DELTA 与 REPLY_END，等待 `/status`
+真正 `idle` 后再按历史校准回复；随后在 AgentScope 真实进程 stop/start 且**不注入
+env 密钥**后继续第三轮、验证持久化与凭据复用。未配置密钥时脚本明确标记未验证，
+**不 fallback 假模型、不伪造回复**。证据写入 `evidence/phase2/`（脱敏，不含密钥）。
+`scripts/smoke_employees.py --with-model` 同样经 `POST /api/conversations` 建立
+会话后真实提问，不绕过 guard。
+
+资源/会话/guard 冒烟 `scripts/smoke_resources.py` 通过真实两个进程验证：资源
+目录真实空态与不可用区分；**独立启动一个测试专用真实无状态 Streamable HTTP
+MCP**（`mcp_fixture_http.py`，`is_stateful=False`、`http_mcp`、`enable_tools`
+精确选择一个工具），用官方 `POST /workspace/mcp` 建立 library 并保存为员工
+默认工具；新建 Conversation 后 workspace 读回健康且仅含所选工具；内部授权端点
+在启用时放行、禁用后拒绝；并通过“启用状态下直接原生 `/chat` 出现
+`MODEL_CALL_START`、禁用后同一操作无 `MODEL_CALL_START` 且以 guard 失败结束”
+对照，把无模型调用归因于 guard，而非把任意失败当成功；重启严格要求 start/stop
+退出码为 0 且服务 `generation_id` 变化，员工、资源关联与原生 Session 绑定恢复，
+并实际重新发现 workspace 所选 MCP。
+`--with-model`（Root 注入密钥）追加真实模型启用轮（要求 `completed` 且有文本）
+与所选 MCP 真实工具轮（要求 `TOOL_CALL_START` 且回复含真实 MCP `compute_plus`
+计算的 `42`），重启后真实再次调用所选工具；未注入时明确标记 `skipped`，不以
+“错误密钥无回复”冒充 guard 生效。脚本不读取用户 Home，密钥由 Root 注入。
+证据写入 `evidence/phase3/`（脱敏）。
+
+新增/更新自动化测试：`tests/backend/test_resources.py`（真实/模拟目录投影、
+严格契约与 KB 跨页、脱敏、`mcp_support` 纯函数边界、安全支持目录完整合并失败/
+无状态 SSE 明确不可选/secret 不出响应）、
+`tests/backend/test_conversations.py`（真实 ASGI + 公开 SkillHub fixture 的
+共同 Session 绑定、真实无状态 HTTP MCP 装载读回、stdio 负向验收、owner 隔离、
+`200/409` 幂等、`client_key` 必填、并发同 key 单一致结果、首次绑定失败后重试、
+异常 2xx/超时保留标记、按精确 marker 恢复且不再 POST、结果未知创建仅代次变化
+后释放、释放前重扫 marker（竞态恢复/代次再变保留）、已知 id 缺失同代次收敛、
+非本会话 Session 绝不 DELETE、确认缺失收敛清理、失效关联不可 ready）、
+`tests/backend/test_mcp_http.py`（真实 FastMCP HTTP 服务经官方 `MCPClient` 的
+发现/调用、`enable_tools` 精确选择、协议错误/超时/慢调用取消后再次可用、无悬挂
+transport 任务、`readOnlyHint` 经原生 `PermissionEngine` 得 ALLOW）、
+`tests/backend/test_guard.py`（真实内部授权端点、网络核对后
+复核禁用、目录 enabled/selectable 与真实 workspace 客户端传输核对、工具名跨 MCP
+碰撞不得用未选客户端补位且不枚举未选客户端、所选 0 工具仍核对存在/支持、有 tools
+缺 mcps 即拒绝、guard 中间件精确装配/完整覆盖/缺项与同名歧义 fail-closed、空选择
+不装任意 Skill、原生 Skill facade、`on_check_permission` 只拒绝未选并保留原工具
+DENY、授权响应字段非法即拒绝、recording model 证明鉴权失败不进入模型）、
+`tests/agent_service/test_services_control.py`
+（内部秘密 env 优先/0600 原子创建/落盘失败明确失败/status 不产生秘密）、
+`tests/agent_service/test_write_barrier.py`（托管 Agent/Session 创建代次头、
+串行化与写屏障）。真实无状态 HTTP MCP 以 `tests/backend/mcp_fixture_http.py`
+提供可验证计算工具（官方 `ToolAnnotations(readOnlyHint=True)`）；stdio MCP 以
+`tests/backend/mcp_fixture_stdio.py` 作为**明确不支持**的负向验收夹具。
 
 ## 验证层级与限制
 
@@ -291,11 +445,27 @@ REPLY_END，等待 `/status` 真正 `idle` 后再按历史校准回复；验证�
 
 当前限制：阶段 3.1 实现员工业务存储、真实创建/修改与列表/搜索/详情及校验；
 3.2.1 已用公开 `WorkspaceManagerBase` 扩展修复同员工双 Session 的物理目录
-隔离并补真实写入与进程重启证据；资源真实绑定、`enabled` 启停执行约束、删除前
-只读历史归档（3.2.2/3.2.3）与前端页面（3.3）尚未实现，因此尚未用真实模型证明
-“改职责后新对话生效”（脚本已就绪，待注入密钥验证）。原生写屏障、单调写入修订与创建代次释放只在
-**单进程部署**范围内成立：锁与高水位保存在 AgentScope 服务进程内存中，不做
-多副本协调；`reconcile` 对未知编辑结果要求先通过同修订幂等 `PATCH` 写屏障再
-确认 `desired`，未带 Nexus 标记的原生探针不受影响。其余未验证：真实 Uvicorn
-进程的模型多轮推理（待密钥）、附件、知识检索、匿名 owner 过滤与三员工主动
-通信；单进程 `InMemoryMessageBus` 不保证多进程事件总线恢复。
+隔离并补真实写入与进程重启证据；3.2.2 已实现真实资源目录、员工默认资源关联与
+启停、共同 Session factory（Conversation 绑定、能力读回）与服务端运行 guard
+（工具允许目录 + 内部授权回调，含真实进程冒烟）；删除前只读历史归档（3.2.3）
+与前端页面（3.3）尚未实现，因此尚未用真实模型证明“改职责后新对话生效”（脚本
+已就绪，待注入密钥验证）。知识库默认未启用，未配置 embedding 时目录明确不可用，
+**不声称 RAG 已验证**；启用入口为可选依赖 `qdrant-client` 与
+`AGENTSCOPE_KNOWLEDGE_ENABLED`，仍需服务端真实 embedding 凭据与知识库。
+原生写屏障、单调写入修订与创建代次释放只在 **单进程部署**范围内成立：锁与高
+水位保存在 AgentScope 服务进程内存中，不做多副本协调；`reconcile` 对未知编辑
+结果要求先通过同修订幂等 `PATCH` 写屏障再确认 `desired`，未带 Nexus 标记的原生
+探针不受影响。运行 guard 与工具允许目录同样只在单进程、单服务实例语义下保证。
+剩余未验证：真实模型多轮推理（待密钥）、附件实际读取、知识检索、三员工主动
+通信；单进程 `InMemoryMessageBus` 不保证多进程事件总线恢复。所有 Agent 运行都
+必须绑定到已授权 Conversation；直接裸建原生会话的旧探针会被 guard 拒绝。
+
+**MCP 支持边界（v1.0.1，明确限制）**：AgentScope 2.0.10 的 stateful MCP 将
+anyio transport scopes 保存在连接 task，跨 task/多连接关闭存在非 LIFO 退出问题，
+公开封装不足以完整修复。因此本版本**只支持官方无状态 Streamable HTTP MCP**；
+stdio、SSE 与 stateful 条目安全投影为不可选并在保存/恢复/运行处拒绝，不修改或
+复制核心、不把 stdio 错配成无状态。真实无状态 HTTP 路径已用真实 FastMCP 服务
+与官方 `MCPClient` 验证发现/调用及超时/取消后再次可用；远端操作取消不承诺回滚。
+内部秘密在未显式配置时由
+`scripts/services.py` 以 0600 原子写入 `data/.nexus-internal-token`（被忽略）；
+落盘失败明确非零且不 spawn，不提供 ephemeral 回退。

@@ -8,6 +8,7 @@ smoke_runtime.py。
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import threading
 from pathlib import Path
@@ -333,3 +334,81 @@ def test_start_existing_owned_unhealthy_returns_one_without_restart(
     assert services.command_start(spec, paths) == 1
     # 保留 PID 记录，不误删。
     assert services.read_record(paths.pid_file) is not None
+
+
+# ----------------------------------------------------------------------
+# 内部秘密（运行 guard 回调鉴权）准备
+# ----------------------------------------------------------------------
+def test_ensure_internal_token_env_wins(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN", "given-token")
+    token_file = tmp_path / "tok"
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN_FILE", str(token_file))
+    assert services.ensure_internal_token() == "given-token"
+    # 已导出秘密时不落盘、不产生文件。
+    assert not token_file.exists()
+
+
+def test_ensure_internal_token_file_created_0600_and_reused(
+    tmp_path,
+    monkeypatch,
+):
+    token_file = tmp_path / "tok"
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN_FILE", str(token_file))
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN", "")
+    token = services.ensure_internal_token()
+    assert token
+    assert token_file.exists()
+    assert oct(token_file.stat().st_mode & 0o777) == "0o600"
+    # 再次调用复用同一秘密（等同另一进程读取同一文件）。
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN", "")
+    assert services.ensure_internal_token() == token
+
+
+def test_ensure_internal_token_persisted_value_reused(tmp_path, monkeypatch):
+    token_file = tmp_path / "tok"
+    token_file.write_text("persisted-secret")
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN_FILE", str(token_file))
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN", "")
+    assert services.ensure_internal_token() == "persisted-secret"
+
+
+def test_ensure_internal_token_disk_failure_raises(tmp_path, monkeypatch):
+    blocker = tmp_path / "blocker"
+    blocker.write_text("x")
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN_FILE", str(blocker / "tok"))
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN", "")
+    with pytest.raises(services.TokenError):
+        services.ensure_internal_token()
+
+
+def test_status_does_not_create_token_file(tmp_path, monkeypatch, capsys):
+    token_file = tmp_path / "status-token"
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN_FILE", str(token_file))
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN", "")
+    # status 未运行返回 1，但不得产生秘密文件（status/stop 不生产秘密）。
+    assert services.main(["status", "agentscope"]) == 1
+    assert not token_file.exists()
+
+
+def test_ensure_internal_token_concurrent_same_value(tmp_path, monkeypatch):
+    """并发准备共享同一 token：文件锁 + 原子创建保证一致。"""
+    import threading
+
+    token_file = tmp_path / "tok"
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN_FILE", str(token_file))
+    monkeypatch.setenv("NEXUS_INTERNAL_TOKEN", "")
+    results: list[str] = []
+    barrier = threading.Barrier(2)
+
+    def worker():
+        os.environ.pop("NEXUS_INTERNAL_TOKEN", None)
+        barrier.wait()
+        results.append(services.ensure_internal_token())
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert results[0] == results[1]
+    assert token_file.stat().st_mode & 0o777 == 0o600

@@ -487,6 +487,50 @@ async def test_managed_create_requires_matching_generation(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_managed_session_create_requires_matching_generation(tmp_path):
+    """托管 Session POST 同样受代次头约束：不匹配 409 且不创建。"""
+    app = build_app(_config(tmp_path))
+    async with app.router.lifespan_context(app):
+        async with await _client(app) as client:
+            agent_id = await _create_agent(client, "普通原生助手。", name="宿主")
+
+            stale = await client.post(
+                "/sessions/",
+                headers=_headers(
+                    **{"X-Nexus-Service-Generation": "stale-generation"},
+                ),
+                json={"agent_id": agent_id, "name": "stale-session"},
+            )
+            assert stale.status_code == 409, stale.text
+            listing = (
+                await client.get(
+                    "/sessions/",
+                    headers=_headers(),
+                    params={"agent_id": agent_id},
+                )
+            ).json()
+            assert listing["total"] == 0
+
+            current = app.state.nexus_generation_id
+            ok = await client.post(
+                "/sessions/",
+                headers=_headers(
+                    **{"X-Nexus-Service-Generation": current},
+                ),
+                json={"agent_id": agent_id, "name": "ok-session"},
+            )
+            assert ok.status_code == 201, ok.text
+            listing = (
+                await client.get(
+                    "/sessions/",
+                    headers=_headers(),
+                    params={"agent_id": agent_id},
+                )
+            ).json()
+            assert listing["total"] == 1
+
+
+@pytest.mark.asyncio
 async def test_delete_is_serialized_with_patch(tmp_path):
     """DELETE 与 PATCH 走同一 agent 锁：先读旧值的旧写不会在删除后重新 upsert。"""
     app = build_app(_config(tmp_path))

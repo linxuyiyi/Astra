@@ -26,6 +26,7 @@ import argparse
 import fcntl
 import json
 import os
+import secrets
 import shlex
 import signal
 import socket
@@ -107,6 +108,84 @@ class ServicePaths:
 
 
 SERVICE_NAMES = ("agentscope", "nexus-backend")
+
+# 服务端内部秘密（运行 guard 回调鉴权）的默认落盘位置。位于被忽略的
+# ``data/`` 下，随项目本地共享，不提交、不下发前端、不写日志。
+DEFAULT_TOKEN_FILE = ROOT / "data" / ".nexus-internal-token"
+
+
+class TokenError(RuntimeError):
+    """内部秘密准备失败：明确非零，禁止 spawn，不做 ephemeral fallback。"""
+
+
+def _read_token_file(token_file: Path) -> str:
+    try:
+        return token_file.read_text().strip()
+    except FileNotFoundError:
+        return ""
+    except OSError as exc:
+        raise TokenError(f"无法读取内部秘密文件 {token_file}：{exc}") from exc
+
+
+def _create_token_file(token_file: Path, token: str) -> None:
+    """以 0600 原子创建秘密文件；已存在则由调用方重读。"""
+    try:
+        fd = os.open(
+            token_file,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+    except FileExistsError:
+        return
+    except OSError as exc:
+        raise TokenError(f"无法创建内部秘密文件 {token_file}：{exc}") from exc
+    try:
+        os.write(fd, token.encode("utf-8"))
+        os.fchmod(fd, 0o600)
+    except OSError as exc:
+        raise TokenError(f"无法写入内部秘密文件 {token_file}：{exc}") from exc
+    finally:
+        os.close(fd)
+
+
+def ensure_internal_token() -> str:
+    """仅在 spawn 前确保两个受控进程共享同一服务端内部秘密。
+
+    优先使用已导出的 ``NEXUS_INTERNAL_TOKEN``；否则在最小文件锁保护下读取或
+    以 0600 原子创建默认 token 文件，并把值注入当前进程环境供 spawn 的子进程
+    继承。**不打印该值**。并发启动共享同一 token；落盘失败明确抛出
+    :class:`TokenError`，调用方必须非零退出且不 spawn，绝不回退为每次随机的
+    ephemeral secret。status/stop 不调用本函数，不产生/不读取秘密文件。
+    """
+    value = (os.environ.get("NEXUS_INTERNAL_TOKEN") or "").strip()
+    if value:
+        return value
+    raw_path = os.environ.get("NEXUS_INTERNAL_TOKEN_FILE")
+    token_file = Path(raw_path) if raw_path else DEFAULT_TOKEN_FILE
+    try:
+        token_file.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise TokenError(f"无法创建内部秘密目录：{exc}") from exc
+    lock_file = token_file.with_name(token_file.name + ".lock")
+    try:
+        with lock_file.open("a") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                token = _read_token_file(token_file)
+                if not token:
+                    token = secrets.token_urlsafe(32)
+                    _create_token_file(token_file, token)
+                    # 若并发的其他进程已抢先创建，重读其值保证一致。
+                    token = _read_token_file(token_file) or token
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except OSError as exc:
+        raise TokenError(f"无法锁定内部秘密文件：{exc}") from exc
+    if not token:
+        raise TokenError("内部秘密文件为空，无法继续。")
+    os.environ["NEXUS_INTERNAL_TOKEN"] = token
+    return token
+
 
 
 def build_spec(name: str) -> ServiceSpec:
@@ -649,6 +728,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
     paths = spec.paths()
+    # 仅在真正 spawn 子进程的 start 前准备内部秘密；status/stop 不生产/不读取
+    # 秘密文件，也不会被无关 token 文件权限阻塞。
+    if args.action == "start":
+        try:
+            ensure_internal_token()
+        except TokenError as exc:
+            print(f"内部秘密准备失败：{exc}", file=sys.stderr)
+            return 1
     try:
         return COMMANDS[args.action](spec, paths)
     except TimeoutError as exc:

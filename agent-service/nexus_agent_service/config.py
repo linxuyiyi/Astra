@@ -22,6 +22,8 @@ DEFAULT_PORT = 8766
 DEFAULT_INTERNAL_USER_ID = "nexus-service"
 DEFAULT_MODEL_NAME = "deepseek-flash"
 DEFAULT_MODEL_BASE_URL = "https://api.deepseek.com"
+# 运行 guard 默认回调的 Nexus 后端地址（仅回环）。仅在配置了内部秘密时启用。
+DEFAULT_GUARD_URL = "http://127.0.0.1:8765"
 # 固定凭据 ID 让每次启动都命中同一记录（upsert 幂等），不会重复新建凭据。
 DEFAULT_CREDENTIAL_ID = "nexus-default-deepseek-credential"
 DEFAULT_CREDENTIAL_NAME = "nexus-default"
@@ -81,6 +83,13 @@ def _validate_port(port: int) -> int:
     return port
 
 
+def _parse_bool(raw: str | None) -> bool:
+    """解析布尔开关；未配置或非真值文本返回 ``False``。"""
+    if raw is None:
+        return False
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 def _parse_model_parameters(raw: str | None) -> dict:
     """解析 ``AGENTSCOPE_MODEL_PARAMETERS``（JSON 对象）。
 
@@ -118,6 +127,15 @@ class ServiceConfig:
     credential_id: str
     credential_name: str
     model_parameters: dict = field(default_factory=dict)
+    # 原生运行 guard：内部秘密与后端回调地址。秘密仅服务端配置，绝不下发
+    # 前端、不写日志；为空表示不启用 guard。
+    nexus_internal_token: str | None = field(default=None, repr=False)
+    nexus_guard_url: str = DEFAULT_GUARD_URL
+    # 可选：知识库功能开关与持久化目录。默认关闭（不配置 embedding 凭据时
+    # 目录接口返回 503 feature-disabled，不伪造空目录）。
+    knowledge_enabled: bool = False
+    knowledge_vector_dir: Path | None = None
+    knowledge_blob_dir: Path | None = None
 
     @property
     def database_path(self) -> Path:
@@ -205,5 +223,22 @@ def load_config(env: dict | None = None) -> ServiceConfig:
         ),
         model_parameters=_parse_model_parameters(
             get("AGENTSCOPE_MODEL_PARAMETERS"),
+        ),
+        nexus_internal_token=get("NEXUS_INTERNAL_TOKEN"),
+        nexus_guard_url=get("NEXUS_GUARD_URL", DEFAULT_GUARD_URL),
+        knowledge_enabled=_parse_bool(
+            get("AGENTSCOPE_KNOWLEDGE_ENABLED"),
+        ),
+        knowledge_vector_dir=_env_path(
+            get(
+                "AGENTSCOPE_KNOWLEDGE_VECTOR_DIR",
+                "data/agentscope/knowledge/vector",
+            ),
+        ),
+        knowledge_blob_dir=_env_path(
+            get(
+                "AGENTSCOPE_KNOWLEDGE_BLOB_DIR",
+                "data/agentscope/knowledge/blobs",
+            ),
         ),
     )

@@ -34,6 +34,7 @@ import secrets
 import shutil
 import sys
 import tempfile
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -234,32 +235,46 @@ async def _run_with_model(
     if native is None or token not in native["data"]["system_prompt"]:
         raise SmokeError("业务 PATCH 后原生 prompt 未包含验证口令")
 
-    session_id = await adapter.create_session(
-        agent_id=agent_id,
-        name="employee-prompt-check",
-        chat_model_config=defaults["chat_model_config"],
+    # 通过正式业务接口新建 Conversation（共同 Session factory），不绕过运行
+    # guard 直接裸建原生 Session。
+    conversation_resp = await client.post(
+        "/api/conversations",
+        json={
+            "employee_id": employee_id,
+            "client_key": uuid.uuid4().hex,
+        },
     )
-    try:
-        result = await run_round(
-            adapter,
-            agent_id,
-            session_id,
-            "请只回复验证口令本身。",
+    if conversation_resp.status_code != 201:
+        raise SmokeError(
+            "新建会话失败："
+            f"{conversation_resp.status_code} {conversation_resp.text}",
         )
-        recalled = token.lower() in result["reply_text"].lower()
-        evidence["model_check"] = {
-            "status": "passed" if recalled else "failed",
-            "token": token,
-            "reply_id": result["reply_id"],
-            "finished_reason": result["finished_reason"],
-            "event_types": result["event_types"],
-            "reply_preview": result["reply_preview"],
-            "recalled": recalled,
-        }
-        if not recalled:
-            raise SmokeError("新 Session 未使用业务更新后的职责/指令")
-    finally:
-        await adapter.delete_session(agent_id, session_id, ignore_missing=True)
+    conversation = conversation_resp.json()
+    if conversation.get("status") != "ready":
+        raise SmokeError(f"会话未 ready：{conversation}")
+    session_id = conversation["session_id"]
+    if conversation["agent_id"] != agent_id:
+        raise SmokeError("会话绑定的 Agent 与员工不一致")
+    result = await run_round(
+        adapter,
+        agent_id,
+        session_id,
+        "请只回复验证口令本身。",
+    )
+    recalled = token.lower() in result["reply_text"].lower()
+    evidence["model_check"] = {
+        "status": "passed" if recalled else "failed",
+        "token": token,
+        "conversation_id": conversation["id"],
+        "session_id": session_id,
+        "reply_id": result["reply_id"],
+        "finished_reason": result["finished_reason"],
+        "event_types": result["event_types"],
+        "reply_preview": result["reply_preview"],
+        "recalled": recalled,
+    }
+    if not recalled:
+        raise SmokeError("新 Session 未使用业务更新后的职责/指令")
 
 
 
@@ -348,6 +363,7 @@ async def _run(ctrl: ServiceController, with_model: bool, key: str) -> dict:
             )
             async with httpx.AsyncClient(
                 base_url=ctrl.backend_url,
+                headers={"X-Nexus-Owner": str(uuid.uuid4())},
                 timeout=60.0,
                 trust_env=False,
             ) as model_client:

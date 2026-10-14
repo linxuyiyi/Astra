@@ -49,6 +49,10 @@ USER_HEADER = b"x-user-id"
 GENERATION_HEADER = b"x-nexus-service-generation"
 
 AGENT_COLLECTION_PATH = "/agent/"
+# 托管 Session 创建同样携带服务代次头：预检后服务重启时旧代次延迟 POST 必须
+# 被拒绝，避免在新实例创建孤立原生 Session。
+SESSION_COLLECTION_PATH = "/sessions/"
+_MANAGED_CREATE_PATHS = frozenset({AGENT_COLLECTION_PATH, SESSION_COLLECTION_PATH})
 _AGENT_PATH = re.compile(r"^/agent/([^/]+)$")
 
 
@@ -211,8 +215,8 @@ class NativeWriteBarrierMiddleware:
             await self.app(scope, receive, send)
             return
         method = scope.get("method", "")
-        if method == "POST" and scope.get("path") == AGENT_COLLECTION_PATH:
-            await self._handle_create(scope, receive, send)
+        if method == "POST" and scope.get("path") in _MANAGED_CREATE_PATHS:
+            await self._handle_managed_create(scope, receive, send)
             return
         agent_id = _agent_id(scope) if method in ("PATCH", "DELETE") else None
         if agent_id is None:
@@ -250,16 +254,16 @@ class NativeWriteBarrierMiddleware:
             # 真实写入已完成并释放锁后，再如实向上传播外层取消。
             raise outer_cancelled
 
-    async def _handle_create(
+    async def _handle_managed_create(
         self,
         scope: dict,
         receive: Callable[[], Awaitable[dict]],
         send: Callable[[dict], Awaitable[None]],
     ) -> None:
-        """托管创建必须携带与当前实例一致的代次头。
+        """托管 Agent/Session 创建必须携带与当前实例一致的代次头。
 
         未带代次头是独立原生创建探针，维持官方行为；带了但与当前实例不一致，
-        说明预检后服务已重启，旧代次请求不得在新实例创建原生 Agent。
+        说明预检后服务已重启，旧代次请求不得在新实例创建原生 Agent/Session。
         """
         generation = _header(scope, GENERATION_HEADER)
         if generation is None or not generation.strip():

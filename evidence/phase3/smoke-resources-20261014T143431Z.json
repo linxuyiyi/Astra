@@ -1,0 +1,69 @@
+{
+  "mode": "full",
+  "run_at": "2026-10-14T14:34:19.356549+00:00",
+  "checks": {
+    "backend_health_ok": true,
+    "catalog_real_state": true,
+    "employee_resource_default_saved": true,
+    "session_binding_and_capability": true,
+    "model_enabled_reply": true,
+    "model_called_selected_mcp_tool": true
+  },
+  "model_check": {
+    "status": "passed",
+    "enabled": {
+      "finished_reason": "completed",
+      "model_call_started": true,
+      "reply_preview": "联通正常。"
+    },
+    "tool": {
+      "finished_reason": "completed",
+      "tool_call_started": true,
+      "reply_preview": "42"
+    }
+  },
+  "catalog": {
+    "skills": {
+      "available": true,
+      "reason": null,
+      "items": []
+    },
+    "mcps": {
+      "available": true,
+      "reason": null,
+      "items": []
+    },
+    "knowledge": {
+      "available": false,
+      "reason": "官方功能未启用或暂不可用（feature disabled）。",
+      "items": []
+    }
+  },
+  "employee": {
+    "id": "emp_cbad1497510b422cb0201210ac3b0412",
+    "tools": [
+      "3e3e24e1a1f746d7991fdd3e7bf1a1ae"
+    ]
+  },
+  "conversation": {
+    "id": "conv_e4b529be939c4417b923dc2fbcda121d",
+    "session_id": "d1e7afd9ed9a4cf9959060e1c7b81dcf",
+    "agent_id": "6c0ef56f13de4caf807990455972152e",
+    "capability_snapshot": {
+      "knowledge": [],
+      "skills": [],
+      "tools": [
+        "3e3e24e1a1f746d7991fdd3e7bf1a1ae"
+      ]
+    },
+    "mcp_healthy": true
+  },
+  "enabled_probe": {
+    "model_call_started": true,
+    "finished_reason": "completed"
+  },
+  "status": "failed",
+  "error": "SmokeError: guard 拒绝时产生了非 guard 回复：['探针。', '联通正常。', '42', '']",
+  "evidence_path": "evidence/phase3/smoke-resources-20261014T143431Z.json",
+  "key_recorded": false
+}

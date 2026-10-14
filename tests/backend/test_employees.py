@@ -570,34 +570,55 @@ async def test_concurrent_edits_serialized_native_local_consistent(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_extra_fields_are_rejected(tmp_path):
+async def test_unknown_fields_rejected_and_enabled_supported(tmp_path):
     async with real_stack(tmp_path) as (backend, adapter, client, upstream):
         created = (
             await client.post("/api/employees", json=_valid_payload())
         ).json()
-        # 尚未实现的资源/启停操作不能被静默接受。
+        # 未知字段仍被显式拒绝。
         post_extra = await client.post(
             "/api/employees",
             json=_valid_payload(name="越界", domain="越界领域")
             | {"resources": ["k1"]},
         )
         assert post_extra.status_code == 422
+        patch_unknown = await client.patch(
+            f"/api/employees/{created['id']}",
+            json={"something_unknown": True},
+        )
+        assert patch_unknown.status_code == 422
+
+        # enabled 已是正式字段：创建可禁用，且真实持久化。
         post_enabled = await client.post(
             "/api/employees",
             json=_valid_payload(name="越界2", domain="越界领域2")
             | {"enabled": False},
         )
-        assert post_enabled.status_code == 422
-        patch_enabled = await client.patch(
-            f"/api/employees/{created['id']}",
-            json={"enabled": False},
-        )
-        assert patch_enabled.status_code == 422
-        patch_unknown = await client.patch(
+        assert post_enabled.status_code == 201, post_enabled.text
+        assert post_enabled.json()["enabled"] is False
+
+        # 资源目录不可用（无 knowledge manager）时关联明确失败，不静默保存。
+        patch_knowledge = await client.patch(
             f"/api/employees/{created['id']}",
             json={"knowledge": ["kb1"]},
         )
-        assert patch_unknown.status_code == 422
+        assert patch_knowledge.status_code in (422, 503), patch_knowledge.text
+        detail = (await client.get(f"/api/employees/{created['id']}")).json()
+        assert detail["knowledge"] == []
+
+        # 禁用可持久，重新启用需要一致状态（当前为 ready，允许）。
+        disabled = await client.patch(
+            f"/api/employees/{created['id']}",
+            json={"enabled": False},
+        )
+        assert disabled.status_code == 200, disabled.text
+        assert disabled.json()["enabled"] is False
+        enabled = await client.patch(
+            f"/api/employees/{created['id']}",
+            json={"enabled": True},
+        )
+        assert enabled.status_code == 200, enabled.text
+        assert enabled.json()["enabled"] is True
 
 
 @pytest.mark.asyncio
@@ -1511,3 +1532,105 @@ async def test_reconcile_mark_failure_reports_error_not_success(
         )
         assert reconciled.status_code == 409
         assert reconciled.json()["detail"]["sync_state"] == "incomplete"
+
+
+@pytest.mark.asyncio
+async def test_confirm_not_created_rescans_and_recovers_landed_agent(tmp_path):
+    """竞态：初扫缺失后旧 POST 落库；代次变化须重扫并恢复绑定，不释放占位。"""
+    state = {
+        "generation": "gen-1",
+        "agents": {},
+        "get_calls": 0,
+        "land_on": None,
+        "landed": None,
+        "post_calls": 0,
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        method = request.method
+        if method == "GET" and path == "/nexus/health":
+            return httpx.Response(
+                200,
+                json={"ready": True, "generation_id": state["generation"]},
+            )
+        if method == "GET" and path == "/agent/":
+            state["get_calls"] += 1
+            if state["land_on"] == state["get_calls"]:
+                state["agents"]["agent-landed"] = state["landed"]
+            agents = list(state["agents"].values())
+            return httpx.Response(
+                200,
+                json={"agents": agents, "total": len(agents)},
+            )
+        if method == "POST" and path == "/agent/":
+            state["post_calls"] += 1
+            return httpx.Response(500, json={"detail": "boom"})
+        return httpx.Response(404, json={"detail": "unexpected"})
+
+    async with mock_stack(tmp_path, handler) as (backend, adapter, client):
+        response = await client.post("/api/employees", json=_valid_payload())
+        assert response.status_code == 502, response.text
+        employee_id = response.json()["detail"]["employee_id"]
+        rows = await _local_rows(backend)
+        intent = rows[0].write_intent
+        state["landed"] = {
+            "id": "agent-landed",
+            "data": {
+                "id": "data-landed",
+                "name": intent["name"],
+                "system_prompt": intent["prompt"],
+            },
+            "editable": True,
+        }
+        # 服务重启 + 旧 POST 在本代次稍后落库：初扫缺失、重扫才发现。
+        state["generation"] = "gen-2"
+        state["get_calls"] = 0
+        state["land_on"] = 2
+
+        recovered = await client.post(
+            f"/api/employees/{employee_id}/reconcile",
+            json={"confirm_not_created": True},
+        )
+        assert recovered.status_code == 200, recovered.text
+        assert recovered.json()["sync_state"] == "ready"
+        assert recovered.json()["agent_id"] == "agent-landed"
+        assert state["post_calls"] == 1  # 绝不重复 POST
+        rows = await _local_rows(backend)
+        assert len(rows) == 1 and rows[0].agent_id == "agent-landed"
+
+
+@pytest.mark.asyncio
+async def test_confirm_not_created_generation_unstable_keeps_placeholder(tmp_path):
+    """重扫前后代次再次变化：保留占位，不释放、不重复 POST。"""
+    # 第一次 health 供创建预检（记为 gen-1）；reconcile 时读 gen-2（已变化），
+    # 重扫后再读取到 gen-3（再次变化）→ 必须保留占位。
+    gens = ["gen-1", "gen-2", "gen-3"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        method = request.method
+        if method == "GET" and path == "/nexus/health":
+            generation = gens.pop(0) if gens else "gen-3"
+            return httpx.Response(
+                200,
+                json={"ready": True, "generation_id": generation},
+            )
+        if method == "GET" and path == "/agent/":
+            return httpx.Response(200, json={"agents": [], "total": 0})
+        if method == "POST" and path == "/agent/":
+            return httpx.Response(500, json={"detail": "boom"})
+        return httpx.Response(404, json={"detail": "unexpected"})
+
+    async with mock_stack(tmp_path, handler) as (backend, adapter, client):
+        response = await client.post("/api/employees", json=_valid_payload())
+        assert response.status_code == 502, response.text
+        employee_id = response.json()["detail"]["employee_id"]
+
+        conflicted = await client.post(
+            f"/api/employees/{employee_id}/reconcile",
+            json={"confirm_not_created": True},
+        )
+        assert conflicted.status_code == 409, conflicted.text
+        rows = await _local_rows(backend)
+        assert len(rows) == 1 and rows[0].agent_id is None

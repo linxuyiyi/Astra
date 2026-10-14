@@ -387,7 +387,15 @@ class AgentScopeHTTPClient:
         chat_model_config: dict | None = None,
         knowledge_config: dict | None = None,
         workspace_id: str | None = None,
+        generation_id: str | None = None,
     ) -> str:
+        """``POST /sessions/``。
+
+        ``generation_id`` 非空时以公开头 ``X-Nexus-Service-Generation`` 携带
+        创建预检得到的服务代次；服务侧写屏障在写入前与当前实例代次比较，不一致
+        则 ``409`` 且不执行原生创建（避免预检后重启错代，旧代次延迟 POST 在新
+        实例创建孤立 Session）。
+        """
         body: dict[str, Any] = {"agent_id": agent_id}
         if name is not None:
             body["name"] = name
@@ -397,13 +405,29 @@ class AgentScopeHTTPClient:
             body["knowledge_config"] = knowledge_config
         if workspace_id is not None:
             body["workspace_id"] = workspace_id
+        extra_headers = (
+            {"X-Nexus-Service-Generation": generation_id}
+            if generation_id is not None
+            else None
+        )
         result = await self._request(
             "POST",
             "/sessions/",
             json_body=body,
             expected=(201,),
+            extra_headers=extra_headers,
         )
-        return result["session_id"]
+        # 异常 2xx 协议响应（缺/非法 session_id）无法证明创建是否被受理，收敛
+        # 为 UpstreamError 交由调用方按“结果未知”处理，绝不 KeyError 冒认。
+        session_id = result.get("session_id") if isinstance(result, dict) else None
+        if not isinstance(session_id, str) or not session_id:
+            raise UpstreamError(
+                "POST",
+                "/sessions/",
+                201,
+                "创建响应缺少有效 session_id",
+            )
+        return session_id
 
     async def list_sessions(self, agent_id: str) -> dict:
         return await self._request(
@@ -546,6 +570,213 @@ class AgentScopeHTTPClient:
                 raise invalid("分页游标未推进（重复页）")
             seen_cursors.add(cursor)
             before = cursor
+
+    # ------------------------------------------------------------------
+    # 资源目录与能力绑定（只读目录投影由后端 resources 模块负责）
+    # ------------------------------------------------------------------
+    async def list_skills(self) -> list:
+        """``GET /skill``：当前内部租户已安装的 Skill library。"""
+        return await self._request("GET", "/skill")
+
+    async def list_mcps(self) -> list:
+        """``GET /mcp``：当前内部租户已安装的 MCP library。"""
+        return await self._request("GET", "/mcp")
+
+    async def mcp_support_map(self) -> list:
+        """``GET /nexus/mcp-support``：每个已安装 MCP 的安全可选性。
+
+        官方库视图不暴露 ``mcp_config``，无法判断传输类型；该只读扩展按同一
+        内部租户从公开 storage 读取真实 ``MCPRecord`` 计算，只返回
+        ``id``/``selectable``/``reason``，不含配置/URL/env/header/credential。
+        """
+        return await self._request("GET", "/nexus/mcp-support")
+
+    async def list_knowledge_bases(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> dict:
+        """``GET /knowledge_bases/``：知识库目录（单页）。
+
+        未配置 ``knowledge_base_manager`` 时官方返回 503 feature-disabled，
+        这里同样收敛为 :class:`UpstreamError`（``status_code=503``），由调用
+        方标记为不可用，绝不当成空目录。
+        """
+        return await self._request(
+            "GET",
+            "/knowledge_bases/",
+            params={"page": page, "page_size": page_size},
+        )
+
+    async def list_all_knowledge_bases(self, *, page_size: int = 100) -> dict:
+        """完整分页读取知识库目录，返回 ``{"knowledge_bases": [...]}``。
+
+        官方列表带 ``total``/``page``/``page_size``；只取第一页会把第 101 个
+        真实资源误判为不存在。这里按 ``total`` 完整翻页并做契约校验：``total``
+        必须为非负整数、``knowledge_bases`` 必须是列表，页游标必须推进，否则
+        显式抛出 :class:`UpstreamError` 说明目录可能不完整。
+        """
+        path = "/knowledge_bases/"
+        collected: list[dict] = []
+        seen_ids: set[str] = set()
+        page = 1
+        while True:
+            payload = await self.list_knowledge_bases(
+                page=page,
+                page_size=page_size,
+            )
+            if not isinstance(payload, dict):
+                raise UpstreamError("GET", path, 200, "目录响应不是 JSON 对象")
+            batch = payload.get("knowledge_bases")
+            total = payload.get("total")
+            if not isinstance(batch, list) or not isinstance(total, int):
+                raise UpstreamError(
+                    "GET",
+                    path,
+                    200,
+                    "目录响应缺少 knowledge_bases/total",
+                )
+            if total < 0:
+                raise UpstreamError("GET", path, 200, "total 非法")
+            for entry in batch:
+                if not isinstance(entry, dict):
+                    raise UpstreamError("GET", path, 200, "目录含非对象条目")
+                identifier = entry.get("id")
+                if not isinstance(identifier, str) or not identifier:
+                    raise UpstreamError("GET", path, 200, "目录条目缺少有效 id")
+                if identifier in seen_ids:
+                    continue
+                seen_ids.add(identifier)
+                collected.append(entry)
+            if len(collected) >= total or not batch:
+                break
+            page += 1
+            if page > 100000:  # pragma: no cover - 防御性上限
+                raise UpstreamError("GET", path, 200, "分页未收敛")
+        return {"knowledge_bases": collected, "total": len(collected)}
+
+    async def list_workspace_skills(
+        self,
+        agent_id: str,
+        session_id: str,
+    ) -> list:
+        """``GET /workspace/skill``：某会话 workspace 实际装载的 Skill。"""
+        return await self._request(
+            "GET",
+            "/workspace/skill",
+            params={"agent_id": agent_id, "session_id": session_id},
+        )
+
+    async def list_workspace_mcps(
+        self,
+        agent_id: str,
+        session_id: str,
+    ) -> list:
+        """``GET /workspace/mcp``：某会话实际装载的 MCP 及健康状态。
+
+        该响应包含官方完整 MCP 配置（可能含 env/headers）；后端只投影安全
+        字段，绝不原样转发给浏览器。
+        """
+        return await self._request(
+            "GET",
+            "/workspace/mcp",
+            params={"agent_id": agent_id, "session_id": session_id},
+        )
+
+    async def add_skills_from_library(
+        self,
+        agent_id: str,
+        session_id: str,
+        skill_ids: list[str],
+    ) -> dict:
+        """``POST /workspace/skill/from-library``：按 library ID 装载 Skill。"""
+        return await self._request(
+            "POST",
+            "/workspace/skill/from-library",
+            params={"agent_id": agent_id, "session_id": session_id},
+            json_body={"skill_ids": list(skill_ids)},
+            expected=(201,),
+        )
+
+    async def add_mcps_from_library(
+        self,
+        agent_id: str,
+        session_id: str,
+        mcp_ids: list[str],
+    ) -> dict:
+        """``POST /workspace/mcp/from-library``：按 library ID 装载 MCP。"""
+        return await self._request(
+            "POST",
+            "/workspace/mcp/from-library",
+            params={"agent_id": agent_id, "session_id": session_id},
+            json_body={"mcp_ids": list(mcp_ids)},
+            expected=(201,),
+        )
+
+    async def install_mcp(
+        self,
+        agent_id: str,
+        session_id: str,
+        mcp: dict,
+    ) -> None:
+        """``POST /workspace/mcp``：安装一个 MCP 声明（同时写入 library）。"""
+        await self._request(
+            "POST",
+            "/workspace/mcp",
+            params={"agent_id": agent_id, "session_id": session_id},
+            json_body=mcp,
+            expected=(201,),
+        )
+
+    async def install_skill_from_hub(
+        self,
+        hub_id: str,
+        card_id: str,
+        *,
+        name: str | None = None,
+    ) -> dict:
+        """``POST /hub/skill/{hub}/cards/{card}/install``：从 Hub 安装到 library。"""
+        params = {"name": name} if name else None
+        return await self._request(
+            "POST",
+            f"/hub/skill/{hub_id}/cards/{card_id}/install",
+            params=params,
+            expected=(201,),
+        )
+
+    async def remove_workspace_mcp(
+        self,
+        agent_id: str,
+        session_id: str,
+        name: str,
+    ) -> None:
+        """``DELETE /workspace/mcp/{name}``：从某会话 workspace 移除 MCP 并关闭。"""
+        await self._request(
+            "DELETE",
+            f"/workspace/mcp/{name}",
+            params={"agent_id": agent_id, "session_id": session_id},
+            expected=(204,),
+        )
+
+    async def install_mcp_from_hub(
+        self,
+        hub_id: str,
+        card_id: str,
+        *,
+        values: dict | None = None,
+        name: str | None = None,
+    ) -> dict:
+        """``POST /hub/mcp/{hub}/cards/{card}/install``：从 Hub 安装到 library。"""
+        body: dict = {"values": values or {}}
+        if name:
+            body["name"] = name
+        return await self._request(
+            "POST",
+            f"/hub/mcp/{hub_id}/cards/{card_id}/install",
+            json_body=body,
+            expected=(201,),
+        )
 
     # ------------------------------------------------------------------
     # Chat 触发与 SSE

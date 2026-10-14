@@ -6,7 +6,7 @@ AgentScope Python 固定 `2.0.10`，tag commit `e6c014f0be49b2a6f6f62a9453082a0b
 
 ## Goals / Non-Goals
 
-**Goals:** 三个页面保留原型布局，所有操作真实连接服务；一个员工对应一个长期原生 Agent；私聊和团队会话可恢复；平等员工通过真实模型工具调用联系；匿名会话与附件隔离；证据驱动验收。
+**Goals:** 三个页面保留原型布局，所有操作真实连接服务；一个员工对应一个长期原生 Agent；私聊和基础团队会话可恢复；人类 @ 指定长期员工真实回复；匿名会话与附件隔离；证据驱动验收。按用户 2026-10-15 更新，自主多员工职责协作延后第三阶段。
 
 **Non-Goals:** 旧业务兼容、旧数据迁移、第四个产品页面、模型配置页面、复杂协作编排，以及 proposal 列出的版本外能力。
 
@@ -45,7 +45,7 @@ AgentScope Python 固定 `2.0.10`，tag commit `e6c014f0be49b2a6f6f62a9453082a0b
 
 ### 4. 原生资源选择与员工删除
 
-Skill、MCP Tools、Knowledge 从官方目录列出，空目录显示空态，不补假目录。员工存资源 ID 默认关联；新建 Session 时通过官方 workspace 关联接口与 `knowledge_config` 落实绑定。能力失效必须报错，不能只存标签。工具适配器以明确允许目录控制实际暴露能力；保留原生专用 Skill 读取工具、实际所选 MCP 工具及阶段五 PeerSend，并在模型 schema 与权限检查两处约束。默认不开放 Bash/PowerShell、任意宿主文件读写、Task、Team、Schedule 和 reset_tools。读取 Skill 文本不等同执行其脚本，脚本型能力缺少允许工具时明确报告限制，不假称运行成功。
+Skill、MCP Tools、Knowledge 从官方目录列出，空目录显示空态，不补假目录。员工存资源 ID 默认关联；新建 Session 时通过官方 workspace 关联接口与 `knowledge_config` 落实绑定。能力失效必须报错，不能只存标签。工具适配器以明确允许目录控制实际暴露能力；保留原生专用 Skill 读取工具与实际所选 MCP 工具，并在模型 schema 与权限检查两处约束。第一阶段不注册延后第三阶段的 PeerSend；默认不开放 Bash/PowerShell、任意宿主文件读写、Task、Team、Schedule 和 reset_tools。读取 Skill 文本不等同执行其脚本，脚本型能力缺少允许工具时明确报告限制，不假称运行成功。
 
 原生运行退出屏障还须覆盖已登记但尚未取得 Session 锁的任务：通过公开依赖读取真实 chat task registry，冻结 admission 后等待已受理 Task、Session lock 与后台 registry 全部排空。公开 MessageBus 扩展在取得运行锁前后拒绝冻结 Session，覆盖原生 wakeup，避免冻结后再生成错误消息尾部。服务内临时冻结集合由 Nexus 持久 deleting 事实恢复，状态查询失败拒绝放行，不另建服务侧员工状态表。
 
@@ -59,17 +59,15 @@ Conversation 与原生 Session 一一稳定绑定。同一员工允许多个 Con
 
 `POST /chat/` 是触发接口，返回 `started`；输出由 `GET /sessions/{sid}/stream` SSE 提供。历史接口提供 `event_cursor`，先加载历史，再从 cursor 续订，按原生 event/message/reply ID 去重；不把 `started` 或 HTTP 流关闭当成模型完成。官方瞬时 replay 最多保留 1000 条事件，assistant 消息在运行 finally 才写入 SQL；长回复重连仅靠 cursor 可能漏掉中间增量，因此流内容只作为临时显示，运行实际 idle 后再次读取完整原生历史，按 reply/message ID 校准最终内容。运行状态以官方状态接口与终态事件结合确认；重连后补历史及状态，避免旧流污染新会话。发送使用客户端幂等键，重复请求不启动第二次推理。取消/服务异常不得伪造成功回复。
 
-### 6. 平等员工的薄消息扩展
+### 6. 基础团队讨论与第三阶段边界
 
 官方 Team 的被邀请长期员工仍受 worker 强制汇报规则限制，因此不将该机制当作平等讨论。每名讨论成员使用同一长期 AgentRecord 下的独立原生 Session，`team_id=None`。
 
-使用公开 `extra_agent_tools` 工厂注册 `PeerSend`，公开 middleware 移除/拒绝 native leader-worker、schedule 等版本外工具。工具闭包绑定实际 Agent/Session；模型仅选择接收员工 ID 和消息内容，不能自报发信人。Nexus 的内部投递接口验证实际成员、enabled、owner、Session 绑定、exchange 预算及幂等键。
+人类 @ 选择稳定员工 ID。明确 @ 的员工收到实际消息；无 @ 仅保存讨论消息，不强制轮流发言。服务端校验 owner、成员、enabled 和 Session 绑定，以输入幂等键防止重复触发；目标忙碌时明确呈现，未知提交不盲目重发。
 
-人类 @ 选择稳定员工 ID。每次人类输入建立 exchange，明确 @ 的员工收到消息；无 @ 仅保存讨论消息，不强制轮流发言。是否联系其他员工由 Agent 真实推理决定。
+讨论历史以人类消息和原生回复引用聚合，不复制活动 AgentState 或建立员工从属关系。每次真实回复必须保留可核对的源 Agent、Session 和 native message/reply ID。
 
-PeerSend 先持久化投递 envelope，再异步触发目标原生 Session，立即返回投递确认。它不在源 Agent 等待目标模型完成，避免 A→B→A 同步锁环。B 自行推理，可以用 PeerSend 回 A 或联系 C；所有人的消息均实时进入同一讨论时间线。目标 Session 仍运行时原生 `/chat/` 返回 409，不能丢弃回信：envelope 保持 pending，按目标 Session 串行、有界地等待 idle 后投递，以该 envelope 表作为最小持久待投递队列，不另建协作状态机。按原生工具调用 ID 去重，每 exchange 限制投递数、推理次数和总时间；达到限制明确终止并展示原因。发送失败与重启中断可见，不无限自动重试，不建立复杂工作流引擎。
-
-讨论历史以人类/peer envelope 和原生消息引用聚合，不复制活动 AgentState 或建立员工从属关系。每次投递及真实回复必须保留可核对的源 Agent、Session、exchange 和 native message/reply ID。
+PeerSend、员工自行选择同事、异步回信和有界自主投递按最新要求移至第三阶段，原方案见 `docs/AGENTSCOPE_PEER_HOOKS.md`。本 change 不注册该工具，不将三员工自主协作链作为第一阶段或第二阶段前置；不得以固定轮流、关键词或模拟回复替代。
 
 ### 7. 附件真实读取
 
@@ -90,7 +88,7 @@ Nexus 保存随机存储名、原始文件名、MIME、大小、owner 和 Conver
 - [匿名 UUID 可冒用] → 回环服务/受控验证部署；未来真实 UID 绑定保持 owner 字段可扩展。
 - [单进程消息总线重启丢瞬时事件] → 原生消息/状态持久化，重新订阅补历史；不宣称多进程恢复。
 - [删除级联与历史承诺冲突] → 先完成只读归档，再执行真实删除；对失败路径测试。
-- [PeerSend 循环或并发冲突] → 持久幂等 envelope、exchange 预算、目标单 Session 运行约束，不同步等待。
+- [人类 @ 重试与并发冲突] → 真实输入幂等、目标单 Session 约束、未知提交核对；自主投递预算留待第三阶段。
 - [Knowledge 依赖真实 embedding 配置] → 由 AgentScope 引导公开 OllamaCredential，使用本机标准 Ollama 模型服务与 embeddinggemma:300m（768维）完成真实索引/检索；向量与文档存储随 AgentScope data_dir 持久化。该模型服务属于模型层依赖，不增加业务微服务或配置页面。缺配置时明确不可用；所选 KB 检索失败必须在模型调用前中止，不沿用原生 log-and-skip 的裸模型成功行为。
 - [本地 workspace 工具可接触宿主文件] → 默认仅允许本版本需要的目录/工具，所有员工启停在服务实际运行前再次检查。
 
@@ -100,4 +98,4 @@ Nexus 保存随机存储名、原始文件名、MIME、大小、owner 和 Conver
 
 ## Open Questions
 
-没有需要改变产品设计的已确认阻塞。官方扩展 peer 方案须在阶段五通过三名长期 Agent 的真实模型消息链验证；不足时再按用户要求确认，不以模拟代替。
+第一阶段尚未完成，具体门槛见 `docs/PHASE1_GATE.md`。自主 peer 方案已延后第三阶段，未实施、未验收；不会以此阻止第二阶段，也不声称模拟验证通过。

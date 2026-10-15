@@ -21,6 +21,7 @@
 | Worker | OpenCode 执行资源及环境运维 | 从旧 DigitalEmployee 的执行字段/环境/占用/心跳适配；与 Employee 身份分离 |
 | ExecutionEnvironment | 本地或 Linux 远程配置 | 旧 `employee_id` 改 Worker FK；保留每 Worker 一个环境的唯一关系、不可变执行快照和密码不回显策略 |
 | RuntimeSession | Task 的执行绑定、终态和用量索引 | 旧执行员工 FK 改 Worker FK；责任员工通过 Task 获取；保留 `superseded_by` 隔离旧轮次 |
+| Event | Task 业务事件与执行关联 | 旧 `Event.employee_id` 由旧 Task 执行员工填入，改为 Worker 关系；员工唤醒目标另从 Task 的责任员工获取 |
 | OpenCode Session/Workspace | 工程执行、消息、权限、问题、文件和变更事实源 | 继续通过 Server/Session/Event 与原生查询；不恢复 Run 表或消息副本；Workspace 是路径与 worktree，不虚构已有 Workspace 表 |
 | AgentScope Conversation Session | 员工交流、推理与记忆事实源 | 与 OpenCode RuntimeSession 分开；以可信服务端绑定解析 Employee/owner/来源会话 |
 | 任务总结/经验 | 真实执行证据和人工审核发布 | `source_employee_id` 来自 Task 责任员工，不能写 Worker ID；执行证据引用真实 RuntimeSession |
@@ -34,7 +35,7 @@
 | 模块 | 分类 | 固定提交中的实现与迁移说明 |
 | --- | --- | --- |
 | Task 状态规则 | 直接复用 | `backend/app/state_machine.py`、`runtime/session_state.py`、`runtime/task_status.json`；实际状态为 PENDING/RUNNING/WAITING/SUCCEEDED/FAILED/CANCELED，无 PAUSED |
-| Task Service/API | 小范围适配 | `services.py:TaskService`、`api/routes.py`；保留创建/转换/事件/筛选/编辑/确认/删除，`(source, external_task_id)` 已有幂等约束；拆分责任员工与执行 Worker，并增加 owner/来源会话校验 |
+| Task Service/API | 小范围适配 | `services.py:TaskService`、`api/routes.py`；保留创建/转换/事件/筛选/确认/删除，`(source, external_task_id)` 已有幂等约束；拆分责任员工与执行 Worker，并增加 owner/来源会话校验。历史没有 Task PATCH/PUT 编辑 API，用户所需修改能力须补薄服务入口与合法状态校验 |
 | 执行生命周期 | 小范围适配 | `runtime/lifecycle.py:RuntimeService` 的 start/send/retry_submission/stop/refresh/confirm_completion 是主链路；保留人工问题/权限、取消、未知提交恢复及旧轮次保护 |
 | OpenCode 连接 | 直接复用与关系适配 | `executors/opencode_server.py:OpenCodeServerClient`、`runtime/session_connection.py`；实际 Session、prompt_async、events、question、permission、abort。不要另迁一个重复执行循环；大体量 `_execute` 不是现行 Task 主链路 |
 | 故障与恢复 | 小范围适配 | `runtime/recovery.py` 的 SSE 观察、绝对状态重读、退避和恢复；保留现有 Celery 包装，不把 Scout 或平台助手作为前置 |
@@ -42,7 +43,7 @@
 | 任务中心/详情 | 小范围适配 | `frontend/src/views/TaskListView.vue`、`TaskDetailView.vue` 及相关组件/API/store；保留筛选、表格、控制、日志、总结、经验等主要交互，只换架构字段和入口 |
 | OpenCode 工作区 UI | 小范围适配 | TaskDetail 的 OpenCodeTaskWorkspace iframe、`workspace-ui/` 全 fork、`scripts/workspace_ui.mjs` 和代理；上游 v1.18.33、commit 51ef4be1d3c122f18fefb510dca8d778571f4f18。保留已有禁用新建/fork/archive 的产品约束；验证与实际 Serve 版本兼容，不删除构建资产 |
 | Task MCP 查询/控制基础 | 小范围适配 | `assistant/tool_gateway.py` 的 task_search/task_get；`assistant/operations.py` 已调用 TaskService.create、RuntimeService.stop/start。提取领域资格校验，新增薄 MCP 入口，不复制状态机 |
-| 完整 Task MCP/Skill | 需要实现 | 历史 MCP 实际仅查询与 prepare_create/cancel/retry；reassign 未注册，resume 文案不是工具。补齐用户要求的管理、运行、结果/总结/候选查询与 Skill，服务端绑定员工身份，不强制旧 WAITING_CONFIRM 卡片流程 |
+| 完整 Task MCP/Skill | 需要实现与查询适配 | 历史 Task 控制为 prepare_create/cancel/retry；reassign 未注册，resume 文案不是工具。task_get 已含 review/task_summary，experience_search 已查候选/发布经验，另有 Session 查询、失败摘要和可信复盘提交，应薄适配复用。仅补缺少的编辑/分配/运行控制工具与自主 Task Skill，服务端绑定员工身份，不强制旧 WAITING_CONFIRM 卡片流程 |
 | AgentScope 注册与事件唤醒 | 需要实现 | 复用第一阶段资源目录/工具 guard/Session factory；增加 Task MCP 与 Skill 配置、Task 关键事件持久投递、幂等与重启恢复，使用原生消息/唤醒入口，不建事件管理页面 |
 | Worker 环境模型/API | 小范围适配 | `models.py:OpenCodeExecutionEnvironment`、schemas、环境 API；已有 LOCAL/LINUX_REMOTE、SSH host/port/user/password、目录、可执行路径/版本、Serve 端口、模型与检测状态；改绑 Worker，保留编辑空密码不覆盖 |
 | SSH 运输 | 直接复用 | `runtime/ssh_client.py:SSHSession` 的命令、流式输出、SFTP、正反隧道及关闭。当前仅密码认证和 AutoAddPolicy，不能声称已有密钥认证或严格 host-key 管理 |

@@ -1,0 +1,20 @@
+{
+  "code_commit": "ddb6e5342aa10a2ed3752e696dd9bf753b81bbf4",
+  "source_evidence": "evidence/phase3/smoke-resources-20261015T005716Z.json",
+  "model_and_restart": "passed",
+  "index_after_true_process_shutdown": [
+    {
+      "kind": "message",
+      "total": 10,
+      "confirmed": 10,
+      "unknown_digest": 0
+    },
+    {
+      "kind": "state",
+      "total": 5,
+      "confirmed": 5,
+      "unknown_digest": 0
+    }
+  ],
+  "scope": "real DeepSeek + real HTTP MCP + two-process restart; not freeze/delete validation"
+}

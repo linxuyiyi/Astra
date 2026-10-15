@@ -1,0 +1,105 @@
+{
+  "mode": "full",
+  "run_at": "2026-10-15T01:07:34.310964+00:00",
+  "checks": {
+    "knowledge_enabled_and_embedding_ready": true,
+    "real_index_ready": true,
+    "real_search_hits_value": true,
+    "empty_kb_search_zero_success": true,
+    "nexus_catalog_lists_kbs": true,
+    "session_knowledge_aligned": true,
+    "empty_search_not_failure": true,
+    "embedding_unreachable_aborts": true,
+    "partial_kb_failure_aborts": true,
+    "deleted_kb_aborts": true,
+    "model_answers_with_doc_value": true,
+    "restart_recovery": true,
+    "restart_model_answers": true
+  },
+  "embedding": {
+    "credential_id": "nexus-default-ollama-embedding",
+    "model": "embeddinggemma:300m",
+    "dimensions": 768,
+    "host": "http://127.0.0.1:11435"
+  },
+  "documents": {
+    "target": {
+      "id": "f96f55239a8d402bb186e0fc5ec992c6",
+      "status": "ready",
+      "chunk_count": 1
+    },
+    "other": {
+      "id": "304da25c034a413b9141fcbd1fb8a4b7",
+      "status": "ready",
+      "chunk_count": 1
+    },
+    "verification_value": "ZS9c382557"
+  },
+  "search": {
+    "result_count": 1,
+    "contains_value": true
+  },
+  "conversation": {
+    "id": "conv_8f63597b00dd4635ae6f5b848828360c",
+    "session_id": "0756e0bcd7f546c5bb73af826741e17e",
+    "agent_id": "f7f83add2fff4c7aa5348a2f26d52b06",
+    "knowledge_snapshot": [
+      "2daee130e393436f82c0bca8e5bf04ef",
+      "b773e1cd60b5473b94856f18cf7e3e33"
+    ],
+    "native_knowledge_config": {
+      "knowledge_base_ids": [
+        "2daee130e393436f82c0bca8e5bf04ef",
+        "b773e1cd60b5473b94856f18cf7e3e33"
+      ],
+      "parameters": {
+        "mode": "static",
+        "top_k": 3,
+        "emit_hint_event": true
+      }
+    }
+  },
+  "zero_result_probe": {
+    "model_call_started": true
+  },
+  "embedding_unreachable": {
+    "finished_reason": "error",
+    "model_call_started": false
+  },
+  "partial_kb_failure": {
+    "finished_reason": "error",
+    "model_call_started": false
+  },
+  "kb_deleted": {
+    "authorize_status": 403,
+    "finished_reason": "error"
+  },
+  "model_check": {
+    "status": "passed",
+    "hint_block": true,
+    "finished_reason": "completed",
+    "reply_preview": "星云计划的内部对接编号是 ZS9c382557。"
+  },
+  "restart": {
+    "generation_before": "20cd62b2daa0459c92c30d200bade619",
+    "generation_after": "e0a3d176fca0459da145247aeaa918d7",
+    "generation_changed": true,
+    "kb_restored": true,
+    "document_ready": "ready",
+    "chunk_count": 1,
+    "search_restored": true,
+    "session_restored": true,
+    "target_authorize_status": 200,
+    "deleted_kb_authorize_status": 403,
+    "empty_employee_authorize_status": 200,
+    "zero_result_probe_model_call_started": true,
+    "model_after_restart": {
+      "hint_block": true,
+      "finished_reason": "completed"
+    }
+  },
+  "status": "passed",
+  "temp_data_dir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-knowledge-tymd684d",
+  "evidence_path": "evidence/phase3/smoke-knowledge-20261015T010803Z.json",
+  "key_recorded": false
+}

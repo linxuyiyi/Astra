@@ -1,0 +1,18 @@
+{
+  "mode": "full",
+  "run_at": "2026-10-15T01:00:24.155218+00:00",
+  "checks": {
+    "knowledge_enabled_and_embedding_ready": true
+  },
+  "embedding": {
+    "credential_id": "nexus-default-ollama-embedding",
+    "model": "embeddinggemma:300m",
+    "dimensions": 768,
+    "host": "http://127.0.0.1:11435"
+  },
+  "status": "failed",
+  "error": "SmokeError: 文档索引失败：'ConnectionError: Failed to connect to Ollama. Please check that Ollama is downloaded, running and accessible. https://ollama.com/download'",
+  "temp_data_dir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-knowledge-xxfi0_oc",
+  "evidence_path": "evidence/phase3/smoke-knowledge-20261015T010031Z.json",
+  "key_recorded": false
+}

@@ -1,0 +1,21 @@
+{
+  "code_commit": "ddb6e5342aa10a2ed3752e696dd9bf753b81bbf4",
+  "source_evidence": "evidence/phase3/smoke-knowledge-20261015T010803Z.json",
+  "knowledge_model_and_restart": "passed",
+  "prior_environment_failure": "evidence/phase3/smoke-knowledge-20261015T010031Z.json",
+  "index_after_true_process_shutdown": [
+    {
+      "kind": "message",
+      "total": 14,
+      "confirmed": 14,
+      "unknown_digest": 0
+    },
+    {
+      "kind": "state",
+      "total": 7,
+      "confirmed": 7,
+      "unknown_digest": 0
+    }
+  ],
+  "scope": "real local EmbeddingGemma indexing and retrieval + DeepSeek answers + two-process restart; not freeze/delete/cancel-tail validation"
+}

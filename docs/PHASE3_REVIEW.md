@@ -77,3 +77,5 @@ Codex 亲自执行全量 `.venv/bin/python -m pytest -q`：**362 passed in 14.49
 边界：本小步未实现冻结/admission/quiesce、业务删除归档、私聊/附件/UI或第二阶段。尚未做新观察装配后的真实模型/独立进程尾部验证；整体 3.2.3.1 仍未完成，任务清单保持未勾选。旧 State 未确认后被新版本覆盖时仍可能持续阻断，不能猜测式清除；下一步骤须保留该失败安全规则。
 
 后续真实回归：Codex 从提交 `ddb6e5342aa10a2ed3752e696dd9bf753b81bbf4` 提取隔离源码副本，通过交付控制脚本启动两真实进程，执行 `smoke_resources.py --with-model`，正常退出 0。真实 DeepSeek 回复、所选 HTTP MCP 调用、禁用后运行拒绝、双服务真正重启后的绑定恢复与再次工具调用共 9 项检查通过；证据 `evidence/phase3/smoke-resources-20261015T005716Z.json`。进程停止后只读取索引元数据，10 条消息与 5 条 State 全部 confirmed，unknown digest 为 0，见 `persistence-real-model-root-20261015T005716Z.json`。凭据仅通过环境注入，未写入命令参数或证据。此为新观察装配的真实模型/MCP/重启回归，尚不是冻结/quiesce、业务删除或取消尾部验收。
+
+同一隔离提交的 Knowledge 真实复测：首次因专用 Ollama 11435 未运行而失败，保留 `smoke-knowledge-20261015T010031Z.json`。确认端口无监听后仅重新启动 Nexus 专用模型目录的本机 Ollama，再运行 `smoke_knowledge.py --with-model --keep-evidence`，真实本地 EmbeddingGemma 索引/检索、DeepSeek 按随机文档值回答、异常前置拒绝和双进程重启共 13 项检查通过，正常退出 0，证据 `smoke-knowledge-20261015T010803Z.json`。停进程后索引元数据计数见 `persistence-knowledge-root-20261015T010803Z.json`；所有消息与 State 均 confirmed，无 unknown digest。保留原始失败与成功证据；此结果仍不代替尚在审查的冻结/取消尾部或删除归档验收。

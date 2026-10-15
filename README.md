@@ -2,6 +2,8 @@
 
 Nexus v1.0.1：数字员工管理、数字员工私聊、团队交流。
 
+2026-10-15 产品阶段核验：第一阶段数字员工体系尚未交付，技术初始化完成不能代替产品验收。缺项见 [第一阶段门槛](docs/PHASE1_GATE.md)；用户指定历史分支的 [第二阶段复用分析](docs/PHASE2_REUSE_ANALYSIS.md) 已整理，但尚未开始功能迁移。自主多员工职责协作延后第三阶段，不作为第二阶段前置。
+
 当前处于阶段三（员工管理）。本仓库已包含独立部署的 **AgentScope Agent
 Service**（`agent-service/`）与 **Nexus 业务后端**（`backend/`）。阶段 3.1
 已实现员工业务存储、真实原生 Agent 创建/修改、列表/搜索/详情与服务端校验；
@@ -188,9 +190,9 @@ DeepSeek 凭据，则复用该持久凭据并仍视为已配置，无需每次�
 - 字段约束：`name` 必填、去首尾空白、最多 24 字符；`domain` 必填、最多 42
   字符；`responsibilities` 与 `instructions` 必填；`avatar` 从五个 emoji
   中选；名称与领域忽略大小写唯一，由数据库唯一索引兜底并发。
-- 请求体未知字段显式拒绝（`extra="forbid"`）：尚未实现的资源关联与 `enabled`
-  启停操作返回 `422`，不静默接受。创建固定 `enabled=true`；`enabled` 的启停
-  执行约束与员工删除属于任务 3.2。
+- 请求体未知字段显式拒绝（`extra="forbid"`）。创建/修改支持 `enabled` 与真实
+  Knowledge/Skill/MCP ID 关联，资源按实际目录校验，启停由服务端运行 guard 生效；
+  员工删除与只读归档仍未完成。
 - 响应姓名以原生 Agent 为事实源：原生可用时 `name_source="native"`；原生
   缺失/非法时退回本地索引值并标记 `name_source="local"`、`native_available=
   false`、非 `ready`，不冒充原生事实。
@@ -532,21 +534,22 @@ DENY、授权响应字段非法即拒绝、recording model 证明鉴权失败不
 隔离并补真实写入与进程重启证据；3.2.2 已实现真实资源目录、员工默认资源关联与
 启停、共同 Session factory（Conversation 绑定、能力读回）与服务端运行 guard
 （工具允许目录 + 内部授权回调，含真实进程冒烟）；删除前只读历史归档（3.2.3）
-与前端页面（3.3）尚未实现，因此尚未用真实模型证明“改职责后新对话生效”（脚本
-已就绪，待注入密钥验证）。知识库默认未启用，未配置 embedding 时目录明确不可用；
+与前端页面（3.3）尚未实现。真实模型已证明“改职责后新对话生效”，证据为
+`evidence/phase3/smoke-employees-20261014T144442Z.json`。知识库默认未启用，未配置 embedding 时目录明确不可用；
 3.2.2 已用 `scripts/smoke_knowledge.py` 在本机隔离进程对**外部只读** Ollama
 （`embeddinggemma:300m`，768 维）完成**真实本地 embedding → 索引 → 原生
 static 检索 → 员工 KB 绑定/会话 → 进程重启恢复**验证，并覆盖 embedding 不可达/
 部分 KB 不可构建/KB 删除时模型调用前严格中止；**真实模型据检索内容作答**与
-`HINT_BLOCK` 仍待 Root 注入密钥后由 `--with-model` 验收。启用入口为 `qdrant-client`
+`HINT_BLOCK` 已经 `--with-model` 验收，证据为
+`evidence/phase3/smoke-knowledge-20261014T151147Z.json`。启用入口为 `qdrant-client`
 与 `agentscope[model-ollama]`（已在交付依赖内）及 `AGENTSCOPE_KNOWLEDGE_ENABLED`。
 原生写屏障、单调写入修订与创建代次释放只在 **单进程部署**范围内成立：锁与高
 水位保存在 AgentScope 服务进程内存中，不做多副本协调；`reconcile` 对未知编辑
 结果要求先通过同修订幂等 `PATCH` 写屏障再确认 `desired`，未带 Nexus 标记的原生
 探针不受影响。运行 guard 与工具允许目录同样只在单进程、单服务实例语义下保证。
-剩余未验证：真实模型多轮推理（待密钥）、附件实际读取、真实模型据知识库作答
-（本地 embedding/索引/检索已由隔离冒烟验证，待密钥验收模型段）、三员工主动
-通信；单进程 `InMemoryMessageBus` 不保证多进程事件总线恢复。所有 Agent 运行都
+剩余未验证：完整产品私聊/附件/历史界面、删除归档与基础团队交流；自主三员工
+通信延后第三阶段，未宣称完成。真实模型多轮、资源工具与知识作答已有对应证据。
+单进程 `InMemoryMessageBus` 不保证多进程事件总线恢复。所有 Agent 运行都
 必须绑定到已授权 Conversation；直接裸建原生会话的旧探针会被 guard 拒绝。
 
 **MCP 支持边界（v1.0.1，明确限制）**：AgentScope 2.0.10 的 stateful MCP 将

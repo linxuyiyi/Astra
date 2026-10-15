@@ -3,8 +3,11 @@
 
 基于官方 ``agentscope.app.create_app``，只通过公开接口与公开扩展点配置：
 
-* ``AsyncSQLAlchemyStorage``（SQLite + aiosqlite）持久化原生记录；
-* 单进程 ``InMemoryMessageBus``；
+* ``ObservedStorage``（公开 ``AsyncSQLAlchemyStorage`` 子类，SQLite + aiosqlite）
+  持久化原生记录，并在真实提交前后记录写入证明；
+* ``ObservedMessageBus``（公开 ``InMemoryMessageBus`` 子类）建立单次运行观察 scope；
+* ``ObservationMiddleware``（公开 ``MiddlewareBase.on_reply``）观察真实回复并建立
+  State 写入期待，装配在运行 guard 之前；
 * ``SessionWorkspaceManager``（公开 ``WorkspaceManagerBase`` 扩展），显式
   ``IsolationPolicy.PER_SESSION``，按原生持久 workspace ID 建立独立物理目录；
 * 关闭 scheduler 与 channel worker。
@@ -20,8 +23,6 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 from agentscope.app import create_app
-from agentscope.app.message_bus import InMemoryMessageBus
-from agentscope.app.storage import AsyncSQLAlchemyStorage
 from agentscope.app.workspace_manager import IsolationPolicy
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware import Middleware
@@ -40,6 +41,12 @@ from .guard import (
     mcp_client_support,
 )
 from .knowledge import ObservedCollectionPerKbManager
+from .persistence_index import PersistenceIndex
+from .persistence_observation import (
+    ObservedMessageBus,
+    ObservedStorage,
+    make_observation_factory,
+)
 from .workspace import SessionWorkspaceManager
 from .write_barrier import NativeWriteBarrierMiddleware
 
@@ -89,12 +96,18 @@ def build_app(
     config.data_dir.mkdir(parents=True, exist_ok=True)
     config.workspace_dir.mkdir(parents=True, exist_ok=True)
 
-    storage = AsyncSQLAlchemyStorage(
+    # 原生持久写入观察索引：固定子目录（从实际 data_dir 派生）。生命周期在
+    # nexus_lifespan 内真实进入/退出；打开失败即不进入就绪。
+    persistence_index = PersistenceIndex(config.persistence_index_dir)
+
+    storage = ObservedStorage(
+        persistence_index,
         url=config.database_url,
         create_tables=True,
         # 日志/异常中隐藏 SQL 绑定参数，避免模型密钥随参数泄露。
         engine_kwargs={"hide_parameters": True},
     )
+    message_bus = ObservedMessageBus(persistence_index)
     # 官方 LocalWorkspaceManager 2.0.10 的 workdir 固定为 basedir/agent_id，
     # 同员工不同 Session 仍共用目录；这里用公开扩展按持久 workspace_id 分目录。
     workspace_manager = SessionWorkspaceManager(
@@ -128,11 +141,35 @@ def build_app(
             guard_authorizer = DenyAllAuthorizer()
     guard_configured = not isinstance(guard_authorizer, DenyAllAuthorizer)
 
-    extra_agent_middlewares = make_run_guard_factory(guard_authorizer)
+    # 观察中间件在 guard 之前（最外层）装配：先建立 State 期待与消息内容观察，
+    # 再进入 guard 的授权与 Knowledge 限制；guard 的 RAG/START/on_model_call
+    # 限制完全保留，不覆盖已有 guard。
+    observation_factory = make_observation_factory(storage, persistence_index)
+    guard_factory = make_run_guard_factory(guard_authorizer)
+
+    async def extra_agent_middlewares(
+        user_id: str,
+        agent_id: str,
+        session_id: str,
+        workspace: Any = None,
+    ) -> list:
+        observation = await observation_factory(
+            user_id,
+            agent_id,
+            session_id,
+            workspace,
+        )
+        guard = await guard_factory(
+            user_id,
+            agent_id,
+            session_id,
+            workspace,
+        )
+        return observation + guard
 
     app = create_app(
         storage=storage,
-        message_bus=InMemoryMessageBus(),
+        message_bus=message_bus,
         workspace_manager=workspace_manager,
         knowledge_base_manager=knowledge_manager,
         knowledge_parsers=knowledge_parsers,
@@ -161,26 +198,30 @@ def build_app(
 
     @asynccontextmanager
     async def nexus_lifespan(app_: FastAPI) -> AsyncIterator[Any]:
-        async with official_lifespan(app_) as state:
-            app_.state.nexus_model_status = await bootstrap_default_model(
-                storage,
-                config,
-            )
-            # 知识库启用时按固定 id 引导原生 OllamaCredential；未启用不写记录。
-            app_.state.nexus_embedding_status = (
-                await bootstrap_embedding_credential(storage, config)
-            )
-            app_.state.nexus_ready = True
-            try:
-                yield state
-            finally:
-                app_.state.nexus_ready = False
-                if owned_authorizer is not None:
-                    await owned_authorizer.aclose()
+        # 先真实打开持久索引；打开/校验失败即抛出，服务不进入就绪。
+        async with persistence_index:
+            async with official_lifespan(app_) as state:
+                app_.state.nexus_model_status = await bootstrap_default_model(
+                    storage,
+                    config,
+                )
+                # 知识库启用时按固定 id 引导原生 OllamaCredential；未启用不写记录。
+                app_.state.nexus_embedding_status = (
+                    await bootstrap_embedding_credential(storage, config)
+                )
+                app_.state.nexus_ready = True
+                try:
+                    yield state
+                finally:
+                    app_.state.nexus_ready = False
+                    if owned_authorizer is not None:
+                        await owned_authorizer.aclose()
 
     app.router.lifespan_context = nexus_lifespan
 
     app.state.nexus_config = config
+    # 原生持久写入观察索引（生命周期由 nexus_lifespan 管理；仅进程内部诊断用）。
+    app.state.nexus_persistence_index = persistence_index
     # 本次 build/start 的服务代次标识（每次构建新生成，永不为 None）。
     app.state.nexus_generation_id = generation_id
     # 运行 guard 是否配置了真实授权（缺秘密时为 fail-closed 拒绝一切运行）。

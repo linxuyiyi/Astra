@@ -185,6 +185,11 @@ class ServiceConfig:
         return self.data_dir / "workspaces"
 
     @property
+    def persistence_index_dir(self) -> Path:
+        """原生持久写入观察索引的固定子目录（从实际 data_dir 派生）。"""
+        return self.data_dir / "persistence"
+
+    @property
     def base_url(self) -> str:
         host = self.host
         if ":" in host:

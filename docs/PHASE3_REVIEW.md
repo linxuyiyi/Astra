@@ -63,3 +63,15 @@ Codex 先前独立运行曾打印 315 passed，但进程持续不退出，因此
 修复后 Codex 亲自执行 23 项索引针对性测试与全量 `.venv/bin/python -m pytest -q`：**320 passed in 12.61s，实际退出码 0**。另用真实临时 SQLite 注入 close 自身取消，验证保留句柄并在恢复后真正关闭。独立审查的真实 Task/Event 探针进一步覆盖 rollback 正在清理时的重复取消，以及 rollback 取消+close 失败组合，旧 pending 经无关写入及重开仍保留。
 
 证据限制：现有重复取消单测连续 cancel，未等待 rollback 进入；独立探针补充了该时序验证。未做断电实测或模型调用，不能将索引单模块验收称为完整落盘屏障、业务删除或第一阶段完成。3.2.3.1仍未勾选，下一步才接真实 Storage、事件观察和读回。
+
+## 任务 3.2.3.1：真实存储观察接入独立验收（2026-10-15）
+
+OpenCode 已通过公开 AsyncSQLAlchemyStorage、InMemoryMessageBus、MiddlewareBase 扩展接入真实消息/State 提交观察；入口冻结副本、原生 super 提交成功后确认，内容 hash 与实际终态 hash 合并。单次 Session 运行锁内共享观察多个 reply、一次 State；成功装配后的公开 inbox consumer 注册先建 unknown State 期待，setup 失败只观察诊断消息。continuation 从可信 State.reply_id 读取旧消息，保留 name/id，支持 parked interrupt，忽略原生过滤的 fallback Msg。读回先验证真实 Session 绑定，再逐条精确确认，未知/缺失/不匹配继续阻断。
+
+Codex 独立审查以真实 SQLite、Task/Event 复现并闭环：closed scope 迟到写覆盖；State.session_id 不匹配仍提交；续写读取失败静默失去期待；parked interrupt 遗漏；已经进入原生保存的旧 writer 在锁释放后覆盖新状态；子 Task 继承上下文绕过锁；等待锁取消后遗留上下文；内部 drain waiter 取消冒充排空。
+
+最终采用 scope 内存 writer lease：首次 await 前受理，覆盖原生提交与索引确认；在真实 Session 锁内部关闭新受理，等待已受理 writer 全部退出后才释放锁。Scope 在实际取锁后建立，同 Session 重入检查真实 owner Task；继承 scope 仅供 writer 关联，不构成锁所有权。内部 waiter 失败/取消与外层重复取消均不能提前释放锁，不增加 Run 状态机或持久执行层。
+
+Codex 亲自执行全量 `.venv/bin/python -m pytest -q`：**362 passed in 14.49s，实际退出码 0**；strict OpenSpec validate 与 diff check 通过。另亲自以纯公开 Bus/真实 Task 探针确认子任务绕锁被拒、等待超时后 ContextVar 恢复、内部 waiter 取消仍等待真实 writer 清零再传播。36 项组件回归使用实际临时 SQLite；6 项官方 app 测试使用公开 recording 模型，覆盖正常/并发、setup 失败、模型报错终态、confirm 失败短路 State、取消遇慢保存失败，明确不算真实 AI 联调。
+
+边界：本小步未实现冻结/admission/quiesce、业务删除归档、私聊/附件/UI或第二阶段。尚未做新观察装配后的真实模型/独立进程尾部验证；整体 3.2.3.1 仍未完成，任务清单保持未勾选。旧 State 未确认后被新版本覆盖时仍可能持续阻断，不能猜测式清除；下一步骤须保留该失败安全规则。

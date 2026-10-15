@@ -58,6 +58,9 @@ evidence/phase3/                     员工管理脱敏验证证据
 - 知识库（可选，启用时）：向量库与文档 blob 默认从实际
   `AGENTSCOPE_DATA_DIR` 派生为 `<data_dir>/knowledge/vector` 与
   `<data_dir>/knowledge/blobs`，隔离实例不会落入项目默认目录。
+- 原生持久写入观察索引（任务 3.2.3.1）：`data/agentscope/persistence/`，
+  只保存消息/State 提交证明**摘要**（不保存消息/State 全文），生命周期由服务
+  lifespan 管理；打开/校验失败服务不进入就绪。
 - PID：`data/agentscope/run/agentscope.pid`
 - 日志：`data/agentscope/logs/agentscope.log`
 

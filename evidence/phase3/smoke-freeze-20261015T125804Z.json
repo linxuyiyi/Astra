@@ -1,0 +1,59 @@
+{
+  "mode": "with_model",
+  "run_at": "2026-10-15T12:57:52.033568+00:00",
+  "checks": {
+    "services_ready": true,
+    "baseline_completed": true,
+    "inflight_observed": true,
+    "deleting_persisted": true,
+    "run_fact_deleting": true,
+    "admission_rejected_deleting": true,
+    "cancel_tail_captured": true,
+    "final_history_persisted": true,
+    "cancel_tail_interrupted": true,
+    "generation_changed": true,
+    "deleting_persisted_after_restart": true,
+    "admission_rejected_after_restart": true,
+    "retry_quiesce_verified": true
+  },
+  "generation_before": "74e44ddffe3d45deb89ec4c56acc6884",
+  "agent_id": "c904c9eeacd04ca591a4104f4bb78244",
+  "session_id": "0fd3c536012c4c06a5995dda0cac52dc",
+  "baseline": {
+    "finished_reason": "completed",
+    "reply_preview": "ok"
+  },
+  "inflight": {
+    "reply_id": "2c5fcfe409314f4fb9c05adf47a551c1",
+    "model_call_started": true,
+    "status_before_freeze": "running",
+    "observed_preview": "1",
+    "observed_length": 1
+  },
+  "operation_id": "del_59c1858bbfa54abfbc35b9bcda7de744",
+  "freeze_report": {
+    "execution_drained": true,
+    "persistence_verified": true,
+    "accepted_input_archival": "not_verified",
+    "captured_chat_alive_at_capture": true,
+    "captured_chat_alive": false,
+    "pending": []
+  },
+  "final_round": {
+    "reply_id": "2c5fcfe409314f4fb9c05adf47a551c1",
+    "finished_reason": "interrupted",
+    "reply_preview": "1",
+    "reply_length": 1,
+    "observed_prefix_retained": true
+  },
+  "generation_after": "a7644e8c1046438eb715987b2b3cb078",
+  "retry_quiesce": {
+    "execution_drained": true,
+    "persistence_verified": true,
+    "accepted_input_archival": "not_verified"
+  },
+  "status": "passed",
+  "temp_data_dir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-freeze-sabbrmrw",
+  "evidence_path": "evidence/phase3/smoke-freeze-20261015T125804Z.json",
+  "key_recorded": false
+}

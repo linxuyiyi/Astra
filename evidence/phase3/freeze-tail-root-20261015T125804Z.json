@@ -1,0 +1,29 @@
+{
+  "code_commit": "5cc52122e8a24f1054e86b267368833afa893b01",
+  "source_evidence": "evidence/phase3/smoke-freeze-20261015T125804Z.json",
+  "status": "passed",
+  "independent_read_after_actual_shutdown": {
+    "trusted_native_binding": true,
+    "final_message_interrupted": true,
+    "state_session_and_reply_match": true,
+    "message_digest_matches_confirmed_index": true,
+    "state_digest_matches_confirmed_index": true,
+    "message_digest": "c2d1d404e0433dbcb708038b9fe27bb9706cb219f9f48d43be3301ecf900e44b",
+    "state_digest": "4e52ec02d59dba7c0c9684206e7c1e6e45ae109338a5d05c11976051cdca4c90"
+  },
+  "index_counts": [
+    {
+      "kind": "message",
+      "total": 4,
+      "confirmed": 4,
+      "unknown_digest": 0
+    },
+    {
+      "kind": "state",
+      "total": 2,
+      "confirmed": 2,
+      "unknown_digest": 0
+    }
+  ],
+  "scope": "real deepseek-flash output then in-flight freeze/cancel, tail content retained, true restart; not input archival or business DELETE"
+}

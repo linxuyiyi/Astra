@@ -93,3 +93,11 @@ Codex 亲自执行全量 `.venv/bin/python -m pytest -q`：**446 passed in 17.71
 真实进程回归（固定源码提交 `5cc52122e8a24f1054e86b267368833afa893b01`）：`smoke_resources.py --with-model --keep-evidence` 正常退出0，真实DeepSeek、MCP、admission直接409拒绝及双服务重启共9项检查通过，见 `smoke-resources-20261015T013207Z.json`。两次取消专项 `smoke-freeze-20261015T013300Z.json` 与 `smoke-freeze-20261015T013916Z.json` 分别在长运行及基线等待输出时超时，均保留失败与私有临时数据；未进入freeze验证，不能算通过。独立最小provider探针当时模型列表HTTP200、stream Chat Completions HTTP503。`freeze-regression-root-20261015T013916Z.json` 记录范围；3.2.3.1继续未勾选，等待真实取消尾部补证。
 
 另完成无模型推理的真实进程故障验收：在第一次取消专项的隔离测试库追加一个显式unknown pending期待，持久写入后启动两服务，核对 execution_drained=true 但 persistence_verified=false；真正停止并重启两服务后代次改变、稳定删除操作不变、unknown期待仍保留且新chat继续409拒绝。证据 `freeze-pending-process-root-20261015T014726Z.json`，真实退出0。这是合成未知写入故障注入与真实服务重启，明确不算AI取消尾部验证；使用原失败沙盒继续探针，原失败JSON保持不变。
+
+## 任务 3.2.3.1：真实模型取消尾部最终验收（2026-10-15）
+
+模型接口恢复后，Codex从固定代码提交 `5cc52122e8a24f1054e86b267368833afa893b01` 的隔离源码重跑 `smoke_freeze.py --with-model --keep-evidence`，真实退出0。`smoke-freeze-20261015T125804Z.json` 共13项检查通过：真实deepseek-flash正常基线；观察到实际模型调用与文本且仍busy；持久deleting后拒绝新运行；freeze确实捕获活跃真实Task并取消到interrupted，保留已输出内容；实际chat/锁/BG排空及pending为空；服务真正stop/start代次改变，持久删除身份与运行拒绝仍成立，重复quiesce继续确认。
+
+Codex在所有服务停止后通过公开Storage独立读取最终Msg及完整State，精确核对原生user/agent/session、State.session_id及reply_id，最终消息确为interrupted。消息与State摘要分别匹配confirmed索引；4条message、2条State全部confirmed，unknown摘要0，证据 `freeze-tail-root-20261015T125804Z.json`。结合前述真实进程unknown pending重启阻断、组件446项与独立交错探针，3.2.3.1允许勾选。此前503/超时失败记录不删除、不改写。
+
+此验收仅完成运行冻结、排空及保存证明，accepted_input_archival仍明确not_verified；共享发送内核、完整归档/真实DELETE、前端与完整私聊/附件/基础团队仍未交付。按用户继续处理前端的当前上下文，将3.3拆成独立管理基础与后续删除接入，先实施不依赖删除API的3.3.1；不以该局部界面冒充第一阶段完成。

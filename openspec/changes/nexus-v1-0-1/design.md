@@ -59,6 +59,8 @@ Conversation 与原生 Session 一一稳定绑定。同一员工允许多个 Con
 
 `POST /chat/` 是触发接口，返回 `started`；输出由 `GET /sessions/{sid}/stream` SSE 提供。历史接口提供 `event_cursor`，先加载历史，再从 cursor 续订，按原生 event/message/reply ID 去重；不把 `started` 或 HTTP 流关闭当成模型完成。官方瞬时 replay 最多保留 1000 条事件，assistant 消息在运行 finally 才写入 SQL；长回复重连仅靠 cursor 可能漏掉中间增量，因此流内容只作为临时显示，运行实际 idle 后再次读取完整原生历史，按 reply/message ID 校准最终内容。运行状态以官方状态接口与终态事件结合确认；重连后补历史及状态，避免旧流污染新会话。发送使用客户端幂等键，重复请求不启动第二次推理。取消/服务异常不得伪造成功回复。
 
+发送前固定原生 input Msg ID，保存必要未完成发送意图、内容摘要及提交 generation；相同客户端键不同内容拒绝。原生 started 可能发生在 user Msg 落盘之前，Task 暂空也不证明未受理；未知结果须核对真实持久消息、真实 Task 与代次，不盲重发。原生确认写入后清理瞬时意图载荷，不复制活动 history。取消前未实际执行的输入以明确取消记录保留并纳入只读归档；执行排空和已受理输入归档完整性分别核对，后者未知时不能宣称完整归档。公开队列无 peek，不用 drain/drop 检查或制造成功。
+
 ### 6. 基础团队讨论与第三阶段边界
 
 官方 Team 的被邀请长期员工仍受 worker 强制汇报规则限制，因此不将该机制当作平等讨论。每名讨论成员使用同一长期 AgentRecord 下的独立原生 Session，`team_id=None`。

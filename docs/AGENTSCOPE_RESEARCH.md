@@ -420,3 +420,11 @@ State 的期待项不能等到 update_session_state 才创建：前一个消息�
 内容摘要与提交证明分开：已验收 message_digest 排除原生 hook 外补的 finished_reason/error，事件观察用于验证实际内容；持久 entry 的最终摘要还须覆盖 writer 入口冻结的实际终态，读回使用相同投影，避免内容相同而错误终态仍被确认。未知摘要、缺失、错绑定或不匹配保持阻断；不能用新 checkpoint 清除旧失败。
 
 以上为固定源码下的设计核对，尚未代表真实 ChatService 集成通过。自主 PeerSend 的既有研究按用户最新要求延后第三阶段；不作为第二阶段前置。
+
+## 17. 停止执行不等于已受理输入全部归档
+
+原生 `POST /chat/` 的新 Msg/None 路径同步 spawn 并登记真实 Task 后返回 started；Task 可能尚未取得 Session 锁，取消时 user Msg 还没有 upsert。HITL 路径只 enqueue 后返回 started，WakeupDispatcher 破坏性 drain 后才 spawn；冻结锁拒绝运行时，该输入可能已经离开队列，却没有进入持久历史，也不会因运行 Task 的拒绝自动重新入队。[handler](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_router/_chat.py#L113)、[输入保存](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_service/_chat.py#L1254)、[wakeup 消费](https://github.com/agentscope-ai/agentscope/blob/v2.0.10/src/agentscope/app/_manager/_wakeup_dispatcher.py#L178)
+
+公开 Bus 没有队列 peek/list/count，只有 push/drain/delete；log_read 是 replay log，不等于待处理队列。不得调用 queue_drain 偷看或直接 drop 来制造“pending=0”。quiesce 可在 admission 关闭、实际 Task 退出、锁/BG 清理与保存核对完成后证明执行停止；输入完整性须另行核对，不能自动报告所有已受理输入都已归档。
+
+产品发送须使用稳定原生 input Msg ID 与客户端幂等键，保存必要的未完成发送意图及可信 owner/Conversation/Agent/Session、摘要和提交 generation。同键异内容拒绝；未知提交核对实际持久消息、真实 Task 与代次，不盲重发。原生确认持久化后清理瞬时意图载荷，不建设活动消息副本。未执行的明确取消记录与原生 input ID 应纳入只读历史/归档；结果仍未知则继续阻止完整归档确认。此边界留待私聊发送和删除集成验收，不建立新的 Run 状态机。

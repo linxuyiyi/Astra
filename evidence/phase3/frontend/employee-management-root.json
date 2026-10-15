@@ -1,0 +1,103 @@
+{
+  "recorded_at_utc": "2026-10-15T13:41:13.878766+00:00",
+  "reviewer": "Codex Root",
+  "scope": "3.3.1 employee management only; no DELETE/chat/team/Phase2 acceptance",
+  "backend_source_commit": "5cc52122e8a24f1054e86b267368833afa893b01",
+  "backend_runtime": "isolated real Nexus and AgentScope processes; no frontend mocks",
+  "frontend_source_sha256": {
+    "frontend/.gitignore": "f9d175e168de91c482e56128b73bea3c9a93bbe88bca14a8e127576bc73dac28",
+    "frontend/README.md": "0fd2f4c3d006dadcfdf231566c2ea5b450d0e2268e2212b05dede3ea6e355cb8",
+    "frontend/index.html": "e001d51778d0baffbc7d583f94fcfbb2c0568b14e57838191fc9e8cf2f9bdb35",
+    "frontend/package-lock.json": "5140226cdd21667b9a73508c36595c581fafb5e2ca8bd16bda50e0dbe78f14a2",
+    "frontend/package.json": "903defbf23a7f9d263bd3f230eccb83d99143e1303e21e901f27f983c94f7ce7",
+    "frontend/src/App.vue": "f8f512ce7bc82e23e91b96d97d3e3114c06e1ff242215c48221b71d82fea2b12",
+    "frontend/src/api/client.ts": "9e90065b73bdb12ebd2baeb50028e43cda9d621dbe5329c880e3fd298741b506",
+    "frontend/src/api/diff.ts": "5848ae49b64f1e8383492901a86536cb0d88b48eabd5b3da48f22aed6a05cde7",
+    "frontend/src/api/employees.ts": "c6acfc8f4363c7c51abd59feafbff647f1cd2b676211369662a9c40eac019dd1",
+    "frontend/src/api/errors.ts": "abd176472393fdebd94b9e29392ec6104cf3e30f30dcc1179a54a35cfa7b50fd",
+    "frontend/src/api/guards.ts": "8c72cc8a9f6f57084997ed20e1c8e89b6d695cb3c44ccd069f562f16b3719d30",
+    "frontend/src/api/resources.ts": "a0d8524b42db2a42e74a025ae13328ac00fa18eb63fb2b298bde621a18566866",
+    "frontend/src/api/types.ts": "b342ba84e6d3eb112c7c6356a11d4a7d9223a9b5fe39e5bfd402973236357264",
+    "frontend/src/components/EmployeeEditorDrawer.vue": "c2a109e46db0dec45af5e3df81afb76a11d4376509df7c1297aaa08b25eb10c2",
+    "frontend/src/components/NexusLayout.vue": "47fcad6088bba64e53d548b352d26e057cbbdfde5ca9340a2cb8ee4e4a34143f",
+    "frontend/src/components/ResourceMultiSelect.vue": "a260119a8c090c08729b1a418570bb5ad6307a7ac1be4c7fa9f26ed4fc436e7c",
+    "frontend/src/composables/useMediaQuery.ts": "373d62ae0ea3443a6cf128c24e200a1013624148ab52a56201cdbb6368ccfa85",
+    "frontend/src/constants.ts": "21ba6f128d31420440750360b387b8947c30e5b653aef971c259d456c0a78d52",
+    "frontend/src/env.d.ts": "697440543ba67a0224010d00f2d2ff4a81e4adaacec00c9cdd9d8f0587ab6b1a",
+    "frontend/src/main.ts": "d589723c224be360b180ca2342a0530a1756656dd775672e5bca5f9e3beeb7c9",
+    "frontend/src/stores/resources.ts": "a85e422cd287fe31c49fd66de835a64173ead119009fc7df37f1ab66defe8cd8",
+    "frontend/src/styles/element-plus-theme.css": "4aad6c63d0537da3a4ec6287e47142a0cc375b5cf4173fc1d62218d7f69dec72",
+    "frontend/src/styles/tokens.css": "1b4c9344777492e03b517e21b28ea0dc8a26e4bdfb2d749ed95729eef1fdd7ef",
+    "frontend/src/views/EmployeeManagementView.vue": "c53caa095fb5668cc3b55c886c772d4d5f69159d4d351ade016695e68f1ca4c3",
+    "frontend/test/client.test.ts": "39ba0bd17db8f4ed5d1b9b93b4866ec7b7531d6e8db38b33bd18c919fde22f30",
+    "frontend/test/diff.test.ts": "95e9105678ee0b1d0b9b3c3b0f1014247d5c6662e504c60a18fca359dc6ae917",
+    "frontend/test/errors.test.ts": "4ef96599f641957fa8ae8db82f09cace4bc40369f8e0549437aca054d228c8f1",
+    "frontend/test/guards.test.ts": "25726fdddfec13ea2793750ac51f6bc17e25bd6483f0142763aaa48dc391e7bf",
+    "frontend/tsconfig.json": "0e4fd74785edeba7ad26f11935d8ed71721710cb39289f085fc56e8919dc2352",
+    "frontend/vite.config.ts": "c380ff2170e361b17ee360ae880505c31c99489730744dd7de19e62a62af348b"
+  },
+  "verification": {
+    "type_check_and_production_build": {
+      "command": "npm run build",
+      "exit_code": 0
+    },
+    "unit_tests": {
+      "command": "npm test",
+      "passed": 27,
+      "exit_code": 0
+    },
+    "browser_checks": [
+      "real initial empty list",
+      "create employee through UI with real public HTTP MCP selection",
+      "edit responsibility and explicitly clear tools to empty array",
+      "server search and selected profile",
+      "rename while filtered produces actual zero results and clears profile",
+      "required validation and real duplicate-name field error",
+      "dirty cancel and Escape confirmation with continue/discard",
+      "real enabled false/true updates and profile state",
+      "390x844 switch and edit/save directly usable",
+      "390px document scrollWidth=clientWidth=390",
+      "drawer mounted above header/dock; save footer reachable",
+      "14 Tab steps stayed inside dialog",
+      "stop real backend: real proxy 502 keeps draft and disables save",
+      "stop real AgentScope: list reports failure; profile does not pretend first empty employee",
+      "three catalogs report unavailable independently",
+      "restart AgentScope and retry MCP shows same real nexus-compute-http resource",
+      "separate real service restarts preserve employee ID and previously committed edits",
+      "manual refresh reads externally updated current profile"
+    ],
+    "desktop_viewport": {
+      "width": 1280,
+      "height": 720,
+      "document_scroll_width": 1280
+    },
+    "mobile_viewport": {
+      "width": 390,
+      "height": 844,
+      "document_scroll_width": 390
+    }
+  },
+  "final_employee": {
+    "id": "emp_cea12a82c49048aa844564e0e3bc7777",
+    "agent_id": "5d5368517e8c4e609a19d8405671216c",
+    "name": "筛选回归员工",
+    "domain": "手动刷新验收",
+    "enabled": true,
+    "tools": [],
+    "native_available": true,
+    "sync_state": "ready"
+  },
+  "limits": [
+    "No real model inference in UI test; freeze real model verification is separate evidence.",
+    "No business DELETE, full chat, attachments, team or Phase2 delivery.",
+    "Pending/deleting switch rules covered by unit tests and code review, not real UI fault injection.",
+    "Knowledge unavailable and Skill empty states verified; real Knowledge/Skill selection not newly repeated in browser.",
+    "Transport/body-read failures covered by unit tests; live browser interruption used real proxy 502.",
+    "Production build warns about Element Plus bundle size; not a build failure."
+  ],
+  "incident": {
+    "action": "External OpenCode initially ran pkill -f vite and stopped pre-existing Astra frontend on 5173.",
+    "recovery": "Root restarted unchanged Astra frontend on loopback 5173 and verified title NEXUS · 数字空间 over HTTP. Original process environment not captured.",
+    "prevention": "Subsequent external tasks forbidden from service/process control; Root controls only owned isolated services."
+  }
+}

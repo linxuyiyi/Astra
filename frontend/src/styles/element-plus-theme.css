@@ -1,0 +1,86 @@
+/* 把 Nexus 主题统一映射到 Element Plus 变量（docs/UI_ACCEPTANCE.md 独立主题）。 */
+:root {
+  --el-color-primary: #188b69;
+  --el-color-primary-light-3: #4aa889;
+  --el-color-primary-light-5: #75bda4;
+  --el-color-primary-light-7: #a5d5c4;
+  --el-color-primary-light-8: #c3e4d8;
+  --el-color-primary-light-9: #e6f7ee;
+  --el-color-primary-dark-2: #08654c;
+
+  --el-color-success: #188b69;
+  --el-color-warning: #cf9c3f;
+  --el-color-danger: #c37e75;
+  --el-color-error: #c37e75;
+
+  --el-text-color-primary: #203830;
+  --el-text-color-regular: #547263;
+  --el-text-color-secondary: #7b9386;
+  --el-text-color-placeholder: #9db3a6;
+
+  --el-border-color: #e1ece5;
+  --el-border-color-light: #e9f1ec;
+  --el-border-color-lighter: #eff4f0;
+  --el-border-color-extra-light: #f5faf7;
+
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-light: #f5faf7;
+  --el-bg-color: #ffffff;
+  --el-bg-color-overlay: #ffffff;
+
+  --el-border-radius-base: 10px;
+  --el-border-radius-small: 9px;
+  --el-font-size-base: 13px;
+}
+
+.el-button {
+  border-radius: 11px;
+  font-weight: 650;
+}
+
+.el-button--primary {
+  background: linear-gradient(135deg, #169672, #117154);
+  border-color: #148362;
+  box-shadow: 0 8px 18px rgba(17, 135, 103, 0.15);
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus {
+  background: linear-gradient(135deg, #189f79, #0f6a4f);
+  border-color: #148362;
+}
+
+.el-button.is-link {
+  font-weight: 650;
+}
+
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  border-radius: 10px;
+}
+
+.el-drawer__header {
+  margin-bottom: 0;
+}
+
+/* 抽屉宽度基准 min(610px, 100%)，窄屏不横向溢出。 */
+.el-drawer {
+  max-width: 100%;
+}
+
+.employee-drawer .el-drawer__header {
+  padding: 22px 28px 16px;
+  border-bottom: 1px solid #e8f0ea;
+  color: var(--ink);
+}
+
+.employee-drawer .el-drawer__body {
+  padding: 18px 28px 26px;
+  overflow: auto;
+}
+
+.employee-drawer .el-drawer__footer {
+  padding: 17px 28px;
+  border-top: 1px solid #edf1ed;
+}

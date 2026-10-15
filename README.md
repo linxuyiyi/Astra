@@ -10,8 +10,9 @@ Service**（`agent-service/`）与 **Nexus 业务后端**（`backend/`）。阶�
 3.2.1 已通过公开 WorkspaceManager 扩展修复同员工双 Session 的物理 workspace
 目录隔离并补真实写入与进程重启证据；3.2.2 已实现真实资源目录、员工默认资源
 关联与启停、共同原生 Session factory（Conversation 绑定）与服务端运行 guard
-（工具允许目录 + 内部授权回调）。删除归档（3.2.3）与前端页面（3.3）尚未开发，
-私聊与团队交流随后进行。
+（工具允许目录 + 内部授权回调）。3.2.3.1 运行冻结与持久保存屏障已验收；
+3.3.1 员工管理前端已通过真实后端与桌面/窄屏浏览器验收。共享发送内核、
+完整删除归档与前端删除接入尚未完成，完整私聊、附件与团队交流随后进行。
 
 ## 架构与边界
 
@@ -32,6 +33,7 @@ Service**（`agent-service/`）与 **Nexus 业务后端**（`backend/`）。阶�
 ```
 agent-service/nexus_agent_service/   AgentScope 服务装配（配置、引导、app、入口）
 backend/nexus_backend/               Nexus 后端（配置、HTTP 适配器、app、入口）
+frontend/                           Vue 3 + Element Plus 员工管理前端
 scripts/services.py                  两个服务的统一 start/stop/status 控制脚本
 scripts/smoke_runtime.py             真实进程 + 真实模型运行时联调脚本
 scripts/smoke_employees.py           员工管理真实进程冒烟脚本
@@ -88,6 +90,18 @@ Nexus 员工业务扩展持久化在：
 ```bash
 uv sync
 ```
+
+员工管理页面需 Node.js 24 或更新版本。启动下面两个后端服务后，另开终端：
+
+```bash
+cd frontend
+npm ci
+npm run dev -- --host 127.0.0.1
+```
+
+访问 Vite 输出的本机地址；默认代理 Nexus 后端 `127.0.0.1:8765`。
+目前支持创建、编辑、搜索、档案、启停与真实资源选择，删除和聊天入口尚未接入。
+隔离后端地址及构建、测试命令见 [前端说明](frontend/README.md)。
 
 ## 配置
 

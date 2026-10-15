@@ -1,0 +1,83 @@
+/* Nexus 独立主题 tokens（原型 docs/reference/Nexus_v1.0.1.html 第 6 行）。 */
+:root {
+  --ink: #203830;
+  --muted: #7b9386;
+  --soft-ink: #547263;
+  --green: #188b69;
+  --deep: #08654c;
+  --mint: #e6f7ee;
+  --line: #e1ece5;
+  --wash: #f5faf7;
+  --white: #ffffff;
+  --shadow: 0 18px 65px rgba(31, 92, 70, 0.065);
+  --radius: 18px;
+  --danger: #c37e75;
+  --danger-bg: #fff5f2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: #f1f7f5;
+  color: var(--ink);
+  font-family: Inter, 'PingFang SC', 'Microsoft YaHei', -apple-system,
+    BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 13px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.h-title {
+  font-size: 25px;
+  font-weight: 850;
+  letter-spacing: 0.5px;
+  color: var(--ink);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (max-width: 650px) {
+  .h-title {
+    font-size: 21px;
+  }
+}

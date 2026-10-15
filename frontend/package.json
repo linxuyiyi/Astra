@@ -1,0 +1,27 @@
+{
+  "name": "nexus-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite",
+    "type-check": "vue-tsc --noEmit",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "element-plus": "2.14.7",
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@vitejs/plugin-vue": "6.0.10",
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vue-tsc": "3.3.13"
+  }
+}

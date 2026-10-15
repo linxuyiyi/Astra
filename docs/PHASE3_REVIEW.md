@@ -101,3 +101,17 @@ Codex 亲自执行全量 `.venv/bin/python -m pytest -q`：**446 passed in 17.71
 Codex在所有服务停止后通过公开Storage独立读取最终Msg及完整State，精确核对原生user/agent/session、State.session_id及reply_id，最终消息确为interrupted。消息与State摘要分别匹配confirmed索引；4条message、2条State全部confirmed，unknown摘要0，证据 `freeze-tail-root-20261015T125804Z.json`。结合前述真实进程unknown pending重启阻断、组件446项与独立交错探针，3.2.3.1允许勾选。此前503/超时失败记录不删除、不改写。
 
 此验收仅完成运行冻结、排空及保存证明，accepted_input_archival仍明确not_verified；共享发送内核、完整归档/真实DELETE、前端与完整私聊/附件/基础团队仍未交付。按用户继续处理前端的当前上下文，将3.3拆成独立管理基础与后续删除接入，先实施不依赖删除API的3.3.1；不以该局部界面冒充第一阶段完成。
+
+## 任务 3.3.1：员工管理前端独立验收（2026-10-15）
+
+OpenCode 使用已批准的 `deepseek/deepseek-flash` 新增 `frontend/`，采用 Vue 3、TypeScript、Element Plus、Vite，依照第一阶段三页面原型实现管理入口、真实员工列表/服务端搜索、档案、创建编辑抽屉、启停、知识/技能/MCP目录状态与资源选择。只有同源 Nexus `/api`；开发代理地址仅服务端读取，浏览器不接触模型凭据或内部 token。删除、私聊、团队入口尚未接入；没有产品内演示员工或模拟执行。
+
+Codex 独立审查并交回三轮修复：筛选后改名使计数0但表格保留员工；刷新未重新读取当前档案；网络/读响应/无ID代理5xx及异常2xx被误当可靠失败或成功；pending安全禁用规则；目录异常时误报已存资源消失；Node版本与原生TS测试要求不符；窄屏固定操作列遮住开关；抽屉处于局部层叠上下文，品牌与导航覆盖保存区。修复后保留草稿并锁住结果未知的再次提交，可靠400/409/422仍允许修改重试，响应未知不自动重发；列表与详情从真实服务重新读取。Node最低24，抽屉使用Element Plus原生append-to-body，窄屏关键操作直接可见。
+
+Codex 亲自执行 `npm run build`（含vue-tsc）与 `npm test`：**27项通过，两个命令正常退出0**。构建仍有Element Plus整包体积提示，不算失败。本次未改后端，未重复已通过的446项后端回归。
+
+真实浏览器连接固定后端源码 `5cc5212` 的隔离 Nexus/AgentScope 两进程，亲自操作初始空态、创建并选择实际HTTP MCP、编辑职责/清空工具、搜索、筛选后改名空结果、必填与真实重名错误、取消/Escape草稿确认、启停同步。实际停止Nexus后端，代理502后草稿保留且保存禁用；实际停止AgentScope，列表与三目录均显示真实不可用，档案不冒充初始空态。两服务各自真正重启后保留相同员工身份及已提交数据；恢复后工具目录单独重试重新出现同一MCP。通过API改变当前领域后，点击页面刷新，档案同步最新值。390×844下实际启停、编辑保存均成功，页面scrollWidth=clientWidth=390；14次Tab均保持抽屉内。默认1280×720页面无整体横向溢出。
+
+证据与逐文件源码摘要：`evidence/phase3/frontend/employee-management-root.json`，以及同目录desktop/mobile/write-unknown/catalog-unavailable截图。pending/deleting开关仅代码与单测验收，未做真实浏览器故障注入；知识不可用/技能空态已验证，浏览器未新增重复完整Knowledge/Skill选择，真实模型推理另见此前独立证据。3.3.1允许勾选，3.3.2及整个第一阶段仍未完成。
+
+运维偏差：外部开发工具首次冒烟使用 `pkill -f vite`，误停原有Astra 5173前端。Codex已从未修改的Astra frontend恢复回环5173，并核对HTTP页面标题；原进程环境未事先捕获，不能宣称精确恢复原参数。后续外部任务禁止控制服务或按端口/名称停止进程，隔离验收进程仅由Root按归属管理；Astra分支与已有未跟踪文档均未改动。

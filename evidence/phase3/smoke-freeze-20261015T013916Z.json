@@ -1,0 +1,15 @@
+{
+  "mode": "with_model",
+  "run_at": "2026-10-15T01:35:10.301161+00:00",
+  "checks": {
+    "services_ready": true
+  },
+  "generation_before": "eb51c5bf45d44cf7b8e992b82de02b4d",
+  "agent_id": "65d97601a1d84affad7203f10e16bf4d",
+  "session_id": "84a4d3e3648a4e19b8f0187810080060",
+  "status": "failed",
+  "error": "TimeoutError",
+  "temp_data_dir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-freeze-onkil2ir",
+  "evidence_path": "evidence/phase3/smoke-freeze-20261015T013916Z.json",
+  "key_recorded": false
+}

@@ -1,0 +1,103 @@
+{
+  "mode": "full",
+  "run_at": "2026-10-15T01:31:40.309347+00:00",
+  "checks": {
+    "backend_health_ok": true,
+    "catalog_real_state": true,
+    "employee_resource_default_saved": true,
+    "session_binding_and_capability": true,
+    "model_enabled_reply": true,
+    "model_called_selected_mcp_tool": true,
+    "disabled_guard_blocks_native_chat": true,
+    "restart_recovery": true,
+    "restart_model_calls_selected_tool": true
+  },
+  "model_check": {
+    "status": "passed",
+    "enabled": {
+      "finished_reason": "completed",
+      "model_call_started": true,
+      "reply_preview": "联通正常。"
+    },
+    "tool": {
+      "finished_reason": "completed",
+      "tool_call_started": true,
+      "reply_preview": "42"
+    }
+  },
+  "catalog": {
+    "skills": {
+      "available": true,
+      "reason": null,
+      "items": []
+    },
+    "mcps": {
+      "available": true,
+      "reason": null,
+      "items": []
+    },
+    "knowledge": {
+      "available": false,
+      "reason": "官方功能未启用或暂不可用（feature disabled）。",
+      "items": []
+    }
+  },
+  "employee": {
+    "id": "emp_468bd90649c440f29909a772c8bf0896",
+    "tools": [
+      "dcad14e5db074ed3a6f3cfb00ced3a41"
+    ]
+  },
+  "conversation": {
+    "id": "conv_ae6941c0b4754662b0be45b0db208fe5",
+    "session_id": "53ab2b8072d8429eb14fa6126ef7f157",
+    "agent_id": "0f238ff10185437a8e0e5df1c88e18f7",
+    "capability_snapshot": {
+      "knowledge": [],
+      "skills": [],
+      "tools": [
+        "dcad14e5db074ed3a6f3cfb00ced3a41"
+      ]
+    },
+    "mcp_healthy": true
+  },
+  "enabled_probe": {
+    "model_call_started": true,
+    "finished_reason": "completed"
+  },
+  "guard": {
+    "enabled_authorize_status": 200,
+    "disabled_authorize_status": 403,
+    "native_chat": {
+      "trigger_status": "rejected",
+      "admission_status": 409,
+      "model_call_started": false,
+      "event_types": [],
+      "end_event": null,
+      "finished_reason": null,
+      "text": "",
+      "new_user_messages": 0,
+      "new_assistant_messages": 0,
+      "new_assistant_texts": [],
+      "session_status": "idle"
+    }
+  },
+  "restart": {
+    "employee_restored": true,
+    "authorize_status": 200,
+    "session_restored": true,
+    "mcp_rediscovered_healthy": true,
+    "generation_before": "ecd378ad60cd421d8b377353ed8736bc",
+    "generation_after": "a30971fb7f9140f485358dfebd0f22d3",
+    "generation_changed": true,
+    "model_tool_after_restart": {
+      "finished_reason": "completed",
+      "tool_call_started": true,
+      "reply_preview": "42"
+    }
+  },
+  "status": "passed",
+  "temp_data_dir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-resources-yb0an2j2",
+  "evidence_path": "evidence/phase3/smoke-resources-20261015T013207Z.json",
+  "key_recorded": false
+}

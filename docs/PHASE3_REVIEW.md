@@ -89,3 +89,5 @@ Codex 真实 Task/Event 与临时 SQLite 独立复现并交回修复：接管已
 Codex 亲自执行全量 `.venv/bin/python -m pytest -q`：**446 passed in 17.71s，真实退出码0**，两个独立探针也正常退出0；diff check通过。新增脚本负向断言拒绝模型error/空基线、未捕获在途、保存未确认、缺失历史及停止失败冒充通过。资源 smoke 适配真实 admission 409 并保留 guard error 验证，其他上游异常仍失败。
 
 当前为组件与公开框架验收，真实模型进程取消尾部及本实现重启尚待下一步亲自执行；3.2.3.1保持未勾选。执行排空与落盘证明不等于已受理输入完整性，后者仍明确 not_verified；共享发送意图内核已作为 3.2.3.2.1 必要前置纳入唯一 tasks.md，完整私聊/SSE/UI仍留在4.x复用。
+
+真实进程回归（固定源码提交 `5cc52122e8a24f1054e86b267368833afa893b01`）：`smoke_resources.py --with-model --keep-evidence` 正常退出0，真实DeepSeek、MCP、admission直接409拒绝及双服务重启共9项检查通过，见 `smoke-resources-20261015T013207Z.json`。两次取消专项 `smoke-freeze-20261015T013300Z.json` 与 `smoke-freeze-20261015T013916Z.json` 分别在长运行及基线等待输出时超时，均保留失败与私有临时数据；未进入freeze验证，不能算通过。独立最小provider探针当时模型列表HTTP200、stream Chat Completions HTTP503。`freeze-regression-root-20261015T013916Z.json` 记录范围；3.2.3.1继续未勾选，等待真实取消尾部补证。

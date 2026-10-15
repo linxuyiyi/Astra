@@ -1,0 +1,20 @@
+{
+  "mode": "with_model",
+  "run_at": "2026-10-15T01:30:51.873787+00:00",
+  "checks": {
+    "services_ready": true,
+    "baseline_completed": true
+  },
+  "generation_before": "326f6ec5798545d09dc1d321fca95942",
+  "agent_id": "9221f7972b0d4896896aee4877fdda73",
+  "session_id": "f9fc277318424aeebc8eaba61e7a855e",
+  "baseline": {
+    "finished_reason": "completed",
+    "reply_preview": "ok"
+  },
+  "status": "failed",
+  "error": "TimeoutError",
+  "temp_data_dir": "/var/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/nexus-freeze-48u97k_p",
+  "evidence_path": "evidence/phase3/smoke-freeze-20261015T013300Z.json",
+  "key_recorded": false
+}

@@ -1,0 +1,28 @@
+{
+  "code_commit": "5cc52122e8a24f1054e86b267368833afa893b01",
+  "resource_model_mcp_restart": "evidence/phase3/smoke-resources-20261015T013207Z.json",
+  "resource_index_after_true_shutdown": [
+    {
+      "kind": "message",
+      "total": 8,
+      "confirmed": 8,
+      "unknown_digest": 0
+    },
+    {
+      "kind": "state",
+      "total": 4,
+      "confirmed": 4,
+      "unknown_digest": 0
+    }
+  ],
+  "freeze_attempts": [
+    "evidence/phase3/smoke-freeze-20261015T013300Z.json",
+    "evidence/phase3/smoke-freeze-20261015T013916Z.json"
+  ],
+  "freeze_real_cancel_tail": "not_verified",
+  "live_provider_probe": {
+    "models_http": 200,
+    "chat_completions_stream_http": 503
+  },
+  "scope": "resource regression passed; freeze real cancel-tail timed out, not accepted"
+}

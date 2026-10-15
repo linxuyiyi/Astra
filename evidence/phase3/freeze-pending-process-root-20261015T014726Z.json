@@ -1,0 +1,17 @@
+{
+  "code_commit": "5cc52122e8a24f1054e86b267368833afa893b01",
+  "type": "fault-injected unknown pending entry; actual two-process restart; no model inference",
+  "checks": {
+    "generation_1_blocks_unknown_and_new_runs": true,
+    "generation_2_blocks_unknown_and_new_runs": true,
+    "true_restart_changed_generation": true,
+    "unknown_pending_retained_after_shutdown": true
+  },
+  "source_runtime_evidence": "evidence/phase3/smoke-freeze-20261015T013300Z.json",
+  "pending_entry_id": "3c1a496b29da45cfbd888cb8e173c16a",
+  "generation_ids": [
+    "74846a1469dd426f8247540c7a0da384",
+    "2c559b5c9a0c4d0c8cc370d2a745c92f"
+  ],
+  "status": "passed"
+}

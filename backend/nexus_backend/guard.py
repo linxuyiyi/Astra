@@ -29,6 +29,7 @@ from . import resources
 from .adapter import AgentScopeHTTPClient, UpstreamError
 from .conversations import _find_session, _parse_session_views
 from .db import Conversation, Database, Employee
+from .employees import prepare_employee_deletion
 
 TOKEN_HEADER = "X-Nexus-Internal-Token"
 
@@ -46,6 +47,28 @@ class AuthorizeRunRequest(BaseModel):
     user_id: str | None = None
     agent_id: str | None = None
     session_id: str | None = None
+
+
+class RunFactRequest(BaseModel):
+    """只读冻结查询请求（任务 3.2.3.1）。
+
+    Agent Service 的 admission / 冻结与 Session 运行锁在放行前用本端点核对
+    真实 Nexus 事实，**绝不**调用完整 ``authorize-run``（那会回查 AgentScope
+    目录并可能形成锁/HTTP 环），也**绝不**取得每员工写锁。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    agent_id: str | None = None
+    session_id: str | None = None
+
+
+class PrepareDeleteRequest(BaseModel):
+    """内部删除准备请求（任务 3.2.3.1）。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    employee_id: str
 
 
 def _token_matches(expected: str | None, provided: str | None) -> bool:
@@ -75,6 +98,18 @@ async def _load_conversation(
 async def _load_employee(db: Database, employee_id: str) -> Employee | None:
     async with db.session() as session:
         return await session.get(Employee, employee_id)
+
+
+async def _load_employee_by_agent_id(
+    db: Database,
+    agent_id: str,
+) -> Employee | None:
+    async with db.session() as session:
+        return (
+            await session.execute(
+                select(Employee).where(Employee.agent_id == agent_id),
+            )
+        ).scalars().first()
 
 
 def _employee_runnable(employee: Employee | None, agent_id: str) -> bool:
@@ -331,3 +366,99 @@ def register_guard_routes(app: FastAPI) -> None:
             # 模型调用前都发生真实检索，且不得沿用官方 log-and-skip。
             "knowledge": list(knowledge_ids),
         }
+
+    @app.post("/api/internal/run-fact", tags=["internal"])
+    async def run_fact(request: Request, payload: RunFactRequest) -> dict:
+        """只读冻结查询：返回真实运行事实，供 Agent Service 放行/冻结判断。
+
+        只做恒定时间秘密比对与**极短数据库读取**：不调用 ``authorize-run``、
+        不查 AgentScope 目录、不取每员工写锁、不做网络 I/O，避免与删除准备
+        持有的员工锁或 AgentScope 调用形成环。任何未知标识、绑定不一致或
+        数据库异常一律 fail-closed（非 200 → 调用方拒绝运行）。
+        """
+        config = request.app.state.nexus_config
+        expected = getattr(config, "internal_token", None)
+        if not expected:
+            raise HTTPException(status_code=503, detail="内部授权未配置。")
+        if not _token_matches(expected, request.headers.get(TOKEN_HEADER)):
+            raise HTTPException(status_code=403, detail="内部授权失败。")
+
+        expected_user = getattr(config, "internal_user_id", None)
+        provided_user = request.headers.get("X-User-ID")
+        if (
+            not expected_user
+            or provided_user is None
+            or provided_user != expected_user
+        ):
+            raise HTTPException(status_code=403, detail="内部租户不匹配。")
+
+        agent_id = payload.agent_id
+        session_id = payload.session_id
+        if not agent_id and not session_id:
+            raise HTTPException(status_code=400, detail="缺少必要标识。")
+
+        db: Database = request.app.state.db
+        conversation: Conversation | None = None
+        employee: Employee | None = None
+        resolved_agent_id: str | None = None
+
+        if session_id:
+            conversation = await _load_conversation(db, session_id)
+            if conversation is None:
+                raise _deny("未知会话，拒绝运行。")
+            if conversation.agent_id is None:
+                raise _deny("会话未绑定 Agent，拒绝运行。")
+            if agent_id and conversation.agent_id != agent_id:
+                raise _deny("会话与 Agent 绑定不一致，拒绝运行。")
+            resolved_agent_id = conversation.agent_id
+            employee = await _load_employee(db, conversation.employee_id)
+        else:
+            employee = await _load_employee_by_agent_id(db, agent_id)
+            resolved_agent_id = agent_id
+
+        if employee is None or employee.agent_id != resolved_agent_id:
+            raise _deny("员工当前不可运行，拒绝。")
+
+        deleting = employee.sync_state == "deleting"
+        runnable = (
+            employee.enabled
+            and employee.sync_state == "ready"
+            and employee.agent_id == resolved_agent_id
+            and (conversation is None or conversation.status == "ready")
+        )
+        return {
+            "runnable": bool(runnable),
+            "deleting": bool(deleting),
+            "operation_id": employee.delete_operation_id if deleting else None,
+            "agent_id": resolved_agent_id,
+            "employee_id": employee.id,
+            "session_id": session_id,
+        }
+
+    @app.post("/api/internal/prepare-delete", tags=["internal"])
+    async def prepare_delete(
+        request: Request,
+        payload: PrepareDeleteRequest,
+    ) -> dict:
+        """内部删除准备：短事务落库删除事实，供后续业务 DELETE 复用。
+
+        与只读查询共用内部秘密校验；只做隔离与事实落库，不等待运行退出、
+        不做归档、不调用原生 DELETE。结果最小脱敏（员工/Agent/操作 ID）。
+        """
+        config = request.app.state.nexus_config
+        expected = getattr(config, "internal_token", None)
+        if not expected:
+            raise HTTPException(status_code=503, detail="内部授权未配置。")
+        if not _token_matches(expected, request.headers.get(TOKEN_HEADER)):
+            raise HTTPException(status_code=403, detail="内部授权失败。")
+        expected_user = getattr(config, "internal_user_id", None)
+        provided_user = request.headers.get("X-User-ID")
+        if (
+            not expected_user
+            or provided_user is None
+            or provided_user != expected_user
+        ):
+            raise HTTPException(status_code=403, detail="内部租户不匹配。")
+        if not payload.employee_id:
+            raise HTTPException(status_code=400, detail="缺少员工标识。")
+        return await prepare_employee_deletion(request, payload.employee_id)

@@ -101,6 +101,14 @@ class Employee(Base):
         nullable=True,
         default=None,
     )
+    # 删除操作身份（任务 3.2.3.1 持久事实源）。一旦员工进入 ``deleting``，
+    # 该 id 稳定不变：重试 prepare 复用同一 id，绝不覆盖既有删除身份，也不
+    # 因为后续状态变化恢复到 ready 放行。未开始删除时为 None。
+    delete_operation_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        default=None,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utcnow,
@@ -201,12 +209,12 @@ class Database:
     async def init(self) -> None:
         """建表并做最小 schema 升级，保持当前开发数据库可用。
 
-        只对已存在的 ``nexus_conversations`` 表补齐本版本新增的 ``create_intent``
-        列；不迁移旧工程数据、不引入版本兼容平台。
+        只对已存在的表补齐本版本新增列；不迁移旧工程数据、不引入版本兼容平台。
         """
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             await self._ensure_conversation_columns(conn)
+            await self._ensure_employee_columns(conn)
 
     async def _ensure_conversation_columns(self, conn) -> None:
         result = await conn.exec_driver_sql(
@@ -216,6 +224,17 @@ class Database:
         if columns and "create_intent" not in columns:
             await conn.exec_driver_sql(
                 "ALTER TABLE nexus_conversations ADD COLUMN create_intent JSON",
+            )
+
+    async def _ensure_employee_columns(self, conn) -> None:
+        result = await conn.exec_driver_sql(
+            "PRAGMA table_info(nexus_employees)",
+        )
+        columns = {row[1] for row in result}
+        if columns and "delete_operation_id" not in columns:
+            await conn.exec_driver_sql(
+                "ALTER TABLE nexus_employees ADD COLUMN delete_operation_id "
+                "VARCHAR(64)",
             )
 
     async def dispose(self) -> None:

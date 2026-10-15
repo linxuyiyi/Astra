@@ -174,6 +174,32 @@ async def _send_json(
     await send({"type": "http.response.body", "body": payload})
 
 
+async def await_real_task(task: "asyncio.Task[Any]") -> None:
+    """等待实际下游任务退出；外层取消时先等真实任务结束再如实抛出。
+
+    供写屏障与运行 admission 共用：shield 保证外层取消不会打断真实下游
+    任务，只有它真正退出后才释放栅栏，避免「已受理但尚未登记」的请求被漏掉。
+    """
+    outer_cancelled: asyncio.CancelledError | None = None
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError as exc:
+            # 外层被取消：shield 保证 task 继续，记住取消并等待其真实退出。
+            outer_cancelled = exc
+            continue
+        except Exception:
+            break
+    if task.cancelled():
+        raise asyncio.CancelledError
+    exc = task.exception()
+    if exc is not None:
+        raise exc
+    if outer_cancelled is not None:
+        # 真实写入已完成并释放锁后，再如实向上传播外层取消。
+        raise outer_cancelled
+
+
 class NativeWriteBarrierMiddleware:
     """按 ``agent_id`` 串行原生 PATCH/DELETE 并校验单调修订的 ASGI 中间件。
 
@@ -235,24 +261,7 @@ class NativeWriteBarrierMiddleware:
 
     async def _await_real_task(self, task: "asyncio.Task[Any]") -> None:
         """等待实际下游任务退出；外层取消时先等真实任务结束再如实抛出。"""
-        outer_cancelled: asyncio.CancelledError | None = None
-        while not task.done():
-            try:
-                await asyncio.shield(task)
-            except asyncio.CancelledError as exc:
-                # 外层被取消：shield 保证 task 继续，记住取消并等待其真实退出。
-                outer_cancelled = exc
-                continue
-            except Exception:
-                break
-        if task.cancelled():
-            raise asyncio.CancelledError
-        exc = task.exception()
-        if exc is not None:
-            raise exc
-        if outer_cancelled is not None:
-            # 真实写入已完成并释放锁后，再如实向上传播外层取消。
-            raise outer_cancelled
+        await await_real_task(task)
 
     async def _handle_managed_create(
         self,

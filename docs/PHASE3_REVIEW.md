@@ -79,3 +79,13 @@ Codex 亲自执行全量 `.venv/bin/python -m pytest -q`：**362 passed in 14.49
 后续真实回归：Codex 从提交 `ddb6e5342aa10a2ed3752e696dd9bf753b81bbf4` 提取隔离源码副本，通过交付控制脚本启动两真实进程，执行 `smoke_resources.py --with-model`，正常退出 0。真实 DeepSeek 回复、所选 HTTP MCP 调用、禁用后运行拒绝、双服务真正重启后的绑定恢复与再次工具调用共 9 项检查通过；证据 `evidence/phase3/smoke-resources-20261015T005716Z.json`。进程停止后只读取索引元数据，10 条消息与 5 条 State 全部 confirmed，unknown digest 为 0，见 `persistence-real-model-root-20261015T005716Z.json`。凭据仅通过环境注入，未写入命令参数或证据。此为新观察装配的真实模型/MCP/重启回归，尚不是冻结/quiesce、业务删除或取消尾部验收。
 
 同一隔离提交的 Knowledge 真实复测：首次因专用 Ollama 11435 未运行而失败，保留 `smoke-knowledge-20261015T010031Z.json`。确认端口无监听后仅重新启动 Nexus 专用模型目录的本机 Ollama，再运行 `smoke_knowledge.py --with-model --keep-evidence`，真实本地 EmbeddingGemma 索引/检索、DeepSeek 按随机文档值回答、异常前置拒绝和双进程重启共 13 项检查通过，正常退出 0，证据 `smoke-knowledge-20261015T010803Z.json`。停进程后索引元数据计数见 `persistence-knowledge-root-20261015T010803Z.json`；所有消息与 State 均 confirmed，无 unknown digest。保留原始失败与成功证据；此结果仍不代替尚在审查的冻结/取消尾部或删除归档验收。
+
+## 任务 3.2.3.1：冻结与排空组件独立审查（2026-10-15）
+
+OpenCode 实现持久 deleting/稳定删除操作、短事务只读 run-fact、共享 Agent admission 栅栏、运行锁取得前后冻结检查、真实 chat/BG Task 取消及自然清理、停写后逐条读回。配置内部秘密时查询不可用即拒绝；freeze/unfreeze 校验内部 token 与精确租户，非法/非有限超时被拒绝。没有业务 DELETE/归档或新 Run 状态机。
+
+Codex 真实 Task/Event 与临时 SQLite 独立复现并交回修复：接管已取消 Task 时二次 cancel 打断尾部；captured Task 仍活跃但 registry 消失时误报排空；慢 writer 未结束时读回把 pending 从1提前清成0；读回期间迟到 registry Task 漏判；取消 handler 不传播；多 Session 逐个读回遗漏早先 Session 的迟到 Task。修复后已重复独立探针：活跃 writer 时 execution/persistence 均 false 且 pending 保持1；单/多 Session 迟到 Task 均阻断；外层取消在安全等待后如实传播。捕获 Task 是否完成始终参与事实判断，首次接管已在取消的对象只登记并等待，全部读回后统一刷新全部 Session 存活事实。
+
+Codex 亲自执行全量 `.venv/bin/python -m pytest -q`：**446 passed in 17.71s，真实退出码0**，两个独立探针也正常退出0；diff check通过。新增脚本负向断言拒绝模型error/空基线、未捕获在途、保存未确认、缺失历史及停止失败冒充通过。资源 smoke 适配真实 admission 409 并保留 guard error 验证，其他上游异常仍失败。
+
+当前为组件与公开框架验收，真实模型进程取消尾部及本实现重启尚待下一步亲自执行；3.2.3.1保持未勾选。执行排空与落盘证明不等于已受理输入完整性，后者仍明确 not_verified；共享发送意图内核已作为 3.2.3.2.1 必要前置纳入唯一 tasks.md，完整私聊/SSE/UI仍留在4.x复用。

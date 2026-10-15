@@ -342,6 +342,28 @@ class ObservedMessageBus(InMemoryMessageBus):
     def __init__(self, index: PersistenceIndex) -> None:
         super().__init__()
         self._index = index
+        # 运行冻结控制：None 表示未配置（保持既有行为）；正式装配会注入。
+        self._freeze_controller: Any = None
+
+    def set_freeze_controller(self, controller: Any) -> None:
+        """注入运行冻结控制（每 Agent admission 栅栏 + 删除事实核对）。"""
+        self._freeze_controller = controller
+
+    async def _guard_frozen(self, session_id: str) -> None:
+        """Session 运行锁放行前的冻结检查；冻结/查询失败一律拒绝。
+
+        与原生 error reporter ``try`` 无关：本检查发生在锁取得前后、原生
+        handler 进入之前，拒绝不会合成 assistant error 尾部。
+        """
+        controller = self._freeze_controller
+        if controller is None:
+            return
+        if await controller.session_blocked(session_id):
+            from .freeze import RunFrozenError
+
+            raise RunFrozenError(
+                "Session 运行已被 Nexus 删除事实冻结，拒绝迟到运行。",
+            )
 
     @asynccontextmanager
     async def acquire_lock(
@@ -377,10 +399,15 @@ class ObservedMessageBus(InMemoryMessageBus):
             yield
             return
 
+        # 冻结检查（等待前）：清理已终止 Session 的迟到 native wakeup。
+        await self._guard_frozen(session_id)
+
         # 关键：先**真正取得原生 Session 运行锁**，再建立/设置当前 scope；任何
         # __aenter__ 失败/取消都不会遗留 scope。排空在锁持有范围内完成——先同步
         # 封盘拒绝新受理，再等待所有已受理 writer 真实退出，之后才释放锁并 reset。
         async with super().acquire_lock(key, ttl_secs=ttl_secs):
+            # 冻结检查（取得后）：等待期间冻结的迟到运行同样必须拒绝。
+            await self._guard_frozen(session_id)
             scope = ObservationScope(session_id, self._index)
             token = _CURRENT_SCOPE.set(scope)
             try:

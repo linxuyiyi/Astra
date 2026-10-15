@@ -61,13 +61,23 @@ evidence/phase3/                     员工管理脱敏验证证据
 - 原生持久写入观察索引（任务 3.2.3.1）：`data/agentscope/persistence/`，
   只保存消息/State 提交证明**摘要**（不保存消息/State 全文），生命周期由服务
   lifespan 管理；打开/校验失败服务不进入就绪。
+
+运行冻结扩展与原生服务同时装配：`POST /chat/` 在同一 Agent 短栅栏内核对 Nexus
+只读运行事实，Session 运行锁取得前后再次核对；员工进入持久 `deleting` 后禁止新
+运行。内部 `POST /nexus/internal/freeze` 需要内部 token 和精确租户，等待真实
+chat/background Task、运行锁与 registry 自然排空，再读回未确认写入；失败或超时
+不允许删除。内部准备操作只保存稳定删除身份，尚未提供业务 DELETE/归档。
+`accepted_input_archival=not_verified` 单独报告，不能将执行排空当作输入归档完整。
+真实模型取消尾部验证命令为 `python scripts/smoke_freeze.py --with-model --keep-evidence`，
+模型凭据仅从环境读取；失败保留数据，缺凭据退出 2 并标 skipped。
+
 - PID：`data/agentscope/run/agentscope.pid`
 - 日志：`data/agentscope/logs/agentscope.log`
 
 Nexus 员工业务扩展持久化在：
 
 - SQLite：`data/nexus-backend/nexus.db`（受 `NEXUS_BACKEND_DATA_DIR` 控制，
-  PostgreSQL/SQLAlchemy 事务只做短状态读写；新库启动时直接建表，不做旧模型
+  SQLite/SQLAlchemy 事务只做短状态读写；新库启动时直接建表，不做旧模型
   迁移）。该库只保存业务分栏、忽略大小写唯一性索引与唯一原生 `agent_id`
   关联；姓名与实际执行 prompt 以 AgentScope 原生 `AgentRecord` 为事实源。
 

@@ -32,6 +32,8 @@ DEFAULT_REQUEST_TIMEOUT = 30.0
 DEFAULT_CONNECT_TIMEOUT = 5.0
 # SSE 心跳间隔 30s；读超时放宽到该值以上，避免把空闲连接误判为断开。
 DEFAULT_STREAM_READ_TIMEOUT = 120.0
+# 服务端内部秘密头（冻结/quiesce 等内部扩展）；绝不下发前端。
+INTERNAL_TOKEN_HEADER = "X-Nexus-Internal-Token"
 
 
 def _status_category(status_code: int) -> str:
@@ -470,6 +472,50 @@ class AgentScopeHTTPClient:
                 return False
             raise
         return True
+
+    async def freeze_agent(
+        self,
+        *,
+        operation_id: str,
+        agent_id: str,
+        session_ids: list[str],
+        token: str,
+        timeout_secs: float | None = None,
+    ) -> dict:
+        """``POST /nexus/internal/freeze``：核对 Nexus 删除事实后冻结并排空。
+
+        携带服务端内部秘密；请求标识必须与真实 Nexus/Storage 绑定一致，否则
+        服务端以 409 明确拒绝。返回最小脱敏排空报告，调用方据此判断是否可进入
+        归档/删除，绝不把 HTTP 200 当作已排空。
+        """
+        body: dict[str, Any] = {
+            "operation_id": operation_id,
+            "agent_id": agent_id,
+            "session_ids": list(session_ids),
+        }
+        if timeout_secs is not None:
+            body["timeout_secs"] = timeout_secs
+        return await self._request(
+            "POST",
+            "/nexus/internal/freeze",
+            json_body=body,
+            extra_headers={INTERNAL_TOKEN_HEADER: token},
+        )
+
+    async def unfreeze_agent(
+        self,
+        *,
+        operation_id: str,
+        agent_id: str,
+        token: str,
+    ) -> dict:
+        """``POST /nexus/internal/unfreeze``：显式释放服务临时冻结。"""
+        return await self._request(
+            "POST",
+            "/nexus/internal/unfreeze",
+            json_body={"operation_id": operation_id, "agent_id": agent_id},
+            extra_headers={INTERNAL_TOKEN_HEADER: token},
+        )
 
     async def list_messages(
         self,

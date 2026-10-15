@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from nexus_backend.adapter import UpstreamError
+
 ROOT = Path(__file__).resolve().parents[2]
 SMOKE_PATH = ROOT / "scripts" / "smoke_resources.py"
 
@@ -50,20 +52,28 @@ def _user(message_id: str) -> dict:
 
 
 class FakeAdapter:
-    """返回 baseline / after 两套完整 history；触发后切换。"""
+    """返回 baseline / after 两套完整 history；触发后切换。
 
-    def __init__(self, before, after, events, *, status="idle"):
+    ``trigger_error`` 非空时 ``trigger_chat`` 抛出该异常（用于模拟 admission
+    直接拒绝等上游错误）。
+    """
+
+    def __init__(self, before, after, events, *, status="idle",
+                 trigger_error=None):
         self._before = before
         self._after = after
         self._events = events
         self._status = status
-        self._triggered = False
+        self._trigger_error = trigger_error
+        self._attempted = False
 
     async def list_messages(self, agent_id, session_id, **kwargs):
         return {"event_cursor": "cursor-1"}
 
     async def trigger_chat(self, agent_id, session_id, input_msg):
-        self._triggered = True
+        self._attempted = True
+        if self._trigger_error is not None:
+            raise self._trigger_error
         return {"status": "started"}
 
     async def stream_events(self, agent_id, session_id, *, after=None):
@@ -74,7 +84,11 @@ class FakeAdapter:
         return {"status": self._status}
 
     async def iter_all_messages(self, agent_id, session_id, **kwargs):
-        return self._after if self._triggered else self._before
+        return self._after if self._attempted else self._before
+
+
+def _upstream(status: int) -> UpstreamError:
+    return UpstreamError("POST", "/chat/", status, "上游拒绝请求")
 
 
 _DENIED_EVENTS = [{"type": "REPLY_END", "finished_reason": "error"}]
@@ -177,4 +191,80 @@ async def test_not_idle_fails(monkeypatch):
 
     monkeypatch.setattr(smoke, "_wait_idle", _fast_wait_idle)
     with pytest.raises(smoke.SmokeError):
+        await smoke._run_guard_denied(adapter, "agent-1", "sess-1")
+
+
+# ----------------------------------------------------------------------
+# admission 直接 409 拒绝路径（禁用/删除中，原生 handler 前拒绝）
+# ----------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_admission_409_with_unchanged_history_passes():
+    """明确 409 且历史无新用户/assistant：算运行 admission 真实阻断。"""
+    adapter = FakeAdapter(
+        _HISTORY,
+        _HISTORY,
+        [],
+        trigger_error=_upstream(409),
+    )
+    result = await smoke._run_guard_denied(adapter, "agent-1", "sess-1")
+    assert result["trigger_status"] == "rejected"
+    assert result["admission_status"] == 409
+    assert result["new_user_messages"] == 0
+    assert result["new_assistant_messages"] == 0
+    assert result["model_call_started"] is False
+    assert result["session_status"] == "idle"
+
+
+@pytest.mark.asyncio
+async def test_admission_409_with_new_assistant_fails():
+    """409 后仍出现新 assistant 执行：不得当作拒绝成功。"""
+    after = _HISTORY + [_user("u-new"), _assistant("a-new", "新成功回复")]
+    adapter = FakeAdapter(
+        _HISTORY,
+        after,
+        [],
+        trigger_error=_upstream(409),
+    )
+    with pytest.raises(smoke.SmokeError):
+        await smoke._run_guard_denied(adapter, "agent-1", "sess-1")
+
+
+@pytest.mark.asyncio
+async def test_admission_409_with_new_user_fails():
+    """409 后仍出现新用户消息：拒绝未真实阻断。"""
+    after = _HISTORY + [_user("u-new")]
+    adapter = FakeAdapter(
+        _HISTORY,
+        after,
+        [],
+        trigger_error=_upstream(409),
+    )
+    with pytest.raises(smoke.SmokeError):
+        await smoke._run_guard_denied(adapter, "agent-1", "sess-1")
+
+
+@pytest.mark.asyncio
+async def test_admission_409_running_session_fails():
+    """409 后会话仍在运行：拒绝未真实阻断。"""
+    adapter = FakeAdapter(
+        _HISTORY,
+        _HISTORY,
+        [],
+        status="running",
+        trigger_error=_upstream(409),
+    )
+    with pytest.raises(smoke.SmokeError):
+        await smoke._run_guard_denied(adapter, "agent-1", "sess-1")
+
+
+@pytest.mark.asyncio
+async def test_non_409_upstream_error_is_not_swallowed():
+    """非 409 上游错误必须如实抛出，绝不吞成拒绝成功。"""
+    adapter = FakeAdapter(
+        _HISTORY,
+        _HISTORY,
+        [],
+        trigger_error=_upstream(500),
+    )
+    with pytest.raises(UpstreamError):
         await smoke._run_guard_denied(adapter, "agent-1", "sess-1")

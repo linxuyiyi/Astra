@@ -74,6 +74,9 @@ SYNC_READY = "ready"
 SYNC_CREATING = "creating"
 SYNC_UPDATING = "updating"
 SYNC_INCOMPLETE = "incomplete"
+# 删除中（任务 3.2.3.1 持久事实源）：非 ready，因此任何人类入口、peer
+# 投递与运行 guard 都会拒绝新运行；业务 DELETE 归档在后续任务实现。
+SYNC_DELETING = "deleting"
 
 # 创建是员工的第一次原生写入，修订从 1 开始单调递增。
 CREATE_REVISION = 1
@@ -226,6 +229,11 @@ def compile_system_prompt(
 
 def new_employee_id() -> str:
     return f"emp_{uuid.uuid4().hex}"
+
+
+def new_delete_operation_id() -> str:
+    """生成稳定的删除操作身份（仅在首次进入删除中时创建一次）。"""
+    return f"del_{uuid.uuid4().hex}"
 
 
 def _required_text(
@@ -980,6 +988,9 @@ async def _reconcile_pending(
         return None, "missing"
     if row.sync_state == SYNC_READY:
         return row, "ready"
+    if row.sync_state == SYNC_DELETING:
+        # 删除中是明确状态：绝不因 reconcile 恢复为 ready 放行。
+        return row, "deleting"
     intent = row.write_intent if isinstance(row.write_intent, dict) else None
 
     if row.agent_id is None:
@@ -1060,6 +1071,69 @@ def _employee_lock(request: Request, key: str) -> asyncio.Lock:
         lock = asyncio.Lock()
         locks[key] = lock
     return lock
+
+
+def _deletion_plan(row: Employee) -> dict:
+    """最小删除计划：稳定操作身份与真实绑定，供后续业务 DELETE 复用心。"""
+    return {
+        "employee_id": row.id,
+        "agent_id": row.agent_id,
+        "operation_id": row.delete_operation_id,
+        "sync_state": row.sync_state,
+    }
+
+
+async def prepare_employee_deletion(request: Request, employee_id: str) -> dict:
+    """在现有员工锁内用**短事务**持久化删除事实（任务 3.2.3.1）。
+
+    只做隔离与事实落库，不等待运行退出、不做归档、不调用原生 DELETE：
+
+    * 现有未完成的创建/编辑（``creating``/``updating``/``incomplete``）一律
+      拒绝，绝不在未确认写入上启动删除；
+    * 首次进入时生成稳定 ``delete_operation_id`` 并把 ``sync_state`` 置为
+      ``deleting``（同时禁用，绝不因删除中而仍可运行）；重试**幂等**返回同一
+      操作身份，绝不覆盖既有身份，也绝不恢复为 ``ready`` 放行；
+    * 整个函数在每员工 ``asyncio.Lock`` 内、且只有极短数据库事务；等待运行
+      退出（quiesce）由调用方在**释放锁后**通过 Agent Service 完成；
+    * 返回最小脱敏事实（员工/Agent/操作 ID），不含 prompt、配置或密钥。
+    """
+    db: Database = request.app.state.db
+    lock = _employee_lock(request, employee_id)
+    async with lock:
+        row = await _reload_row(db, employee_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="员工不存在。")
+        if row.sync_state == SYNC_DELETING:
+            return _deletion_plan(row)
+        if row.sync_state != SYNC_READY:
+            raise HTTPException(
+                status_code=409,
+                detail=_pending_detail(
+                    employee_id,
+                    sync_state=row.sync_state,
+                    message=(
+                        "该员工存在未完成的创建或编辑，请先调用 reconcile "
+                        "核对为一致状态后再删除。"
+                    ),
+                ),
+            )
+
+        operation_id = row.delete_operation_id or new_delete_operation_id()
+        async with db.session() as session:
+            current = await session.get(Employee, employee_id)
+            if current is None:
+                raise HTTPException(status_code=404, detail="员工不存在。")
+            # 锁内串行已排除并发；短事务只写最少事实：删除中、操作身份、
+            # 禁用。绝不把网络 I/O 放进事务。
+            current.sync_state = SYNC_DELETING
+            current.delete_operation_id = operation_id
+            current.enabled = False
+            await session.commit()
+
+        refreshed = await _reload_row(db, employee_id)
+        if refreshed is None:
+            raise HTTPException(status_code=404, detail="员工不存在。")
+        return _deletion_plan(refreshed)
 
 
 def register_employee_routes(app: FastAPI) -> None:
@@ -1358,6 +1432,16 @@ def register_employee_routes(app: FastAPI) -> None:
             row = await _reload_row(db, employee_id)
             if row is None:
                 raise HTTPException(status_code=404, detail="员工不存在。")
+            if row.sync_state == SYNC_DELETING:
+                # 删除中禁止编辑/启停，绝不恢复为 ready 放行。
+                raise HTTPException(
+                    status_code=409,
+                    detail=_pending_detail(
+                        employee_id,
+                        sync_state=row.sync_state,
+                        message="该员工正在删除中，拒绝编辑。",
+                    ),
+                )
 
             # 先恢复此前的未完成写入，再在同一串行边界内执行本次编辑。
             try:
@@ -1664,6 +1748,16 @@ def register_employee_routes(app: FastAPI) -> None:
 
             if status in ("ready", "recovered", "reverted"):
                 return await _public_row_safe(adapter, row)
+
+            if status == "deleting":
+                raise HTTPException(
+                    status_code=409,
+                    detail=_pending_detail(
+                        employee_id,
+                        sync_state=row.sync_state,
+                        message="该员工正在删除中，reconcile 不会恢复为可运行。",
+                    ),
+                )
 
             if status == "not_found":
                 confirm = bool(payload and payload.confirm_not_created)

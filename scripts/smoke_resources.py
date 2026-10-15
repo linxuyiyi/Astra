@@ -40,7 +40,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT / "tests" / "backend"))
 
-from nexus_backend.adapter import AgentScopeHTTPClient  # noqa: E402
+from nexus_backend.adapter import AgentScopeHTTPClient, UpstreamError  # noqa: E402
 from mcp_fixture_http import (  # noqa: E402
     HTTP_MCP_NAME as MCP_NAME,
     SELECTED_TOOL,
@@ -225,6 +225,54 @@ def _assistant_text(message: dict) -> str:
     )
 
 
+async def _confirm_admission_rejected(
+    adapter,
+    agent_id: str,
+    session_id: str,
+    baseline_ids: set,
+) -> dict:
+    """admission 明确拒绝（409）：读回历史/状态确认无新用户/assistant 执行。
+
+    只有 ``409`` 才算「运行 admission 真实阻断」；读回必须证明没有新的用户或
+    assistant 消息、会话未在运行。旧历史仅按 ID 差分归因，绝不污染。
+    """
+    messages = await adapter.iter_all_messages(agent_id, session_id)
+    new_users = [
+        message
+        for message in messages
+        if message.get("id") not in baseline_ids
+        and message.get("role") == "user"
+    ]
+    new_assistants = [
+        message
+        for message in messages
+        if message.get("id") not in baseline_ids
+        and message.get("role") == "assistant"
+    ]
+    if new_users:
+        raise SmokeError("admission 409 拒绝后仍出现新的用户消息，拒绝未真实阻断")
+    if new_assistants:
+        raise SmokeError(
+            "admission 409 拒绝后仍出现新的 assistant 执行，拒绝未真实阻断",
+        )
+    status = await adapter.get_session_status(agent_id, session_id)
+    if status.get("status") == "running":
+        raise SmokeError("admission 409 拒绝后会话仍在运行")
+    return {
+        "trigger_status": "rejected",
+        "admission_status": 409,
+        "model_call_started": False,
+        "event_types": [],
+        "end_event": None,
+        "finished_reason": None,
+        "text": "",
+        "new_user_messages": 0,
+        "new_assistant_messages": 0,
+        "new_assistant_texts": [],
+        "session_status": status.get("status"),
+    }
+
+
 async def _run_guard_denied(adapter, agent_id: str, session_id: str) -> dict:
     """guard 应拒绝时触发原生 /chat：确认未发生模型调用、本轮无成功回复。
 
@@ -233,17 +281,35 @@ async def _run_guard_denied(adapter, agent_id: str, session_id: str) -> dict:
     的消息（按新 ID）。既有正常历史的回复绝不能被算作本轮 guard 回复，也不能
     因为 joined 里含一个 guard 词就吞掉本轮另一条正常新回复；本轮出现的原生
     error 记录（空/明确拒绝）不算成功回复，但任何新的正常成功回复都必须失败。
+
+    两条真实拒绝路径都接受，且都必须读到真实阻断事实：
+
+    * **admission 直接 409**（禁用/删除中，运行 admission 在原生 handler 前
+      拒绝）：不得误当异常吞成成功，只有 409 走读回确认路径；其它上游错误如实
+      抛出。
+    * **原生 guard error**：``POST /chat`` 仍返回 ``started``，本轮 SSE 以
+      ``finished_reason=error`` 结束且无 ``MODEL_CALL_START``——保留原有检查。
     """
     baseline_ids = {
         message.get("id")
         for message in await adapter.iter_all_messages(agent_id, session_id)
     }
-    result = await _collect_events(
-        adapter,
-        agent_id,
-        session_id,
-        timeout=30.0,
-    )
+    try:
+        result = await _collect_events(
+            adapter,
+            agent_id,
+            session_id,
+            timeout=30.0,
+        )
+    except UpstreamError as exc:
+        if exc.status_code != 409:
+            raise
+        return await _confirm_admission_rejected(
+            adapter,
+            agent_id,
+            session_id,
+            baseline_ids,
+        )
     if result["model_call_started"]:
         raise SmokeError("guard 拒绝时仍发生了 MODEL_CALL_START")
     # 必须确有本轮 REPLY_END 且 finished_reason 明确为 error：None（断流/超时/

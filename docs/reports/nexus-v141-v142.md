@@ -46,7 +46,7 @@ v1.4.0 的底部下拉导航割裂主入口，私聊/群聊两套页面，配置
 - API URL helper 覆盖 central client、workspace XHR 上传、knowledge 上传/下载；实测 workspace SKILL.md 上传 201 并回读，知识文档路径返回 AgentScope JSON（真实 KB 上传需 embedding 凭据，隔离服务未配置）。
 - 原生写入回读：隔离用户 Agent 重命名后官方 UI 显示，再恢复；MCP 重命名/禁用后 API/UI 回读，再恢复。
 - 隔离服务：端口 18001、Redis DB 9、临时 workspace/Qdrant/blob；health `skill_hubs=ok`、`mcp_hubs=ok`；真实 ClawHub/GitHub Registry 列表、测试 Skill/MCP 安装。未触碰原 18000/18120 数据。
-- 部署：Vite preview 与 nginx 均配置 `/agentscope-api/` 代理和 `/agentscope-ui/` 深链接回退；保留 `X-User-ID`。
+- 部署：Vite preview 与 nginx 均配置 `/agentscope-api/` 代理和 `/agentscope-ui/` 深链接回退；保留 `X-User-ID`；nginx 上传上限 64 MB、SSE 不缓冲、长连接超时。
 
 ## 验证
 
@@ -83,4 +83,5 @@ v1.4.0 的底部下拉导航割裂主入口，私聊/群聊两套页面，配置
 - 官方 UI 使用隔离的真实 AgentScope 2.0.10 与真实 Hub，但未在共享生产 Redis 上创建/删除资源。
 - 真实知识文档上传需要 embedding 凭据；隔离服务未配置，因此只验证同源路径到达 AgentScope 并返回 JSON。
 - 官方 UI 产物约 15 MB，构建有 chunk size 警告；未做裁剪/多版本兼容。
+- Vite preview 的 `/agentscope-ui/skill` 深链接、`/agentscope-api/health`、workspace SKILL.md 上传已实测；nginx 配置已审查但本机未运行 nginx 做等价运行时验证。
 - `test_live_agentscope.py` 4 项、`test_gateway_data_plane.py` 3 项因缺少 live/Redis 环境跳过。

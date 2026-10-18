@@ -1,6 +1,6 @@
 <template>
   <ElContainer direction="vertical" class="digital-library-page" data-testid="digital-library-page">
-    <AstraPageHeader title="数字图书馆" testid="library-header">
+    <AstraPageHeader title="数字图书馆" hide-title testid="library-header">
       <template #actions>
         <ElButton :icon="RefreshCw" :loading="refreshing" data-testid="library-refresh" @click="refreshAll">刷新</ElButton>
         <template v-if="permissions?.can_manage">
@@ -483,7 +483,7 @@ function normalizeSpaces(nodes: KnowledgeSpace[]): KnowledgeSpace[] {
 <style scoped>
 /* 标题区、筛选面板、表格面板与页脚统一走 styles/page-layout.css。
    本页只保留「左目录树 + 右知识表格」的双栏骨架与页面独有的排版。 */
-.digital-library-page{height:calc(100vh - 260px);min-height:480px;padding:0 0 18px;overflow:hidden;gap:14px;background:var(--astra-bg-base)}
+.digital-library-page{height:100%;min-height:480px;padding:0 0 18px;overflow:hidden;gap:14px;background:var(--astra-bg-base)}
 .digital-library-page>.astra-page-header{flex:none}
 .hidden-input{display:none}
 .library-body{--el-main-padding:0;display:flex;flex:1 1 auto;min-height:0;flex-direction:column;gap:12px}
@@ -498,5 +498,5 @@ function normalizeSpaces(nodes: KnowledgeSpace[]): KnowledgeSpace[] {
 .move-knowledge-card select{height:var(--astra-control-height);padding:0 9px;color:var(--astra-text-primary);border:1px solid var(--astra-border);border-radius:8px;background:#fff;font:inherit}
 .delete-blocked{display:grid;gap:8px}.delete-blocked p{margin:0;color:var(--astra-text-secondary);line-height:1.6}.delete-blocked p strong{color:var(--astra-text-primary)}
 @media(max-width:1100px){.library-aside{--el-aside-width:270px}}
-@media(max-width:780px){.digital-library-page{height:auto;min-height:calc(100vh - 260px);overflow:visible}.library-workspace{min-height:420px}.library-aside{flex:none;height:300px;--el-aside-width:auto}.library-content{min-height:420px}.library-service-reason{max-width:100%}}
+@media(max-width:780px){.digital-library-page{height:auto;min-height:100%;overflow:visible}.library-workspace{min-height:420px}.library-aside{flex:none;height:300px;--el-aside-width:auto}.library-content{min-height:420px}.library-service-reason{max-width:100%}}
 </style>

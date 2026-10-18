@@ -14,9 +14,9 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  height: calc(100vh - 260px);
-  min-height: 520px;
-  padding: 0 0 18px;
+  height: 100%;
+  min-height: 0;
+  padding: 0 0 12px;
   overflow: hidden;
 }
 
@@ -41,6 +41,17 @@
   color: var(--astra-text-primary);
   font-size: var(--astra-font-section);
   line-height: 1.4;
+}
+
+.astra-page-header--compact { align-items: center; }
+.astra-page-header--compact .astra-page-header__lead { flex: 1 1 auto; }
+.astra-page-header__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .astra-page-header__desc {
@@ -152,8 +163,66 @@
 .el-card__body > .el-empty { padding: 40px 0; }
 
 @media (max-width: 900px) {
-  .astra-page { height: auto; min-height: calc(100vh - 68px); overflow: visible; }
+  .astra-page { height: auto; min-height: 0; overflow: visible; }
   .astra-table-panel { min-height: 480px; }
   .astra-filter__select { width: 132px; }
   .astra-filter__search { margin-left: 0; }
 }
+
+
+/* ── 配置中心 / 网关统一内容壳 ─────────────────────────────────────────
+   右侧只有一张 ElCard 作为工作台，子页的分区卡片去掉重复边框，
+   用标题分隔线和表格组织内容。 */
+.content-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 12px;
+}
+.content-shell > .el-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  overflow: auto;
+}
+.content-shell .el-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.content-shell .el-card .el-card__header {
+  padding-left: 0;
+  padding-right: 0;
+  border-bottom: 1px solid var(--astra-border);
+}
+.content-shell .el-card .el-card__body {
+  padding-left: 0;
+  padding-right: 0;
+}
+.content-shell .astra-filter {
+  border: 0;
+  border-bottom: 1px solid var(--astra-border);
+  border-radius: 0;
+  background: transparent;
+  padding-left: 0;
+  padding-right: 0;
+}
+.content-shell .astra-table-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.content-shell .panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.content-shell .gateway-overview__metrics .el-card {
+  border-right: 1px solid var(--astra-border);
+  border-radius: 0;
+}
+.content-shell .gateway-overview__metrics .el-card:last-child { border-right: 0; }

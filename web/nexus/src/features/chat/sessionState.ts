@@ -30,6 +30,16 @@ export function streamCursor(current: string, eventId: unknown): string {
   return typeof eventId === "string" && /^\d+-\d+$/.test(eventId) ? eventId : current;
 }
 
+export function maxCursor(left: string, right: string): string {
+  if (!left) return right;
+  if (!right) return left;
+  const parse = (value: string) => value.split("-").map((part) => Number(part) || 0);
+  const [leftReply, leftIndex] = parse(left);
+  const [rightReply, rightIndex] = parse(right);
+  if (rightReply !== leftReply) return rightReply > leftReply ? right : left;
+  return rightIndex >= leftIndex ? right : left;
+}
+
 export function selectionIsCurrent(
   selectedKey: string,
   expectedKey: string,

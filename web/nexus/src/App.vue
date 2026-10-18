@@ -5,9 +5,17 @@
         <div class="mark">✦</div>
         <div class="brandname">NEXUS <span class="version">v1.4.1</span></div>
       </div>
-      <span class="env-banner">
+      <nav class="top-nav" aria-label="页面导航">
+        <router-link
+          v-for="item in navItems"
+          :key="item.to"
+          :to="item.to"
+          :class="{ active: item.active }"
+        >{{ item.label }}</router-link>
+      </nav>
+      <span class="env-banner" :title="banner">
         <i class="dot" :class="{ off: !runtime?.reachable }"></i>
-        {{ banner }}
+        <span class="env-text">{{ banner }}</span>
       </span>
     </header>
     <main class="page">
@@ -20,14 +28,6 @@
       </form>
       <router-view v-else-if="identity === 'ready'" />
     </main>
-    <nav class="dock" aria-label="页面导航">
-      <router-link
-        v-for="item in navItems"
-        :key="item.to"
-        :to="item.to"
-        :class="{ active: item.active }"
-      >{{ item.label }}</router-link>
-    </nav>
     <AstraConfirmHost />
   </div>
 </template>
@@ -53,6 +53,7 @@ const navItems = computed(() => [
     active: route.path.startsWith("/settings") || route.path.startsWith("/employees") || route.path.startsWith("/workers"),
   },
 ]);
+
 const runtime = ref<RuntimeStatus | null>(null);
 const identity = ref<"loading" | "ready" | "ask">("loading");
 const uidDraft = ref("");
@@ -81,15 +82,26 @@ onMounted(async () => {
   try {
     runtime.value = await getRuntime();
   } catch {
-    runtime.value = { agentscope_version: "2.0.10", configured: false, reachable: false, ui_url: "" };
+    runtime.value = { agentscope_version: "2.0.10", configured: false, reachable: false, ui_url: "", agentscope_user_id: "nexus" };
   }
 });
 </script>
 
 <style scoped>
-.dock a.active, .dock a.router-link-active { background: #dff3e7; color: #147d59; font-weight: 750; }
+.top-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.top-nav a {
+  padding: 7px 12px; border-radius: 10px; color: #6c897a; text-decoration: none;
+  white-space: nowrap; font-size: 13px;
+}
+.top-nav a:hover { background: #edf7f1; color: #187956; }
+.top-nav a.active { background: #dff3e7; color: #147d59; font-weight: 750; }
+.env-text { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .uid-gate { display: flex; gap: 12px; align-items: end; max-width: 420px; }
 .uid-gate label { display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .uid-gate input { padding: 8px 10px; border: 1px solid #c9ddd2; border-radius: 8px; }
 .uid-gate button { padding: 8px 14px; border: 0; border-radius: 8px; background: #187956; color: white; }
+@media (max-width: 900px) {
+  .env-text { max-width: 120px; }
+  .top-nav a { padding: 6px 9px; }
+}
 </style>

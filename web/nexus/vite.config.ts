@@ -34,17 +34,57 @@ function missingWorkspaceBundle(): Plugin {
   };
 }
 
+// 官方 AgentScope Web UI 以 history 路由挂在 /agentscope-ui/。静态资源直接命中 public，
+// 其余无扩展名路径回退到官方 index.html，避免被 Nexus 自己的 SPA 兜底。
+function agentscopeUiSpa(): Plugin {
+  const rewrite = (req: { url?: string }) => {
+    const url = (req.url ?? "").split("?")[0];
+    if (url === "/agentscope-ui" || url === "/agentscope-ui/") {
+      req.url = "/agentscope-ui/index.html";
+      return;
+    }
+    if (!url.startsWith("/agentscope-ui/")) return;
+    if (url.startsWith("/agentscope-ui/assets/") || path.extname(url)) return;
+    req.url = "/agentscope-ui/index.html";
+  };
+  return {
+    name: "agentscope-ui-spa",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        rewrite(req);
+        next();
+      });
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        rewrite(req);
+        next();
+      });
+    },
+  };
+}
+
+const proxy = {
+  "/api/v1": process.env.VITE_NEXUS_API_PROXY_TARGET ?? "http://127.0.0.1:18120",
+  "/api": process.env.VITE_PROXY_TARGET ?? "http://127.0.0.1:18100",
+  "/v1": process.env.VITE_GATEWAY_PROXY_TARGET ?? "http://127.0.0.1:18110",
+  "/agentscope-api": {
+    target: process.env.VITE_AGENTSCOPE_PROXY_TARGET ?? "http://127.0.0.1:18000",
+    changeOrigin: false,
+    rewrite: (requestPath: string) => requestPath.replace(/^\/agentscope-api/, ""),
+  },
+};
+
 export default defineConfig({
-  plugins: [vue(), missingWorkspaceBundle()],
+  plugins: [vue(), missingWorkspaceBundle(), agentscopeUiSpa()],
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   server: {
     port: 15174,
-    proxy: {
-      "/api/v1": "http://127.0.0.1:18120",
-      "/api": "http://127.0.0.1:18100",
-      "/v1": "http://127.0.0.1:18110",
-    },
+    proxy,
+  },
+  preview: {
+    proxy,
   },
 });

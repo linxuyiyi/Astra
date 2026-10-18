@@ -1,133 +1,78 @@
 <template>
-  <div class="astra-page" data-testid="agentscope-page">
-    <AstraPageHeader title="AgentScope" testid="agentscope-header">
-      <template #actions>
+  <div class="astra-page agentscope-page" data-testid="agentscope-page">
+    <div class="agentscope-toolbar">
+      <div class="agentscope-status">
+        <ElTag :type="runtime?.reachable ? 'success' : 'danger'">{{ runtime?.reachable ? "可达" : "不可达" }}</ElTag>
+        <span>AgentScope {{ runtime?.agentscope_version ?? "2.0.10" }}</span>
+      </div>
+      <div class="agentscope-actions">
         <ElButton :icon="RefreshCw" :loading="loading" @click="load">刷新</ElButton>
-        <ElButton v-if="runtime?.ui_url" type="primary" :icon="ExternalLink" @click="openUi">打开管理界面</ElButton>
-      </template>
-    </AstraPageHeader>
+        <ElButton :icon="ExternalLink" @click="openWindow">新窗口打开</ElButton>
+      </div>
+    </div>
 
-    <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error">
-      <ElButton type="primary" @click="load">重试</ElButton>
-    </ElAlert>
+    <ElAlert v-if="error" type="warning" show-icon :closable="false" :title="error" />
 
-    <ElAlert
-      v-if="runtime && !runtime.ui_url"
-      type="info"
-      show-icon
-      :closable="false"
-      title="当前部署未配置 AgentScope 图形管理入口"
-    >
-      <p>Agent、Session、Skill、Knowledge 与记忆由 AgentScope 管理；Nexus 不保存第二套数据，也不在此页面伪造 Skill/MCP 管理。</p>
-      <p>如需外部管理界面，请由部署方配置 <code>NEXUS_AGENTSCOPE_UI_URL</code>。</p>
-    </ElAlert>
-
-    <ElCard shadow="never">
-      <template #header><h3 class="agentscope-card__title">运行状态</h3></template>
-      <ElDescriptions :column="3" border size="small">
-        <ElDescriptionsItem label="版本">{{ runtime?.agentscope_version ?? "—" }}</ElDescriptionsItem>
-        <ElDescriptionsItem label="配置">
-          <ElTag :type="runtime?.configured ? 'success' : 'info'">{{ runtime?.configured ? "已配置" : "未配置" }}</ElTag>
-        </ElDescriptionsItem>
-        <ElDescriptionsItem label="连接">
-          <ElTag :type="runtime?.reachable ? 'success' : 'danger'">{{ runtime?.reachable ? "可达" : "不可达" }}</ElTag>
-        </ElDescriptionsItem>
-      </ElDescriptions>
-    </ElCard>
-
-    <section class="agentscope-grid">
-      <ElCard v-for="catalog in catalogs" :key="catalog.key" shadow="never">
-        <template #header>
-          <div class="agentscope-card__head">
-            <h3 class="agentscope-card__title">{{ catalog.label }}</h3>
-            <ElText type="info">{{ catalog.available ? `${catalog.items.length} 项` : "不可读取" }}</ElText>
-          </div>
-        </template>
-        <div v-if="catalog.available" class="agentscope-tags">
-          <ElTag v-for="item in catalog.items" :key="item.id" effect="plain">{{ item.name }}</ElTag>
-          <ElText v-if="!catalog.items.length" type="info">暂无</ElText>
-        </div>
-        <ElText v-else type="info">{{ catalog.error || "AgentScope 未连接或接口不可用" }}</ElText>
-      </ElCard>
-    </section>
+    <iframe
+      v-if="ready"
+      :key="iframeKey"
+      class="agentscope-frame"
+      src="/agentscope-ui/"
+      title="AgentScope 管理界面"
+      data-testid="agentscope-frame"
+    />
+    <div v-else class="agentscope-loading">正在载入 AgentScope 管理界面…</div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ExternalLink, RefreshCw } from "lucide-vue-next";
 import { onMounted, ref } from "vue";
-import {
-  ElAlert,
-  ElButton,
-  ElCard,
-  ElDescriptions,
-  ElDescriptionsItem,
-  ElTag,
-  ElText,
-} from "element-plus";
-import { getKnowledge, getRuntime, getSkills, getTools } from "@/api";
-import AstraPageHeader from "@/components/astra/AstraPageHeader.vue";
-import type { ResourceCatalog, RuntimeStatus, SkillItem } from "@/types";
-
-interface CatalogView {
-  key: string;
-  label: string;
-  available: boolean;
-  items: SkillItem[];
-  error: string;
-}
+import { ElAlert, ElButton, ElTag } from "element-plus";
+import { getRuntime } from "@/api";
+import type { RuntimeStatus } from "@/types";
 
 const runtime = ref<RuntimeStatus | null>(null);
 const loading = ref(false);
 const error = ref("");
-const catalogs = ref<CatalogView[]>([
-  { key: "skills", label: "Skill", available: false, items: [], error: "" },
-  { key: "knowledge", label: "Knowledge", available: false, items: [], error: "" },
-  { key: "tools", label: "Tool", available: false, items: [], error: "" },
-]);
+const ready = ref(false);
+const iframeKey = ref(0);
 
-function toView(key: string, label: string, catalog: ResourceCatalog): CatalogView {
-  return { key, label, available: catalog.available, items: catalog.items, error: catalog.available ? "" : "AgentScope 接口不可用" };
+function seedUiContext() {
+  const userId = runtime.value?.agentscope_user_id?.trim() || "nexus";
+  localStorage.setItem("server_url", "/agentscope-api/");
+  localStorage.setItem("username", userId);
 }
 
 async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [runtimeValue, skills, knowledge, tools] = await Promise.all([
-      getRuntime(),
-      getSkills().catch(() => ({ available: false, items: [] })),
-      getKnowledge().catch(() => ({ available: false, items: [] })),
-      getTools().catch(() => ({ available: false, items: [] })),
-    ]);
-    runtime.value = runtimeValue;
-    catalogs.value = [
-      toView("skills", "Skill", skills),
-      toView("knowledge", "Knowledge", knowledge),
-      toView("tools", "Tool", tools),
-    ];
+    runtime.value = await getRuntime();
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : "无法读取 AgentScope 状态";
     runtime.value = null;
+    error.value = reason instanceof Error ? reason.message : "无法读取 AgentScope 状态";
   } finally {
+    seedUiContext();
+    ready.value = true;
+    iframeKey.value += 1;
     loading.value = false;
   }
 }
 
-function openUi() {
-  if (!runtime.value?.ui_url) return;
-  window.open(runtime.value.ui_url, "_blank", "noopener,noreferrer");
+function openWindow() {
+  seedUiContext();
+  window.open("/agentscope-ui/", "_blank", "noopener");
 }
 
 onMounted(load);
 </script>
 
 <style scoped>
-.agentscope-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
-.agentscope-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.agentscope-card__title { margin: 0; font-size: var(--astra-font-label); }
-.agentscope-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.astra-page p { margin: 4px 0; }
-.astra-page code { padding: 1px 4px; border-radius: 4px; background: #f2f7f4; font-family: ui-monospace, monospace; }
-@media (max-width: 1000px) { .agentscope-grid { grid-template-columns: 1fr; } }
+.agentscope-page { gap: 10px; }
+.agentscope-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; flex: none; }
+.agentscope-status { display: flex; align-items: center; gap: 8px; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); }
+.agentscope-actions { display: flex; gap: 8px; margin-left: auto; }
+.agentscope-frame { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; border-radius: 8px; background: #fff; }
+.agentscope-loading { flex: 1 1 auto; display: grid; place-items: center; color: var(--astra-text-muted); }
 </style>

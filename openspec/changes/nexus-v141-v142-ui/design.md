@@ -6,29 +6,33 @@ v1.4.0 前端已经有员工目录、私聊、团队交流、任务、Worker、�
 
 **Goals:**
 
-- 五个底部主入口直达，配置管理收口到 `/settings/*`，旧路径保持可达。
+- 五个顶部主入口直达，配置管理收口到 `/settings/*`，旧路径保持可达。
 - 用单个 `DigitalEmployeeChatView` 统一联系人/群组，共用列表、消息、输入附件与右侧 Tab；两个适配器分别对接原私聊和群组 API、Session 与事件流。
 - 会话切换时取消旧流、隔离草稿/附件/流式状态，防止异步回包串屏。
 - 联系人任务按当前会话筛选，群组任务按 `source_channel_id` 筛选。
 - 去掉解释性页头与机制话术，保留错误、校验、部署进度、人工确认和真实回复。
-- 交付网关 v1.4.2 可审阅设计稿；生产布局等设计确认后再改。
+- 交付网关 v1.4.2 设计稿并按确认口径实施生产布局。
+- 配置中心承载官方 AgentScope Web UI，启用 2.0.10 原生 Skill/MCP Hub，不另造管理数据系统。
 
 **Non-Goals:**
 
 - 不合并联系人/群组的服务端会话模型，不更换 AgentScope Session。
-- 不新增 Skill/MCP/Session/Memory 后端，不伪造 AgentScope 管理能力。
+- 不新增 Nexus 自制的 Skill/MCP/Session/Memory 管理后端；官方 UI 直接访问 AgentScope 原生 API。
 - 不改任务状态机、Worker 调度、网关代理/健康/路由/限流/熔断/重试/鉴权/日志审计与数据库契约。
-- 本次不实施网关生产布局改动。
 
 ## Decisions
 
 ### 导航与路由
 
-- `App.vue` 改为五个 `router-link`，不使用 `el-dropdown`。高亮通过 `route.path` 前缀匹配。
+- `App.vue` 顶部 header 放五个 `router-link`，不使用 `el-dropdown`，不保留底部 dock。高亮通过 `route.path` 前缀匹配；品牌与连接状态压缩为同一行。
+- `.app` 在桌面使用 `height: 100dvh`，`.page` / 路由根 / workspace 用 `flex: 1 1 auto; min-height: 0` 撑满视口；窄屏改为整页滚动。
+- 页面去掉重复大标题，`AstraPageHeader` 增加 `hide-title`（`title` 仍作 `aria-label`，actions/default 插槽保留），操作栏与筛选保留。
+- 新建群组“＋”固定在左栏搜索旁；群组编辑仍在当前群组操作区。
 - 根路径 `/` 重定向到 `/chat`。
-- `/settings` 为父布局（`ElContainer + ElAside + ElMenu + RouterView`），与 `GatewayView.vue` 同款结构。
+- `/settings` 与 `/gateway/*` 为 `ElContainer + ElAside + ElMenu`，右侧一张 `ElCard.content-shell` 承载 `RouterView`；子页去掉重复外层大标题和包裹卡，内部用 toolbar/分区/分隔线/表格。
+- 去掉各页重复大标题；`AstraPageHeader` 的 `hide-title` 保留 actions/default 插槽，`title` 仍作 `aria-label`。
 - 旧路径使用重定向：`/employees → /settings/employees`、`/workers → /settings/workers`、`/workers/:id → /settings/workers/:id`、`/interventions → /tasks?view=interventions`、`/team → /chat`（带 `group` 参数时保留）。
-- 任务大厅内部用 `view=list|interventions` 查询参数切换“任务列表/待处理”，复用现有待处理视图逻辑，不再占底部入口。
+- 任务大厅内部用 `view=list|interventions` 查询参数切换“任务列表/待处理”，复用现有待处理视图逻辑，不再占主导航入口。
 
 ### 统一聊天
 
@@ -38,6 +42,7 @@ v1.4.0 前端已经有员工目录、私聊、团队交流、任务、Worker、�
   - `GroupChatAdapter`：封装 `listChannels`、`channelTimeline`、`sendChannel`、频道事件流与成员流。
 - 两个适配器暴露统一接口：`load()`、`send()`、`follow()`、`taskQuery()`。视图不直接拼两套 API。
 - 会话状态按 `contact:<employeeId>` / `group:<channelId>` 隔离：`draft`、`attachments`、`messages`、`liveLines`、`notice`、`abortController`、`generation token`。
+- 进行中的流式前缀由适配器按会话持久（`liveText` / `liveTools` / `liveState`），切换只 abort 流，不丢已收到前缀；`REPLY_END` 清理，游标与 seen 跨 follow 保留。
 - 切换会话立即 abort 旧流并递增 token；所有异步回调在写入状态前校验 session key 与 token。
 - 私聊适配器在选中联系人时 `createConversation`（后端保证一人一条私聊）；群组适配器按频道加载。
 - 联系人任务：调用 `/api/tasks?source_session_id=<agentscope session>`；会话尚未建立 Session 时按 `source_conversation_id=<conversation id>` 查询。群组：`source_channel_id=<channel id>`。
@@ -57,11 +62,15 @@ v1.4.0 前端已经有员工目录、私聊、团队交流、任务、Worker、�
 - `contact_employee` 返回结构化轻量 JSON：成功 `{"ok": true, "peer": "...", "status": "delivered"}`；失败 `{"ok": false, "peer": "...", "error": "..."}`。Agent 仍可读取结果推理。
 - 聊天工具区只在 `tool.name === "contact_employee"` 时解析结构化结果并显示“已联系 XX”/“联系失败：原因”；其它工具保留受控详情。不对任意模型正文做关键词过滤。
 
-### AgentScope 入口
+### AgentScope 官方管理 UI
 
-- 现有部署没有可验证的 AgentScope 图形管理 UI，Nexus 不内嵌、不复制 Skill/MCP/Session/Memory 管理。
-- 配置中心提供 `/settings/agentscope`：展示 AgentScope 版本、配置与可达状态；若部署设置可选 `NEXUS_AGENTSCOPE_UI_URL`，显示“打开 AgentScope 管理界面”外部入口；否则明确说明当前部署未提供图形管理入口。
-- `/api/v1/runtime` 增加可选 `ui_url` 字段用于该入口，不改变已有字段。
+- 上游：`agentscope-ai/agentscope` v2.0.10，commit `e6c014f0be49b2a6f6f62a9453082a0b975484e1`，`examples/web_ui/frontend`。已核对 GitHub tag 指向该 commit。
+- 构建产物放在 `web/nexus/public/agentscope-ui/`，以 `/agentscope-ui/` 提供；只做三处最小适配：React Router `basename: '/agentscope-ui'`、API 基址支持 `/agentscope-api/` 路径前缀、`index.html` 写入同源默认 `server_url`/`username`。不复制官方业务后端。
+- `AgentscopeView` 用 iframe 承载 `/agentscope-ui/`，并可在新窗口打开；不使用状态页或文字链接替代。
+- 同源 API 代理 `/agentscope-api/` -> AgentScope `18000`（开发 Vite proxy，生产 nginx），保留 `X-User-ID`。`/api/v1/runtime` 返回 `agentscope_user_id`，父页在 iframe 加载前写入 localStorage，保证真实用户上下文。
+- Vite middleware 将 `/agentscope-ui/*` 无扩展名深链接回退到官方 `index.html`；静态 assets 直接命中 public。
+- `services/agent-service/agent_service.py` 的 `create_app` 注入 `skill_hubs=[ClawSkillHub(...)]`、`mcp_hubs=[GitHubMCPHub(...)]`，使用 2.0.10 原生 hub；health 的 `skill_hubs`/`mcp_hubs` 应为 `ok`。没有的功能不伪造。
+- 隔离验证：独立端口 `18001`、Redis DB `9`、临时 workspace/Qdrant/blob；不在原 18000 服务或原数据上创建资源。
 
 ### 网关 v1.4.2 指标口径（设计稿）
 
@@ -97,7 +106,8 @@ null 语义：`null` 只能显示“无请求/无采样”，请求失败显示�
 - [任务来源字段历史不一致] → 只做精确匹配，不做员工级兜底；无匹配显示“暂无关联任务”。
 - [群组多成员流式排序] → 以 timeline 为准，流式文本只作为临时展示，REPLY_END 后重载 timeline。
 - [删除副标题误伤业务信息] → 只改页头与机制说明，保留字段级帮助、错误、空状态和真实回复。
-- [AgentScope 无原生 UI] → 只做状态与可选外部入口，不伪造管理页面。
+- [官方 UI 构建产物与上游版本绑定] → 记录上游 commit 与三处补丁；构建脚本可复现，升级需重新构建并回归。
+- [Hub 依赖外部网络] → 隔离服务验证真实 ClawHub/GitHub Registry；不可达时保留官方 UI 的真实错误，不伪造数据。
 - [网关指标口径混淆] → 主指标窗口与健康窗口分开标注；P95 一律写 P95；null 不用 0。
 - [指标窗口混用] → 每张卡标注真实窗口，顶部控件只声明对 request/TTFT/TPS/趋势生效；健康判断保留原 5 分钟口径。
 
@@ -110,5 +120,4 @@ null 语义：`null` 只能显示“无请求/无采样”，请求失败显示�
 
 ## Open Questions
 
-- AgentScope 部署是否实际提供可访问的管理 UI。若提供，需确认鉴权与反向代理方式后再接入；当前按“无内置 UI”处理。
 - 趋势平均值是否允许扩展 `/trends` 契约。当前保持 P95 并明确标注。

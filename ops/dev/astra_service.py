@@ -449,6 +449,9 @@ def core_services(
     frontend_env = os.environ.copy()
     frontend_env["VITE_PROXY_TARGET"] = f"http://127.0.0.1:{BACKEND_PORT}"
     frontend_env["VITE_GATEWAY_PROXY_TARGET"] = f"http://127.0.0.1:{GATEWAY_PORT}"
+    frontend_env["VITE_AGENTSCOPE_PROXY_TARGET"] = os.environ.get(
+        "NEXUS_AGENTSCOPE_BASE_URL", "http://127.0.0.1:18000"
+    )
     services.append(
         ("frontend", frontend_command(mode, npm, local_command), FRONTEND, frontend_env)
     )

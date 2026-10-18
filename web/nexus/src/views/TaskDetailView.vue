@@ -406,7 +406,7 @@ onBeforeUnmount(() => { clearInterval(timer); diffRequest?.abort(); closeEvents(
 </script>
 
 <style scoped>
-.task-detail{--el-border-color-lighter:var(--astra-border);height:calc(100vh - 176px);min-height:480px;overflow:hidden}
+.task-detail{--el-border-color-lighter:var(--astra-border);height:100%;min-height:480px;overflow:hidden}
 .task-header{--el-header-height:auto;display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px;padding:12px 20px;border-bottom:1px solid var(--astra-border);background:var(--astra-bg-panel)}
 .task-title{flex:1;min-width:240px;display:grid;gap:4px}
 .task-kicker{margin:0;color:var(--astra-text-muted)}

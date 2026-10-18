@@ -15,7 +15,7 @@ import type {
   LiveLine,
   LiveTool,
 } from "./types";
-import { mergeMessages, sequenceIsCurrent, streamCursor } from "./sessionState";
+import { maxCursor, mergeMessages, sequenceIsCurrent, streamCursor } from "./sessionState";
 
 function delay(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve) => {
@@ -66,6 +66,9 @@ export class PrivateChatAdapter implements ChatAdapter {
   readonly kind = "contact" as const;
   private conversation: Conversation;
   private reloadSequence = 0;
+  private liveText = "";
+  private liveTools: LiveTool[] = [];
+  private eventCursor = "";
 
   constructor(private employee: Employee, conversation: Conversation) {
     this.key = `contact:${employee.id}`;
@@ -95,6 +98,7 @@ export class PrivateChatAdapter implements ChatAdapter {
   async load(): Promise<ChatMessage[]> {
     const payload = await getConversation(this.conversation.id);
     this.conversation.agentscope_session_id = payload.agentscope_session_id;
+    this.eventCursor = maxCursor(this.eventCursor, payload.event_cursor || "");
     return payload.messages;
   }
 
@@ -121,14 +125,13 @@ export class PrivateChatAdapter implements ChatAdapter {
     const payload = await getConversation(this.conversation.id);
     if (signal.aborted) return;
     this.conversation.agentscope_session_id = payload.agentscope_session_id;
+    this.eventCursor = maxCursor(this.eventCursor, payload.event_cursor || "");
     emit({ type: "messages", messages: payload.messages });
     if (payload.history_error) emit({ type: "notice", text: payload.history_error });
     if (!payload.agentscope_session_id) return;
 
     const seen = new Set<string>();
-    const tools: LiveTool[] = [];
-    let liveText = "";
-    const cursor = { value: payload.event_cursor || "" };
+    const cursor = { value: this.eventCursor };
     const reload = () => {
       const sequence = ++this.reloadSequence;
       return getConversation(this.conversation.id).then((next) => {
@@ -138,7 +141,7 @@ export class PrivateChatAdapter implements ChatAdapter {
       }).catch(() => undefined);
     };
     const publishLive = () => {
-      if (!liveText && !tools.length) {
+      if (!this.liveText && !this.liveTools.length) {
         emit({ type: "live", lines: [] });
         return;
       }
@@ -147,11 +150,12 @@ export class PrivateChatAdapter implements ChatAdapter {
         lines: [{
           employeeId: this.employee.id,
           name: this.employee.name,
-          text: liveText,
-          tools: tools.map((tool) => ({ ...tool })),
+          text: this.liveText,
+          tools: this.liveTools.map((tool) => ({ ...tool })),
         }],
       });
     };
+    publishLive();
 
     for (let attempt = 0; attempt < 8; attempt += 1) {
       if (signal.aborted) return;
@@ -162,28 +166,29 @@ export class PrivateChatAdapter implements ChatAdapter {
         await readEventStream(`/api/v1/conversations/${this.conversation.id}/stream${query}`, signal, (event) => {
           sawEvent = true;
           cursor.value = streamCursor(cursor.value, event.id);
+          this.eventCursor = cursor.value;
           if (typeof event.id === "string") {
             if (seen.has(event.id)) return;
             seen.add(event.id);
           }
           if (event.type === "TEXT_BLOCK_DELTA" && typeof event.delta === "string") {
-            liveText += event.delta;
+            this.liveText += event.delta;
             publishLive();
           }
           if (event.type === "TOOL_CALL_START" && typeof event.tool_call_id === "string") {
-            ensureTool(tools, event.tool_call_id, typeof event.tool_call_name === "string" ? event.tool_call_name : "");
+            ensureTool(this.liveTools, event.tool_call_id, typeof event.tool_call_name === "string" ? event.tool_call_name : "");
             publishLive();
           }
           if (event.type === "TOOL_CALL_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
-            ensureTool(tools, event.tool_call_id).input += event.delta;
+            ensureTool(this.liveTools, event.tool_call_id).input += event.delta;
             publishLive();
           }
           if (event.type === "TOOL_RESULT_TEXT_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
-            ensureTool(tools, event.tool_call_id).output += event.delta;
+            ensureTool(this.liveTools, event.tool_call_id).output += event.delta;
             publishLive();
           }
           if (event.type === "TOOL_RESULT_START" && typeof event.tool_call_id === "string") {
-            ensureTool(tools, event.tool_call_id).state = "done";
+            ensureTool(this.liveTools, event.tool_call_id).state = "done";
             publishLive();
           }
           if (event.type === "REPLY_END" || event.type === "NEXUS_RUN_FINISHED") {
@@ -191,8 +196,8 @@ export class PrivateChatAdapter implements ChatAdapter {
             if (reason === "error" || reason === "interrupted") {
               emit({ type: "notice", text: reason === "interrupted" ? "回复已中断" : "回复失败" });
             }
-            liveText = "";
-            tools.length = 0;
+            this.liveText = "";
+            this.liveTools.length = 0;
             emit({ type: "live", lines: [] });
             void reload();
             finished = true;
@@ -219,10 +224,16 @@ export class GroupChatAdapter implements ChatAdapter {
   readonly kind = "group" as const;
   private memberCursors = new Map<string, string>();
   private memberSeen = new Map<string, Set<string>>();
+  private liveState = new Map<string, LiveLine>();
   private reloadSequence = 0;
 
   constructor(private channel: Channel, private employees: Employee[]) {
     this.key = `group:${channel.id}`;
+  }
+
+  setChannel(channel: Channel, employees: Employee[]) {
+    this.channel = channel;
+    this.employees = employees;
   }
 
   get title() {
@@ -289,8 +300,8 @@ export class GroupChatAdapter implements ChatAdapter {
     if (signal.aborted) return;
     let latestMessages = initial;
     emit({ type: "messages", messages: initial });
-    const live = new Map<string, LiveLine>();
-    const publishLive = () => emit({ type: "live", lines: cloneLines([...live.values()]) });
+    const publishLive = () => emit({ type: "live", lines: cloneLines([...this.liveState.values()]) });
+    publishLive();
 
     const reload = async () => {
       if (signal.aborted) return;
@@ -332,40 +343,35 @@ export class GroupChatAdapter implements ChatAdapter {
               seen.add(event.id);
             }
             if (event.type === "TEXT_BLOCK_DELTA" && typeof event.delta === "string") {
-              const line = live.get(employeeId);
+              const line = this.liveState.get(employeeId);
               if (line) line.text += event.delta;
-              else live.set(employeeId, { employeeId, name: this.speakerName(employeeId), text: event.delta, tools: [] });
+              else this.liveState.set(employeeId, { employeeId, name: this.speakerName(employeeId), text: event.delta, tools: [] });
               publishLive();
             }
             if (event.type === "TOOL_CALL_START" && typeof event.tool_call_id === "string") {
-              const line = live.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+              const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
               ensureTool(line.tools, event.tool_call_id, typeof event.tool_call_name === "string" ? event.tool_call_name : "");
-              live.set(employeeId, line);
+              this.liveState.set(employeeId, line);
               publishLive();
             }
             if (event.type === "TOOL_RESULT_TEXT_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
-              const line = live.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+              const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
               ensureTool(line.tools, event.tool_call_id).output += event.delta;
-              live.set(employeeId, line);
+              this.liveState.set(employeeId, line);
               publishLive();
             }
             if (event.type === "REPLY_END") {
-              live.delete(employeeId);
+              this.liveState.delete(employeeId);
               publishLive();
               void reload();
             }
             if (event.type === "NEXUS_UPSTREAM_ERROR") {
-              live.delete(employeeId);
-              publishLive();
               emit({ type: "notice", text: String(event.detail ?? "事件流中断") });
             }
           },
         );
       } catch (error) {
         if (!signal.aborted) emit({ type: "notice", text: error instanceof Error ? error.message : "事件流中断" });
-      } finally {
-        live.delete(employeeId);
-        publishLive();
       }
     };
 
@@ -392,7 +398,7 @@ export class GroupChatAdapter implements ChatAdapter {
       }
       if (opened) quiet = 0;
       else quiet += 1;
-      if (quiet >= 3 && live.size === 0) break;
+      if (quiet >= 3 && this.liveState.size === 0) break;
       await delay(1000, signal);
     }
   }

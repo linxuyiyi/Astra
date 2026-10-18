@@ -1,9 +1,6 @@
 <template>
-  <section>
-    <div class="title-row">
-      <div>
-        <h1 class="h-title">数字员工管理</h1>
-      </div>
+  <section class="astra-page employees-page">
+    <div class="compact-toolbar">
       <el-button type="primary" @click="openCreate">创建数字员工</el-button>
     </div>
     <div class="management-grid">

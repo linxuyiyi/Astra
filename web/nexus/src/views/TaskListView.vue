@@ -1,6 +1,6 @@
 <template>
   <div class="astra-page" data-testid="task-list-page">
-    <AstraPageHeader title="任务大厅" testid="task-header">
+    <AstraPageHeader title="任务大厅" hide-title testid="task-header">
       <ElRadioGroup v-model="view" aria-label="任务大厅视图">
         <ElRadioButton value="list">任务列表</ElRadioButton>
         <ElRadioButton value="interventions">待处理</ElRadioButton>

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<script>
+			// Nexus 同源部署默认值；操作员已设置的值不覆盖。
+			;(function () {
+				try {
+					if (!localStorage.getItem('server_url')) {
+						localStorage.setItem('server_url', '/agentscope-api/');
+					}
+					if (!localStorage.getItem('username')) {
+						localStorage.setItem('username', 'nexus');
+					}
+				} catch (e) {}
+			})();
+		</script>
+		<link rel="icon" type="image/svg+xml" href="/agentscope-ui/agentscope.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>AgentScope</title>
+		<script>
+			// Applied before the first paint, so the theme never flashes.
+			const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+			const applyTheme = () =>
+				document.documentElement.classList.toggle('dark', darkQuery.matches);
+			applyTheme();
+			darkQuery.addEventListener('change', applyTheme);
+		</script>
+		<script type="module" crossorigin src="/agentscope-ui/assets/index-DWT_a0-j.js"></script>
+		<link rel="stylesheet" crossorigin href="/agentscope-ui/assets/index-BpoEJNXH.css">
+	</head>
+	<body>
+		<div id="root"></div>
+	</body>
+</html>

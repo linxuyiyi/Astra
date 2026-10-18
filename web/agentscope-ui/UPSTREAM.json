@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/agentscope-ai/agentscope",
+  "tag": "v2.0.10",
+  "commit": "e6c014f0be49b2a6f6f62a9453082a0b975484e1",
+  "source": "examples/web_ui/frontend",
+  "build": "pnpm install --frozen-lockfile && pnpm exec vite build --base=/agentscope-ui/ --outDir dist-nexus",
+  "patches": [
+    "src/App.tsx: createBrowserRouter basename /agentscope-ui",
+    "src/api/client.ts: apiUrl helper for path-prefixed server_url",
+    "src/api/workspace.ts: upload XHR uses apiUrl",
+    "src/api/knowledgeBase.ts: upload/download URL uses apiUrl",
+    "index.html: same-origin server_url/username seed and %BASE_URL% icon"
+  ]
+}

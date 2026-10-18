@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  maxCursor,
   mergeMessages,
   sameIds,
   selectionIsCurrent,
@@ -45,6 +46,14 @@ test('streamCursor only accepts numeric replay cursors', () => {
   assert.equal(streamCursor('', '12-3'), '12-3')
   assert.equal(streamCursor('12-3', 'bad-id'), '12-3')
   assert.equal(streamCursor('12-3', undefined), '12-3')
+})
+
+test('maxCursor keeps the newest replay cursor across reconnects', () => {
+  assert.equal(maxCursor('', '2-1'), '2-1')
+  assert.equal(maxCursor('2-1', ''), '2-1')
+  assert.equal(maxCursor('2-1', '2-2'), '2-2')
+  assert.equal(maxCursor('2-3', '3-0'), '3-0')
+  assert.equal(maxCursor('3-0', '2-9'), '3-0')
 })
 
 test('selection and reload guards reject stale async work', () => {

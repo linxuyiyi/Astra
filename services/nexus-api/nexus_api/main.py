@@ -1191,6 +1191,7 @@ def create_app() -> FastAPI:
             "configured": client.configured,
             "reachable": await client.probe(),
             "ui_url": os.environ.get("NEXUS_AGENTSCOPE_UI_URL", "").strip(),
+            "agentscope_user_id": os.environ.get("NEXUS_AGENTSCOPE_USER_ID", "nexus").strip() or "nexus",
         }
 
     async def publish_catalog(client: AgentScopeClient, load) -> dict[str, Any]:

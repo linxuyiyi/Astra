@@ -414,6 +414,7 @@ def main() -> None:
     import uvicorn
     from agentscope.app import create_app
     from agentscope.app._bus_ops import deliver_to_inbox
+    from agentscope.app.hub import ClawSkillHub, GitHubMCPHub
     from agentscope.app._service._toolkit import get_toolkit
     from agentscope.app.message_bus import MessageBusKeys, RedisMessageBus
     from agentscope.app.rag.blob_store import LocalBlobStore
@@ -536,6 +537,8 @@ def main() -> None:
         blob_store=LocalBlobStore(blob_dir),
         extra_agent_tools=extra_agent_tools,
         extra_agent_middlewares=memory_middlewares,
+        mcp_hubs=[GitHubMCPHub(api_token=os.environ.get("AGENTSCOPE_GITHUB_TOKEN") or None)],
+        skill_hubs=[ClawSkillHub(api_token=os.environ.get("AGENTSCOPE_CLAWHUB_TOKEN") or None)],
     )
     listen_host = os.environ.get("AGENTSCOPE_HOST", "0.0.0.0")
     listen_port = int(os.environ.get("AGENTSCOPE_PORT", "18000"))

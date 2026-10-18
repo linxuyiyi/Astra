@@ -16,7 +16,9 @@
         </ElMenu>
       </ElAside>
       <ElMain class="settings-content">
-        <RouterView />
+        <ElCard class="content-shell" shadow="never">
+          <RouterView />
+        </ElCard>
       </ElMain>
     </ElContainer>
   </ElContainer>
@@ -26,7 +28,7 @@
 import { Bot, Boxes, Tags, Users } from "lucide-vue-next";
 import { computed } from "vue";
 import { RouterView, useRoute } from "vue-router";
-import { ElAside, ElContainer, ElMain, ElMenu, ElMenuItem } from "element-plus";
+import { ElAside, ElCard, ElContainer, ElMain, ElMenu, ElMenuItem } from "element-plus";
 
 const route = useRoute();
 const menuItems = [
@@ -45,7 +47,7 @@ const activeMenu = computed(() => {
 .settings-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 176px);
+  height: 100%;
   min-height: 480px;
   padding: 0;
   overflow: hidden;
@@ -54,9 +56,10 @@ const activeMenu = computed(() => {
 .settings-workspace { align-items: stretch; }
 .settings-aside {
   --el-aside-width: 210px;
-  border: 1px solid var(--astra-border);
-  border-radius: 12px;
-  background: var(--astra-bg-panel);
+  border: 0;
+  border-right: 1px solid var(--astra-border);
+  border-radius: 12px 0 0 12px;
+  background: transparent;
   overflow: auto;
 }
 .settings-aside__title {
@@ -77,9 +80,9 @@ const activeMenu = computed(() => {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  overflow: auto;
+  overflow: hidden;
 }
-.settings-content > * { flex: 1 1 auto; min-height: 0; }
+.settings-content > .content-shell { flex: 1 1 auto; min-height: 0; }
 .settings-content :deep(.astra-page) { height: 100%; min-height: 0; }
 @media (max-width: 860px) {
   .settings-aside { --el-aside-width: 170px; }

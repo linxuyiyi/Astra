@@ -10,7 +10,7 @@
 
 #### Scenario: 子页面切换
 - **WHEN** 用户点击左侧菜单的任一配置项
-- **THEN** 右侧内容切换到对应页面，底部“配置中心”保持高亮
+- **THEN** 右侧内容切换到对应页面，顶部“配置中心”保持高亮
 
 ### Requirement: 员工管理与聊天职责分离
 
@@ -40,14 +40,26 @@
 - **WHEN** 用户新增或编辑任务分类并保存
 - **THEN** 分类列表与平台缓存刷新，原提示词和启用状态语义保持不变
 
-### Requirement: AgentScope 入口只展示真实能力
+### Requirement: AgentScope 入口承载官方管理 UI
 
-AgentScope 入口 SHALL 展示真实可达状态与可用的管理入口；如果服务没有可安全内嵌的管理界面，MUST 明确提供外部入口或说明，不得伪装成已有的 Skill/MCP 管理页面。
+配置中心的 AgentScope 子页 SHALL 内嵌官方 AgentScope v2.0.10 Web UI，并在默认部署中可直接进入管理界面；MUST NOT 只用状态、说明文字或外部链接占位。官方 UI SHALL 通过同源 `/agentscope-ui/` 提供，API 通过 `/agentscope-api/` 代理到 AgentScope，`X-User-ID` 使用当前部署的 AgentScope 用户。Skill/MCP/Knowledge/Session 仍以 AgentScope 为唯一事实源，Nexus MUST NOT 新建平行 CRUD 数据。
+
+#### Scenario: 默认进入官方 UI
+- **WHEN** 用户打开配置中心的 AgentScope 子页
+- **THEN** 页面在内容卡内加载官方管理界面，无需手工填写 server_url 或用户名
+
+#### Scenario: 官方 UI 深链接与静态资源
+- **WHEN** 用户刷新 `/agentscope-ui/skill` 或直接打开该深链接
+- **THEN** 官方 SPA 正常加载，静态资源和 API 请求均可用
+
+#### Scenario: 原生 Hub 能力
+- **WHEN** AgentScope 2.0.10 注册了 Skill/MCP Hub
+- **THEN** 官方 UI 可浏览真实 Hub 与资源；没有注册的能力不显示伪造数据
 
 #### Scenario: AgentScope 不可达
 - **WHEN** AgentScope 未连接或不可达
-- **THEN** 配置中心显示真实状态与失败原因，不展示伪造的管理数据
+- **THEN** 页面保留真实错误与状态，不伪造 Agent/Skill/MCP 数据
 
-#### Scenario: 没有内置图形界面
-- **WHEN** 部署的 AgentScope 没有可安全内嵌的管理界面
-- **THEN** 页面提供明确的服务入口或说明，并声明 Nexus 不另建 Skill/MCP/Session 数据库
+#### Scenario: 不新建管理数据系统
+- **WHEN** 用户在官方 UI 创建或删除 Agent/Skill/MCP/Knowledge
+- **THEN** 变更直接写入 AgentScope，Nexus 不保存第二套管理数据库

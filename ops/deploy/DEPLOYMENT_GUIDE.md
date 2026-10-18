@@ -197,6 +197,17 @@ Task MCP（8202）由 `ops/dev/astra_service.py` 与 Task API、Celery、OpenCod
 ops/dev/start_astra.sh start     # 或 restart / stop / status
 ```
 
+
+### AgentScope 官方 Web UI（配置中心）
+
+配置中心的 AgentScope 子页内嵌官方 AgentScope v2.0.10 Web UI：
+
+- 静态产物：`web/nexus/public/agentscope-ui/`，随 `web/nexus` 构建复制到 `dist/agentscope-ui/`。
+- 同源 API：开发由 `vite.config.ts` 的 `/agentscope-api/` 代理，生产由 `nginx-nexus.conf` 代理到 AgentScope（默认 `127.0.0.1:18000`）。保留浏览器 `X-User-ID`。
+- 默认入口：`/settings/agentscope`；无需手工填写 `server_url`。`/api/v1/runtime` 的 `agentscope_user_id` 用于写入同源 localStorage。
+- 原生 Skill/MCP Hub：`services/agent-service/agent_service.py` 注入 `ClawSkillHub`、`GitHubMCPHub`；health 的 `skill_hubs`/`mcp_hubs` 应为 `ok`。
+- 升级/重建：`ops/deploy/build_agentscope_web_ui.sh <官方 examples/web_ui/frontend>`；上游 commit 与三处补丁见 `docs/architecture/agentscope-web-ui.md`。
+
 ### 5.5 Agent Service（AgentScope 2.0.10）与聊天模型
 ```bash
 python3 -m venv $R/services/agent-service/.venv-agentscope

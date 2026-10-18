@@ -334,7 +334,7 @@ async function testEnvironment() {
 </script>
 
 <style scoped>
-.employee-detail { display: grid; gap: 14px; height: calc(100vh - 176px); min-height: 480px; padding: 20px 24px 24px; overflow: auto; }
+.employee-detail { display: grid; gap: 14px; height: 100%; min-height: 480px; padding: 20px 24px 24px; overflow: auto; }
 .employee-detail__tabs :deep(.el-tab-pane) { display: grid; gap: 14px; }
 .employee-detail__nav { font-size: var(--astra-font-label); }
 .employee-detail__nav :deep(.el-breadcrumb__inner a) { color: var(--astra-text-muted); }

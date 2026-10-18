@@ -1,12 +1,13 @@
 <template>
   <section class="chat-page">
-    <div class="title-row">
-      <h1 class="h-title">数字员工</h1>
-      <el-button type="primary" @click="openGroupDialog()">＋ 新建群组</el-button>
-    </div>
     <div class="workspace" :class="{ 'workspace--focus': !asideOpen }">
       <aside class="panel left-rail">
-        <el-input v-model="search" placeholder="搜索联系人 / 群组" clearable style="margin-bottom: 10px" />
+        <div class="chat-search-row">
+          <el-input v-model="search" placeholder="搜索联系人 / 群组" clearable />
+          <el-tooltip content="新建群组" placement="top">
+            <el-button circle aria-label="新建群组" data-testid="chat-create-group" @click="openGroupDialog()">＋</el-button>
+          </el-tooltip>
+        </div>
         <div class="chat-filters">
           <button
             v-for="item in filterOptions"
@@ -68,7 +69,13 @@
               <div class="muted">{{ senderLabel(message) }}</div>
               <div v-if="message.text" class="bubble markdown" v-html="renderMarkdown(message.text)"></div>
               <template v-for="tool in message.tools || []" :key="tool.id">
-                <div v-if="tool.name === 'contact_employee'" class="tool-status">{{ contactStatus(tool) }}</div>
+                <template v-if="tool.name === 'contact_employee'">
+                  <details v-if="contactState(tool).kind === 'unknown'" class="tool-status tool-status--unknown">
+                    <summary>{{ contactState(tool).text }}</summary>
+                    <pre v-if="contactState(tool).raw">{{ contactState(tool).raw }}</pre>
+                  </details>
+                  <div v-else class="tool-status">{{ contactState(tool).text }}</div>
+                </template>
                 <details v-else class="tool-card tool-card--collapsed">
                   <summary><b>{{ tool.name || "工具" }}</b><span class="muted">{{ toolSummary(tool) }}</span></summary>
                   <div class="tool-card__body">
@@ -100,7 +107,13 @@
               <div class="muted">{{ line.name }}</div>
               <div v-if="line.text" class="bubble markdown" v-html="renderMarkdown(line.text)"></div>
               <template v-for="tool in line.tools" :key="tool.id">
-                <div v-if="tool.name === 'contact_employee'" class="tool-status">{{ contactStatus(tool) }}</div>
+                <template v-if="tool.name === 'contact_employee'">
+                  <details v-if="contactState(tool).kind === 'unknown'" class="tool-status tool-status--unknown">
+                    <summary>{{ contactState(tool).text }}</summary>
+                    <pre v-if="contactState(tool).raw">{{ contactState(tool).raw }}</pre>
+                  </details>
+                  <div v-else class="tool-status">{{ contactState(tool).text }}</div>
+                </template>
                 <details v-else class="tool-card tool-card--collapsed">
                   <summary><b>{{ tool.name || "工具" }}</b><span class="muted">{{ toolSummary(tool) }}</span></summary>
                   <div class="tool-card__body">
@@ -298,7 +311,6 @@ const groupForm = reactive({ name: "", description: "", memberIds: [] as string[
 const emptyCatalog = (): ResourceCatalog => ({ available: false, items: [] });
 const catalogs = ref({ skills: emptyCatalog(), knowledge: emptyCatalog(), tools: emptyCatalog() });
 let taskTimer = 0;
-let routeApplying = false;
 let selectionGeneration = 0;
 let disposed = false;
 const preparePromises = new Map<string, Promise<void>>();
@@ -425,16 +437,20 @@ function toolSummary(tool: { state: string }) {
   return tool.state === "done" ? "完成" : "";
 }
 
-function contactStatus(tool: { output: string; state: string }) {
-  const raw = tool.output?.trim();
-  if (!raw) return tool.state === "error" ? "联系失败" : "正在联系同事…";
-  try {
-    const parsed = JSON.parse(raw) as { ok?: boolean; peer?: string; error?: string };
-    if (parsed.ok) return `已联系 ${parsed.peer ?? "同事"}`;
-    return `联系失败：${parsed.error || "未投递"}`;
-  } catch {
-    return tool.state === "error" ? "联系失败" : "正在联系同事…";
+function contactState(tool: { output: string; state: string }) {
+  const raw = tool.output?.trim() ?? "";
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as { ok?: boolean; peer?: string; error?: string };
+      if (parsed.ok) return { kind: "ok" as const, text: `已联系 ${parsed.peer ?? "同事"}`, raw };
+      return { kind: "error" as const, text: `联系失败：${parsed.error || "未投递"}`, raw };
+    } catch {
+      /* 运行中的流式 JSON 不完整，按状态继续展示。 */
+    }
   }
+  if (tool.state === "running") return { kind: "running" as const, text: "正在联系同事…", raw };
+  if (tool.state === "error") return { kind: "error" as const, text: "联系失败", raw };
+  return { kind: "unknown" as const, text: "联系结果未知", raw };
 }
 
 function createState(target: ChatTarget): ChatSessionState {
@@ -472,7 +488,6 @@ function stopFollow(key: string) {
   state.abort?.abort();
   state.abort = null;
   state.generation += 1;
-  state.liveLines = [];
 }
 
 function startFollow(state: ChatSessionState) {
@@ -481,7 +496,6 @@ function startFollow(state: ChatSessionState) {
   const controller = new AbortController();
   state.abort = controller;
   const generation = ++state.generation;
-  state.liveLines = [];
   const emit = (event: ChatAdapterEvent) => {
     if (disposed || state.generation !== generation || controller.signal.aborted) return;
     if (event.type === "messages") state.messages = mergeMessages(state.messages, event.messages);
@@ -491,8 +505,6 @@ function startFollow(state: ChatSessionState) {
   void state.adapter.follow(controller.signal, emit).catch((error) => {
     if (controller.signal.aborted || state.generation !== generation) return;
     state.notice = error instanceof Error ? error.message : "事件流中断";
-  }).finally(() => {
-    if (state.generation === generation) state.liveLines = [];
   });
 }
 
@@ -585,18 +597,12 @@ function routeType(): "contact" | "group" | "" {
 }
 
 async function applyRouteTarget() {
-  if (routeApplying) return;
   if (!employees.value.length && !channels.value.length) return;
   const type = routeType();
   if (type) filter.value = type;
   const key = routeTargetKey() || (type ? targets.value.find((item) => item.kind === type)?.key ?? "" : "");
   if (!key || key === selectedKey.value) return;
-  routeApplying = true;
-  try {
-    await selectTarget(key, { fromRoute: true });
-  } finally {
-    routeApplying = false;
-  }
+  await selectTarget(key, { fromRoute: true });
 }
 
 async function addFileList(files: File[]) {
@@ -735,7 +741,11 @@ async function saveGroup() {
       const wasSelected = selectedKey.value === key;
       if (wasSelected) stopFollow(key);
       existing.target = target;
-      existing.adapter = new GroupChatAdapter(target.channel, employees.value);
+      if (existing.adapter instanceof GroupChatAdapter) {
+        existing.adapter.setChannel(target.channel, employees.value);
+      } else {
+        existing.adapter = new GroupChatAdapter(target.channel, employees.value);
+      }
       existing.status = "ready";
       existing.error = "";
       if (wasSelected) {
@@ -754,7 +764,7 @@ async function saveGroup() {
 }
 
 watch(search, () => { mentionOpen.value = false; });
-watch(() => [route.query.employee, route.query.group], () => { void applyRouteTarget(); });
+watch(() => [route.query.employee, route.query.group, route.query.type], () => { void applyRouteTarget(); });
 watch(() => activeState.value?.messages, async () => {
   await nextTick();
   if (messageBox.value) messageBox.value.scrollTop = messageBox.value.scrollHeight;
@@ -776,6 +786,7 @@ onMounted(async () => {
     listChannels(),
     listWorkers().catch(() => []),
   ]);
+  if (disposed) return;
   catalogs.value = { skills, knowledge, tools };
   employees.value = employeeList;
   channels.value = channelList;
@@ -791,6 +802,7 @@ onMounted(async () => {
     || targets.value[0]?.key
     || "";
   if (initial) await selectTarget(initial, { fromRoute: Boolean(routeKey || type) });
+  if (disposed) return;
   taskTimer = window.setInterval(() => {
     const state = activeState.value;
     if (state?.tab === "tasks") void loadTasks(state);
@@ -811,6 +823,9 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.chat-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.chat-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.chat-search-row :deep(.el-input) { flex: 1; }
 .chat-filters { display: flex; gap: 6px; margin-bottom: 10px; }
 .chat-counts { margin: 0 0 8px 2px; font-size: 11px; }
 .chat-target { width: 100%; border: 0; background: transparent; text-align: left; }
@@ -832,6 +847,10 @@ onBeforeUnmount(() => {
 .tool-card--collapsed summary span { margin-left: auto; }
 .tool-card__body { padding: 0 10px 10px; }
 .tool-status { display: inline-flex; margin-top: 8px; padding: 5px 9px; border: 1px solid #cfe5d8; border-radius: 999px; background: #f0faf4; color: #2a7d5c; font-size: 11px; }
+.tool-status--unknown { display: block; width: fit-content; cursor: pointer; }
+.tool-status--unknown summary { list-style: none; }
+.tool-status--unknown summary::-webkit-details-marker { display: none; }
+.tool-status--unknown pre { margin: 6px 0 0; max-width: 480px; white-space: pre-wrap; color: #5f746a; }
 .markdown :deep(code) { font-family: ui-monospace, monospace; }
 .mention-box { margin-top: 8px; background: white; border: 1px solid #dbece0; border-radius: 12px; padding: 6px; }
 .mention-box button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 8px; cursor: pointer; }

@@ -53,7 +53,7 @@
 - [x] 6.3 `PYTHONPATH=services/nexus-api services/nexus-api/.venv/bin/pytest services/nexus-api/tests`（至少运行受影响 API 测试）。
 - [x] 6.4 真实浏览器验证两尺寸：1440×900、1920×1080；覆盖五入口、旧链接、聊天快速切换、联系人/群组发送与附件、任务关联、配置中心、AgentScope 状态、网关设计稿三态。
 - [x] 6.5 证据写入 `.astra/qa-v141-v142/`（截图、命令输出、未验证项）。完成标准：无证据不声称通过。
-- [ ] 6.6 检查 `git diff` 无无关修改后，v1.4.1 独立提交。
+- [x] 6.6 检查 `git diff` 无无关修改后，v1.4.1 独立提交。
 
 ## 7. 网关 v1.4.2
 

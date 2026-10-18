@@ -82,7 +82,7 @@ onMounted(async () => {
   try {
     runtime.value = await getRuntime();
   } catch {
-    runtime.value = { agentscope_version: "2.0.10", configured: false, reachable: false, ui_url: "", agentscope_user_id: "nexus" };
+    runtime.value = { agentscope_version: "2.0.10", configured: false, reachable: false, agentscope_user_id: "nexus" };
   }
 });
 </script>

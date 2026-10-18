@@ -72,6 +72,5 @@ export interface RuntimeStatus {
   agentscope_version: string;
   configured: boolean;
   reachable: boolean;
-  ui_url?: string;
   agentscope_user_id?: string;
 }

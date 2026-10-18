@@ -23,7 +23,12 @@
 - 辅助指标可折叠：重试率、上游 429、流式中断率、Token 吞吐量、用量缺失率使用近 5 分钟健康窗口；连接耗时、TTFB 使用 `/stats` 所选窗口平均值。
 - `null` 不使用 0 代替；区分无请求、无采样、接口失败、无权限。
 
-## 仍需部署侧确认（不阻塞前端实现）
+## AgentScope 官方 UI 契约
 
-- `NEXUS_AGENTSCOPE_UI_URL` 是否配置真实可访问的 AgentScope 管理入口。未配置时，配置中心只展示状态与说明，不伪造管理页面。
+- 配置中心 AgentScope 子页在内容卡内加载 `/agentscope-ui/` 官方 v2.0.10 Web UI，不需要手工填写 `server_url`。
+- API 经同源 `/agentscope-api/` 代理到 AgentScope，保留 `X-User-ID`；用户 ID 来自 `/api/v1/runtime.agentscope_user_id`。
+- 不提供状态占位页或额外交付入口配置；官方 UI 是真实管理入口。
+
+## 仍不做的范围
+
 - 趋势平均值若后续确需，需要后端为 `TrendPoint` 增加平均字段；本版本不做。

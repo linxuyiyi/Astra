@@ -73,7 +73,7 @@
                 <ElCard shadow="never" data-testid="gateway-node-info">
                   <template #header>
                     <div class="gateway-node-card-head">
-                      <div><h4>节点信息</h4><ElText type="info">凭据只写不回显</ElText></div>
+                      <div><h4>节点信息</h4></div>
                     </div>
                   </template>
                   <ElDescriptions :column="2">
@@ -91,10 +91,7 @@
                 <ElCard shadow="never" data-testid="gateway-node-probe-latest">
                   <template #header>
                     <div class="gateway-node-card-head">
-                      <div>
-                        <h4>最近一次探测</h4>
-                        <ElText type="info">完整记录在「运维」里，这里只留结论。</ElText>
-                      </div>
+                      <div><h4>最近一次探测</h4></div>
                       <ElTag :type="tagType(authenticationTone(probeAuthentication))">{{ authenticationLabel(probeAuthentication) }}</ElTag>
                     </div>
                   </template>
@@ -108,7 +105,7 @@
             <section v-show="showSection('tokens')" id="tokens" class="gateway-node-section" data-testid="gateway-node-section-tokens">
               <header class="gateway-node-section__bar">
                 <h3>用量</h3>
-                <ElText type="info">{{ windowLabel }}窗口。未知用量不估算为零。</ElText>
+                <ElText type="info">{{ windowLabel }}窗口</ElText>
                 <ElRadioGroup v-model="statsWindow" class="gateway-node-window" aria-label="统计窗口" data-testid="gateway-node-window">
                   <ElRadioButton v-for="item in windows" :key="item.id" :value="item.id">{{ item.label }}</ElRadioButton>
                 </ElRadioGroup>
@@ -140,18 +137,24 @@
             <section v-show="showSection('performance')" id="performance" class="gateway-node-section" data-testid="gateway-node-section-performance">
               <header class="gateway-node-section__bar">
                 <h3>性能</h3>
-                <ElText type="info">{{ windowLabel }}窗口的平均 / p50 / p95</ElText>
+                <ElText type="info">{{ windowLabel }}窗口平均</ElText>
               </header>
               <div class="gateway-node-grid">
                 <ElCard shadow="never" data-testid="gateway-node-latency">
                   <template #header>
                     <div class="gateway-node-card-head">
-                      <div><h4>性能指标</h4><ElText type="info">平均 / p50 / p95</ElText></div>
+                      <div><h4>性能指标</h4><ElText type="info">窗口平均</ElText></div>
                     </div>
                   </template>
                   <ElDescriptions :column="1">
                     <ElDescriptionsItem v-for="row in latencyRows" :key="row.label" :label="row.label">{{ row.value }}</ElDescriptionsItem>
                   </ElDescriptions>
+                  <details class="gateway-node-advanced">
+                    <summary>分位统计（p50 / p95）</summary>
+                    <ElDescriptions :column="1">
+                      <ElDescriptionsItem v-for="row in latencyAdvancedRows" :key="row.label" :label="row.label">{{ row.value }}</ElDescriptionsItem>
+                    </ElDescriptions>
+                  </details>
                   <div class="gateway-node-peak">
                     <span>峰值并发 <b>{{ stats?.peak_concurrency ?? '—' }}</b></span>
                     <span>QPS <b>{{ stats ? stats.qps.toFixed(2) : '—' }}</b></span>
@@ -174,7 +177,7 @@
             <section v-show="showSection('limits')" id="limits" class="gateway-node-section" data-testid="gateway-node-section-limits">
               <header class="gateway-node-section__bar">
                 <h3>限制</h3>
-                <ElText type="info">并发、权重与额度由节点配置决定，实际用量按自然窗口统计</ElText>
+
               </header>
               <div class="gateway-node-grid">
                 <ElCard shadow="never" data-testid="gateway-node-scheduling-limits">
@@ -197,7 +200,7 @@
                 <ElCard shadow="never" data-testid="gateway-node-quota">
                   <template #header>
                     <div class="gateway-node-card-head">
-                      <div><h4>Token 额度</h4><ElText type="info">已完成请求的实际 usage 计入</ElText></div>
+                      <div><h4>Token 额度</h4></div>
                     </div>
                   </template>
                   <ElDescriptions :column="1">
@@ -208,7 +211,7 @@
                     <ElDescriptionsItem label="每日限额">
                       {{ node.daily_token_limit ?? '不限' }} · 今日已用 {{ dayTokens ? formatTokens(dayTokens.total_tokens) : '—' }}
                     </ElDescriptionsItem>
-                    <ElDescriptionsItem label="未知用量（今日）">{{ dayTokens?.unknown_usage_requests ?? '—' }}</ElDescriptionsItem>
+                    <ElDescriptionsItem label="未知用量请求（今日）">{{ dayTokens?.unknown_usage_requests ?? '—' }}</ElDescriptionsItem>
                   </ElDescriptions>
                   <p class="gateway-node-note">额度按已完成请求计入，并发时可能略微超出限额。</p>
                 </ElCard>
@@ -219,13 +222,13 @@
             <section v-show="showSection('health')" id="health" class="gateway-node-section" data-testid="gateway-node-section-health">
               <header class="gateway-node-section__bar">
                 <h3>健康</h3>
-                <ElText type="info">健康态由探测推导，调度态由管理员操作决定，两者互不覆盖</ElText>
+
               </header>
               <div class="gateway-node-grid">
                 <ElCard shadow="never" data-testid="gateway-node-health-state">
                   <template #header>
                     <div class="gateway-node-card-head">
-                      <div><h4>健康状态</h4><ElText type="info">服务端观测快照</ElText></div>
+                      <div><h4>健康状态</h4></div>
                     </div>
                   </template>
                   <ElDescriptions :column="1">
@@ -284,7 +287,7 @@
             <section v-show="showSection('logs')" id="logs" class="gateway-node-section" data-testid="gateway-node-section-logs">
               <header class="gateway-node-section__bar">
                 <h3>日志</h3>
-                <ElText type="info">只记录元数据与测量值，不保存 Prompt、Authorization 或响应体</ElText>
+                <ElText type="info">元数据与测量值</ElText>
                 <ElButton
                   :loading="logsLoading"
                   :icon="RefreshCw"
@@ -295,7 +298,7 @@
               <ElCard shadow="never" data-testid="gateway-node-logs">
                 <template #header>
                   <div class="gateway-node-card-head">
-                    <div><h4>调用日志</h4><ElText type="info">该节点的调用元数据与测量值</ElText></div>
+                    <div><h4>调用日志</h4></div>
                   </div>
                 </template>
                 <ElTable
@@ -364,12 +367,12 @@
             <section v-show="showSection('config')" id="config" class="gateway-node-section" data-testid="gateway-node-section-config">
               <header class="gateway-node-section__bar">
                 <h3>配置</h3>
-                <ElText type="info">配置、健康、调度分开看。改配置不会自动改健康或调度。</ElText>
+
               </header>
               <ElCard shadow="never" data-testid="gateway-node-config">
                 <template #header>
                   <div class="gateway-node-card-head">
-                    <div><h4>节点配置</h4><ElText type="info">凭据加密入库，任何视图都不回显明文</ElText></div>
+                    <div><h4>节点配置</h4></div>
                     <ElButton
                       type="primary"
                       plain
@@ -493,7 +496,7 @@ const serveSummary = computed(() => {
   const health = healthStateLabel(current.health_state)
   const scheduling = schedulingStateLabel(current.scheduling_state)
   const config = configStateLabel(current.config_state)
-  const facts = `健康是${health}，调度是${scheduling}，配置是${config}。这三件事分开看。`
+  const facts = `健康 ${health} · 调度 ${scheduling} · 配置 ${config}`
   if (current.config_state !== 'ENABLED') return { title: '不能接请求', detail: `配置已禁用。${facts}` }
   if (current.scheduling_state === 'DRAINING') return { title: '正在下线', detail: `不再接新请求。${facts}` }
   if (current.scheduling_state !== 'ACTIVE') return { title: '不能接请求', detail: facts }
@@ -564,14 +567,28 @@ const tokenCards = computed<Array<{ id: string; label: string; value: number | s
 const latencyRows = computed(() => {
   const current = stats.value
   if (!current) return [] as Array<{ label: string; value: string }>
-  const line = (label: string, value: { avg: number | null; p50: number | null; p95: number | null }, unit = 'ms') =>
-    ({ label, value: value.avg === null ? '—' : `${value.avg.toFixed(0)} / ${value.p50?.toFixed(0) ?? '—'} / ${value.p95?.toFixed(0) ?? '—'} ${unit}` })
+  const line = (label: string, value: { avg: number | null }, unit = 'ms') =>
+    ({ label, value: value.avg === null ? '—' : `${value.avg.toFixed(0)} ${unit}` })
   return [
     line('连接', current.connect_ms),
-    line('首字节 (TTFB)', current.ttfb_ms),
-    line('首 Token (TTFT)', current.ttft_ms),
+    line('首字节（TTFB）', current.ttfb_ms),
+    line('首 Token 延迟（TTFT）', current.ttft_ms),
     line('总时长', current.duration_ms),
-    line('输出 TPS', current.output_tps, 'tok/s'),
+    line('输出速度（Token/s）', current.output_tps, 'Token/s'),
+  ]
+})
+
+const latencyAdvancedRows = computed(() => {
+  const current = stats.value
+  if (!current) return [] as Array<{ label: string; value: string }>
+  const line = (label: string, value: { p50: number | null; p95: number | null }, unit = 'ms') =>
+    ({ label, value: value.p50 == null && value.p95 == null ? '—' : `${value.p50?.toFixed(0) ?? '—'} / ${value.p95?.toFixed(0) ?? '—'} ${unit}` })
+  return [
+    line('连接', current.connect_ms),
+    line('首字节（TTFB）', current.ttfb_ms),
+    line('首 Token 延迟（TTFT）', current.ttft_ms),
+    line('总时长', current.duration_ms),
+    line('输出速度（Token/s）', current.output_tps, 'Token/s'),
   ]
 })
 
@@ -775,6 +792,11 @@ onMounted(() => {
 .gateway-node-card-head { display: flex; align-items: flex-start; gap: 12px; }
 .gateway-node-card-head > div { margin-right: auto; }
 .gateway-node-card-head h4 { margin: 0; color: var(--astra-text-primary); font-size: var(--astra-font-control); }
+.gateway-node-advanced { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--astra-border); }
+.gateway-node-advanced summary { color: var(--astra-text-muted); font-size: var(--astra-font-helper); cursor: pointer; }
+.gateway-node-advanced summary::-webkit-details-marker { display: none; }
+.gateway-node-advanced summary::before { content: '▸ '; }
+.gateway-node-advanced[open] summary::before { content: '▾ '; }
 .gateway-node-note { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .gateway-node-peak { display: flex; gap: 16px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--astra-border); color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .gateway-node-peak b { color: var(--astra-text-primary); font-variant-numeric: tabular-nums; }

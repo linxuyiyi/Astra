@@ -74,7 +74,6 @@
       <template #header>
         <div class="gateway-nodes__card-head">
           <h4>Gateway 实例</h4>
-          <ElText>心跳过期即标记不可用。实例状态不反推节点健康。</ElText>
         </div>
       </template>
       <ElAlert v-if="instanceError" type="warning" show-icon :closable="false" :title="instanceError" />

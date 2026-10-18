@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nexus v1.4.2 · API 网关运行总览设计预览</title>
+<style>
+  :root {
+    --ink: #203830;
+    --ink-2: #3b554b;
+    --muted: #7b9386;
+    --muted-2: #93a69b;
+    --line: #dfe9e3;
+    --line-soft: #edf3ef;
+    --bg: #eef4f1;
+    --surface: #ffffff;
+    --surface-2: #f7faf8;
+    --mint: #188b69;
+    --mint-dark: #117154;
+    --mint-soft: #e7f6ef;
+    --mint-line: #bfe3d2;
+    --danger: #c0444f;
+    --danger-soft: #fff3f4;
+    --danger-line: #efc4c8;
+    --warn: #a66b10;
+    --warn-soft: #fff8e9;
+    --warn-line: #ecd49d;
+    --radius: 12px;
+    --shadow: 0 14px 40px rgba(31, 92, 70, 0.07);
+    font-family: Inter, "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    color: var(--ink);
+    background:
+      radial-gradient(ellipse 70% 50% at 85% 0, #ddf5eb, transparent 70%),
+      radial-gradient(ellipse 50% 40% at 0 100%, #e6f1fb, transparent 72%),
+      var(--bg);
+    font-size: 13px;
+  }
+  button, select, input { font: inherit; color: inherit; }
+  .preview-bar {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+    padding: 10px 18px;
+    border-bottom: 1px solid #d8e6de;
+    background: rgba(250, 253, 251, 0.94);
+    backdrop-filter: blur(12px);
+  }
+  .preview-bar__brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+  .preview-bar__mark {
+    width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center;
+    background: linear-gradient(135deg, #1ea87b, #066448); color: #fff; font-weight: 800;
+  }
+  .preview-bar__brand strong { font-size: 13px; letter-spacing: .04em; }
+  .preview-bar__brand small { color: var(--muted); }
+  .example-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 9px; border-radius: 999px; font-size: 11px;
+    color: var(--warn); background: var(--warn-soft); border: 1px solid var(--warn-line);
+  }
+  .control-group { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .control-group > span { padding: 0 7px; color: var(--muted); font-size: 11px; }
+  .control-group button {
+    border: 0; border-radius: 6px; padding: 6px 10px; background: transparent; color: var(--ink-2);
+    cursor: pointer; font-size: 12px;
+  }
+  .control-group button[aria-pressed="true"] { background: var(--mint-soft); color: var(--mint-dark); font-weight: 700; }
+  .zoom-note { color: var(--muted); font-size: 11px; }
+  .viewport {
+    display: flex; align-items: flex-start; justify-content: center;
+    min-height: calc(100vh - 58px);
+    padding: 22px; overflow: auto;
+  }
+  .stage {
+    position: relative; flex: none; margin: 0 auto;
+  }
+  .device {
+    position: absolute; top: 0; left: 0;
+    width: 1440px; height: 900px;
+    transform-origin: top left;
+    display: flex; flex-direction: column;
+    border: 1px solid #cfe0d7; border-radius: 18px; overflow: hidden;
+    background:
+      radial-gradient(ellipse 60% 45% at 85% 0, #e2f8f0, transparent 72%),
+      #f3f8f5;
+    box-shadow: 0 30px 90px rgba(28, 79, 59, .16);
+  }
+  .app-top {
+    flex: none; height: 58px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand__mark {
+    width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center;
+    background: linear-gradient(135deg, #1ea87b, #066448); color: #fff; font-weight: 800; font-size: 17px;
+  }
+  .brand__name { font-size: 17px; font-weight: 800; letter-spacing: .13em; }
+  .brand__version { margin-left: 5px; color: #2d9c74; font-size: 10px; letter-spacing: 0; }
+  .env {
+    display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px;
+    color: #5d8070; background: rgba(255,255,255,.72); border: 1px solid #dfece5; border-radius: 999px;
+  }
+  .device-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-left: auto; }
+  .device-nav button {
+    padding: 7px 12px; border: 0; border-radius: 10px; background: transparent;
+    color: #6c897a; font-size: 13px; white-space: nowrap; cursor: pointer;
+  }
+  .device-nav button:hover { background: #edf7f1; color: #187956; }
+  .device-nav button.active { background: #dff3e7; color: #147d59; font-weight: 700; }
+  .page-toolbar {
+    flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+    min-height: 32px;
+  }
+  .page-toolbar__scope { color: var(--muted); font-size: 11px; }
+  .page-toolbar .head-actions { margin-left: auto; }
+  .aside-title {
+    min-height: 46px; display: flex; align-items: center; padding: 0 10px;
+    color: var(--ink-2); font-size: 13px; font-weight: 700;
+  }
+  .content-head {
+    display: flex; align-items: center; gap: 12px; min-height: 34px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--line-soft);
+  }
+  .content-head__title { color: var(--ink-2); font-size: 13px; font-weight: 700; }
+  .content-head .head-actions { margin-left: auto; }
+  .content-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 4px 0 2px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #1cac7e; }
+  .dot.warn { background: #d79b2d; }
+  .dot.bad { background: #c0444f; }
+  .page { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 4px 22px 20px; }
+  .page-head { flex: none; display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .page-head__lead { display: grid; gap: 5px; margin-right: auto; }
+  .page-head h1 { margin: 0; font-size: 24px; line-height: 1.25; font-weight: 800; }
+  .health-line { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 12px; color: var(--muted); }
+  .health-pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px;
+    border: 1px solid var(--mint-line); background: var(--mint-soft); color: var(--mint-dark); font-weight: 700;
+  }
+  .health-pill.warn { border-color: var(--warn-line); background: var(--warn-soft); color: var(--warn); }
+  .health-pill.bad { border-color: var(--danger-line); background: var(--danger-soft); color: var(--danger); }
+  .head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .scope-note {
+    flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+    padding: 8px 11px; border: 1px dashed #cfe1d8; border-radius: 9px;
+    background: rgba(255,255,255,.55); color: var(--muted);
+  }
+  .scope-note strong { color: var(--ink-2); }
+  .el-select, .el-button, .el-radio-group, .el-checkbox {
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid #d8e3dc;
+    background: #fff; color: var(--ink-2); border-radius: 8px; padding: 7px 10px; min-height: 32px;
+  }
+  .el-select { min-width: 112px; justify-content: space-between; cursor: pointer; }
+  .el-button { cursor: pointer; }
+  .el-button.primary { background: var(--mint); border-color: var(--mint); color: #fff; }
+  .el-button.primary:hover { background: var(--mint-dark); }
+  .workspace { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 12px; }
+  .aside {
+    min-height: 0; overflow: auto; border: 0; border-right: 1px solid var(--line);
+    border-radius: 12px 0 0 12px; background: transparent; padding: 9px;
+  }
+  .menu-group { margin: 2px 0 10px; }
+  .menu-group__title { padding: 7px 9px; color: var(--muted-2); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+  .menu-item {
+    display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 10px;
+    border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); text-align: left; cursor: pointer;
+  }
+  .menu-item:hover { background: #f2f8f5; }
+  .menu-item.active { background: var(--mint-soft); color: var(--mint-dark); font-weight: 700; }
+  .menu-item svg { width: 15px; height: 15px; flex: none; }
+  .content {
+    min-height: 0; overflow: auto; display: grid; grid-auto-rows: max-content; gap: 12px;
+    align-content: start; padding: 12px 14px; padding-bottom: 20px;
+    border: 1px solid var(--line); border-radius: 12px; background: #fff;
+  }
+  .card {
+    min-width: 0; border: 0; border-radius: 0;
+    background: transparent; box-shadow: none;
+  }
+  .card__head { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+  .card__head > div:first-child { margin-right: auto; display: grid; gap: 3px; }
+  .card__head h3 { margin: 0; font-size: 13px; }
+  .card__head p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+  .card__body { padding: 12px 0; }
+  .metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; border-bottom: 1px solid var(--line); }
+  .metric { padding: 10px 12px; border: 0; border-right: 1px solid var(--line-soft); border-radius: 0; background: transparent; display: grid; gap: 6px; }
+  .metric:last-child { border-right: 0; }
+  .metric__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+  .metric__label { color: var(--ink-2); font-size: 12px; font-weight: 600; }
+  .window-tag { flex: none; padding: 2px 6px; border-radius: 5px; background: #f1f6f3; color: var(--muted); font-size: 10px; white-space: nowrap; }
+  .metric__value { font-size: 22px; line-height: 1.15; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .metric__value small { font-size: 11px; color: var(--muted); font-weight: 500; }
+  .metric__hint { color: var(--muted); font-size: 11px; line-height: 1.4; min-height: 30px; }
+  .metric.is-empty .metric__value { color: var(--muted-2); font-size: 15px; }
+  .trend { overflow: hidden; min-height: 300px; }
+  .trend__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .trend__legend { display: flex; gap: 14px; padding: 0 14px 4px; color: var(--muted); font-size: 11px; }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 9px; height: 9px; border-radius: 2px; background: #57b793; }
+  .swatch.error { background: #c0444f; border-radius: 50%; }
+  .chart-wrap { position: relative; padding: 0 12px 8px; }
+  .chart { width: 100%; height: 190px; display: block; }
+  .trend__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 4px 14px 12px; color: var(--muted); font-size: 11px; }
+  .two-col { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .85fr); gap: 12px; align-items: start; }
+  .table { width: 100%; border-collapse: collapse; }
+  .table th, .table td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line-soft); }
+  .table th { color: var(--muted); background: #f8fbf9; font-size: 11px; font-weight: 600; }
+  .table tr:last-child td { border-bottom: 0; }
+  .table tbody tr:hover { background: #f7fbf8; }
+  .node-name { display: grid; gap: 1px; }
+  .node-name strong { font-size: 12px; }
+  .node-name span { color: var(--muted); font-size: 10px; }
+  .tag { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 5px; font-size: 10px; font-weight: 600; background: #f1f6f3; color: var(--muted); }
+  .tag.ok { background: var(--mint-soft); color: var(--mint-dark); }
+  .tag.warn { background: var(--warn-soft); color: var(--warn); }
+  .tag.bad { background: var(--danger-soft); color: var(--danger); }
+  .linkish { border: 0; background: transparent; color: var(--mint); cursor: pointer; padding: 0; font-size: 11px; }
+  .checkline { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 11px; user-select: none; }
+  .checkline input { accent-color: var(--mint); }
+  .events { display: grid; gap: 2px; }
+  .event {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 8px; width: 100%;
+    padding: 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer;
+  }
+  .event:hover { background: var(--surface-2); }
+  .event__summary { font-size: 12px; line-height: 1.45; }
+  .event__time { grid-column: 2; color: var(--muted); font-size: 10px; }
+  .empty { padding: 34px 16px; text-align: center; color: var(--muted); }
+  .empty strong { display: block; color: var(--ink-2); margin-bottom: 4px; }
+  .details { overflow: hidden; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+  .details summary {
+    display: flex; align-items: center; gap: 8px; padding: 12px 14px; cursor: pointer;
+    list-style: none; font-size: 12px; font-weight: 600; color: var(--ink-2);
+  }
+  .details summary::-webkit-details-marker { display: none; }
+  .details summary::before { content: "▸"; color: var(--muted); transition: transform .15s ease; }
+  .details[open] summary::before { transform: rotate(90deg); }
+  .details summary small { margin-left: auto; color: var(--muted); font-weight: 400; }
+  .details__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 0 14px 14px; }
+  .detail-item { padding: 9px 10px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--surface-2); display: grid; gap: 3px; }
+  .detail-item span { color: var(--muted); font-size: 10px; }
+  .detail-item strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+  .null-legend { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 14px 14px; }
+  .null-legend span { padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); background: #fff; font-size: 10px; }
+  .modal-backdrop {
+    position: absolute; inset: 0; z-index: 20; display: none; place-items: center;
+    background: rgba(21, 46, 37, .28); backdrop-filter: blur(2px);
+  }
+  .modal-backdrop.open { display: grid; }
+  .modal {
+    width: min(560px, 88%); border: 1px solid var(--line); border-radius: 14px;
+    background: #fff; box-shadow: 0 30px 80px rgba(20,50,38,.24); overflow: hidden;
+  }
+  .modal__head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line-soft); }
+  .modal__head h3 { margin: 0; font-size: 14px; margin-right: auto; }
+  .modal__body { padding: 14px 16px; display: grid; gap: 9px; color: var(--ink-2); }
+  .modal__body code { padding: 2px 5px; border-radius: 4px; background: #f3f8f5; color: var(--mint-dark); font-size: 11px; }
+  .modal__foot { padding: 12px 16px; border-top: 1px solid var(--line-soft); display: flex; justify-content: flex-end; }
+  @media (max-width: 900px) {
+    .preview-bar__brand small { display: none; }
+    .viewport { padding: 10px; }
+  }
+</style>
+</head>
+<body>
+  <div class="preview-bar">
+    <div class="preview-bar__brand">
+      <div class="preview-bar__mark">✦</div>
+      <div><strong>Nexus v1.4.2 · API 网关运行总览</strong><br /><small>设计预览 · 白灰薄荷绿 · Element Plus 视觉</small></div>
+      <span class="example-badge">设计示例 · 全部为模拟数据</span>
+    </div>
+    <div class="control-group" role="group" aria-label="数据状态">
+      <span>状态</span>
+      <button type="button" data-state="normal" aria-pressed="true">正常</button>
+      <button type="button" data-state="abnormal" aria-pressed="false">异常</button>
+      <button type="button" data-state="empty" aria-pressed="false">无数据</button>
+    </div>
+    <div class="control-group" role="group" aria-label="预览尺寸">
+      <span>视口</span>
+      <button type="button" data-size="1440" aria-pressed="true">1440 × 900</button>
+      <button type="button" data-size="1920" aria-pressed="false">1920 × 1080</button>
+    </div>
+    <span class="zoom-note" id="zoomNote">按窗口缩放预览</span>
+  </div>
+
+  <div class="viewport" id="viewport">
+    <div class="stage" id="stage">
+    <div class="device" id="device" data-state="normal">
+      <header class="app-top">
+        <div class="brand">
+          <div class="brand__mark">✦</div>
+          <div><span class="brand__name">NEXUS</span><span class="brand__version">v1.4.2</span></div>
+        </div>
+        <nav class="device-nav" aria-label="主导航">
+          <button type="button">数字员工</button>
+          <button type="button">任务大厅</button>
+          <button type="button">数字图书馆</button>
+          <button type="button" class="active">API 网关</button>
+          <button type="button">配置中心</button>
+        </nav>
+        <span class="env"><i class="dot" id="envDot"></i><span id="envText">AgentScope 2.0.10 已连接</span></span>
+      </header>
+
+      <main class="page">
+        <div class="workspace">
+          <aside class="aside">
+            <div class="aside-title">API 网关</div>
+            <nav aria-label="API 网关菜单">
+              <div class="menu-group">
+                <div class="menu-group__title">监控</div>
+                <button class="menu-item active" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l2.5-6 4 12L16 12h5"/></svg>
+                  运行总览
+                </button>
+                <button class="menu-item" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>
+                  调用日志
+                </button>
+                <button class="menu-item" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 4h10v16H7zM10 8h4M10 12h4M10 16h2"/></svg>
+                  审计
+                </button>
+              </div>
+              <div class="menu-group">
+                <div class="menu-group__title">配置</div>
+                <button class="menu-item" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/></svg>
+                  上游节点
+                </button>
+                <button class="menu-item" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h7v7H4zM13 10h7v7h-7zM7.5 14v3h5.5"/></svg>
+                  资源池与路由
+                </button>
+                <button class="menu-item" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="12" r="3"/><path d="M11 12h9M17 12v3"/></svg>
+                  API Key
+                </button>
+              </div>
+            </nav>
+          </aside>
+
+          <section class="content">
+            <div class="content-head">
+              <span class="content-head__title">运行总览</span>
+              <div class="head-actions">
+                <label class="el-select" title="仅作用于请求数、TTFT 平均值、输出速度平均值">
+                  <span id="statsWindowLabel">统计窗口：今日</span>
+                  <select id="statsWindow" aria-label="统计窗口" style="border:0;background:transparent;outline:none;margin-left:6px">
+                    <option value="hour">本小时</option>
+                    <option value="today" selected>今日</option>
+                    <option value="7d">近 7 天</option>
+                    <option value="30d">近 30 天</option>
+                  </select>
+                </label>
+                <button class="el-button" id="refreshBtn" type="button">刷新</button>
+              </div>
+            </div>
+            <div class="content-toolbar">
+              <div class="health-line">
+                <span class="health-pill" id="healthPill"><i class="dot"></i><span id="healthText">正常</span></span>
+                <span id="healthImpact">全部生效路由可服务</span>
+                <span id="healthReason"></span>
+              </div>
+              <span class="page-toolbar__scope">统计窗口仅作用于请求数、TTFT 平均、输出速度平均；趋势使用自己的 1h/15m 窗口。</span>
+            </div>
+            <div class="metrics" id="metrics" aria-label="六项主指标"></div>
+
+            <section class="card trend" aria-label="调用趋势">
+              <div class="card__head">
+                <div>
+                  <h3>调用趋势</h3>
+                  <p>请求数与失败数</p>
+                </div>
+                <div class="trend__tools">
+                  <label class="el-select" title="趋势时间窗口">
+                    <select id="trendWindow" aria-label="趋势时间窗口" style="border:0;background:transparent;outline:none">
+                      <option value="1h" selected>近 1 小时</option>
+                      <option value="15m">近 15 分钟</option>
+                    </select>
+                  </label>
+                  <label class="el-select" title="趋势分组">
+                    <select id="trendGroup" aria-label="趋势分组" style="border:0;background:transparent;outline:none">
+                      <option value="none" selected>全部</option>
+                      <option value="model">按模型</option>
+                      <option value="node">按节点</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <div class="trend__legend">
+                <span class="legend-item"><i class="swatch"></i>请求数</span>
+                <span class="legend-item"><i class="swatch error"></i>失败数</span>
+              </div>
+              <div class="chart-wrap">
+                <svg class="chart" id="trendChart" viewBox="0 0 900 210" role="img" aria-label="调用趋势图"></svg>
+              </div>
+              <div class="trend__foot">
+                <span id="trendSummary">窗口内 12,840 次请求 · 失败 168 次</span>
+                <span id="trendBucket">5 分钟分桶</span>
+              </div>
+            </section>
+
+            <div class="two-col">
+              <section class="card" aria-label="节点与资源池">
+                <div class="card__head">
+                  <div>
+                    <h3>节点与资源池</h3>
+                  </div>
+                  <label class="checkline"><input type="checkbox" id="abnormalOnly" />只看异常</label>
+                </div>
+                <div class="card__body" style="padding:0">
+                  <table class="table">
+                    <thead><tr><th>节点</th><th>结论</th><th>健康</th><th>调度</th><th>当前并发</th><th></th></tr></thead>
+                    <tbody id="nodeRows"></tbody>
+                  </table>
+                  <div class="empty" id="nodeEmpty" hidden><strong>暂无节点</strong>当前没有可显示的上游节点。</div>
+                </div>
+              </section>
+
+              <section class="card" aria-label="最近事件">
+                <div class="card__head">
+                  <div>
+                    <h3>最近事件</h3>
+                  </div>
+                </div>
+                <div class="card__body" style="padding:6px">
+                  <div class="events" id="eventList"></div>
+                  <div class="empty" id="eventEmpty" hidden><strong>暂无事件</strong>运行态与配置审计会显示在这里。</div>
+                </div>
+              </section>
+            </div>
+
+            <details class="card details" id="detailPanel">
+              <summary>辅助指标 <small>近 5 分钟 · 连接与 TTFB 为所选统计窗口平均</small></summary>
+              <div class="details__grid" id="detailGrid"></div>
+              <div class="null-legend">
+                <span>无请求：计数为 0，窗口内没有调用</span>
+                <span>无采样：延迟/速度样本为空，不用 0 代替</span>
+                <span>接口失败：显示“加载失败”，可重试</span>
+                <span>无权限：显示“无权限”，不展示猜测数据</span>
+                <span>延迟均值趋势：当前接口不提供，本版本不展示</span>
+              </div>
+            </details>
+          </section>
+        </div>
+      </main>
+
+      <div class="modal-backdrop" id="logModal" role="dialog" aria-modal="true" aria-labelledby="logModalTitle">
+        <div class="modal">
+          <div class="modal__head">
+            <h3 id="logModalTitle">打开调用日志</h3>
+            <button class="linkish" type="button" id="closeModal">关闭</button>
+          </div>
+          <div class="modal__body" id="logModalBody"></div>
+          <div class="modal__foot"><button class="el-button primary" type="button" id="confirmLogs">按此条件查看日志</button></div>
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+<script>
+  const state = { mode: 'normal', size: 1440, statsWindow: 'today', trendWindow: '1h', trendGroup: 'none', abnormalOnly: false };
+  const WINDOW_LABEL = { hour: '本小时', today: '今日', '7d': '近 7 天', '30d': '近 30 天' };
+  const WINDOW_HINT = { hour: '自然小时', today: '自然日', '7d': '近 7 天', '30d': '近 30 天' };
+
+  const base = {
+    normal: {
+      env: ['ok', 'AgentScope 2.0.10 已连接'],
+      health: ['ok', '正常', '全部生效路由可服务', ''],
+      stats: { requests: 128430, ttft: 862, tps: 48.6 },
+      healthMetrics: { failure: 0.0126, failureSamples: 127820, failureCount: 1610, qps: 1.49, active: 37, activeLimit: 120, applies: true },
+      nodes: [
+        { name: 'qwen-primary', pool: '主资源池', conclusion: '可以服务', health: '健康', healthTone: 'ok', scheduling: '可调度', schedulingTone: 'ok', active: '18 / 60', abnormal: false },
+        { name: 'deepseek-backup', pool: '备用资源池', conclusion: '可以服务', health: '健康', healthTone: 'ok', scheduling: '可调度', schedulingTone: 'ok', active: '11 / 40', abnormal: false },
+        { name: 'glm-edge', pool: '边缘资源池', conclusion: '可以服务', health: '健康', healthTone: 'ok', scheduling: '可调度', schedulingTone: 'ok', active: '8 / 20', abnormal: false }
+      ],
+      events: [
+        { source: '运行', tone: 'warn', summary: 'deepseek-backup 健康探测恢复', time: '今天 14:32:18' },
+        { source: '配置', tone: 'ok', summary: '更新路由 qwen-plus 的资源池权重', time: '今天 13:48:02' },
+        { source: '运行', tone: 'warn', summary: 'qwen-primary 连续 2 次上游 429', time: '今天 12:05:44' },
+        { source: '配置', tone: 'ok', summary: '新增 API Key：数据平台只读', time: '今天 10:17:31' },
+        { source: '运行', tone: 'warn', summary: 'glm-edge 连接探测超时一次', time: '今天 09:41:07' }
+      ],
+      details: { retry: '2.71%', upstream429: '0.36%', stream: '0.18%', tokens: '621.4 token/s', unknown: '0.42%', connect: '34 ms', ttfb: '412 ms' },
+      trend: [820, 910, 1040, 980, 1120, 1260, 1180, 1080, 1320, 1410, 1280, 1150, 990],
+      errors: [6, 8, 12, 9, 14, 18, 15, 11, 21, 24, 19, 13, 8]
+    },
+    abnormal: {
+      env: ['warn', 'AgentScope 2.0.10 已连接'],
+      health: ['bad', '降级', '部分生效路由不可服务', 'qwen-primary 健康异常；deepseek-backup 处于半开熔断'],
+      stats: { requests: 118240, ttft: 1840, tps: 31.2 },
+      healthMetrics: { failure: 0.0482, failureSamples: 117310, failureCount: 5655, qps: 1.72, active: 96, activeLimit: 120, applies: true },
+      nodes: [
+        { name: 'qwen-primary', pool: '主资源池', conclusion: '需要处理', health: '异常', healthTone: 'bad', scheduling: '熔断', schedulingTone: 'bad', active: '54 / 60', abnormal: true },
+        { name: 'deepseek-backup', pool: '备用资源池', conclusion: '需要处理', health: '未知', healthTone: 'warn', scheduling: '半开', schedulingTone: 'warn', active: '31 / 40', abnormal: true },
+        { name: 'glm-edge', pool: '边缘资源池', conclusion: '可以服务', health: '健康', healthTone: 'ok', scheduling: '可调度', schedulingTone: 'ok', active: '11 / 20', abnormal: false }
+      ],
+      events: [
+        { source: '运行', tone: 'bad', summary: 'qwen-primary 连续失败达到熔断阈值', time: '今天 14:41:52' },
+        { source: '运行', tone: 'warn', summary: 'deepseek-backup 进入半开探测', time: '今天 14:39:10' },
+        { source: '运行', tone: 'bad', summary: '上游 429 比例超过 4%', time: '今天 14:35:27' },
+        { source: '配置', tone: 'ok', summary: '提高 glm-edge 路由权重', time: '今天 14:22:04' },
+        { source: '运行', tone: 'warn', summary: '流式请求中断率升高', time: '今天 14:11:39' }
+      ],
+      details: { retry: '8.94%', upstream429: '4.62%', stream: '1.37%', tokens: '388.2 token/s', unknown: '2.18%', connect: '96 ms', ttfb: '1830 ms' },
+      trend: [760, 880, 930, 1010, 1180, 1260, 1310, 1420, 1510, 1380, 1290, 1140, 940],
+      errors: [14, 22, 31, 46, 72, 96, 118, 141, 156, 132, 108, 84, 51]
+    },
+    empty: {
+      env: ['ok', 'AgentScope 2.0.10 已连接'],
+      health: ['ok', '正常', '暂无流量', ''],
+      stats: { requests: 0, ttft: null, tps: null },
+      healthMetrics: { failure: null, failureSamples: 0, failureCount: 0, qps: 0, active: 0, activeLimit: 120, applies: false },
+      nodes: [],
+      events: [],
+      details: { retry: null, upstream429: null, stream: null, tokens: null, unknown: null, connect: null, ttfb: null },
+      trend: [],
+      errors: []
+    }
+  };
+
+  const $ = (selector) => document.querySelector(selector);
+  const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+  function fmtInt(value) { return value == null ? null : new Intl.NumberFormat('zh-CN').format(value); }
+  function pct(value) { return value == null ? null : (value * 100).toFixed(2) + '%'; }
+  function nullText(value, emptyText) { return value == null ? emptyText : value; }
+
+  function metricCards() {
+    const data = base[state.mode];
+    const w = state.statsWindow;
+    const wl = WINDOW_LABEL[w];
+    const hm = data.healthMetrics;
+    const failureValue = hm.failure == null ? '无终态样本' : pct(hm.failure);
+    const failureHint = hm.failure == null
+      ? '近 5 分钟没有已确认结束的请求'
+      : `近 5 分钟 ${fmtInt(hm.failureSamples)} 个终态样本 · 失败 ${fmtInt(hm.failureCount)} 条${hm.applies ? '' : ' · 样本不足 20'}`;
+    const activeText = hm.active == null ? '加载失败' : `${hm.active} / ${hm.activeLimit}`;
+    const activeHint = hm.active == null ? '运行态采集失败，请重试' : '实时运行态，不受统计窗口影响';
+    const cards = [
+      { key: 'requests', label: '请求数', value: fmtInt(data.stats.requests), unit: '条', window: wl, hint: `${WINDOW_HINT[w]}窗口内已落库调用`, empty: false },
+      { key: 'failure', label: '请求失败率', value: failureValue, unit: '', window: '近 5 分钟', hint: failureHint, empty: hm.failure == null },
+      { key: 'qps', label: 'QPS', value: hm.qps == null ? '无采样' : hm.qps.toFixed(2), unit: 'req/s', window: '近 1 分钟', hint: '近 1 分钟请求数 / 60 秒', empty: hm.qps == null },
+      { key: 'ttft', label: '首 Token 延迟（平均）', value: data.stats.ttft == null ? '无采样' : Math.round(data.stats.ttft), unit: 'ms', window: `${wl}平均`, hint: '所选窗口内已确认结束且含首 Token 的请求', empty: data.stats.ttft == null },
+      { key: 'tps', label: '输出速度（平均）', value: data.stats.tps == null ? '无采样' : data.stats.tps.toFixed(1), unit: 'token/s', window: `${wl}平均`, hint: '所选窗口内的输出速度平均值', empty: data.stats.tps == null },
+      { key: 'active', label: '当前并发数', value: activeText, unit: '', window: '实时', hint: activeHint, empty: hm.active == null }
+    ];
+    return cards.map((card) => `
+      <article class="metric${card.empty ? ' is-empty' : ''}" data-testid="gateway-metric-${card.key}">
+        <div class="metric__top"><span class="metric__label">${card.label}</span><span class="window-tag">${card.window}</span></div>
+        <div class="metric__value">${card.value}${card.unit && !card.empty ? ` <small>${card.unit}</small>` : ''}</div>
+        <div class="metric__hint">${card.hint}</div>
+      </article>`).join('');
+  }
+
+  function renderNodes() {
+    const data = base[state.mode];
+    const rows = state.abnormalOnly ? data.nodes.filter((node) => node.abnormal) : data.nodes.slice().sort((a, b) => Number(b.abnormal) - Number(a.abnormal));
+    $('#nodeRows').innerHTML = rows.map((node) => `
+      <tr>
+        <td><div class="node-name"><strong>${node.name}</strong><span>${node.pool}</span></div></td>
+        <td>${node.conclusion}</td>
+        <td><span class="tag ${node.healthTone}">${node.health}</span></td>
+        <td><span class="tag ${node.schedulingTone}">${node.scheduling}</span></td>
+        <td>${node.active}</td>
+        <td><button class="linkish" type="button" data-node-logs="${node.name}">查看日志</button></td>
+      </tr>`).join('');
+    $('#nodeEmpty').hidden = rows.length > 0;
+    $('#nodeRows').closest('table').hidden = rows.length === 0;
+  }
+
+  function renderEvents() {
+    const data = base[state.mode];
+    $('#eventList').innerHTML = data.events.map((event, index) => `
+      <button class="event" type="button" data-event-index="${index}">
+        <span class="tag ${event.tone}">${event.source}</span>
+        <span class="event__summary">${event.summary}</span>
+        <time class="event__time">${event.time}</time>
+      </button>`).join('');
+    $('#eventEmpty').hidden = data.events.length > 0;
+  }
+
+  function renderDetails() {
+    const d = base[state.mode].details;
+    const wl = WINDOW_LABEL[state.statsWindow];
+    const items = [
+      ['重试率', d.retry, '近 5 分钟 · 额外上游尝试 / 已确认结束'],
+      ['上游 429', d.upstream429, '近 5 分钟 · 仅上游返回'],
+      ['流式中断率', d.stream, '近 5 分钟 · 流式请求中的中断占比'],
+      ['Token 吞吐量', d.tokens, '近 5 分钟 · 已知 token / 300 秒'],
+      ['Token 用量缺失率', d.unknown, '近 5 分钟 · 未返回 usage 的占比'],
+      ['连接耗时（平均）', d.connect, `${wl} · 已确认结束请求平均`],
+      ['TTFB（平均）', d.ttfb, `${wl} · 已确认结束请求平均`]
+    ];
+    $('#detailGrid').innerHTML = items.map(([label, value, hint]) => `
+      <div class="detail-item"><span>${label}</span><strong>${nullText(value, '暂无数据')}</strong><span>${hint}</span></div>`).join('');
+  }
+
+  function renderTrend() {
+    const data = base[state.mode];
+    const svg = $('#trendChart');
+    const groupMultiplier = state.trendGroup === 'none' ? 1 : state.trendGroup === 'model' ? 0.86 : 0.73;
+    const requests = data.trend.map((value) => Math.round(value * groupMultiplier));
+    const errors = data.errors.map((value) => Math.round(value * groupMultiplier));
+    const total = requests.reduce((sum, value) => sum + value, 0);
+    const totalErrors = errors.reduce((sum, value) => sum + value, 0);
+    const bucket = state.trendWindow === '1h' ? '5 分钟分桶' : '1 分钟分桶';
+    $('#trendSummary').textContent = requests.length ? `窗口内 ${fmtInt(total)} 次请求 · 失败 ${fmtInt(totalErrors)} 次` : '暂无数据';
+    $('#trendBucket').textContent = bucket;
+    svg.setAttribute('viewBox', '0 0 900 210');
+    if (!requests.length) {
+      svg.innerHTML = `<rect x="0" y="0" width="900" height="210" fill="#ffffff"/><text x="450" y="105" text-anchor="middle" fill="#93a69b" font-size="13">所选窗口暂无调用数据</text>`;
+      return;
+    }
+    const width = 900, height = 210, left = 44, right = 14, top = 14, bottom = 28;
+    const plotW = width - left - right;
+    const plotH = height - top - bottom;
+    const maxRequests = Math.max(...requests, 1) * 1.15;
+    const maxErrors = Math.max(...errors, 1) * 1.4;
+    const step = plotW / requests.length;
+    const barW = Math.max(6, step * 0.48);
+    const x = (index) => left + step * index + step / 2;
+    const yReq = (value) => top + plotH - (value / maxRequests) * plotH;
+    const yErr = (value) => top + plotH - (value / maxErrors) * plotH;
+    const gridLines = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+      const y = top + plotH * ratio;
+      return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" stroke="#edf3ef" stroke-width="1"/>`;
+    }).join('');
+    const bars = requests.map((value, index) => `
+      <rect x="${(x(index) - barW / 2).toFixed(1)}" y="${yReq(value).toFixed(1)}" width="${barW.toFixed(1)}" height="${(top + plotH - yReq(value)).toFixed(1)}" rx="3" fill="#8fd0b6">
+        <title>${fmtInt(value)} 次请求</title>
+      </rect>`).join('');
+    const points = errors.map((value, index) => `${x(index).toFixed(1)},${yErr(value).toFixed(1)}`).join(' ');
+    const dots = errors.map((value, index) => `<circle cx="${x(index).toFixed(1)}" cy="${yErr(value).toFixed(1)}" r="3" fill="#c0444f"><title>${fmtInt(value)} 次失败</title></circle>`).join('');
+    const labels = requests.map((value, index) => {
+      if (index % (requests.length > 10 ? 2 : 1) !== 0) return '';
+      const label = state.trendWindow === '1h' ? `${(index * 5).toString().padStart(2, '0')}m` : `${index + 1}m`;
+      return `<text x="${x(index).toFixed(1)}" y="${height - 8}" text-anchor="middle" fill="#93a69b" font-size="10">${label}</text>`;
+    }).join('');
+    svg.innerHTML = `<rect x="0" y="0" width="900" height="210" fill="#ffffff"/>${gridLines}
+      <line x1="${left}" y1="${top + plotH}" x2="${width - right}" y2="${top + plotH}" stroke="#dfe9e3" stroke-width="1"/>
+      ${bars}<polyline points="${points}" fill="none" stroke="#c0444f" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}${labels}`;
+  }
+
+  function renderAll() {
+    const data = base[state.mode];
+    $('#metrics').innerHTML = metricCards();
+    renderNodes();
+    renderEvents();
+    renderDetails();
+    renderTrend();
+    const [tone, text] = data.health;
+    const pill = $('#healthPill');
+    pill.className = `health-pill${tone === 'ok' ? '' : tone === 'warn' ? ' warn' : ' bad'}`;
+    pill.querySelector('.dot').className = `dot${tone === 'ok' ? '' : tone === 'warn' ? ' warn' : ' bad'}`;
+    $('#healthText').textContent = text;
+    $('#healthImpact').textContent = data.health[2];
+    $('#healthReason').textContent = data.health[3] || '';
+    $('#envDot').className = `dot${data.env[0] === 'ok' ? '' : ' warn'}`;
+    $('#envText').textContent = data.env[1];
+    $('#statsWindowLabel').textContent = `统计窗口：${WINDOW_LABEL[state.statsWindow]}`;
+    $('#abnormalOnly').checked = state.abnormalOnly;
+    $('#detailPanel').open = state.mode !== 'empty';
+    $('#device').dataset.state = state.mode;
+  }
+
+  function setMode(mode) {
+    state.mode = mode;
+    $$('[data-state]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.state === mode)));
+    renderAll();
+  }
+
+  function setSize(size) {
+    state.size = Number(size);
+    const width = state.size === 1920 ? 1920 : 1440;
+    const height = state.size === 1920 ? 1080 : 900;
+    $('#device').style.width = `${width}px`;
+    $('#device').style.height = `${height}px`;
+    $$('[data-size]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.size) === state.size)));
+    fit();
+  }
+
+  function fit() {
+    const width = state.size === 1920 ? 1920 : 1440;
+    const height = state.size === 1920 ? 1080 : 900;
+    const availableW = Math.max(320, $('#viewport').clientWidth - 44);
+    const availableH = Math.max(420, window.innerHeight - 110);
+    const scale = Math.min(1, availableW / width, availableH / height);
+    const stage = $('#stage');
+    const device = $('#device');
+    stage.style.width = `${Math.round(width * scale)}px`;
+    stage.style.height = `${Math.round(height * scale)}px`;
+    device.style.transform = `scale(${scale})`;
+    $('#zoomNote').textContent = `预览缩放 ${Math.round(scale * 100)}% · ${width} × ${height}`;
+  }
+
+  function openLogModal(title, lines, params) {
+    $('#logModalTitle').textContent = title;
+    $('#logModalBody').innerHTML = lines.map((line) => `<div>${line}</div>`).join('') +
+      `<div style="margin-top:4px;padding-top:8px;border-top:1px solid #edf3ef">查询参数：${params.map((item) => `<code>${item}</code>`).join(' ')}</div>`;
+    $('#logModal').classList.add('open');
+  }
+
+  function closeLogModal() { $('#logModal').classList.remove('open'); }
+
+  $$('[data-state]').forEach((button) => button.addEventListener('click', () => setMode(button.dataset.state)));
+  $$('[data-size]').forEach((button) => button.addEventListener('click', () => setSize(button.dataset.size)));
+  $('#statsWindow').addEventListener('change', (event) => { state.statsWindow = event.target.value; renderAll(); });
+  $('#trendWindow').addEventListener('change', (event) => { state.trendWindow = event.target.value; renderTrend(); });
+  $('#trendGroup').addEventListener('change', (event) => { state.trendGroup = event.target.value; renderTrend(); });
+  $('#abnormalOnly').addEventListener('change', (event) => { state.abnormalOnly = event.target.checked; renderNodes(); });
+  $('#refreshBtn').addEventListener('click', () => {
+    const button = $('#refreshBtn');
+    button.textContent = '已刷新（示例）';
+    setTimeout(() => { button.textContent = '刷新'; }, 900);
+  });
+  $('#nodeRows').addEventListener('click', (event) => {
+    const name = event.target.closest('[data-node-logs]')?.dataset.nodeLogs;
+    if (!name) return;
+    openLogModal('按节点查看调用日志', [`节点：${name}`, '时间范围：最近 5 分钟'], [`node_id=${name}`, 'from=-5m', 'to=now']);
+  });
+  $('#eventList').addEventListener('click', (event) => {
+    const index = event.target.closest('[data-event-index]')?.dataset.eventIndex;
+    if (index == null) return;
+    const item = base[state.mode].events[index];
+    openLogModal('按事件查看调用日志', [`事件：${item.summary}`, `时间：${item.time}`, '范围：事件前后各 5 分钟'], ['event=' + index, 'from=-5m', 'to=+5m']);
+  });
+  $('#closeModal').addEventListener('click', closeLogModal);
+  $('#confirmLogs').addEventListener('click', closeLogModal);
+  $('#logModal').addEventListener('click', (event) => { if (event.target === $('#logModal')) closeLogModal(); });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeLogModal(); });
+  window.addEventListener('resize', fit);
+
+  setSize(1440);
+  setMode('normal');
+</script>
+</body>
+</html>

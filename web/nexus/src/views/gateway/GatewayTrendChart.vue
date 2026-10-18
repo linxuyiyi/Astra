@@ -1,5 +1,5 @@
 <template>
-  <div ref="chartRef" class="gateway-trend" :class="{ 'gateway-trend--tall': tall }" role="img" :aria-label="ariaLabel" />
+  <div ref="chartRef" class="gateway-trend" :class="{ 'gateway-trend--tall': tall, 'gateway-trend--compact': compact }" role="img" :aria-label="ariaLabel" />
 </template>
 
 <script setup lang="ts">
@@ -16,11 +16,13 @@ const props = withDefaults(
   defineProps<{
     buckets?: GatewayStatBucket[]
     points?: Array<{ bucket_start: string; value: number | null }>
-    mode?: 'tokens' | 'requests' | 'value'
+    callPoints?: Array<{ bucket_start: string; requests: number; errors: number }>
+    mode?: 'tokens' | 'requests' | 'value' | 'calls'
     valueName?: string
     tall?: boolean
+    compact?: boolean
   }>(),
-  { buckets: () => [], points: () => [], mode: 'tokens', valueName: 'TTFT P95', tall: false },
+  { buckets: () => [], points: () => [], callPoints: () => [], mode: 'tokens', valueName: '数值', tall: false, compact: false },
 )
 
 const chartRef = ref<HTMLElement | null>(null)
@@ -30,6 +32,7 @@ echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, Canvas
 const ariaLabel = computed(() => {
   if (props.mode === 'tokens') return 'API 网关 Token 使用趋势图'
   if (props.mode === 'value') return `API 网关 ${props.valueName} 趋势图`
+  if (props.mode === 'calls') return 'API 网关请求与失败趋势图'
   return 'API 网关请求量趋势图'
 })
 
@@ -38,7 +41,7 @@ function parseTime(value: string) {
 }
 
 function axisLabels() {
-  const points = props.mode === 'value' ? props.points : props.buckets
+  const points = props.mode === 'value' ? props.points : props.mode === 'calls' ? props.callPoints : props.buckets
   if (points.length < 2) {
     return points.map((point) => parseTime(point.bucket_start).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }))
   }
@@ -60,11 +63,16 @@ function render() {
       ]
     : props.mode === 'value'
       ? [{ name: props.valueName, data: props.points.map((item) => item.value), color: '#0f6e4c' }]
-      : [
-          { name: '请求数', data: props.buckets.map((item) => item.requests), color: '#159d65' },
-          { name: '成功', data: props.buckets.map((item) => item.success), color: '#3d8ff0' },
-          { name: '失败', data: props.buckets.map((item) => item.errors), color: '#e45d6a' },
-        ]
+      : props.mode === 'calls'
+        ? [
+            { name: '请求数', data: props.callPoints.map((item) => item.requests), color: '#159d65' },
+            { name: '失败数', data: props.callPoints.map((item) => item.errors), color: '#e45d6a' },
+          ]
+        : [
+            { name: '请求数', data: props.buckets.map((item) => item.requests), color: '#159d65' },
+            { name: '成功', data: props.buckets.map((item) => item.success), color: '#3d8ff0' },
+            { name: '失败', data: props.buckets.map((item) => item.errors), color: '#e45d6a' },
+          ]
   chart.setOption({
     textStyle: typography,
     backgroundColor: 'transparent',
@@ -91,6 +99,7 @@ function render() {
       smooth: true,
       symbol: 'none',
       data: item.data,
+      itemStyle: { color: item.color },
       lineStyle: { color: item.color, width: 2 },
       areaStyle: index === 0 ? { color: `${item.color}14` } : undefined,
     })),
@@ -104,7 +113,7 @@ onMounted(async () => {
     render()
   }
 })
-watch(() => [props.buckets, props.points, props.mode, props.valueName], render, { deep: true })
+watch(() => [props.buckets, props.points, props.callPoints, props.mode, props.valueName], render, { deep: true })
 useResizeObserver(chartRef, () => chart?.resize())
 onBeforeUnmount(() => chart?.dispose())
 </script>
@@ -112,4 +121,5 @@ onBeforeUnmount(() => chart?.dispose())
 <style scoped>
 .gateway-trend { width: 100%; height: 200px; }
 .gateway-trend--tall { height: 240px; }
+.gateway-trend--compact { height: 180px; }
 </style>

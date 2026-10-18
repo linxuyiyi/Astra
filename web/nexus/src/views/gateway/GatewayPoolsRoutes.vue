@@ -101,7 +101,7 @@
         <div class="gateway-pools-routes__card-head">
           <div class="gateway-pools-routes__card-title">
             <h4>{{ selectedPoolName ? `${selectedPoolName} 的路由` : '模型路由' }}</h4>
-            <ElText type="info">点上面的资源池，这里只显示它的路由，不用对照名称。</ElText>
+
           </div>
           <ElButton type="primary" :icon="Plus" data-testid="gateway-route-create" @click="openRouteCreate">新增路由</ElButton>
         </div>
@@ -264,7 +264,7 @@
       <template #header>
         <div class="gateway-pools-routes__card-title">
           <h4>声明模型分布</h4>
-          <ElText>按上游节点声明支持的模型计数，不是调用量。</ElText>
+          <ElText>按节点声明模型计数</ElText>
         </div>
       </template>
       <ul v-if="modelRows.length" class="gateway-model-dist">

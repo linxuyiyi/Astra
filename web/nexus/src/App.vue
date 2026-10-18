@@ -3,7 +3,7 @@
     <header class="top">
       <div class="brand">
         <div class="mark">✦</div>
-        <div class="brandname">NEXUS <span class="version">v1.4.1</span></div>
+        <div class="brandname">NEXUS <span class="version">v1.4.2</span></div>
       </div>
       <nav class="top-nav" aria-label="页面导航">
         <router-link

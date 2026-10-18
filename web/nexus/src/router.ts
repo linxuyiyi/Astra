@@ -1,14 +1,14 @@
 import { createRouter, createWebHistory, type LocationQueryRaw, type RouteLocationGeneric } from "vue-router";
-import EmployeesView from "./views/EmployeesView.vue";
-import ChatView from "./views/ChatView.vue";
-import TeamView from "./views/TeamView.vue";
+import DigitalEmployeeChatView from "./views/DigitalEmployeeChatView.vue";
 import TaskListView from "./views/TaskListView.vue";
 import TaskDetailView from "./views/TaskDetailView.vue";
 import EmployeeListView from "./views/EmployeeListView.vue";
 import EmployeeDetailView from "./views/EmployeeDetailView.vue";
 import DigitalLibraryView from "./views/DigitalLibraryView.vue";
-import InterventionView from "./views/InterventionView.vue";
+import EmployeesView from "./views/EmployeesView.vue";
 import SettingsView from "./views/SettingsView.vue";
+import AgentscopeView from "./views/settings/AgentscopeView.vue";
+import CategoryConfig from "./views/settings/CategoryConfig.vue";
 import GatewayView from "./views/gateway/GatewayView.vue";
 import GatewayNodeDetailView from "./views/gateway/GatewayNodeDetailView.vue";
 import GatewayOverview from "./views/gateway/GatewayOverview.vue";
@@ -33,20 +33,52 @@ function gatewayIndexRedirect(to: RouteLocationGeneric) {
   return { path: `/gateway/${segment}`, query: rest as LocationQueryRaw };
 }
 
+function keepQuery(path: string) {
+  return (to: RouteLocationGeneric) => ({ path, query: to.query, hash: to.hash });
+}
+
+function teamRedirect(to: RouteLocationGeneric) {
+  const { channel, ...rest } = to.query;
+  return {
+    path: "/chat",
+    query: {
+      ...rest,
+      type: "group",
+      ...(typeof channel === "string" ? { group: channel } : {}),
+    } as LocationQueryRaw,
+    hash: to.hash,
+  };
+}
+
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: "/", redirect: "/employees" },
-    { path: "/employees", name: "employees", component: EmployeesView },
-    { path: "/chat", name: "chat", component: ChatView },
-    { path: "/team", name: "team", component: TeamView },
+    { path: "/", redirect: "/chat" },
+    { path: "/employees", redirect: keepQuery("/settings/employees") },
+    { path: "/chat", name: "chat", component: DigitalEmployeeChatView },
+    { path: "/team", redirect: teamRedirect },
     { path: "/tasks", name: "tasks", component: TaskListView },
     { path: "/tasks/:id", name: "task-detail", component: TaskDetailView },
-    { path: "/workers", name: "workers", component: EmployeeListView },
-    { path: "/workers/:id", name: "worker-detail", component: EmployeeDetailView },
+    { path: "/workers", redirect: keepQuery("/settings/workers") },
+    { path: "/workers/:id", redirect: (to) => ({ path: `/settings/workers/${String(to.params.id)}`, query: to.query, hash: to.hash }) },
     { path: "/library", name: "library", component: DigitalLibraryView },
-    { path: "/settings", name: "settings", component: SettingsView },
-    { path: "/interventions", name: "interventions", component: InterventionView },
+    {
+      path: "/settings",
+      name: "settings",
+      component: SettingsView,
+      children: [
+        { path: "", redirect: "/settings/employees" },
+        { path: "employees", name: "settings-employees", component: EmployeesView },
+        { path: "workers", name: "settings-workers", component: EmployeeListView },
+        { path: "workers/:id", name: "settings-worker-detail", component: EmployeeDetailView },
+        { path: "categories", name: "settings-categories", component: CategoryConfig },
+        { path: "agentscope", name: "settings-agentscope", component: AgentscopeView },
+      ],
+    },
+    {
+      path: "/interventions",
+      redirect: (to) => ({ path: "/tasks", query: { ...to.query, view: "interventions" }, hash: to.hash }),
+    },
     {
       path: "/gateway",
       component: GatewayView,

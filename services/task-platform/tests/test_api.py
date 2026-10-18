@@ -52,6 +52,44 @@ def test_task_api_uses_session_business_contract():
         assert client.get(f"/api/tasks/{task['id']}").json()["status"] == "CANCELED"
 
 
+def test_task_list_filters_by_exact_source_session_and_conversation():
+    with TestClient(app) as client:
+        conversation = client.post(
+            "/api/tasks",
+            json=task_payload(
+                title="私聊来源任务",
+                source_session_id="ses-private-a",
+                source_conversation_id="conv-private-a",
+            ),
+        ).json()
+        channel = client.post(
+            "/api/tasks",
+            json=task_payload(
+                title="群组来源任务",
+                source_session_id="ses-group-a",
+                source_channel_id="ch-group-a",
+            ),
+        ).json()
+        other = client.post(
+            "/api/tasks",
+            json=task_payload(
+                title="其它会话任务",
+                source_session_id="ses-private-b",
+                source_conversation_id="conv-private-b",
+            ),
+        ).json()
+
+        by_session = client.get("/api/tasks", params={"source_session_id": "ses-private-a"}).json()
+        assert [item["id"] for item in by_session] == [conversation["id"]]
+        by_conversation = client.get(
+            "/api/tasks", params={"source_conversation_id": "conv-private-a"}
+        ).json()
+        assert [item["id"] for item in by_conversation] == [conversation["id"]]
+        by_channel = client.get("/api/tasks", params={"source_channel_id": "ch-group-a"}).json()
+        assert [item["id"] for item in by_channel] == [channel["id"]]
+        assert other["id"] not in {item["id"] for item in by_session + by_conversation + by_channel}
+
+
 def test_task_patch_updates_open_task_and_refuses_concluded():
     with TestClient(app) as client:
         created = client.post("/api/tasks", json=task_payload(title="可编辑任务")).json()

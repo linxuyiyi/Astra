@@ -1,12 +1,19 @@
 <template>
   <div class="astra-page" data-testid="task-list-page">
-    <AstraPageHeader title="任务管理" description="现在有哪些任务，哪些正在正常运行，哪些需要人工处理。" testid="task-header">
+    <AstraPageHeader title="任务大厅" testid="task-header">
+      <ElRadioGroup v-model="view" aria-label="任务大厅视图">
+        <ElRadioButton value="list">任务列表</ElRadioButton>
+        <ElRadioButton value="interventions">待处理</ElRadioButton>
+      </ElRadioGroup>
       <template #actions>
         <ElButton :icon="RefreshCw" :loading="store.loading" data-testid="task-refresh" @click="store.refresh()">刷新</ElButton>
         <ElButton type="primary" :icon="Plus" data-testid="task-create" @click="createOpen = true">创建任务</ElButton>
       </template>
     </AstraPageHeader>
 
+    <InterventionPanel v-if="view === 'interventions'" />
+
+    <template v-else>
     <AstraFilterPanel label="任务筛选" testid="task-filter">
       <ElSelect v-model="filters.type" class="astra-filter__select" data-testid="task-filter-type" aria-label="任务类型" placeholder="类型：全部" clearable>
         <ElOption value="ISSUE" label="问题" />
@@ -84,6 +91,7 @@
         <ElPagination v-model:current-page="currentPage" v-model:page-size="pageSize" :total="total" :page-sizes="[20, 50, 100]" layout="sizes, prev, pager, next" data-testid="task-pagination" />
       </nav>
     </footer>
+    </template>
 
     <TaskCreateDrawer :open="createOpen || Boolean(editTask)" :task="editTask" @close="closeEditor" @created="onTaskCreated" @saved="onTaskSaved" />
 
@@ -112,7 +120,7 @@
 import { Ban, Play, Plus, RefreshCw, RotateCcw, RotateCw, Search, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { ElButton, ElDialog, ElEmpty, ElInput, ElOption, ElPagination, ElSelect, ElTable, ElTableColumn, ElTag, ElText, vLoading } from 'element-plus'
+import { ElButton, ElDialog, ElEmpty, ElInput, ElOption, ElPagination, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn, ElTag, ElText, vLoading } from 'element-plus'
 import { api } from '@/api/client'
 import type { Task, TaskPriority, TaskStatus } from '@/api/types'
 import { listEmployees } from '../api'
@@ -121,6 +129,7 @@ import AstraFilterPanel from '@/components/astra/AstraFilterPanel.vue'
 import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
 import RowMenu, { type RowMenuItem } from '@/components/astra/RowMenu.vue'
 import RuntimeStatusBadge from '@/components/runtime/RuntimeStatusBadge.vue'
+import InterventionPanel from '@/components/task/InterventionPanel.vue'
 import TaskCreateDrawer from '@/components/task/TaskCreateDrawer.vue'
 import { notify } from '@/composables/useToast'
 import {
@@ -136,6 +145,7 @@ const store = useAstraStore()
 const route = useRoute()
 const router = useRouter()
 const createOpen = ref(route.query.create === '1')
+const view = ref<'list' | 'interventions'>(route.query.view === 'interventions' ? 'interventions' : 'list')
 const editTask = ref<Task | null>(null)
 const owners = ref<NexusEmployee[]>([])
 const pageSize = ref(20)
@@ -157,6 +167,15 @@ const filters = reactive({
   owner: typeof route.query.owner === 'string' ? route.query.owner : '',
 })
 watch(() => filters, () => { currentPage.value = 1 }, { deep: true })
+watch(view, (value) => {
+  const query = { ...route.query }
+  if (value === 'interventions') query.view = 'interventions'
+  else delete query.view
+  void router.replace({ path: '/tasks', query })
+})
+watch(() => route.query.view, (value) => {
+  view.value = value === 'interventions' ? 'interventions' : 'list'
+})
 
 onMounted(async () => {
   await store.refresh()

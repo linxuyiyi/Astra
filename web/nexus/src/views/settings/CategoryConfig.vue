@@ -1,6 +1,6 @@
 <template>
   <div class="astra-page" data-testid="category-page">
-    <AstraPageHeader title="任务分类" description="分类用于表示任务所属的业务领域；排序小的排在前面，提示词随分类下发给对应 Worker。" testid="category-header">
+    <AstraPageHeader title="任务分类" testid="category-header">
       <template #actions>
         <ElButton :icon="RefreshCw" :loading="loading" data-testid="category-refresh" @click="load">刷新</ElButton>
         <ElButton type="primary" :icon="Plus" data-testid="category-create" @click="beginCreate">新增分类</ElButton>

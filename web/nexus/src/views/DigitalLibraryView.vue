@@ -1,6 +1,6 @@
 <template>
   <ElContainer direction="vertical" class="digital-library-page" data-testid="digital-library-page">
-    <AstraPageHeader title="数字图书馆" description="管理团队知识、经验与项目资料。" testid="library-header">
+    <AstraPageHeader title="数字图书馆" testid="library-header">
       <template #actions>
         <ElButton :icon="RefreshCw" :loading="refreshing" data-testid="library-refresh" @click="refreshAll">刷新</ElButton>
         <template v-if="permissions?.can_manage">

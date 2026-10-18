@@ -193,7 +193,7 @@ def system_prompt(body: EmployeeBody | dict[str, Any]) -> str:
         f"你是{name}，责任领域是{domain}。\n"
         f"职责说明：\n{description}\n"
         f"工作指令：\n{instructions}\n"
-        "需要其他员工协助时调用 contact_employee，不要代替对方编写答复。"
+        "需要其他员工协助时调用 contact_employee；对方的回复由对方自己产生。"
     )
     skills = body.skills if isinstance(body, EmployeeBody) else list(body.get("skills") or [])
     employee_id = None if isinstance(body, EmployeeBody) else body.get("id")
@@ -1190,6 +1190,7 @@ def create_app() -> FastAPI:
             "agentscope_version": PINNED_VERSION,
             "configured": client.configured,
             "reachable": await client.probe(),
+            "ui_url": os.environ.get("NEXUS_AGENTSCOPE_UI_URL", "").strip(),
         }
 
     async def publish_catalog(client: AgentScopeClient, load) -> dict[str, Any]:

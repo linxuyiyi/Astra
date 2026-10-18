@@ -1,11 +1,5 @@
 <template>
-  <div class="astra-page" data-testid="intervention-page">
-    <AstraPageHeader title="待处理" description="处理需要人工介入、长时间无活动或继续执行的任务。" testid="intervention-header">
-      <template #actions>
-        <ElButton :icon="RefreshCw" :loading="store.loading" data-testid="intervention-refresh" @click="store.refresh()">刷新</ElButton>
-      </template>
-    </AstraPageHeader>
-
+  <div class="intervention-panel" data-testid="intervention-page">
     <AstraFilterPanel label="待处理筛选" testid="intervention-filter">
       <ElButton
         v-for="state in states"
@@ -14,6 +8,9 @@
         :data-testid="`intervention-state-${state}`"
         @click="selected = state"
       >{{ runtimeStatusLabel(state) }} · {{ countOf(state) }}</ElButton>
+      <template #search>
+        <ElButton :icon="RefreshCw" :loading="store.loading" data-testid="intervention-refresh" @click="store.refresh()">刷新</ElButton>
+      </template>
     </AstraFilterPanel>
 
     <section class="astra-table-panel">
@@ -61,7 +58,6 @@ import { api } from '@/api/client'
 import type { Task } from '@/api/types'
 import { notify } from '@/composables/useToast'
 import AstraFilterPanel from '@/components/astra/AstraFilterPanel.vue'
-import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
 import RuntimeStatusBadge from '@/components/runtime/RuntimeStatusBadge.vue'
 import { runtimeStatusLabel } from '@/features/runtime/status'
 import { useAstraStore } from '@/stores/astra'
@@ -86,7 +82,7 @@ onMounted(() => { void store.refresh() })
 </script>
 
 <style scoped>
-/* 页面骨架、标题区、筛选面板与表格面板统一走 styles/page-layout.css。 */
+.intervention-panel { display: flex; flex: 1 1 auto; flex-direction: column; gap: 14px; min-height: 0; }
 .intervention-task { display: grid; gap: 2px; min-width: 0; }
 .intervention-task strong, .intervention-task a { overflow: hidden; color: var(--astra-text-primary); font-size: var(--astra-font-label); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
 .intervention-task a:hover { color: var(--astra-primary); }

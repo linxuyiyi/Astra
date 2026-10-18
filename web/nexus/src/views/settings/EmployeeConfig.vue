@@ -3,7 +3,6 @@
     <AstraPageHeader
       v-if="!embedded"
       :title="creating ? '创建 Worker' : `${employeeDisplayName(employee?.name)} 配置`"
-      description="配置描述 Worker 职责与工作环境；运行状态由系统状态机维护。"
       testid="employee-config-header"
     />
     <ElForm

@@ -1,6 +1,6 @@
 <template>
   <div class="astra-page" data-testid="employee-list-page">
-    <AstraPageHeader title="Worker" description="Worker 负责执行任务。数字员工负责沟通，不在这个列表里。" testid="employee-header">
+    <AstraPageHeader title="Agent Worker" testid="employee-header">
       <template #actions>
         <ElButton :icon="RefreshCw" :loading="store.loading" data-testid="employee-refresh" @click="store.refresh()">刷新</ElButton>
         <ElButton type="primary" :icon="Plus" data-testid="employee-create" @click="beginCreate">新建 Worker</ElButton>

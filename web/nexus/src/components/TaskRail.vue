@@ -1,6 +1,6 @@
 <template>
   <div class="task-rail">
-    <p v-if="!tasks.length" class="muted">还没有任务</p>
+    <p v-if="!tasks.length" class="muted">{{ emptyText ?? "还没有任务" }}</p>
     <section v-if="active.length" class="task-rail__group">
       <h3>进行中</h3>
       <RouterLink v-for="task in active" :key="task.id" class="task-rail__card" :to="`/tasks/${task.id}`">
@@ -31,6 +31,7 @@ const props = defineProps<{
   tasks: PlatformTask[]
   names?: Record<string, string>
   hideResponsible?: boolean
+  emptyText?: string
 }>()
 
 const STATUS_LABEL: Record<string, string> = {

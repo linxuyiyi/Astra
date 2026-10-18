@@ -2,8 +2,7 @@
   <section>
     <div class="title-row">
       <div>
-        <h1 class="h-title">数字员工</h1>
-        <p class="muted" style="margin: 4px 0 0">这里是你对话的人。执行任务的 Worker 在导航里单独进入，两者不是同一个对象。</p>
+        <h1 class="h-title">数字员工管理</h1>
       </div>
       <el-button type="primary" @click="openCreate">创建数字员工</el-button>
     </div>

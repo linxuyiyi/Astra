@@ -823,7 +823,7 @@ def test_team_discussion_shows_peer_identities_and_stops_repeat_contact():
             )
             for hidden in hidden_names:
                 assert hidden not in ops_tool_list, ops_tool_list
-            delivered = "已把消息交给对方" in tool_fragments(collected[ops["id"]])
+            delivered = '"status": "delivered"' in tool_fragments(collected[ops["id"]])
             assert delivered, tool_fragments(collected[ops["id"]])[:500]
             assert eng["id"] in seen_sessions
             eng_tool_list = tool_names(collected[eng["id"]])

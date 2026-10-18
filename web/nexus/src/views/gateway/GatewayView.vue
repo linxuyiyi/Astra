@@ -1,6 +1,6 @@
 <template>
   <ElContainer class="gateway-page" data-testid="gateway-page">
-    <AstraPageHeader title="API 网关" :description="sectionLine" testid="gateway-header">
+    <AstraPageHeader title="API 网关" testid="gateway-header">
       <template #actions>
         <!-- 子页把自己的刷新与主操作 Teleport 到这里，全站按钮位置保持一致。 -->
         <div id="gateway-header-actions" class="gateway-header-actions" />
@@ -39,25 +39,23 @@ import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
 
 const route = useRoute()
 
-// 父级是 API 中转唯一的标题区：这里同时承载分区名与分区说明，
-// 子页不再各自带一套大标题，避免父子两套大标题重复。
 const menuGroups = [
   {
     id: 'monitor',
     label: '监控',
     items: [
-      { id: 'overview', label: '运行总览', path: '/gateway/overview', icon: Activity, description: '按服务影响给出健康结论，指标与节点表使用同一窗口口径。' },
-      { id: 'logs', label: '调用日志', path: '/gateway/logs', icon: ScrollText, description: '只记录元数据与测量值，不保存 Prompt、Authorization 或响应体。' },
-      { id: 'audits', label: '审计', path: '/gateway/audits', icon: ClipboardList, description: '配置变更审计。运行态变迁在运行总览的事件流里。' },
+      { id: 'overview', label: '运行总览', path: '/gateway/overview', icon: Activity },
+      { id: 'logs', label: '调用日志', path: '/gateway/logs', icon: ScrollText },
+      { id: 'audits', label: '审计', path: '/gateway/audits', icon: ClipboardList },
     ],
   },
   {
     id: 'config',
     label: '配置',
     items: [
-      { id: 'nodes', label: '上游节点', path: '/gateway/nodes', icon: Server, description: '配置保存后自动生效；新建或修改连接配置的节点须探测达标后才能进入调度。' },
-      { id: 'routes', label: '资源池与路由', path: '/gateway/routes', icon: Boxes, description: '配置保存后自动生效；路由模型名唯一，一个路由指向一个资源池。' },
-      { id: 'keys', label: 'API Key', path: '/gateway/keys', icon: KeyRound, description: '配置保存后自动生效；Key 原文仅在创建成功后显示一次，库中只存不可逆摘要。' },
+      { id: 'nodes', label: '上游节点', path: '/gateway/nodes', icon: Server },
+      { id: 'routes', label: '资源池与路由', path: '/gateway/routes', icon: Boxes },
+      { id: 'keys', label: 'API Key', path: '/gateway/keys', icon: KeyRound },
     ],
   },
 ]
@@ -67,10 +65,7 @@ const activeMenu = computed(() => {
   const match = menuItems.find((item) => route.path === item.path || route.path.startsWith(`${item.path}/`))
   return match ? match.path : '/gateway/overview'
 })
-const sectionLine = computed(() => {
-  const current = menuItems.find((item) => item.path === activeMenu.value) ?? menuItems[0]
-  return `${current.label} · ${current.description}`
-})
+
 </script>
 
 <style scoped>
@@ -84,7 +79,7 @@ const sectionLine = computed(() => {
 .gateway-aside { --el-aside-width: 210px; border: 1px solid var(--astra-border); border-radius: 12px; background: var(--astra-bg-panel); }
 .gateway-menu { --el-menu-base-level-padding: 14px; --el-menu-item-height: 44px; border-right: 0; background: transparent; }
 .gateway-menu :deep(.el-menu-item) { gap: 8px; }
-.gateway-content { --el-main-padding: 0; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.gateway-content { --el-main-padding: 0; display: flex; flex-direction: column; min-width: 0; overflow: auto; scrollbar-gutter: stable; }
 .gateway-content > * { flex: 1 1 auto; min-height: 0; }
 @media (max-width: 860px) { .gateway-aside { --el-aside-width: 170px; } }
 </style>

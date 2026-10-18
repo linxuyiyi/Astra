@@ -546,6 +546,8 @@ async def list_tasks(
     employee_id: str | None = None,
     worker_id: str | None = None,
     responsible_employee_id: str | None = None,
+    source_session_id: str | None = None,
+    source_conversation_id: str | None = None,
     source_channel_id: str | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
@@ -571,6 +573,10 @@ async def list_tasks(
         query = query.where(Task.employee_id == employee_id)
     if responsible_employee_id:
         query = query.where(Task.responsible_employee_id == responsible_employee_id)
+    if source_session_id:
+        query = query.where(Task.source_session_id == source_session_id)
+    if source_conversation_id:
+        query = query.where(Task.source_conversation_id == source_conversation_id)
     if source_channel_id:
         query = query.where(Task.source_channel_id == source_channel_id)
     if created_from:

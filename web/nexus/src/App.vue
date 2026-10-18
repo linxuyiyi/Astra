@@ -3,7 +3,7 @@
     <header class="top">
       <div class="brand">
         <div class="mark">✦</div>
-        <div class="brandname">NEXUS <span class="version">v1.4.0</span></div>
+        <div class="brandname">NEXUS <span class="version">v1.4.1</span></div>
       </div>
       <span class="env-banner">
         <i class="dot" :class="{ off: !runtime?.reachable }"></i>
@@ -21,17 +21,12 @@
       <router-view v-else-if="identity === 'ready'" />
     </main>
     <nav class="dock" aria-label="页面导航">
-      <el-dropdown v-for="group in navGroups" :key="group.label" trigger="click" @command="openNav">
-        <button type="button" class="dock-item" :class="{ active: group.active }">{{ group.label }}</button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item v-for="item in group.items" :key="item.to" :command="item.to">{{ item.label }}</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-      <router-link to="/workers" title="Worker 执行任务。数字员工负责沟通，两者不是同一个对象。">Worker</router-link>
-      <router-link to="/gateway">API 网关</router-link>
-      <router-link to="/library">图书馆</router-link>
+      <router-link
+        v-for="item in navItems"
+        :key="item.to"
+        :to="item.to"
+        :class="{ active: item.active }"
+      >{{ item.label }}</router-link>
     </nav>
     <AstraConfirmHost />
   </div>
@@ -39,7 +34,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import AstraConfirmHost from "@/components/astra/AstraConfirmHost.vue";
 import { useAstraStore } from "@/stores/astra";
 import { getRuntime, resolveOwner, saveOwnerId } from "./api";
@@ -47,32 +42,17 @@ import type { RuntimeStatus } from "./types";
 
 const store = useAstraStore();
 const route = useRoute();
-const router = useRouter();
-const navGroups = computed(() => [
+const navItems = computed(() => [
+  { to: "/chat", label: "数字员工", active: route.path === "/chat" || route.path === "/team" },
+  { to: "/tasks", label: "任务大厅", active: route.path.startsWith("/tasks") || route.path.startsWith("/interventions") },
+  { to: "/library", label: "数字图书馆", active: route.path.startsWith("/library") },
+  { to: "/gateway", label: "API 网关", active: route.path.startsWith("/gateway") },
   {
-    label: "数字员工",
-    active: ["/employees", "/chat", "/team"].some((path) => route.path.startsWith(path)),
-    items: [
-      { to: "/employees", label: "名录" },
-      { to: "/chat", label: "私聊" },
-      { to: "/team", label: "团队" },
-    ],
-  },
-  {
-    label: "任务",
-    active: ["/tasks", "/interventions", "/settings"].some((path) => route.path.startsWith(path)),
-    items: [
-      { to: "/tasks", label: "任务列表" },
-      { to: "/interventions", label: "待处理" },
-      { to: "/settings", label: "任务分类" },
-    ],
+    to: "/settings",
+    label: "配置中心",
+    active: route.path.startsWith("/settings") || route.path.startsWith("/employees") || route.path.startsWith("/workers"),
   },
 ]);
-
-function openNav(path: string) {
-  void router.push(path);
-}
-
 const runtime = ref<RuntimeStatus | null>(null);
 const identity = ref<"loading" | "ready" | "ask">("loading");
 const uidDraft = ref("");
@@ -101,14 +81,13 @@ onMounted(async () => {
   try {
     runtime.value = await getRuntime();
   } catch {
-    runtime.value = { agentscope_version: "2.0.10", configured: false, reachable: false };
+    runtime.value = { agentscope_version: "2.0.10", configured: false, reachable: false, ui_url: "" };
   }
 });
 </script>
 
 <style scoped>
-.dock a.router-link-active, .dock-item.active { background: #dff3e7; color: #147d59; font-weight: 750; }
-.dock-item { font: inherit; }
+.dock a.active, .dock a.router-link-active { background: #dff3e7; color: #147d59; font-weight: 750; }
 .uid-gate { display: flex; gap: 12px; align-items: end; max-width: 420px; }
 .uid-gate label { display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .uid-gate input { padding: 8px 10px; border: 1px solid #c9ddd2; border-radius: 8px; }

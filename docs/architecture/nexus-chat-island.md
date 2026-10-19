@@ -157,6 +157,21 @@ ops/dev/start_nexus_api.sh stop && ops/dev/start_nexus_api.sh start
 
 注意：`qwen2.5:3b` 只有 3B，会误调工具、偶尔不遵守中文指令，只适合验证链路，不适合验收回复质量。
 
+### DeepSeek flash（推荐）
+
+本地 3B 只适合验证链路。真实回复质量用 DeepSeek 官方 API：
+
+- 节点 `base_url=https://api.deepseek.com`，`auth_type=BEARER`，`models=["deepseek-flash"]`，`health_path=/models`
+- 路由 `model=deepseek-flash`，员工 `model_route_id` 选该路由
+- Nexus API 需要 `NEXUS_GATEWAY_API_KEY`（网关 Key，`allowed_models` 要包含 `deepseek-flash`），
+  以及 `NEXUS_AGENTSCOPE_BASE_URL` 指向本机 AgentScope（dev 默认 `8000`）
+- Key 只写在 `ops/env/.env`（已被 gitignore），不要写进代码或提交
+
+验收记录（2026-10-20）：DeepSeek flash 首轮 4 秒返回「收到」，原生历史为
+`['hint', 'text']`；第二条「好的」同样直出。`stream?raw=1` 收到
+`REPLY_START → TEXT_BLOCK_* → REPLY_END`，无私有事件、连接不关闭。
+截图：`docs/reports/evidence/nexus-chat-island/acceptance-deepseek-20261020.png`。
+
 ## 上游升级
 
 1. 在临时目录 checkout 新 tag，按 `UPSTREAM.sha256` 清单重新拷贝同名文件。

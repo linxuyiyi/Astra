@@ -1,4 +1,4 @@
-# Nexus v1.0.1
+# Nexus v1.4.4
 
 Nexus 是数字员工的目录和交流产品。推理、会话、技能、知识和记忆由 **AgentScope 2.0.10 Agent Service** 承担。Nexus 只通过 HTTP 调用它。
 
@@ -29,15 +29,15 @@ docs/reports             验证记录与证据
 
 | 服务 | 端口 | 目录 |
 |---|---|---|
-| Agent Service | 8000 | `services/agent-service` |
-| Task API | 8100 | `services/task-platform` |
-| Gateway | 8110 | `services/task-platform` |
-| Nexus API | 8120 | `services/nexus-api` |
-| Library MCP | 8201 | `services/task-platform` |
-| Task MCP | 8202 | `services/task-platform` |
-| Nexus Web | 5174 | `web/nexus` |
-| 员工 OpenCode | 4096 | 由 Task 平台拉起 |
-| 助手 OpenCode | 4097 | 由 Task 平台拉起 |
+| Agent Service | 18000 | `services/agent-service` |
+| Task API | 18100 | `services/task-platform` |
+| Gateway | 18110 | `services/task-platform` |
+| Nexus API | 18120 | `services/nexus-api` |
+| Library MCP | 18201 | `services/task-platform` |
+| Task MCP | 18202 | `services/task-platform` |
+| Nginx Web | 80 | `web/nexus` 构建产物 |
+| 员工 OpenCode | 14096 | 由 Task 平台 Runtime 拉起 |
+| 助手 OpenCode | 14097 | 由 Task 平台 Runtime 拉起 |
 | Redis | 6379 | Agent Service 与 Celery |
 
 ## 本地启动
@@ -60,7 +60,7 @@ npm install
 npm run dev
 ```
 
-打开 `http://127.0.0.1:5174`。开发服务器把 `/api/v1` 代理到 `8120`，其余 `/api` 代理到 `8100`。
+打开 `http://127.0.0.1:5174`。开发服务器把 `/api/v1` 代理到 `18120`，其余 `/api` 代理到 `18100`。
 
 这些 `.sh` 只加载 `ops/env/.env` 并调用 Python。进程由 `ops/dev/astra_service.py` 和 `ops/dev/service_ctl.py` 拉起：`Popen(start_new_session=True)` 记下 pid、pgid、psutil `create_time` 和 cwd。停止前必须 pid 与 `create_time` 仍一致，然后向进程组发 `SIGTERM`，超时再 `SIGKILL`，并用本机 socket 确认端口已释放。健康检查用 urllib，只接受 HTTP 2xx。停不干净时状态文件保留，进程以非 0 退出。
 
@@ -76,7 +76,7 @@ PYTHONPATH=services/nexus-api services/nexus-api/.venv/bin/pytest services/nexus
 cd web/nexus && npm run type-check && npm run build
 ```
 
-部署见 [ops/deploy/DEPLOYMENT_GUIDE.md](ops/deploy/DEPLOYMENT_GUIDE.md)。Agent Service 的安装细节见 [docs/deploy/agentscope.md](docs/deploy/agentscope.md)。版本钉在 [services/agent-service/agentscope.version](services/agent-service/agentscope.version)。接口记录在 [docs/architecture/agentscope-2.0.10.md](docs/architecture/agentscope-2.0.10.md)。
+生产部署见 [ops/deploy/PRODUCTION_DEPLOYMENT.md](ops/deploy/PRODUCTION_DEPLOYMENT.md)。Gateway 探针 key 首次部署后由部署创建；本机 OpenCode 在工作区无配置时使用部署生成的 `NEXUS_OPENCODE_CONFIG`，工作区配置优先。生产入口是 `ops/deploy/install_nexus.sh`，必须显式提供完整 commit；配置模板是 `ops/env/nexus-production.env.example`。`ops/deploy/DEPLOYMENT_GUIDE.md` 保留为入口索引。本机验证与未验证项见 [docs/reports/NEXUS_V144_DEPLOYMENT_20261019.md](docs/reports/NEXUS_V144_DEPLOYMENT_20261019.md)；真实 Linux 验收未完成前不得视为生产通过。Agent Service 的安装细节见 [docs/deploy/agentscope.md](docs/deploy/agentscope.md)。版本钉在 [services/agent-service/agentscope.version](services/agent-service/agentscope.version)。接口记录在 [docs/architecture/agentscope-2.0.10.md](docs/architecture/agentscope-2.0.10.md)。
 
 ## 已知限制
 

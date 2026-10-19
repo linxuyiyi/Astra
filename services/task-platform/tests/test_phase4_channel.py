@@ -494,11 +494,15 @@ def repo_root() -> Path:
 
 def test_remote_port_default_is_14096_and_llm_wiki_tunnel_stays():
     root = repo_root()
-    script = (root / "ops/deploy/install_nexus.sh").read_text(encoding="utf-8")
-    assert "REMOTE_WORKER_OPENCODE_PORT:=14096" in script
-    assert "4296" not in script
-    assert "ssh -N -i" in script
-    example = (root / "ops/env/.env.example").read_text(encoding="utf-8")
+    installer = (root / "ops/deploy/install_nexus.sh").read_text(encoding="utf-8")
+    assert "-m nexus_deploy" in installer
+    config_source = (root / "ops/deploy/nexus_deploy/config.py").read_text(encoding="utf-8")
+    assert '"opencode": 14096' in config_source
+    assert "4296" not in config_source
+    optional = (root / "ops/deploy/optional/llm_wiki.sh").read_text(encoding="utf-8")
+    assert "ssh -N -i" in optional
+    example = (root / "ops/env/nexus-production.env.example").read_text(encoding="utf-8")
+    assert "NEXUS_OPENCODE_PORT=14096" in example
     assert "REMOTE_WORKER_OPENCODE_PORT=14096" in example
     assert "4296" not in example
     guide = (root / "ops/deploy/DEPLOYMENT_GUIDE.md").read_text(encoding="utf-8")

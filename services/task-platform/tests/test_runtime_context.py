@@ -231,3 +231,32 @@ async def test_runtime_session_context_hash_is_unique():
             select(RuntimeSession).where(RuntimeSession.runtime_context_hash == digest)
         )
         assert duplicate is not None
+
+
+def test_deployment_config_is_used_when_workspace_has_none(tmp_path, monkeypatch):
+    from app.runtime import opencode_workspace
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    home = tmp_path / "home"
+    home.mkdir()
+    deployment = tmp_path / "deploy-opencode.json"
+    deployment.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("NEXUS_OPENCODE_CONFIG", str(deployment))
+    monkeypatch.delenv("OPENCODE_CONFIG", raising=False)
+    monkeypatch.setattr(opencode_workspace, "global_config_path", lambda: None)
+    assert opencode_workspace.discover_workspace_config(workspace) == deployment
+
+
+def test_workspace_config_keeps_precedence_over_deployment_config(tmp_path, monkeypatch):
+    from app.runtime import opencode_workspace
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    owned = workspace / "opencode.json"
+    owned.write_text("{}", encoding="utf-8")
+    deployment = tmp_path / "deploy-opencode.json"
+    deployment.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("NEXUS_OPENCODE_CONFIG", str(deployment))
+    assert opencode_workspace.discover_workspace_config(workspace) == owned

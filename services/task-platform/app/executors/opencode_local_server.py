@@ -14,7 +14,7 @@ from pathlib import Path
 from app.executors.errors import OpenCodeServerUnavailable
 from app.executors.opencode_server import OpenCodeServerClient, OpenCodeServerExecutor
 from app.executors.process import local_command, process_group_options
-from app.runtime.opencode_workspace import discover_workspace_config
+from app.runtime.opencode_workspace import discover_workspace_config, workspace_owned_config
 
 # Only terminate processes started by this worker, never an unknown port owner.
 _processes: dict[int, subprocess.Popen] = {}
@@ -135,9 +135,15 @@ class LocalOpenCodeServerExecutor(OpenCodeServerExecutor):
                 environment = os.environ.copy()
                 environment.pop("OPENCODE_SERVER_PASSWORD", None)
                 environment.pop("OPENCODE_SERVER_USERNAME", None)
-                # The workspace owns its OpenCode config; Astra must never inject
-                # one through OPENCODE_CONFIG or it would shadow company providers.
-                environment.pop("OPENCODE_CONFIG", None)
+                # Workspace-owned config keeps precedence. Only when the
+                # workspace has none do we pass the deployment-owned config.
+                owned_config = workspace_owned_config(self.workspace)
+                if owned_config is not None:
+                    environment.pop("OPENCODE_CONFIG", None)
+                else:
+                    discovered = discover_workspace_config(self.workspace)
+                    if discovered is not None:
+                        environment["OPENCODE_CONFIG"] = str(discovered)
                 log_path = self.workspace / ".nexus-opencode-server.log"
                 with log_path.open("ab") as log:
                     process = subprocess.Popen(

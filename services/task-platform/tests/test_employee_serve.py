@@ -184,3 +184,40 @@ async def test_missing_workspace_fails_environment_check(serve):
     checks = await ExecutionEnvironmentRuntime(executor.settings).test(executor.environment)
     assert checks_status(checks) == "UNAVAILABLE"
     assert not executor.workspace.exists()
+
+
+async def test_deployment_config_is_passed_to_local_serve(serve, monkeypatch, tmp_path):
+    executor = serve("deployment-config")
+    (executor.workspace / "opencode.json").unlink()
+    deployment = tmp_path / "deploy-opencode.json"
+    deployment.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("NEXUS_OPENCODE_CONFIG", str(deployment))
+    monkeypatch.delenv("OPENCODE_CONFIG", raising=False)
+    captured = {}
+    real_popen = local.subprocess.Popen
+
+    def capture(*args, **kwargs):
+        captured.update(kwargs.get("env") or {})
+        return real_popen(*args, **kwargs)
+
+    monkeypatch.setattr(local.subprocess, "Popen", capture)
+    await executor.ensure_ready()
+    assert captured["OPENCODE_CONFIG"] == str(deployment)
+
+
+async def test_workspace_config_is_not_shadowed_by_deployment_env(serve, monkeypatch, tmp_path):
+    executor = serve("workspace-config")
+    deployment = tmp_path / "deploy-opencode.json"
+    deployment.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("NEXUS_OPENCODE_CONFIG", str(deployment))
+    monkeypatch.setenv("OPENCODE_CONFIG", str(deployment))
+    captured = {}
+    real_popen = local.subprocess.Popen
+
+    def capture(*args, **kwargs):
+        captured.update(kwargs.get("env") or {})
+        return real_popen(*args, **kwargs)
+
+    monkeypatch.setattr(local.subprocess, "Popen", capture)
+    await executor.ensure_ready()
+    assert "OPENCODE_CONFIG" not in captured

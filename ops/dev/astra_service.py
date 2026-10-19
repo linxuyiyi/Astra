@@ -240,13 +240,14 @@ def validate_gateway_production(settings: Any) -> None:
 
 
 def prepare(mode: str, settings: Any, npm: str, local_command: Any) -> None:
+    if mode != "dev":
+        raise RuntimeError(
+            "production services are managed by ops/deploy/install_nexus.sh; "
+            "the development launcher does not migrate or build in production"
+        )
     validate_start(mode, settings)
     run_checked([sys.executable, "-m", "alembic", "upgrade", "head"], BACKEND, "database migration")
     run_checked([sys.executable, str(ROOT / "ops" / "dev" / "preflight.py")], ROOT, "preflight")
-    if mode == "pro":
-        run_checked(local_command(npm, ["run", "build"]), FRONTEND, "frontend production build")
-        if not (FRONTEND / "dist" / "index.html").is_file():
-            raise RuntimeError("web/nexus/dist/index.html not found after build")
 
 
 def http_ready(url: str, *, headers: dict[str, str] | None = None) -> bool:
@@ -594,6 +595,13 @@ def start(
 
 def main() -> int:
     args = parse_args()
+    if args.mode == "pro":
+        print(
+            "Nexus 生产服务由 systemd 与 ops/deploy/install_nexus.sh（nexus_deploy）管理；"
+            "使用 `ops/deploy/install_nexus.sh status|health|restart`。"
+            "astra_service.py pro 不再迁移、构建或托管常驻进程。"
+        )
+        return 2
     try:
         settings, OpenCodeServerManager, AssistantOpenCodeServerManager, local_command = load_astra(
             args.mode

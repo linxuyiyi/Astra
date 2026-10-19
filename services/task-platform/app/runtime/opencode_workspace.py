@@ -1,14 +1,15 @@
 """Workspace-owned OpenCode configuration discovery.
 
-Astra never generates OpenCode configuration and never sets ``OPENCODE_CONFIG``.
-Each employee workspace (or the host's user-level config) owns its providers,
-models, MCP servers and permissions. This module only answers whether OpenCode
-would discover a configuration from a directory, so a missing configuration
-fails loudly instead of silently starting an unusable Server.
+Workspace-owned configuration keeps precedence. When a workspace has none,
+Nexus may fall back to an explicit deployment-owned ``NEXUS_OPENCODE_CONFIG``
+(or ``OPENCODE_CONFIG``) before the host user-level config. This module only
+answers whether OpenCode would discover a configuration, so a missing
+configuration fails loudly instead of silently starting an unusable Server.
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 CONFIG_FILENAMES = ("opencode.json", "opencode.jsonc")
@@ -27,13 +28,8 @@ def global_config_path() -> Path | None:
     return None
 
 
-def discover_workspace_config(workspace: Path) -> Path | None:
-    """Locate the config OpenCode discovers from ``workspace``.
-
-    OpenCode merges ``opencode.json``(c) found from the working directory up to
-    the git root, plus the user-level config. The walk stops at the git root so
-    a task git worktree never inherits an unrelated parent project.
-    """
+def workspace_owned_config(workspace: Path) -> Path | None:
+    """Return only configs discovered inside the workspace/git root."""
 
     current = Path(workspace).resolve()
     while True:
@@ -47,4 +43,33 @@ def discover_workspace_config(workspace: Path) -> Path | None:
         if parent == current:
             break
         current = parent
+    return None
+
+
+def explicit_deployment_config() -> Path | None:
+    """Deployment-owned config used only when the workspace has none."""
+
+    for name in ("NEXUS_OPENCODE_CONFIG", "OPENCODE_CONFIG"):
+        raw = (os.environ.get(name) or "").strip()
+        if raw:
+            candidate = Path(raw).expanduser()
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+def discover_workspace_config(workspace: Path) -> Path | None:
+    """Locate the config OpenCode discovers from ``workspace``.
+
+    Workspace-owned config keeps precedence. When none exists, the explicit
+    Nexus deployment config is the fallback, then the user-level config. The
+    walk stops at the git root so a task worktree never inherits a parent project.
+    """
+
+    owned = workspace_owned_config(workspace)
+    if owned is not None:
+        return owned
+    explicit = explicit_deployment_config()
+    if explicit is not None:
+        return explicit
     return global_config_path()

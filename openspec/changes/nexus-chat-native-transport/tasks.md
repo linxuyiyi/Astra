@@ -6,8 +6,9 @@
 - [x] 1.2 事件流：`raw=1` 不注入收尾事件、`REPLY_END` 后不关闭、默认模式行为不变
   - 完成标准：用假上游响应覆盖两种模式，断言默认模式仍有 `NEXUS_RUN_FINISHED`
 - [x] 1.3 停止：归属校验、绑定缺失拒绝、跨 owner 不产生上游调用
-- [ ] 1.4 发送的附件归属与超限仍由既有 `load_attachments` 覆盖；聊天岛目前只发文本
-  - 完成标准：补一条“data 块 → attachment_ids”的测试
+- [x] 1.4 附件：聊天岛先上传 `/api/v1/attachments`，DataBlock 的 URL source 携带附件 id，
+      发送时还原成 `attachment_ids`；归属与 20 MB 限制仍由 Nexus 校验
+  - 结果：浏览器选 md/png 各一次，上传 201，气泡显示文件卡/缩略图，模型读到内容
 
 ## 2. 后端
 

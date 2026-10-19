@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMessages } from "@/hooks/useMessages";
 import { onSessionBound } from "@/shims/api";
 
+import { uploadAttachment } from "./attachments";
 import { loadBinding, type ChatBinding } from "./binding";
 
 function param(name: string): string {
@@ -23,6 +24,7 @@ export function IslandApp() {
   const conversationId = param("conversation");
   const [binding, setBinding] = useState<ChatBinding | null>(null);
   const [bindingError, setBindingError] = useState("");
+  const [notice, setNotice] = useState("");
   const [resolving, setResolving] = useState(Boolean(conversationId));
 
   useEffect(() => {
@@ -78,6 +80,14 @@ export function IslandApp() {
   return (
     <TooltipProvider>
       <div className="flex h-full min-h-0 flex-1 flex-col">
+        {notice && (
+          <div className="mx-4 mt-2 flex items-start justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <span>{notice}</span>
+            <button type="button" className="shrink-0 underline" onClick={() => setNotice("")}>
+              关闭
+            </button>
+          </div>
+        )}
         {chat.error && (
           <div className="mx-4 mt-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
             {chat.error.message}
@@ -97,7 +107,14 @@ export function IslandApp() {
             }}
             onInterrupt={() => void chat.interrupt()}
             allowedInputTypes={["image/*", "application/pdf", "text/*"]}
-            fileProcessor={async () => null}
+            fileProcessor={async (file: File) => {
+              try {
+                return await uploadAttachment(file);
+              } catch (error) {
+                setNotice(error instanceof Error ? error.message : "附件上传失败");
+                throw error;
+              }
+            }}
             agentId={agentId}
             sessionId={sessionId}
             cwd={null}

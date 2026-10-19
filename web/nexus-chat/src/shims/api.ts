@@ -49,6 +49,7 @@ interface ContentBlockLike {
   type: string;
   text?: string;
   metadata?: Record<string, unknown>;
+  source?: { url?: string };
 }
 
 /** 首次发送后 Nexus 才会建 Session；岛入口用它更新绑定并重挂载。 */
@@ -83,6 +84,12 @@ async function errorDetail(response: Response): Promise<string> {
   }
 }
 
+/** 附件在 DataBlock 里以 Nexus 下载地址表示，id 从地址里取回。 */
+function attachmentIdOf(block: ContentBlockLike): string | null {
+  const match = /\/api\/v1\/attachments\/([^/?#]+)/.exec(block.source?.url ?? "");
+  return match ? match[1] : null;
+}
+
 /** 把上游的 ContentBlock[] 压成 Nexus 现有发送契约：正文 + 附件 id。 */
 function toSendBody(input: unknown): { text: string; attachment_ids: string[] } {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -96,8 +103,8 @@ function toSendBody(input: unknown): { text: string; attachment_ids: string[] } 
     .join("");
   const attachmentIds = content
     .filter((block) => block.type === "data")
-    .map((block) => block.metadata?.attachment_id)
-    .filter((value): value is string => typeof value === "string" && value.length > 0);
+    .map((block) => attachmentIdOf(block))
+    .filter((value): value is string => Boolean(value));
   return { text, attachment_ids: attachmentIds };
 }
 

@@ -1,0 +1,4 @@
+bash -n OK ../../ops/deploy/install_nexus.sh
+bash -n OK ../../ops/deploy/optional/llm_wiki.sh
+bash -n OK ../../ops/deploy/tests/linux_smoke.sh
+BASH_N_EXIT=0

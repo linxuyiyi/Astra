@@ -1,0 +1,5 @@
+zsh:12: no such file or directory: port=55340 pid=86419 cwd=/private/tmp/nexus-v144-redis-final-86413 expected=/private/tmp/nexus-v144-redis-final-86413
+86419 Mon Oct 19 10:16:21 2026     redis-server 127.0.0.1:55340                
+PONG
+cleaned pid=86419 port=55340
+Could not connect to Redis at 127.0.0.1:55340: Connection refused

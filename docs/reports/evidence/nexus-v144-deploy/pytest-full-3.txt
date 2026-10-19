@@ -1,0 +1,381 @@
+........................................................................ [  7%]
+........................................................................ [ 15%]
+......s................................................................. [ 23%]
+........................................................................ [ 31%]
+........................................................................ [ 39%]
+................................................ss...................... [ 47%]
+.......................................F
+=================================== FAILURES ===================================
+______ test_install_script_installs_venv_package_for_the_selected_python _______
+tests/test_remote_provisioning.py:652: in test_install_script_installs_venv_package_for_the_selected_python
+    assert "需要安装 python3.12-venv" in result.stderr
+E   AssertionError: assert '需要安装 python3.12-venv' in 'app/runtime/remote_install.sh: line 15: flock: command not found\n同一 SSH 用户已有部署操作，请等待远端操作结束后重试\n'
+E    +  where 'app/runtime/remote_install.sh: line 15: flock: command not found\n同一 SSH 用户已有部署操作，请等待远端操作结束后重试\n' = CompletedProcess(args=['bash', 'app/runtime/remote_install.sh', '/srv/project', '/usr/local/bin/opencode', '22.23.3', ..., stdout='', stderr='app/runtime/remote_install.sh: line 15: flock: command not found\n同一 SSH 用户已有部署操作，请等待远端操作结束后重试\n').stderr
+=============================== warnings summary ===============================
+tests/test_acceptance_review.py::test_existing_succeeded_session_reprojects_running_task
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/test_acceptance_review.py: 8 warnings
+tests/test_adapters.py: 7 warnings
+tests/test_api.py: 9 warnings
+tests/test_assistant.py: 17 warnings
+tests/test_assistant_session_tools.py: 3 warnings
+tests/test_astra_service_stop.py: 5 warnings
+tests/test_capability.py: 3 warnings
+tests/test_category_prompts.py: 1 warning
+tests/test_channel_switch.py: 6 warnings
+tests/test_dashboard_office.py: 26 warnings
+tests/test_dev_daemon.py: 2 warnings
+tests/test_employee_character.py: 8 warnings
+tests/test_employee_serve.py: 13 warnings
+tests/test_experience.py: 9 warnings
+tests/test_fix_b3.py: 14 warnings
+tests/test_gateway_config.py: 5 warnings
+tests/test_gateway_config_migration.py: 2 warnings
+tests/test_gateway_control.py: 44 warnings
+tests/test_gateway_data_plane.py: 65 warnings
+tests/test_gateway_health_summary.py: 26 warnings
+tests/test_gateway_observability.py: 7 warnings
+tests/test_knowledge_mapping.py: 1 warning
+tests/test_library.py: 4 warnings
+tests/test_library_tree.py: 8 warnings
+tests/test_llm_wiki.py: 20 warnings
+tests/test_naming.py: 1 warning
+tests/test_opencode_prompt.py: 4 warnings
+tests/test_opencode_server.py: 10 warnings
+tests/test_phase4_channel.py: 8 warnings
+tests/test_preflight_database_isolation.py: 2 warnings
+tests/test_production_deploy.py: 60 warnings
+tests/test_proxy_secret_redaction.py: 10 warnings
+tests/test_recovery_summary.py: 35 warnings
+tests/test_recovery_supervisor.py: 5 warnings
+tests/test_remote_provisioning.py: 22 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/test_acceptance_review.py: 8 warnings
+tests/test_adapters.py: 7 warnings
+tests/test_api.py: 9 warnings
+tests/test_assistant.py: 17 warnings
+tests/test_assistant_session_tools.py: 3 warnings
+tests/test_astra_service_stop.py: 5 warnings
+tests/test_capability.py: 3 warnings
+tests/test_category_prompts.py: 1 warning
+tests/test_channel_switch.py: 6 warnings
+tests/test_dashboard_office.py: 26 warnings
+tests/test_dev_daemon.py: 2 warnings
+tests/test_employee_character.py: 8 warnings
+tests/test_employee_serve.py: 13 warnings
+tests/test_experience.py: 9 warnings
+tests/test_fix_b3.py: 14 warnings
+tests/test_gateway_config.py: 5 warnings
+tests/test_gateway_config_migration.py: 2 warnings
+tests/test_gateway_control.py: 44 warnings
+tests/test_gateway_data_plane.py: 65 warnings
+tests/test_gateway_health_summary.py: 26 warnings
+tests/test_gateway_observability.py: 7 warnings
+tests/test_knowledge_mapping.py: 1 warning
+tests/test_library.py: 4 warnings
+tests/test_library_tree.py: 8 warnings
+tests/test_llm_wiki.py: 20 warnings
+tests/test_naming.py: 1 warning
+tests/test_opencode_prompt.py: 4 warnings
+tests/test_opencode_server.py: 10 warnings
+tests/test_phase4_channel.py: 8 warnings
+tests/test_preflight_database_isolation.py: 2 warnings
+tests/test_production_deploy.py: 60 warnings
+tests/test_proxy_secret_redaction.py: 10 warnings
+tests/test_recovery_summary.py: 35 warnings
+tests/test_recovery_supervisor.py: 5 warnings
+tests/test_remote_provisioning.py: 22 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/test_acceptance_review.py: 8 warnings
+tests/test_adapters.py: 7 warnings
+tests/test_api.py: 9 warnings
+tests/test_assistant.py: 17 warnings
+tests/test_assistant_session_tools.py: 3 warnings
+tests/test_astra_service_stop.py: 5 warnings
+tests/test_capability.py: 3 warnings
+tests/test_category_prompts.py: 1 warning
+tests/test_channel_switch.py: 6 warnings
+tests/test_dashboard_office.py: 26 warnings
+tests/test_dev_daemon.py: 2 warnings
+tests/test_employee_character.py: 8 warnings
+tests/test_employee_serve.py: 13 warnings
+tests/test_experience.py: 9 warnings
+tests/test_fix_b3.py: 14 warnings
+tests/test_gateway_config.py: 5 warnings
+tests/test_gateway_config_migration.py: 2 warnings
+tests/test_gateway_control.py: 44 warnings
+tests/test_gateway_data_plane.py: 65 warnings
+tests/test_gateway_health_summary.py: 26 warnings
+tests/test_gateway_observability.py: 7 warnings
+tests/test_knowledge_mapping.py: 1 warning
+tests/test_library.py: 4 warnings
+tests/test_library_tree.py: 8 warnings
+tests/test_llm_wiki.py: 20 warnings
+tests/test_naming.py: 1 warning
+tests/test_opencode_prompt.py: 4 warnings
+tests/test_opencode_server.py: 10 warnings
+tests/test_phase4_channel.py: 8 warnings
+tests/test_preflight_database_isolation.py: 2 warnings
+tests/test_production_deploy.py: 60 warnings
+tests/test_proxy_secret_redaction.py: 10 warnings
+tests/test_recovery_summary.py: 35 warnings
+tests/test_recovery_supervisor.py: 5 warnings
+tests/test_remote_provisioning.py: 22 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/test_acceptance_review.py: 8 warnings
+tests/test_adapters.py: 7 warnings
+tests/test_api.py: 9 warnings
+tests/test_assistant.py: 17 warnings
+tests/test_assistant_session_tools.py: 3 warnings
+tests/test_astra_service_stop.py: 5 warnings
+tests/test_capability.py: 3 warnings
+tests/test_category_prompts.py: 1 warning
+tests/test_channel_switch.py: 6 warnings
+tests/test_dashboard_office.py: 26 warnings
+tests/test_dev_daemon.py: 2 warnings
+tests/test_employee_character.py: 8 warnings
+tests/test_employee_serve.py: 13 warnings
+tests/test_experience.py: 9 warnings
+tests/test_fix_b3.py: 14 warnings
+tests/test_gateway_config.py: 5 warnings
+tests/test_gateway_config_migration.py: 2 warnings
+tests/test_gateway_control.py: 44 warnings
+tests/test_gateway_data_plane.py: 65 warnings
+tests/test_gateway_health_summary.py: 26 warnings
+tests/test_gateway_observability.py: 7 warnings
+tests/test_knowledge_mapping.py: 1 warning
+tests/test_library.py: 4 warnings
+tests/test_library_tree.py: 8 warnings
+tests/test_llm_wiki.py: 20 warnings
+tests/test_naming.py: 1 warning
+tests/test_opencode_prompt.py: 4 warnings
+tests/test_opencode_server.py: 10 warnings
+tests/test_phase4_channel.py: 8 warnings
+tests/test_preflight_database_isolation.py: 2 warnings
+tests/test_production_deploy.py: 60 warnings
+tests/test_proxy_secret_redaction.py: 10 warnings
+tests/test_recovery_summary.py: 35 warnings
+tests/test_recovery_supervisor.py: 5 warnings
+tests/test_remote_provisioning.py: 22 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/test_acceptance_review.py: 8 warnings
+tests/test_adapters.py: 7 warnings
+tests/test_api.py: 9 warnings
+tests/test_assistant.py: 17 warnings
+tests/test_assistant_session_tools.py: 3 warnings
+tests/test_astra_service_stop.py: 5 warnings
+tests/test_capability.py: 3 warnings
+tests/test_category_prompts.py: 1 warning
+tests/test_channel_switch.py: 6 warnings
+tests/test_dashboard_office.py: 26 warnings
+tests/test_dev_daemon.py: 2 warnings
+tests/test_employee_character.py: 8 warnings
+tests/test_employee_serve.py: 13 warnings
+tests/test_experience.py: 9 warnings
+tests/test_fix_b3.py: 14 warnings
+tests/test_gateway_config.py: 5 warnings
+tests/test_gateway_config_migration.py: 2 warnings
+tests/test_gateway_control.py: 44 warnings
+tests/test_gateway_data_plane.py: 65 warnings
+tests/test_gateway_health_summary.py: 26 warnings
+tests/test_gateway_observability.py: 7 warnings
+tests/test_knowledge_mapping.py: 1 warning
+tests/test_library.py: 4 warnings
+tests/test_library_tree.py: 8 warnings
+tests/test_llm_wiki.py: 20 warnings
+tests/test_naming.py: 1 warning
+tests/test_opencode_prompt.py: 4 warnings
+tests/test_opencode_server.py: 10 warnings
+tests/test_phase4_channel.py: 8 warnings
+tests/test_preflight_database_isolation.py: 2 warnings
+tests/test_production_deploy.py: 60 warnings
+tests/test_proxy_secret_redaction.py: 10 warnings
+tests/test_recovery_summary.py: 35 warnings
+tests/test_recovery_supervisor.py: 5 warnings
+tests/test_remote_provisioning.py: 22 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/test_acceptance_review.py: 8 warnings
+tests/test_adapters.py: 7 warnings
+tests/test_api.py: 9 warnings
+tests/test_assistant.py: 17 warnings
+tests/test_assistant_session_tools.py: 3 warnings
+tests/test_astra_service_stop.py: 5 warnings
+tests/test_capability.py: 3 warnings
+tests/test_category_prompts.py: 1 warning
+tests/test_channel_switch.py: 6 warnings
+tests/test_dashboard_office.py: 26 warnings
+tests/test_dev_daemon.py: 2 warnings
+tests/test_employee_character.py: 8 warnings
+tests/test_employee_serve.py: 13 warnings
+tests/test_experience.py: 9 warnings
+tests/test_fix_b3.py: 14 warnings
+tests/test_gateway_config.py: 5 warnings
+tests/test_gateway_config_migration.py: 2 warnings
+tests/test_gateway_control.py: 44 warnings
+tests/test_gateway_data_plane.py: 65 warnings
+tests/test_gateway_health_summary.py: 26 warnings
+tests/test_gateway_observability.py: 7 warnings
+tests/test_knowledge_mapping.py: 1 warning
+tests/test_library.py: 4 warnings
+tests/test_library_tree.py: 8 warnings
+tests/test_llm_wiki.py: 20 warnings
+tests/test_naming.py: 1 warning
+tests/test_opencode_prompt.py: 4 warnings
+tests/test_opencode_server.py: 10 warnings
+tests/test_phase4_channel.py: 8 warnings
+tests/test_preflight_database_isolation.py: 2 warnings
+tests/test_production_deploy.py: 60 warnings
+tests/test_proxy_secret_redaction.py: 10 warnings
+tests/test_recovery_summary.py: 35 warnings
+tests/test_recovery_supervisor.py: 5 warnings
+tests/test_remote_provisioning.py: 22 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/test_acceptance_review.py: 8 warnings
+tests/test_adapters.py: 7 warnings
+tests/test_api.py: 9 warnings
+tests/test_assistant.py: 17 warnings
+tests/test_assistant_session_tools.py: 3 warnings
+tests/test_astra_service_stop.py: 5 warnings
+tests/test_capability.py: 3 warnings
+tests/test_category_prompts.py: 1 warning
+tests/test_channel_switch.py: 6 warnings
+tests/test_dashboard_office.py: 26 warnings
+tests/test_dev_daemon.py: 2 warnings
+tests/test_employee_character.py: 8 warnings
+tests/test_employee_serve.py: 13 warnings
+tests/test_experience.py: 9 warnings
+tests/test_fix_b3.py: 14 warnings
+tests/test_gateway_config.py: 5 warnings
+tests/test_gateway_config_migration.py: 2 warnings
+tests/test_gateway_control.py: 44 warnings
+tests/test_gateway_data_plane.py: 65 warnings
+tests/test_gateway_health_summary.py: 26 warnings
+tests/test_gateway_observability.py: 7 warnings
+tests/test_knowledge_mapping.py: 1 warning
+tests/test_library.py: 4 warnings
+tests/test_library_tree.py: 8 warnings
+tests/test_llm_wiki.py: 20 warnings
+tests/test_naming.py: 1 warning
+tests/test_opencode_prompt.py: 4 warnings
+tests/test_opencode_server.py: 10 warnings
+tests/test_phase4_channel.py: 8 warnings
+tests/test_preflight_database_isolation.py: 2 warnings
+tests/test_production_deploy.py: 60 warnings
+tests/test_proxy_secret_redaction.py: 10 warnings
+tests/test_recovery_summary.py: 35 warnings
+tests/test_recovery_supervisor.py: 5 warnings
+tests/test_remote_provisioning.py: 22 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/test_acceptance_review.py: 8 warnings
+tests/test_adapters.py: 7 warnings
+tests/test_api.py: 9 warnings
+tests/test_assistant.py: 17 warnings
+tests/test_assistant_session_tools.py: 3 warnings
+tests/test_astra_service_stop.py: 5 warnings
+tests/test_capability.py: 3 warnings
+tests/test_category_prompts.py: 1 warning
+tests/test_channel_switch.py: 6 warnings
+tests/test_dashboard_office.py: 26 warnings
+tests/test_dev_daemon.py: 2 warnings
+tests/test_employee_character.py: 8 warnings
+tests/test_employee_serve.py: 13 warnings
+tests/test_experience.py: 9 warnings
+tests/test_fix_b3.py: 14 warnings
+tests/test_gateway_config.py: 5 warnings
+tests/test_gateway_config_migration.py: 2 warnings
+tests/test_gateway_control.py: 44 warnings
+tests/test_gateway_data_plane.py: 65 warnings
+tests/test_gateway_health_summary.py: 26 warnings
+tests/test_gateway_observability.py: 7 warnings
+tests/test_knowledge_mapping.py: 1 warning
+tests/test_library.py: 4 warnings
+tests/test_library_tree.py: 8 warnings
+tests/test_llm_wiki.py: 20 warnings
+tests/test_naming.py: 1 warning
+tests/test_opencode_prompt.py: 4 warnings
+tests/test_opencode_server.py: 10 warnings
+tests/test_phase4_channel.py: 8 warnings
+tests/test_preflight_database_isolation.py: 2 warnings
+tests/test_production_deploy.py: 60 warnings
+tests/test_proxy_secret_redaction.py: 10 warnings
+tests/test_recovery_summary.py: 35 warnings
+tests/test_recovery_supervisor.py: 5 warnings
+tests/test_remote_provisioning.py: 22 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/test_acceptance_review.py: 8 warnings
+tests/test_adapters.py: 7 warnings
+tests/test_api.py: 9 warnings
+tests/test_assistant.py: 17 warnings
+tests/test_assistant_session_tools.py: 3 warnings
+tests/test_astra_service_stop.py: 5 warnings
+tests/test_capability.py: 3 warnings
+tests/test_category_prompts.py: 1 warning
+tests/test_channel_switch.py: 6 warnings
+tests/test_dashboard_office.py: 26 warnings
+tests/test_dev_daemon.py: 2 warnings
+tests/test_employee_character.py: 8 warnings
+tests/test_employee_serve.py: 13 warnings
+tests/test_experience.py: 9 warnings
+tests/test_fix_b3.py: 14 warnings
+tests/test_gateway_config.py: 5 warnings
+tests/test_gateway_config_migration.py: 2 warnings
+tests/test_gateway_control.py: 44 warnings
+tests/test_gateway_data_plane.py: 65 warnings
+tests/test_gateway_health_summary.py: 26 warnings
+tests/test_gateway_observability.py: 7 warnings
+tests/test_knowledge_mapping.py: 1 warning
+tests/test_library.py: 4 warnings
+tests/test_library_tree.py: 8 warnings
+tests/test_llm_wiki.py: 20 warnings
+tests/test_naming.py: 1 warning
+tests/test_opencode_prompt.py: 4 warnings
+tests/test_opencode_server.py: 10 warnings
+tests/test_phase4_channel.py: 8 warnings
+tests/test_preflight_database_isolation.py: 2 warnings
+tests/test_production_deploy.py: 60 warnings
+tests/test_proxy_secret_redaction.py: 10 warnings
+tests/test_recovery_summary.py: 35 warnings
+tests/test_recovery_supervisor.py: 5 warnings
+tests/test_remote_provisioning.py: 22 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/test_assistant.py::test_assistant_migration_adopts_complete_precreated_schema
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/alembic/config.py:604: DeprecationWarning: No path_separator found in configuration; falling back to legacy splitting on spaces, commas, and colons for prepend_sys_path.  Consider adding path_separator=os to Alembic config.
+    util.warn_deprecated(
+
+tests/test_gateway_observability.py::test_stats_overview_and_missing_scope_validation
+  /Users/niuniu/程序/Astra-worktrees/nexus-v1.4.4-deploy/services/task-platform/app/api/gateway_routes.py:401: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    scope=scope, scope_id=_require_scope_id(scope, scope_id), window=window
+
+tests/test_library_tree.py::test_move_directory_and_cycle_guards
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+tests/test_naming.py::test_product_entry_is_nexus_and_astra_env_names_stay
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID native_proxy_api_tasks__task_id__opencode__session_id___path__post for function native_proxy at /Users/niuniu/程序/Astra-worktrees/nexus-v1.4.4-deploy/services/task-platform/app/api/workspace_routes.py
+    warnings.warn(message, stacklevel=1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_remote_provisioning.py::test_install_script_installs_venv_package_for_the_selected_python
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 468 passed, 3 skipped, 2 deselected, 4235 warnings in 47.69s

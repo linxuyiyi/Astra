@@ -1,0 +1,55 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+<baseline-worktree>/services/task-platform/app/runtime/worker_client.py:182: TimeoutError: Worker 未在时限内返回指令结果
+=============================== warnings summary ===============================
+tests/test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files
+1 failed, 10 warnings in 60.69s (0:01:00)
+Task exception was never retrieved
+future: <Task finished name='Task-13' coro=<test_install_marks_inside_the_operation_and_serves_files.<locals>.answer() done, defined at <baseline-worktree>/services/task-platform/tests/test_phase4_channel.py:336> exception=AttributeError("module 'os' has no attribute 'O_PATH'")>
+Traceback (most recent call last):
+  File "<baseline-worktree>/services/task-platform/tests/test_phase4_channel.py", line 383, in answer
+  File "<baseline-worktree>/services/task-platform/app/worker_agent/files.py", line 363, in execute_file_command
+  File "<baseline-worktree>/services/task-platform/app/worker_agent/files.py", line 185, in validate_inside
+AttributeError: module 'os' has no attribute 'O_PATH'

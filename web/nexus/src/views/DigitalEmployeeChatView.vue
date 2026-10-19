@@ -509,6 +509,12 @@ function stopFollow(key: string) {
 
 function startFollow(state: ChatSessionState) {
   if (disposed || !state.adapter) return;
+  // 聊天岛接管时，同一会话只能有一个事件流消费者：旧适配器在这里让位。
+  if (route.query.island === "1" && state.target.kind === "contact" && state.adapter.conversationId) {
+    state.abort?.abort();
+    state.abort = null;
+    return;
+  }
   state.abort?.abort();
   const controller = new AbortController();
   state.abort = controller;

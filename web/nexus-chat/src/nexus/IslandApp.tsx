@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ChatContent } from "@/components/chat/ChatContent";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMessages } from "@/hooks/useMessages";
+import { onSessionBound } from "@/shims/api";
 
 import { loadBinding, type ChatBinding } from "./binding";
 
@@ -12,10 +13,11 @@ function param(name: string): string {
 }
 
 /**
- * 阶段 A：只读聊天岛。
+ * 阶段 B：聊天岛接管私聊的读、发、停。
  *
- * 数据来自 Nexus 的会话历史，渲染完全交给上游 ChatContent / ASMessageBubble。
- * 发送、停止、确认不在本阶段接管，所以输入区禁用；Vue 外壳仍是唯一的发送入口。
+ * 历史与事件流走 Nexus 的原生接口；发送和停止仍由 Nexus 校验归属后转发。
+ * 首次发送前会话还没有 Session，这里给 hook 一个占位绑定，等 Nexus 返回真实
+ * Session 后再更新绑定，让 hook 重新加载原生历史。
  */
 export function IslandApp() {
   const conversationId = param("conversation");
@@ -48,8 +50,21 @@ export function IslandApp() {
     };
   }, [conversationId]);
 
-  const agentId = binding?.agentId || null;
-  const sessionId = binding?.sessionId || null;
+  // Nexus 在首次发送时建 Session；绑定更新后 hook 会重新加载原生历史。
+  useEffect(
+    () =>
+      onSessionBound((sessionId) => {
+        setBinding((previous) =>
+          previous && previous.sessionId !== sessionId
+            ? { ...previous, sessionId }
+            : previous,
+        );
+      }),
+    [],
+  );
+
+  const agentId = binding ? binding.agentId || "nexus" : null;
+  const sessionId = binding ? binding.sessionId || "pending" : null;
   const chat = useMessages(agentId, sessionId);
 
   if (bindingError) {
@@ -62,22 +77,33 @@ export function IslandApp() {
 
   return (
     <TooltipProvider>
-      <div className="relative flex h-full min-h-0 flex-1 justify-center overflow-hidden px-4 [--chat-content-w:48rem]">
-        <ChatContent
-          className="w-full max-w-[var(--chat-content-w)]"
-          msgs={chat.msgs}
-          loading={resolving || chat.loading}
-          phase={chat.phase}
-          disabled
-          onSend={(_content: ContentBlock[]) => undefined}
-          onUserConfirm={async (_tool: ToolCallBlock, _confirm: boolean, _replyId: string) => undefined}
-          allowedInputTypes={["image/*", "application/pdf", "text/*"]}
-          fileProcessor={async () => null}
-          agentId={agentId}
-          sessionId={sessionId}
-          cwd={null}
-          onCwdChange={() => undefined}
-        />
+      <div className="flex h-full min-h-0 flex-1 flex-col">
+        {chat.error && (
+          <div className="mx-4 mt-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            {chat.error.message}
+          </div>
+        )}
+        <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden px-4 [--chat-content-w:48rem]">
+          <ChatContent
+            className="w-full max-w-[var(--chat-content-w)]"
+            msgs={chat.msgs}
+            loading={resolving || chat.loading}
+            phase={chat.phase}
+            disabled={!binding || !binding.enabled}
+            onSend={(content: ContentBlock[]) => void chat.send(content)}
+            onUserConfirm={async (_tool: ToolCallBlock, _confirm: boolean, _replyId: string) => {
+              // 私聊会话固定在 dont_ask 策略下，确认卡不会出现；这里只作为兜底。
+              throw new Error("当前会话不提供人工确认");
+            }}
+            onInterrupt={() => void chat.interrupt()}
+            allowedInputTypes={["image/*", "application/pdf", "text/*"]}
+            fileProcessor={async () => null}
+            agentId={agentId}
+            sessionId={sessionId}
+            cwd={null}
+            onCwdChange={() => undefined}
+          />
+        </div>
       </div>
     </TooltipProvider>
   );

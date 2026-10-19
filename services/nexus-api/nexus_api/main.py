@@ -1578,6 +1578,28 @@ def create_app() -> FastAPI:
             "is_running": is_running,
         }
 
+    @app.post("/api/v1/conversations/{conversation_id}/interrupt")
+    async def interrupt_private(
+        conversation_id: str,
+        request: Request,
+        owner_id: str = Depends(require_owner),
+        connection=Depends(database),
+    ):
+        """停止正在回复的会话。先校验归属与绑定，再转发给 AgentScope。"""
+
+        row = owned_conversation(connection, conversation_id, owner_id)
+        employee = load_employee(connection, row["employee_id"])
+        if not row["agentscope_session_id"] or not employee["agentscope_agent_id"]:
+            raise HTTPException(status_code=409, detail="这条对话还没有 AgentScope Session")
+        try:
+            await client_of(request).interrupt_session(
+                employee["agentscope_agent_id"],
+                row["agentscope_session_id"],
+            )
+        except AgentScopeError as exc:
+            raise HTTPException(status_code=502, detail=exc.detail) from exc
+        return {"accepted": True}
+
     @app.post("/api/v1/conversations/{conversation_id}/messages")
     async def send_private(
         conversation_id: str,

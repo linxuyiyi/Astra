@@ -30,20 +30,15 @@ Agent、Session、消息与运行态只存在于 AgentScope。Nexus 只保存员
 `POST /api/v1/conversations/{id}/messages`。附件先经 `/api/v1/attachments` 上传并保留归属。
 不新增平行发送通道，也不让浏览器直连 `/agentscope-api/chat/`。
 
-**D5 乐观消息用请求标识对账。**
-`MessageBody` 增加可选 `request_id`，Nexus 原样回显。客户端按它把本地乐观消息替换成
-服务端消息。理由：按“发送人 + 文本 + 时间窗”去重已经在 `sessionState.ts` 和
-`groups.py` 里被证明会吞掉用户连续发送的相同内容，不能再用。
-
-**D6 停止先校验归属，再转发。**
+**D5 停止先校验归属，再转发。**
 新增 `POST /api/v1/conversations/{id}/interrupt`；Nexus 校验 owner、确认会话已绑定
 Session 后调用 AgentScope `POST /sessions/{sid}/interrupt`。浏览器不能自带 agent/session。
 
-**D7 单一消费者。**
+**D6 单一消费者。**
 `?island=1` 时旧适配器不再调用 `follow()`，事件流只由聊天岛消费。
 理由：两条 SSE 会各自维护游标，重连时互相抢占。
 
-**D8 人工确认不在本期。**
+**D7 人工确认不在本期。**
 私聊发送路径每次都会 `set_permission_mode(..., "dont_ask")`，确认卡不可达。
 本变更不改变该策略，也不把 `ConfirmCard` 的确认通道接到 Nexus。
 

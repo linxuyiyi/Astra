@@ -6,10 +6,12 @@ Element Plus 也不变——聊天岛在独立 iframe 文档里跑，Tailwind �
 
 ## 状态
 
-**阶段 A：只读预览。** 聊天岛渲染 Nexus 已有的会话历史，输入区禁用。
-发送、停止、人工确认、群组、附件仍走 Vue 侧的既有链路，本阶段不接管。
+**阶段 B：私聊读写已接管。** 聊天岛读原生消息、订阅 `raw=1` 事件流、经 Nexus 发送与停止；
+`?island=1` 时旧适配器不再订阅，避免双消费者。群组、附件、人工确认仍未迁移。
 
-所以它现在不是产品入口，只在 `?island=1` 时出现；默认关闭，旧渲染可随时回退。
+默认关闭，旧渲染可随时回退；阶段 D 收敛时删除开关与旧渲染分支。
+
+真实模型的一轮对话还没验：本机没有启用的模型路由，网关（18100）未运行，员工建不出来。
 
 ## 目录
 
@@ -110,15 +112,15 @@ cd web/nexus && npm run dev
   这是上游默认行为，本阶段没改；是否要关掉由视觉验收决定。
 - 群组、发送、停止、确认、附件、HITL。这些属于阶段 B/C。
 
-## 阶段 B 必须解决的前置
+## 阶段 B 进度
 
-1. `/api/v1/conversations/{id}` 只返回扁平 `text + tools`，丢了 thinking、图片、交互状态。
-   原生组件要的是 `Msg[]`，需要**保真历史接口**（契约变更，走 OpenSpec）。
-2. `proxy_stream` 在 `REPLY_END` 后注入 `NEXUS_RUN_FINISHED` 并关闭连接，而 `useMessages`
-   只建一条长连接、不重连——第二条回复收不到流。需要原生透传模式。
-3. `MessageBody` 只有 `text + attachment_ids`，`TextInput` 给的是 `ContentBlock[]`，需要定映射。
-4. 首次发送前 `sessionId` 为空，`useMessages` 会直接 return，需要「建 Session 后重挂载」。
-5. `UNATTENDED_PERMISSION = "dont_ask"`，确认卡在当前策略下不会出现。
+- [x] 保真历史：`GET /api/v1/conversations/{id}/messages`（原生 `Msg[]` + 游标 + `is_running`）
+- [x] 原生事件流：`stream?raw=1`，不注入收尾事件、不中途关闭
+- [x] 停止：`POST /api/v1/conversations/{id}/interrupt`，先校验归属与绑定
+- [x] 首次发送：Nexus 返回 Session 后更新绑定，`useMessages` 重挂载并加载原生历史
+- [ ] 附件：`MessageBody` 仍是 `text + attachment_ids`，聊天岛目前只发文本；
+      文件要先经 `/api/v1/attachments` 上传，再把 id 带进发送请求
+- [ ] 人工确认：`UNATTENDED_PERMISSION = "dont_ask"`，确认卡在当前策略下不会出现
 
 ## 上游升级
 

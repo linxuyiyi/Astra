@@ -31,8 +31,16 @@ async function ownerHeaders(): Promise<Record<string, string>> {
   return !proxyVerified && resolvedUid ? { "X-Owner-Id": resolvedUid } : {};
 }
 
+export async function nexusFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = {
+    ...(await ownerHeaders()),
+    ...((init.headers as Record<string, string> | undefined) ?? {}),
+  };
+  return fetch(path, { ...init, headers, credentials: "omit" });
+}
+
 export async function nexusGet<T>(path: string): Promise<T> {
-  const response = await fetch(path, { headers: await ownerHeaders(), credentials: "omit" });
+  const response = await nexusFetch(path);
   if (!response.ok) {
     let detail = response.statusText;
     try {

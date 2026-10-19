@@ -29,13 +29,21 @@ def employee_body() -> dict:
     }
 
 
-def build_client(tmp_path, monkeypatch, message_response, stream_sse: bytes | None = None):
+def build_client(
+    tmp_path,
+    monkeypatch,
+    message_response,
+    stream_sse: bytes | None = None,
+    calls: list[httpx.Request] | None = None,
+):
     """建一个只有 AgentScope 上游是假的 app，员工与会话走真实 HTTP。"""
 
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("NEXUS_AGENTSCOPE_BASE_URL", "")
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if calls is not None:
+            calls.append(request)
         path = request.url.path
         if path == "/agent/":
             return httpx.Response(201, json={"agent_id": "agent-1"})
@@ -46,6 +54,8 @@ def build_client(tmp_path, monkeypatch, message_response, stream_sse: bytes | No
             return httpx.Response(status, json=payload)
         if path.endswith("/stream") and stream_sse is not None:
             return httpx.Response(200, content=stream_sse)
+        if path.endswith("/interrupt") and request.method == "POST":
+            return httpx.Response(202, json={"status": "accepted"})
         return httpx.Response(404, json={"detail": "missing"})
 
     application = create_app()
@@ -265,5 +275,73 @@ def test_default_stream_still_injects_terminal_event(tmp_path, monkeypatch):
 
         assert "NEXUS_RUN_FINISHED" in body
         assert "不应再出现" not in body
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_interrupt_reaches_the_bound_session(tmp_path, monkeypatch):
+    calls: list[httpx.Request] = []
+    client = build_client(
+        tmp_path,
+        monkeypatch,
+        (200, {"messages": [], "event_cursor": "", "is_running": True, "has_more": False}),
+        calls=calls,
+    )
+    try:
+        conversation_id = create_conversation(client)
+        bind_session(conversation_id, "session-1")
+
+        response = client.post(
+            f"/api/v1/conversations/{conversation_id}/interrupt",
+            headers=OWNER,
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"accepted": True}
+        interrupts = [item for item in calls if item.url.path.endswith("/interrupt")]
+        assert len(interrupts) == 1
+        assert interrupts[0].url.params["agent_id"] == "agent-1"
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_interrupt_rejects_other_owner_without_calling_upstream(tmp_path, monkeypatch):
+    calls: list[httpx.Request] = []
+    client = build_client(
+        tmp_path,
+        monkeypatch,
+        (200, {"messages": [], "event_cursor": "", "is_running": True, "has_more": False}),
+        calls=calls,
+    )
+    try:
+        conversation_id = create_conversation(client)
+        bind_session(conversation_id, "session-1")
+
+        response = client.post(
+            f"/api/v1/conversations/{conversation_id}/interrupt",
+            headers=OTHER,
+        )
+
+        assert response.status_code == 404
+        assert not [item for item in calls if item.url.path.endswith("/interrupt")]
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_interrupt_without_session_is_rejected(tmp_path, monkeypatch):
+    client = build_client(
+        tmp_path,
+        monkeypatch,
+        (200, {"messages": [], "event_cursor": "", "is_running": False, "has_more": False}),
+    )
+    try:
+        conversation_id = create_conversation(client)
+
+        response = client.post(
+            f"/api/v1/conversations/{conversation_id}/interrupt",
+            headers=OWNER,
+        )
+
+        assert response.status_code == 409
     finally:
         client.__exit__(None, None, None)

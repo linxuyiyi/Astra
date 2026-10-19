@@ -57,11 +57,6 @@
 - **WHEN** 消息引用了不属于该用户的附件或超过数量/大小限制
 - **THEN** 请求被拒绝，消息不会进入会话
 
-#### Scenario: Retry does not duplicate
-
-- **WHEN** 客户端因网络重试同一条发送请求
-- **THEN** 会话中不出现两条相同的用户消息，客户端能按请求标识对账本地乐观消息
-
 ### Requirement: Stop the right reply
 
 停止 SHALL 经 Nexus 校验会话归属与绑定后转发给对应 Session；会话的权限策略 MUST NOT 因客户端改造而改变。

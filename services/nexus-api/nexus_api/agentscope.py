@@ -381,7 +381,16 @@ class AgentScopeClient:
             if not isinstance(older, str) or older == before:
                 break
             before = older
-        return collected, event_cursor
+        return collected, event_cursor, is_running
+
+    async def interrupt_session(self, agent_id: str, session_id: str) -> None:
+        """请求中断该会话正在跑的回复。空闲会话在上游是静默 no-op。"""
+
+        await self.request(
+            "POST",
+            f"/sessions/{session_id}/interrupt",
+            params={"agent_id": agent_id},
+        )
 
     async def list_agent_sessions(self, agent_id: str) -> list[dict[str, Any]]:
         response = await self.request("GET", "/sessions/", params={"agent_id": agent_id})

@@ -51,7 +51,13 @@
         </div>
         <div v-else class="chat-head"><h2>数字员工</h2></div>
 
-        <div ref="messageBox" class="chat-messages">
+        <iframe
+          v-if="islandVisible"
+          class="chat-island"
+          :src="islandSrc"
+          title="Nexus 对话"
+        />
+        <div v-if="!islandVisible" ref="messageBox" class="chat-messages">
           <div v-if="activeState?.status === 'error'" class="msg system"><div class="bubble">{{ activeState.error }}</div></div>
           <div
             v-else-if="activeState && !activeState.messages.length && !activeState.liveLines.length && !activeState.notice"
@@ -128,7 +134,7 @@
           <div v-if="activeState?.notice" class="msg system"><div class="bubble">{{ activeState.notice }}</div></div>
         </div>
 
-        <div v-if="activeTarget" class="chat-compose">
+        <div v-if="activeTarget && !islandVisible" class="chat-compose">
           <div v-if="activeTarget.kind === 'group'" class="chips" style="margin-bottom: 8px">
             <button
               v-for="employee in enabledMembers"
@@ -362,6 +368,17 @@ const filteredTargets = computed(() => {
 
 const activeState = computed(() => (selectedKey.value ? sessions[selectedKey.value] : undefined));
 const activeTarget = computed(() => activeState.value?.target ?? null);
+// 阶段 A 的临时开关：?island=1 时中间区换成 Nexus 聊天岛（只读预览）。
+// 默认关闭，旧渲染仍可回退；阶段 D 收敛时删除这个开关和旧渲染分支。
+const islandVisible = computed(() => {
+  if (route.query.island !== "1") return false;
+  if (activeTarget.value?.kind !== "contact") return false;
+  return Boolean(activeState.value?.adapter?.conversationId);
+});
+const islandSrc = computed(() => {
+  const id = activeState.value?.adapter?.conversationId ?? "";
+  return `/nexus-chat/index.html?conversation=${encodeURIComponent(id)}`;
+});
 const enabledMembers = computed(() => (activeTarget.value?.members ?? []).filter((item) => item.enabled));
 const rightTabs = computed(() => activeTarget.value?.kind === "group"
   ? [{ value: "tasks" as const, label: "任务" }, { value: "members" as const, label: "成员" }, { value: "materials" as const, label: "资料" }]
@@ -824,6 +841,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .chat-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.chat-island { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; background: var(--astra-bg-panel); }
 .chat-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .chat-search-row :deep(.el-input) { flex: 1; }
 .chat-filters { display: flex; gap: 6px; margin-bottom: 10px; }

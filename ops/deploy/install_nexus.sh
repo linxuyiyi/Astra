@@ -167,6 +167,10 @@ step_deps() {
   [ -x "$NEXUS_ROOT/services/agent-service/.venv-agentscope/bin/python" ] || $py -m venv "$NEXUS_ROOT/services/agent-service/.venv-agentscope"
   "$NEXUS_ROOT/services/agent-service/.venv-agentscope/bin/pip" install -q -r "$NEXUS_ROOT/services/agent-service/requirements.txt"
   if [ "$SKIP_WEB" = 0 ]; then
+    # 聊天岛产物落在 web/nexus/public/nexus-chat/，必须先于 web/nexus 构建，
+    # 否则 Vite 拷 public 时拿不到它。
+    log "构建 web/nexus-chat（聊天岛）"
+    (cd "$NEXUS_ROOT/web/nexus-chat" && npm ci --no-audit --no-fund >/dev/null && npm run build >/dev/null)
     log "构建 web/nexus"
     (cd "$NEXUS_ROOT/web/nexus" && npm ci --no-audit --no-fund >/dev/null && npm run build >/dev/null)
   else log "跳过 Web 构建（--skip-web-build）"; fi

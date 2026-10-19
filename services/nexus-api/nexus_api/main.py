@@ -2121,19 +2121,18 @@ def create_app() -> FastAPI:
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
-    @app.get("/api/v1/channels/{channel_id}/timeline")
-    async def channel_timeline(
-        channel_id: str,
-        request: Request,
-        connection=Depends(database),
-        cursor: str = "",
-        limit: int = 50,
-    ):
-        channel = channel_payload(connection, channel_id)
-        local = list_messages(connection, channel_id=channel_id)
+    async def channel_native_streams(
+        connection,
+        client: AgentScopeClient,
+        channel: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """按来源返回原生消息：人类消息一条流，每位成员与同事各一条 Session 流。"""
+
+        local = list_messages(connection, channel_id=channel["id"])
         streams: list[dict[str, Any]] = [
             {
-                "session_id": channel_id,
+                "session_id": channel["id"],
+                "employee_id": "",
                 "label": "human",
                 "messages": [
                     {
@@ -2182,10 +2181,53 @@ def create_app() -> FastAPI:
                     except AgentScopeError:
                         continue
                     streams.append(
-                        {"session_id": peer_session, "label": peer_label, "messages": peer_messages}
+                        {
+                            "session_id": peer_session,
+                            "employee_id": "",
+                            "label": peer_label,
+                            "messages": peer_messages,
+                        }
                     )
+        return streams
+
+    @app.get("/api/v1/channels/{channel_id}/timeline")
+    async def channel_timeline(
+        channel_id: str,
+        request: Request,
+        connection=Depends(database),
+        cursor: str = "",
+        limit: int = 50,
+    ):
+        channel = channel_payload(connection, channel_id)
+        streams = await channel_native_streams(connection, client_of(request), channel)
         bounded = limit if 1 <= limit <= 200 else 50
         return merge_timeline(streams, cursor=cursor, limit=bounded)
+
+    @app.get("/api/v1/channels/{channel_id}/timeline/native")
+    async def channel_timeline_native(
+        channel_id: str,
+        request: Request,
+        connection=Depends(database),
+    ):
+        """群组原生时间线：保留每位成员 Session 的完整 Msg，人类消息只出现一次。"""
+
+        channel = channel_payload(connection, channel_id)
+        streams = await channel_native_streams(connection, client_of(request), channel)
+        human_ids = {str(item["id"]) for item in streams[0]["messages"]}
+        for stream in streams[1:]:
+            kept: list[dict[str, Any]] = []
+            for message in stream["messages"]:
+                metadata = message.get("metadata")
+                if message.get("role") == "user" and isinstance(metadata, dict):
+                    # 同一条人类消息会被写进多个成员 Session，id 可能是副本 id，
+                    # 原始 id 在 metadata.message_id 上。
+                    if str(metadata.get("message_id") or "") in human_ids:
+                        continue
+                if message.get("role") == "user" and str(message.get("id") or "") in human_ids:
+                    continue
+                kept.append(message)
+            stream["messages"] = kept
+        return {"channel": channel, "streams": streams}
 
     @app.get("/api/v1/channels/{channel_id}/members/{employee_id}/stream")
     async def stream_member(

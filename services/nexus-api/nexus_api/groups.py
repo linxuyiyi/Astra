@@ -129,13 +129,18 @@ def merge_timeline(
                 continue
             created_at = str(message.get("created_at") or "")
             if message.get("role") == "user":
-                message_id = str(message.get("id") or "")
+                metadata = message.get("metadata") if isinstance(message.get("metadata"), dict) else {}
+                raw_id = metadata.get("message_id") or message.get("id")
+                message_id = str(raw_id or "")
+                display = metadata.get("display_text")
+                text = display if isinstance(display, str) else _plain_text(message.get("content"))
+                speaker = str(message.get("name") or "user")
+                # 只按消息 id 去重：同一条人类消息会被写进多个员工会话，id 相同才是同一条。
+                # 曾经再按「发送人 + 文本 + 分钟」去重，会把用户同一分钟内发送的两条相同文字
+                # 折叠成一条；那是掩盖 id 不一致，不是修复。
                 if not message_id or message_id in seen_users:
                     continue
                 seen_users.add(message_id)
-                metadata = message.get("metadata") if isinstance(message.get("metadata"), dict) else {}
-                display = metadata.get("display_text")
-                text = display if isinstance(display, str) else _plain_text(message.get("content"))
                 raw_attachments = metadata.get("attachments")
                 attachments = raw_attachments if isinstance(raw_attachments, list) else []
                 rows.append(

@@ -345,3 +345,70 @@ def test_interrupt_without_session_is_rejected(tmp_path, monkeypatch):
         assert response.status_code == 409
     finally:
         client.__exit__(None, None, None)
+
+
+def test_native_group_timeline_keeps_blocks_and_shows_human_once(tmp_path, monkeypatch):
+    """群组原生时间线：成员 Session 保留完整块，人类消息只出现一次。"""
+
+    remote = [
+        {
+            "id": "copy-1",
+            "role": "user",
+            "name": "browser-native",
+            "created_at": "2026-10-20T08:00:00Z",
+            "content": [{"type": "text", "text": "大家好", "id": "b0", "created_at": ""}],
+            "metadata": {"message_id": "msg_h1", "display_text": "大家好"},
+        },
+        {
+            "id": "reply-1",
+            "role": "assistant",
+            "name": "星河",
+            "created_at": "2026-10-20T08:00:05Z",
+            "content": [
+                {"type": "thinking", "thinking": "先回应", "id": "b1", "created_at": ""},
+                {"type": "text", "text": "收到", "id": "b2", "created_at": ""},
+            ],
+        },
+    ]
+    client = build_client(
+        tmp_path,
+        monkeypatch,
+        (200, {"messages": remote, "event_cursor": "5-0", "is_running": False, "has_more": False}),
+    )
+    try:
+        employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
+        channel = client.post(
+            "/api/v1/channels",
+            json={"name": "验收群", "description": "群组原生时间线", "member_ids": [employee["id"]]},
+        ).json()
+        with sqlite3.connect(db_path()) as connection:
+            connection.execute(
+                "UPDATE channel_members SET agentscope_session_id = ? WHERE channel_id = ?",
+                ("session-1", channel["id"]),
+            )
+            connection.execute(
+                """
+                INSERT INTO messages (id, conversation_id, channel_id, sender, text,
+                                      attachments_json, accepted, speaker_uid, created_at)
+                VALUES (?, NULL, ?, 'user', '大家好', '[]', 1, 'browser-native', ?)
+                """,
+                ("msg_h1", channel["id"], "2026-10-20T08:00:00Z"),
+            )
+
+        native = client.get(f"/api/v1/channels/{channel['id']}/timeline/native").json()
+
+        assert len(native["streams"]) == 2
+        human, member = native["streams"]
+        assert [item["id"] for item in human["messages"]] == ["msg_h1"]
+        assert [item["id"] for item in member["messages"]] == ["reply-1"]
+        assert [block["type"] for block in member["messages"][0]["content"]] == [
+            "thinking",
+            "text",
+        ]
+        assert member["label"] == "星河"
+
+        legacy = client.get(f"/api/v1/channels/{channel['id']}/timeline").json()
+        assert len(legacy["items"]) == 2
+        assert [item["kind"] for item in legacy["items"]] == ["human", "reply"]
+    finally:
+        client.__exit__(None, None, None)

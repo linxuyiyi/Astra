@@ -372,10 +372,16 @@ const activeTarget = computed(() => activeState.value?.target ?? null);
 // 默认关闭，旧渲染仍可回退；阶段 D 收敛时删除这个开关和旧渲染分支。
 const islandVisible = computed(() => {
   if (route.query.island !== "1") return false;
-  if (activeTarget.value?.kind !== "contact") return false;
+  const target = activeTarget.value;
+  if (!target) return false;
+  if (target.kind === "group") return Boolean(target.channel?.id);
   return Boolean(activeState.value?.adapter?.conversationId);
 });
 const islandSrc = computed(() => {
+  const target = activeTarget.value;
+  if (target?.kind === "group" && target.channel) {
+    return `/nexus-chat/index.html?channel=${encodeURIComponent(target.channel.id)}`;
+  }
   const id = activeState.value?.adapter?.conversationId ?? "";
   return `/nexus-chat/index.html?conversation=${encodeURIComponent(id)}`;
 });
@@ -510,10 +516,15 @@ function stopFollow(key: string) {
 function startFollow(state: ChatSessionState) {
   if (disposed || !state.adapter) return;
   // 聊天岛接管时，同一会话只能有一个事件流消费者：旧适配器在这里让位。
-  if (route.query.island === "1" && state.target.kind === "contact" && state.adapter.conversationId) {
-    state.abort?.abort();
-    state.abort = null;
-    return;
+  if (route.query.island === "1") {
+    const ready = state.target.kind === "group"
+      ? Boolean(state.target.channel?.id)
+      : Boolean(state.adapter.conversationId);
+    if (ready) {
+      state.abort?.abort();
+      state.abort = null;
+      return;
+    }
   }
   state.abort?.abort();
   const controller = new AbortController();

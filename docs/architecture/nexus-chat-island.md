@@ -187,6 +187,25 @@ ops/dev/start_nexus_api.sh stop && ops/dev/start_nexus_api.sh start
 已知上游表现：被中断的 thinking 块若耗时为 0s，标头显示「思考中」（上游按
 `elapsedText === '0s'` 选文案），块本身已结束、可展开查看部分内容；不是本项目的回归。
 
+## 群组（阶段 C）
+
+群组不是一条 Session，而是一个 channel + 每位员工各一条 Session：
+
+- `GET /api/v1/channels/{id}/timeline/native` 按来源返回完整 `Msg` 与每位成员的
+  `event_cursor`；成员 Session 里的人类消息副本按 `metadata.message_id` 剔除，
+  只剩 Nexus 记录的那一条
+- 前端为每位成员订阅 `members/{id}/stream?raw=1`，按 `session_id` 分桶合并；
+  一次回复结束连接不关闭
+- 停止按成员下发到 `POST /channels/{id}/members/{id}/interrupt`
+- 发言人标题渲染在**气泡外**，不改写正文，也不改上游组件
+- 发送仍走 `/api/v1/channels/{id}/messages`，`@` 路由与去重由后端负责
+
+已知取舍：聊天岛接管群组后，旧 Vue 输入区的「点击 @成员」快捷按钮不再出现，
+`@名字` 仍可手输；需要按钮的话要改上游 TextInput 暴露插入接口。
+
+验收：两位员工、两条 `@` 消息，回复按发言人分标题渲染
+（`group-20261020.png`）。
+
 ## 上游升级
 
 1. 在临时目录 checkout 新 tag，按 `UPSTREAM.sha256` 清单重新拷贝同名文件。

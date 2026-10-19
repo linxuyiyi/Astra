@@ -48,3 +48,9 @@ export async function uploadAttachment(file: File): Promise<DataBlock> {
     },
   };
 }
+
+/** 附件在 DataBlock 里以 Nexus 下载地址表示，发送时从地址取回 id。 */
+export function attachmentIdFromBlock(block: { source?: { url?: string } }): string | null {
+  const match = /\/api\/v1\/attachments\/([^/?#]+)/.exec(block.source?.url ?? "");
+  return match ? match[1] : null;
+}

@@ -412,3 +412,35 @@ def test_native_group_timeline_keeps_blocks_and_shows_human_once(tmp_path, monke
         assert [item["kind"] for item in legacy["items"]] == ["human", "reply"]
     finally:
         client.__exit__(None, None, None)
+
+
+def test_member_interrupt_reaches_the_member_session(tmp_path, monkeypatch):
+    calls: list[httpx.Request] = []
+    client = build_client(
+        tmp_path,
+        monkeypatch,
+        (200, {"messages": [], "event_cursor": "", "is_running": False, "has_more": False}),
+        calls=calls,
+    )
+    try:
+        employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
+        channel = client.post(
+            "/api/v1/channels",
+            json={"name": "停止群", "description": "成员停止", "member_ids": [employee["id"]]},
+        ).json()
+        with sqlite3.connect(db_path()) as connection:
+            connection.execute(
+                "UPDATE channel_members SET agentscope_session_id = ? WHERE channel_id = ?",
+                ("session-1", channel["id"]),
+            )
+
+        response = client.post(
+            f"/api/v1/channels/{channel['id']}/members/{employee['id']}/interrupt"
+        )
+
+        assert response.status_code == 200
+        interrupts = [item for item in calls if item.url.path.endswith("/interrupt")]
+        assert len(interrupts) == 1
+        assert interrupts[0].url.params["agent_id"] == "agent-1"
+    finally:
+        client.__exit__(None, None, None)

@@ -2162,11 +2162,19 @@ def create_app() -> FastAPI:
                     continue
                 seen_sessions.add(session_id)
                 try:
-                    remote = await client.list_session_messages(employee["agentscope_agent_id"], session_id)
+                    remote, event_cursor = await client.read_session(
+                        employee["agentscope_agent_id"], session_id
+                    )
                 except AgentScopeError:
-                    remote = []
+                    remote, event_cursor = [], ""
                 streams.append(
-                    {"session_id": session_id, "label": employee["name"], "messages": remote}
+                    {
+                        "session_id": session_id,
+                        "employee_id": employee["id"],
+                        "label": employee["name"],
+                        "event_cursor": event_cursor,
+                        "messages": remote,
+                    }
                 )
                 try:
                     views = await client.list_agent_sessions(employee["agentscope_agent_id"])
@@ -2236,6 +2244,7 @@ def create_app() -> FastAPI:
         request: Request,
         connection=Depends(database),
         after: str | None = None,
+        raw: bool = False,
     ):
         channel = channel_payload(connection, channel_id)
         employee = load_employee(connection, employee_id)
@@ -2247,7 +2256,34 @@ def create_app() -> FastAPI:
             employee["agentscope_agent_id"],
             binding["agentscope_session_id"],
             stream_cursor(after),
+            raw=raw,
         )
+
+    @app.post("/api/v1/channels/{channel_id}/members/{employee_id}/interrupt")
+    async def interrupt_member(
+        channel_id: str,
+        employee_id: str,
+        request: Request,
+        connection=Depends(database),
+    ):
+        """停止某个成员在群组会话里正在跑的回复。"""
+
+        channel = channel_payload(connection, channel_id)
+        employee = load_employee(connection, employee_id)
+        binding = next(
+            (item for item in channel["members"] if item["employee_id"] == employee_id),
+            None,
+        )
+        if binding is None or not binding["agentscope_session_id"] or not employee["agentscope_agent_id"]:
+            raise HTTPException(status_code=409, detail="该成员还没有 AgentScope Session")
+        try:
+            await client_of(request).interrupt_session(
+                employee["agentscope_agent_id"],
+                binding["agentscope_session_id"],
+            )
+        except AgentScopeError as exc:
+            raise HTTPException(status_code=502, detail=exc.detail) from exc
+        return {"accepted": True}
 
     @app.get("/api/v1/peers/resolve")
     async def resolve_peer(

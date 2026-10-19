@@ -1549,6 +1549,35 @@ def create_app() -> FastAPI:
             "history_error": history_error,
         }
 
+    @app.get("/api/v1/conversations/{conversation_id}/messages")
+    async def native_conversation_messages(
+        conversation_id: str,
+        request: Request,
+        owner_id: str = Depends(require_owner),
+        connection=Depends(database),
+    ):
+        """原生消息：完整 content 块、事件游标和运行态，供嵌入式聊天使用。
+
+        扁平响应（GET /conversations/{id}）是旧渲染的契约，保持不动。
+        """
+
+        row = owned_conversation(connection, conversation_id, owner_id)
+        employee = load_employee(connection, row["employee_id"])
+        if not row["agentscope_session_id"] or not employee["agentscope_agent_id"]:
+            return {"messages": [], "event_cursor": "", "is_running": False}
+        try:
+            messages, event_cursor, is_running = await client_of(request).read_session_detail(
+                employee["agentscope_agent_id"],
+                row["agentscope_session_id"],
+            )
+        except AgentScopeError as exc:
+            raise HTTPException(status_code=502, detail=exc.detail) from exc
+        return {
+            "messages": messages,
+            "event_cursor": event_cursor,
+            "is_running": is_running,
+        }
+
     @app.post("/api/v1/conversations/{conversation_id}/messages")
     async def send_private(
         conversation_id: str,
@@ -1692,6 +1721,7 @@ def create_app() -> FastAPI:
         owner_id: str = Depends(require_owner),
         connection=Depends(database),
         after: str | None = None,
+        raw: bool = False,
     ):
         row = owned_conversation(connection, conversation_id, owner_id)
         employee = load_employee(connection, row["employee_id"])
@@ -1702,6 +1732,7 @@ def create_app() -> FastAPI:
             employee["agentscope_agent_id"],
             row["agentscope_session_id"],
             stream_cursor(after),
+            raw=raw,
         )
 
     def channel_payload(connection, channel_id: str) -> dict[str, Any]:
@@ -2280,6 +2311,7 @@ def create_app() -> FastAPI:
         agent_id: str,
         session_id: str,
         after: str | None = None,
+        raw: bool = False,
     ) -> StreamingResponse:
         if not client.configured:
             raise HTTPException(status_code=503, detail="AgentScope 未连接，没有生成回复")
@@ -2306,6 +2338,10 @@ def create_app() -> FastAPI:
                         frames, pending = split_sse(pending)
                         for frame in frames:
                             yield frame + b"\n\n"
+                            if raw:
+                                # 原生客户端自己判断一轮是否结束；这里不注入收尾事件，
+                                # 也不因为 REPLY_END 关闭连接，否则第二条回复收不到。
+                                continue
                             started, terminal, close = observe_stream_event(started, sse_payload(frame))
                             if terminal is not None:
                                 encoded = json.dumps(terminal, ensure_ascii=False)

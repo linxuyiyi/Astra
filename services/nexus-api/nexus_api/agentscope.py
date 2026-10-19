@@ -345,8 +345,19 @@ class AgentScopeClient:
     async def read_session(self, agent_id: str, session_id: str) -> tuple[list[dict[str, Any]], str]:
         """同一页里取出消息和重放游标，避免历史和流各读一次中间漏事件。"""
 
+        messages, cursor, _running = await self.read_session_detail(agent_id, session_id)
+        return messages, cursor
+
+    async def read_session_detail(
+        self,
+        agent_id: str,
+        session_id: str,
+    ) -> tuple[list[dict[str, Any]], str, bool]:
+        """历史、游标和运行态来自同一次上游读取，不事后推断。"""
+
         collected: list[dict[str, Any]] = []
         event_cursor = ""
+        is_running = False
         before: str | None = None
         for _ in range(10):
             params: dict[str, Any] = {"agent_id": agent_id, "limit": 200}

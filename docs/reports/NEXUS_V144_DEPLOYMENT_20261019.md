@@ -33,11 +33,11 @@
 
 ## 全量测试边界
 
-全量 `pytest tests -x -q --tb=short` 在 macOS 上不能完整通过，属平台/基线限制，不是本次变更失败：
+全量 `pytest tests -x -q --tb=short` 在 macOS 上不能完整通过：
 
-- `test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files` 因 `app/worker_agent/files.py` 的 Linux `openat2` 实现使用 `os.O_PATH` 失败；同一用例在基线 worktree `ae6bc2e3e` 复现 exit 1。
-- `test_remote_provisioning.py` 的直接安装脚本用例依赖 `flock`，本机无该命令；`remote_install.sh` 未在本次修改。
-- 去掉上述已知平台用例后，全量进程在 689 个用例后以 exit 140 无 summary 退出，最后用例位于 `test_session_workspace.py`；该文件单独运行 145 passed，确认是累积进程边界而非本次业务改动。未将全量标为通过。
+- `test_phase4_channel.py::test_install_marks_inside_the_operation_and_serves_files` 因 `app/worker_agent/files.py` 的 Linux `openat2` 实现使用 `os.O_PATH` 失败；同一用例已在原始基线 worktree `ae6bc2e3e` 复现 exit 1。
+- `test_remote_provisioning.py` 的直接安装脚本用例依赖 `flock`，本机缺少该依赖；`remote_install.sh` 未在本次修改。
+- 去掉上述用例后，全量进程在 689 个用例后以 exit 140 无 summary 退出，最后用例位于 `test_session_workspace.py`。exit 140 的原因未确认；该文件单独运行 145 passed 不能排除全量回归，不得把该终止归因为已确认的平台或累积进程问题。完整全量仍未通过。
 
 ## 未验证项
 

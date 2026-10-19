@@ -122,6 +122,41 @@ cd web/nexus && npm run dev
       文件要先经 `/api/v1/attachments` 上传，再把 id 带进发送请求
 - [ ] 人工确认：`UNATTENDED_PERMISSION = "dont_ask"`，确认卡在当前策略下不会出现
 
+## 本地免费模型验收
+
+没有可用模型 Key 时，可以用本机 Ollama 跑通完整链路（无需 Key、无外网费用）：
+
+```bash
+# 1. 模型（1.9 GB）
+OLLAMA_MODELS=/tmp/ollama-models ollama serve &
+OLLAMA_MODELS=/tmp/ollama-models ollama pull qwen2.5:3b
+
+# 2. 网关数据面（18110）与 Task API（18100）
+. ops/env/.env
+(cd services/task-platform && .venv/bin/uvicorn app.main:app --port 18100 &)
+(cd services/task-platform && .venv/bin/uvicorn app.gateway.server:app --port 18110 &)
+
+# 3. 建池 / 节点 / 路由（base_url 不带 /v1，网关自己追加 /v1/chat/completions）
+curl -X POST localhost:18100/api/gateway/pools -d '{"name":"本地 Ollama"}'
+curl -X POST localhost:18100/api/gateway/nodes -d '{"name":"Ollama qwen2.5:3b","base_url":"http://127.0.0.1:11434","pool_id":"<pool>","auth_type":"NONE","models":["qwen2.5:3b"],"health_path":"/api/tags"}'
+curl -X POST localhost:18100/api/gateway/routes -d '{"model":"qwen2.5:3b","pool_id":"<pool>","target_model":"qwen2.5:3b"}'
+curl -X POST localhost:18100/api/gateway/nodes/<node>/probe -d '{"probe_types":["NETWORK","SERVICE","MODEL","STREAM"]}'
+curl -X POST localhost:18100/api/gateway/nodes/<node>/activate
+
+# 4. 网关 Key，然后把 Nexus API 指到网关
+curl -X POST localhost:18100/api/gateway/keys -d '{"name":"本地验收","allowed_models":["qwen2.5:3b"]}'
+export NEXUS_GATEWAY_API_KEY=<返回的 key>
+export NEXUS_AGENTSCOPE_BASE_URL=http://127.0.0.1:8000   # 本地 dev 端口见 ops/env/.env
+ops/dev/start_nexus_api.sh stop && ops/dev/start_nexus_api.sh start
+```
+
+验收记录（2026-10-20）：新建员工 → 首条发送建 Session → 原生历史返回
+`hint / tool_call / tool_result / text` 四类块 → `stream?raw=1` 收到
+`REPLY_START … REPLY_END` 且无 `NEXUS_RUN_FINISHED` → 聊天岛渲染两轮真实对话。
+截图：`docs/reports/evidence/nexus-chat-island/acceptance-20261020.png`。
+
+注意：`qwen2.5:3b` 只有 3B，会误调工具、偶尔不遵守中文指令，只适合验证链路，不适合验收回复质量。
+
 ## 上游升级
 
 1. 在临时目录 checkout 新 tag，按 `UPSTREAM.sha256` 清单重新拷贝同名文件。

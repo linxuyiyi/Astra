@@ -32,11 +32,14 @@
 
 ## 4. 验收
 
-- [ ] 4.1 真实模型的一轮对话（发送 → 流式 → 停止 → 刷新）
-  - 阻塞：本机没有启用的模型路由，网关（18100）未运行，员工无法创建；旧 Session 在新 Redis 里也是 404
-  - 已做：AgentScope 2.0.10 起服务并通过 `/health`，确认契约与鉴权可用
-- [ ] 4.2 用假上游跑通“发送 → 绑定更新 → 原生历史重载”的浏览器链路
-  - 完成标准：提交消息后聊天岛出现助手回复；停止按钮触发 interrupt
+- [x] 4.1 真实模型的一轮对话（发送 → 流式 → 停止 → 刷新）
+  - 结果：DeepSeek flash 两轮各约 4 秒；`stream?raw=1` 事件完整；停止后
+    `is_running=false`、`finished_reason=interrupted`
+  - 证据：`docs/reports/evidence/nexus-chat-island/acceptance-deepseek-20261020.png`
+- [x] 4.2 浏览器内“输入 → 发送 → 流式 → 停止 → 刷新”
+  - 结果：CDP 驱动真实 Chrome，Enter 发送后用户消息与助手回复都进入界面；
+    流式期间出现停止按钮，点击后 4 秒内回到空闲
+  - 证据：`live-send-20261020.png`、`stop-20261020.png`
 - [x] 4.3 回归既有测试
   - 验证：`PYTHONPATH=services/nexus-api ... pytest services/nexus-api/tests`（98 passed, 4 skipped）；
     `services/nexus-api/.venv/bin/ruff check services/nexus-api/nexus_api services/nexus-api/tests`；

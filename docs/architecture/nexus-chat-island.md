@@ -172,6 +172,21 @@ ops/dev/start_nexus_api.sh stop && ops/dev/start_nexus_api.sh start
 `REPLY_START → TEXT_BLOCK_* → REPLY_END`，无私有事件、连接不关闭。
 截图：`docs/reports/evidence/nexus-chat-island/acceptance-deepseek-20261020.png`。
 
+### 浏览器交互验收（2026-10-20）
+
+用 Chrome DevTools Protocol 驱动真实浏览器（无人工点击）：
+
+- 在输入框写入文本并按 Enter → 用户消息立即出现（乐观插入），POST 返回后保持
+- 同一会话连续多轮：助手回复通过 `stream?raw=1` 增量进入界面，无需刷新
+- 流式期间出现停止按钮（0.5s 内），点击后 4s 内回到空闲；Nexus 侧
+  `is_running=false`，该条助手消息 `finished_reason=interrupted`
+- 刷新后原生历史完整渲染（含 hint、thinking、工具块与 token 用量）
+
+证据：`live-send-20261020.png`、`stop-20261020.png`。
+
+已知上游表现：被中断的 thinking 块若耗时为 0s，标头显示「思考中」（上游按
+`elapsedText === '0s'` 选文案），块本身已结束、可展开查看部分内容；不是本项目的回归。
+
 ## 上游升级
 
 1. 在临时目录 checkout 新 tag，按 `UPSTREAM.sha256` 清单重新拷贝同名文件。

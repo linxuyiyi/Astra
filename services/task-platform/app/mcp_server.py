@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import hmac
 from typing import Any
+from urllib.parse import urlsplit
 
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import ValidationError
 
 from app.config.settings import get_settings
@@ -35,6 +37,69 @@ class StaticTokenVerifier:
             subject="nexus-library-client",
             scopes=["library:read", "library:feedback"],
         )
+
+
+def _authority(url: str) -> tuple[str, str] | None:
+    parsed = urlsplit(url or "")
+    host = parsed.hostname
+    if not host or host in {"0.0.0.0", "::", "*"} or "*" in host:
+        return None
+    literal = f"[{host}]" if ":" in host else host
+    authority = f"{literal}:{parsed.port}" if parsed.port else literal
+    scheme = parsed.scheme or "http"
+    return authority, f"{scheme}://{authority}"
+
+
+def transport_security(settings=None) -> TransportSecuritySettings:
+    """Allow only the explicitly configured MCP resource/issuer hosts.
+
+    The SDK defaults to loopback-only when DNS rebinding protection is on. A
+    real Worker reaches the service through ``mcp_resource_server_url``, so that
+    configured authority (and the configured bind/issuer) must be allowed
+    explicitly. Request Host headers are never trusted as a source.
+    """
+
+    resolved = settings or get_settings()
+    hosts: list[str] = []
+    origins: list[str] = []
+
+    def add(authority: str, origin: str) -> None:
+        if authority not in hosts:
+            hosts.append(authority)
+        if origin not in origins:
+            origins.append(origin)
+
+    for url in (
+        resolved.mcp_resource_server_url,
+        resolved.mcp_issuer_url,
+    ):
+        parsed = _authority(url)
+        if parsed is not None:
+            add(*parsed)
+    if resolved.mcp_host not in {"0.0.0.0", "::", ""}:
+        parsed = _authority(f"http://{resolved.mcp_host}:{resolved.mcp_port}")
+        if parsed is not None:
+            add(*parsed)
+
+    for authority in ("127.0.0.1:*", "localhost:*", "[::1]:*"):
+        if authority not in hosts:
+            hosts.append(authority)
+    for origin in (
+        "http://127.0.0.1:*",
+        "http://localhost:*",
+        "http://[::1]:*",
+        "https://127.0.0.1:*",
+        "https://localhost:*",
+        "https://[::1]:*",
+    ):
+        if origin not in origins:
+            origins.append(origin)
+
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=hosts,
+        allowed_origins=origins,
+    )
 
 
 def build_mcp_server() -> MCPServer:
@@ -143,6 +208,7 @@ def main() -> None:
             streamable_http_path=settings.mcp_streamable_http_path,
             stateless_http=True,
             json_response=True,
+            transport_security=transport_security(settings),
         )
     except KeyboardInterrupt:
         pass

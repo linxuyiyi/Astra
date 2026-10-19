@@ -1,0 +1,96 @@
+{
+  "status": "PASS",
+  "operation": {
+    "id": "op_aee0e6c836424bde8931e612d35503ba",
+    "state": "SUCCEEDED",
+    "error_code": null,
+    "error_message": null,
+    "execution_channel": null,
+    "elapsed_seconds": 4.07,
+    "checks": [
+      {
+        "name": "SSH 连接与执行检查",
+        "state": "passed",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "重启 OpenCode Serve",
+        "state": "passed",
+        "passed": true,
+        "detail": "单元重启、OpenCode 健康与 Worker 上线均已确认"
+      }
+    ]
+  },
+  "final_units": {
+    "opencode": {
+      "active": "active",
+      "enabled": "enabled",
+      "main_pid": "40203"
+    },
+    "worker": {
+      "active": "active",
+      "enabled": "enabled",
+      "main_pid": "40204"
+    }
+  },
+  "final_health": {
+    "connection": {
+      "channel": "worker",
+      "state": "online",
+      "last_heartbeat_at": "2026-10-19T05:48:36.686732+00:00",
+      "epoch": 13
+    },
+    "maintenance": {
+      "state": "SUCCEEDED",
+      "operation_id": "op_aee0e6c836424bde8931e612d35503ba",
+      "stage": "verify",
+      "attempt": 1
+    },
+    "runtime_status": "AVAILABLE",
+    "schedulable": true,
+    "blocking": [],
+    "equipment": [
+      {
+        "key": "opencode",
+        "deployed": true,
+        "verified": true
+      },
+      {
+        "key": "worker_agent",
+        "deployed": true,
+        "verified": true
+      },
+      {
+        "key": "model",
+        "deployed": true,
+        "verified": true
+      },
+      {
+        "key": "mcp",
+        "deployed": true,
+        "verified": true
+      },
+      {
+        "key": "skills",
+        "deployed": true,
+        "verified": true
+      },
+      {
+        "key": "git",
+        "deployed": true,
+        "verified": true
+      }
+    ]
+  },
+  "checks": {
+    "offline_confirmed_before_restart": true,
+    "formal_restart_succeeded_without_reconcile": true,
+    "six_items_verified": true,
+    "schedulable": true,
+    "worker_online": true,
+    "tokens_unchanged": true,
+    "no_manual_start": true
+  },
+  "report": "/private/tmp/nexus-v145-qa/reports/offline-ssh-recovery-final.json"
+}

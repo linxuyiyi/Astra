@@ -1,0 +1,1367 @@
+{
+  "meta": {
+    "generated_at": "2026-10-19T05:35:15Z",
+    "target_ip": "47.77.219.113",
+    "base": "/opt/nexus-v145-qa-20261019",
+    "mode": "fault-matrix-batch1",
+    "product_source_modified": false,
+    "committed_or_pushed": false,
+    "system_upgraded": false,
+    "nativebusy_or_controllerCrash_started": false,
+    "services_kept_running": true,
+    "toolchain": {
+      "kernel": "3.10.0-514.26.2.el7.x86_64",
+      "glibc": "2.17",
+      "systemd": "systemd 219"
+    }
+  },
+  "corrections": {
+    "previous_installer_runtime_changed_inference": "WRONG",
+    "explanation": "The extra OpenCode restart was not caused by an unconditional runtime_changed in the installer. op_a30f31d4 had changed={runtime:false,configuration:false,skills:false,repository:false}; remote_install.sh already had the readlink comparison. The real cause was the old switch implementation. The channel idempotency fix only reloads when the actual URL differs, uses verified as the sole effect fact, and records reloaded as the actual action.",
+    "evidence": [
+      "op_a30f31d4 after_snapshot.changed all false",
+      "remote_install.sh symlink/readlink comparison present",
+      "/tmp/nexus-v145-opencode-channel-idempotency.jsonl final stop, 78 passed on Linux",
+      "A/B same-config deploy now keeps OpenCode/Worker PIDs unchanged"
+    ],
+    "remaining_false_fix_entries_removed": true
+  },
+  "base_validation": {
+    "sync_all_app": {
+      "ok": true,
+      "files": [
+        {
+          "file": "app/runtime/remote_install.sh",
+          "local_sha256": "2a76c95fd1bc3f396dbc5d4d0f267968758ff50fcbe6d4ed0e0b35517668de2e",
+          "remote_before": "2a76c95fd1bc3f396dbc5d4d0f267968758ff50fcbe6d4ed0e0b35517668de2e",
+          "remote_after": "2a76c95fd1bc3f396dbc5d4d0f267968758ff50fcbe6d4ed0e0b35517668de2e",
+          "uploaded": false,
+          "match": true
+        },
+        {
+          "file": "services/task-platform/app/mcp_server.py",
+          "local_sha256": "d81ef4ce64c258886c472e37c02f7253e4f33130a1ac6fa3a154cb558210fce4",
+          "remote_before": "d81ef4ce64c258886c472e37c02f7253e4f33130a1ac6fa3a154cb558210fce4",
+          "remote_after": "d81ef4ce64c258886c472e37c02f7253e4f33130a1ac6fa3a154cb558210fce4",
+          "uploaded": false,
+          "match": true
+        },
+        {
+          "file": "services/task-platform/app/runtime/maintenance.py",
+          "local_sha256": "963bf8ac95ee6a1c89f6c3f37a6a48f0de8357e53a7e05212a8b7260ad9acaf4",
+          "remote_before": "963bf8ac95ee6a1c89f6c3f37a6a48f0de8357e53a7e05212a8b7260ad9acaf4",
+          "remote_after": "963bf8ac95ee6a1c89f6c3f37a6a48f0de8357e53a7e05212a8b7260ad9acaf4",
+          "uploaded": false,
+          "match": true
+        },
+        {
+          "file": "services/task-platform/app/runtime/remote_provisioning.py",
+          "local_sha256": "0939ac201656def0d856f0d8d8b2814a4420120e02d105250316a70b2dbdc218",
+          "remote_before": "f1701e8d6d02ffb91f1aea93f1e1a42eb313e87d532f18fadd40f747d6ec3c87",
+          "remote_after": "0939ac201656def0d856f0d8d8b2814a4420120e02d105250316a70b2dbdc218",
+          "uploaded": true,
+          "match": true
+        },
+        {
+          "file": "services/task-platform/app/runtime/worker_channel.py",
+          "local_sha256": "2261c5401263666bb7ed51af98159ca6a583309ff6d9ba5d3bf12c2c3d95fff9",
+          "remote_before": "eb4c04fc4597ca0443a261a6af24b02eadc681a95701e684b44dc43306860b49",
+          "remote_after": "2261c5401263666bb7ed51af98159ca6a583309ff6d9ba5d3bf12c2c3d95fff9",
+          "uploaded": true,
+          "match": true
+        },
+        {
+          "file": "services/task-platform/app/runtime/worker_health.py",
+          "local_sha256": "f521b2c42e85ca53be17855c602eb0895df87cec2e94d879f3fe539ec2d76aa6",
+          "remote_before": "f521b2c42e85ca53be17855c602eb0895df87cec2e94d879f3fe539ec2d76aa6",
+          "remote_after": "f521b2c42e85ca53be17855c602eb0895df87cec2e94d879f3fe539ec2d76aa6",
+          "uploaded": false,
+          "match": true
+        },
+        {
+          "file": "services/task-platform/app/worker_agent/channel_switch.py",
+          "local_sha256": "ad84826b98c86d26817e2cfbdd99a612af8d873c7a044d26cbd8ec62d69fb2c0",
+          "remote_before": "cf41ce49d8cb616aaf6b83a6cea5115df4290bba010399cb4cc0c1322c9626a7",
+          "remote_after": "ad84826b98c86d26817e2cfbdd99a612af8d873c7a044d26cbd8ec62d69fb2c0",
+          "uploaded": true,
+          "match": true
+        },
+        {
+          "file": "services/task-platform/app/worker_agent/inspection.py",
+          "local_sha256": "d02fd0f527b797b432d776782c0ac64bd54c068de3bed5ce2c12d73376a04692",
+          "remote_before": "d02fd0f527b797b432d776782c0ac64bd54c068de3bed5ce2c12d73376a04692",
+          "remote_after": "d02fd0f527b797b432d776782c0ac64bd54c068de3bed5ce2c12d73376a04692",
+          "uploaded": false,
+          "match": true
+        },
+        {
+          "file": "services/task-platform/app/worker_agent/process_env.py",
+          "local_sha256": "5903b0c52b90787640f14daaf7101e64239f00b85767b7f7bfe0cf46d51dfde3",
+          "remote_before": "5903b0c52b90787640f14daaf7101e64239f00b85767b7f7bfe0cf46d51dfde3",
+          "remote_after": "5903b0c52b90787640f14daaf7101e64239f00b85767b7f7bfe0cf46d51dfde3",
+          "uploaded": false,
+          "match": true
+        }
+      ],
+      "restarted_units": [
+        "nexus-v145-qa-api-20261019.service",
+        "nexus-v145-qa-mcp-20261019.service"
+      ],
+      "health": {
+        "api": 200,
+        "mcp": 200
+      },
+      "units_state": [
+        "MainPID=9198",
+        "Id=nexus-v145-qa-api-20261019.service",
+        "ActiveState=active",
+        "SubState=running",
+        "",
+        "MainPID=9200",
+        "Id=nexus-v145-qa-mcp-20261019.service",
+        "ActiveState=active",
+        "SubState=running"
+      ],
+      "note": "These are current uncommitted app changes, not part of commit 619d357db."
+    },
+    "worker_a": {
+      "employee_id": "worker-x86-a",
+      "environment_id": 1,
+      "repository_id": "3486b007730449e4aded523ba8a6a851",
+      "repository_url": "file:///opt/nexus-v145-qa-20261019/git/source.git",
+      "head": "a82c6b27054097d63f880a22e72dd682c894db3d",
+      "health": {
+        "connection": "online",
+        "runtime_health": "AVAILABLE",
+        "schedulable": true,
+        "blocking": [],
+        "equipment": [
+          {
+            "key": "opencode",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "worker_agent",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "model",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "mcp",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "skills",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "git",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          }
+        ],
+        "repository": {
+          "id": "3486b007730449e4aded523ba8a6a851",
+          "url": "file:///opt/nexus-v145-qa-20261019/git/source.git",
+          "target_branch": "main",
+          "branch": "main",
+          "commit": "a82c6b27054097d63f880a22e72dd682c894db3d",
+          "dirty": false,
+          "authentication": "token",
+          "error": null
+        }
+      }
+    },
+    "worker_b": {
+      "employee_id": "worker-x86-b",
+      "environment_id": 2,
+      "repository_id": "ee482b4269c54e058da17b96ee449b98",
+      "repository_url": "http://172.17.13.60:18045/http-source.git",
+      "head": "f1dd3ae6070d53001e058fec2d7c2c105c0086b2",
+      "health": {
+        "connection": "online",
+        "runtime_health": "AVAILABLE",
+        "schedulable": true,
+        "blocking": [],
+        "equipment": [
+          {
+            "key": "opencode",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "worker_agent",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "model",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "mcp",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "skills",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "git",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          }
+        ],
+        "repository": {
+          "id": "ee482b4269c54e058da17b96ee449b98",
+          "url": "http://172.17.13.60:18045/http-source.git",
+          "target_branch": "main",
+          "branch": "main",
+          "commit": "f1dd3ae6070d53001e058fec2d7c2c105c0086b2",
+          "dirty": false,
+          "authentication": "token",
+          "error": null
+        }
+      }
+    },
+    "versions": {
+      "node": "v22.23.3",
+      "npm": "10.9.9",
+      "opencode": "1.18.35",
+      "worker_agent": "1.4.5",
+      "worker_python": "Python 3.11.10",
+      "systemd": "systemd 219"
+    }
+  },
+  "idempotency": {
+    "generated_at": "2026-10-19T05:23:28Z",
+    "environments": {
+      "1": {
+        "ok": true,
+        "state": "SUCCEEDED",
+        "operation_id": "op_a8725cf6ccd649f9a90ff0faee7b8fd9",
+        "event_count": 30,
+        "before": {
+          "pids": {
+            "opencode": {
+              "pid": "5212",
+              "start": "Mon 2026-10-19 13:02:15 CST",
+              "unit": "nexus-opencode-1.service"
+            },
+            "worker": {
+              "pid": "9774",
+              "start": "Mon 2026-10-19 13:22:27 CST",
+              "unit": "nexus-worker-1.service"
+            }
+          },
+          "hashes": {
+            "opencode_unit": "cf2a40ffed9cafc81feafa0e565207a1feda25b3ea94ed5aa72b57af40cbf736",
+            "worker_unit": "3e33f2cdb76c168caf825b05d4cb68bb98d423ab38367c9737f204afe5e7e430",
+            "worker_env": "b9021fae9b710a2d1cb861536ee0d64a796a07938079dbe0dc42d8f11a85b816",
+            "opencode_config": "a70b615a9386469861846a4cc621d61a16849f51316c6ee08aeb5dab15adc0c6",
+            "opencode_backup": "a70b615a9386469861846a4cc621d61a16849f51316c6ee08aeb5dab15adc0c6",
+            "manifest": "783e6b912b66ddd629514e4a925cb5eebbd543219e086cfb74a08b8bca0891b6",
+            "git_token_file": "498799a225d12429198c22bbf4fb6a312abfb22a9a3bdedcab59a0013a3bf92e",
+            "git_askpass": "b1eda06368128d431582ffc368bcce45fcce9ebcc403c935da84b4f27d6e9209",
+            "wheel": "19fbcf2f5ae01a1f67175146b9bfe4c4b5e7a0905e2ab2bd4a109a9a25fcf028",
+            "worktree": {
+              "head": "a82c6b27054097d63f880a22e72dd682c894db3d",
+              "tree": "7728edc5b6a7364d86f8dc16a5ae7768420feb21",
+              "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "dirty": false
+            },
+            "token_hashes": {
+              "env:NEXUS_WORKER_TOKEN": "45135549c31ff6ec075fc74fd04cff62a9edd51f9c94765386d556565b1a4418",
+              "file:git_token": "498799a225d12429198c22bbf4fb6a312abfb22a9a3bdedcab59a0013a3bf92e",
+              "opencode:gateway_apiKey": "05b3d04d216e2f80603cdfb292df0b8f03b54ff3edeccbe8821e1d2a6742c7c0"
+            }
+          },
+          "health": {
+            "connection": "online",
+            "runtime_health": "AVAILABLE",
+            "schedulable": true,
+            "equipment": [
+              {
+                "key": "opencode",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "worker_agent",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "model",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "mcp",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "skills",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "git",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              }
+            ],
+            "blocking": []
+          }
+        },
+        "after": {
+          "pids": {
+            "opencode": {
+              "pid": "5212",
+              "start": "Mon 2026-10-19 13:02:15 CST",
+              "unit": "nexus-opencode-1.service"
+            },
+            "worker": {
+              "pid": "9774",
+              "start": "Mon 2026-10-19 13:22:27 CST",
+              "unit": "nexus-worker-1.service"
+            }
+          },
+          "hashes": {
+            "opencode_unit": "cf2a40ffed9cafc81feafa0e565207a1feda25b3ea94ed5aa72b57af40cbf736",
+            "worker_unit": "3e33f2cdb76c168caf825b05d4cb68bb98d423ab38367c9737f204afe5e7e430",
+            "worker_env": "b9021fae9b710a2d1cb861536ee0d64a796a07938079dbe0dc42d8f11a85b816",
+            "opencode_config": "a70b615a9386469861846a4cc621d61a16849f51316c6ee08aeb5dab15adc0c6",
+            "opencode_backup": "a70b615a9386469861846a4cc621d61a16849f51316c6ee08aeb5dab15adc0c6",
+            "manifest": "783e6b912b66ddd629514e4a925cb5eebbd543219e086cfb74a08b8bca0891b6",
+            "git_token_file": "498799a225d12429198c22bbf4fb6a312abfb22a9a3bdedcab59a0013a3bf92e",
+            "git_askpass": "b1eda06368128d431582ffc368bcce45fcce9ebcc403c935da84b4f27d6e9209",
+            "wheel": "19fbcf2f5ae01a1f67175146b9bfe4c4b5e7a0905e2ab2bd4a109a9a25fcf028",
+            "worktree": {
+              "head": "a82c6b27054097d63f880a22e72dd682c894db3d",
+              "tree": "7728edc5b6a7364d86f8dc16a5ae7768420feb21",
+              "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "dirty": false
+            },
+            "token_hashes": {
+              "env:NEXUS_WORKER_TOKEN": "45135549c31ff6ec075fc74fd04cff62a9edd51f9c94765386d556565b1a4418",
+              "file:git_token": "498799a225d12429198c22bbf4fb6a312abfb22a9a3bdedcab59a0013a3bf92e",
+              "opencode:gateway_apiKey": "05b3d04d216e2f80603cdfb292df0b8f03b54ff3edeccbe8821e1d2a6742c7c0"
+            }
+          },
+          "health": {
+            "connection": "online",
+            "runtime_health": "AVAILABLE",
+            "schedulable": true,
+            "equipment": [
+              {
+                "key": "opencode",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "worker_agent",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "model",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "mcp",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "skills",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "git",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              }
+            ],
+            "blocking": []
+          }
+        },
+        "comparison": {
+          "pids_unchanged": true,
+          "unit_config_worktree_hashes_unchanged": true,
+          "worktree_unchanged": true,
+          "token_hashes_unchanged": true,
+          "health_stable_after_observer": true
+        },
+        "detail_path": "/opt/nexus-v145-qa-20261019/reports/worker-a-idempotent-op_a8725cf6ccd649f9a90ff0faee7b8fd9.json",
+        "events_path": "/opt/nexus-v145-qa-20261019/reports/worker-a-idempotent-op_a8725cf6ccd649f9a90ff0faee7b8fd9-events.jsonl"
+      },
+      "2": {
+        "ok": true,
+        "state": "SUCCEEDED",
+        "operation_id": "op_a70a3387dd5d4ab39dc6c0d9339f7766",
+        "event_count": 30,
+        "before": {
+          "pids": {
+            "opencode": {
+              "pid": "6732",
+              "start": "Mon 2026-10-19 13:06:39 CST",
+              "unit": "nexus-opencode-2.service"
+            },
+            "worker": {
+              "pid": "10287",
+              "start": "Mon 2026-10-19 13:22:48 CST",
+              "unit": "nexus-worker-2.service"
+            }
+          },
+          "hashes": {
+            "opencode_unit": "7f9be76036a89184bf7d7502a2e201610b9dcdd506f0a232dc26d23e07f33eaf",
+            "worker_unit": "247e33b3b2f589d7ab280757c75527cbb8b97b4ba0fa7b9bd4173eeb18fcb0f4",
+            "worker_env": "8b162b36315d430be5cd4357f0a7882feff3247defa07b6d4dbd4a6d42013ea4",
+            "opencode_config": "0ab2b64705baaf9d99503f8ae3bd0f587bce314fa8d45853f68bfb971b1f4f5f",
+            "opencode_backup": "8396b5688c9881d058f7fc68815933f49ec792c12673931b97d19700a69b221c",
+            "manifest": "783e6b912b66ddd629514e4a925cb5eebbd543219e086cfb74a08b8bca0891b6",
+            "git_token_file": "c8da50c6b6f90a91894d23771840359f356192a9539ad5adc144097820f635c5",
+            "git_askpass": "3ad3a6e944b2bc8781e1d4201aabfec1fdb090028ec1eecdf8eb224d91343b02",
+            "wheel": "19fbcf2f5ae01a1f67175146b9bfe4c4b5e7a0905e2ab2bd4a109a9a25fcf028",
+            "worktree": {
+              "head": "a82c6b27054097d63f880a22e72dd682c894db3d",
+              "tree": "7728edc5b6a7364d86f8dc16a5ae7768420feb21",
+              "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "dirty": false
+            },
+            "token_hashes": {
+              "env:NEXUS_WORKER_TOKEN": "b06ac72631c9ad3cf72ae8905a7c6a61b7bd25485dfeb5b5157ffcd8c5467df4",
+              "file:git_token": "c8da50c6b6f90a91894d23771840359f356192a9539ad5adc144097820f635c5",
+              "opencode:gateway_apiKey": "0b3138e09b41b552c63afc714a9bc1a6bb5c3255f90609acf20341fa7dddfb57"
+            }
+          },
+          "health": {
+            "connection": "online",
+            "runtime_health": "AVAILABLE",
+            "schedulable": true,
+            "equipment": [
+              {
+                "key": "opencode",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "worker_agent",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "model",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "mcp",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "skills",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "git",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              }
+            ],
+            "blocking": []
+          }
+        },
+        "after": {
+          "pids": {
+            "opencode": {
+              "pid": "6732",
+              "start": "Mon 2026-10-19 13:06:39 CST",
+              "unit": "nexus-opencode-2.service"
+            },
+            "worker": {
+              "pid": "10287",
+              "start": "Mon 2026-10-19 13:22:48 CST",
+              "unit": "nexus-worker-2.service"
+            }
+          },
+          "hashes": {
+            "opencode_unit": "7f9be76036a89184bf7d7502a2e201610b9dcdd506f0a232dc26d23e07f33eaf",
+            "worker_unit": "247e33b3b2f589d7ab280757c75527cbb8b97b4ba0fa7b9bd4173eeb18fcb0f4",
+            "worker_env": "8b162b36315d430be5cd4357f0a7882feff3247defa07b6d4dbd4a6d42013ea4",
+            "opencode_config": "0ab2b64705baaf9d99503f8ae3bd0f587bce314fa8d45853f68bfb971b1f4f5f",
+            "opencode_backup": "8396b5688c9881d058f7fc68815933f49ec792c12673931b97d19700a69b221c",
+            "manifest": "783e6b912b66ddd629514e4a925cb5eebbd543219e086cfb74a08b8bca0891b6",
+            "git_token_file": "c8da50c6b6f90a91894d23771840359f356192a9539ad5adc144097820f635c5",
+            "git_askpass": "3ad3a6e944b2bc8781e1d4201aabfec1fdb090028ec1eecdf8eb224d91343b02",
+            "wheel": "19fbcf2f5ae01a1f67175146b9bfe4c4b5e7a0905e2ab2bd4a109a9a25fcf028",
+            "worktree": {
+              "head": "a82c6b27054097d63f880a22e72dd682c894db3d",
+              "tree": "7728edc5b6a7364d86f8dc16a5ae7768420feb21",
+              "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "dirty": false
+            },
+            "token_hashes": {
+              "env:NEXUS_WORKER_TOKEN": "b06ac72631c9ad3cf72ae8905a7c6a61b7bd25485dfeb5b5157ffcd8c5467df4",
+              "file:git_token": "c8da50c6b6f90a91894d23771840359f356192a9539ad5adc144097820f635c5",
+              "opencode:gateway_apiKey": "0b3138e09b41b552c63afc714a9bc1a6bb5c3255f90609acf20341fa7dddfb57"
+            }
+          },
+          "health": {
+            "connection": "online",
+            "runtime_health": "AVAILABLE",
+            "schedulable": true,
+            "equipment": [
+              {
+                "key": "opencode",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "worker_agent",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "model",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "mcp",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "skills",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              },
+              {
+                "key": "git",
+                "configured": true,
+                "deployed": true,
+                "verified": true,
+                "diff": []
+              }
+            ],
+            "blocking": []
+          }
+        },
+        "comparison": {
+          "pids_unchanged": true,
+          "unit_config_worktree_hashes_unchanged": true,
+          "worktree_unchanged": true,
+          "token_hashes_unchanged": true,
+          "health_stable_after_observer": true
+        },
+        "detail_path": "/opt/nexus-v145-qa-20261019/reports/worker-b-idempotent-op_a70a3387dd5d4ab39dc6c0d9339f7766.json",
+        "events_path": "/opt/nexus-v145-qa-20261019/reports/worker-b-idempotent-op_a70a3387dd5d4ab39dc6c0d9339f7766-events.jsonl"
+      }
+    }
+  },
+  "fault_matrix": {
+    "A_dirty_update_reject": {
+      "ok": true,
+      "state": "INTERRUPTED",
+      "report": {
+        "operation_id": "op_c3e3188a24514720907c59cfb73dd534",
+        "state": "INTERRUPTED",
+        "detail": "/opt/nexus-v145-qa-20261019/reports/fault-a-dirty-update-op_c3e3188a24514720907c59cfb73dd534.json",
+        "events": "/opt/nexus-v145-qa-20261019/reports/fault-a-dirty-update-op_c3e3188a24514720907c59cfb73dd534-events.jsonl"
+      },
+      "evidence": {
+        "sentinel_preserved": true,
+        "pids_unchanged": true,
+        "unit_config_token_hashes_unchanged": true,
+        "head_tree_unchanged": true,
+        "reconcile": {
+          "cleared": true,
+          "operation_id": "op_c3e3188a24514720907c59cfb73dd534",
+          "state": "FAILED",
+          "report": {
+            "operation_id": "op_c3e3188a24514720907c59cfb73dd534",
+            "state": "FAILED",
+            "detail": "/opt/nexus-v145-qa-20261019/reports/reconcile-op_c3e3188a24514720907c59cfb73dd534-op_c3e3188a24514720907c59cfb73dd534.json",
+            "events": "/opt/nexus-v145-qa-20261019/reports/reconcile-op_c3e3188a24514720907c59cfb73dd534-op_c3e3188a24514720907c59cfb73dd534-events.jsonl"
+          }
+        },
+        "recovery_health": {
+          "connection": "online",
+          "runtime_health": "AVAILABLE",
+          "schedulable": true,
+          "equipment": [
+            {
+              "key": "opencode",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "worker_agent",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "model",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "mcp",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "skills",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "git",
+              "verified": true,
+              "diff": []
+            }
+          ],
+          "blocking": [],
+          "repository": {
+            "id": "3486b007730449e4aded523ba8a6a851",
+            "url": "file:///opt/nexus-v145-qa-20261019/git/source.git",
+            "target_branch": "main",
+            "branch": "main",
+            "commit": "a82c6b27054097d63f880a22e72dd682c894db3d",
+            "dirty": false,
+            "authentication": "token",
+            "error": null
+          }
+        }
+      }
+    },
+    "B_wrong_branch_reject": {
+      "ok": true,
+      "update_rejected": true,
+      "deploy_rejected": true,
+      "code_head_tree_preserved": true,
+      "pids_unchanged": true,
+      "unit_config_token_hashes_unchanged": true,
+      "wrong_branch": "qa-fault-b-wrong-1792387972",
+      "after_checkout_main": {
+        "head": "a82c6b27054097d63f880a22e72dd682c894db3d",
+        "tree": "7728edc5b6a7364d86f8dc16a5ae7768420feb21",
+        "branch": "main",
+        "origin": "http://172.17.13.60:18045/http-source.git",
+        "status": "",
+        "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "dirty": false
+      },
+      "update_report": {
+        "operation_id": "op_2590c1f9111e4859b6b72b290cbf08ae",
+        "state": "INTERRUPTED",
+        "detail": "/opt/nexus-v145-qa-20261019/reports/fault-b-wrong-update-op_2590c1f9111e4859b6b72b290cbf08ae.json",
+        "events": "/opt/nexus-v145-qa-20261019/reports/fault-b-wrong-update-op_2590c1f9111e4859b6b72b290cbf08ae-events.jsonl"
+      },
+      "deploy_report": {
+        "operation_id": "op_e3e4a53ecd9942e0b28489a7063cba31",
+        "state": "INTERRUPTED",
+        "detail": "/opt/nexus-v145-qa-20261019/reports/fault-b-wrong-deploy-op_e3e4a53ecd9942e0b28489a7063cba31.json",
+        "events": "/opt/nexus-v145-qa-20261019/reports/fault-b-wrong-deploy-op_e3e4a53ecd9942e0b28489a7063cba31-events.jsonl"
+      },
+      "recovery_health": {
+        "connection": "online",
+        "runtime_health": "AVAILABLE",
+        "schedulable": true,
+        "equipment": [
+          {
+            "key": "opencode",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "worker_agent",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "model",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "mcp",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "skills",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "git",
+            "verified": true,
+            "diff": []
+          }
+        ],
+        "blocking": [],
+        "repository": {
+          "id": "ee482b4269c54e058da17b96ee449b98",
+          "url": "http://172.17.13.60:18045/http-source.git",
+          "target_branch": "main",
+          "branch": "main",
+          "commit": "a82c6b27054097d63f880a22e72dd682c894db3d",
+          "dirty": false,
+          "authentication": "token",
+          "error": null
+        }
+      }
+    },
+    "C_fixture_fast_forward": {
+      "ok": true,
+      "state": "SUCCEEDED",
+      "before_head": "a82c6b27054097d63f880a22e72dd682c894db3d",
+      "new_remote_main": "f1dd3ae6070d53001e058fec2d7c2c105c0086b2",
+      "workspace_head_after": "f1dd3ae6070d53001e058fec2d7c2c105c0086b2",
+      "fast_forward_ancestor": true,
+      "ancestor_rc": 0,
+      "reflog": [
+        "f1dd3ae HEAD@{2026-10-19 13:33:14 +0800}: merge f1dd3ae6070d53001e058fec2d7c2c105c0086b2: Fast-forward",
+        "a82c6b2 HEAD@{2026-10-19 13:33:06 +0800}: checkout: moving from qa-fault-b-wrong-1792387972 to main",
+        "a82c6b2 HEAD@{2026-10-19 13:32:52 +0800}: checkout: moving from main to qa-fault-b-wrong-1792387972",
+        "a82c6b2 HEAD@{2026-10-19 13:27:12 +0800}: checkout: moving from qa-fault-b-wrong-1792387626 to main",
+        "a82c6b2 HEAD@{2026-10-19 13:27:06 +0800}: checkout: moving from main to qa-fault-b-wrong-1792387626"
+      ],
+      "after_health": {
+        "connection": "online",
+        "runtime_health": "AVAILABLE",
+        "schedulable": true,
+        "equipment": [
+          {
+            "key": "opencode",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "worker_agent",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "model",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "mcp",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "skills",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "git",
+            "verified": true,
+            "diff": []
+          }
+        ],
+        "blocking": [],
+        "repository": {
+          "id": "ee482b4269c54e058da17b96ee449b98",
+          "url": "http://172.17.13.60:18045/http-source.git",
+          "target_branch": "main",
+          "branch": "main",
+          "commit": "f1dd3ae6070d53001e058fec2d7c2c105c0086b2",
+          "dirty": false,
+          "authentication": "token",
+          "error": null
+        }
+      },
+      "report": {
+        "operation_id": "op_f499925891334748b90388faa68a0a70",
+        "state": "SUCCEEDED",
+        "detail": "/opt/nexus-v145-qa-20261019/reports/fault-c-fast-forward-op_f499925891334748b90388faa68a0a70.json",
+        "events": "/opt/nexus-v145-qa-20261019/reports/fault-c-fast-forward-op_f499925891334748b90388faa68a0a70-events.jsonl"
+      },
+      "harness_note": "Initial false was a harness bug: stdout was unpacked instead of the git exit code. Re-verified merge-base --is-ancestor rc=0; reflog shows Fast-forward."
+    },
+    "D_disable_restore": {
+      "ok": true,
+      "disable": {
+        "state": "SUCCEEDED",
+        "report": {
+          "operation_id": "op_f79b04e552fd4075972074d28f10bd40",
+          "state": "SUCCEEDED",
+          "detail": "/opt/nexus-v145-qa-20261019/reports/fault-d-disable-op_f79b04e552fd4075972074d28f10bd40.json",
+          "events": "/opt/nexus-v145-qa-20261019/reports/fault-d-disable-op_f79b04e552fd4075972074d28f10bd40-events.jsonl"
+        },
+        "health": {
+          "connection": "online",
+          "runtime_health": "AVAILABLE",
+          "schedulable": false,
+          "equipment": [
+            {
+              "key": "opencode",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "worker_agent",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "model",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "mcp",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "skills",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "git",
+              "verified": true,
+              "diff": []
+            }
+          ],
+          "blocking": [
+            "disabled"
+          ],
+          "repository": {
+            "id": "3486b007730449e4aded523ba8a6a851",
+            "url": "file:///opt/nexus-v145-qa-20261019/git/source.git",
+            "target_branch": "main",
+            "branch": "main",
+            "commit": "a82c6b27054097d63f880a22e72dd682c894db3d",
+            "dirty": false,
+            "authentication": "token",
+            "error": null
+          }
+        },
+        "pids": {
+          "opencode": {
+            "pid": "5212",
+            "active": "active",
+            "start": "Mon 2026-10-19 13:02:15 CST"
+          },
+          "worker": {
+            "pid": "9774",
+            "active": "active",
+            "start": "Mon 2026-10-19 13:22:27 CST"
+          }
+        }
+      },
+      "restore": {
+        "state": "SUCCEEDED",
+        "report": {
+          "operation_id": "op_6b871aa02e6644a8bf038dd65a43dc98",
+          "state": "SUCCEEDED",
+          "detail": "/opt/nexus-v145-qa-20261019/reports/fault-d-restore-op_6b871aa02e6644a8bf038dd65a43dc98.json",
+          "events": "/opt/nexus-v145-qa-20261019/reports/fault-d-restore-op_6b871aa02e6644a8bf038dd65a43dc98-events.jsonl"
+        },
+        "health": {
+          "connection": "online",
+          "runtime_health": "AVAILABLE",
+          "schedulable": true,
+          "equipment": [
+            {
+              "key": "opencode",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "worker_agent",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "model",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "mcp",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "skills",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "git",
+              "verified": true,
+              "diff": []
+            }
+          ],
+          "blocking": [],
+          "repository": {
+            "id": "3486b007730449e4aded523ba8a6a851",
+            "url": "file:///opt/nexus-v145-qa-20261019/git/source.git",
+            "target_branch": "main",
+            "branch": "main",
+            "commit": "a82c6b27054097d63f880a22e72dd682c894db3d",
+            "dirty": false,
+            "authentication": "token",
+            "error": null
+          }
+        },
+        "pids": {
+          "opencode": {
+            "pid": "5212",
+            "active": "active",
+            "start": "Mon 2026-10-19 13:02:15 CST"
+          },
+          "worker": {
+            "pid": "9774",
+            "active": "active",
+            "start": "Mon 2026-10-19 13:22:27 CST"
+          }
+        }
+      },
+      "pids_unchanged": true
+    },
+    "E_occupancy_guard": {
+      "ok": true,
+      "fixture": {
+        "task_id": "qa-fixture-occupancy-task-20261019T053428Z",
+        "session_id": "qa-fixture-occupancy-session-20261019T053428Z"
+      },
+      "steps": {
+        "create": true,
+        "maintenance_rejects": true,
+        "disable": true,
+        "cleanup": true,
+        "restore": true
+      },
+      "maintenance_rejects": {
+        "ok": true,
+        "results": {
+          "deploy": {
+            "status": 409,
+            "body": {
+              "detail": "员工存在占用或未结束 Session，不能部署或重启"
+            },
+            "rejected": true
+          },
+          "update": {
+            "status": 409,
+            "body": {
+              "detail": "员工存在占用或未结束 Session，不能部署或重启"
+            },
+            "rejected": true
+          },
+          "restart": {
+            "status": 409,
+            "body": {
+              "detail": "员工存在占用或未结束 Session，不能部署或重启"
+            },
+            "rejected": true
+          }
+        }
+      },
+      "disable_preserved": {
+        "employee": {
+          "id": "worker-x86-a",
+          "enabled": false,
+          "status": "WAIT_HUMAN",
+          "current_task_count": 1
+        },
+        "task_status": "WAITING",
+        "health_schedulable": false,
+        "pids": {
+          "opencode": {
+            "pid": "5212",
+            "active": "active",
+            "start": "Mon 2026-10-19 13:02:15 CST"
+          },
+          "worker": {
+            "pid": "9774",
+            "active": "active",
+            "start": "Mon 2026-10-19 13:22:27 CST"
+          }
+        }
+      },
+      "cleanup": {
+        "ok": true,
+        "fixture_gone": true,
+        "other_task_ids_unchanged": true,
+        "other_session_ids_unchanged": true,
+        "employee": {
+          "id": "worker-x86-a",
+          "enabled": false,
+          "status": "IDLE",
+          "current_task_count": 0
+        },
+        "health": {
+          "connection": "online",
+          "runtime_health": "AVAILABLE",
+          "schedulable": false,
+          "equipment": [
+            {
+              "key": "opencode",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "worker_agent",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "model",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "mcp",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "skills",
+              "verified": true,
+              "diff": []
+            },
+            {
+              "key": "git",
+              "verified": true,
+              "diff": []
+            }
+          ],
+          "blocking": [
+            "disabled"
+          ],
+          "repository": {
+            "id": "3486b007730449e4aded523ba8a6a851",
+            "url": "file:///opt/nexus-v145-qa-20261019/git/source.git",
+            "target_branch": "main",
+            "branch": "main",
+            "commit": "a82c6b27054097d63f880a22e72dd682c894db3d",
+            "dirty": false,
+            "authentication": "token",
+            "error": null
+          }
+        },
+        "ids": {
+          "tasks": [],
+          "sessions": []
+        }
+      },
+      "restore_health": {
+        "connection": "online",
+        "runtime_health": "AVAILABLE",
+        "schedulable": true,
+        "equipment": [
+          {
+            "key": "opencode",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "worker_agent",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "model",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "mcp",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "skills",
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "git",
+            "verified": true,
+            "diff": []
+          }
+        ],
+        "blocking": [],
+        "repository": {
+          "id": "3486b007730449e4aded523ba8a6a851",
+          "url": "file:///opt/nexus-v145-qa-20261019/git/source.git",
+          "target_branch": "main",
+          "branch": "main",
+          "commit": "a82c6b27054097d63f880a22e72dd682c894db3d",
+          "dirty": false,
+          "authentication": "token",
+          "error": null
+        }
+      },
+      "final_employee": {
+        "id": "worker-x86-a",
+        "enabled": true,
+        "status": "IDLE",
+        "current_task_count": 0
+      },
+      "report": "/opt/nexus-v145-qa-20261019/reports/fault-matrix-e.json"
+    }
+  },
+  "fixture": {
+    "url": "http://172.17.13.60:18045/http-source.git",
+    "bare_path": "/opt/nexus-v145-qa-20261019/git/http-source.git",
+    "branch": "main",
+    "head": "f1dd3ae6070d53001e058fec2d7c2c105c0086b2",
+    "commit_count": 4,
+    "receivepack": "true",
+    "pat_sha256": "c8da50c6b6f90a91894d23771840359f356192a9539ad5adc144097820f635c5",
+    "initial_correct_pat_ls_remote_rc": 0,
+    "initial_wrong_pat_ls_remote_rc": 128,
+    "initial_fetch_pull_verified": true,
+    "initial_push_branch_present": true,
+    "log_pat_leak": false,
+    "log_authorization_header": false,
+    "unit": "nexus-v145-qa-git-http-20261019.service",
+    "bind": "172.17.13.60:18045",
+    "basic_auth_user": "git",
+    "receivepack_repo_only": "http-source.git"
+  },
+  "secret_safety": {
+    "reports_scanned": "/opt/nexus-v145-qa-20261019/reports",
+    "raw_secret_hits": [],
+    "git_http_log_pat_leak": false,
+    "git_http_log_authorization_header": false,
+    "ok": true
+  },
+  "final_health": {
+    "1": {
+      "connection": "online",
+      "runtime_health": "AVAILABLE",
+      "schedulable": true,
+      "blocking": [],
+      "equipment": [
+        {
+          "key": "opencode",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "worker_agent",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "model",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "mcp",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "skills",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "git",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        }
+      ],
+      "repository": {
+        "id": "3486b007730449e4aded523ba8a6a851",
+        "url": "file:///opt/nexus-v145-qa-20261019/git/source.git",
+        "target_branch": "main",
+        "branch": "main",
+        "commit": "a82c6b27054097d63f880a22e72dd682c894db3d",
+        "dirty": false,
+        "authentication": "token",
+        "error": null
+      }
+    },
+    "2": {
+      "connection": "online",
+      "runtime_health": "AVAILABLE",
+      "schedulable": true,
+      "blocking": [],
+      "equipment": [
+        {
+          "key": "opencode",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "worker_agent",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "model",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "mcp",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "skills",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "git",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        }
+      ],
+      "repository": {
+        "id": "ee482b4269c54e058da17b96ee449b98",
+        "url": "http://172.17.13.60:18045/http-source.git",
+        "target_branch": "main",
+        "branch": "main",
+        "commit": "f1dd3ae6070d53001e058fec2d7c2c105c0086b2",
+        "dirty": false,
+        "authentication": "token",
+        "error": null
+      }
+    }
+  },
+  "preserved": [
+    "Worker-A and its file:// fixture",
+    "old failed deploy evidence op_471ac53aad564307893bd4c2cfaddf11",
+    "old Worker-A idempotency evidence op_a30f31d4c5aa4fed8c32481bb7f74ed6",
+    "all original directories and prior operation reports"
+  ],
+  "reports": {
+    "combined": "/opt/nexus-v145-qa-20261019/reports/user-linux-fault-matrix-batch1.json",
+    "base_sync": "/opt/nexus-v145-qa-20261019/reports/sync-all-app.json",
+    "idempotency": "/opt/nexus-v145-qa-20261019/reports/ab-idempotency-final.json",
+    "fault_a_d": "/opt/nexus-v145-qa-20261019/reports/fault-matrix-a-d.json",
+    "fault_e": "/opt/nexus-v145-qa-20261019/reports/fault-matrix-e.json",
+    "fixture_final": "/opt/nexus-v145-qa-20261019/reports/git-http-fixture-final.json",
+    "secret_scan": "/opt/nexus-v145-qa-20261019/reports/secret-scan-final.json",
+    "final_health": "/opt/nexus-v145-qa-20261019/reports/final-health.json"
+  },
+  "ok": true
+}

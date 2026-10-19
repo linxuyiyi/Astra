@@ -1,0 +1,18 @@
+{
+  "status": "PARTIAL_PRODUCT_BLOCK",
+  "deploy_idempotency": "PASS",
+  "fault1_occupancy_worker_reconnect": "PASS",
+  "fault2_native_busy_rejects_maintenance": "PASS",
+  "fault3_crash_recovery": "PASS_BY_JOURNAL (harness health check raced)",
+  "fault3_persistent_stop": "PASS",
+  "fault3_formal_restart": "FAIL (product: Worker 未在时限内上传响应)",
+  "fault4_control_plane_crash": "NOT_RUN (product block at fault3)",
+  "evidence": {
+    "idempotency": "/tmp/nexus-v145-qa/reports/worker-a-final-idempotency.json",
+    "fault1": "/tmp/nexus-v145-qa/reports/fault1-occupancy-latest.json",
+    "fault2": "/tmp/nexus-v145-qa/reports/fault2-native-busy-latest.json",
+    "fault3": "/tmp/nexus-v145-qa/reports/fault3-opencode.json",
+    "fault3_crash_journal": "/tmp/nexus-v145-qa/reports/fault3-opencode-crash-journal.txt",
+    "fault3_worker_timeout": "/tmp/nexus-v145-qa/reports/fault3-worker-restart-timeout.txt"
+  }
+}

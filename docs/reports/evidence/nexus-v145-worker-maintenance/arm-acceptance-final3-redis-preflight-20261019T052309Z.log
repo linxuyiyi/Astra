@@ -1,0 +1,9 @@
+source=task-owned harness Redis
+state_process_cwd=/private/tmp/nexus-v145-qa/private/redis
+state_process_cmdline=redis-server --port 61267 --bind 127.0.0.1 (save disabled)
+PING_DB14=True
+TCP_PORT=61267
+RUN_ID=b2e34741a25e8543adcb937ac2ba39650af9a580
+ASTRA_TEST_REDIS_URL_DB=14
+business_QA_DB=1 (not used by regression)
+EXIT_CODE=0

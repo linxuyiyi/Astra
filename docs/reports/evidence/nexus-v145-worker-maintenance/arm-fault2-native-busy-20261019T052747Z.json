@@ -1,0 +1,525 @@
+{
+  "run_id": "338ff5ac468e4163bfb1fdbc2a380cd1",
+  "fault": "native_busy_rejects_maintenance",
+  "session_id": "ses_ead5fada0ffenl4KXx6xcY6ZQN",
+  "shell_launch": {
+    "cmd": "nohup curl -sS -X POST -H 'Content-Type: application/json' -d '{\"agent\":\"build\",\"command\":\"sleep 60\"}' 'http://127.0.0.1:44135/session/ses_ead5fada0ffenl4KXx6xcY6ZQN/shell?directory=/root/nexus-v145/worker-a' >/tmp/v145-fault2-shell.out 2>&1 & echo $!",
+    "out": "31419\n",
+    "err": ""
+  },
+  "busy_status": {
+    "ses_ead5fada0ffenl4KXx6xcY6ZQN": {
+      "type": "busy"
+    }
+  },
+  "busy_confirmed": true,
+  "before": {
+    "hashes": {
+      "gateway_token_hash": "89260eeb73b183cb",
+      "mcp_token_hash": "78cf1dd18a75c714",
+      "worker_token_hash": "e546a26aba2e8b00",
+      "git_token_hash": "2cc387232925286e",
+      "git_token_file_present": true,
+      "config_sha256": "1141d85ecb52d5af",
+      "config_bytes": 736,
+      "env_keys": [
+        "GIT_ASKPASS",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_TERMINAL_PROMPT",
+        "NEXUS_MCP_RESOURCE_URL",
+        "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+        "NEXUS_REMOTE_GATEWAY_URL",
+        "NEXUS_WORKER_ENVIRONMENT_ID",
+        "NEXUS_WORKER_GATEWAY_URL",
+        "NEXUS_WORKER_INSTANCE_ID",
+        "NEXUS_WORKER_OPENCODE_BIN",
+        "NEXUS_WORKER_OPENCODE_UNIT",
+        "NEXUS_WORKER_OPENCODE_URL",
+        "NEXUS_WORKER_TOKEN",
+        "NEXUS_WORKER_WORKSPACE_ROOT",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR"
+      ]
+    },
+    "unit_hash": "1fd19f1e85b0989a",
+    "workingtree_hash": "9f4f4d053e1c14e1",
+    "units": {
+      "opencode": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "22283"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "31208"
+      }
+    },
+    "listener": {
+      "port": 44135,
+      "addresses": [
+        "127.0.0.1:44135"
+      ],
+      "loopback_only": true
+    },
+    "installer_processes": [],
+    "installer_lock": {
+      "free": true,
+      "raw": "rc=0"
+    },
+    "evidence": {
+      "worker_id": "worker-a",
+      "environment_id": 1,
+      "workspace": "/root/nexus-v145/worker-a",
+      "port": 44135,
+      "units": {
+        "opencode": {
+          "active": "active",
+          "enabled": "enabled"
+        },
+        "worker": {
+          "active": "active",
+          "enabled": "enabled"
+        }
+      },
+      "listener": {
+        "port": 44135,
+        "addresses": [
+          "127.0.0.1:44135"
+        ],
+        "loopback_only": true
+      },
+      "config": {
+        "path": "/etc/nexus/opencode/1/opencode.jsonc",
+        "model": "nexus-gateway/qa-model",
+        "providers": [
+          "nexus-gateway"
+        ],
+        "provider_has_api_key": true,
+        "mcp_names": [
+          "nexus-library"
+        ],
+        "mcp_auth_header_present": true
+      },
+      "skill_file": "present",
+      "opencode_skill_probe": {
+        "ok": false,
+        "error": "non-json /skill response"
+      },
+      "opencode_mcp_probe": {
+        "ok": true,
+        "status": "connected"
+      },
+      "worker_env": {
+        "path": "/etc/nexus/worker-1.env",
+        "keys": [
+          "NEXUS_WORKER_TOKEN",
+          "NEXUS_WORKER_GATEWAY_URL",
+          "NEXUS_WORKER_INSTANCE_ID",
+          "NEXUS_WORKER_ENVIRONMENT_ID",
+          "NEXUS_REMOTE_GATEWAY_URL",
+          "NEXUS_MCP_RESOURCE_URL",
+          "NEXUS_WORKER_OPENCODE_URL",
+          "NEXUS_WORKER_OPENCODE_UNIT",
+          "NEXUS_WORKER_OPENCODE_BIN",
+          "OPENCODE_CONFIG",
+          "OPENCODE_CONFIG_DIR",
+          "NEXUS_WORKER_WORKSPACE_ROOT",
+          "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+          "GIT_ASKPASS",
+          "GIT_TERMINAL_PROMPT",
+          "GIT_CONFIG_COUNT",
+          "GIT_CONFIG_KEY_0",
+          "GIT_CONFIG_VALUE_0"
+        ],
+        "astra_worker_prefix": false,
+        "nexus_worker_prefix": true,
+        "values": "not read into the report"
+      },
+      "git": {
+        "head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+        "branch": "main",
+        "origin": "file:///srv/nexus-v145-qa/source.git",
+        "dirty": false,
+        "expected_head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+        "expected_origin": "file:///srv/nexus-v145-qa/source.git",
+        "clone_matches_fixture": true
+      },
+      "git_update_note": "This proves a real clone from the VM-local bare fixture. The maintenance action `update` is not exposed yet, so fetch/pull is PENDING_IMPLEMENTATION."
+    }
+  },
+  "gateway_generations_before": 0,
+  "operations": [
+    {
+      "action": "deploy",
+      "submit_status": 202,
+      "submit": {
+        "id": "op_a79687e7006045e4b749c75962898b16",
+        "environment_id": 1,
+        "action": "deploy",
+        "state": "QUEUED",
+        "stage": "queued",
+        "attempt": 1,
+        "requested_by": "v145-qa-fault2-deploy",
+        "requested_at": "2026-10-19T05:26:41.281415+00:00",
+        "started_at": null,
+        "finished_at": null,
+        "lease_owner": null,
+        "lease_until": null,
+        "cancel_requested": false,
+        "danger_dispatched": false,
+        "reconcile_required": false,
+        "reconcile_only": false,
+        "execution_channel": "ssh",
+        "execution_reason": "安装系统依赖与 per-environment 运行时需要 SSH 管理通道",
+        "retry_of_attempt": null,
+        "target_revision": {
+          "opencode_version": "1.18.35",
+          "worker_agent_version": "1.4.5",
+          "model_name": "nexus-gateway/qa-model",
+          "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "branch": "main",
+          "skills": [
+            "nexus-v145-qa-skill"
+          ],
+          "mcp": [],
+          "capability_revision": "1f1a427f8c1d9eaa"
+        },
+        "before_snapshot": {
+          "environment_id": 1,
+          "mode": "LINUX_REMOTE",
+          "name": "QA Worker A Linux",
+          "host": "127.0.0.1",
+          "port": 56060,
+          "username": "root",
+          "has_ssh_password": true,
+          "opencode_server_port": 44135,
+          "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+          "model_name": "nexus-gateway/qa-model",
+          "workspace_root": "/root/nexus-v145/worker-a",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "labels": [
+            "qa",
+            "v145",
+            "linux"
+          ],
+          "capability_revision": "1f1a427f8c1d9eaa"
+        },
+        "after_snapshot": {},
+        "error_code": null,
+        "error_message": null
+      },
+      "operation_id": "op_a79687e7006045e4b749c75962898b16",
+      "state": "FAILED",
+      "error_code": "maintenance_failed",
+      "error_message": "OpenCode 存在正在执行的 Session，请先停止执行再维护环境",
+      "events": [],
+      "busy_at_submit": true
+    },
+    {
+      "action": "update",
+      "submit_status": 202,
+      "submit": {
+        "id": "op_1cca74603140402a9d4db76097e201fb",
+        "environment_id": 1,
+        "action": "update",
+        "state": "QUEUED",
+        "stage": "queued",
+        "attempt": 1,
+        "requested_by": "v145-qa-fault2-update",
+        "requested_at": "2026-10-19T05:26:42.385881+00:00",
+        "started_at": null,
+        "finished_at": null,
+        "lease_owner": null,
+        "lease_until": null,
+        "cancel_requested": false,
+        "danger_dispatched": false,
+        "reconcile_required": false,
+        "reconcile_only": false,
+        "execution_channel": "ssh",
+        "execution_reason": "安装系统依赖与 per-environment 运行时需要 SSH 管理通道",
+        "retry_of_attempt": null,
+        "target_revision": {
+          "opencode_version": "1.18.35",
+          "worker_agent_version": "1.4.5",
+          "model_name": "nexus-gateway/qa-model",
+          "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "branch": "main",
+          "skills": [
+            "nexus-v145-qa-skill"
+          ],
+          "mcp": [],
+          "capability_revision": "1f1a427f8c1d9eaa"
+        },
+        "before_snapshot": {
+          "environment_id": 1,
+          "mode": "LINUX_REMOTE",
+          "name": "QA Worker A Linux",
+          "host": "127.0.0.1",
+          "port": 56060,
+          "username": "root",
+          "has_ssh_password": true,
+          "opencode_server_port": 44135,
+          "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+          "model_name": "nexus-gateway/qa-model",
+          "workspace_root": "/root/nexus-v145/worker-a",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "labels": [
+            "qa",
+            "v145",
+            "linux"
+          ],
+          "capability_revision": "1f1a427f8c1d9eaa"
+        },
+        "after_snapshot": {},
+        "error_code": null,
+        "error_message": null
+      },
+      "operation_id": "op_1cca74603140402a9d4db76097e201fb",
+      "state": "FAILED",
+      "error_code": "maintenance_failed",
+      "error_message": "OpenCode 存在正在执行的 Session，请先停止执行再维护环境",
+      "events": [],
+      "busy_at_submit": true
+    },
+    {
+      "action": "restart",
+      "submit_status": 202,
+      "submit": {
+        "id": "op_1b8c82d1414745359bb3d514086bafba",
+        "environment_id": 1,
+        "action": "restart",
+        "state": "QUEUED",
+        "stage": "queued",
+        "attempt": 1,
+        "requested_by": "v145-qa-fault2-restart",
+        "requested_at": "2026-10-19T05:26:43.486962+00:00",
+        "started_at": null,
+        "finished_at": null,
+        "lease_owner": null,
+        "lease_until": null,
+        "cancel_requested": false,
+        "danger_dispatched": false,
+        "reconcile_required": false,
+        "reconcile_only": false,
+        "execution_channel": null,
+        "execution_reason": null,
+        "retry_of_attempt": null,
+        "target_revision": {
+          "opencode_version": "1.18.35",
+          "worker_agent_version": "1.4.5",
+          "model_name": "nexus-gateway/qa-model",
+          "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "branch": "main",
+          "skills": [
+            "nexus-v145-qa-skill"
+          ],
+          "mcp": [],
+          "capability_revision": "1f1a427f8c1d9eaa"
+        },
+        "before_snapshot": {
+          "environment_id": 1,
+          "mode": "LINUX_REMOTE",
+          "name": "QA Worker A Linux",
+          "host": "127.0.0.1",
+          "port": 56060,
+          "username": "root",
+          "has_ssh_password": true,
+          "opencode_server_port": 44135,
+          "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+          "model_name": "nexus-gateway/qa-model",
+          "workspace_root": "/root/nexus-v145/worker-a",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "labels": [
+            "qa",
+            "v145",
+            "linux"
+          ],
+          "capability_revision": "1f1a427f8c1d9eaa"
+        },
+        "after_snapshot": {},
+        "error_code": null,
+        "error_message": null
+      },
+      "operation_id": "op_1b8c82d1414745359bb3d514086bafba",
+      "state": "FAILED",
+      "error_code": "maintenance_failed",
+      "error_message": "OpenCode 存在正在执行的 Session，请先停止执行再维护环境",
+      "events": [],
+      "busy_at_submit": true
+    }
+  ],
+  "after": {
+    "hashes": {
+      "gateway_token_hash": "89260eeb73b183cb",
+      "mcp_token_hash": "78cf1dd18a75c714",
+      "worker_token_hash": "e546a26aba2e8b00",
+      "git_token_hash": "2cc387232925286e",
+      "git_token_file_present": true,
+      "config_sha256": "1141d85ecb52d5af",
+      "config_bytes": 736,
+      "env_keys": [
+        "GIT_ASKPASS",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_TERMINAL_PROMPT",
+        "NEXUS_MCP_RESOURCE_URL",
+        "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+        "NEXUS_REMOTE_GATEWAY_URL",
+        "NEXUS_WORKER_ENVIRONMENT_ID",
+        "NEXUS_WORKER_GATEWAY_URL",
+        "NEXUS_WORKER_INSTANCE_ID",
+        "NEXUS_WORKER_OPENCODE_BIN",
+        "NEXUS_WORKER_OPENCODE_UNIT",
+        "NEXUS_WORKER_OPENCODE_URL",
+        "NEXUS_WORKER_TOKEN",
+        "NEXUS_WORKER_WORKSPACE_ROOT",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR"
+      ]
+    },
+    "unit_hash": "1fd19f1e85b0989a",
+    "workingtree_hash": "9f4f4d053e1c14e1",
+    "units": {
+      "opencode": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "22283"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "31208"
+      }
+    },
+    "listener": {
+      "port": 44135,
+      "addresses": [
+        "127.0.0.1:44135"
+      ],
+      "loopback_only": true
+    },
+    "installer_processes": [],
+    "installer_lock": {
+      "free": true,
+      "raw": "rc=0"
+    },
+    "evidence": {
+      "worker_id": "worker-a",
+      "environment_id": 1,
+      "workspace": "/root/nexus-v145/worker-a",
+      "port": 44135,
+      "units": {
+        "opencode": {
+          "active": "active",
+          "enabled": "enabled"
+        },
+        "worker": {
+          "active": "active",
+          "enabled": "enabled"
+        }
+      },
+      "listener": {
+        "port": 44135,
+        "addresses": [
+          "127.0.0.1:44135"
+        ],
+        "loopback_only": true
+      },
+      "config": {
+        "path": "/etc/nexus/opencode/1/opencode.jsonc",
+        "model": "nexus-gateway/qa-model",
+        "providers": [
+          "nexus-gateway"
+        ],
+        "provider_has_api_key": true,
+        "mcp_names": [
+          "nexus-library"
+        ],
+        "mcp_auth_header_present": true
+      },
+      "skill_file": "present",
+      "opencode_skill_probe": {
+        "ok": false,
+        "error": "non-json /skill response"
+      },
+      "opencode_mcp_probe": {
+        "ok": true,
+        "status": "connected"
+      },
+      "worker_env": {
+        "path": "/etc/nexus/worker-1.env",
+        "keys": [
+          "NEXUS_WORKER_TOKEN",
+          "NEXUS_WORKER_GATEWAY_URL",
+          "NEXUS_WORKER_INSTANCE_ID",
+          "NEXUS_WORKER_ENVIRONMENT_ID",
+          "NEXUS_REMOTE_GATEWAY_URL",
+          "NEXUS_MCP_RESOURCE_URL",
+          "NEXUS_WORKER_OPENCODE_URL",
+          "NEXUS_WORKER_OPENCODE_UNIT",
+          "NEXUS_WORKER_OPENCODE_BIN",
+          "OPENCODE_CONFIG",
+          "OPENCODE_CONFIG_DIR",
+          "NEXUS_WORKER_WORKSPACE_ROOT",
+          "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+          "GIT_ASKPASS",
+          "GIT_TERMINAL_PROMPT",
+          "GIT_CONFIG_COUNT",
+          "GIT_CONFIG_KEY_0",
+          "GIT_CONFIG_VALUE_0"
+        ],
+        "astra_worker_prefix": false,
+        "nexus_worker_prefix": true,
+        "values": "not read into the report"
+      },
+      "git": {
+        "head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+        "branch": "main",
+        "origin": "file:///srv/nexus-v145-qa/source.git",
+        "dirty": false,
+        "expected_head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+        "expected_origin": "file:///srv/nexus-v145-qa/source.git",
+        "clone_matches_fixture": true
+      },
+      "git_update_note": "This proves a real clone from the VM-local bare fixture. The maintenance action `update` is not exposed yet, so fetch/pull is PENDING_IMPLEMENTATION."
+    }
+  },
+  "gateway_generations_after": 0,
+  "final_status": {
+    "ses_ead5fada0ffenl4KXx6xcY6ZQN": {
+      "type": "busy"
+    }
+  },
+  "shell_output": {
+    "cmd": "head -c 500 /tmp/v145-fault2-shell.out 2>/dev/null || true",
+    "out": "",
+    "err": ""
+  },
+  "cleanup": {
+    "cmd": "curl -sS -X DELETE 'http://127.0.0.1:44135/session/ses_ead5fada0ffenl4KXx6xcY6ZQN?directory=/root/nexus-v145/worker-a' >/dev/null || true",
+    "out": "",
+    "err": ""
+  },
+  "idle_status": {},
+  "checks": {
+    "busy_confirmed": true,
+    "all_operations_rejected": true,
+    "all_submitted_while_busy": true,
+    "native_busy_error_present": true,
+    "opencode_pid_unchanged": true,
+    "worker_pid_unchanged": true,
+    "unit_hash_unchanged": true,
+    "workingtree_hash_unchanged": true,
+    "tokens_unchanged": true,
+    "config_hash_unchanged": true,
+    "gateway_generations_zero": true
+  },
+  "status": "PASS"
+}

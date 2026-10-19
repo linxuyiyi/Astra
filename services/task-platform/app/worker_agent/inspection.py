@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from app.worker_agent.jsonc import loads_jsonc
+from app.worker_agent.process_env import child_environ
 
 HEALTHY = "healthy"
 UNHEALTHY = "unhealthy"
@@ -420,26 +421,33 @@ def _inspect_skills(
 
 
 def _inspect_repository(workspace: str, secrets: set[str]) -> dict[str, Any]:
+    def result(
+        status: str,
+        *,
+        url: str | None = None,
+        branch: str | None = None,
+        commit: str | None = None,
+        dirty: bool | None = None,
+        error: str | None = None,
+        authentication_verified: bool | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "status": status,
+            "url": url,
+            "branch": branch,
+            "commit": commit,
+            "dirty": dirty,
+            "authentication_verified": authentication_verified,
+            "verification_scope": "refs:read",
+            "error": error,
+        }
+
     root = Path(workspace) if workspace else None
     if root is None or not root.is_dir():
-        return {
-            "status": UNKNOWN,
-            "url": None,
-            "branch": None,
-            "commit": None,
-            "dirty": None,
-            "error": "工作区不存在，未检测到 Git 仓库",
-        }
+        return result(UNKNOWN, error="工作区不存在，未检测到 Git 仓库")
     inside = _git(workspace, "rev-parse", "--is-inside-work-tree")
     if inside is None or inside.strip() != "true":
-        return {
-            "status": UNKNOWN,
-            "url": None,
-            "branch": None,
-            "commit": None,
-            "dirty": None,
-            "error": "未检测到 Git 仓库",
-        }
+        return result(UNKNOWN, error="未检测到 Git 仓库")
     toplevel = _git(workspace, "rev-parse", "--show-toplevel")
     try:
         same_root = (
@@ -449,44 +457,81 @@ def _inspect_repository(workspace: str, secrets: set[str]) -> dict[str, Any]:
     except OSError:
         same_root = False
     if not same_root:
-        return {
-            "status": UNHEALTHY,
-            "url": None,
-            "branch": None,
-            "commit": None,
-            "dirty": None,
-            "error": "工作区不是 Git 仓库根目录",
-        }
+        return result(UNHEALTHY, error="工作区不是 Git 仓库根目录")
     url = _git(workspace, "config", "--get", "remote.origin.url")
     branch = _git(workspace, "rev-parse", "--abbrev-ref", "HEAD")
     commit = _git(workspace, "rev-parse", "HEAD")
     changes = _git(workspace, "status", "--porcelain")
     if branch is None or commit is None or changes is None:
-        return {
-            "status": UNHEALTHY,
-            "url": _sanitize_url(url) if url else None,
-            "branch": branch.strip() if branch else None,
-            "commit": commit.strip() if commit else None,
-            "dirty": None,
-            "error": "Git 只读探测失败",
-        }
+        return result(
+            UNHEALTHY,
+            url=_sanitize_url(url) if url else None,
+            branch=branch.strip() if branch else None,
+            commit=commit.strip() if commit else None,
+            error="Git 只读探测失败",
+        )
     if not url or not url.strip():
-        return {
-            "status": UNHEALTHY,
-            "url": None,
-            "branch": branch.strip(),
-            "commit": commit.strip(),
-            "dirty": bool(changes.strip()),
-            "error": "Git 仓库缺少 remote.origin.url",
-        }
-    return {
-        "status": HEALTHY,
-        "url": _sanitize_url(url),
-        "branch": branch.strip(),
-        "commit": commit.strip(),
-        "dirty": bool(changes.strip()),
-        "error": None,
-    }
+        return result(
+            UNHEALTHY,
+            branch=branch.strip(),
+            commit=commit.strip(),
+            dirty=bool(changes.strip()),
+            error="Git 仓库缺少 remote.origin.url",
+        )
+    authenticated, auth_error = _verify_remote_read(
+        workspace, branch.strip(), secrets
+    )
+    return result(
+        HEALTHY,
+        url=_sanitize_url(url),
+        branch=branch.strip(),
+        commit=commit.strip(),
+        dirty=bool(changes.strip()),
+        error=auth_error,
+        authentication_verified=authenticated,
+    )
+
+
+def _verify_remote_read(
+    workspace: str, branch: str, secrets: set[str]
+) -> tuple[bool | None, str | None]:
+    """Read-only refs check. Never fetches, never proves push access."""
+
+    if not branch:
+        return None, "无法确定当前分支，未验证远端读取"
+    env = child_environ(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    command = [
+        "git",
+        "-C",
+        workspace,
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "core.pager=cat",
+        "-c",
+        "credential.helper=",
+        "ls-remote",
+        "--exit-code",
+        "origin",
+        f"refs/heads/{branch}",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            timeout=_GIT_TIMEOUT_SECONDS,
+            check=False,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None, "Git 远端读取验证超时或无法启动"
+    if completed.returncode == 0:
+        return True, None
+    if completed.returncode == 2:
+        return False, "远端不存在目标分支或无法读取引用"
+    return False, "Git 远端认证或读取失败（仅验证读取，不代表 push 权限）"
 
 
 def _git(workspace: str, *args: str) -> str | None:
@@ -694,6 +739,8 @@ def _sanitize_url(value: str) -> str:
         return re.sub(r"^[^/@\s]+@", "", text.split("?", 1)[0].split("#", 1)[0])
     try:
         parts = urllib.parse.urlsplit(text)
+        if parts.scheme == "file":
+            return urllib.parse.urlunsplit(("file", "", parts.path, "", ""))
         host = parts.hostname or ""
         if not host:
             return ""

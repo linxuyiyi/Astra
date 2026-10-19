@@ -1,0 +1,20 @@
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:   File "/opt/nexus/workers/1/venv/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:     response = await self._send_handling_auth(
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:   File "/opt/nexus/workers/1/venv/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:     response = await self._send_handling_redirects(
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:   File "/opt/nexus/workers/1/venv/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:     response = await self._send_single_request(request)
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:   File "/opt/nexus/workers/1/venv/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:     response = await transport.handle_async_request(request)
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:   File "/opt/nexus/workers/1/venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:     with map_httpcore_exceptions():
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:   File "/usr/lib/python3.12/contextlib.py", line 158, in __exit__
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:     self.gen.throw(value)
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:   File "/opt/nexus/workers/1/venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]:     raise mapped_exc(message) from exc
+Oct 19 13:32:29 lima-nexus-v145-qa python[31208]: httpx.ConnectError: All connection attempts failed

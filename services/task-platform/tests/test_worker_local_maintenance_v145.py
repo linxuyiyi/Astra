@@ -477,6 +477,7 @@ def test_channel_switch_uses_nexus_env_provider_and_backup(tmp_path: Path, monke
         "gateway_url": "http://10.0.0.8:8110",
         "mcp_url": "http://10.0.0.8:8201/mcp",
         "reloaded": True,
+        "verified": True,
     }
     updated = json.loads(path.read_text(encoding="utf-8"))
     assert updated["provider"]["nexus-gateway"]["options"]["baseURL"] == (

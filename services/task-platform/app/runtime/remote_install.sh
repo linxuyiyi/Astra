@@ -134,20 +134,18 @@ prepare_git_token() {
   fi
   chmod 600 "$token_file"
   askpass=$(mktemp)
-  cat >"$askpass" <<'ASK'
-#!/bin/sh
-case "$1" in
-  *Username*) printf '%s\n' git ;;
-  *) printf '%s\n' "$NEXUS_GIT_TOKEN" ;;
-esac
-ASK
+  local token_ref
+  token_ref=$("$python_bin" -c 'import shlex,sys; print(shlex.quote(sys.argv[1]))' "$token_file")
+  printf '%s\n' \
+    '#!/bin/sh' \
+    'case "$1" in' \
+    "  *Username*) printf '%s\\n' git ;;" \
+    "  *) cat $token_ref ;;" \
+    'esac' >"$askpass"
   chmod 700 "$askpass"
-  NEXUS_GIT_TOKEN=$(cat "$token_file")
-  export NEXUS_GIT_TOKEN
 }
 
 cleanup_git_token() {
-  unset NEXUS_GIT_TOKEN 2>/dev/null || true
   if test -n "${token_file:-}"; then rm -f "$token_file"; fi
   token_file=""
   if test -n "${askpass:-}"; then rm -f "$askpass"; fi

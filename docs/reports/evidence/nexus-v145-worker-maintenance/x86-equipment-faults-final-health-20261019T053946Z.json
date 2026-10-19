@@ -1,0 +1,78 @@
+{
+  "env1": {
+    "connection": "online",
+    "runtime_health": "AVAILABLE",
+    "schedulable": true,
+    "equipment": [
+      {
+        "key": "opencode",
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "worker_agent",
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "model",
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "mcp",
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "skills",
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "git",
+        "verified": true,
+        "diff": []
+      }
+    ],
+    "blocking": []
+  },
+  "env2": {
+    "connection": "online",
+    "runtime_health": "AVAILABLE",
+    "schedulable": true,
+    "equipment": [
+      {
+        "key": "opencode",
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "worker_agent",
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "model",
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "mcp",
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "skills",
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "git",
+        "verified": true,
+        "diff": []
+      }
+    ],
+    "blocking": []
+  }
+}

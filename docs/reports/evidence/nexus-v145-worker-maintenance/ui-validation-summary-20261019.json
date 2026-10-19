@@ -1,0 +1,46 @@
+{
+  "generated_at": "2026-10-19T04:34:13Z",
+  "scope": "web/nexus",
+  "source": "从本轮 UI 验证会话中抽取的命令与结果摘要；未复制完整 OpenCode 会话",
+  "commands": [
+    {
+      "command": "npm run type-check",
+      "workdir": "web/nexus",
+      "exit_code": 0,
+      "result": "passed"
+    },
+    {
+      "command": "npm run build",
+      "workdir": "web/nexus",
+      "exit_code": 0,
+      "result": "passed",
+      "modules_transformed": 4019,
+      "warning": "存在既有 chunk 体积超过 500 kB 的构建警告，不影响构建成功"
+    },
+    {
+      "command": "npm test",
+      "workdir": "web/nexus",
+      "exit_code": 0,
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 114.445584
+    },
+    {
+      "command": "git diff --check -- web/nexus",
+      "exit_code": 0,
+      "result": "passed"
+    }
+  ],
+  "covered_scenarios": [
+    "initial offline, unknown health and pending equipment do not block deploy",
+    "real occupancy blocks restart/deploy but not disable",
+    "health abnormalities are not treated as occupancy",
+    "active maintenance blocks actions while interrupted keeps restore/check available"
+  ],
+  "not_verified": [
+    "未在本轮重新执行真实浏览器逐项点击与视觉复验",
+    "未启动或停止现有服务；验证为 type-check/build/单测与 diff 检查"
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "phase": "acceptance-v145-linux-affected-regression-final5",
+  "generated_at": "2026-10-19T05:49:39Z",
+  "run_id": "20261019T054735Z-final5",
+  "vm": "nexus-v145-qa",
+  "guest_src": "/opt/nexus-v145-regression/src",
+  "guest_venv": "/opt/nexus-v145-regression/venv",
+  "snapshot": {
+    "manifest": "a9d678abe8beb6634a5299ab3bae39fd0954e5ef1a7220aa8d1d2b1f1e5907cb",
+    "file_count": 272,
+    "host_source": "/Users/niuniu/程序/Astra-worktrees/nexus-v1.4.5-workers/services/task-platform",
+    "host_python": "3.12.13",
+    "guest_python": "3.12.3",
+    "sensitive_exclusions": "retained by prepare_regression.py",
+    "prepare_mode": "--reuse-venv --skip-install (pyproject.toml hash unchanged; no dependency reinstall)",
+    "host_app_tests_vs_snapshot": {
+      "snapshot_files": 218,
+      "host_files": 218,
+      "changed": 0,
+      "missing": 0,
+      "added_since_snapshot": 0
+    }
+  },
+  "commands": [
+    {
+      "command": "prepare_regression.py --reuse-venv --skip-install",
+      "exit_code": 0,
+      "result": "source refreshed; retained venv; manifest a9d678ab...",
+      "log": "/tmp/nexus-v145-qa/logs/acceptance-final5-prepare-20261019T054735Z-final5.log"
+    },
+    {
+      "command": "stage /opt/ops, /opt/docs, /opt/web/nexus/public/opencode-workspace",
+      "exit_code": 0,
+      "result": "dependencies retained/refreshed for repo_root and UI bundle tests",
+      "log": "/tmp/nexus-v145-qa/logs/acceptance-final5-deps-20261019T054735Z-final5.log"
+    },
+    {
+      "command": "task Redis preflight (PING DB14, server metadata)",
+      "exit_code": 0,
+      "result": "PING_DB14=True; TCP_PORT=61267; harness-owned Redis; not port 6379",
+      "log": "/tmp/nexus-v145-qa/logs/acceptance-final5-redis-preflight-20261019T054735Z-final5.log"
+    },
+    {
+      "command": "pytest -ra (21 files; ASTRA_TEST_REDIS_URL=redis://host.lima.internal:61267/14)",
+      "exit_code": 0,
+      "result": "460 passed, 0 failed, 1 skipped, 4 warnings",
+      "log": "/tmp/nexus-v145-qa/logs/acceptance-final5-pytest-20261019T054735Z-final5.log"
+    },
+    {
+      "command": "ruff check --no-cache app tests",
+      "exit_code": 0,
+      "result": "All checks passed!",
+      "log": "/tmp/nexus-v145-qa/logs/acceptance-final5-ruff-20261019T054735Z-final5.log"
+    }
+  ],
+  "summary": {
+    "passed": 460,
+    "failed": 0,
+    "skipped": 1,
+    "pytest_exit_code": 0,
+    "ruff_exit_code": 0,
+    "status": "passed"
+  },
+  "pytest_scope": [
+    "tests/test_worker_maintenance.py",
+    "tests/test_worker_settings_v145.py",
+    "tests/test_worker_equipment_v145.py",
+    "tests/test_worker_runtime_inspection_v145.py",
+    "tests/test_worker_local_maintenance_v145.py",
+    "tests/test_remote_install_v145.py",
+    "tests/test_remote_provisioning.py",
+    "tests/test_phase4_channel.py",
+    "tests/test_worker_channel_review_fixes.py",
+    "tests/test_worker_gateway.py",
+    "tests/test_channel_switch.py",
+    "tests/test_worker_occupancy.py",
+    "tests/test_task_responsibility.py",
+    "tests/test_task_routing.py",
+    "tests/test_session_workspace.py",
+    "tests/test_proxy_secret_redaction.py",
+    "tests/test_api.py",
+    "tests/test_mcp_transport_security.py",
+    "tests/test_worker_git_auth_v145.py",
+    "tests/test_repositories.py",
+    "tests/test_task_mcp_auth.py"
+  ],
+  "redis_validation": {
+    "url": "redis://host.lima.internal:61267/14",
+    "db": 14,
+    "pong": true,
+    "tcp_port": 61267,
+    "server_run_id": "b2e34741a25e8543adcb937ac2ba39650af9a580",
+    "ownership": "/tmp/nexus-v145-qa/private/redis, cmdline redis-server --port 61267 --bind 127.0.0.1, save disabled",
+    "not_original_6379": true,
+    "business_qa_db1_used": false,
+    "new_redis_started": false
+  },
+  "skipped": [
+    {
+      "test": "tests/test_worker_channel_review_fixes.py::test_sweep_statements_execute_on_mysql",
+      "reason": "未提供 ASTRA_TEST_MYSQL_URL，只编译 MySQL 方言"
+    }
+  ],
+  "source_drift": {
+    "host_app_tests_vs_snapshot_changed": 0,
+    "note": "host app/tests SHA matches the guest snapshot after the run"
+  },
+  "actual_vs_expected": {
+    "expected": "459 passed + 1 MySQL skip",
+    "actual": "460 passed + 1 MySQL skip",
+    "note": "recorded from real pytest output"
+  },
+  "environment_adjustments": [
+    "ASTRA_DATA_DIR/ASTRA_LOG_DIR/ASTRA_RUNTIME_DIR/ASTRA_CONFIG_DIR point to writable /tmp/nexus-v145-qa-guest paths.",
+    "Real worktree ops/, docs/ and web/nexus/public/opencode-workspace/ copied to VM /opt because tests resolve REPO_ROOT=/opt.",
+    "ASTRA_TEST_REDIS_URL points only to the harness-owned Redis DB14; DB1 and port 6379 were not touched.",
+    "ruff run with --no-cache to avoid writing .ruff_cache in the root-owned snapshot."
+  ],
+  "boundaries_observed": [
+    "No product or fixture code was modified by this acceptance run.",
+    "No test was added, removed or rewritten.",
+    "No product service was deployed or restarted.",
+    "No additional product service or Redis instance was started.",
+    "QA app source and running fixtures were not overwritten.",
+    "Regression path /opt/nexus-v145-regression remained separate from real workers under /opt/nexus/workers.",
+    "No credentials/private keys/env values were scanned or printed.",
+    "No paid LLM or model prompt was sent.",
+    "No git commit or push."
+  ],
+  "history": {
+    "previous_reports": [
+      "/tmp/nexus-v145-qa/reports/acceptance-final-v145-20261019T042337Z.json (415 passed)",
+      "/tmp/nexus-v145-qa/reports/acceptance-final2-v145-20261019T050440Z.json (1 failed, retained as-is)",
+      "/tmp/nexus-v145-qa/reports/acceptance-final3-v145-20261019T052309Z.json (445 passed, Redis DB14)",
+      "/tmp/nexus-v145-qa/reports/acceptance-final4-v145-20261019T054332Z.json (453 passed, Redis DB14)"
+    ]
+  }
+}

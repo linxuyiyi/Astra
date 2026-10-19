@@ -349,8 +349,10 @@ async def _worker_online(environment_id: int) -> bool:
 
 
 def _mismatch(result: object) -> str | None:
-    if not isinstance(result, dict) or result.get("reloaded") is not True:
-        return "受控重载没有完成，通道保持 ssh"
+    # `verified` is the single fact that the running process reports the
+    # expected addresses. `reloaded` only says a reload was performed.
+    if not isinstance(result, dict) or result.get("verified") is not True:
+        return "生效配置未核验，通道保持 ssh"
     settings = get_settings()
     if not _same_direct_url(result.get("gateway_url"), settings.remote_gateway_local_url):
         return "生效的 Gateway 地址与内网配置不一致，通道保持 ssh"

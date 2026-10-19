@@ -1,0 +1,77 @@
+{
+  "run_id": "ecb833e90a7a4b3f9302d24224ef52bb",
+  "fault": "occupancy_worker_reconnect",
+  "fixture": {
+    "task_id": "T-v145-fixture-9bb302e00579",
+    "session_id": "ses_v145_fixture_9bb302e00579",
+    "previous_count": 0,
+    "created_at": "2026-10-19T05:25:50.930139+00:00",
+    "marker": "[FIXTURE v145] lifecycle occupancy injection"
+  },
+  "before": {
+    "employee_current_task_count": 1,
+    "waiting_tasks": 1,
+    "waiting_sessions": 1,
+    "worker_pid": "30812",
+    "opencode_pid": "22283",
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T05:25:39.739102+00:00",
+        "epoch": 7
+      },
+      "schedulable": false
+    }
+  },
+  "fixture_rows_before": {
+    "task_status": "WAITING",
+    "task_current_session_id": null,
+    "session_status": "WAITING",
+    "session_task_id": "T-v145-fixture-9bb302e00579"
+  },
+  "restart_command": {
+    "cmd": "systemctl restart nexus-worker-1.service; echo rc=$?",
+    "out": "rc=0\n",
+    "err": ""
+  },
+  "after": {
+    "worker_pid": "31208",
+    "opencode_pid": "22283",
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T05:25:51.320682+00:00",
+        "epoch": 8
+      },
+      "schedulable": false
+    },
+    "counts": {
+      "employee_current_task_count": 1,
+      "waiting_tasks": 1,
+      "waiting_sessions": 1
+    },
+    "fixture_rows": {
+      "task_status": "WAITING",
+      "task_current_session_id": null,
+      "session_status": "WAITING",
+      "session_task_id": "T-v145-fixture-9bb302e00579"
+    }
+  },
+  "checks": {
+    "epoch_updated": true,
+    "worker_pid_changed": true,
+    "opencode_pid_unchanged": true,
+    "task_and_session_not_released": true,
+    "employee_count_not_released": true,
+    "worker_online": true
+  },
+  "status": "PASS",
+  "cleanup_counts": {
+    "employee_current_task_count": 0,
+    "waiting_tasks": 0,
+    "waiting_sessions": 0
+  },
+  "cleanup_ok": true
+}

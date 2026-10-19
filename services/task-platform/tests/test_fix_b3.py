@@ -320,7 +320,7 @@ async def test_start_reuses_the_assignment_checks_and_merges_the_snapshot(sessio
     await session.commit()
     blocked = runtime_assignment_block(environment, await session.get(Task, "T-start"))
     assert blocked == "Worker 能力绑定尚未应用"
-    with pytest.raises(RuntimeStateError, match="Worker 能力绑定尚未应用"):
+    with pytest.raises(RuntimeStateError, match="装备绑定尚未应用"):
         await RuntimeService(session).start("T-start")
 
     environment.skill_refs = []
@@ -459,6 +459,9 @@ def _git_stub() -> str:
         repo = state.get(workspace or "", {})
         if command == "rev-parse" and "--git-dir" in rest:
             sys.exit(0 if repo else 1)
+        if command == "rev-parse" and "--show-toplevel" in rest:
+            sys.stdout.write(workspace or "")
+            sys.exit(0 if repo else 1)
         if command == "rev-parse" and "HEAD" in rest:
             sys.exit(0 if repo.get("head") else 1)
         if command == "config":
@@ -467,6 +470,10 @@ def _git_stub() -> str:
         if command == "branch":
             sys.stdout.write(repo.get("branch", ""))
             sys.exit(0)
+        if command == "symbolic-ref":
+            branch = repo.get("branch", "")
+            sys.stdout.write(branch + ("\\n" if branch else ""))
+            sys.exit(0 if branch else 1)
         if command == "clone":
             branch = rest[rest.index("--branch") + 1]
             url, dest = rest[-2], rest[-1]
@@ -485,7 +492,12 @@ def _git_stub() -> str:
 
 def _run_workspace(tmp_path: Path, payload: dict, *, token: str | None, state: dict, workspace: Path):
     script = Path("app/runtime/remote_install.sh").read_text(encoding="utf-8")
-    body = script[script.index("step '工程目录' running") : script.index("step '工程目录' passed")]
+    functions = script.split("# >>> nexus-installer-functions\n", 1)[1].split(
+        "# <<< nexus-installer-functions", 1
+    )[0]
+    body = script[
+        script.index("step '工程目录' running") : script.index("step '工程目录' passed")
+    ]
     trap = next(line for line in script.splitlines() if line.startswith("trap "))
     bindir = tmp_path / "bin"
     bindir.mkdir(parents=True)
@@ -510,11 +522,22 @@ def _run_workspace(tmp_path: Path, payload: dict, *, token: str | None, state: d
                 "set -euo pipefail",
                 "umask 077",
                 "step() { printf 'ASTRA_STEP\\t%s\\t%s\\n' \"$1\" \"$2\"; }",
+                "cleanup() { if test -n \"${token_file:-}\"; then rm -f \"$token_file\"; fi; "
+                "if test -n \"${askpass:-}\"; then rm -f \"$askpass\"; fi; }",
+                functions,
                 f"python_bin={sys.executable}",
                 f"payload={payload_file}",
                 f"workspace={workspace}",
                 f"token_file={token_ref}",
                 "askpass=",
+                "action=deploy",
+                "repo_url=$(json_field repository.url)",
+                "repo_branch=$(json_field repository.branch)",
+                "repo_branch=${repo_branch:-main}",
+                "repo_changed=false",
+                "remote_commit=''",
+                "workspace_real=$(\"$python_bin\" -c "
+                "'import os,sys; print(os.path.realpath(sys.argv[1]))' \"$workspace\")",
                 trap,
                 body,
             ]
@@ -546,8 +569,9 @@ def test_remote_install_clones_with_askpass_and_checks_an_existing_workspace(tmp
     assert not token_file.exists()
     cloned = next(item for item in calls if item["command"] == "clone")
     assert PAT not in " ".join(cloned["argv"])
-    assert cloned["token"] == PAT
+    assert cloned["token"] == ""
     assert PAT not in cloned["askpass"]
+    assert str(token_file) in cloned["askpass"]
     assert cloned["mode"] == oct(stat.S_IRUSR | stat.S_IWUSR)
     assert all(item["command"] != "init" for item in calls)
     stored = json.loads((tmp_path / "clone" / "git-state.json").read_text(encoding="utf-8"))

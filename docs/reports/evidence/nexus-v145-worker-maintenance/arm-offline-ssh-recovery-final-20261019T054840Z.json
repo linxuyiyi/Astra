@@ -1,0 +1,499 @@
+{
+  "run_id": "757cc0a6de1f489097551c0b3e755117",
+  "fault": "offline_ssh_recovery_final",
+  "before": {
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T05:48:33.662177+00:00",
+        "epoch": 12
+      },
+      "maintenance": {
+        "state": "FAILED",
+        "operation_id": "op_acc3a386a0a9457faade6a0a2d074401",
+        "stage": "reconciled",
+        "attempt": 2
+      },
+      "runtime_status": "AVAILABLE",
+      "schedulable": true,
+      "blocking": [],
+      "equipment": [
+        {
+          "key": "opencode",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "worker_agent",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "model",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "mcp",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "skills",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "git",
+          "deployed": true,
+          "verified": true
+        }
+      ]
+    },
+    "units": {
+      "opencode": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "37637"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "37638"
+      }
+    },
+    "hashes": {
+      "gateway_token_hash": "89260eeb73b183cb",
+      "mcp_token_hash": "78cf1dd18a75c714",
+      "worker_token_hash": "e546a26aba2e8b00",
+      "git_token_hash": "2cc387232925286e",
+      "git_token_file_present": true,
+      "config_sha256": "1141d85ecb52d5af",
+      "config_bytes": 736,
+      "env_keys": [
+        "GIT_ASKPASS",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_TERMINAL_PROMPT",
+        "NEXUS_MCP_RESOURCE_URL",
+        "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+        "NEXUS_REMOTE_GATEWAY_URL",
+        "NEXUS_WORKER_ENVIRONMENT_ID",
+        "NEXUS_WORKER_GATEWAY_URL",
+        "NEXUS_WORKER_INSTANCE_ID",
+        "NEXUS_WORKER_OPENCODE_BIN",
+        "NEXUS_WORKER_OPENCODE_UNIT",
+        "NEXUS_WORKER_OPENCODE_URL",
+        "NEXUS_WORKER_TOKEN",
+        "NEXUS_WORKER_WORKSPACE_ROOT",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR"
+      ]
+    }
+  },
+  "stop": {
+    "cmd": "systemctl stop nexus-worker-1.service nexus-opencode-1.service; echo rc=$?",
+    "out": "rc=0\n",
+    "err": ""
+  },
+  "stopped_units": {
+    "opencode": {
+      "active": "inactive",
+      "enabled": "enabled",
+      "main_pid": "0"
+    },
+    "worker": {
+      "active": "inactive",
+      "enabled": "enabled",
+      "main_pid": "0"
+    }
+  },
+  "offline_health": {
+    "connection": {
+      "channel": "worker",
+      "state": "offline",
+      "last_heartbeat_at": "2026-10-19T05:48:33.662177+00:00",
+      "epoch": 12
+    },
+    "maintenance": {
+      "state": "FAILED",
+      "operation_id": "op_acc3a386a0a9457faade6a0a2d074401",
+      "stage": "reconciled",
+      "attempt": 2
+    },
+    "runtime_status": "AVAILABLE",
+    "schedulable": false,
+    "blocking": [
+      {
+        "code": "worker_offline",
+        "message": "Worker 通道离线"
+      }
+    ],
+    "equipment": [
+      {
+        "key": "opencode",
+        "deployed": true,
+        "verified": true
+      },
+      {
+        "key": "worker_agent",
+        "deployed": true,
+        "verified": true
+      },
+      {
+        "key": "model",
+        "deployed": true,
+        "verified": true
+      },
+      {
+        "key": "mcp",
+        "deployed": true,
+        "verified": true
+      },
+      {
+        "key": "skills",
+        "deployed": true,
+        "verified": true
+      },
+      {
+        "key": "git",
+        "deployed": true,
+        "verified": true
+      }
+    ]
+  },
+  "submit": {
+    "status": 202,
+    "json": {
+      "id": "op_aee0e6c836424bde8931e612d35503ba",
+      "environment_id": 1,
+      "action": "restart",
+      "state": "QUEUED",
+      "stage": "queued",
+      "attempt": 1,
+      "requested_by": "v145-qa-offline-final",
+      "requested_at": "2026-10-19T05:48:36.095069+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "lease_owner": null,
+      "lease_until": null,
+      "cancel_requested": false,
+      "danger_dispatched": false,
+      "reconcile_required": false,
+      "reconcile_only": false,
+      "execution_channel": null,
+      "execution_reason": null,
+      "retry_of_attempt": null,
+      "target_revision": {
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "branch": "main",
+        "skills": [
+          "nexus-v145-qa-skill"
+        ],
+        "mcp": [],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "before_snapshot": {
+        "environment_id": 1,
+        "mode": "LINUX_REMOTE",
+        "name": "QA Worker A Linux",
+        "host": "127.0.0.1",
+        "port": 56060,
+        "username": "root",
+        "has_ssh_password": true,
+        "opencode_server_port": 44135,
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "model_name": "nexus-gateway/qa-model",
+        "workspace_root": "/root/nexus-v145/worker-a",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "labels": [
+          "qa",
+          "v145",
+          "linux"
+        ],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "after_snapshot": {},
+      "error_code": null,
+      "error_message": null
+    }
+  },
+  "operation": {
+    "id": "op_aee0e6c836424bde8931e612d35503ba",
+    "state": "SUCCEEDED",
+    "error_code": null,
+    "error_message": null,
+    "execution_channel": null,
+    "elapsed_seconds": 4.07,
+    "checks": [
+      {
+        "name": "SSH 连接与执行检查",
+        "state": "passed",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "重启 OpenCode Serve",
+        "state": "passed",
+        "passed": true,
+        "detail": "单元重启、OpenCode 健康与 Worker 上线均已确认"
+      }
+    ]
+  },
+  "final": {
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T05:48:36.686732+00:00",
+        "epoch": 13
+      },
+      "maintenance": {
+        "state": "SUCCEEDED",
+        "operation_id": "op_aee0e6c836424bde8931e612d35503ba",
+        "stage": "verify",
+        "attempt": 1
+      },
+      "runtime_status": "AVAILABLE",
+      "schedulable": true,
+      "blocking": [],
+      "equipment": [
+        {
+          "key": "opencode",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "worker_agent",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "model",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "mcp",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "skills",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "git",
+          "deployed": true,
+          "verified": true
+        }
+      ]
+    },
+    "equipment": [
+      {
+        "key": "opencode",
+        "label": "OpenCode",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "1.18.35",
+        "actual_revision": "1.18.35",
+        "diff": [],
+        "error": null,
+        "detail": "OpenCode 1.18.35"
+      },
+      {
+        "key": "worker_agent",
+        "label": "Worker Agent",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "1.4.5",
+        "actual_revision": "1.4.5",
+        "diff": [],
+        "error": null,
+        "detail": "Worker Agent 1.4.5"
+      },
+      {
+        "key": "model",
+        "label": "模型",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "nexus-gateway/qa-model",
+        "actual_revision": "nexus-gateway/qa-model",
+        "diff": [],
+        "error": null,
+        "detail": "实际模型 nexus-gateway/qa-model"
+      },
+      {
+        "key": "mcp",
+        "label": "MCP",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "bee4a46a3d606b6d",
+        "actual_revision": "bee4a46a3d606b6d",
+        "diff": [],
+        "error": null,
+        "detail": "已连接：nexus-library"
+      },
+      {
+        "key": "skills",
+        "label": "Skill",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "3e46d4dda6d0487c",
+        "actual_revision": "3e46d4dda6d0487c",
+        "diff": [],
+        "error": null,
+        "detail": "发现 nexus-v145-qa-skill"
+      },
+      {
+        "key": "git",
+        "label": "Git 仓库",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "1b48b92e8e44b82e",
+        "actual_revision": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+        "diff": [],
+        "error": null,
+        "detail": "main@4f7ad4b565d0"
+      }
+    ],
+    "units": {
+      "opencode": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "40203"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "40204"
+      }
+    },
+    "hashes": {
+      "gateway_token_hash": "89260eeb73b183cb",
+      "mcp_token_hash": "78cf1dd18a75c714",
+      "worker_token_hash": "e546a26aba2e8b00",
+      "git_token_hash": "2cc387232925286e",
+      "git_token_file_present": true,
+      "config_sha256": "1141d85ecb52d5af",
+      "config_bytes": 736,
+      "env_keys": [
+        "GIT_ASKPASS",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_TERMINAL_PROMPT",
+        "NEXUS_MCP_RESOURCE_URL",
+        "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+        "NEXUS_REMOTE_GATEWAY_URL",
+        "NEXUS_WORKER_ENVIRONMENT_ID",
+        "NEXUS_WORKER_GATEWAY_URL",
+        "NEXUS_WORKER_INSTANCE_ID",
+        "NEXUS_WORKER_OPENCODE_BIN",
+        "NEXUS_WORKER_OPENCODE_UNIT",
+        "NEXUS_WORKER_OPENCODE_URL",
+        "NEXUS_WORKER_TOKEN",
+        "NEXUS_WORKER_WORKSPACE_ROOT",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR"
+      ]
+    }
+  },
+  "checks": {
+    "offline_confirmed_before_restart": true,
+    "formal_restart_succeeded_without_reconcile": true,
+    "six_items_verified": true,
+    "schedulable": true,
+    "worker_online": true,
+    "tokens_unchanged": true,
+    "no_manual_start": true
+  },
+  "status": "PASS",
+  "file_sha256": "c0ca0b6a3509e97974e88ce8f0141eaf4a18c980496a7da68f274e2955109b4c",
+  "candidate_sha256": "c0ca0b6a3509e97974e88ce8f0141eaf4a18c980496a7da68f274e2955109b4c",
+  "api_restart": {
+    "old_pid": 8425,
+    "new_pid": 10090,
+    "duration_seconds": 25,
+    "health_status": 200,
+    "log": "/tmp/nexus-v145-qa/api-restart-offline-final.log"
+  },
+  "cleanup": {
+    "watcher_found": [],
+    "marked_installer_scripts": [],
+    "removed": [
+      "/tmp/v145_fault4_delay.py",
+      "/tmp/v145-fault4-delay.log",
+      "/tmp/v145-fault4-delay-watch.out",
+      "/tmp/v145-fault4-delay.log.evidence"
+    ],
+    "business_repo_touched": false,
+    "log": "/tmp/nexus-v145-qa/delay-fixture-cleanup-final.log"
+  },
+  "final_health_after_observer": {
+    "schedulable": true,
+    "runtime_status": "AVAILABLE",
+    "maintenance": {
+      "state": "SUCCEEDED",
+      "operation_id": "op_aee0e6c836424bde8931e612d35503ba"
+    },
+    "equipment": [
+      {
+        "key": "opencode",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "worker_agent",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "model",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "mcp",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "skills",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "git",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      }
+    ]
+  },
+  "note": "Offline restart now succeeds without reconcile: formal operation SUCCEEDED in 4.07s; both units restarted via the formal offline SSH path; /global/health and Worker online confirmed before the operation passed. No manual systemctl start. Observer check 36s later remains healthy."
+}

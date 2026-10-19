@@ -82,7 +82,33 @@ def _read_config(path: Path) -> dict:
     return config
 
 
-def write_direct_config(path: Path, *, gateway_url: str, mcp_url: str) -> None:
+def _config_target(path: Path) -> Path | None:
+    jsonc = path if path.suffix == ".jsonc" else path.with_suffix(".jsonc")
+    if jsonc.is_file():
+        return jsonc
+    if path.is_file():
+        return path
+    return None
+
+
+def config_addresses(path: Path) -> tuple[str, str] | None:
+    target = _config_target(path)
+    if target is None:
+        return None
+    try:
+        config = _read_config(target)
+    except RuntimeError:
+        return None
+    gateway = _mapping(_mapping(_mapping(config, "provider"), _PROVIDER), "options")
+    library = _mapping(_mapping(config, "mcp"), "nexus-library")
+    base = gateway.get("baseURL") if isinstance(gateway, dict) else None
+    mcp = library.get("url") if isinstance(library, dict) else None
+    if not isinstance(base, str) or not isinstance(mcp, str):
+        return None
+    return base, mcp
+
+
+def write_direct_config(path: Path, *, gateway_url: str, mcp_url: str) -> bool:
     """Replace only the two direct addresses. Keep the Gateway key and MCP token.
 
     An existing opencode.jsonc is merged. It is not a reason to stop.
@@ -121,6 +147,8 @@ def write_direct_config(path: Path, *, gateway_url: str, mcp_url: str) -> None:
         raise RuntimeError("全局配置缺少 nexus-gateway，未重载")
     if library is None or "url" not in library:
         raise RuntimeError("全局配置缺少 nexus-library，未重载")
+    if options.get("baseURL") == gateway_url and library.get("url") == mcp_url:
+        return False
     backup = target.with_name(target.name + ".nexus-backup")
     shutil.copy2(target if target.is_file() else path, backup)
     os.chmod(backup, 0o600)
@@ -130,6 +158,7 @@ def write_direct_config(path: Path, *, gateway_url: str, mcp_url: str) -> None:
     temporary.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     os.chmod(temporary, 0o600)
     os.replace(temporary, target)
+    return True
 
 
 def read_effective_config(port: int, workspace: str, *, timeout: float = 5) -> dict:
@@ -391,8 +420,39 @@ def apply_channel_switch(
     for url in (gateway_url, mcp_url):
         if not probe_fn(url):
             raise RuntimeError("内网 Gateway 或 MCP 探测失败")
-    assert_native_idle(workspace, port, gate=gate)
     path = config_path or global_config_path(environ)
+    read_running = read_effective or (lambda: read_effective_config(port, workspace))
+
+    def read_addresses() -> tuple[dict | None, tuple[str, str] | None]:
+        try:
+            effective = read_running()
+        except RuntimeError:
+            return None, None
+        try:
+            return effective, (
+                _address(effective, ("provider", _PROVIDER, "options", "baseURL")),
+                _address(effective, ("mcp", "nexus-library", "url")),
+            )
+        except RuntimeError:
+            return effective, None
+
+    file_addresses = config_addresses(path)
+    _initial_effective, running_addresses = read_addresses()
+    if file_addresses == (gateway_url, mcp_url) and running_addresses == (
+        gateway_url,
+        mcp_url,
+    ):
+        # Already applied on disk and in the running process: no write, no reload.
+        return {
+            "gateway_url": gateway_url,
+            "mcp_url": mcp_url,
+            "reloaded": False,
+            "verified": True,
+        }
+
+    # Any write/reload stays behind the existing native-idle and owner gate.
+    _check_gate(gate)
+    assert_native_idle(workspace, port, gate=gate)
     _check_gate(gate)
     write_direct_config(path, gateway_url=gateway_url, mcp_url=mcp_url)
     if reload is None:
@@ -401,11 +461,15 @@ def apply_channel_switch(
         _check_gate(gate)
         reload()
     _check_gate(gate)
-    effective = read_effective() if read_effective is not None else read_effective_config(port, workspace)
+    effective, running = read_addresses()
+    verified = running == (gateway_url, mcp_url)
+    if effective is None:
+        raise RuntimeError("读取生效配置失败")
     return {
         "gateway_url": _address(effective, ("provider", _PROVIDER, "options", "baseURL")),
         "mcp_url": _address(effective, ("mcp", "nexus-library", "url")),
         "reloaded": True,
+        "verified": verified,
     }
 
 

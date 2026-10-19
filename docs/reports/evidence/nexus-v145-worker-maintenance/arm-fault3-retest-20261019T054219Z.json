@@ -1,0 +1,620 @@
+{
+  "run_id": "3ff9e4381cea44dc8bbb79f978650b53",
+  "fault": "fault3_retest",
+  "before": {
+    "opencode_active": "inactive",
+    "opencode_pid": "0",
+    "hashes": {
+      "gateway_token_hash": "89260eeb73b183cb",
+      "mcp_token_hash": "78cf1dd18a75c714",
+      "worker_token_hash": "e546a26aba2e8b00",
+      "git_token_hash": "2cc387232925286e",
+      "git_token_file_present": true,
+      "config_sha256": "1141d85ecb52d5af",
+      "config_bytes": 736,
+      "env_keys": [
+        "GIT_ASKPASS",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_TERMINAL_PROMPT",
+        "NEXUS_MCP_RESOURCE_URL",
+        "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+        "NEXUS_REMOTE_GATEWAY_URL",
+        "NEXUS_WORKER_ENVIRONMENT_ID",
+        "NEXUS_WORKER_GATEWAY_URL",
+        "NEXUS_WORKER_INSTANCE_ID",
+        "NEXUS_WORKER_OPENCODE_BIN",
+        "NEXUS_WORKER_OPENCODE_UNIT",
+        "NEXUS_WORKER_OPENCODE_URL",
+        "NEXUS_WORKER_TOKEN",
+        "NEXUS_WORKER_WORKSPACE_ROOT",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR"
+      ]
+    },
+    "units": {
+      "opencode": {
+        "active": "inactive",
+        "enabled": "enabled",
+        "main_pid": "0"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "31208"
+      }
+    },
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T05:42:07.635666+00:00",
+        "epoch": 9
+      },
+      "maintenance": {
+        "state": "FAILED",
+        "operation_id": "op_341b44c9e26440a7a7e79627c9c49f48",
+        "stage": "failed",
+        "attempt": 1
+      },
+      "runtime_status": "UNAVAILABLE",
+      "schedulable": false,
+      "blocking": [
+        {
+          "code": "runtime_unavailable",
+          "message": "环境状态为 UNAVAILABLE，禁止调度"
+        },
+        {
+          "code": "equipment_pending",
+          "message": "装备配置等待部署生效"
+        },
+        {
+          "code": "equipment_pending",
+          "message": "装备未完成部署或核验：OpenCode"
+        },
+        {
+          "code": "equipment_pending",
+          "message": "装备未完成部署或核验：模型"
+        },
+        {
+          "code": "equipment_pending",
+          "message": "装备未完成部署或核验：MCP"
+        },
+        {
+          "code": "equipment_pending",
+          "message": "装备未完成部署或核验：Skill"
+        },
+        {
+          "code": "capability_not_applied",
+          "message": "装备绑定尚未应用"
+        }
+      ],
+      "equipment": [
+        {
+          "key": "opencode",
+          "deployed": true,
+          "verified": false
+        },
+        {
+          "key": "worker_agent",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "model",
+          "deployed": true,
+          "verified": null
+        },
+        {
+          "key": "mcp",
+          "deployed": true,
+          "verified": false
+        },
+        {
+          "key": "skills",
+          "deployed": true,
+          "verified": false
+        },
+        {
+          "key": "git",
+          "deployed": true,
+          "verified": true
+        }
+      ]
+    }
+  },
+  "restart_from_stopped": {
+    "submit_status": 202,
+    "submit": {
+      "id": "op_5a2e6f12a7384614b510a1849a8c3515",
+      "environment_id": 1,
+      "action": "restart",
+      "state": "QUEUED",
+      "stage": "queued",
+      "attempt": 1,
+      "requested_by": "v145-qa-fault3retest-stopped",
+      "requested_at": "2026-10-19T05:42:20.349992+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "lease_owner": null,
+      "lease_until": null,
+      "cancel_requested": false,
+      "danger_dispatched": false,
+      "reconcile_required": false,
+      "reconcile_only": false,
+      "execution_channel": null,
+      "execution_reason": null,
+      "retry_of_attempt": null,
+      "target_revision": {
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "branch": "main",
+        "skills": [
+          "nexus-v145-qa-skill"
+        ],
+        "mcp": [],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "before_snapshot": {
+        "environment_id": 1,
+        "mode": "LINUX_REMOTE",
+        "name": "QA Worker A Linux",
+        "host": "127.0.0.1",
+        "port": 56060,
+        "username": "root",
+        "has_ssh_password": true,
+        "opencode_server_port": 44135,
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "model_name": "nexus-gateway/qa-model",
+        "workspace_root": "/root/nexus-v145/worker-a",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "labels": [
+          "qa",
+          "v145",
+          "linux"
+        ],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "after_snapshot": {},
+      "error_code": null,
+      "error_message": null
+    },
+    "operation_id": "op_5a2e6f12a7384614b510a1849a8c3515",
+    "state": "SUCCEEDED",
+    "error_code": null,
+    "error_message": null
+  },
+  "after_stopped_restart": {
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T05:42:07.635666+00:00",
+        "epoch": 9
+      },
+      "maintenance": {
+        "state": "SUCCEEDED",
+        "operation_id": "op_5a2e6f12a7384614b510a1849a8c3515",
+        "stage": "verify",
+        "attempt": 1
+      },
+      "runtime_status": "AVAILABLE",
+      "schedulable": true,
+      "blocking": [],
+      "equipment": [
+        {
+          "key": "opencode",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "worker_agent",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "model",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "mcp",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "skills",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "git",
+          "deployed": true,
+          "verified": true
+        }
+      ]
+    },
+    "units": {
+      "opencode": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "33737"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "31208"
+      }
+    },
+    "hashes": {
+      "gateway_token_hash": "89260eeb73b183cb",
+      "mcp_token_hash": "78cf1dd18a75c714",
+      "worker_token_hash": "e546a26aba2e8b00",
+      "git_token_hash": "2cc387232925286e",
+      "git_token_file_present": true,
+      "config_sha256": "1141d85ecb52d5af",
+      "config_bytes": 736,
+      "env_keys": [
+        "GIT_ASKPASS",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_TERMINAL_PROMPT",
+        "NEXUS_MCP_RESOURCE_URL",
+        "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+        "NEXUS_REMOTE_GATEWAY_URL",
+        "NEXUS_WORKER_ENVIRONMENT_ID",
+        "NEXUS_WORKER_GATEWAY_URL",
+        "NEXUS_WORKER_INSTANCE_ID",
+        "NEXUS_WORKER_OPENCODE_BIN",
+        "NEXUS_WORKER_OPENCODE_UNIT",
+        "NEXUS_WORKER_OPENCODE_URL",
+        "NEXUS_WORKER_TOKEN",
+        "NEXUS_WORKER_WORKSPACE_ROOT",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR"
+      ]
+    }
+  },
+  "kill": {
+    "cmd": "kill -9 33737; echo rc=$?",
+    "out": "rc=0\n",
+    "err": ""
+  },
+  "crash_pid": "33928",
+  "crash_recovery": {
+    "new_pid": "33928",
+    "global_health": {
+      "healthy": true,
+      "version": "1.18.35"
+    },
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T05:42:07.635666+00:00",
+        "epoch": 9
+      },
+      "maintenance": {
+        "state": "SUCCEEDED",
+        "operation_id": "op_5a2e6f12a7384614b510a1849a8c3515",
+        "stage": "verify",
+        "attempt": 1
+      },
+      "runtime_status": "AVAILABLE",
+      "schedulable": true,
+      "blocking": [],
+      "equipment": [
+        {
+          "key": "opencode",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "worker_agent",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "model",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "mcp",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "skills",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "git",
+          "deployed": true,
+          "verified": true
+        }
+      ]
+    },
+    "units": {
+      "opencode": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "33928"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "31208"
+      }
+    }
+  },
+  "stop": {
+    "cmd": "systemctl stop nexus-opencode-1.service; echo rc=$?",
+    "out": "rc=0\n",
+    "err": ""
+  },
+  "persistent_fault": {
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T05:42:27.722380+00:00",
+        "epoch": 9
+      },
+      "maintenance": {
+        "state": "SUCCEEDED",
+        "operation_id": "op_5a2e6f12a7384614b510a1849a8c3515",
+        "stage": "verify",
+        "attempt": 1
+      },
+      "runtime_status": "UNAVAILABLE",
+      "schedulable": false,
+      "blocking": [
+        {
+          "code": "runtime_unavailable",
+          "message": "环境状态为 UNAVAILABLE，禁止调度"
+        },
+        {
+          "code": "equipment_pending",
+          "message": "装备配置等待部署生效"
+        },
+        {
+          "code": "equipment_pending",
+          "message": "装备未完成部署或核验：OpenCode"
+        },
+        {
+          "code": "equipment_pending",
+          "message": "装备未完成部署或核验：模型"
+        },
+        {
+          "code": "equipment_pending",
+          "message": "装备未完成部署或核验：MCP"
+        },
+        {
+          "code": "equipment_pending",
+          "message": "装备未完成部署或核验：Skill"
+        },
+        {
+          "code": "capability_not_applied",
+          "message": "装备绑定尚未应用"
+        }
+      ],
+      "equipment": [
+        {
+          "key": "opencode",
+          "deployed": true,
+          "verified": false
+        },
+        {
+          "key": "worker_agent",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "model",
+          "deployed": true,
+          "verified": null
+        },
+        {
+          "key": "mcp",
+          "deployed": true,
+          "verified": false
+        },
+        {
+          "key": "skills",
+          "deployed": true,
+          "verified": false
+        },
+        {
+          "key": "git",
+          "deployed": true,
+          "verified": true
+        }
+      ]
+    },
+    "units": {
+      "opencode": {
+        "active": "inactive",
+        "enabled": "enabled",
+        "main_pid": "0"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "31208"
+      }
+    }
+  },
+  "restart_after_stop": {
+    "submit_status": 202,
+    "submit": {
+      "id": "op_c3e5d95f952a4f98ab9acf1d809fda78",
+      "environment_id": 1,
+      "action": "restart",
+      "state": "QUEUED",
+      "stage": "queued",
+      "attempt": 1,
+      "requested_by": "v145-qa-fault3retest-recover",
+      "requested_at": "2026-10-19T05:42:29.435193+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "lease_owner": null,
+      "lease_until": null,
+      "cancel_requested": false,
+      "danger_dispatched": false,
+      "reconcile_required": false,
+      "reconcile_only": false,
+      "execution_channel": null,
+      "execution_reason": null,
+      "retry_of_attempt": null,
+      "target_revision": {
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "branch": "main",
+        "skills": [
+          "nexus-v145-qa-skill"
+        ],
+        "mcp": [],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "before_snapshot": {
+        "environment_id": 1,
+        "mode": "LINUX_REMOTE",
+        "name": "QA Worker A Linux",
+        "host": "127.0.0.1",
+        "port": 56060,
+        "username": "root",
+        "has_ssh_password": true,
+        "opencode_server_port": 44135,
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "model_name": "nexus-gateway/qa-model",
+        "workspace_root": "/root/nexus-v145/worker-a",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "labels": [
+          "qa",
+          "v145",
+          "linux"
+        ],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "after_snapshot": {},
+      "error_code": null,
+      "error_message": null
+    },
+    "operation_id": "op_c3e5d95f952a4f98ab9acf1d809fda78",
+    "state": "SUCCEEDED",
+    "error_code": null,
+    "error_message": null
+  },
+  "final_recovery": {
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T05:42:27.722380+00:00",
+        "epoch": 9
+      },
+      "maintenance": {
+        "state": "SUCCEEDED",
+        "operation_id": "op_c3e5d95f952a4f98ab9acf1d809fda78",
+        "stage": "verify",
+        "attempt": 1
+      },
+      "runtime_status": "AVAILABLE",
+      "schedulable": true,
+      "blocking": [],
+      "equipment": [
+        {
+          "key": "opencode",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "worker_agent",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "model",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "mcp",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "skills",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "git",
+          "deployed": true,
+          "verified": true
+        }
+      ]
+    },
+    "units": {
+      "opencode": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "34418"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "31208"
+      }
+    },
+    "hashes": {
+      "gateway_token_hash": "89260eeb73b183cb",
+      "mcp_token_hash": "78cf1dd18a75c714",
+      "worker_token_hash": "e546a26aba2e8b00",
+      "git_token_hash": "2cc387232925286e",
+      "git_token_file_present": true,
+      "config_sha256": "1141d85ecb52d5af",
+      "config_bytes": 736,
+      "env_keys": [
+        "GIT_ASKPASS",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_TERMINAL_PROMPT",
+        "NEXUS_MCP_RESOURCE_URL",
+        "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+        "NEXUS_REMOTE_GATEWAY_URL",
+        "NEXUS_WORKER_ENVIRONMENT_ID",
+        "NEXUS_WORKER_GATEWAY_URL",
+        "NEXUS_WORKER_INSTANCE_ID",
+        "NEXUS_WORKER_OPENCODE_BIN",
+        "NEXUS_WORKER_OPENCODE_UNIT",
+        "NEXUS_WORKER_OPENCODE_URL",
+        "NEXUS_WORKER_TOKEN",
+        "NEXUS_WORKER_WORKSPACE_ROOT",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR"
+      ]
+    }
+  },
+  "checks": {
+    "formal_restart_from_stopped": true,
+    "sigkill_systemd_recovery": true,
+    "persistent_stop_observed": true,
+    "formal_restart_after_stop": true,
+    "worker_online": true,
+    "six_equipment_verified": true,
+    "tokens_unchanged": true
+  },
+  "status": "PASS"
+}

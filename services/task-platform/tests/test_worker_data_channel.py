@@ -345,6 +345,7 @@ def _direct_switch_result() -> dict[str, object]:
         "gateway_url": settings.remote_gateway_local_url + "/",
         "mcp_url": settings.mcp_resource_server_url + "/",
         "reloaded": True,
+        "verified": True,
     }
 
 

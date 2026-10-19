@@ -1,0 +1,26 @@
+{
+  "run_id": "restart-api-8dcea7ee1eeb",
+  "old_api": {
+    "pid": 27395,
+    "create_time": 1792417829.62248,
+    "cwd": "/Users/niuniu/程序/Astra-worktrees/nexus-v1.4.5-workers/services/task-platform"
+  },
+  "new_api": {
+    "pid": 28820,
+    "create_time": 1792418347.78846,
+    "pgid": 28820,
+    "cwd": "/Users/niuniu/程序/Astra-worktrees/nexus-v1.4.5-workers/services/task-platform",
+    "listener_owned": true
+  },
+  "health": {
+    "ok": true,
+    "status": 200,
+    "body": "{\"status\":\"ok\",\"time\":\"2026-10-19T13:59:08.351686+00:00\"}"
+  },
+  "stop": {
+    "name": "api",
+    "pid": 27395,
+    "stopped": true,
+    "reason": "SIGTERM group (zombie counts as stopped)"
+  }
+}

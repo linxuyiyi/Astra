@@ -78,6 +78,11 @@ _ENV_ALLOW = (
     "NEXUS_WORKER_OPENCODE_URL",
     "NEXUS_WORKER_WORKSPACE_ROOT",
     "NEXUS_WORKER_OPENCODE_UNIT",
+    "GIT_ASKPASS",
+    "GIT_TERMINAL_PROMPT",
+    "GIT_CONFIG_COUNT",
+    "GIT_CONFIG_KEY_0",
+    "GIT_CONFIG_VALUE_0",
 )
 
 
@@ -235,6 +240,11 @@ def _matches_repository(desired: dict[str, Any], observation: dict[str, Any]) ->
     want_branch = _text(repository.get("target_branch"))
     actual_branch = _text(section.get("branch"))
     commit = _text(section.get("commit"))
+    if (
+        repository.get("authentication") == "token"
+        and section.get("authentication_verified") is not True
+    ):
+        return False
     return bool(
         want_url
         and want_branch
@@ -756,6 +766,7 @@ def _skills_row(
     skills = desired.get("skills") if isinstance(desired.get("skills"), dict) else {}
     items = [item for item in skills.get("items") or [] if isinstance(item, dict)]
     want = _text(skills.get("revision"))
+    want_content = _text(skills.get("content_revision")) or want
     section = _section(observation, "skills")
     status = _status(section)
     missing = [str(name) for name in section.get("missing") or [] if name]
@@ -763,6 +774,19 @@ def _skills_row(
         discovered = {str(name) for name in section.get("discovered") or [] if name}
         missing = [str(item.get("name")) for item in items if item.get("name") not in discovered]
     content_hashes = section.get("content_hashes")
+    actual_content_revision = ""
+    managed_names = sorted({_text(item.get("name")) for item in items if _text(item.get("name"))})
+    if isinstance(content_hashes, dict) and managed_names:
+        managed_hashes = {
+            name: _text(content_hashes.get(name)) for name in managed_names
+        }
+        if all(managed_hashes.values()):
+            actual_content_revision = _skills_content_revision(
+                [
+                    {"name": name, "content_hash": managed_hashes[name]}
+                    for name in managed_names
+                ]
+            )
     problems: list[str] = []
     unknown: list[str] = []
     if status == HEALTHY and not missing:
@@ -811,8 +835,8 @@ def _skills_row(
         configured=bool(items),
         deployed=deployed,
         verified=verified,
-        desired_revision=want or None,
-        actual_revision=deployed_revision or None,
+        desired_revision=want_content or None,
+        actual_revision=actual_content_revision or None,
         diff=diff,
         error=_text(section.get("error")) or None,
         detail=(
@@ -1043,6 +1067,8 @@ def _sanitize_url(value: Any) -> str:
         return re.sub(r"^[^/@\s]+@", "", text.split("?", 1)[0].split("#", 1)[0])
     try:
         parts = urlsplit(text)
+        if parts.scheme == "file":
+            return urlunsplit(("file", "", parts.path, "", ""))
         host = parts.hostname or ""
         if not host:
             return ""

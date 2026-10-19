@@ -1,0 +1,2036 @@
+{
+  "run_id": "d2f784e586b14cf5884008a3d50a03e1",
+  "started_at": "2026-10-19T13:51:03.609592+00:00",
+  "worker_id": "worker-a",
+  "environment_id": 1,
+  "preflight_health": {
+    "connection": {
+      "channel": "worker",
+      "state": "online",
+      "last_heartbeat_at": "2026-10-19T13:50:58.836240+00:00",
+      "epoch": 25
+    },
+    "maintenance": {
+      "state": "SUCCEEDED",
+      "operation_id": "op_aee0e6c836424bde8931e612d35503ba",
+      "stage": "verify",
+      "attempt": 1
+    },
+    "runtime_health": {
+      "status": "AVAILABLE",
+      "last_checked_at": "2026-10-19T13:51:00.142774+00:00",
+      "capability": {
+        "desired_revision": "1f1a427f8c1d9eaa",
+        "checked_at": "2026-10-19T13:51:00.142774+00:00",
+        "runtime_status": "applied",
+        "error": "",
+        "applied_revision": "1f1a427f8c1d9eaa"
+      },
+      "equipment": [
+        {
+          "key": "opencode",
+          "label": "OpenCode",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "desired_revision": "1.18.35",
+          "actual_revision": "1.18.35",
+          "diff": [],
+          "error": null,
+          "detail": "OpenCode 1.18.35"
+        },
+        {
+          "key": "worker_agent",
+          "label": "Worker Agent",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "desired_revision": "1.4.5",
+          "actual_revision": "1.4.5",
+          "diff": [],
+          "error": null,
+          "detail": "Worker Agent 1.4.5"
+        },
+        {
+          "key": "model",
+          "label": "模型",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "desired_revision": "nexus-gateway/qa-model",
+          "actual_revision": "nexus-gateway/qa-model",
+          "diff": [],
+          "error": null,
+          "detail": "实际模型 nexus-gateway/qa-model"
+        },
+        {
+          "key": "mcp",
+          "label": "MCP",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "desired_revision": "bee4a46a3d606b6d",
+          "actual_revision": "bee4a46a3d606b6d",
+          "diff": [],
+          "error": null,
+          "detail": "已连接：nexus-library"
+        },
+        {
+          "key": "skills",
+          "label": "Skill",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "desired_revision": "2be29b84c89b6f90",
+          "actual_revision": "513655002ffce5a7",
+          "diff": [],
+          "error": null,
+          "detail": "发现 nexus-v145-qa-skill"
+        },
+        {
+          "key": "git",
+          "label": "Git 仓库",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "desired_revision": "1b48b92e8e44b82e",
+          "actual_revision": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "diff": [],
+          "error": null,
+          "detail": "main@4f7ad4b565d0"
+        }
+      ]
+    },
+    "repository": {
+      "id": "924842e6c92a46ed99e37391688c4852",
+      "url": "file:///srv/nexus-v145-qa/source.git",
+      "target_branch": "main",
+      "branch": "main",
+      "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+      "dirty": false,
+      "authentication": "token",
+      "error": null
+    },
+    "schedulable": true,
+    "blocking": []
+  },
+  "first_submit": {
+    "status": 202,
+    "json": {
+      "id": "op_68cf9f750b82426d96f509a483833edc",
+      "environment_id": 1,
+      "action": "deploy",
+      "state": "QUEUED",
+      "stage": "queued",
+      "attempt": 1,
+      "requested_by": "v145-qa-final",
+      "requested_at": "2026-10-19T13:51:03.641823+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "lease_owner": null,
+      "lease_until": null,
+      "cancel_requested": false,
+      "danger_dispatched": false,
+      "reconcile_required": false,
+      "reconcile_only": false,
+      "execution_channel": "ssh",
+      "execution_reason": "安装系统依赖与 per-environment 运行时需要 SSH 管理通道",
+      "retry_of_attempt": null,
+      "target_revision": {
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "branch": "main",
+        "repository_commit": null,
+        "skills": [
+          "nexus-v145-qa-skill"
+        ],
+        "mcp": [],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "before_snapshot": {
+        "environment_id": 1,
+        "mode": "LINUX_REMOTE",
+        "name": "QA Worker A Linux",
+        "host": "127.0.0.1",
+        "port": 56060,
+        "username": "root",
+        "has_ssh_password": true,
+        "opencode_server_port": 44135,
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "model_name": "nexus-gateway/qa-model",
+        "workspace_root": "/root/nexus-v145/worker-a",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "labels": [
+          "qa",
+          "v145",
+          "linux"
+        ],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "after_snapshot": {},
+      "error_code": null,
+      "error_message": null
+    }
+  },
+  "first_deploy": {
+    "operation": {
+      "id": "op_68cf9f750b82426d96f509a483833edc",
+      "state": "SUCCEEDED",
+      "stage": "verify",
+      "attempt": 1,
+      "target_revision": {
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "branch": "main",
+        "repository_commit": null,
+        "skills": [
+          "nexus-v145-qa-skill"
+        ],
+        "mcp": [],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "before_snapshot": {
+        "environment_id": 1,
+        "mode": "LINUX_REMOTE",
+        "name": "QA Worker A Linux",
+        "host": "127.0.0.1",
+        "port": 56060,
+        "username": "root",
+        "has_ssh_password": true,
+        "opencode_server_port": 44135,
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "model_name": "nexus-gateway/qa-model",
+        "workspace_root": "/root/nexus-v145/worker-a",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "labels": [
+          "qa",
+          "v145",
+          "linux"
+        ],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "after_snapshot": {
+        "checks": [
+          {
+            "name": "SSH 连接与执行检查",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "部署配置",
+            "state": "passed",
+            "passed": true,
+            "detail": "已准备员工专属中转、数字图书馆与安全连接"
+          },
+          {
+            "name": "运行状态检查",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "系统依赖",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "Node.js 与 npm",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "Git 工作树",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "OpenCode 安装",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "写入前状态检查",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "工程目录",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "全局 OpenCode 配置",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "模型中转连接",
+            "state": "passed",
+            "passed": true,
+            "detail": "模型中转认证与模型路由正常"
+          },
+          {
+            "name": "安装 Worker Agent",
+            "state": "passed",
+            "passed": true,
+            "detail": "wrk_d571a4facaebfea7add456d0124728c9"
+          },
+          {
+            "name": "图书馆 MCP",
+            "state": "passed",
+            "passed": true,
+            "detail": "数字图书馆已连接"
+          },
+          {
+            "name": "切换到 Worker",
+            "state": "passed",
+            "passed": true,
+            "detail": "生效配置与内网地址一致"
+          }
+        ],
+        "changed": {
+          "runtime": false,
+          "configuration": false,
+          "skills": false,
+          "repository": false
+        },
+        "equipment": [
+          {
+            "key": "opencode",
+            "label": "OpenCode",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1.18.35",
+            "actual_revision": "1.18.35",
+            "diff": [],
+            "error": null,
+            "detail": "OpenCode 1.18.35"
+          },
+          {
+            "key": "worker_agent",
+            "label": "Worker Agent",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1.4.5",
+            "actual_revision": "1.4.5",
+            "diff": [],
+            "error": null,
+            "detail": "Worker Agent 1.4.5"
+          },
+          {
+            "key": "model",
+            "label": "模型",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "nexus-gateway/qa-model",
+            "actual_revision": "nexus-gateway/qa-model",
+            "diff": [],
+            "error": null,
+            "detail": "实际模型 nexus-gateway/qa-model"
+          },
+          {
+            "key": "mcp",
+            "label": "MCP",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "bee4a46a3d606b6d",
+            "actual_revision": "bee4a46a3d606b6d",
+            "diff": [],
+            "error": null,
+            "detail": "已连接：nexus-library"
+          },
+          {
+            "key": "skills",
+            "label": "Skill",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "2be29b84c89b6f90",
+            "actual_revision": "513655002ffce5a7",
+            "diff": [],
+            "error": null,
+            "detail": "发现 nexus-v145-qa-skill"
+          },
+          {
+            "key": "git",
+            "label": "Git 仓库",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1b48b92e8e44b82e",
+            "actual_revision": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+            "diff": [],
+            "error": null,
+            "detail": "main@4f7ad4b565d0"
+          }
+        ],
+        "message": "",
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "repository": {
+          "url": "file:///srv/nexus-v145-qa/source.git",
+          "branch": "main",
+          "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "dirty": false,
+          "remote_commit": null
+        }
+      },
+      "error_code": null,
+      "error_message": null,
+      "lease_owner": null,
+      "lease_until": null
+    },
+    "worker_instance_id": "wrk_d571a4facaebfea7add456d0124728c9",
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T13:51:38.845145+00:00",
+        "epoch": 25
+      },
+      "maintenance": {
+        "state": "SUCCEEDED",
+        "operation_id": "op_68cf9f750b82426d96f509a483833edc",
+        "stage": "verify",
+        "attempt": 1
+      },
+      "runtime_health": {
+        "status": "AVAILABLE",
+        "last_checked_at": "2026-10-19T13:51:30.191230+00:00",
+        "capability": {
+          "desired_revision": "1f1a427f8c1d9eaa",
+          "checked_at": "2026-10-19T13:51:30.191230+00:00",
+          "runtime_status": "applied",
+          "error": "",
+          "applied_revision": "1f1a427f8c1d9eaa"
+        },
+        "equipment": [
+          {
+            "key": "opencode",
+            "label": "OpenCode",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1.18.35",
+            "actual_revision": "1.18.35",
+            "diff": [],
+            "error": null,
+            "detail": "OpenCode 1.18.35"
+          },
+          {
+            "key": "worker_agent",
+            "label": "Worker Agent",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1.4.5",
+            "actual_revision": "1.4.5",
+            "diff": [],
+            "error": null,
+            "detail": "Worker Agent 1.4.5"
+          },
+          {
+            "key": "model",
+            "label": "模型",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "nexus-gateway/qa-model",
+            "actual_revision": "nexus-gateway/qa-model",
+            "diff": [],
+            "error": null,
+            "detail": "实际模型 nexus-gateway/qa-model"
+          },
+          {
+            "key": "mcp",
+            "label": "MCP",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "bee4a46a3d606b6d",
+            "actual_revision": "bee4a46a3d606b6d",
+            "diff": [],
+            "error": null,
+            "detail": "已连接：nexus-library"
+          },
+          {
+            "key": "skills",
+            "label": "Skill",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "2be29b84c89b6f90",
+            "actual_revision": "513655002ffce5a7",
+            "diff": [],
+            "error": null,
+            "detail": "发现 nexus-v145-qa-skill"
+          },
+          {
+            "key": "git",
+            "label": "Git 仓库",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1b48b92e8e44b82e",
+            "actual_revision": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+            "diff": [],
+            "error": null,
+            "detail": "main@4f7ad4b565d0"
+          }
+        ]
+      },
+      "repository": {
+        "id": "924842e6c92a46ed99e37391688c4852",
+        "url": "file:///srv/nexus-v145-qa/source.git",
+        "target_branch": "main",
+        "branch": "main",
+        "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+        "dirty": false,
+        "authentication": "token",
+        "error": null
+      },
+      "schedulable": true,
+      "blocking": []
+    },
+    "equipment": {
+      "ok": true,
+      "count": 6,
+      "configured": 6,
+      "items": [
+        {
+          "key": "opencode",
+          "label": "OpenCode",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "worker_agent",
+          "label": "Worker Agent",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "model",
+          "label": "模型",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "mcp",
+          "label": "MCP",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "skills",
+          "label": "Skill",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "git",
+          "label": "Git 仓库",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        }
+      ],
+      "runtime_status": "AVAILABLE",
+      "capability": {
+        "desired_revision": "1f1a427f8c1d9eaa",
+        "checked_at": "2026-10-19T13:51:30.191230+00:00",
+        "runtime_status": "applied",
+        "error": "",
+        "applied_revision": "1f1a427f8c1d9eaa"
+      }
+    },
+    "stable": {
+      "ok": true,
+      "first": {
+        "connection": {
+          "channel": "worker",
+          "state": "online",
+          "last_heartbeat_at": "2026-10-19T13:50:58.836240+00:00",
+          "epoch": 25
+        },
+        "maintenance": {
+          "state": "SUCCEEDED",
+          "operation_id": "op_68cf9f750b82426d96f509a483833edc",
+          "stage": "verify",
+          "attempt": 1
+        },
+        "runtime_health": {
+          "status": "AVAILABLE",
+          "last_checked_at": "2026-10-19T13:51:13.351021+00:00",
+          "capability": {
+            "desired_revision": "1f1a427f8c1d9eaa",
+            "checked_at": "2026-10-19T13:51:13.351021+00:00",
+            "runtime_status": "applied",
+            "error": "",
+            "applied_revision": "1f1a427f8c1d9eaa"
+          },
+          "equipment": [
+            {
+              "key": "opencode",
+              "label": "OpenCode",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1.18.35",
+              "actual_revision": "1.18.35",
+              "diff": [],
+              "error": null,
+              "detail": "OpenCode 1.18.35"
+            },
+            {
+              "key": "worker_agent",
+              "label": "Worker Agent",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1.4.5",
+              "actual_revision": "1.4.5",
+              "diff": [],
+              "error": null,
+              "detail": "Worker Agent 1.4.5"
+            },
+            {
+              "key": "model",
+              "label": "模型",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "nexus-gateway/qa-model",
+              "actual_revision": "nexus-gateway/qa-model",
+              "diff": [],
+              "error": null,
+              "detail": "实际模型 nexus-gateway/qa-model"
+            },
+            {
+              "key": "mcp",
+              "label": "MCP",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "bee4a46a3d606b6d",
+              "actual_revision": "bee4a46a3d606b6d",
+              "diff": [],
+              "error": null,
+              "detail": "已连接：nexus-library"
+            },
+            {
+              "key": "skills",
+              "label": "Skill",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "2be29b84c89b6f90",
+              "actual_revision": "513655002ffce5a7",
+              "diff": [],
+              "error": null,
+              "detail": "发现 nexus-v145-qa-skill"
+            },
+            {
+              "key": "git",
+              "label": "Git 仓库",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1b48b92e8e44b82e",
+              "actual_revision": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+              "diff": [],
+              "error": null,
+              "detail": "main@4f7ad4b565d0"
+            }
+          ]
+        },
+        "repository": {
+          "id": "924842e6c92a46ed99e37391688c4852",
+          "url": "file:///srv/nexus-v145-qa/source.git",
+          "target_branch": "main",
+          "branch": "main",
+          "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "dirty": false,
+          "authentication": "token",
+          "error": null
+        },
+        "schedulable": true,
+        "blocking": []
+      },
+      "after_observer": {
+        "connection": {
+          "channel": "worker",
+          "state": "online",
+          "last_heartbeat_at": "2026-10-19T13:51:38.845145+00:00",
+          "epoch": 25
+        },
+        "maintenance": {
+          "state": "SUCCEEDED",
+          "operation_id": "op_68cf9f750b82426d96f509a483833edc",
+          "stage": "verify",
+          "attempt": 1
+        },
+        "runtime_health": {
+          "status": "AVAILABLE",
+          "last_checked_at": "2026-10-19T13:51:30.191230+00:00",
+          "capability": {
+            "desired_revision": "1f1a427f8c1d9eaa",
+            "checked_at": "2026-10-19T13:51:30.191230+00:00",
+            "runtime_status": "applied",
+            "error": "",
+            "applied_revision": "1f1a427f8c1d9eaa"
+          },
+          "equipment": [
+            {
+              "key": "opencode",
+              "label": "OpenCode",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1.18.35",
+              "actual_revision": "1.18.35",
+              "diff": [],
+              "error": null,
+              "detail": "OpenCode 1.18.35"
+            },
+            {
+              "key": "worker_agent",
+              "label": "Worker Agent",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1.4.5",
+              "actual_revision": "1.4.5",
+              "diff": [],
+              "error": null,
+              "detail": "Worker Agent 1.4.5"
+            },
+            {
+              "key": "model",
+              "label": "模型",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "nexus-gateway/qa-model",
+              "actual_revision": "nexus-gateway/qa-model",
+              "diff": [],
+              "error": null,
+              "detail": "实际模型 nexus-gateway/qa-model"
+            },
+            {
+              "key": "mcp",
+              "label": "MCP",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "bee4a46a3d606b6d",
+              "actual_revision": "bee4a46a3d606b6d",
+              "diff": [],
+              "error": null,
+              "detail": "已连接：nexus-library"
+            },
+            {
+              "key": "skills",
+              "label": "Skill",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "2be29b84c89b6f90",
+              "actual_revision": "513655002ffce5a7",
+              "diff": [],
+              "error": null,
+              "detail": "发现 nexus-v145-qa-skill"
+            },
+            {
+              "key": "git",
+              "label": "Git 仓库",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1b48b92e8e44b82e",
+              "actual_revision": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+              "diff": [],
+              "error": null,
+              "detail": "main@4f7ad4b565d0"
+            }
+          ]
+        },
+        "repository": {
+          "id": "924842e6c92a46ed99e37391688c4852",
+          "url": "file:///srv/nexus-v145-qa/source.git",
+          "target_branch": "main",
+          "branch": "main",
+          "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "dirty": false,
+          "authentication": "token",
+          "error": null
+        },
+        "schedulable": true,
+        "blocking": []
+      },
+      "equipment": {
+        "ok": true,
+        "count": 6,
+        "configured": 6,
+        "items": [
+          {
+            "key": "opencode",
+            "label": "OpenCode",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "worker_agent",
+            "label": "Worker Agent",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "model",
+            "label": "模型",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "mcp",
+            "label": "MCP",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "skills",
+            "label": "Skill",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "git",
+            "label": "Git 仓库",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          }
+        ],
+        "runtime_status": "AVAILABLE",
+        "capability": {
+          "desired_revision": "1f1a427f8c1d9eaa",
+          "checked_at": "2026-10-19T13:51:30.191230+00:00",
+          "runtime_status": "applied",
+          "error": "",
+          "applied_revision": "1f1a427f8c1d9eaa"
+        }
+      }
+    },
+    "remote": {
+      "hashes": {
+        "gateway_token_hash": "89260eeb73b183cb",
+        "mcp_token_hash": "78cf1dd18a75c714",
+        "worker_token_hash": "e546a26aba2e8b00",
+        "git_token_hash": "2cc387232925286e",
+        "git_token_file_present": true,
+        "config_sha256": "1141d85ecb52d5af",
+        "config_bytes": 736,
+        "env_keys": [
+          "GIT_ASKPASS",
+          "GIT_CONFIG_COUNT",
+          "GIT_CONFIG_KEY_0",
+          "GIT_CONFIG_VALUE_0",
+          "GIT_TERMINAL_PROMPT",
+          "NEXUS_MCP_RESOURCE_URL",
+          "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+          "NEXUS_REMOTE_GATEWAY_URL",
+          "NEXUS_WORKER_ENVIRONMENT_ID",
+          "NEXUS_WORKER_GATEWAY_URL",
+          "NEXUS_WORKER_INSTANCE_ID",
+          "NEXUS_WORKER_OPENCODE_BIN",
+          "NEXUS_WORKER_OPENCODE_UNIT",
+          "NEXUS_WORKER_OPENCODE_URL",
+          "NEXUS_WORKER_TOKEN",
+          "NEXUS_WORKER_WORKSPACE_ROOT",
+          "OPENCODE_CONFIG",
+          "OPENCODE_CONFIG_DIR"
+        ]
+      },
+      "unit_hash": "1fd19f1e85b0989a",
+      "workingtree_hash": "9f4f4d053e1c14e1",
+      "units": {
+        "opencode": {
+          "active": "active",
+          "enabled": "enabled",
+          "main_pid": "40203"
+        },
+        "worker": {
+          "active": "active",
+          "enabled": "enabled",
+          "main_pid": "40204"
+        }
+      },
+      "listener": {
+        "port": 44135,
+        "addresses": [
+          "127.0.0.1:44135"
+        ],
+        "loopback_only": true
+      },
+      "installer_processes": [],
+      "installer_lock": {
+        "free": true,
+        "raw": "rc=0"
+      },
+      "evidence": {
+        "worker_id": "worker-a",
+        "environment_id": 1,
+        "workspace": "/root/nexus-v145/worker-a",
+        "port": 44135,
+        "units": {
+          "opencode": {
+            "active": "active",
+            "enabled": "enabled"
+          },
+          "worker": {
+            "active": "active",
+            "enabled": "enabled"
+          }
+        },
+        "listener": {
+          "port": 44135,
+          "addresses": [
+            "127.0.0.1:44135"
+          ],
+          "loopback_only": true
+        },
+        "config": {
+          "path": "/etc/nexus/opencode/1/opencode.jsonc",
+          "model": "nexus-gateway/qa-model",
+          "providers": [
+            "nexus-gateway"
+          ],
+          "provider_has_api_key": true,
+          "mcp_names": [
+            "nexus-library"
+          ],
+          "mcp_auth_header_present": true
+        },
+        "skill_file": "present",
+        "opencode_skill_probe": {
+          "ok": false,
+          "error": "non-json /skill response"
+        },
+        "opencode_mcp_probe": {
+          "ok": true,
+          "status": "connected"
+        },
+        "worker_env": {
+          "path": "/etc/nexus/worker-1.env",
+          "keys": [
+            "NEXUS_WORKER_TOKEN",
+            "NEXUS_WORKER_GATEWAY_URL",
+            "NEXUS_WORKER_INSTANCE_ID",
+            "NEXUS_WORKER_ENVIRONMENT_ID",
+            "NEXUS_REMOTE_GATEWAY_URL",
+            "NEXUS_MCP_RESOURCE_URL",
+            "NEXUS_WORKER_OPENCODE_URL",
+            "NEXUS_WORKER_OPENCODE_UNIT",
+            "NEXUS_WORKER_OPENCODE_BIN",
+            "OPENCODE_CONFIG",
+            "OPENCODE_CONFIG_DIR",
+            "NEXUS_WORKER_WORKSPACE_ROOT",
+            "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+            "GIT_ASKPASS",
+            "GIT_TERMINAL_PROMPT",
+            "GIT_CONFIG_COUNT",
+            "GIT_CONFIG_KEY_0",
+            "GIT_CONFIG_VALUE_0"
+          ],
+          "astra_worker_prefix": false,
+          "nexus_worker_prefix": true,
+          "values": "not read into the report"
+        },
+        "git": {
+          "head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "branch": "main",
+          "origin": "file:///srv/nexus-v145-qa/source.git",
+          "dirty": false,
+          "expected_head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "expected_origin": "file:///srv/nexus-v145-qa/source.git",
+          "clone_matches_fixture": true
+        },
+        "git_update_note": "This proves a real clone from the VM-local bare fixture. The maintenance action `update` is not exposed yet, so fetch/pull is PENDING_IMPLEMENTATION."
+      }
+    }
+  },
+  "second_submit": {
+    "status": 202,
+    "json": {
+      "id": "op_cd7be305d87c4c1d97c5e4debe1db4a9",
+      "environment_id": 1,
+      "action": "deploy",
+      "state": "QUEUED",
+      "stage": "queued",
+      "attempt": 1,
+      "requested_by": "v145-qa-final-repeat",
+      "requested_at": "2026-10-19T13:51:49.924900+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "lease_owner": null,
+      "lease_until": null,
+      "cancel_requested": false,
+      "danger_dispatched": false,
+      "reconcile_required": false,
+      "reconcile_only": false,
+      "execution_channel": "ssh",
+      "execution_reason": "安装系统依赖与 per-environment 运行时需要 SSH 管理通道",
+      "retry_of_attempt": null,
+      "target_revision": {
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "branch": "main",
+        "repository_commit": null,
+        "skills": [
+          "nexus-v145-qa-skill"
+        ],
+        "mcp": [],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "before_snapshot": {
+        "environment_id": 1,
+        "mode": "LINUX_REMOTE",
+        "name": "QA Worker A Linux",
+        "host": "127.0.0.1",
+        "port": 56060,
+        "username": "root",
+        "has_ssh_password": true,
+        "opencode_server_port": 44135,
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "model_name": "nexus-gateway/qa-model",
+        "workspace_root": "/root/nexus-v145/worker-a",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "labels": [
+          "qa",
+          "v145",
+          "linux"
+        ],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "after_snapshot": {},
+      "error_code": null,
+      "error_message": null
+    }
+  },
+  "second_deploy": {
+    "operation": {
+      "id": "op_cd7be305d87c4c1d97c5e4debe1db4a9",
+      "state": "SUCCEEDED",
+      "stage": "verify",
+      "attempt": 1,
+      "target_revision": {
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "branch": "main",
+        "repository_commit": null,
+        "skills": [
+          "nexus-v145-qa-skill"
+        ],
+        "mcp": [],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "before_snapshot": {
+        "environment_id": 1,
+        "mode": "LINUX_REMOTE",
+        "name": "QA Worker A Linux",
+        "host": "127.0.0.1",
+        "port": 56060,
+        "username": "root",
+        "has_ssh_password": true,
+        "opencode_server_port": 44135,
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "model_name": "nexus-gateway/qa-model",
+        "workspace_root": "/root/nexus-v145/worker-a",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "labels": [
+          "qa",
+          "v145",
+          "linux"
+        ],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "after_snapshot": {
+        "checks": [
+          {
+            "name": "SSH 连接与执行检查",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "部署配置",
+            "state": "passed",
+            "passed": true,
+            "detail": "已准备员工专属中转、数字图书馆与安全连接"
+          },
+          {
+            "name": "运行状态检查",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "系统依赖",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "Node.js 与 npm",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "Git 工作树",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "OpenCode 安装",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "写入前状态检查",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "工程目录",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "全局 OpenCode 配置",
+            "state": "passed",
+            "passed": true,
+            "detail": ""
+          },
+          {
+            "name": "模型中转连接",
+            "state": "passed",
+            "passed": true,
+            "detail": "模型中转认证与模型路由正常"
+          },
+          {
+            "name": "安装 Worker Agent",
+            "state": "passed",
+            "passed": true,
+            "detail": "wrk_d571a4facaebfea7add456d0124728c9"
+          },
+          {
+            "name": "图书馆 MCP",
+            "state": "passed",
+            "passed": true,
+            "detail": "数字图书馆已连接"
+          },
+          {
+            "name": "切换到 Worker",
+            "state": "passed",
+            "passed": true,
+            "detail": "生效配置与内网地址一致"
+          }
+        ],
+        "changed": {
+          "runtime": false,
+          "configuration": false,
+          "skills": false,
+          "repository": false
+        },
+        "equipment": [
+          {
+            "key": "opencode",
+            "label": "OpenCode",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1.18.35",
+            "actual_revision": "1.18.35",
+            "diff": [],
+            "error": null,
+            "detail": "OpenCode 1.18.35"
+          },
+          {
+            "key": "worker_agent",
+            "label": "Worker Agent",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1.4.5",
+            "actual_revision": "1.4.5",
+            "diff": [],
+            "error": null,
+            "detail": "Worker Agent 1.4.5"
+          },
+          {
+            "key": "model",
+            "label": "模型",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "nexus-gateway/qa-model",
+            "actual_revision": "nexus-gateway/qa-model",
+            "diff": [],
+            "error": null,
+            "detail": "实际模型 nexus-gateway/qa-model"
+          },
+          {
+            "key": "mcp",
+            "label": "MCP",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "bee4a46a3d606b6d",
+            "actual_revision": "bee4a46a3d606b6d",
+            "diff": [],
+            "error": null,
+            "detail": "已连接：nexus-library"
+          },
+          {
+            "key": "skills",
+            "label": "Skill",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "2be29b84c89b6f90",
+            "actual_revision": "513655002ffce5a7",
+            "diff": [],
+            "error": null,
+            "detail": "发现 nexus-v145-qa-skill"
+          },
+          {
+            "key": "git",
+            "label": "Git 仓库",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1b48b92e8e44b82e",
+            "actual_revision": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+            "diff": [],
+            "error": null,
+            "detail": "main@4f7ad4b565d0"
+          }
+        ],
+        "message": "",
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "repository": {
+          "url": "file:///srv/nexus-v145-qa/source.git",
+          "branch": "main",
+          "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "dirty": false,
+          "remote_commit": null
+        }
+      },
+      "error_code": null,
+      "error_message": null,
+      "lease_owner": null,
+      "lease_until": null
+    },
+    "worker_instance_id": "wrk_d571a4facaebfea7add456d0124728c9",
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T13:52:18.856194+00:00",
+        "epoch": 25
+      },
+      "maintenance": {
+        "state": "SUCCEEDED",
+        "operation_id": "op_cd7be305d87c4c1d97c5e4debe1db4a9",
+        "stage": "verify",
+        "attempt": 1
+      },
+      "runtime_health": {
+        "status": "AVAILABLE",
+        "last_checked_at": "2026-10-19T13:52:30.307245+00:00",
+        "capability": {
+          "desired_revision": "1f1a427f8c1d9eaa",
+          "checked_at": "2026-10-19T13:52:30.307245+00:00",
+          "runtime_status": "applied",
+          "error": "",
+          "applied_revision": "1f1a427f8c1d9eaa"
+        },
+        "equipment": [
+          {
+            "key": "opencode",
+            "label": "OpenCode",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1.18.35",
+            "actual_revision": "1.18.35",
+            "diff": [],
+            "error": null,
+            "detail": "OpenCode 1.18.35"
+          },
+          {
+            "key": "worker_agent",
+            "label": "Worker Agent",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1.4.5",
+            "actual_revision": "1.4.5",
+            "diff": [],
+            "error": null,
+            "detail": "Worker Agent 1.4.5"
+          },
+          {
+            "key": "model",
+            "label": "模型",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "nexus-gateway/qa-model",
+            "actual_revision": "nexus-gateway/qa-model",
+            "diff": [],
+            "error": null,
+            "detail": "实际模型 nexus-gateway/qa-model"
+          },
+          {
+            "key": "mcp",
+            "label": "MCP",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "bee4a46a3d606b6d",
+            "actual_revision": "bee4a46a3d606b6d",
+            "diff": [],
+            "error": null,
+            "detail": "已连接：nexus-library"
+          },
+          {
+            "key": "skills",
+            "label": "Skill",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "2be29b84c89b6f90",
+            "actual_revision": "513655002ffce5a7",
+            "diff": [],
+            "error": null,
+            "detail": "发现 nexus-v145-qa-skill"
+          },
+          {
+            "key": "git",
+            "label": "Git 仓库",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "desired_revision": "1b48b92e8e44b82e",
+            "actual_revision": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+            "diff": [],
+            "error": null,
+            "detail": "main@4f7ad4b565d0"
+          }
+        ]
+      },
+      "repository": {
+        "id": "924842e6c92a46ed99e37391688c4852",
+        "url": "file:///srv/nexus-v145-qa/source.git",
+        "target_branch": "main",
+        "branch": "main",
+        "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+        "dirty": false,
+        "authentication": "token",
+        "error": null
+      },
+      "schedulable": true,
+      "blocking": []
+    },
+    "equipment": {
+      "ok": true,
+      "count": 6,
+      "configured": 6,
+      "items": [
+        {
+          "key": "opencode",
+          "label": "OpenCode",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "worker_agent",
+          "label": "Worker Agent",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "model",
+          "label": "模型",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "mcp",
+          "label": "MCP",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "skills",
+          "label": "Skill",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "git",
+          "label": "Git 仓库",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        }
+      ],
+      "runtime_status": "AVAILABLE",
+      "capability": {
+        "desired_revision": "1f1a427f8c1d9eaa",
+        "checked_at": "2026-10-19T13:52:30.307245+00:00",
+        "runtime_status": "applied",
+        "error": "",
+        "applied_revision": "1f1a427f8c1d9eaa"
+      }
+    },
+    "stable": {
+      "ok": true,
+      "first": {
+        "connection": {
+          "channel": "worker",
+          "state": "online",
+          "last_heartbeat_at": "2026-10-19T13:51:38.845145+00:00",
+          "epoch": 25
+        },
+        "maintenance": {
+          "state": "SUCCEEDED",
+          "operation_id": "op_cd7be305d87c4c1d97c5e4debe1db4a9",
+          "stage": "verify",
+          "attempt": 1
+        },
+        "runtime_health": {
+          "status": "AVAILABLE",
+          "last_checked_at": "2026-10-19T13:51:57.498356+00:00",
+          "capability": {
+            "desired_revision": "1f1a427f8c1d9eaa",
+            "checked_at": "2026-10-19T13:51:57.498356+00:00",
+            "runtime_status": "applied",
+            "error": "",
+            "applied_revision": "1f1a427f8c1d9eaa"
+          },
+          "equipment": [
+            {
+              "key": "opencode",
+              "label": "OpenCode",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1.18.35",
+              "actual_revision": "1.18.35",
+              "diff": [],
+              "error": null,
+              "detail": "OpenCode 1.18.35"
+            },
+            {
+              "key": "worker_agent",
+              "label": "Worker Agent",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1.4.5",
+              "actual_revision": "1.4.5",
+              "diff": [],
+              "error": null,
+              "detail": "Worker Agent 1.4.5"
+            },
+            {
+              "key": "model",
+              "label": "模型",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "nexus-gateway/qa-model",
+              "actual_revision": "nexus-gateway/qa-model",
+              "diff": [],
+              "error": null,
+              "detail": "实际模型 nexus-gateway/qa-model"
+            },
+            {
+              "key": "mcp",
+              "label": "MCP",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "bee4a46a3d606b6d",
+              "actual_revision": "bee4a46a3d606b6d",
+              "diff": [],
+              "error": null,
+              "detail": "已连接：nexus-library"
+            },
+            {
+              "key": "skills",
+              "label": "Skill",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "2be29b84c89b6f90",
+              "actual_revision": "513655002ffce5a7",
+              "diff": [],
+              "error": null,
+              "detail": "发现 nexus-v145-qa-skill"
+            },
+            {
+              "key": "git",
+              "label": "Git 仓库",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1b48b92e8e44b82e",
+              "actual_revision": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+              "diff": [],
+              "error": null,
+              "detail": "main@4f7ad4b565d0"
+            }
+          ]
+        },
+        "repository": {
+          "id": "924842e6c92a46ed99e37391688c4852",
+          "url": "file:///srv/nexus-v145-qa/source.git",
+          "target_branch": "main",
+          "branch": "main",
+          "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "dirty": false,
+          "authentication": "token",
+          "error": null
+        },
+        "schedulable": true,
+        "blocking": []
+      },
+      "after_observer": {
+        "connection": {
+          "channel": "worker",
+          "state": "online",
+          "last_heartbeat_at": "2026-10-19T13:52:18.856194+00:00",
+          "epoch": 25
+        },
+        "maintenance": {
+          "state": "SUCCEEDED",
+          "operation_id": "op_cd7be305d87c4c1d97c5e4debe1db4a9",
+          "stage": "verify",
+          "attempt": 1
+        },
+        "runtime_health": {
+          "status": "AVAILABLE",
+          "last_checked_at": "2026-10-19T13:52:30.307245+00:00",
+          "capability": {
+            "desired_revision": "1f1a427f8c1d9eaa",
+            "checked_at": "2026-10-19T13:52:30.307245+00:00",
+            "runtime_status": "applied",
+            "error": "",
+            "applied_revision": "1f1a427f8c1d9eaa"
+          },
+          "equipment": [
+            {
+              "key": "opencode",
+              "label": "OpenCode",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1.18.35",
+              "actual_revision": "1.18.35",
+              "diff": [],
+              "error": null,
+              "detail": "OpenCode 1.18.35"
+            },
+            {
+              "key": "worker_agent",
+              "label": "Worker Agent",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1.4.5",
+              "actual_revision": "1.4.5",
+              "diff": [],
+              "error": null,
+              "detail": "Worker Agent 1.4.5"
+            },
+            {
+              "key": "model",
+              "label": "模型",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "nexus-gateway/qa-model",
+              "actual_revision": "nexus-gateway/qa-model",
+              "diff": [],
+              "error": null,
+              "detail": "实际模型 nexus-gateway/qa-model"
+            },
+            {
+              "key": "mcp",
+              "label": "MCP",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "bee4a46a3d606b6d",
+              "actual_revision": "bee4a46a3d606b6d",
+              "diff": [],
+              "error": null,
+              "detail": "已连接：nexus-library"
+            },
+            {
+              "key": "skills",
+              "label": "Skill",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "2be29b84c89b6f90",
+              "actual_revision": "513655002ffce5a7",
+              "diff": [],
+              "error": null,
+              "detail": "发现 nexus-v145-qa-skill"
+            },
+            {
+              "key": "git",
+              "label": "Git 仓库",
+              "configured": true,
+              "deployed": true,
+              "verified": true,
+              "desired_revision": "1b48b92e8e44b82e",
+              "actual_revision": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+              "diff": [],
+              "error": null,
+              "detail": "main@4f7ad4b565d0"
+            }
+          ]
+        },
+        "repository": {
+          "id": "924842e6c92a46ed99e37391688c4852",
+          "url": "file:///srv/nexus-v145-qa/source.git",
+          "target_branch": "main",
+          "branch": "main",
+          "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "dirty": false,
+          "authentication": "token",
+          "error": null
+        },
+        "schedulable": true,
+        "blocking": []
+      },
+      "equipment": {
+        "ok": true,
+        "count": 6,
+        "configured": 6,
+        "items": [
+          {
+            "key": "opencode",
+            "label": "OpenCode",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "worker_agent",
+            "label": "Worker Agent",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "model",
+            "label": "模型",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "mcp",
+            "label": "MCP",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "skills",
+            "label": "Skill",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          },
+          {
+            "key": "git",
+            "label": "Git 仓库",
+            "configured": true,
+            "deployed": true,
+            "verified": true,
+            "diff": []
+          }
+        ],
+        "runtime_status": "AVAILABLE",
+        "capability": {
+          "desired_revision": "1f1a427f8c1d9eaa",
+          "checked_at": "2026-10-19T13:52:30.307245+00:00",
+          "runtime_status": "applied",
+          "error": "",
+          "applied_revision": "1f1a427f8c1d9eaa"
+        }
+      }
+    },
+    "remote": {
+      "hashes": {
+        "gateway_token_hash": "89260eeb73b183cb",
+        "mcp_token_hash": "78cf1dd18a75c714",
+        "worker_token_hash": "e546a26aba2e8b00",
+        "git_token_hash": "2cc387232925286e",
+        "git_token_file_present": true,
+        "config_sha256": "1141d85ecb52d5af",
+        "config_bytes": 736,
+        "env_keys": [
+          "GIT_ASKPASS",
+          "GIT_CONFIG_COUNT",
+          "GIT_CONFIG_KEY_0",
+          "GIT_CONFIG_VALUE_0",
+          "GIT_TERMINAL_PROMPT",
+          "NEXUS_MCP_RESOURCE_URL",
+          "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+          "NEXUS_REMOTE_GATEWAY_URL",
+          "NEXUS_WORKER_ENVIRONMENT_ID",
+          "NEXUS_WORKER_GATEWAY_URL",
+          "NEXUS_WORKER_INSTANCE_ID",
+          "NEXUS_WORKER_OPENCODE_BIN",
+          "NEXUS_WORKER_OPENCODE_UNIT",
+          "NEXUS_WORKER_OPENCODE_URL",
+          "NEXUS_WORKER_TOKEN",
+          "NEXUS_WORKER_WORKSPACE_ROOT",
+          "OPENCODE_CONFIG",
+          "OPENCODE_CONFIG_DIR"
+        ]
+      },
+      "unit_hash": "1fd19f1e85b0989a",
+      "workingtree_hash": "9f4f4d053e1c14e1",
+      "units": {
+        "opencode": {
+          "active": "active",
+          "enabled": "enabled",
+          "main_pid": "40203"
+        },
+        "worker": {
+          "active": "active",
+          "enabled": "enabled",
+          "main_pid": "40204"
+        }
+      },
+      "listener": {
+        "port": 44135,
+        "addresses": [
+          "127.0.0.1:44135"
+        ],
+        "loopback_only": true
+      },
+      "installer_processes": [],
+      "installer_lock": {
+        "free": true,
+        "raw": "rc=0"
+      },
+      "evidence": {
+        "worker_id": "worker-a",
+        "environment_id": 1,
+        "workspace": "/root/nexus-v145/worker-a",
+        "port": 44135,
+        "units": {
+          "opencode": {
+            "active": "active",
+            "enabled": "enabled"
+          },
+          "worker": {
+            "active": "active",
+            "enabled": "enabled"
+          }
+        },
+        "listener": {
+          "port": 44135,
+          "addresses": [
+            "127.0.0.1:44135"
+          ],
+          "loopback_only": true
+        },
+        "config": {
+          "path": "/etc/nexus/opencode/1/opencode.jsonc",
+          "model": "nexus-gateway/qa-model",
+          "providers": [
+            "nexus-gateway"
+          ],
+          "provider_has_api_key": true,
+          "mcp_names": [
+            "nexus-library"
+          ],
+          "mcp_auth_header_present": true
+        },
+        "skill_file": "present",
+        "opencode_skill_probe": {
+          "ok": false,
+          "error": "non-json /skill response"
+        },
+        "opencode_mcp_probe": {
+          "ok": true,
+          "status": "connected"
+        },
+        "worker_env": {
+          "path": "/etc/nexus/worker-1.env",
+          "keys": [
+            "NEXUS_WORKER_TOKEN",
+            "NEXUS_WORKER_GATEWAY_URL",
+            "NEXUS_WORKER_INSTANCE_ID",
+            "NEXUS_WORKER_ENVIRONMENT_ID",
+            "NEXUS_REMOTE_GATEWAY_URL",
+            "NEXUS_MCP_RESOURCE_URL",
+            "NEXUS_WORKER_OPENCODE_URL",
+            "NEXUS_WORKER_OPENCODE_UNIT",
+            "NEXUS_WORKER_OPENCODE_BIN",
+            "OPENCODE_CONFIG",
+            "OPENCODE_CONFIG_DIR",
+            "NEXUS_WORKER_WORKSPACE_ROOT",
+            "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+            "GIT_ASKPASS",
+            "GIT_TERMINAL_PROMPT",
+            "GIT_CONFIG_COUNT",
+            "GIT_CONFIG_KEY_0",
+            "GIT_CONFIG_VALUE_0"
+          ],
+          "astra_worker_prefix": false,
+          "nexus_worker_prefix": true,
+          "values": "not read into the report"
+        },
+        "git": {
+          "head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "branch": "main",
+          "origin": "file:///srv/nexus-v145-qa/source.git",
+          "dirty": false,
+          "expected_head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "expected_origin": "file:///srv/nexus-v145-qa/source.git",
+          "clone_matches_fixture": true
+        },
+        "git_update_note": "This proves a real clone from the VM-local bare fixture. The maintenance action `update` is not exposed yet, so fetch/pull is PENDING_IMPLEMENTATION."
+      }
+    }
+  },
+  "comparison": {
+    "first_state": "SUCCEEDED",
+    "second_state": "SUCCEEDED",
+    "second_error_code": null,
+    "second_error_message": null,
+    "gates_equal": true,
+    "token_hashes_equal": {
+      "gateway_token_hash": true,
+      "mcp_token_hash": true,
+      "worker_token_hash": true,
+      "git_token_hash": true
+    },
+    "config_hash_equal": true,
+    "unit_hash_equal": true,
+    "workingtree_hash_equal": true,
+    "unit_pids_first": {
+      "opencode": "40203",
+      "worker": "40204"
+    },
+    "unit_pids_second": {
+      "opencode": "40203",
+      "worker": "40204"
+    },
+    "unit_pids_equal": true,
+    "git_first": {
+      "head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+      "branch": "main",
+      "origin": "file:///srv/nexus-v145-qa/source.git",
+      "dirty": false,
+      "expected_head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+      "expected_origin": "file:///srv/nexus-v145-qa/source.git",
+      "clone_matches_fixture": true
+    },
+    "git_second": {
+      "head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+      "branch": "main",
+      "origin": "file:///srv/nexus-v145-qa/source.git",
+      "dirty": false,
+      "expected_head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+      "expected_origin": "file:///srv/nexus-v145-qa/source.git",
+      "clone_matches_fixture": true
+    },
+    "git_unchanged": true,
+    "equipment_first": [
+      [
+        "opencode",
+        true,
+        true,
+        []
+      ],
+      [
+        "worker_agent",
+        true,
+        true,
+        []
+      ],
+      [
+        "model",
+        true,
+        true,
+        []
+      ],
+      [
+        "mcp",
+        true,
+        true,
+        []
+      ],
+      [
+        "skills",
+        true,
+        true,
+        []
+      ],
+      [
+        "git",
+        true,
+        true,
+        []
+      ]
+    ],
+    "equipment_second": [
+      [
+        "opencode",
+        true,
+        true,
+        []
+      ],
+      [
+        "worker_agent",
+        true,
+        true,
+        []
+      ],
+      [
+        "model",
+        true,
+        true,
+        []
+      ],
+      [
+        "mcp",
+        true,
+        true,
+        []
+      ],
+      [
+        "skills",
+        true,
+        true,
+        []
+      ],
+      [
+        "git",
+        true,
+        true,
+        []
+      ]
+    ],
+    "changed_first": {
+      "runtime": false,
+      "configuration": false,
+      "skills": false,
+      "repository": false
+    },
+    "changed_second": {
+      "runtime": false,
+      "configuration": false,
+      "skills": false,
+      "repository": false
+    },
+    "health_operation_first": "op_68cf9f750b82426d96f509a483833edc",
+    "health_operation_second": "op_cd7be305d87c4c1d97c5e4debe1db4a9",
+    "latest_pointer_matches_first": true,
+    "latest_pointer_matches_second": true,
+    "tokens_config_git_unchanged": true
+  },
+  "secret_safety": {
+    "secret_count": 10,
+    "match_count": 0,
+    "match": 0,
+    "paths": [],
+    "findings": []
+  },
+  "status": "succeeded",
+  "reason": null,
+  "finished_at": "2026-10-19T13:52:34.112425+00:00"
+}

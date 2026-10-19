@@ -1,0 +1,51 @@
+{
+  "phase": "systemd-directory-mode-oneoff-repair",
+  "generated_at": "2026-10-19T13:57:04Z",
+  "host_alias": "nexus-v145-qa",
+  "target_path": "/etc/systemd/system",
+  "execution": {
+    "transport": "limactl shell --tty=false nexus-v145-qa",
+    "privilege": "sudo -n",
+    "change_scope": "chmod 0755 /etc/systemd/system"
+  },
+  "preconditions": {
+    "path_is_directory": true,
+    "path_is_symlink": false,
+    "owner_is_root": true,
+    "mode_is_exactly_700": true,
+    "satisfied": true
+  },
+  "before": {
+    "file_type": "directory",
+    "owner": "root",
+    "group": "root",
+    "mode": "700"
+  },
+  "after": {
+    "file_type": "directory",
+    "owner": "root",
+    "group": "root",
+    "mode": "755"
+  },
+  "owner_preserved": true,
+  "process_pids": {
+    "qa_opencode_main": {
+      "before": 40203,
+      "after": 40203,
+      "unchanged": true
+    },
+    "qa_worker_main": {
+      "before": 40204,
+      "after": 40204,
+      "unchanged": true
+    }
+  },
+  "untouched": {
+    "unit_contents": true,
+    "environment_or_secrets": true,
+    "service_restarts": true,
+    "process_or_network_permissions": true,
+    "other_hosts": true
+  },
+  "status": "passed"
+}

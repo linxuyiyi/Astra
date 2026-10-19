@@ -8,6 +8,7 @@ import pytest
 
 from app.worker_agent.channel_switch import apply_channel_switch, global_config_path
 from app.worker_agent.connection import AgentConfig, WorkerConnectionManager, handle_command
+from app.worker_agent.jsonc import loads_jsonc
 from app.worker_agent.supervisor import RuntimeSupervisor
 from app.worker_gateway.protocol import envelope
 
@@ -77,6 +78,7 @@ def test_switch_writes_direct_urls_and_returns_effective_override(tmp_path):
         "gateway_url": "http://127.0.0.1:19999",
         "mcp_url": "http://10.0.0.8:8201/mcp",
         "reloaded": True,
+        "verified": False,
     }
     assert reloads == [1]
     assert probed == ["http://10.0.0.8:8110", "http://10.0.0.8:8201/mcp"]
@@ -99,7 +101,7 @@ def test_switch_merges_existing_jsonc(tmp_path):
         },
         probe=lambda _url: True,
         reload=lambda: None,
-        read_effective=lambda: json.loads(jsonc.read_text(encoding="utf-8")),
+        read_effective=lambda: loads_jsonc(jsonc.read_text(encoding="utf-8")),
     )
     stored = json.loads(jsonc.read_text(encoding="utf-8"))
     assert stored["provider"]["nexus-gateway"]["options"]["baseURL"] == "http://10.0.0.8:8110"
@@ -144,6 +146,7 @@ def test_switch_command_ignores_payload_urls(monkeypatch):
             "gateway_url": "http://10.0.0.8:8110",
             "mcp_url": "http://10.0.0.8:8201/mcp",
             "reloaded": True,
+            "verified": True,
         }
 
     monkeypatch.setattr("app.worker_agent.channel_switch.apply_channel_switch", fake_apply)
@@ -204,3 +207,120 @@ def test_disconnect_does_not_reload(monkeypatch):
     asyncio.run(scenario())
     assert calls == []
     assert supervisor.restart_count == 0
+
+
+def test_switch_same_config_already_effective_does_not_write_or_reload(tmp_path, monkeypatch):
+    desired_gateway = "http://10.0.0.8:8110"
+    desired_mcp = "http://10.0.0.8:8201/mcp"
+    path = tmp_path / "opencode.json"
+    _config(path, gateway=desired_gateway, mcp=desired_mcp)
+    before = path.stat().st_mtime_ns
+    reloads: list[int] = []
+
+    def fail_native(*_args, **_kwargs):
+        raise AssertionError("already-effective switch must not inspect/restart native")
+
+    monkeypatch.setattr("app.worker_agent.channel_switch.assert_native_idle", fail_native)
+    result = apply_channel_switch(
+        workspace=str(tmp_path),
+        port=4096,
+        config_path=path,
+        environ={
+            "NEXUS_REMOTE_GATEWAY_URL": desired_gateway,
+            "NEXUS_MCP_RESOURCE_URL": desired_mcp,
+        },
+        probe=lambda _url: True,
+        reload=lambda: reloads.append(1),
+        read_effective=lambda: json.loads(path.read_text(encoding="utf-8")),
+    )
+    assert path.stat().st_mtime_ns == before
+    assert reloads == []
+    assert result["reloaded"] is False
+    assert result["verified"] is True
+
+
+def test_switch_file_matches_but_running_config_is_old_reloads(tmp_path):
+    desired_gateway = "http://10.0.0.8:8110"
+    desired_mcp = "http://10.0.0.8:8201/mcp"
+    path = tmp_path / "opencode.json"
+    _config(path, gateway=desired_gateway, mcp=desired_mcp)
+    old = json.loads(path.read_text(encoding="utf-8"))
+    old["provider"]["nexus-gateway"]["options"]["baseURL"] = "http://127.0.0.1:19998"
+    calls = {"read": 0, "reload": 0}
+
+    def read_effective():
+        calls["read"] += 1
+        return old if calls["read"] == 1 else json.loads(path.read_text(encoding="utf-8"))
+
+    def reload():
+        calls["reload"] += 1
+
+    result = apply_channel_switch(
+        workspace=str(tmp_path),
+        port=4096,
+        config_path=path,
+        environ={
+            "NEXUS_REMOTE_GATEWAY_URL": desired_gateway,
+            "NEXUS_MCP_RESOURCE_URL": desired_mcp,
+        },
+        probe=lambda _url: True,
+        reload=reload,
+        read_effective=read_effective,
+    )
+    assert calls["reload"] == 1
+    assert result["reloaded"] is True
+    assert result["verified"] is True
+
+
+def test_switch_busy_or_unknown_never_writes_or_reloads(tmp_path, monkeypatch):
+    path = tmp_path / "opencode.json"
+    _config(path)
+    original = path.read_text(encoding="utf-8")
+    reloads: list[int] = []
+
+    def busy(*_args, **_kwargs):
+        raise RuntimeError("OpenCode 存在正在执行的 Session")
+
+    monkeypatch.setattr("app.worker_agent.channel_switch.assert_native_idle", busy)
+    with pytest.raises(RuntimeError, match="正在执行"):
+        apply_channel_switch(
+            workspace=str(tmp_path),
+            port=4096,
+            config_path=path,
+            environ={
+                "NEXUS_REMOTE_GATEWAY_URL": "http://10.0.0.8:8110",
+                "NEXUS_MCP_RESOURCE_URL": "http://10.0.0.8:8201/mcp",
+            },
+            probe=lambda _url: True,
+            reload=lambda: reloads.append(1),
+            read_effective=lambda: json.loads(path.read_text(encoding="utf-8")),
+        )
+    assert path.read_text(encoding="utf-8") == original
+    assert reloads == []
+
+
+def test_switch_stale_gate_blocks_before_write(tmp_path):
+    path = tmp_path / "opencode.json"
+    _config(path)
+    original = path.read_text(encoding="utf-8")
+    reloads: list[int] = []
+
+    def stale():
+        raise RuntimeError("维护租约已失效")
+
+    with pytest.raises(RuntimeError, match="租约"):
+        apply_channel_switch(
+            workspace=str(tmp_path),
+            port=4096,
+            config_path=path,
+            environ={
+                "NEXUS_REMOTE_GATEWAY_URL": "http://10.0.0.8:8110",
+                "NEXUS_MCP_RESOURCE_URL": "http://10.0.0.8:8201/mcp",
+            },
+            probe=lambda _url: True,
+            reload=lambda: reloads.append(1),
+            read_effective=lambda: json.loads(path.read_text(encoding="utf-8")),
+            gate=stale,
+        )
+    assert path.read_text(encoding="utf-8") == original
+    assert reloads == []

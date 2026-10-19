@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import os
+import shlex
 import subprocess
 import sys
 import zipfile
@@ -182,7 +183,7 @@ async def test_failed_switch_does_not_mark_worker(monkeypatch):
 
     def fake_switch(*_args):
         async def switch():
-            return {"reloaded": False}
+            return {"reloaded": False, "verified": False}
 
         return switch
 
@@ -206,22 +207,8 @@ async def test_online_restart_does_not_open_ssh(monkeypatch):
     queues = gateway.bus.bound[enrolled.worker_instance_id]
 
     async def answer():
-        status = await queues.wait_frame()
-        assert status["payload"]["name"] == "http"
-        assert status["payload"]["data"]["path"] == "/session/status"
-        async with SessionLocal() as session:
-            await DataChannel(gateway).commit_upload(
-                session,
-                request_id=status["request_id"],
-                worker_instance_id=enrolled.worker_instance_id,
-                epoch=auth.epoch,
-                upload_id="status",
-                http_status=200,
-                headers={},
-                content_type="application/json",
-                chunk=json.dumps({"ses_idle": {"type": "idle"}}),
-                complete=True,
-            )
+        # The Worker performs the native-idle check inside restart_opencode;
+        # the controller must not probe /session/status first.
         frame = await queues.wait_frame()
         assert frame["payload"]["name"] == "restart_opencode"
         await _complete(gateway, frame, auth.epoch, {"restarted": True})
@@ -335,6 +322,16 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
     class SSH:
         async def run_command(self, command):
             commands.append(command)
+            parts = shlex.split(command)
+            if parts[:2] == ["cp", "-p"] and parts[2] in files:
+                files[parts[3]] = files[parts[2]]
+                return 0, "", ""
+            if parts[:2] == ["mv", "-f"] and parts[2] in files:
+                files[parts[3]] = files.pop(parts[2])
+                return 0, "", ""
+            if parts[:2] == ["rm", "-f"]:
+                files.pop(parts[2], None)
+                return 0, "", ""
             if "pip install" in command:
                 assert any(path.endswith(".whl") for path in files)
                 assert not any(path.endswith(".env") for path in files)
@@ -407,7 +404,7 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
                     gateway,
                     frame,
                     epoch,
-                    {"reloaded": True, "gateway_url": GATEWAY, "mcp_url": MCP},
+                    {"reloaded": True, "verified": True, "gateway_url": GATEWAY, "mcp_url": MCP},
                 )
                 continue
             if name == "http" and data.get("path") == "/mcp":

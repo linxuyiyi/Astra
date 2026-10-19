@@ -1,0 +1,19 @@
+{
+  "url": "http://172.17.13.60:18045/http-source.git",
+  "bare_path": "/opt/nexus-v145-qa-20261019/git/http-source.git",
+  "branch": "main",
+  "head": "f1dd3ae6070d53001e058fec2d7c2c105c0086b2",
+  "commit_count": 4,
+  "receivepack": "true",
+  "pat_sha256": "c8da50c6b6f90a91894d23771840359f356192a9539ad5adc144097820f635c5",
+  "initial_correct_pat_ls_remote_rc": 0,
+  "initial_wrong_pat_ls_remote_rc": 128,
+  "initial_fetch_pull_verified": true,
+  "initial_push_branch_present": true,
+  "log_pat_leak": false,
+  "log_authorization_header": false,
+  "unit": "nexus-v145-qa-git-http-20261019.service",
+  "bind": "172.17.13.60:18045",
+  "basic_auth_user": "git",
+  "receivepack_repo_only": "http-source.git"
+}

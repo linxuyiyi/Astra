@@ -1,0 +1,21 @@
+Nexus v1.4.5 recheck Linux final regression
+generated_at=2026-10-19T14:00:00Z
+guest=/opt/nexus-v145-regression/src
+venv=/opt/nexus-v145-regression/venv
+command=pytest -ra <final5 21 files + tests/test_fix_b3.py>
+pytest_result=503 passed, 1 skipped, 4 warnings in 92.32s
+pytest_exit_code=0
+skip=tests/test_worker_channel_review_fixes.py::test_sweep_statements_execute_on_mysql (MySQL-only, no ASTRA_TEST_MYSQL_URL)
+ruff_command=ruff check --no-cache app tests
+ruff_result=All checks passed!
+ruff_exit_code=0
+source_manifest_before=139172014664b9e48da670e7e2bca2d0ca81752fa0247ad789c0a65051e62000
+source_manifest_after_clean=139172014664b9e48da670e7e2bca2d0ca81752fa0247ad789c0a65051e62000
+source_files=272
+host_app_tests_files=218
+guest_app_tests_files=218
+host_guest_changed_missing_added=0
+host_guest_diff_lines=0
+redis=harness-owned 61267 DB14, PING true, save disabled, business DB1 untouched
+generated_caches_excluded=.pytest_cache,__pycache__,.ruff_cache
+previous_499=historical old guest snapshot only, not current result

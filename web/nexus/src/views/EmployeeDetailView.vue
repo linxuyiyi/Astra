@@ -43,7 +43,7 @@
 
     <ElTabs v-model="detailSection" class="employee-detail__tabs">
       <ElTabPane label="运行概览" name="overview">
-        <section class="employee-detail__panels">
+        <section class="employee-detail__panels employee-detail__panels--overview">
           <ElCard shadow="never">
             <template #header>
               <div class="employee-detail__card-title"><h3>基础环境</h3><ElText size="small" type="info">Worker 作为可部署执行资源的身份与接入信息</ElText></div>
@@ -54,8 +54,8 @@
               <ElDescriptionsItem label="关联员工">{{ employeeDisplayName(employee.name) }}（{{ employee.id }}）</ElDescriptionsItem>
               <ElDescriptionsItem label="执行方式">{{ environmentLabel(environment) }}</ElDescriptionsItem>
               <ElDescriptionsItem label="服务器">{{ serverAddress(environment) }}</ElDescriptionsItem>
-              <ElDescriptionsItem label="工作目录">{{ environment.workspace_root || '—' }}</ElDescriptionsItem>
-              <ElDescriptionsItem label="OpenCode 可执行文件">{{ environment.opencode_path || '—' }}</ElDescriptionsItem>
+              <ElDescriptionsItem label="工作目录" :span="2">{{ environment.workspace_root || '—' }}</ElDescriptionsItem>
+              <ElDescriptionsItem label="OpenCode 可执行文件" :span="2">{{ environment.opencode_path || '—' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="OpenCode 端口">{{ environment.opencode_server_port }}</ElDescriptionsItem>
               <ElDescriptionsItem label="模型">{{ environment.model_name || '使用默认配置' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="SSH 凭据">{{ environment.has_ssh_password ? '已配置（不回显）' : '未配置' }}</ElDescriptionsItem>
@@ -73,7 +73,7 @@
               <ElDescriptionsItem label="目标分支">{{ repository.targetBranch || '未核验' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="当前分支">{{ repository.branch || '未核验' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="仓库 ID">{{ repository.id || '—' }}</ElDescriptionsItem>
-              <ElDescriptionsItem label="工作目录">{{ environment?.workspace_root || '—' }}</ElDescriptionsItem>
+              <ElDescriptionsItem label="工作目录" :span="2">{{ environment?.workspace_root || '—' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="当前提交">{{ repository.commit || '未核验' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="工作区">{{ dirtyLabel(repository.dirty) }}</ElDescriptionsItem>
               <ElDescriptionsItem label="认证">{{ repository.authentication || '未核验' }}</ElDescriptionsItem>
@@ -253,7 +253,7 @@
       <ElTabPane label="用量" name="usage">
         <section class="employee-detail__metrics" aria-label="今日工作摘要">
           <ElCard v-for="metric in metrics" :key="metric.label" shadow="never">
-            <ElStatistic :title="metric.label" :value="metric.value as number"><template v-if="metric.unit" #suffix>{{ metric.unit }}</template></ElStatistic>
+            <ElStatistic :title="metric.label" :value="metric.value" :formatter="metric.formatter" />
             <p class="employee-detail__metric-hint">{{ metric.hint }}</p>
           </ElCard>
         </section>
@@ -428,15 +428,21 @@ const latestError = computed(() => employeeTasks.value.filter((task) => task.exe
 const latestErrorCopy = computed(() => latestError.value
   ? `最近异常：${platformCopy(String(latestError.value.execution_error?.reason ?? latestError.value.current_progress))} · ${formatTime(latestError.value.updated_at)}`
   : '')
-const metrics = computed(() => {
+interface DetailMetric {
+  label: string
+  value: number
+  hint: string
+  formatter: () => string
+}
+const metrics = computed<DetailMetric[]>(() => {
   const today = employee.value?.today_usage
   return [
-    { label: '今日 Token', value: formatTokens(today?.total_tokens), unit: '', hint: 'Agent 实际用量' },
-    { label: '工具调用', value: today?.tool_call_count ?? '—', unit: '次', hint: '成功与失败均保留' },
-    { label: '今日完成', value: employee.value?.today_completed ?? '—', unit: '项', hint: 'Worker 已提交结果' },
-    { label: '处理中', value: statusCount('RUNNING'), unit: '项', hint: '当前工作' },
-    { label: '等待人工', value: statusCount('WAITING'), unit: '项', hint: '需要补充信息' },
-    { label: '今日工作时长', value: formatDurationSeconds(today?.duration_seconds), unit: '', hint: '按任务开始到结束计算' },
+    { label: '今日 Token', value: today?.total_tokens ?? 0, hint: 'Agent 实际用量', formatter: () => formatTokens(today?.total_tokens) },
+    { label: '工具调用', value: today?.tool_call_count ?? 0, hint: '成功与失败均保留', formatter: () => today?.tool_call_count == null ? '—' : `${today.tool_call_count} 次` },
+    { label: '今日完成', value: employee.value?.today_completed ?? 0, hint: 'Worker 已提交结果', formatter: () => employee.value?.today_completed == null ? '—' : `${employee.value.today_completed} 项` },
+    { label: '处理中', value: statusCount('RUNNING'), hint: '当前工作', formatter: () => `${statusCount('RUNNING')} 项` },
+    { label: '等待人工', value: statusCount('WAITING'), hint: '需要补充信息', formatter: () => `${statusCount('WAITING')} 项` },
+    { label: '今日工作时长', value: today?.duration_seconds ?? 0, hint: '按任务开始到结束计算', formatter: () => formatDurationSeconds(today?.duration_seconds) },
   ]
 })
 const averageTaskTokens = computed(() => {
@@ -507,6 +513,10 @@ async function onMaintenanceChanged() { await store.refresh() }
 .employee-detail__metrics :deep(.el-statistic__content) { color: var(--astra-text-primary); font-size: var(--astra-font-subtitle); font-weight: var(--astra-weight-bold); }
 .employee-detail__metric-hint { margin: 4px 0 0; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .employee-detail__panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.employee-detail__panels--overview { grid-template-columns: minmax(0, 1fr); }
+.employee-detail :deep(.el-descriptions__cell) { min-width: 0; }
+.employee-detail :deep(.el-descriptions__label) { white-space: nowrap; }
+.employee-detail :deep(.el-descriptions__content) { overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
 .employee-detail__panel--wide { grid-column: 1 / -1; }
 .employee-detail__link, .employee-detail__link:hover { color: var(--astra-primary); font-size: var(--astra-font-label); display: inline-flex; align-items: center; gap: 4px; }
 .employee-detail__current-task { display: grid; gap: 4px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--astra-border); }

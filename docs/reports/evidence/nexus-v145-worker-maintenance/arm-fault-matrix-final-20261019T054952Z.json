@@ -1,0 +1,552 @@
+{
+  "status": "PASS",
+  "deploy_idempotency": {
+    "status": "PASS",
+    "idempotency_correction": "previous FAIL corrected: OpenCode PID 22283 and Worker PID 28171 unchanged across both final deploys",
+    "worker_id": "worker-a",
+    "environment_id": 1,
+    "worker_instance_id": "wrk_d571a4facaebfea7add456d0124728c9",
+    "first_operation_id": "op_e0c65465c66441a3af8bbccb803e7d95",
+    "second_operation_id": "op_c7d0b8740627438ca171d05515eeabdd",
+    "first_state": "SUCCEEDED",
+    "second_state": "SUCCEEDED",
+    "unit_pids_first": {
+      "opencode": "22283",
+      "worker": "28171"
+    },
+    "unit_pids_second": {
+      "opencode": "22283",
+      "worker": "28171"
+    },
+    "token_hashes_equal": {
+      "gateway_token_hash": true,
+      "mcp_token_hash": true,
+      "worker_token_hash": true,
+      "git_token_hash": true
+    },
+    "config_hash_equal": true,
+    "unit_hash_equal": true,
+    "workingtree_hash_equal": true,
+    "git_unchanged": true,
+    "equipment_second": [
+      {
+        "key": "opencode",
+        "label": "OpenCode",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "worker_agent",
+        "label": "Worker Agent",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "model",
+        "label": "模型",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "mcp",
+        "label": "MCP",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "skills",
+        "label": "Skill",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "git",
+        "label": "Git 仓库",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      }
+    ],
+    "secret_safety": {
+      "secret_count": 10,
+      "match_count": 0,
+      "match": 0,
+      "paths": [],
+      "findings": []
+    },
+    "evidence_paths": {
+      "deploy_log": "/tmp/nexus-v145-qa/worker-a-final-deploy-2.log",
+      "report": "/tmp/nexus-v145-qa/reports/final-deploy-latest.json"
+    }
+  },
+  "fault3_retest": {
+    "status": "PASS",
+    "formal_restart_from_stopped": {
+      "submit_status": 202,
+      "submit": {
+        "id": "op_5a2e6f12a7384614b510a1849a8c3515",
+        "environment_id": 1,
+        "action": "restart",
+        "state": "QUEUED",
+        "stage": "queued",
+        "attempt": 1,
+        "requested_by": "v145-qa-fault3retest-stopped",
+        "requested_at": "2026-10-19T05:42:20.349992+00:00",
+        "started_at": null,
+        "finished_at": null,
+        "lease_owner": null,
+        "lease_until": null,
+        "cancel_requested": false,
+        "danger_dispatched": false,
+        "reconcile_required": false,
+        "reconcile_only": false,
+        "execution_channel": null,
+        "execution_reason": null,
+        "retry_of_attempt": null,
+        "target_revision": {
+          "opencode_version": "1.18.35",
+          "worker_agent_version": "1.4.5",
+          "model_name": "nexus-gateway/qa-model",
+          "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "branch": "main",
+          "skills": [
+            "nexus-v145-qa-skill"
+          ],
+          "mcp": [],
+          "capability_revision": "1f1a427f8c1d9eaa"
+        },
+        "before_snapshot": {
+          "environment_id": 1,
+          "mode": "LINUX_REMOTE",
+          "name": "QA Worker A Linux",
+          "host": "127.0.0.1",
+          "port": 56060,
+          "username": "root",
+          "has_ssh_password": true,
+          "opencode_server_port": 44135,
+          "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+          "model_name": "nexus-gateway/qa-model",
+          "workspace_root": "/root/nexus-v145/worker-a",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "labels": [
+            "qa",
+            "v145",
+            "linux"
+          ],
+          "capability_revision": "1f1a427f8c1d9eaa"
+        },
+        "after_snapshot": {},
+        "error_code": null,
+        "error_message": null
+      },
+      "operation_id": "op_5a2e6f12a7384614b510a1849a8c3515",
+      "state": "SUCCEEDED",
+      "error_code": null,
+      "error_message": null
+    },
+    "crash_pid": "33928",
+    "global_health": null,
+    "persistent_fault": {
+      "opencode": {
+        "active": "inactive",
+        "enabled": "enabled",
+        "main_pid": "0"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "31208"
+      }
+    },
+    "restart_after_stop": {
+      "submit_status": 202,
+      "submit": {
+        "id": "op_c3e5d95f952a4f98ab9acf1d809fda78",
+        "environment_id": 1,
+        "action": "restart",
+        "state": "QUEUED",
+        "stage": "queued",
+        "attempt": 1,
+        "requested_by": "v145-qa-fault3retest-recover",
+        "requested_at": "2026-10-19T05:42:29.435193+00:00",
+        "started_at": null,
+        "finished_at": null,
+        "lease_owner": null,
+        "lease_until": null,
+        "cancel_requested": false,
+        "danger_dispatched": false,
+        "reconcile_required": false,
+        "reconcile_only": false,
+        "execution_channel": null,
+        "execution_reason": null,
+        "retry_of_attempt": null,
+        "target_revision": {
+          "opencode_version": "1.18.35",
+          "worker_agent_version": "1.4.5",
+          "model_name": "nexus-gateway/qa-model",
+          "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "branch": "main",
+          "skills": [
+            "nexus-v145-qa-skill"
+          ],
+          "mcp": [],
+          "capability_revision": "1f1a427f8c1d9eaa"
+        },
+        "before_snapshot": {
+          "environment_id": 1,
+          "mode": "LINUX_REMOTE",
+          "name": "QA Worker A Linux",
+          "host": "127.0.0.1",
+          "port": 56060,
+          "username": "root",
+          "has_ssh_password": true,
+          "opencode_server_port": 44135,
+          "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+          "model_name": "nexus-gateway/qa-model",
+          "workspace_root": "/root/nexus-v145/worker-a",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "labels": [
+            "qa",
+            "v145",
+            "linux"
+          ],
+          "capability_revision": "1f1a427f8c1d9eaa"
+        },
+        "after_snapshot": {},
+        "error_code": null,
+        "error_message": null
+      },
+      "operation_id": "op_c3e5d95f952a4f98ab9acf1d809fda78",
+      "state": "SUCCEEDED",
+      "error_code": null,
+      "error_message": null
+    },
+    "checks": {
+      "formal_restart_from_stopped": true,
+      "sigkill_systemd_recovery": true,
+      "persistent_stop_observed": true,
+      "formal_restart_after_stop": true,
+      "worker_online": true,
+      "six_equipment_verified": true,
+      "tokens_unchanged": true
+    },
+    "report": "/tmp/nexus-v145-qa/reports/fault3-retest-latest.json"
+  },
+  "fault4_controller_crash": {
+    "status": "PASS",
+    "operation_id": "op_52d6308084fd47a8afd94ea9db769a98",
+    "state_at_kill": "RUNNING",
+    "api_kill": {
+      "name": "api",
+      "pid": 7298,
+      "stopped": true,
+      "reason": "SIGTERM group (zombie counts as stopped)"
+    },
+    "api_recovery": {
+      "returncode": 0,
+      "stdout": "{\n  \"run_id\": \"recover-api-5cb1a8738467\",\n  \"old_api\": {\n    \"pid\": 7298,\n    \"create_time\": 1792388518.217808,\n    \"cwd\": \"/Users/niuniu/程序/Astra-worktrees/nexus-v1.4.5-workers/services/task-platform\",\n    \"running\": false\n  },\n  \"new_api\": {\n    \"pid\": 8425,\n    \"create_time\": 1792388634.608624,\n    \"pgid\": 8425,\n    \"cwd\": \"/Users/niuniu/程序/Astra-worktrees/nexus-v1.4.5-workers/services/task-platform\"\n  },\n  \"health\": {\n    \"ok\": true,\n    \"status\": 200,\n    \"body\": \"{\\\"status\\\":\\\"ok\\\",\\\"time\\\":\\\"2026-10-19T05:43:55.404105+00:00\\\"}\"\n  }\n}\n",
+      "stderr": ""
+    },
+    "after_crash_operation": {
+      "state": "INTERRUPTED",
+      "stage": "interrupted",
+      "error_code": "controller_stopped",
+      "error_message": "执行进程停止；请先核对远端状态再重试",
+      "lease_owner": null,
+      "lease_until": null,
+      "reconcile_required": false
+    },
+    "sse_resume": {
+      "cursor": 247,
+      "ids": [
+        248,
+        249,
+        250,
+        251
+      ],
+      "duplicates": false,
+      "all_after_cursor": true,
+      "end_state": "INTERRUPTED",
+      "ok": true,
+      "error": null
+    },
+    "reconcile": {
+      "state": "FAILED",
+      "error_code": "reconciled",
+      "error_message": "远端无晚到危险操作，环境健康",
+      "installer_lock": "free",
+      "worker_command": "none",
+      "lease_owner": null,
+      "lease_until": null,
+      "remote_installer_lock": {
+        "free": true,
+        "raw": "rc=0"
+      },
+      "remote_installer_processes": []
+    },
+    "retry_final": {
+      "state": "SUCCEEDED",
+      "units": {
+        "opencode": {
+          "active": "active",
+          "enabled": "enabled",
+          "main_pid": "34418"
+        },
+        "worker": {
+          "active": "active",
+          "enabled": "enabled",
+          "main_pid": "31208"
+        }
+      },
+      "hashes": {
+        "gateway_token_hash": "89260eeb73b183cb",
+        "mcp_token_hash": "78cf1dd18a75c714",
+        "worker_token_hash": "e546a26aba2e8b00",
+        "git_token_hash": "2cc387232925286e",
+        "git_token_file_present": true,
+        "config_sha256": "1141d85ecb52d5af",
+        "config_bytes": 736,
+        "env_keys": [
+          "GIT_ASKPASS",
+          "GIT_CONFIG_COUNT",
+          "GIT_CONFIG_KEY_0",
+          "GIT_CONFIG_VALUE_0",
+          "GIT_TERMINAL_PROMPT",
+          "NEXUS_MCP_RESOURCE_URL",
+          "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+          "NEXUS_REMOTE_GATEWAY_URL",
+          "NEXUS_WORKER_ENVIRONMENT_ID",
+          "NEXUS_WORKER_GATEWAY_URL",
+          "NEXUS_WORKER_INSTANCE_ID",
+          "NEXUS_WORKER_OPENCODE_BIN",
+          "NEXUS_WORKER_OPENCODE_UNIT",
+          "NEXUS_WORKER_OPENCODE_URL",
+          "NEXUS_WORKER_TOKEN",
+          "NEXUS_WORKER_WORKSPACE_ROOT",
+          "OPENCODE_CONFIG",
+          "OPENCODE_CONFIG_DIR"
+        ]
+      }
+    },
+    "checks": {
+      "deploy_was_running_at_kill": true,
+      "api_killed_by_identity": true,
+      "operation_interrupted_with_lock": true,
+      "no_token_rotation": true,
+      "no_blind_pid_change": true,
+      "reconcile_safe": true,
+      "retry_succeeded": true,
+      "final_worker_healthy": true,
+      "sse_no_duplicates": true,
+      "delay_fixture_patched": true
+    },
+    "delay_fixture": {
+      "log": "patched /root/.cache/nexus-provision/op_52d6308084fd47a8afd94ea9db769a98.sh 1792388611.0653515",
+      "patched": true,
+      "note": "watcher appended sleep 30 to the real uploaded installer script; the report sample was taken before the append"
+    },
+    "harness_issue": "The final health check used health_view truncated rows without configured/diff, producing a false negative. The real /health response has all six configured/deployed/verified with diff=[] and schedulable=true. The delay_log field was sampled before the watcher appended; the actual log confirms the patch.",
+    "report": "/tmp/nexus-v145-qa/reports/fault4-controller-crash-latest.json"
+  },
+  "offline_ssh_recovery": {
+    "status": "PASS",
+    "operation": {
+      "id": "op_aee0e6c836424bde8931e612d35503ba",
+      "state": "SUCCEEDED",
+      "error_code": null,
+      "error_message": null,
+      "execution_channel": null,
+      "elapsed_seconds": 4.07,
+      "checks": [
+        {
+          "name": "SSH 连接与执行检查",
+          "state": "passed",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "重启 OpenCode Serve",
+          "state": "passed",
+          "passed": true,
+          "detail": "单元重启、OpenCode 健康与 Worker 上线均已确认"
+        }
+      ]
+    },
+    "final_units": {
+      "opencode": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "40203"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "40204"
+      }
+    },
+    "final_health": {
+      "schedulable": true,
+      "runtime_status": "AVAILABLE",
+      "maintenance": {
+        "state": "SUCCEEDED",
+        "operation_id": "op_aee0e6c836424bde8931e612d35503ba"
+      },
+      "equipment": [
+        {
+          "key": "opencode",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "worker_agent",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "model",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "mcp",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "skills",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        },
+        {
+          "key": "git",
+          "configured": true,
+          "deployed": true,
+          "verified": true,
+          "diff": []
+        }
+      ]
+    },
+    "checks": {
+      "offline_confirmed_before_restart": true,
+      "formal_restart_succeeded_without_reconcile": true,
+      "six_items_verified": true,
+      "schedulable": true,
+      "worker_online": true,
+      "tokens_unchanged": true,
+      "no_manual_start": true
+    },
+    "file_sha256": "c0ca0b6a3509e97974e88ce8f0141eaf4a18c980496a7da68f274e2955109b4c",
+    "api_restart": {
+      "old_pid": 8425,
+      "new_pid": 10090,
+      "duration_seconds": 25,
+      "health_status": 200,
+      "log": "/tmp/nexus-v145-qa/api-restart-offline-final.log"
+    },
+    "cleanup": {
+      "watcher_found": [],
+      "marked_installer_scripts": [],
+      "removed": [
+        "/tmp/v145_fault4_delay.py",
+        "/tmp/v145-fault4-delay.log",
+        "/tmp/v145-fault4-delay-watch.out",
+        "/tmp/v145-fault4-delay.log.evidence"
+      ],
+      "business_repo_touched": false,
+      "log": "/tmp/nexus-v145-qa/delay-fixture-cleanup-final.log"
+    },
+    "note": "Offline restart now succeeds without reconcile: formal operation SUCCEEDED in 4.07s; both units restarted via the formal offline SSH path; /global/health and Worker online confirmed before the operation passed. No manual systemctl start. Observer check 36s later remains healthy.",
+    "report": "/tmp/nexus-v145-qa/reports/offline-ssh-recovery-final.json"
+  },
+  "final_worker": {
+    "worker_id": "worker-a",
+    "environment_id": 1,
+    "worker_instance_id": "wrk_d571a4facaebfea7add456d0124728c9",
+    "opencode_pid": "40203",
+    "worker_pid": "40204",
+    "schedulable": true,
+    "runtime_status": "AVAILABLE",
+    "equipment": [
+      {
+        "key": "opencode",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "worker_agent",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "model",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "mcp",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "skills",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "git",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      }
+    ]
+  },
+  "services": {
+    "api_pid": 10090,
+    "mcp_pid": 92408,
+    "redis_pid": 83324,
+    "gateway_pid": 83515,
+    "vite_pid": 83683,
+    "browser_url": "http://127.0.0.1:61275/"
+  },
+  "harness_faults": [
+    "fault3 initial health wait raced with systemd restart; fixed by waiting new MainPID + real /global/health before systemctl stop.",
+    "fault4 final health check used truncated health_view (no configured/diff) and falsely reported final_worker_healthy=false; corrected with full /health six items.",
+    "fault4 delay log was sampled before the watcher appended; actual watcher log confirms sleep 30 was appended to the uploaded installer script.",
+    "offline SSH restart started Worker/OpenCode but the formal operation ended INTERRUPTED health_unknown before readiness; formal reconcile then confirmed healthy six items. No manual systemctl start used.",
+    "Offline readiness race from the prior run is resolved by the final patch; final offline run passed without reconcile."
+  ]
+}

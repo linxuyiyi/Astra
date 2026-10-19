@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -111,7 +112,7 @@ async def test_channel_switch_keeps_capability(monkeypatch):
     target = await environment_id()
 
     async def switch():
-        return {"reloaded": True}
+        return {"reloaded": True, "verified": True}
 
     monkeypatch.setattr("app.runtime.worker_channel._mismatch", lambda _result: None)
     async with SessionLocal() as db:
@@ -546,8 +547,15 @@ def _agent_install_worker(monkeypatch):
     calls = []
 
     class SSH:
+        def __init__(self):
+            self.files = {}
+
         async def write_file(self, path, data, mode=0o644):
             calls.append(path)
+            self.files[path] = data
+
+        async def read_file(self, path):
+            return self.files.get(path)
 
         async def run_command(self, command):
             return 0, "", ""
@@ -610,6 +618,348 @@ async def test_enroll_happens_after_the_venv_and_writes_the_token(monkeypatch):
     await worker._install_units(emit)
     pip_at = next(i for i, item in enumerate(calls) if isinstance(item, tuple) and "pip install" in item[1])
     enroll_at = calls.index("enroll")
-    token_at = next(i for i, item in enumerate(calls) if isinstance(item, str) and item.endswith(".env"))
+    token_at = next(
+        i for i, item in enumerate(calls) if isinstance(item, str) and ".env.tmp-" in item
+    )
     assert pip_at < enroll_at < token_at
     assert calls[pip_at][0] == 300
+
+
+@pytest.mark.parametrize("existing_mode", [None, 0o700])
+@pytest.mark.asyncio
+async def test_install_units_does_not_chmod_existing_systemd_dir(monkeypatch, tmp_path, existing_mode):
+    from app.runtime import remote_provisioning
+
+    secret_dir = tmp_path / "etc-nexus"
+    systemd_dir = tmp_path / "systemd"
+    if existing_mode is not None:
+        systemd_dir.mkdir()
+        systemd_dir.chmod(existing_mode)
+    monkeypatch.setattr(remote_provisioning, "WORKER_SECRET_DIR", str(secret_dir))
+    monkeypatch.setattr(remote_provisioning, "SYSTEMD_UNIT_DIR", str(systemd_dir))
+
+    worker, _calls = _agent_install_worker(monkeypatch)
+    executed: list[str] = []
+
+    async def command(self, text, timeout=30):
+        if str(tmp_path) in text and text.startswith(("install -d ", "test -d ")):
+            executed.append(text)
+            result = subprocess.run(["bash", "-c", text], capture_output=True, text=True)
+            assert result.returncode == 0, result.stderr
+            return result.stdout
+        return ""
+
+    async def unchanged(*_args, **_kwargs):
+        return False
+
+    async def safe(*_args, **_kwargs):
+        return None
+
+    async def idle(*_args, **_kwargs):
+        return True
+
+    async def credentials(_path):
+        return "wtk_existing", "wrk_existing"
+
+    monkeypatch.setattr(worker, "_command", command.__get__(worker, RemoteProvisioner))
+    monkeypatch.setattr(worker, "_write_atomic_if_changed", unchanged)
+    monkeypatch.setattr(worker, "_ensure_safe", safe)
+    monkeypatch.setattr(worker, "_native_idle", idle)
+    monkeypatch.setattr(worker, "_existing_worker_credentials", credentials)
+
+    async def emit(_event):
+        return None
+
+    await worker._install_units(emit)
+
+    assert secret_dir.stat().st_mode & 0o777 == 0o700
+    expected = existing_mode if existing_mode is not None else 0o755
+    assert systemd_dir.stat().st_mode & 0o777 == expected
+    assert any("install -d -m 700" in item and str(secret_dir) in item for item in executed)
+    assert not any("install -d -m 700" in item and str(systemd_dir) in item for item in executed)
+
+
+class _AtomicLocalSSH:
+    """A local filesystem double that executes the same path-only commands."""
+
+    def __init__(self, *, partial_at=None, corrupt=False, fail_move=False, read_error=False):
+        self.partial_at = partial_at
+        self.corrupt = corrupt
+        self.fail_move = fail_move
+        self.read_error = read_error
+        self.writes: list[str] = []
+
+    async def read_file(self, path):
+        if self.read_error:
+            raise OSError("permission denied while reading")
+        try:
+            return Path(path).read_bytes()
+        except FileNotFoundError:
+            return None
+
+    async def write_file(self, path, data, mode=0o644):
+        self.writes.append(path)
+        if self.partial_at is not None:
+            Path(path).write_bytes(data[: self.partial_at])
+            raise RuntimeError("sftp interrupted")
+        if self.corrupt:
+            data = data[:-1]
+        Path(path).write_bytes(data)
+        os.chmod(path, mode)
+
+    async def run_command(self, command):
+        if self.fail_move and command.startswith("mv -f "):
+            return 1, "", "rename failed"
+        result = subprocess.run(
+            ["bash", "-c", command], capture_output=True, text=True, timeout=20
+        )
+        return result.returncode, result.stdout, result.stderr
+
+
+def _atomic_worker(secret: str = "ssh-canary-secret"):
+    environment = SimpleNamespace(
+        id=901,
+        ssh_password=secret,
+        model_name=None,
+        opencode_path="/usr/local/bin/opencode",
+    )
+    return RemoteProvisioner(environment, {"id": "op-atomic", "action": "deploy"})
+
+
+@pytest.mark.asyncio
+async def test_atomic_write_skips_identical_content_but_enforces_mode(tmp_path):
+    target = tmp_path / "worker 1.env"
+    target.write_bytes(b"NEXUS_WORKER_TOKEN=canary\n")
+    target.chmod(0o644)
+    before = target.stat().st_mtime_ns
+    ssh = _AtomicLocalSSH()
+    worker = _atomic_worker()
+    worker.ssh = ssh
+
+    changed = await worker._write_atomic_if_changed(
+        str(target), target.read_bytes(), 0o600, backup=True
+    )
+
+    assert changed is False
+    assert ssh.writes == []
+    assert target.stat().st_mode & 0o777 == 0o600
+    assert target.stat().st_mtime_ns == before
+    assert not (tmp_path / "worker 1.env.nexus-backup").exists()
+
+
+@pytest.mark.asyncio
+async def test_atomic_write_replaces_and_keeps_old_backup(tmp_path):
+    target = tmp_path / "worker 1.env"
+    target.write_bytes(b"old-canary\n")
+    ssh = _AtomicLocalSSH()
+    worker = _atomic_worker()
+    worker.ssh = ssh
+
+    changed = await worker._write_atomic_if_changed(
+        str(target), b"new-value\n", 0o600, backup=True
+    )
+
+    assert changed is True
+    assert target.read_bytes() == b"new-value\n"
+    assert target.stat().st_mode & 0o777 == 0o600
+    backup = tmp_path / "worker 1.env.nexus-backup"
+    assert backup.read_bytes() == b"old-canary\n"
+    assert backup.stat().st_mode & 0o777 == 0o600
+    assert len(ssh.writes) == 1
+    assert Path(ssh.writes[0]).parent == tmp_path
+    assert not list(tmp_path.glob("*.tmp-*"))
+
+
+@pytest.mark.asyncio
+async def test_atomic_write_stops_when_existing_read_fails(tmp_path):
+    target = tmp_path / "worker 1.env"
+    target.write_bytes(b"old-canary\n")
+    target.chmod(0o600)
+    ssh = _AtomicLocalSSH(read_error=True)
+    worker = _atomic_worker()
+    worker.ssh = ssh
+
+    with pytest.raises(OSError, match="permission denied"):
+        await worker._write_atomic_if_changed(
+            str(target), b"new-secret-value\n", 0o600, backup=True
+        )
+
+    assert target.read_bytes() == b"old-canary\n"
+    assert ssh.writes == []
+    assert not (tmp_path / "worker 1.env.nexus-backup").exists()
+    assert not list(tmp_path.glob("*.tmp-*"))
+
+
+@pytest.mark.asyncio
+async def test_atomic_write_interruption_keeps_old_target_and_backup(tmp_path):
+    target = tmp_path / "worker 1.env"
+    target.write_bytes(b"old-canary\n")
+    ssh = _AtomicLocalSSH(partial_at=3)
+    worker = _atomic_worker()
+    worker.ssh = ssh
+
+    with pytest.raises(RuntimeError) as error:
+        await worker._write_atomic_if_changed(
+            str(target), b"new-secret-value\n", 0o600, backup=True
+        )
+
+    assert target.read_bytes() == b"old-canary\n"
+    assert (tmp_path / "worker 1.env.nexus-backup").read_bytes() == b"old-canary\n"
+    assert not list(tmp_path.glob("*.tmp-*"))
+    assert "new-secret-value" not in str(error.value)
+    assert "ssh-canary-secret" not in str(error.value)
+
+
+@pytest.mark.asyncio
+async def test_atomic_write_verification_failure_keeps_old_target(tmp_path):
+    target = tmp_path / "worker 1.env"
+    target.write_bytes(b"old-canary\n")
+    ssh = _AtomicLocalSSH(corrupt=True)
+    worker = _atomic_worker()
+    worker.ssh = ssh
+
+    with pytest.raises(RuntimeError, match="完整性校验失败") as error:
+        await worker._write_atomic_if_changed(
+            str(target), b"new-secret-value\n", 0o600, backup=True
+        )
+
+    assert target.read_bytes() == b"old-canary\n"
+    assert (tmp_path / "worker 1.env.nexus-backup").read_bytes() == b"old-canary\n"
+    assert not list(tmp_path.glob("*.tmp-*"))
+    assert "new-secret-value" not in str(error.value)
+
+
+@pytest.mark.asyncio
+async def test_atomic_write_rename_failure_keeps_old_target_and_reports(tmp_path):
+    target = tmp_path / "worker 1.env"
+    target.write_bytes(b"old-canary\n")
+    ssh = _AtomicLocalSSH(fail_move=True)
+    worker = _atomic_worker()
+    worker.ssh = ssh
+
+    with pytest.raises(RuntimeError, match="rename failed"):
+        await worker._write_atomic_if_changed(
+            str(target), b"new-secret-value\n", 0o600, backup=True
+        )
+
+    assert target.read_bytes() == b"old-canary\n"
+    assert (tmp_path / "worker 1.env.nexus-backup").read_bytes() == b"old-canary\n"
+    assert not list(tmp_path.glob("*.tmp-*"))
+
+
+@pytest.mark.asyncio
+async def test_atomic_write_creates_new_file_with_requested_mode(tmp_path):
+    target = tmp_path / "worker 2.env"
+    ssh = _AtomicLocalSSH()
+    worker = _atomic_worker()
+    worker.ssh = ssh
+
+    changed = await worker._write_atomic_if_changed(
+        str(target), b"value\n", 0o600, backup=True
+    )
+
+    assert changed is True
+    assert target.read_bytes() == b"value\n"
+    assert target.stat().st_mode & 0o777 == 0o600
+    assert not (tmp_path / "worker 2.env.nexus-backup").exists()
+
+
+class _ProbeLocalSSH:
+    def __init__(self, env):
+        self.env = env
+
+    async def run_command(self, command):
+        result = subprocess.run(
+            command, shell=True, env=self.env, capture_output=True, text=True
+        )
+        return result.returncode, result.stdout, result.stderr
+
+
+def _write_probe_node(path, log, output):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$0\" >> {shlex.quote(str(log))}\n"
+        f"printf '%s\\n' {shlex.quote(output)}\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+
+
+async def _probe_worker(tmp_path):
+    env, op = await reserve(await employee())
+    worker = RemoteProvisioner(env, op)
+    worker.home = str(tmp_path)
+    worker.config_path = str(tmp_path / "opencode.jsonc")
+    Path(worker.config_path).write_text("{}", encoding="utf-8")
+    return worker
+
+
+def _probe_node_path(tmp_path, worker):
+    return (
+        tmp_path
+        / ".local/share/nexus/workers"
+        / str(worker.environment.id)
+        / f"node-v{worker.settings.remote_node_version}"
+        / "bin"
+        / "node"
+    )
+
+
+@pytest.mark.asyncio
+async def test_probe_gateway_uses_environment_node_without_global_node(tmp_path):
+    worker = await _probe_worker(tmp_path)
+    empty_bin = tmp_path / "empty-bin"
+    empty_bin.mkdir()
+    worker.ssh = _ProbeLocalSSH({"PATH": str(empty_bin), "HOME": str(tmp_path)})
+    log = tmp_path / "invoked.log"
+    node = _probe_node_path(tmp_path, worker)
+    _write_probe_node(node, log, "probe-ok")
+    steps = []
+
+    async def emit(step):
+        steps.append(step)
+
+    await worker._probe_gateway(emit)
+
+    assert log.read_text(encoding="utf-8").splitlines() == [str(node)]
+    assert steps[-1]["detail"] == "probe-ok"
+
+
+@pytest.mark.asyncio
+async def test_probe_gateway_fails_without_environment_node_and_ignores_global(
+    tmp_path,
+):
+    worker = await _probe_worker(tmp_path)
+    global_bin = tmp_path / "global-bin"
+    global_log = tmp_path / "global.log"
+    _write_probe_node(global_bin / "node", global_log, "global-node")
+    worker.ssh = _ProbeLocalSSH({"PATH": str(global_bin), "HOME": str(tmp_path)})
+    steps = []
+
+    async def emit(step):
+        steps.append(step)
+
+    with pytest.raises(RuntimeError):
+        await worker._probe_gateway(emit)
+
+    assert not global_log.exists()
+
+
+@pytest.mark.asyncio
+async def test_probe_gateway_fails_when_home_is_unknown(tmp_path):
+    worker = await _probe_worker(tmp_path)
+    worker.home = None
+    global_bin = tmp_path / "global-bin"
+    global_log = tmp_path / "global.log"
+    _write_probe_node(global_bin / "node", global_log, "global-node")
+    worker.ssh = _ProbeLocalSSH({"PATH": str(global_bin), "HOME": str(tmp_path)})
+    steps = []
+
+    async def emit(step):
+        steps.append(step)
+
+    with pytest.raises(RuntimeError, match="远程用户目录"):
+        await worker._probe_gateway(emit)
+
+    assert not global_log.exists()

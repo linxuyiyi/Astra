@@ -1,0 +1,8 @@
+Oct 19 13:28:43 lima-nexus-v145-qa systemd[1]: nexus-opencode-1.service: Main process exited, code=killed, status=9/KILL
+Oct 19 13:28:43 lima-nexus-v145-qa systemd[1]: nexus-opencode-1.service: Failed with result 'signal'.
+Oct 19 13:28:43 lima-nexus-v145-qa systemd[1]: nexus-opencode-1.service: Consumed 18.945s CPU time, 448.3M memory peak, 0B memory swap peak.
+Oct 19 13:28:43 lima-nexus-v145-qa systemd[1]: nexus-opencode-1.service: Scheduled restart job, restart counter is at 1.
+Oct 19 13:28:43 lima-nexus-v145-qa systemd[1]: Started nexus-opencode-1.service - Nexus OpenCode.
+Oct 19 13:28:44 lima-nexus-v145-qa systemd[1]: Stopping nexus-opencode-1.service - Nexus OpenCode...
+Oct 19 13:28:44 lima-nexus-v145-qa systemd[1]: nexus-opencode-1.service: Deactivated successfully.
+Oct 19 13:28:44 lima-nexus-v145-qa systemd[1]: Stopped nexus-opencode-1.service - Nexus OpenCode.

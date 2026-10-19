@@ -80,8 +80,11 @@ FastAPI lifespan 新增 `maintenance_executor()` 任务，与 `supervise_session
 - `RUNNING`：安装/写配置/换装备。
 - `VERIFYING`：健康、MCP、配置生效与 capability 观察。
 - 每次危险步骤前调用 `assert_safe_to_disrupt()`：短事务 fenced 复检操作租约 + canonical 占用；原生 idle 检查后再次复检。
-- `restart` 在线分支必须先读 Worker OpenCode `/session/status`，发现 busy/retry 拒绝；离线分支沿用 SSH 原生检查。
+- `restart` 在线分支由 Worker 本地正式 restart 命令执行唯一原生状态判断：明确 ECONNREFUSED（服务已停）允许启动，busy/retry/unknown/malformed 在 Worker 本地拒绝；控制面不重复 HTTP `/session/status` 门槛。离线分支沿用 SSH 原生检查。两条路径在 `systemctl`/本地 restart 返回后都必须等待真就绪：在线以 Worker 命令结果与健康为准；离线在 `systemctl restart` 后有界轮询真实 `/global/health`（2xx JSON 且 `healthy=true`），再等待既有 Worker online，之后才允许操作 `SUCCEEDED`。端口监听、PID、unit active 或固定 sleep 不得代替真实就绪。控制面 Task/Session 占用、租约、danger 标记、dedup、Worker 绑定与 gate 保持不变。
 - `check` 永远只读，可在占用时执行。
+- 维护历史与 `latest_operation` 按最近实际 attempt 的 `updated_at`（含 retry/finish 写入）倒序，不以最初 `requested_at` 判定“最近维护”；分页 `before_id` 使用同一排序键。
+- Worker 通道切换在底层 `apply_channel_switch` 幂等：磁盘目标地址已一致且真实 `/config` 的 Gateway/MCP 地址均已核验时，不写文件、不 reload，返回 `verified=true/reloaded=false`。磁盘不同、实际配置不一致或服务明确停止时才在既有 native-idle 与 owner gate 下受控 reload，再读取真实配置核验。`verified` 是实际地址已核验的唯一事实，`reloaded` 仅表示执行过 reload；controller `_mismatch` 不再用 `reloaded` 判定成功。
+- 调度门禁使用 equipment 的 `configured/deployed/verified` 事实；描述性 diff（如 Git 工作区 dirty、仅阻止 update）不单独作为运行调度阻塞。真实版本/MCP/Skill/credential 差异必须已反映为 deployed/verified 不通过。
 - 维护成功写 `environment.status=AVAILABLE` 和实际版本；失败只记录操作错误。危险步骤已发出去后失败/取消，先做只读核对：健康则保留可用，不健康或未知则置 `UNKNOWN` 并禁止调度；`INTERRUPTED` 保持维护锁。
 - 不使用 placeholder `unmanaged`、PID 或端口监听作为健康证据。
 
@@ -90,8 +93,11 @@ FastAPI lifespan 新增 `maintenance_executor()` 任务，与 `supervise_session
 - 保留 `remote_install.sh`、`_install`、`_gateway_key`、`_probe_gateway`、`_probe_mcp`、`_restart_*`。
 - installer payload 固定 `{action: deploy|update, environment_id, opencode_server_port, config_path, repository{url,branch}}`；解析 `NEXUS_STEP` 与 `NEXUS_META`。每环境 Node/npm 在 `$HOME/.local/share/nexus/workers/{id}`，venv/wheel 在 `/opt/nexus/workers/{id}`，目标 OpenCode 入口是本环境 `bin/opencode`，不写全局 `/usr/local/bin`。
 - wheel 引用 `worker_agent.__version__`、包名 `nexus-worker-agent`、固定时间戳/排序，源码相同则 bytes/digest 相同。env/unit/config/wheel marker 只在内容变化时写；仅必要才 pip、daemon-reload、重启 Worker/OpenCode。systemd 写 `WorkingDirectory=workspace` 与每环境 Node/npm PATH。
+- env/unit/wheel 的唯一写入路径是同目录临时文件 → SFTP 回读校验 → `mv -f` 原子替换；env/unit 替换前保留 `.nexus-backup`。临时写入、校验或 rename 失败保留旧目标并清理临时文件，命令只携带路径，不把内容/凭据放入 argv 或异常；同内容只修正权限，不写不重启。
 - `_install_units` 先读取远端现有 Worker env 与 DB 登记 token（`WorkerInstance.token_ciphertext` 可恢复）：digest 一致时沿用，不调用 `enroll`；远端与 DB 不一致或无法证明时明确要求人工修复，不盲目轮换。
 - 装备期望/实际/差异由 `app/runtime/worker_health.py` 的 `desired_equipment` / `probe_equipment` / `equipment_rows` / `repository_payload` 提供；check、deploy/update/restart 结束后都做完整探测，`status_detail` 保存 `observed/deployed` 摘要，desired 仍只从 DB/Skill 源派生。
+- Git 凭据按环境装配：`/etc/nexus/git-{id}.token`（0600）与 `git-{id}-askpass`（0700）。askpass 仅在 Git prompt 时读取 token 文件，token 不进入 argv、unit、jsonc、环境变量或日志。OpenCode unit 与 Worker env 只传 `GIT_ASKPASS/GIT_TERMINAL_PROMPT/GIT_CONFIG_COUNT/GIT_CONFIG_KEY_0/GIT_CONFIG_VALUE_0` 这些安全路径/开关；`child_environ` 仅放行这些明确变量，`NEXUS_*`/token 仍不得进入子进程。凭据文件只在 deploy/update 的占用与 native 复检后按内容差异原子写入；内容轮换不重启，首次 unit/env 接线变化才按必要重启。deployed repository 保存本次实际写入的 `credential_revision`，check/restart/observer 不把新的 desired revision 当已部署。
+- Worker inspection 对真实 `origin` 与当前分支执行有超时的只读 `git ls-remote --exit-code origin refs/heads/<branch>`，不 fetch、不改 refs/工作区，返回 `authentication_verified` 与 `verification_scope=refs:read`；只证明读取，不宣称 push 权限。controller 在线/离线探测消费同一字段。
 - `_gateway_key` 继续读取远端现有 Key 并复用。
 - 新增 `key_applied` 标记：失败时只撤销尚未写入远端配置的新 Key；已写入配置的 Key 不撤销。
 - 重试从 `PREFLIGHT` 开始，复用远端有效配置，不盲重发危险命令。
@@ -175,5 +181,5 @@ data: {"id":42,"operation_id":"op_hex","attempt":1,"type":"step","stage":"prefli
 
 - 租约过期采用保守 `INTERRUPTED` + 保留锁，可能要求人工核对或显式取消；这是为避免盲目重发危险命令的代价。
 - SQLite 与 MySQL 的锁语义不同；通过环境行条件写 + 活动环境唯一索引双保险，真实 MySQL 并发仍需集成验证。
-- 在线重启的原生 idle 检查依赖 Worker OpenCode 接口，接口不可达时按“未知”拒绝危险操作。
+- 在线重启的原生 idle 判断在 Worker 本地执行；接口不可达/超时/结构未知时按未知拒绝，不因控制面重复探测而阻止已停止服务恢复。离线 SSH restart 的 `systemctl` 返回不代表 OpenCode 已就绪；必须有界等待真实 `/global/health` 与 Worker online，否则操作失败而不是提前成功。
 - 真实 SSH/systemd/token/端口和 Linux 权限未在本阶段执行，需在真实 Worker 验收中补充。

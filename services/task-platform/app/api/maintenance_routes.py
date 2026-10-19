@@ -86,7 +86,7 @@ async def maintenance_event_page(
     items = [event_payload(item) for item in events]
     return {
         "items": items,
-        "next_cursor": items[-1]["id"] if items else after_id,
+        "next_cursor": items[-1]["id"] if len(items) == limit else None,
     }
 
 

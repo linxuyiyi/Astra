@@ -1,0 +1,93 @@
+{
+  "generated_at": "2026-10-19T14:00:00Z",
+  "phase": "nexus-v145-worker-recheck-final",
+  "vm": "nexus-v145-qa",
+  "code_fixes": [
+    "reconcile full probe + independent native idle + late worker control command lock",
+    "atomic strict read and 600 backup; Git askpass token file only",
+    "systemd directory no chmod when existing; internal switch_channel not replayed",
+    "event next_cursor null on last page; execution route fencing; actual-only versions/model/repository",
+    "managed Skill content revision restricted to bound skills; unmanaged extra skills preserved but excluded",
+    "per-environment absolute Node path for gateway probe"
+  ],
+  "linux_regression": {
+    "source_manifest": "139172014664b9e48da670e7e2bca2d0ca81752fa0247ad789c0a65051e62000",
+    "source_manifest_after_clean_recompute": "139172014664b9e48da670e7e2bca2d0ca81752fa0247ad789c0a65051e62000",
+    "source_files": 272,
+    "generated_cache_files_excluded_from_drift_check": [".pytest_cache", "__pycache__", ".ruff_cache"],
+    "pytest_files": 22,
+    "pytest": "503 passed, 1 skipped",
+    "pytest_exit_code": 0,
+    "pytest_duration_seconds": 92.32,
+    "skipped": "tests/test_worker_channel_review_fixes.py::test_sweep_statements_execute_on_mysql (MySQL-only, no ASTRA_TEST_MYSQL_URL)",
+    "increment_vs_previous_499": [
+      "3 real subprocess Node probe tests",
+      "1 managed Skill revision vs unmanaged extra Skill test"
+    ],
+    "ruff": "All checks passed",
+    "ruff_exit_code": 0,
+    "host_guest_app_tests": {
+      "host_files": 218,
+      "guest_files": 218,
+      "changed_missing_added": 0,
+      "diff_lines": 0
+    },
+    "redis": {
+      "ownership": "harness-owned redis-server on 61267, save disabled, private state cwd",
+      "db": 14,
+      "ping": true
+    }
+  },
+  "atomic_write_real_ssh": {
+    "transport": "Paramiko key auth from Lima ssh options (values not printed)",
+    "initial_write": true,
+    "second_write": true,
+    "first_preserved_in_backup": true,
+    "final_matches_second": true,
+    "modes_and_owner": ["600 niuniu", "600 niuniu"],
+    "strict_read_failed_without_overwrite": true
+  },
+  "qa_api_restart": {
+    "old_pid": 27395,
+    "new_pid": 28820,
+    "new_listener_owned": true,
+    "health_ok": true
+  },
+  "qa_health_after_restart": {
+    "connection": "online",
+    "schedulable": true,
+    "blocking": [],
+    "skills": {
+      "desired_revision": "2be29b84c89b6f90",
+      "actual_revision": "2be29b84c89b6f90",
+      "verified": true,
+      "diff": []
+    }
+  },
+  "deploy_acceptance": {
+    "note": "controller-only changes; Worker was not redeployed this round. Existing evidence from two successful same-config deploys retained.",
+    "first_operation_id": "op_68cf9f750b82426d96f509a483833edc",
+    "second_operation_id": "op_cd7be305d87c4c1d97c5e4debe1db4a9",
+    "equipment_verified": 6,
+    "token_config_unit_worktree_unchanged": true,
+    "unit_pids_equal": true,
+    "secret_safety_match_count": 0,
+    "worker_instance_id": "wrk_d571a4facaebfea7add456d0124728c9"
+  },
+  "web": {
+    "src_tree_sha256": "a0a951ad228abdce21c2ee980f154e7c6928d86a3a8255bc6710c964ca15dcdd",
+    "rerun_this_recheck": false,
+    "previous_round": "unit tests 15/15, type-check passed, build 4019 modules passed",
+    "ui_snapshot": "docs/reports/evidence/nexus-v145-worker-recheck/ui-worker-list-current.png"
+  },
+  "boundaries": {
+    "x86_64_rerun_this_round": false,
+    "mysql_run": false,
+    "non_root_worker": "not verified",
+    "model": "authentication and route visibility only; no inference",
+    "business_db_or_worker_touched": false,
+    "other_hosts_touched": false,
+    "commit_or_push": false
+  },
+  "credential_note": "临时 QA 凭据需轮换；未更改生产凭据。此前 QA 工具曾误输出隔离环境临时密钥，本次报告不复述该值，也不宣称全程零泄露。"
+}

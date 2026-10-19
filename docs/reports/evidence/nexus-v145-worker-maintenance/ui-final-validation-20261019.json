@@ -1,0 +1,40 @@
+{
+  "generated_at": "2026-10-19T05:38:24Z",
+  "source": "/tmp/nexus-v145-opencode-final-ui-labels.jsonl（仅提取命令与结果，不复制会话）",
+  "scope": "web/nexus 最终阶段中文标签补齐后的验证",
+  "commands": [
+    {
+      "command": "npm test",
+      "exit_code": 0,
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 123.35575
+    },
+    {
+      "command": "npm run type-check",
+      "exit_code": 0,
+      "result": "passed"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "result": "passed",
+      "modules_transformed": 4019,
+      "warning": "既有 chunk 体积超过 500 kB 警告，不影响成功"
+    }
+  ],
+  "checked_stage_labels": [
+    "verify_failed",
+    "disable",
+    "disabled",
+    "restore",
+    "restored",
+    "restore_failed"
+  ],
+  "not_verified": [
+    "未复制或保存整个 OpenCode 会话",
+    "未在本轮重新做浏览器逐项点击；截图由根在真实页面独立采集"
+  ]
+}

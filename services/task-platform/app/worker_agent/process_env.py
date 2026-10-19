@@ -29,6 +29,11 @@ _EXACT = frozenset(
         "https_proxy",
         "no_proxy",
         "NODE_EXTRA_CA_CERTS",
+        "GIT_ASKPASS",
+        "GIT_TERMINAL_PROMPT",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
     }
 )
 _PREFIXES = ("LC_", "XDG_", "SSL_CERT_")

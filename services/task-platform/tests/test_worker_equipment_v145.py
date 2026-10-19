@@ -22,6 +22,7 @@ from app.models import (
 )
 from app.runtime.worker_health import (
     WORKER_AGENT_VERSION,
+    _skills_content_revision,
     desired_equipment,
     equipment_rows,
     health_status,
@@ -571,6 +572,79 @@ def test_same_skill_name_with_old_content_is_not_verified():
     assert row["verified"] is False
     assert any("内容不一致" in item for item in row["diff"])
     assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
+
+
+def test_managed_skill_revision_ignores_unmanaged_extra_skills():
+    desired = _desired()
+    expected = _skills_content_revision(
+        [{"name": "review", "content_hash": "skill-hash"}]
+    )
+    desired["skills"]["content_revision"] = expected
+    observation = _observation(desired)
+    observation["skills"]["content_hashes"]["extra-unmanaged"] = "extra-hash-v1"
+    snapshot = _snapshot(desired)
+
+    row = {item["key"]: item for item in equipment_rows(desired, observation, snapshot)}[
+        "skills"
+    ]
+
+    assert row["desired_revision"] == expected
+    assert row["actual_revision"] == expected
+    assert row["verified"] is True
+    assert row["diff"] == []
+
+    observation["skills"]["content_hashes"]["extra-unmanaged"] = "extra-hash-v2"
+    unchanged = {
+        item["key"]: item
+        for item in equipment_rows(desired, observation, snapshot)
+    }["skills"]
+    assert unchanged["actual_revision"] == expected
+    assert unchanged["verified"] is True
+
+    observation["skills"]["content_hashes"]["review"] = "skill-hash-drifted"
+    drifted = {
+        item["key"]: item
+        for item in equipment_rows(desired, observation, snapshot)
+    }["skills"]
+    assert drifted["actual_revision"] != expected
+    assert drifted["verified"] is False
+
+    observation["skills"]["content_hashes"].pop("review")
+    unknown = {
+        item["key"]: item
+        for item in equipment_rows(desired, observation, snapshot)
+    }["skills"]
+    assert unknown["actual_revision"] is None
+
+
+def test_skill_actual_revision_uses_observed_semantic_content_hashes():
+    desired = _desired()
+    observation = _observation(desired)
+    snapshot = _snapshot(desired)
+
+    row = {item["key"]: item for item in equipment_rows(desired, observation, snapshot)}["skills"]
+
+    assert row["desired_revision"] == "skill-content-revision"
+    assert row["actual_revision"] is not None
+    assert row["actual_revision"] != "skill-revision"
+    baseline = row["actual_revision"]
+
+    observation["skills"]["content_hashes"]["review"] = "drifted-content-hash"
+    drifted = {
+        item["key"]: item
+        for item in equipment_rows(desired, observation, snapshot)
+    }["skills"]
+    assert drifted["actual_revision"] != baseline
+    assert drifted["verified"] is False
+    assert any("内容不一致" in item for item in drifted["diff"])
+
+    observation["skills"]["content_hashes"] = None
+    unknown = {
+        item["key"]: item
+        for item in equipment_rows(desired, observation, snapshot)
+    }["skills"]
+    assert unknown["actual_revision"] is None
+    assert unknown["verified"] is None
 
 
 def test_same_mcp_name_with_wrong_url_is_not_verified():

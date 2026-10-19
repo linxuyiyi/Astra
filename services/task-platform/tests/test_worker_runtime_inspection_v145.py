@@ -614,8 +614,15 @@ async def test_disconnect_gate_stops_queued_restart_before_side_effect(monkeypat
 
 
 async def test_socket_disconnect_does_not_restart_and_result_has_no_canary(
-    tmp_path: Path, opencode_server
+    tmp_path: Path, opencode_server, monkeypatch
 ):
+    # This test owns transport/disconnect/canary behavior. Git auth is covered
+    # by the real HTTP git-http-backend tests, so keep this fixture local and
+    # deterministic instead of depending on external DNS.
+    monkeypatch.setattr(
+        "app.worker_agent.inspection._verify_remote_read",
+        lambda *_args, **_kwargs: (True, None),
+    )
     _state, base = opencode_server
     workspace = _repo(tmp_path / "ws", remote="https://example.test/org/repo.git")
     config = AgentConfig(

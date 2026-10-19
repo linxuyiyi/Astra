@@ -1,0 +1,570 @@
+{
+  "run_id": "571ae7ba84bd446d814aa217fc64996b",
+  "fault": "controller_crash_during_running_deploy",
+  "before": {
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T05:43:27.729193+00:00",
+        "epoch": 9
+      },
+      "maintenance": {
+        "state": "SUCCEEDED",
+        "operation_id": "op_c3e5d95f952a4f98ab9acf1d809fda78",
+        "stage": "verify",
+        "attempt": 1
+      },
+      "runtime_status": "AVAILABLE",
+      "schedulable": true,
+      "blocking": [],
+      "equipment": [
+        {
+          "key": "opencode",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "worker_agent",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "model",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "mcp",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "skills",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "git",
+          "deployed": true,
+          "verified": true
+        }
+      ]
+    },
+    "hashes": {
+      "gateway_token_hash": "89260eeb73b183cb",
+      "mcp_token_hash": "78cf1dd18a75c714",
+      "worker_token_hash": "e546a26aba2e8b00",
+      "git_token_hash": "2cc387232925286e",
+      "git_token_file_present": true,
+      "config_sha256": "1141d85ecb52d5af",
+      "config_bytes": 736,
+      "env_keys": [
+        "GIT_ASKPASS",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_TERMINAL_PROMPT",
+        "NEXUS_MCP_RESOURCE_URL",
+        "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+        "NEXUS_REMOTE_GATEWAY_URL",
+        "NEXUS_WORKER_ENVIRONMENT_ID",
+        "NEXUS_WORKER_GATEWAY_URL",
+        "NEXUS_WORKER_INSTANCE_ID",
+        "NEXUS_WORKER_OPENCODE_BIN",
+        "NEXUS_WORKER_OPENCODE_UNIT",
+        "NEXUS_WORKER_OPENCODE_URL",
+        "NEXUS_WORKER_TOKEN",
+        "NEXUS_WORKER_WORKSPACE_ROOT",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR"
+      ]
+    },
+    "units": {
+      "opencode": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "34418"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "31208"
+      }
+    }
+  },
+  "delay_watcher": {
+    "cmd": "echo CmltcG9ydCBnbG9iLCBvcywgdGltZQpzdGFydD10aW1lLnRpbWUoKQpsb2c9b3BlbignL3RtcC92MTQ1LWZhdWx0NC1kZWxheS5sb2cnLCdhJyxidWZmZXJpbmc9MSkKc2l6ZXM9e30Kc2Vlbj1zZXQoKQplbmQ9c3RhcnQrMzAwCndoaWxlIHRpbWUudGltZSgpPGVuZDoKICAgIGZvciBwIGluIGdsb2IuZ2xvYignL3Jvb3QvLmNhY2hlL25leHVzLXByb3Zpc2lvbi9vcF8qLnNoJyk6CiAgICAgICAgdHJ5OgogICAgICAgICAgICBzdD1vcy5zdGF0KHApCiAgICAgICAgICAgIGlmIHN0LnN0X210aW1lIDwgc3RhcnQtMjogY29udGludWUKICAgICAgICAgICAgaWYgcCBpbiBzZWVuOiBjb250aW51ZQogICAgICAgICAgICBzej1zdC5zdF9zaXplCiAgICAgICAgICAgIGlmIHN6IDwgMTAwMDoKICAgICAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAgICAgIGlmIHNpemVzLmdldChwKSAhPSBzejoKICAgICAgICAgICAgICAgIHNpemVzW3BdPXN6CiAgICAgICAgICAgICAgICBjb250aW51ZQogICAgICAgICAgICB0ZXh0PW9wZW4ocCkucmVhZCgpCiAgICAgICAgICAgIGlmICdIQVJORVNTX0ZBVUxUNF9ERUxBWScgaW4gdGV4dDoKICAgICAgICAgICAgICAgIHNlZW4uYWRkKHApOyBjb250aW51ZQogICAgICAgICAgICB3aXRoIG9wZW4ocCwnYScpIGFzIGY6CiAgICAgICAgICAgICAgICBmLndyaXRlKCdcbnNsZWVwIDMwXG4jIEhBUk5FU1NfRkFVTFQ0X0RFTEFZXG4nKQogICAgICAgICAgICBzZWVuLmFkZChwKQogICAgICAgICAgICBsb2cud3JpdGUoJ3BhdGNoZWQgJXMgJXNcbicgJSAocCwgdGltZS50aW1lKCkpKQogICAgICAgIGV4Y2VwdCBGaWxlTm90Rm91bmRFcnJvcjoKICAgICAgICAgICAgcGFzcwogICAgICAgIGV4Y2VwdCBFeGNlcHRpb24gYXMgZXhjOgogICAgICAgICAgICBsb2cud3JpdGUoJ2Vycm9yICVzICVyXG4nICUgKHAsIGV4YykpCiAgICB0aW1lLnNsZWVwKDAuMDUpCg== | base64 -d > /tmp/v145_fault4_delay.py; nohup python3 /tmp/v145_fault4_delay.py >/tmp/v145-fault4-delay-watch.out 2>&1 & echo $!",
+    "out": "34708\n",
+    "err": ""
+  },
+  "submit": {
+    "status": 202,
+    "json": {
+      "id": "op_52d6308084fd47a8afd94ea9db769a98",
+      "environment_id": 1,
+      "action": "deploy",
+      "state": "QUEUED",
+      "stage": "queued",
+      "attempt": 1,
+      "requested_by": "v145-qa-fault4-crash",
+      "requested_at": "2026-10-19T05:43:30.507237+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "lease_owner": null,
+      "lease_until": null,
+      "cancel_requested": false,
+      "danger_dispatched": false,
+      "reconcile_required": false,
+      "reconcile_only": false,
+      "execution_channel": "ssh",
+      "execution_reason": "安装系统依赖与 per-environment 运行时需要 SSH 管理通道",
+      "retry_of_attempt": null,
+      "target_revision": {
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "branch": "main",
+        "skills": [
+          "nexus-v145-qa-skill"
+        ],
+        "mcp": [],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "before_snapshot": {
+        "environment_id": 1,
+        "mode": "LINUX_REMOTE",
+        "name": "QA Worker A Linux",
+        "host": "127.0.0.1",
+        "port": 56060,
+        "username": "root",
+        "has_ssh_password": true,
+        "opencode_server_port": 44135,
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "model_name": "nexus-gateway/qa-model",
+        "workspace_root": "/root/nexus-v145/worker-a",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "labels": [
+          "qa",
+          "v145",
+          "linux"
+        ],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "after_snapshot": {},
+      "error_code": null,
+      "error_message": null
+    }
+  },
+  "operation_id": "op_52d6308084fd47a8afd94ea9db769a98",
+  "state_at_kill": "RUNNING",
+  "stage_at_kill": "configure",
+  "event_cursor_before_kill": 247,
+  "events_before_kill": 4,
+  "delay_log": {
+    "cmd": "cat /tmp/v145-fault4-delay.log 2>/dev/null || true",
+    "out": "",
+    "err": ""
+  },
+  "api_identity_before_kill": {
+    "name": "api",
+    "pid": 7298,
+    "port": 61273,
+    "zombie": false,
+    "running": true,
+    "create_time_matches": true,
+    "cwd_matches": true,
+    "pgid": 7298,
+    "pgid_matches": true,
+    "listener_owned": true,
+    "listeners": [
+      {
+        "pid": 7298,
+        "address": "127.0.0.1",
+        "port": 61273
+      }
+    ],
+    "ok": true
+  },
+  "kill": {
+    "name": "api",
+    "pid": 7298,
+    "stopped": true,
+    "reason": "SIGTERM group (zombie counts as stopped)"
+  },
+  "api_recovery": {
+    "returncode": 0,
+    "stdout": "{\n  \"run_id\": \"recover-api-5cb1a8738467\",\n  \"old_api\": {\n    \"pid\": 7298,\n    \"create_time\": 1792388518.217808,\n    \"cwd\": \"/Users/niuniu/程序/Astra-worktrees/nexus-v1.4.5-workers/services/task-platform\",\n    \"running\": false\n  },\n  \"new_api\": {\n    \"pid\": 8425,\n    \"create_time\": 1792388634.608624,\n    \"pgid\": 8425,\n    \"cwd\": \"/Users/niuniu/程序/Astra-worktrees/nexus-v1.4.5-workers/services/task-platform\"\n  },\n  \"health\": {\n    \"ok\": true,\n    \"status\": 200,\n    \"body\": \"{\\\"status\\\":\\\"ok\\\",\\\"time\\\":\\\"2026-10-19T05:43:55.404105+00:00\\\"}\"\n  }\n}\n",
+    "stderr": ""
+  },
+  "after_crash_operation": {
+    "state": "INTERRUPTED",
+    "stage": "interrupted",
+    "error_code": "controller_stopped",
+    "error_message": "执行进程停止；请先核对远端状态再重试",
+    "lease_owner": null,
+    "lease_until": null,
+    "reconcile_required": false
+  },
+  "after_crash_remote": {
+    "hashes": {
+      "gateway_token_hash": "89260eeb73b183cb",
+      "mcp_token_hash": "78cf1dd18a75c714",
+      "worker_token_hash": "e546a26aba2e8b00",
+      "git_token_hash": "2cc387232925286e",
+      "git_token_file_present": true,
+      "config_sha256": "1141d85ecb52d5af",
+      "config_bytes": 736,
+      "env_keys": [
+        "GIT_ASKPASS",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_TERMINAL_PROMPT",
+        "NEXUS_MCP_RESOURCE_URL",
+        "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+        "NEXUS_REMOTE_GATEWAY_URL",
+        "NEXUS_WORKER_ENVIRONMENT_ID",
+        "NEXUS_WORKER_GATEWAY_URL",
+        "NEXUS_WORKER_INSTANCE_ID",
+        "NEXUS_WORKER_OPENCODE_BIN",
+        "NEXUS_WORKER_OPENCODE_UNIT",
+        "NEXUS_WORKER_OPENCODE_URL",
+        "NEXUS_WORKER_TOKEN",
+        "NEXUS_WORKER_WORKSPACE_ROOT",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR"
+      ]
+    },
+    "units": {
+      "opencode": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "34418"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "31208"
+      }
+    },
+    "installer_lock": {
+      "free": true,
+      "raw": "rc=0"
+    },
+    "installer_processes": []
+  },
+  "sse_resume": {
+    "cursor": 247,
+    "ids": [
+      248,
+      249,
+      250,
+      251
+    ],
+    "duplicates": false,
+    "all_after_cursor": true,
+    "end_state": "INTERRUPTED",
+    "ok": true,
+    "error": null
+  },
+  "reconcile_submit": {
+    "status": 200,
+    "json": {
+      "id": "op_52d6308084fd47a8afd94ea9db769a98",
+      "environment_id": 1,
+      "action": "deploy",
+      "state": "QUEUED",
+      "stage": "reconcile",
+      "attempt": 2,
+      "requested_by": "v145-qa-fault4-crash",
+      "requested_at": "2026-10-19T05:43:30.507237+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "lease_owner": null,
+      "lease_until": null,
+      "cancel_requested": false,
+      "danger_dispatched": false,
+      "reconcile_required": true,
+      "reconcile_only": true,
+      "execution_channel": "ssh",
+      "execution_reason": "安装系统依赖与 per-environment 运行时需要 SSH 管理通道",
+      "retry_of_attempt": 1,
+      "target_revision": {
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "branch": "main",
+        "skills": [
+          "nexus-v145-qa-skill"
+        ],
+        "mcp": [],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "before_snapshot": {
+        "environment_id": 1,
+        "mode": "LINUX_REMOTE",
+        "name": "QA Worker A Linux",
+        "host": "127.0.0.1",
+        "port": 56060,
+        "username": "root",
+        "has_ssh_password": true,
+        "opencode_server_port": 44135,
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "model_name": "nexus-gateway/qa-model",
+        "workspace_root": "/root/nexus-v145/worker-a",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "labels": [
+          "qa",
+          "v145",
+          "linux"
+        ],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "after_snapshot": {},
+      "error_code": null,
+      "error_message": null
+    }
+  },
+  "reconcile": {
+    "state": "FAILED",
+    "error_code": "reconciled",
+    "error_message": "远端无晚到危险操作，环境健康",
+    "installer_lock": "free",
+    "worker_command": "none",
+    "lease_owner": null,
+    "lease_until": null,
+    "remote_installer_lock": {
+      "free": true,
+      "raw": "rc=0"
+    },
+    "remote_installer_processes": []
+  },
+  "safe_to_retry": true,
+  "retry_submit": {
+    "status": 200,
+    "json": {
+      "id": "op_52d6308084fd47a8afd94ea9db769a98",
+      "environment_id": 1,
+      "action": "deploy",
+      "state": "QUEUED",
+      "stage": "queued",
+      "attempt": 3,
+      "requested_by": "v145-qa-fault4-crash",
+      "requested_at": "2026-10-19T05:43:30.507237+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "lease_owner": null,
+      "lease_until": null,
+      "cancel_requested": false,
+      "danger_dispatched": false,
+      "reconcile_required": false,
+      "reconcile_only": false,
+      "execution_channel": "ssh",
+      "execution_reason": "安装系统依赖与 per-environment 运行时需要 SSH 管理通道",
+      "retry_of_attempt": 2,
+      "target_revision": {
+        "opencode_version": "1.18.35",
+        "worker_agent_version": "1.4.5",
+        "model_name": "nexus-gateway/qa-model",
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "branch": "main",
+        "skills": [
+          "nexus-v145-qa-skill"
+        ],
+        "mcp": [],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "before_snapshot": {
+        "environment_id": 1,
+        "mode": "LINUX_REMOTE",
+        "name": "QA Worker A Linux",
+        "host": "127.0.0.1",
+        "port": 56060,
+        "username": "root",
+        "has_ssh_password": true,
+        "opencode_server_port": 44135,
+        "opencode_path": "/root/.local/share/nexus/workers/1/bin/opencode",
+        "model_name": "nexus-gateway/qa-model",
+        "workspace_root": "/root/nexus-v145/worker-a",
+        "repository_id": "924842e6c92a46ed99e37391688c4852",
+        "labels": [
+          "qa",
+          "v145",
+          "linux"
+        ],
+        "capability_revision": "1f1a427f8c1d9eaa"
+      },
+      "after_snapshot": {},
+      "error_code": null,
+      "error_message": null
+    }
+  },
+  "retry_final": {
+    "state": "SUCCEEDED",
+    "error_code": null,
+    "error_message": null,
+    "health": {
+      "connection": {
+        "channel": "worker",
+        "state": "online",
+        "last_heartbeat_at": "2026-10-19T05:44:01.065427+00:00",
+        "epoch": 10
+      },
+      "maintenance": {
+        "state": "SUCCEEDED",
+        "operation_id": "op_52d6308084fd47a8afd94ea9db769a98",
+        "stage": "verify",
+        "attempt": 3
+      },
+      "runtime_status": "AVAILABLE",
+      "schedulable": true,
+      "blocking": [],
+      "equipment": [
+        {
+          "key": "opencode",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "worker_agent",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "model",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "mcp",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "skills",
+          "deployed": true,
+          "verified": true
+        },
+        {
+          "key": "git",
+          "deployed": true,
+          "verified": true
+        }
+      ]
+    },
+    "hashes": {
+      "gateway_token_hash": "89260eeb73b183cb",
+      "mcp_token_hash": "78cf1dd18a75c714",
+      "worker_token_hash": "e546a26aba2e8b00",
+      "git_token_hash": "2cc387232925286e",
+      "git_token_file_present": true,
+      "config_sha256": "1141d85ecb52d5af",
+      "config_bytes": 736,
+      "env_keys": [
+        "GIT_ASKPASS",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "GIT_TERMINAL_PROMPT",
+        "NEXUS_MCP_RESOURCE_URL",
+        "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
+        "NEXUS_REMOTE_GATEWAY_URL",
+        "NEXUS_WORKER_ENVIRONMENT_ID",
+        "NEXUS_WORKER_GATEWAY_URL",
+        "NEXUS_WORKER_INSTANCE_ID",
+        "NEXUS_WORKER_OPENCODE_BIN",
+        "NEXUS_WORKER_OPENCODE_UNIT",
+        "NEXUS_WORKER_OPENCODE_URL",
+        "NEXUS_WORKER_TOKEN",
+        "NEXUS_WORKER_WORKSPACE_ROOT",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR"
+      ]
+    },
+    "units": {
+      "opencode": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "34418"
+      },
+      "worker": {
+        "active": "active",
+        "enabled": "enabled",
+        "main_pid": "31208"
+      }
+    }
+  },
+  "checks": {
+    "deploy_was_running_at_kill": true,
+    "api_killed_by_identity": true,
+    "operation_interrupted_with_lock": true,
+    "no_token_rotation": true,
+    "no_blind_pid_change": true,
+    "reconcile_safe": true,
+    "retry_succeeded": true,
+    "final_worker_healthy": true,
+    "sse_no_duplicates": true,
+    "delay_fixture_patched": true
+  },
+  "status": "PASS",
+  "delay_fixture": {
+    "log": "patched /root/.cache/nexus-provision/op_52d6308084fd47a8afd94ea9db769a98.sh 1792388611.0653515",
+    "patched": true,
+    "note": "watcher appended sleep 30 to the real uploaded installer script; the report sample was taken before the append"
+  },
+  "harness_issue": "The final health check used health_view truncated rows without configured/diff, producing a false negative. The real /health response has all six configured/deployed/verified with diff=[] and schedulable=true. The delay_log field was sampled before the watcher appended; the actual log confirms the patch.",
+  "final_health_full": {
+    "schedulable": true,
+    "runtime_status": "AVAILABLE",
+    "equipment": [
+      {
+        "key": "opencode",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "worker_agent",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "model",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "mcp",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "skills",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      },
+      {
+        "key": "git",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "diff": []
+      }
+    ]
+  }
+}

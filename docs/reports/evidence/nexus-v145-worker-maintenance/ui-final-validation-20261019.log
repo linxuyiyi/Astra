@@ -1,0 +1,51 @@
+$ npm test && npm run type-check && npm run build
+
+
+> nexus-web@1.4.2 test
+> node --test tests/*.test.ts
+
+✔ mergeMessages dedupes by id and keeps an unconfirmed local message in time order (1.216ms)
+✔ a sent message is inserted after existing history, not before it (0.066583ms)
+✔ mergeMessages does not duplicate the same server message arriving twice (0.042583ms)
+✔ streamCursor only accepts numeric replay cursors (0.076209ms)
+✔ maxCursor keeps the newest replay cursor across reconnects (0.071208ms)
+✔ selection and reload guards reject stale async work (0.36625ms)
+✔ replayed events are ignored by the per-member seen set (0.052375ms)
+✔ a delayed timeline response cannot overwrite a newer one (0.049792ms)
+✔ opening the create drawer stays uncategorized and clean (0.618709ms)
+✔ an edit after the baseline stays dirty (0.082458ms)
+✔ empty and null employee ids compare as the same untouched value (0.054875ms)
+✔ initial offline, unknown health and pending equipment do not block deploy (0.63225ms)
+✔ real occupancy blocks restart/deploy but not disable (0.058708ms)
+✔ health abnormalities are not treated as occupancy (0.051333ms)
+✔ active maintenance blocks actions while interrupted keeps restore/check available (0.047583ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 123.35575
+
+> nexus-web@1.4.2 type-check
+> vue-tsc --noEmit -p tsconfig.json
+
+
+> nexus-web@1.4.2 build
+> vue-tsc --noEmit -p tsconfig.json && vite build
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 4019 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     0.46 kB │ gzip:   0.31 kB
+dist/assets/index-BPojvfbF.css    448.19 kB │ gzip:  62.68 kB
+dist/assets/index-7ONLzgc7.js   2,057.25 kB │ gzip: 664.52 kB
+✓ built in 4.93s
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.

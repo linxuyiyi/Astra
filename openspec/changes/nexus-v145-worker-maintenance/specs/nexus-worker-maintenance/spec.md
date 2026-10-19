@@ -42,8 +42,12 @@
 - **THEN** 提交或危险阶段被拒绝，并返回阻塞原因
 
 #### Scenario: 原生 Session 忙碌
-- **WHEN** 数据库没有占用但 OpenCode 原生 Session 处于 busy 或 retry
+- **WHEN** 数据库没有占用但 OpenCode 原生 Session 处于 busy、retry 或无法确认
 - **THEN** 危险维护被拒绝，不重启或改写运行配置
+
+#### Scenario: 在线重启时服务已停止
+- **WHEN** Worker 在线、OpenCode 明确停止（ECONNREFUSED）且数据库无占用
+- **THEN** Worker 本地 restart 命令允许启动服务；控制面不因重复 HTTP 探测而拒绝
 
 #### Scenario: 只读检查
 - **WHEN** 环境存在占用任务但请求只读检查
@@ -138,3 +142,108 @@
 #### Scenario: 安装失败但旧环境可用
 - **WHEN** 维护在未改变远端或核对确认旧环境仍健康时失败
 - **THEN** 环境保持可用，维护记录失败原因，不误报 Worker 不可用
+
+
+### Requirement: Git 凭据装配与只读验证
+
+系统 SHALL 为每个 Worker 环境独立保存 Git token 与 askpass helper，token MUST NOT 出现在命令行、unit、jsonc、环境变量或日志。deploy/update 在维护租约、占用与原生 Session 复检后原子写入；仅 helper 路径首次接线变化需要重启。Git 认证 MUST 通过真实只读远端引用检查得出，不得以 PID、文件存在或 clone 历史宣告成功，也不得宣称 push 权限已验证。
+
+#### Scenario: 正确与错误 PAT
+- **WHEN** Worker 使用正确 PAT 对真实 origin 执行只读 `ls-remote` 引用检查
+- **THEN** 返回 `authentication_verified=true`；错误 PAT 返回 false 和通用错误，且不泄露 PAT
+
+#### Scenario: PAT 轮换
+- **WHEN** token 文件内容更新但 askpass 路径和 unit/env 未变
+- **THEN** 下一次 Git 操作读取新 token，不要求重启；check/restart 不把新 revision 当已部署
+
+#### Scenario: 认证字段进入健康与调度
+- **WHEN** token 仓库的 `authentication_verified` 不是 true
+- **THEN** Git 装备为未核验，health/scheduling 拒绝调度
+
+
+### Requirement: 最近维护与设备事实一致性
+
+系统 SHALL 按最近一次实际 attempt 时间展示最近维护与历史；retry 后的旧操作 MUST 重新成为最近维护。调度 MUST 依据装备 `configured/deployed/verified` 事实，不得仅因描述性 diff 拒绝，但真实配置差异 MUST 反映为 deployed/verified 失败。
+
+#### Scenario: 旧操作重试晚于新操作
+- **WHEN** 较旧操作在新操作结束后被 retry
+- **THEN** health 的 maintenance、历史列表和分页顺序都显示该旧操作的新 attempt
+
+#### Scenario: Git 工作区 dirty
+- **WHEN** Git 认证与引用读取通过、deployed/verified 均为 true，但工作区有未提交变更
+- **THEN** health 与调度不因该描述性 diff 拒绝；实际 update 仍拒绝 dirty 并保留现场
+
+#### Scenario: 真实装备差异
+- **WHEN** 模型、MCP、Skill 或 Git credential revision 与期望不一致
+- **THEN** deployed 或 verified 为 false，调度被拒绝
+
+
+### Requirement: 通道切换幂等与实际配置核验
+
+系统 SHALL 仅在磁盘配置或真实运行配置与期望不一致时执行受控 reload；磁盘与运行配置均已一致时 MUST NOT 写文件或重启。结果 MUST 用 `verified` 表示实际 Gateway/MCP 地址已核验，`reloaded` 只表示是否执行过 reload，消费者不得以 `reloaded` 代替核验。
+
+#### Scenario: 同配置已生效
+- **WHEN** 磁盘地址与真实运行配置均为期望值
+- **THEN** 不写文件、不改变 mtime、不 reload，返回 `verified=true`
+
+#### Scenario: 磁盘一致但运行配置旧
+- **WHEN** 磁盘文件已是期望值但真实运行配置仍是旧地址
+- **THEN** 在 native-idle 与 owner gate 通过后受控 reload，并重新读取核验
+
+#### Scenario: busy/unknown 或过期 gate
+- **WHEN** 原生 Session busy/unknown 或维护租约已失效
+- **THEN** 不写文件、不 reload
+
+
+### Requirement: 环境文件原子写入与幂等
+
+系统 SHALL 将 Worker env、systemd unit 与 Worker Agent wheel 的同目录临时文件写入、完整回读校验和原子 rename 作为唯一写入路径。写入中断、校验失败或 rename 失败时 MUST 保留旧目标并清理临时文件；env/unit 更新前 MUST 保留旧内容备份。同内容 MUST NOT 重写或触发重启，异常与命令参数 MUST NOT 包含文件内容或凭据。
+
+#### Scenario: 写入中断保留旧目标
+- **WHEN** 临时文件写入、完整性校验或 rename 任一步失败
+- **THEN** 旧 env/unit/wheel 保持原内容与权限，临时文件被清理，错误仅包含脱敏后的路径/命令诊断
+
+#### Scenario: 同内容幂等
+- **WHEN** 目标文件内容与期望一致
+- **THEN** 不重写内容、不创建新临时文件、不因该文件触发 Worker/OpenCode 重启；已有文件权限按期望修正
+
+#### Scenario: 旧 env/unit 备份
+- **WHEN** env 或 systemd unit 内容发生变化并成功替换
+- **THEN** 替换前内容保留在 `<path>.nexus-backup`，回滚由人工执行，不承诺自动回滚
+
+
+### Requirement: 最终核对与事实投影闭环
+
+系统 SHALL 在 reconcile 释放维护锁前重新核对完整装备、原生 Session 空闲与同环境未终态控制指令；完整探测与原生检查 MUST 分别判断，不得用单一 `/global/health` 推断 idle。系统 SHALL 让执行通道、目标提交与实际版本/模型/仓库只来自真实路由、installer meta 或完整探测，未知 MUST 保持 `null`，不得用期望值或本机常量冒充实际值。
+
+#### Scenario: 同 owner 租约过期后续租失败
+- **WHEN** 执行器自己的租约过期且续租失败，终态写入因过期被拒绝
+- **THEN** 下一轮 executor 在领取前恢复该过期租约，不留下永久进行中操作
+
+#### Scenario: 装备健康但原生 Session busy
+- **WHEN** 完整装备探测为健康，但独立读取到的原生 Session 为 busy/retry
+- **THEN** 环境不恢复 `AVAILABLE`，`native` 不写 `idle`，维护锁按核对结果保留或释放但调度仍被阻断
+
+#### Scenario: 晚到控制指令未终态
+- **WHEN** 同环境存在 pending/accepted/dispatched 的 `switch_channel` 或 `restart_opencode` 指令
+- **THEN** reconcile 不释放维护锁，操作保持 `INTERRUPTED` 并记录待核对指令
+
+#### Scenario: 内部通道切换操作
+- **WHEN** 用户对 `switch_channel` 等非六个公开维护动作调用 retry
+- **THEN** retry 被显式拒绝；执行器也不得落入离线 restart，reconcile 仍可用于释放锁
+
+#### Scenario: 目标与实际未知
+- **WHEN** update 没有 installer `remote_commit`，或 deploy/restart 没有可确定的目标提交
+- **THEN** 目标 commit 为 `null`；after snapshot 的版本/模型/仓库只写 installer meta 或完整 probe 的实际值，缺失时保持 `null`
+
+#### Scenario: Skill 实际内容漂移
+- **WHEN** 绑定的 Skill 语义 content hash 与期望 content revision 不一致
+- **THEN** actual revision 只按绑定 Skill 集合计算且与期望不同，verified 为 false；绑定内容不可读/缺失时 actual 为 `null`，不得伪造成已验证
+
+#### Scenario: 额外未管理 Skill
+- **WHEN** 观察到的 Skill 集合包含未在员工绑定中的额外 Skill
+- **THEN** 额外 Skill 保留、不删除、不参与绑定 revision 聚合；其内容变化不改变绑定 actual revision 或 verified
+
+#### Scenario: 首次部署无全局 node
+- **WHEN** 远端 PATH 没有全局 `node`，但本次环境 Node 已安装到每环境绝对路径
+- **THEN** 模型网关探测使用该每环境 Node 路径；缺失或 home 未知时失败，不回退到全局 node

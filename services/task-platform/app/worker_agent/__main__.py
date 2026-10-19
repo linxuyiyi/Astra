@@ -16,7 +16,7 @@ from app.worker_agent.transport import connect_websocket
 
 
 def control_timeout_seconds() -> float:
-    raw = os.environ.get("ASTRA_OPENCODE_CONTROL_TIMEOUT_SECONDS", "").strip()
+    raw = os.environ.get("NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS", "").strip()
     if not raw:
         return 60.0
     try:

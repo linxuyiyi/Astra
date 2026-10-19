@@ -1,0 +1,110 @@
+{
+  "phase": "qa",
+  "status": "failed",
+  "run_id": "78c7fad10dfd495dbfeb2f03959b2e6c",
+  "checks": [
+    {
+      "name": "services.preflight",
+      "status": "PASS"
+    },
+    {
+      "name": "gateway",
+      "status": "PASS"
+    },
+    {
+      "name": "mcp",
+      "status": "PASS"
+    },
+    {
+      "name": "repository.register",
+      "status": "PASS"
+    },
+    {
+      "name": "worker.worker-a.setup",
+      "status": "PASS"
+    },
+    {
+      "name": "worker.worker-a.repository",
+      "status": "FAIL"
+    },
+    {
+      "name": "workers.reset",
+      "status": "PASS"
+    },
+    {
+      "name": "worker.worker-a.maintenance.terminal",
+      "status": "PASS"
+    },
+    {
+      "name": "worker.worker-a.maintenance.succeeded",
+      "status": "FAIL"
+    },
+    {
+      "name": "worker.worker-a.maintenance.sse_resume",
+      "status": "PASS"
+    },
+    {
+      "name": "worker.worker-a.worker.health",
+      "status": "FAIL"
+    },
+    {
+      "name": "worker.worker-a.worker.ssh",
+      "status": "PASS"
+    },
+    {
+      "name": "worker.worker-a.worker.units",
+      "status": "FAIL"
+    },
+    {
+      "name": "worker.worker-a.worker.opencode_loopback",
+      "status": "FAIL"
+    },
+    {
+      "name": "worker.worker-a.worker.skill_installed",
+      "status": "PASS"
+    },
+    {
+      "name": "worker.worker-a.worker.skill_discovered",
+      "status": "FAIL"
+    },
+    {
+      "name": "worker.worker-a.worker.mcp_connected",
+      "status": "FAIL"
+    },
+    {
+      "name": "worker.worker-a.worker.git_clone",
+      "status": "PASS"
+    },
+    {
+      "name": "worker.worker-a.worker.env_prefix_alignment",
+      "status": "FAIL"
+    },
+    {
+      "name": "worker.worker-a.worker.config_provider",
+      "status": "PASS"
+    },
+    {
+      "name": "worker.worker-a.worker.config_provider_alignment",
+      "status": "PASS"
+    },
+    {
+      "name": "actions.update_disable_restore",
+      "status": "PENDING"
+    },
+    {
+      "name": "git.update",
+      "status": "PENDING"
+    },
+    {
+      "name": "aliases.workers",
+      "status": "PASS"
+    }
+  ],
+  "not_verified": [
+    "model inference / chat completions (intentionally not called)",
+    "Task execution with a real prompt (intentionally not called)",
+    "future maintenance actions update/disable/restore (not exposed by this working tree)",
+    "browser UI interactions or screenshots (Codex will drive Cua)",
+    "remote private-repository PAT/push (the fixture is a VM-local file:// bare repository)"
+  ]
+}

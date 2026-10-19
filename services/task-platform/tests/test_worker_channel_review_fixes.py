@@ -27,11 +27,12 @@ from app.models import (
     WorkerCommand,
     WorkerHttpSlot,
     WorkerInstance,
+    WorkerMaintenanceOperation,
     utcnow,
 )
 from app.runtime.lifecycle import MessageHistoryIncomplete, RuntimeService, RuntimeStateError
 from app.runtime.recovery import _refresh_with_client
-from app.runtime.remote_provisioning import RemoteProvisioner, guard_environment_write, operation_active
+from app.runtime.remote_provisioning import RemoteProvisioner, guard_environment_write
 from app.runtime.session_connection import connect
 from app.runtime.worker_channel import main as channel_main
 from app.runtime.worker_channel import mark_worker_channel, read_worker_channel
@@ -267,15 +268,15 @@ def test_child_environ_drops_worker_credentials_and_restart_is_not_pure(tmp_path
         "HOME": "/home/dev",
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
-        "ASTRA_WORKER_TOKEN": "wtk_secret",
-        "ASTRA_WORKER_GATEWAY_URL": "ws://nexus/api/worker-gateway/connect",
-        "ASTRA_GATEWAY_MASTER_KEY": "master",
+        "NEXUS_WORKER_TOKEN": "wtk_secret",
+        "NEXUS_WORKER_GATEWAY_URL": "ws://nexus/api/worker-gateway/connect",
+        "NEXUS_GATEWAY_MASTER_KEY": "master",
     }
     cleaned = child_environ(source)
     assert cleaned["PATH"] == "/usr/bin"
-    assert "ASTRA_WORKER_TOKEN" not in cleaned
-    assert "ASTRA_WORKER_GATEWAY_URL" not in cleaned
-    assert "ASTRA_GATEWAY_MASTER_KEY" not in cleaned
+    assert "NEXUS_WORKER_TOKEN" not in cleaned
+    assert "NEXUS_WORKER_GATEWAY_URL" not in cleaned
+    assert "NEXUS_GATEWAY_MASTER_KEY" not in cleaned
     captured: dict[str, object] = {}
 
     def popen(cmd, **kwargs):
@@ -284,22 +285,26 @@ def test_child_environ_drops_worker_credentials_and_restart_is_not_pure(tmp_path
         return SimpleNamespace()
 
     monkeypatch.setattr("app.worker_agent.channel_switch._listener_pid", lambda _port: None)
+    monkeypatch.setattr("app.worker_agent.channel_switch._probe_listener", lambda _port: False)
     monkeypatch.setattr("app.worker_agent.channel_switch.probe_url", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr("app.worker_agent.channel_switch._wait_until_healthy", lambda *_a, **_k: None)
     monkeypatch.setattr("app.worker_agent.channel_switch.subprocess.Popen", popen)
     workspace = tmp_path / "ws"
     workspace.mkdir()
     restart_local_opencode(
         str(workspace),
         4096,
-        environ={**source, "ASTRA_WORKER_OPENCODE_BIN": "/opt/opencode"},
+        environ={**source, "NEXUS_WORKER_OPENCODE_BIN": "/opt/opencode"},
     )
     assert captured["cmd"] == ["/opt/opencode", "serve", "--hostname", "127.0.0.1", "--port", "4096"]
     assert "--pure" not in captured["cmd"]
-    assert "ASTRA_WORKER_TOKEN" not in captured["env"]
+    assert "NEXUS_WORKER_TOKEN" not in captured["env"]
 
 
 def test_restart_refuses_a_port_that_is_not_opencode(tmp_path, monkeypatch):
     killed: list[int] = []
+    monkeypatch.setattr("app.worker_agent.channel_switch._probe_listener", lambda _port: True)
+    monkeypatch.setattr("app.worker_agent.channel_switch._read_native_status", lambda *_a, **_k: {})
     monkeypatch.setattr("app.worker_agent.channel_switch._listener_pid", lambda _port: 4321)
     monkeypatch.setattr("app.worker_agent.channel_switch._opencode_listener", lambda _pid: False)
     monkeypatch.setattr("app.worker_agent.channel_switch.os.kill", lambda pid, _sig: killed.append(pid))
@@ -319,6 +324,7 @@ def test_systemd_restart_does_not_inherit_the_worker_token(tmp_path, monkeypatch
 
     monkeypatch.setattr("app.worker_agent.channel_switch.subprocess.run", run)
     monkeypatch.setattr("app.worker_agent.channel_switch.probe_url", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr("app.worker_agent.channel_switch._wait_until_healthy", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "app.worker_agent.channel_switch.subprocess.Popen",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("systemd 路径不应再拉起进程")),
@@ -331,12 +337,12 @@ def test_systemd_restart_does_not_inherit_the_worker_token(tmp_path, monkeypatch
         environ={
             "PATH": "/usr/bin",
             "HOME": "/home/dev",
-            "ASTRA_WORKER_TOKEN": "wtk_secret",
-            "ASTRA_WORKER_OPENCODE_UNIT": "opencode.service",
+            "NEXUS_WORKER_TOKEN": "wtk_secret",
+            "NEXUS_WORKER_OPENCODE_UNIT": "opencode.service",
         },
     )
     assert calls[0][0] == ["systemctl", "restart", "opencode.service"]
-    assert "ASTRA_WORKER_TOKEN" not in calls[0][1]
+    assert "NEXUS_WORKER_TOKEN" not in calls[0][1]
 
 
 def test_oversized_event_frame_becomes_a_gap_marker():
@@ -501,8 +507,15 @@ async def test_switch_holds_the_maintenance_lock_until_the_mark(environment_id):
 
         async def occupy():
             async with SessionLocal() as other:
-                stored = await other.get(OpenCodeExecutionEnvironment, environment_id)
-                assert operation_active(stored)
+                operation = await other.scalar(
+                    select(WorkerMaintenanceOperation).where(
+                        WorkerMaintenanceOperation.environment_id == environment_id,
+                        WorkerMaintenanceOperation.state.in_(
+                            ["QUEUED", "PREFLIGHT", "RUNNING", "VERIFYING", "INTERRUPTED"]
+                        ),
+                    )
+                )
+                assert operation is not None
                 other.add(
                     Task(
                         id="T-during-switch",
@@ -519,9 +532,13 @@ async def test_switch_holds_the_maintenance_lock_until_the_mark(environment_id):
             await mark_worker_channel(session, environment_id, switch=occupy)
         assert blocked.value.status_code == 409
         assert await read_worker_channel(session, environment_id) == "ssh"
-        stored = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        await session.refresh(stored)
-        assert not operation_active(stored)
+        operation = await session.scalar(
+            select(WorkerMaintenanceOperation)
+            .where(WorkerMaintenanceOperation.environment_id == environment_id)
+            .order_by(WorkerMaintenanceOperation.requested_at.desc())
+        )
+        assert operation.state == "INTERRUPTED"
+        assert operation.active_environment_id == environment_id
 
 
 def test_admin_command_route_rejects_switch_channel():
@@ -668,25 +685,30 @@ async def test_refresh_snapshot_survives_a_closed_session(monkeypatch):
     assert snapshot.current_session_id is None
 
 
-def _running_operation(*, expires_in: float) -> dict:
-    now = datetime.now(UTC)
-    return {
-        "operation": {
-            "id": "op-held",
-            "action": "switch_channel",
-            "state": "RUNNING",
-            "previous_status": "UNKNOWN",
-            "started_at": now.isoformat(),
-            "expires_at": (now + timedelta(seconds=expires_in)).isoformat(),
-        }
-    }
-
-
 async def _hold_operation(environment_id: int, *, expires_in: float = 300, status: str = "UNKNOWN") -> str:
+    now = datetime.now(UTC)
     async with SessionLocal() as session:
         environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
         environment.status = status
-        environment.status_detail = _running_operation(expires_in=expires_in)
+        session.add(
+            WorkerMaintenanceOperation(
+                id="op_" + uuid4().hex,
+                environment_id=environment_id,
+                action="switch_channel",
+                state="RUNNING",
+                stage="channel",
+                requested_by="test-hold",
+                attempt=1,
+                lease_owner="test-hold",
+                lease_until=now + timedelta(seconds=expires_in),
+                target_revision={},
+                before_snapshot={},
+                after_snapshot={},
+                active_environment_id=environment_id,
+                requested_at=now,
+                started_at=now,
+            )
+        )
         await session.commit()
         return environment.employee_id
 
@@ -789,8 +811,15 @@ async def test_second_switch_cannot_replace_a_running_reservation(environment_id
     running = asyncio.create_task(first())
     await asyncio.wait_for(started.wait(), 3)
     async with SessionLocal() as session:
-        stored = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        operation_id = stored.status_detail["operation"]["id"]
+        operation = await session.scalar(
+            select(WorkerMaintenanceOperation).where(
+                WorkerMaintenanceOperation.environment_id == environment_id,
+                WorkerMaintenanceOperation.state.in_(
+                    ["QUEUED", "PREFLIGHT", "RUNNING", "VERIFYING", "INTERRUPTED"]
+                ),
+            )
+        )
+        operation_id = operation.id
         with pytest.raises(HTTPException) as blocked:
             await mark_worker_channel(
                 session,
@@ -799,8 +828,15 @@ async def test_second_switch_cannot_replace_a_running_reservation(environment_id
             )
         assert blocked.value.status_code == 409
         await session.rollback()
-        stored = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        assert stored.status_detail["operation"]["id"] == operation_id
+        operation = await session.scalar(
+            select(WorkerMaintenanceOperation).where(
+                WorkerMaintenanceOperation.environment_id == environment_id,
+                WorkerMaintenanceOperation.state.in_(
+                    ["QUEUED", "PREFLIGHT", "RUNNING", "VERIFYING", "INTERRUPTED"]
+                ),
+            )
+        )
+        assert operation.id == operation_id
     release.set()
     switched = await running
     assert switched.worker_channel == "worker"
@@ -830,7 +866,7 @@ async def test_start_and_send_reject_an_active_maintenance_reservation(environme
             )
         )
         await session.commit()
-        with pytest.raises(RuntimeStateError, match="部署或重启"):
+        with pytest.raises(RuntimeStateError, match="维护"):
             await RuntimeService(session).start(start_id)
     async with SessionLocal() as session:
         session.add(
@@ -846,7 +882,7 @@ async def test_start_and_send_reject_an_active_maintenance_reservation(environme
             )
         )
         await session.commit()
-        with pytest.raises(RuntimeStateError, match="部署或重启"):
+        with pytest.raises(RuntimeStateError, match="维护"):
             await RuntimeService(session).send(send_id, {"messageID": "msg_maint000001"})
     async with SessionLocal() as session:
         started = await session.get(Task, start_id)
@@ -855,11 +891,20 @@ async def test_start_and_send_reject_an_active_maintenance_reservation(environme
 
 
 @pytest.mark.asyncio
-async def test_expired_maintenance_reservation_allows_the_environment_write(environment_id):
+async def test_expired_lease_does_not_release_unknown_maintenance_lock(environment_id):
     await _hold_operation(environment_id, expires_in=-5, status="UNKNOWN")
     async with SessionLocal() as session:
         environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        await guard_environment_write(session, environment)
+        with pytest.raises(HTTPException):
+            await guard_environment_write(session, environment)
+        await session.rollback()
+    from app.runtime.maintenance import recover_expired
+
+    await recover_expired("test-recovery")
+    async with SessionLocal() as session:
+        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
+        with pytest.raises(HTTPException):
+            await guard_environment_write(session, environment)
         await session.rollback()
 
 
@@ -1157,8 +1202,8 @@ def test_child_environ_keeps_proxy_ca_and_an_explicit_allowlist():
             "no_proxy": "localhost",
             "NODE_EXTRA_CA_CERTS": "/etc/ssl/certs/ca.pem",
             "CUSTOM_CA_BUNDLE": "/etc/ssl/custom.pem",
-            "ASTRA_WORKER_CHILD_ENV_ALLOW": "CUSTOM_CA_BUNDLE,ASTRA_WORKER_TOKEN,OPENAI_API_KEY",
-            "ASTRA_WORKER_TOKEN": "wtk_secret",
+            "NEXUS_WORKER_CHILD_ENV_ALLOW": "CUSTOM_CA_BUNDLE,NEXUS_WORKER_TOKEN,OPENAI_API_KEY",
+            "NEXUS_WORKER_TOKEN": "wtk_secret",
             "OPENAI_API_KEY": "sk-secret",
         }
     )
@@ -1168,9 +1213,9 @@ def test_child_environ_keeps_proxy_ca_and_an_explicit_allowlist():
     assert cleaned["no_proxy"] == "localhost"
     assert cleaned["NODE_EXTRA_CA_CERTS"] == "/etc/ssl/certs/ca.pem"
     assert cleaned["CUSTOM_CA_BUNDLE"] == "/etc/ssl/custom.pem"
-    assert "ASTRA_WORKER_TOKEN" not in cleaned
+    assert "NEXUS_WORKER_TOKEN" not in cleaned
     assert "OPENAI_API_KEY" not in cleaned
-    assert "ASTRA_WORKER_CHILD_ENV_ALLOW" not in cleaned
+    assert "NEXUS_WORKER_CHILD_ENV_ALLOW" not in cleaned
 
 
 async def _until(predicate) -> None:

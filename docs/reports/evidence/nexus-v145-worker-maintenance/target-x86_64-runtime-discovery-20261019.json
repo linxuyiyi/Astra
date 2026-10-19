@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-10-19T04:33:36.347217+00:00",
+  "target_ip": "47.77.219.113",
+  "target_dir_exists": false,
+  "glibc": "glibc 2.17",
+  "kernel": "3.10.0-514.26.2.el7.x86_64",
+  "arch": "x86_64",
+  "system_python2": "Python 2.7.5",
+  "python3_command": null,
+  "usr_bin_python3_exists": false,
+  "usr_local_bin_python3_exists": false,
+  "tools": {
+    "curl": "/usr/bin/curl",
+    "wget": "/usr/bin/wget",
+    "tar": "/usr/bin/tar",
+    "sha256sum": "/usr/bin/sha256sum",
+    "ss": "/usr/sbin/ss",
+    "docker": "/usr/bin/docker"
+  },
+  "network": {
+    "github_http_code": "302",
+    "interface_172_17_13_60": [
+      "2: eth0    inet 172.17.13.60/18 brd 172.17.63.255 scope global dynamic eth0\\       valid_lft 1891893755sec preferred_lft 1891893755sec"
+    ],
+    "listen_18041_18044": []
+  },
+  "disk_opt": "Filesystem        1-blocks        Used   Available Capacity Mounted on\n/dev/vda1      42139451392 10442125312 29533171712      27% /",
+  "memory": "total        used        free      shared  buff/cache   available\nMem:           1758         180         307           0        1269        1409\nSwap:          2047           0        2047",
+  "redis": {
+    "path": null,
+    "version": "bash: redis-server: command not found"
+  },
+  "docker_images": [
+    "llm-wiki-web:0.6.11|67d5637de8d9|324MB",
+    "<none>:<none>|6e4f6de54406|272MB",
+    "llm-wiki:0.6.12|88afe5720e36|815MB",
+    "ubuntu:22.04|e7a996328f5c|69.8MB",
+    "ubuntu:<none>|e8df6c74f650|78.1MB"
+  ],
+  "python_candidates": []
+}

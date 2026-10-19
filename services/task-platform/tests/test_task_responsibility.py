@@ -255,8 +255,8 @@ async def test_running_replaces_waiting_progress(session):
 def test_opencode_model_names():
     assert route_model_id(None) == "deepseek-flash"
     assert route_model_id("deepseek/deepseek-flash") == "deepseek-flash"
-    assert route_model_id("astra-gateway/deepseek-flash") == "deepseek-flash"
-    assert gateway_model(None) == "astra-gateway/deepseek-flash"
-    assert gateway_model("deepseek/deepseek-flash") == "astra-gateway/deepseek-flash"
+    assert route_model_id("nexus-gateway/deepseek-flash") == "deepseek-flash"
+    assert gateway_model(None) == "nexus-gateway/deepseek-flash"
+    assert gateway_model("deepseek/deepseek-flash") == "nexus-gateway/deepseek-flash"
     assert direct_model("opencode/glm-5.1", None) == "opencode/glm-5.1"
     assert direct_model(None, "deepseek/deepseek-flash") == "deepseek/deepseek-flash"

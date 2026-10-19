@@ -78,7 +78,7 @@ def test_copy_keeps_the_repository_and_drops_secrets(monkeypatch, tmp_path):
                     "port": 2222,
                     "opencode_server_port": 19991,
                     "ssh_password": "ssh-secret-value",
-                    "model_name": "astra-gateway/demo",
+                    "model_name": "nexus-gateway/demo",
                     "workspace_root": "/tmp/workspaces/source-worker",
                     "labels": ["runtime"],
                 },
@@ -146,7 +146,7 @@ def test_copy_keeps_the_repository_and_drops_secrets(monkeypatch, tmp_path):
         environment = body["employee"]["execution_environment"]
         assert environment["repository_id"] == repository_id
         assert environment["branch"] == "release"
-        assert environment["model_name"] == "astra-gateway/demo"
+        assert environment["model_name"] == "nexus-gateway/demo"
         assert environment["skill_refs"] == ["review"]
         assert environment["mcp_refs"] == [{"name": "library", "url": "http://127.0.0.1/mcp"}]
         assert environment["labels"] == ["runtime"]

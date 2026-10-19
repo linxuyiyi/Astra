@@ -7,21 +7,24 @@ import os
 import subprocess
 import sys
 import zipfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.database import SessionLocal, init_database
 from app.gateway.models import GatewayKey, GatewayPool, GatewayRoute
 from app.gateway.security import gateway_key_digest
-from app.models import DigitalEmployee, OpenCodeExecutionEnvironment
+from app.models import DigitalEmployee, OpenCodeExecutionEnvironment, WorkerMaintenanceOperation
 from app.runtime.environment import ExecutionEnvironmentRuntime
+from app.runtime.maintenance import OperationLease, submit_operation
 from app.runtime.opencode_model import gateway_model
-from app.runtime.remote_provisioning import AGENT_PYTHON, RemoteProvisioner, agent_wheel, reserve_operation
+from app.runtime.remote_provisioning import RemoteProvisioner, agent_python, agent_wheel
 from app.runtime.worker_channel import complete_worker_mark, read_worker_channel
 from app.runtime.workspace_files import upload, validate_path
 from app.worker_agent.connection import handle_command
@@ -30,6 +33,31 @@ from app.worker_agent.supervisor import RuntimeSupervisor
 from app.worker_gateway.data_channel import DataChannel
 from app.worker_gateway.protocol import envelope
 from tests.test_worker_gateway import authenticate, gateway_for
+
+
+@pytest.fixture(autouse=True)
+def healthy_observation(monkeypatch):
+    from app.domain import EnvironmentStatus
+
+    async def fake(environment_id, *, persist=False, **_kwargs):
+        now = datetime.now(UTC)
+        return {
+            "stale": False,
+            "status": EnvironmentStatus.AVAILABLE,
+            "desired": {},
+            "observation": {"source": "test"},
+            "equipment": [],
+            "repository": None,
+            "checked_at": now,
+            "values": {
+                "status": EnvironmentStatus.AVAILABLE,
+                "last_checked_at": now,
+                "status_detail": {},
+            },
+        }
+
+    monkeypatch.setattr("app.runtime.maintenance.observe_environment", fake)
+
 
 GATEWAY = "http://10.0.0.8:8110"
 MCP = "http://10.0.0.8:8201/mcp"
@@ -77,6 +105,30 @@ async def _employee(**overrides) -> tuple[str, int]:
         return employee_id, row.id
 
 
+async def _reserve(employee_id, action):
+    async with SessionLocal() as db:
+        environment = await db.scalar(
+            select(OpenCodeExecutionEnvironment).where(
+                OpenCodeExecutionEnvironment.employee_id == employee_id
+            )
+        )
+        operation = await submit_operation(db, environment.id, action, requested_by="test")
+        now = datetime.now(UTC)
+        operation.state = "PREFLIGHT"
+        operation.stage = "preflight"
+        operation.lease_owner = "test-lease"
+        operation.lease_until = now + timedelta(hours=1)
+        operation.started_at = now
+        await db.commit()
+        await db.refresh(operation)
+        environment_id = environment.id
+    async with SessionLocal() as db:
+        environment = await db.get(OpenCodeExecutionEnvironment, environment_id)
+        db.expunge(environment)
+    lease = OperationLease(operation.id, operation.attempt, "test-lease", 3600)
+    return environment, operation, lease
+
+
 async def _complete(gateway, frame, epoch, result):
     reply = envelope(
         request_id=frame["request_id"],
@@ -102,8 +154,7 @@ async def test_deploy_rejects_loopback_before_ssh(monkeypatch):
     monkeypatch.setattr(get_settings(), "mcp_transport", "streamable-http")
     monkeypatch.setattr(get_settings(), "remote_gateway_local_url", "http://127.0.0.1:8110")
     employee_id, _environment_id = await _employee()
-    async with SessionLocal() as db:
-        environment, operation = await reserve_operation(employee_id, "deploy", db)
+    environment, operation, lease = await _reserve(employee_id, "deploy")
     called = False
 
     async def opened(self, _environment):
@@ -117,7 +168,7 @@ async def test_deploy_rejects_loopback_before_ssh(monkeypatch):
     async def emit(event):
         events.append(event)
 
-    await RemoteProvisioner(environment, operation).run(emit)
+    await RemoteProvisioner(environment, operation, lease=lease).run(emit)
     assert called is False
     assert events[-1]["success"] is False
     assert "内网" in events[-1]["message"]
@@ -127,8 +178,7 @@ async def test_deploy_rejects_loopback_before_ssh(monkeypatch):
 async def test_failed_switch_does_not_mark_worker(monkeypatch):
     _direct(monkeypatch)
     employee_id, environment_id = await _employee()
-    async with SessionLocal() as db:
-        _environment, operation = await reserve_operation(employee_id, "deploy", db)
+    _environment, operation, lease = await _reserve(employee_id, "deploy")
 
     def fake_switch(*_args):
         async def switch():
@@ -139,7 +189,7 @@ async def test_failed_switch_does_not_mark_worker(monkeypatch):
     monkeypatch.setattr("app.runtime.worker_channel._worker_switch", fake_switch)
     with pytest.raises(HTTPException) as error:
         async with SessionLocal() as db:
-            await complete_worker_mark(db, environment_id, operation["id"])
+            await complete_worker_mark(db, environment_id, operation.id, lease=lease)
     assert error.value.status_code == 409
     async with SessionLocal() as db:
         assert await read_worker_channel(db, environment_id) == "ssh"
@@ -156,6 +206,22 @@ async def test_online_restart_does_not_open_ssh(monkeypatch):
     queues = gateway.bus.bound[enrolled.worker_instance_id]
 
     async def answer():
+        status = await queues.wait_frame()
+        assert status["payload"]["name"] == "http"
+        assert status["payload"]["data"]["path"] == "/session/status"
+        async with SessionLocal() as session:
+            await DataChannel(gateway).commit_upload(
+                session,
+                request_id=status["request_id"],
+                worker_instance_id=enrolled.worker_instance_id,
+                epoch=auth.epoch,
+                upload_id="status",
+                http_status=200,
+                headers={},
+                content_type="application/json",
+                chunk=json.dumps({"ses_idle": {"type": "idle"}}),
+                complete=True,
+            )
         frame = await queues.wait_frame()
         assert frame["payload"]["name"] == "restart_opencode"
         await _complete(gateway, frame, auth.epoch, {"restarted": True})
@@ -176,8 +242,7 @@ async def test_online_restart_does_not_open_ssh(monkeypatch):
             )
 
     running = asyncio.create_task(answer())
-    async with SessionLocal() as db:
-        environment, operation = await reserve_operation(employee_id, "restart", db)
+    environment, operation, lease = await _reserve(employee_id, "restart")
     called = False
 
     async def opened(self, _environment):
@@ -191,7 +256,7 @@ async def test_online_restart_does_not_open_ssh(monkeypatch):
     async def emit(event):
         events.append(event)
 
-    await RemoteProvisioner(environment, operation).run(emit)
+    await RemoteProvisioner(environment, operation, lease=lease).run(emit)
     await running
     assert called is False
     assert events[-1]["success"] is True
@@ -205,9 +270,8 @@ async def test_online_restart_does_not_require_ssh_password(monkeypatch):
     monkeypatch.setattr("app.runtime.worker_client.get_gateway", lambda: gateway)
     employee_id, environment_id = await _employee(ssh_password=None)
     await authenticate_existing(gateway, environment_id)
-    async with SessionLocal() as db:
-        environment, operation = await reserve_operation(employee_id, "restart", db)
-    assert operation["action"] == "restart"
+    environment, operation, lease = await _reserve(employee_id, "restart")
+    assert operation.action == "restart"
     assert environment.ssh_password is None
 
 
@@ -241,8 +305,7 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
             )
         )
         await db.commit()
-    async with SessionLocal() as db:
-        environment, operation = await reserve_operation(employee_id, "deploy", db)
+    environment, operation, lease = await _reserve(employee_id, "deploy")
 
     files: dict[str, bytes] = {}
     commands: list[str] = []
@@ -293,7 +356,7 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
                 return files[path]
             if path.endswith("opencode.json") or path.endswith("opencode.jsonc"):
                 return json.dumps(
-                    {"provider": {"astra-gateway": {"options": {"apiKey": RAW_KEY}}}}
+                    {"provider": {"nexus-gateway": {"options": {"apiKey": RAW_KEY}}}}
                 ).encode()
             return None
 
@@ -320,8 +383,8 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
         auth = await authenticate(
             gateway,
             environment_id,
-            values["ASTRA_WORKER_INSTANCE_ID"],
-            values["ASTRA_WORKER_TOKEN"],
+            values["NEXUS_WORKER_INSTANCE_ID"],
+            values["NEXUS_WORKER_TOKEN"],
             "auth-install",
         )
         assert await gateway.bus.set_owner(
@@ -393,7 +456,7 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
     async def emit(event):
         events.append(event)
 
-    await RemoteProvisioner(environment, operation).run(emit)
+    await RemoteProvisioner(environment, operation, lease=lease).run(emit)
     assert events[-1]["success"] is True, events[-1]
     assert ssh_calls == ["ssh"]
     assert seen[:2] == ["switch_channel", "http"]
@@ -403,13 +466,13 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
             texts.append(value.decode())
         except UnicodeDecodeError:
             continue
-    assert any(f"ASTRA_REMOTE_GATEWAY_URL={GATEWAY}" in text for text in texts)
-    assert any(f"ASTRA_MCP_RESOURCE_URL={MCP}" in text for text in texts)
-    assert any("ASTRA_WORKER_OPENCODE_URL=http://127.0.0.1:4096" in text for text in texts)
+    assert any(f"NEXUS_REMOTE_GATEWAY_URL={GATEWAY}" in text for text in texts)
+    assert any(f"NEXUS_MCP_RESOURCE_URL={MCP}" in text for text in texts)
+    assert any("NEXUS_WORKER_OPENCODE_URL=http://127.0.0.1:4096" in text for text in texts)
     assert any("serve --hostname 127.0.0.1 --port 4096" in text for text in texts)
-    assert any(GATEWAY in text and "astra-gateway" in text for text in texts)
+    assert any(GATEWAY in text and "nexus-gateway" in text for text in texts)
     wheels = [path for path in files if path.endswith(".whl")]
-    assert wheels == ["/opt/nexus/worker/astra_worker_agent-0.4.0-py3-none-any.whl"]
+    assert wheels == [f"/opt/nexus/workers/{environment_id}/nexus_worker_agent-1.4.5-py3-none-any.whl"]
     with zipfile.ZipFile(io.BytesIO(files[wheels[0]])) as archive:
         packed = set(archive.namelist())
     assert "app/worker_agent/__main__.py" in packed
@@ -417,14 +480,14 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
     assert "app/config/settings.py" not in packed
     assert "app/worker_gateway/service.py" not in packed
     install = next(command for command in commands if "pip install" in command)
-    assert install.startswith("python3 -m venv /opt/nexus/worker/venv && ")
-    assert f"{AGENT_PYTHON} -m pip install" in install
+    assert install.startswith(f"python3 -m venv /opt/nexus/workers/{environment_id}/venv && ")
+    assert f"{agent_python(environment_id)} -m pip install" in install
     assert "--force-reinstall" in install
     assert wheels[0] in install
     worker_unit = f"nexus-worker-{environment_id}.service"
     opencode_unit = f"nexus-opencode-{environment_id}.service"
     unit = files[f"/etc/systemd/system/{worker_unit}"].decode()
-    assert f"ExecStart={AGENT_PYTHON} -m app.worker_agent\n" in unit
+    assert f"ExecStart={agent_python(environment_id)} -m app.worker_agent\n" in unit
     assert "/usr/bin/python3" not in unit
     skill_dir = f"/etc/nexus/opencode/{environment_id}"
     opencode = files[f"/etc/systemd/system/{opencode_unit}"].decode()
@@ -435,7 +498,7 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
     assert restart == (
         "systemctl daemon-reload && "
         f"systemctl enable {opencode_unit} {worker_unit} && "
-        f"systemctl start {opencode_unit} && "
+        f"systemctl restart {opencode_unit} && "
         f"systemctl restart {worker_unit}"
     )
     assert commands.index(install) < commands.index(restart)
@@ -443,8 +506,8 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
         stored = await db.get(OpenCodeExecutionEnvironment, environment_id)
         assert stored.worker_channel == "worker"
         assert stored.ssh_password == "test-ssh-secret"
-        assert stored.status_detail["operation"]["id"] == operation["id"]
-        assert stored.status_detail["operation"]["state"] == "SUCCEEDED"
+        finished = await db.get(WorkerMaintenanceOperation, operation.id)
+        assert finished.state == "SUCCEEDED"
         ready = SimpleNamespace(id=stored.id, mode=stored.mode)
     relative = await validate_path(ready, workspace, ".")
     assert relative == "."
@@ -459,9 +522,10 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
 def test_restart_command_restarts_local_opencode(monkeypatch):
     seen = {}
 
-    def restart(workspace, port, *, environ=None):
+    def restart(workspace, port, *, environ=None, gate=None):
         seen["workspace"] = workspace
         seen["port"] = port
+        seen["gate"] = gate
 
     monkeypatch.setattr("app.worker_agent.channel_switch.restart_local_opencode", restart)
     message = envelope(
@@ -472,15 +536,26 @@ def test_restart_command_restarts_local_opencode(monkeypatch):
         message_type="command",
         payload={"name": "restart_opencode", "data": {"workspace": "/srv/project", "port": 4096}},
     )
-    result, error = handle_command(message, RuntimeSupervisor())
+    def gate():
+        return None
+
+    result, error = handle_command(
+        message,
+        RuntimeSupervisor(),
+        workspace_root="/srv/project",
+        opencode_url="http://127.0.0.1:4096",
+        gate=gate,
+    )
     assert error is None
     assert result == {"restarted": True}
-    assert seen == {"workspace": "/srv/project", "port": 4096}
+    assert seen["workspace"] == "/srv/project"
+    assert seen["port"] == 4096
+    assert seen["gate"] is gate
 
 
 def test_linux_remote_model_stays_on_the_gateway():
-    assert gateway_model("deepseek-flash") == "astra-gateway/deepseek-flash"
-    assert gateway_model("opencode/glm-5.1") == "astra-gateway/glm-5.1"
+    assert gateway_model("deepseek-flash") == "nexus-gateway/deepseek-flash"
+    assert gateway_model("opencode/glm-5.1") == "nexus-gateway/glm-5.1"
     source = Path("app/runtime/lifecycle.py").read_text(encoding="utf-8")
     assert "effective_model = gateway_model(raw_model)" in source
 

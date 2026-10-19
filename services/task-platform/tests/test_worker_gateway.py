@@ -595,7 +595,7 @@ def test_disconnect_does_not_restart_opencode_and_reconnect_uses_new_epoch():
 
 def test_agent_config_requires_token_and_does_not_echo_it():
     with pytest.raises(SystemExit) as caught:
-        load_agent_config({"ASTRA_WORKER_GATEWAY_URL": "ws://nexus", "ASTRA_WORKER_INSTANCE_ID": "wrk"})
+        load_agent_config({"NEXUS_WORKER_GATEWAY_URL": "ws://nexus", "NEXUS_WORKER_INSTANCE_ID": "wrk"})
     assert "TOKEN" in str(caught.value)
     assert "wtk_" not in str(caught.value)
 

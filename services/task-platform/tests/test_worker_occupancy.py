@@ -11,8 +11,8 @@ from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
 from app.models import Base, DigitalEmployee, OpenCodeExecutionEnvironment, RuntimeSession, Task
 from app.runtime.dispatcher import Dispatcher
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
+from app.runtime.maintenance import submit_operation
 from app.runtime.occupancy import task_occupies
-from app.runtime.remote_provisioning import reserve_operation
 
 
 @pytest.fixture
@@ -216,10 +216,14 @@ async def test_heartbeat_does_not_clear_occupied_worker(session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_maintenance_blocks_until_release_matches_unknown_session(session, monkeypatch):
-    monkeypatch.setattr("app.runtime.remote_provisioning.get_settings", lambda: SimpleNamespace(
+    settings = SimpleNamespace(
         remote_deploy_timeout_seconds=30,
         mcp_transport="streamable-http",
-    ))
+        worker_maintenance_lease_seconds=60,
+        remote_opencode_version="1.18.35",
+    )
+    monkeypatch.setattr("app.runtime.remote_provisioning.get_settings", lambda: settings)
+    monkeypatch.setattr("app.runtime.maintenance.get_settings", lambda: settings)
     employee = DigitalEmployee(
         id="E1",
         name="Remote",
@@ -255,12 +259,20 @@ async def test_maintenance_blocks_until_release_matches_unknown_session(session,
         )
     )
     await session.commit()
+    environment_id = environment.id
 
-    with pytest.raises(Exception, match="占用") as blocked:
-        await reserve_operation("E1", "deploy", session)
-    assert getattr(blocked.value, "status_code", None) == 409
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as blocked:
+        await submit_operation(
+            session, environment_id, "deploy", requested_by="test"
+        )
+    assert blocked.value.status_code == 409
 
     await RuntimeService(session).confirm_execution_stop("T1", operator="ada", reason="已停止")
-    await reserve_operation("E1", "deploy", session)
+    operation = await submit_operation(
+        session, environment_id, "deploy", requested_by="test"
+    )
+    assert operation.state == "QUEUED"
     await session.refresh(environment)
-    assert environment.status == "CHECKING"
+    assert environment.status == "UNKNOWN"

@@ -570,7 +570,7 @@ class GatewayDataPlane:
             models.append(model)
         now = int(time.time())
         data = [
-            {"id": model, "object": "model", "created": now, "owned_by": "astra-gateway"}
+            {"id": model, "object": "model", "created": now, "owned_by": "nexus-gateway"}
             for model in sorted(models)
         ]
         return JSONResponse({"object": "list", "data": data})

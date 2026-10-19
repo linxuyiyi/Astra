@@ -20,6 +20,7 @@ class Settings(BaseSettings):
         env_file=REPO_ROOT / "ops" / "env" / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     app_name: str = "Nexus"
@@ -51,26 +52,52 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/1"
     # auto：redis_url 非空时用 Redis 共享连接所有者；URL 为空才退回 memory。
     # memory / redis 可显式覆盖。memory 会在健康接口提示仅单进程可用。
-    worker_gateway_bus: Literal["auto", "memory", "redis"] = "auto"
-    worker_gateway_ping_seconds: int = Field(default=20, ge=1, le=300)
-    worker_gateway_ping_timeout_seconds: int = Field(default=10, ge=1, le=300)
-    worker_gateway_reconnect_min_seconds: float = Field(default=1, ge=0.1, le=60)
-    worker_gateway_reconnect_max_seconds: float = Field(default=30, ge=1, le=300)
-    worker_gateway_max_frame_bytes: int = Field(default=262144, ge=1024, le=1048576)
-    worker_gateway_control_queue_size: int = Field(default=64, ge=1, le=10000)
-    worker_gateway_event_queue_size: int = Field(default=64, ge=1, le=10000)
-    worker_gateway_heartbeat_misses: int = Field(default=2, ge=1, le=10)
-    worker_gateway_command_timeout_seconds: int = Field(default=30, ge=1, le=600)
-    worker_gateway_auth_timeout_seconds: int = Field(default=10, ge=1, le=60)
-    worker_gateway_dispatch_lease_seconds: int = Field(default=10, ge=1, le=600)
+    worker_gateway_bus: Literal["auto", "memory", "redis"] = Field(
+        default="auto", validation_alias="NEXUS_WORKER_GATEWAY_BUS"
+    )
+    worker_gateway_ping_seconds: int = Field(
+        default=20, ge=1, le=300, validation_alias="NEXUS_WORKER_GATEWAY_PING_SECONDS"
+    )
+    worker_gateway_ping_timeout_seconds: int = Field(
+        default=10, ge=1, le=300, validation_alias="NEXUS_WORKER_GATEWAY_PING_TIMEOUT_SECONDS"
+    )
+    worker_gateway_reconnect_min_seconds: float = Field(
+        default=1, ge=0.1, le=60, validation_alias="NEXUS_WORKER_GATEWAY_RECONNECT_MIN_SECONDS"
+    )
+    worker_gateway_reconnect_max_seconds: float = Field(
+        default=30, ge=1, le=300, validation_alias="NEXUS_WORKER_GATEWAY_RECONNECT_MAX_SECONDS"
+    )
+    worker_gateway_max_frame_bytes: int = Field(
+        default=262144, ge=1024, le=1048576, validation_alias="NEXUS_WORKER_GATEWAY_MAX_FRAME_BYTES"
+    )
+    worker_gateway_control_queue_size: int = Field(
+        default=64, ge=1, le=10000, validation_alias="NEXUS_WORKER_GATEWAY_CONTROL_QUEUE_SIZE"
+    )
+    worker_gateway_event_queue_size: int = Field(
+        default=64, ge=1, le=10000, validation_alias="NEXUS_WORKER_GATEWAY_EVENT_QUEUE_SIZE"
+    )
+    worker_gateway_heartbeat_misses: int = Field(
+        default=2, ge=1, le=10, validation_alias="NEXUS_WORKER_GATEWAY_HEARTBEAT_MISSES"
+    )
+    worker_gateway_command_timeout_seconds: int = Field(
+        default=30, ge=1, le=600, validation_alias="NEXUS_WORKER_GATEWAY_COMMAND_TIMEOUT_SECONDS"
+    )
+    worker_gateway_auth_timeout_seconds: int = Field(
+        default=10, ge=1, le=60, validation_alias="NEXUS_WORKER_GATEWAY_AUTH_TIMEOUT_SECONDS"
+    )
+    worker_gateway_dispatch_lease_seconds: int = Field(
+        default=10, ge=1, le=600, validation_alias="NEXUS_WORKER_GATEWAY_DISPATCH_LEASE_SECONDS"
+    )
     # 空值时由启动流程生成并写入 ops/env/.env。管理接口校验这把密钥，WebSocket 不使用它。
-    worker_gateway_admin_key: str = ""
+    worker_gateway_admin_key: str = Field(default="", validation_alias="NEXUS_WORKER_GATEWAY_ADMIN_KEY")
     # How long an open event stream waits for a disconnected Worker before it
     # emits a gap and ends. A new epoch inside this window resumes the stream.
-    worker_event_offline_grace_seconds: float = Field(default=30, ge=1, le=600)
+    worker_event_offline_grace_seconds: float = Field(
+        default=30, ge=1, le=600, validation_alias="NEXUS_WORKER_EVENT_OFFLINE_GRACE_SECONDS"
+    )
     # Extra environment names copied into OpenCode, comma-separated. ASTRA_* and
     # token/key/secret names are never copied, even when listed here.
-    worker_child_env_allow: str = ""
+    worker_child_env_allow: str = Field(default="", validation_alias="NEXUS_WORKER_CHILD_ENV_ALLOW")
     scout_interval: int = 30
     dispatcher_interval: int = 5
     heartbeat_interval: int = 10
@@ -92,15 +119,17 @@ class Settings(BaseSettings):
     nexus_api_base: str = "http://127.0.0.1:18120"
     agentscope_base_url: str = "http://127.0.0.1:18000"
     agentscope_user_id: str = "nexus"
-    task_mcp_host: str = "127.0.0.1"
-    task_mcp_port: int = Field(default=18202, ge=1, le=65535)
+    task_mcp_host: str = Field(default="127.0.0.1", validation_alias="NEXUS_TASK_MCP_HOST")
+    task_mcp_port: int = Field(default=18202, ge=1, le=65535, validation_alias="NEXUS_TASK_MCP_PORT")
     # Shared with Nexus API (NEXUS_TASK_MCP_KEY). Empty rejects every Task MCP call.
-    task_mcp_key: str | None = None
+    task_mcp_key: str | None = Field(default=None, validation_alias="NEXUS_TASK_MCP_KEY")
     opencode_timeout_seconds: int = 3600
     # Control-plane requests (status/messages/session/abort/prompt) must never
     # inherit the long execution budget; a stalled control call has to fail fast
     # so one slow Session cannot block supervision.
-    opencode_control_timeout_seconds: int = Field(default=60, ge=5, le=600)
+    opencode_control_timeout_seconds: int = Field(
+        default=60, ge=5, le=600, validation_alias="NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS"
+    )
     opencode_server_url: str | None = None
     opencode_server_hostname: str = "127.0.0.1"
     opencode_server_port: int = Field(default=14096, ge=1, le=65535)
@@ -118,30 +147,55 @@ class Settings(BaseSettings):
     # restart must never start a second Session while the old one can still
     # write to the shared task workspace.
     opencode_restart_abort_timeout_seconds: int = Field(default=10, ge=1, le=300)
-    ssh_connect_timeout_seconds: int = 10
+    ssh_connect_timeout_seconds: int = Field(default=10, validation_alias="NEXUS_SSH_CONNECT_TIMEOUT_SECONDS")
 
-    remote_opencode_version: str = "1.18.35"
-    remote_node_version: str = "22.23.3"
-    remote_npm_registry: str = "https://registry.npmmirror.com"
+    remote_opencode_version: str = Field(default="1.18.35", validation_alias="NEXUS_REMOTE_OPENCODE_VERSION")
+    remote_node_version: str = Field(default="22.23.3", validation_alias="NEXUS_REMOTE_NODE_VERSION")
+    remote_npm_registry: str = Field(
+        default="https://registry.npmmirror.com", validation_alias="NEXUS_REMOTE_NPM_REGISTRY"
+    )
     # Empty uses python3 on the remote. The interpreter must already be >= 3.11.
-    remote_python: str = ""
+    remote_python: str = Field(default="", validation_alias="NEXUS_REMOTE_PYTHON")
     # Empty keeps pip's default index. A value is passed as pip -i.
-    remote_pip_index_url: str = ""
-    remote_deploy_timeout_seconds: int = Field(default=1200, ge=60, le=3600)
-    remote_gateway_local_url: str = "http://127.0.0.1:18110"
-    remote_gateway_public_url: str | None = None
+    remote_pip_index_url: str = Field(default="", validation_alias="NEXUS_REMOTE_PIP_INDEX_URL")
+    remote_deploy_timeout_seconds: int = Field(
+        default=1200, ge=60, le=3600, validation_alias="NEXUS_REMOTE_DEPLOY_TIMEOUT_SECONDS"
+    )
+    # 独立维护 executor 的租约与轮询；租约必须短于部署超时并由执行器持续续租。
+    worker_maintenance_lease_seconds: int = Field(
+        default=60, ge=15, le=600, validation_alias="NEXUS_WORKER_MAINTENANCE_LEASE_SECONDS"
+    )
+    worker_maintenance_poll_seconds: float = Field(
+        default=1.0, ge=0.05, le=60, validation_alias="NEXUS_WORKER_MAINTENANCE_POLL_SECONDS"
+    )
+    worker_health_interval_seconds: int = Field(
+        default=30, ge=0, le=3600, validation_alias="NEXUS_WORKER_HEALTH_INTERVAL_SECONDS"
+    )
+    worker_health_max_age_seconds: int = Field(
+        default=90, ge=5, le=86400, validation_alias="NEXUS_WORKER_HEALTH_MAX_AGE_SECONDS"
+    )
+    remote_gateway_local_url: str = Field(
+        default="http://127.0.0.1:18110", validation_alias="NEXUS_REMOTE_GATEWAY_LOCAL_URL"
+    )
+    remote_gateway_public_url: str | None = Field(
+        default=None, validation_alias="NEXUS_REMOTE_GATEWAY_PUBLIC_URL"
+    )
     # WebSocket the remote Worker Agent dials. Deploy rejects an empty or loopback value.
-    worker_agent_gateway_url: str = ""
+    worker_agent_gateway_url: str = Field(default="", validation_alias="NEXUS_WORKER_AGENT_GATEWAY_URL")
 
-    mcp_transport: Literal["stdio", "streamable-http"] = "stdio"
-    mcp_host: str = "127.0.0.1"
-    mcp_port: int = Field(default=18201, ge=1, le=65535)
-    mcp_streamable_http_path: str = "/mcp"
-    mcp_api_key: str | None = None
+    mcp_transport: Literal["stdio", "streamable-http"] = Field(
+        default="stdio", validation_alias="NEXUS_MCP_TRANSPORT"
+    )
+    mcp_host: str = Field(default="127.0.0.1", validation_alias="NEXUS_MCP_HOST")
+    mcp_port: int = Field(default=18201, ge=1, le=65535, validation_alias="NEXUS_MCP_PORT")
+    mcp_streamable_http_path: str = Field(default="/mcp", validation_alias="NEXUS_MCP_STREAMABLE_HTTP_PATH")
+    mcp_api_key: str | None = Field(default=None, validation_alias="NEXUS_MCP_API_KEY")
     # Optional public MCP URL. Deploy uses mcp_resource_server_url and rejects loopback.
-    mcp_public_url: str | None = None
-    mcp_issuer_url: str = "http://127.0.0.1:18201"
-    mcp_resource_server_url: str = "http://127.0.0.1:18201/mcp"
+    mcp_public_url: str | None = Field(default=None, validation_alias="NEXUS_MCP_PUBLIC_URL")
+    mcp_issuer_url: str = Field(default="http://127.0.0.1:18201", validation_alias="NEXUS_MCP_ISSUER_URL")
+    mcp_resource_server_url: str = Field(
+        default="http://127.0.0.1:18201/mcp", validation_alias="NEXUS_MCP_RESOURCE_SERVER_URL"
+    )
 
     llm_wiki_enabled: bool = False
     llm_wiki_api_base_url: str = "http://127.0.0.1:19828/api/v1"
@@ -206,6 +260,36 @@ class Settings(BaseSettings):
     # 已吊销 Key 摘要的后台追平周期：Redis 清空/重启后据此从 DB 重建阻断列表。
     gateway_revocation_sync_interval: int = Field(default=60, ge=5, le=86400)
 
+    @model_validator(mode="after")
+    def reject_legacy_worker_env_names(self):
+        """Worker/remote/MCP use only NEXUS_*; old ASTRA_* names are rejected."""
+
+        legacy = []
+        for field in type(self).model_fields.values():
+            alias = field.validation_alias
+            if isinstance(alias, str) and alias.startswith("NEXUS_"):
+                old = "ASTRA_" + alias.removeprefix("NEXUS_")
+                if old in os.environ:
+                    legacy.append(old)
+        env_file = type(self).model_config.get("env_file")
+        if env_file:
+            try:
+                for line in Path(env_file).read_text(encoding="utf-8").splitlines():
+                    key = line.split("=", 1)[0].strip()
+                    if not key.startswith("ASTRA_"):
+                        continue
+                    alias = "NEXUS_" + key.removeprefix("ASTRA_")
+                    if any(field.validation_alias == alias for field in type(self).model_fields.values()):
+                        legacy.append(key)
+            except OSError:
+                pass
+        if legacy:
+            raise ValueError(
+                "以下 Worker/远程/MCP 环境变量已迁移到 NEXUS_*，不再接受旧名："
+                + ", ".join(sorted(set(legacy)))
+            )
+        return self
+
     @field_validator("database_backend")
     @classmethod
     def validate_database_backend(cls, value: str) -> str:
@@ -256,8 +340,7 @@ class Settings(BaseSettings):
             raise ValueError("ASTRA_OPENCODE_SERVER_VERSION 不能为空")
         if normalized == "0.0.0":
             raise ValueError(
-                "不能用 0.0.0 关闭版本校验；如需关闭请设置 "
-                "ASTRA_OPENCODE_SERVER_VERSION_CHECK_ENABLED=false"
+                "不能用 0.0.0 关闭版本校验；如需关闭请设置 ASTRA_OPENCODE_SERVER_VERSION_CHECK_ENABLED=false"
             )
         if not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", normalized):
             raise ValueError("ASTRA_OPENCODE_SERVER_VERSION 必须是完整版本号")
@@ -290,9 +373,9 @@ class Settings(BaseSettings):
             and self.mcp_host not in {"127.0.0.1", "localhost", "::1"}
             and not self.mcp_api_key
         ):
-            raise ValueError("数字图书馆 MCP 非 loopback 监听时必须配置 ASTRA_MCP_API_KEY")
+            raise ValueError("数字图书馆 MCP 非 loopback 监听时必须配置 NEXUS_MCP_API_KEY")
         if not self.mcp_streamable_http_path.startswith("/"):
-            raise ValueError("ASTRA_MCP_STREAMABLE_HTTP_PATH 必须以 / 开头")
+            raise ValueError("NEXUS_MCP_STREAMABLE_HTTP_PATH 必须以 / 开头")
         if self.gateway_enabled and self.environment == "production":
             if not self.gateway_master_key:
                 raise ValueError("生产模式启用 API 中转时必须配置 ASTRA_GATEWAY_MASTER_KEY")

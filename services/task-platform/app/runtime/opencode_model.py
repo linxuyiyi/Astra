@@ -1,8 +1,8 @@
-"""OpenCode 模型字符串。直连用 provider/model，远程经网关用 astra-gateway/<路由 id>。"""
+"""OpenCode 模型字符串。直连用 provider/model，远程经网关用 nexus-gateway/<路由 id>。"""
 
 DEFAULT_MODEL_ID = "deepseek-flash"
 DIRECT_PROVIDER = "deepseek"
-GATEWAY_PROVIDER = "astra-gateway"
+GATEWAY_PROVIDER = "nexus-gateway"
 
 
 def route_model_id(value: str | None) -> str:

@@ -119,7 +119,7 @@ SERVICES: dict[str, dict[str, Any]] = {
         "log_env": "TASK_MCP_LOG",
         "default_log": "/tmp/nexus-task-mcp.log",
         "command": task_mcp_command,
-        "port": lambda: _env_port("ASTRA_TASK_MCP_PORT", 18202),
+        "port": lambda: _env_port("NEXUS_TASK_MCP_PORT", 18202),
         "health": lambda port: f"http://127.0.0.1:{port}/health",
         "headers": lambda: {},
     },

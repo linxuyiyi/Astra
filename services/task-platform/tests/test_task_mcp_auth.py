@@ -35,7 +35,7 @@ def test_authenticate_rejects_missing_and_forged_identity():
 async def test_middleware_does_not_trust_employee_header_alone(monkeypatch):
     from app.config.settings import get_settings
 
-    monkeypatch.setenv("ASTRA_TASK_MCP_KEY", "secret")
+    monkeypatch.setenv("NEXUS_TASK_MCP_KEY", "secret")
     get_settings.cache_clear()
 
     async def endpoint(_request):

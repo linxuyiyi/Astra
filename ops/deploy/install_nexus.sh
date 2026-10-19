@@ -178,9 +178,9 @@ step_secrets() {
   v="${ASTRA_GATEWAY_MASTER_KEY:-$(get_kv "$SECRETS" ASTRA_GATEWAY_MASTER_KEY)}"
   [ -n "$v" ] || v="$("$NEXUS_ROOT/services/task-platform/.venv/bin/python" -c 'from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())')"
   upsert_kv "$SECRETS" ASTRA_GATEWAY_MASTER_KEY "$v"
-  v="${ASTRA_MCP_API_KEY:-$(get_kv "$SECRETS" ASTRA_MCP_API_KEY)}"
+  v="${NEXUS_MCP_API_KEY:-$(get_kv "$SECRETS" NEXUS_MCP_API_KEY)}"
   [ -n "$v" ] || v="$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')"
-  upsert_kv "$SECRETS" ASTRA_MCP_API_KEY "$v"
+  upsert_kv "$SECRETS" NEXUS_MCP_API_KEY "$v"
   upsert_kv "$SECRETS" DEEPSEEK_API_KEY "$DEEPSEEK_API_KEY"
   upsert_kv "$SECRETS" OPENAI_API_KEY "$DEEPSEEK_API_KEY"
   if [ "$WITH_WIKI" = 1 ]; then
@@ -197,10 +197,10 @@ step_runenv() {
   { cat <<ENV
 PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
 ASTRA_GATEWAY_PROBE_TIMEOUT_SECONDS=30
-ASTRA_MCP_TRANSPORT=streamable-http
-ASTRA_MCP_HOST=127.0.0.1
-ASTRA_MCP_PORT=18201
-ASTRA_TASK_MCP_PORT=18202
+NEXUS_MCP_TRANSPORT=streamable-http
+NEXUS_MCP_HOST=127.0.0.1
+NEXUS_MCP_PORT=18201
+NEXUS_TASK_MCP_PORT=18202
 ASTRA_REDIS_URL=redis://127.0.0.1:6379/1
 ASTRA_OUTBOX_INTERVAL=2
 ASTRA_OUTBOX_RETRY_SECONDS=5

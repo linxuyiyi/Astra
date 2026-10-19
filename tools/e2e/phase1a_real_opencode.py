@@ -45,7 +45,7 @@ def configure_environment(root: Path, workspace: Path, port: int, model: str, bi
             "ASTRA_OPENCODE_BINARY": binary,
             "ASTRA_OPENCODE_MODEL": model,
             "ASTRA_OPENCODE_TIMEOUT_SECONDS": "300",
-            "ASTRA_MCP_TRANSPORT": "stdio",
+            "NEXUS_MCP_TRANSPORT": "stdio",
         }
     )
 

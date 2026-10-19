@@ -82,7 +82,7 @@ cd web/nexus && npm run type-check && npm run build
 
 - 官方 `get_toolkit` 会挂上任务规划、`ToolStop`、定时任务和 Agent Team。启动脚本在组装之后卸掉这些名字，保留 `contact_employee` 和工作区文件工具。没有修改 AgentScope 安装包。
 - 聊天验证目标是 DeepSeek 的 OpenAI 兼容接口：`OPENAI_BASE_URL=https://api.deepseek.com`，`OPENAI_MODEL=deepseek-flash`。密钥用 `OPENAI_API_KEY`，或在它为空时用 `DEEPSEEK_API_KEY`。
-- OpenCode 执行模型默认 `ASTRA_OPENCODE_MODEL=deepseek/deepseek-flash`。Worker 自己的 `model_name` 优先。远程 Worker 经网关写成 `astra-gateway/deepseek-flash`。
+- OpenCode 执行模型默认 `ASTRA_OPENCODE_MODEL=deepseek/deepseek-flash`。Worker 自己的 `model_name` 优先。远程 Worker 经网关写成 `nexus-gateway/deepseek-flash`。
 - 知识库没有启用。`GET /knowledge_bases/` 会是 503。本地嵌入只通过 `services/agent-service/embedding_smoke.py` 做冒烟。
 - `PER_SESSION` 只隔离工作目录，不是进程或文件沙箱。
 - `X-User-ID` 仍是 Agent Service 的占位身份。私聊用浏览器里的匿名标识隔离，不是登录账号。

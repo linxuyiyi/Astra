@@ -1950,7 +1950,7 @@ async def test_diff_stays_redacted_when_remote_connect_fails(runtime, monkeypatc
     class Client:
         async def exchange(self, method, path, *, params=None, body=None, session_id=None, task_id=None):
             if path == "/config":
-                payload = {"provider": {"astra-gateway": {"options": {"apiKey": secret}}}}
+                payload = {"provider": {"nexus-gateway": {"options": {"apiKey": secret}}}}
                 return 200, json.dumps(payload).encode(), {}
             return 200, b"{}", {}
 
@@ -2071,7 +2071,7 @@ async def test_global_config_alone_does_not_make_a_cold_diff_known(runtime, monk
         async def exchange(self, method, path, *, params=None, body=None, session_id=None, task_id=None):
             if path == "/config":
                 await asyncio.sleep(30)
-                payload = {"provider": {"astra-gateway": {"options": {"apiKey": secret}}}}
+                payload = {"provider": {"nexus-gateway": {"options": {"apiKey": secret}}}}
                 return 200, json.dumps(payload).encode(), {}
             if path == "/global/config":
                 return 200, b"{}", {}
@@ -3003,7 +3003,7 @@ async def test_remote_worker_redacts_configured_secret_values(runtime, monkeypat
         if request.url.path == "/config":
             return httpx.Response(
                 200,
-                json={"provider": {"astra-gateway": {"options": {"apiKey": canary, "baseURL": "http://gw"}}}},
+                json={"provider": {"nexus-gateway": {"options": {"apiKey": canary, "baseURL": "http://gw"}}}},
             )
         if request.url.path == "/global/config":
             return httpx.Response(200, json={})
@@ -3167,7 +3167,7 @@ async def test_remote_config_secrets_are_read_once_inside_the_cache_window(runti
         if request.url.path == "/config":
             return httpx.Response(
                 200,
-                json={"provider": {"astra-gateway": {"options": {"apiKey": canary}}}},
+                json={"provider": {"nexus-gateway": {"options": {"apiKey": canary}}}},
             )
         if request.url.path == "/global/config":
             return httpx.Response(200, json={})

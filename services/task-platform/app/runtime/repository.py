@@ -29,7 +29,7 @@ Runner = Callable[[list[str], dict[str, str]], tuple[int, str, str]]
 _ASKPASS = """#!/bin/sh
 case "$1" in
   *Username*) printf '%s\\n' git ;;
-  *) printf '%s\\n' "$ASTRA_GIT_TOKEN" ;;
+  *) printf '%s\\n' "$NEXUS_GIT_TOKEN" ;;
 esac
 """
 
@@ -96,7 +96,7 @@ def clone_repository(
         env["GIT_ASKPASS"] = str(script)
         env["GIT_TERMINAL_PROMPT"] = "0"
         if token:
-            env["ASTRA_GIT_TOKEN"] = token
+            env["NEXUS_GIT_TOKEN"] = token
         code, err, out = run(command, env)
     if code:
         message = redact_secret((err or out or "git clone 失败").strip(), token)

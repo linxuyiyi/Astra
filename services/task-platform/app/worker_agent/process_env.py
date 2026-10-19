@@ -33,7 +33,13 @@ _EXACT = frozenset(
 )
 _PREFIXES = ("LC_", "XDG_", "SSL_CERT_")
 _BLOCKED_PARTS = ("TOKEN", "KEY", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL")
-_ALLOW_ENV = "ASTRA_WORKER_CHILD_ENV_ALLOW"
+_BLOCKED_PREFIXES = ("ASTRA_", "NEXUS_")
+_ALLOW_ENV = "NEXUS_WORKER_CHILD_ENV_ALLOW"
+
+
+def _blocked(name: str) -> bool:
+    upper = name.upper()
+    return any(upper.startswith(prefix) for prefix in _BLOCKED_PREFIXES)
 
 
 def _extra_allowed(name: str) -> bool:
@@ -41,7 +47,7 @@ def _extra_allowed(name: str) -> bool:
     if not name or any(character not in letters for character in name):
         return False
     upper = name.upper()
-    if upper.startswith("ASTRA_"):
+    if _blocked(upper):
         return False
     return not any(part in upper for part in _BLOCKED_PARTS)
 
@@ -62,5 +68,5 @@ def child_environ(source: dict[str, str] | None = None) -> dict[str, str]:
     return {
         key: value
         for key, value in env.items()
-        if key in allowed or key.startswith(_PREFIXES)
+        if not _blocked(key) and (key in allowed or key.startswith(_PREFIXES))
     }

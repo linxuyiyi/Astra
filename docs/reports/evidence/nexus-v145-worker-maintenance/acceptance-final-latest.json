@@ -1,0 +1,105 @@
+{
+  "phase": "acceptance-v145-linux-regression-final",
+  "generated_at": "2026-10-19T04:24:30Z",
+  "run_id": "20261019T042337Z-final",
+  "vm": "nexus-v145-qa",
+  "guest_src": "/opt/nexus-v145-regression/src",
+  "guest_venv": "/opt/nexus-v145-regression/venv",
+  "snapshot": {
+    "manifest": "8b7b23410789bb7ad222656caffaf96ba7e8bb8670de60110295d2e9ac9be22c",
+    "file_count": 270,
+    "host_source": "/Users/niuniu/程序/Astra-worktrees/nexus-v1.4.5-workers/services/task-platform",
+    "host_python": "3.12.13",
+    "guest_python": "3.12.3",
+    "sensitive_exclusions": "retained by prepare_regression.py (no .git/.venv/data/logs/configs/.env/credentials/caches/db)",
+    "drift_after_run": 0
+  },
+  "commands": [
+    {
+      "command": "prepare_regression.py --reuse-venv",
+      "exit_code": 0,
+      "result": "prepared; pip_ok=true; pip_check_ok=true; imports_ok=true",
+      "log": "/tmp/nexus-v145-qa/logs/acceptance-final-prepare-20261019T042337Z-final.log"
+    },
+    {
+      "command": "stage /opt/ops, /opt/docs, /opt/web/nexus/public/opencode-workspace",
+      "exit_code": 0,
+      "result": "staged real worktree dependencies required by repo_root/UI bundle tests",
+      "log": "/tmp/nexus-v145-qa/logs/acceptance-final-deps-20261019T042337Z-final.log"
+    },
+    {
+      "command": "pytest (17 files, writable ASTRA_DATA_DIR/LOG_DIR/RUNTIME_DIR/CONFIG_DIR)",
+      "exit_code": 0,
+      "result": "415 passed, 0 failed, 3 skipped",
+      "log": "/tmp/nexus-v145-qa/logs/acceptance-final-pytest-20261019T042337Z-final.log"
+    },
+    {
+      "command": "ruff check --no-cache app tests",
+      "exit_code": 0,
+      "result": "All checks passed!",
+      "log": "/tmp/nexus-v145-qa/logs/acceptance-final-ruff-20261019T042337Z-final.log"
+    }
+  ],
+  "summary": {
+    "passed": 415,
+    "failed": 0,
+    "skipped": 3,
+    "pytest_exit_code": 0,
+    "ruff_exit_code": 0
+  },
+  "pytest_scope": [
+    "tests/test_worker_maintenance.py",
+    "tests/test_worker_settings_v145.py",
+    "tests/test_worker_equipment_v145.py",
+    "tests/test_worker_runtime_inspection_v145.py",
+    "tests/test_worker_local_maintenance_v145.py",
+    "tests/test_remote_install_v145.py",
+    "tests/test_remote_provisioning.py",
+    "tests/test_phase4_channel.py",
+    "tests/test_worker_channel_review_fixes.py",
+    "tests/test_worker_gateway.py",
+    "tests/test_channel_switch.py",
+    "tests/test_worker_occupancy.py",
+    "tests/test_task_responsibility.py",
+    "tests/test_task_routing.py",
+    "tests/test_session_workspace.py",
+    "tests/test_proxy_secret_redaction.py",
+    "tests/test_api.py"
+  ],
+  "skipped": [
+    "tests/test_worker_channel_review_fixes.py::test_sweep_statements_execute_on_mysql (MySQL-only)",
+    "tests/test_worker_gateway.py::test_redis_owner_epoch_and_bounded_command_list (Redis-only)",
+    "tests/test_worker_gateway.py::test_redis_lease_and_result_expire_like_memory (Redis-only)"
+  ],
+  "environment_adjustments": [
+    "ASTRA_DATA_DIR/ASTRA_LOG_DIR/ASTRA_RUNTIME_DIR/ASTRA_CONFIG_DIR point to writable /tmp/nexus-v145-qa-guest paths; snapshot remains root-owned and excluded data stays out of source.",
+    "Real worktree ops/, docs/ and web/nexus/public/opencode-workspace/ copied to VM /opt because tests resolve REPO_ROOT=/opt.",
+    "ruff run with --no-cache to avoid writing .ruff_cache in the root-owned snapshot."
+  ],
+  "evidence": {
+    "backend_fix_reference": "/tmp/nexus-v145-qa/logs/backend-fix-20261019T042321Z-failed7.log",
+    "previous_failures_now_green": [
+      "test_real_config_merge_writes_jsonc_and_keeps_user_settings",
+      "test_npm_install_migrates_manual_binary_and_preserves_it_on_failure[success]",
+      "test_npm_install_migrates_manual_binary_and_preserves_it_on_failure[install-failed]",
+      "test_npm_install_migrates_manual_binary_and_preserves_it_on_failure[wrong-version]",
+      "test_install_script_installs_venv_package_for_the_selected_python",
+      "test_install_marks_inside_the_operation_and_serves_files",
+      "test_restart_command_restarts_local_opencode"
+    ],
+    "harness_dependencies_green": [
+      "test_remote_port_default_is_14096_and_llm_wiki_tunnel_stays",
+      "test_supported_version_uses_its_bundle"
+    ]
+  },
+  "boundaries_observed": [
+    "No product or fixture code was modified by this acceptance run.",
+    "No additional product service was started.",
+    "No QA port was occupied and no running process was stopped.",
+    "No credentials/env/key values were printed.",
+    "No paid LLM or model prompt was sent.",
+    "No git commit or push."
+  ],
+  "status": "passed",
+  "supersedes": "/tmp/nexus-v145-qa/reports/acceptance-v145-20261019T041452Z-77843.json"
+}

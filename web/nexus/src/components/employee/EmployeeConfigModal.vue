@@ -34,6 +34,7 @@ import { computed, ref } from 'vue'
 import { ElButton, ElDrawer, ElSpace, ElTag } from 'element-plus'
 import type { Employee, TaskCategory } from '@/api/types'
 import { confirmDialog } from '@/composables/useConfirm'
+import { notify } from '@/composables/useToast'
 import { employeeDisplayName } from '@/utils/format'
 import EmployeeConfig from '@/views/settings/EmployeeConfig.vue'
 
@@ -62,10 +63,10 @@ async function requestClose() {
   }
   emit('close')
 }
-function onSaved(id: string, environmentOk?: boolean) {
+function onSaved(id: string) {
+  notify(props.creating ? 'Worker 已创建，请执行装备检查' : '配置已保存，请执行装备检查')
   emit('saved', id)
-  // 保存已成功；仅当工作环境检测也通过时才自动关闭，异常时保留抽屉以便处理检查项。
-  if (environmentOk !== false) emit('close')
+  emit('close')
 }
 </script>
 

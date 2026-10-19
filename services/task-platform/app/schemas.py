@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domain import (
     CompletionPolicy,
-    EnvironmentStatus,
     ExecutionMode,
     Priority,
     TaskType,
@@ -82,18 +81,6 @@ class ExecutionEnvironmentRead(ORMModel):
     last_checked_at: datetime | None
     created_at: datetime
     updated_at: datetime
-
-
-class EnvironmentCheckItem(BaseModel):
-    name: str
-    passed: bool
-    detail: str
-
-
-class EnvironmentCheckResult(BaseModel):
-    status: EnvironmentStatus
-    checked_at: datetime
-    checks: list[EnvironmentCheckItem]
 
 
 class UsageSummary(BaseModel):

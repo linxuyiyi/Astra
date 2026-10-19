@@ -157,7 +157,7 @@ class _RemoteClient:
         assert params["directory"] == "/srv/worker/task"
         self.config_reads += 1
         if path == "/config":
-            payload = {"provider": {"astra-gateway": {"options": {"apiKey": VALUE}}}}
+            payload = {"provider": {"nexus-gateway": {"options": {"apiKey": VALUE}}}}
             return 200, json.dumps(payload).encode(), {"content-type": "application/json"}
         return 404, b"{}", {}
 
@@ -415,7 +415,7 @@ async def test_remote_workspace_loads_secret_values_through_the_connected_client
             if path == "/config":
                 payload = {
                     "mcp": {"nexus-library": {"headers": {"Authorization": f"Bearer {secret}"}}},
-                    "provider": {"astra-gateway": {"options": {"apiKey": secret, "baseURL": "http://127.0.0.1"}}},
+                    "provider": {"nexus-gateway": {"options": {"apiKey": secret, "baseURL": "http://127.0.0.1"}}},
                 }
                 return 200, json.dumps(payload).encode(), {}
             return 404, b"", {}
@@ -449,7 +449,7 @@ async def test_failed_remote_config_keeps_cached_secrets(monkeypatch):
             if state["fail"]:
                 raise ConnectionError("worker down")
             if path == "/config":
-                payload = {"provider": {"astra-gateway": {"options": {"apiKey": secret}}}}
+                payload = {"provider": {"nexus-gateway": {"options": {"apiKey": secret}}}}
                 return 200, json.dumps(payload).encode(), {}
             return 200, b"{}", {}
 
@@ -485,7 +485,7 @@ async def test_remote_secret_cache_is_per_workspace(monkeypatch):
             if path != "/config":
                 return 200, b"{}", {}
             value = secret if directory.rstrip("/") == "/srv/worker/task" else other
-            payload = {"provider": {"astra-gateway": {"options": {"apiKey": value}}}}
+            payload = {"provider": {"nexus-gateway": {"options": {"apiKey": value}}}}
             return 200, json.dumps(payload).encode(), {}
 
     client = Client()
@@ -521,7 +521,7 @@ async def test_partial_config_read_keeps_cached_secret_values(monkeypatch):
                     raise ConnectionError("config down")
                 if state["config"] == "bad-json":
                     return 200, b"not-json", {}
-                payload = {"provider": {"astra-gateway": {"options": {"apiKey": secret}}}}
+                payload = {"provider": {"nexus-gateway": {"options": {"apiKey": secret}}}}
                 return 200, json.dumps(payload).encode(), {}
             if path == "/global/config":
                 return 200, b"{}", {}

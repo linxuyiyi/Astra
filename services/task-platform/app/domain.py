@@ -67,6 +67,26 @@ class EnvironmentStatus(StrEnum):
     UNAVAILABLE = "UNAVAILABLE"
 
 
+class MaintenanceState(StrEnum):
+    QUEUED = "QUEUED"
+    PREFLIGHT = "PREFLIGHT"
+    RUNNING = "RUNNING"
+    VERIFYING = "VERIFYING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    CANCELED = "CANCELED"
+    INTERRUPTED = "INTERRUPTED"
+
+
+class MaintenanceAction(StrEnum):
+    CHECK = "check"
+    DEPLOY = "deploy"
+    UPDATE = "update"
+    RESTART = "restart"
+    DISABLE = "disable"
+    RESTORE = "restore"
+
+
 class Priority(StrEnum):
     VERY_HIGH = "VERY_HIGH"
     HIGH = "HIGH"

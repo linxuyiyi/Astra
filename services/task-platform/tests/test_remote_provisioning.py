@@ -1,18 +1,16 @@
-import asyncio
 import json
 import os
 import shutil
 import subprocess
 import sys
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.database import SessionLocal, init_database
@@ -21,13 +19,8 @@ from app.gateway.security import gateway_key_digest
 from app.main import app
 from app.models import DigitalEmployee, OpenCodeExecutionEnvironment, RuntimeSession, Task
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
-from app.runtime.remote_provisioning import (
-    E2E_MODEL,
-    RemoteProvisioner,
-    managed_config,
-    operation_active,
-    reserve_operation,
-)
+from app.runtime.maintenance import submit_operation
+from app.runtime.remote_provisioning import E2E_MODEL, RemoteProvisioner, managed_config
 
 
 @pytest.fixture(autouse=True)
@@ -67,7 +60,13 @@ async def employee(**overrides):
 
 async def reserve(employee_id):
     async with SessionLocal() as db:
-        return await reserve_operation(employee_id, "deploy", db)
+        environment = await db.scalar(
+            select(OpenCodeExecutionEnvironment).where(
+                OpenCodeExecutionEnvironment.employee_id == employee_id
+            )
+        )
+        operation = await submit_operation(db, environment.id, "deploy")
+        return environment, operation
 
 
 @pytest.mark.asyncio
@@ -81,7 +80,7 @@ async def test_restart_finish_keeps_the_capability_record():
     employee_id = await employee(status_detail={"capability": record})
     env, op = await reserve(employee_id)
     assert env.status_detail["capability"] == record
-    applied = await RemoteProvisioner(env, {**op, "action": "restart"})._finish(True)
+    applied = await RemoteProvisioner(env, op)._finish(True)
     assert applied
     async with SessionLocal() as db:
         current = await db.get(OpenCodeExecutionEnvironment, env.id)
@@ -195,15 +194,19 @@ async def test_reservation_is_exclusive_and_blocks_manual_start():
         )
         db.add(task)
         await db.commit()
-        with pytest.raises(RuntimeStateError, match="部署或重启"):
+        with pytest.raises(RuntimeStateError, match="维护"):
             await RuntimeService(db).start(task.id)
-    await RemoteProvisioner(env, op)._finish(False, "test cleanup")
 
 
-def test_operation_blocks_configuration_delete_and_test_api():
-    employee_id = asyncio.run(employee())
-    env, op = asyncio.run(reserve(employee_id))
-    with TestClient(app) as client:
+@pytest.mark.asyncio
+async def test_operation_blocks_configuration_delete_and_test_api():
+    employee_id = await employee()
+    env, op = await reserve(employee_id)
+    # ASGITransport does not run the lifespan executor; the queued operation stays
+    # the active maintenance lock for these guard assertions.
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
         for method, url, body in [
             (
                 "put",
@@ -216,80 +219,14 @@ def test_operation_blocks_configuration_delete_and_test_api():
                     "workspace_root": "/other",
                 },
             ),
-            ("post", f"/api/employees/{employee_id}/environment/test", None),
-            ("post", f"/api/employees/{employee_id}/environment/restart", None),
             ("delete", f"/api/employees/{employee_id}", None),
         ]:
-            response = client.request(method, url, json=body)
+            response = await client.request(method, url, json=body)
             assert response.status_code == 409, response.text
-    asyncio.run(RemoteProvisioner(env, op)._finish(False, "test cleanup"))
+    from app.runtime.maintenance import cancel_operation
 
-
-@pytest.mark.asyncio
-async def test_cancel_marks_interruption_and_closes_ssh(monkeypatch):
-    employee_id = await employee()
-    env, op = await reserve(employee_id)
-    entered = asyncio.Event()
-
-    class SSH:
-        closed = False
-
-        async def close(self):
-            self.closed = True
-
-    ssh = SSH()
-    worker = RemoteProvisioner(env, op)
-
-    async def open_session(_environment):
-        return ssh
-
-    async def idle():
-        return None
-
-    async def install(emit):
-        await worker.step(emit, "下载", "running")
-        entered.set()
-        await asyncio.Event().wait()
-
-    async def emit(_event):
-        pass
-
-    monkeypatch.setattr(worker.runtime, "open_session", open_session)
-    monkeypatch.setattr(worker, "_native_idle", idle)
-    monkeypatch.setattr(worker, "_install", install)
-    task = asyncio.create_task(worker.run(emit))
-    await entered.wait()
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
-    assert ssh.closed
     async with SessionLocal() as db:
-        current = await db.get(OpenCodeExecutionEnvironment, env.id)
-        assert current.status == "UNAVAILABLE"
-        assert current.status_detail["operation"]["state"] == "FAILED"
-        assert not operation_active(current)
-
-
-@pytest.mark.asyncio
-async def test_old_completion_cannot_overwrite_new_operation():
-    employee_id = await employee()
-    env, op = await reserve(employee_id)
-    replacement = {**op, "id": uuid4().hex}
-    async with SessionLocal() as db:
-        await db.execute(
-            update(OpenCodeExecutionEnvironment)
-            .where(
-                OpenCodeExecutionEnvironment.id == env.id,
-            )
-            .values(status_detail={"operation": replacement}, model_name="new/model")
-        )
-        await db.commit()
-    assert not await RemoteProvisioner(env, op)._finish(True)
-    async with SessionLocal() as db:
-        current = await db.get(OpenCodeExecutionEnvironment, env.id)
-        assert current.status_detail["operation"]["id"] == replacement["id"]
-        assert current.model_name == "new/model"
-        assert current.status == "CHECKING"
+        await cancel_operation(db, op.id)
 
 
 @pytest.mark.asyncio
@@ -313,7 +250,7 @@ async def test_redeploy_reuses_existing_employee_key():
 
     class SSH:
         async def read_file(self, _path):
-            return json.dumps({"provider": {"astra-gateway": {"options": {"apiKey": raw}}}}).encode()
+            return json.dumps({"provider": {"nexus-gateway": {"options": {"apiKey": raw}}}}).encode()
 
     worker = RemoteProvisioner(env, op)
     worker.ssh = SSH()
@@ -321,19 +258,6 @@ async def test_redeploy_reuses_existing_employee_key():
     assert worker.new_key_id is None
     assert raw not in worker.redact("request " + raw + " test-ssh-secret Bearer mcp-secret")
     assert "test-ssh-secret" not in worker.redact("test-ssh-secret")
-    await worker._finish(False, "test cleanup")
-
-
-def test_expired_reservation_allows_explicit_retry():
-    environment = OpenCodeExecutionEnvironment(
-        status_detail={
-            "operation": {
-                "state": "RUNNING",
-                "expires_at": (datetime.now(UTC) - timedelta(seconds=1)).isoformat(),
-            }
-        }
-    )
-    assert not operation_active(environment)
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="Node.js required for real config merge")
@@ -362,6 +286,7 @@ def test_real_config_merge_writes_jsonc_and_keeps_user_settings(tmp_path):
     repo.mkdir(parents=True)
     (repo / "SKILL.md").write_text("untouched", encoding="utf-8")
     source = Path("app/runtime/remote_install.sh").read_text().split("<<'NODE'\n", 1)[1].split("\nNODE", 1)[0]
+    result_file = tmp_path / "config-info.json"
     result = subprocess.run(
         [
             shutil.which("node"),
@@ -370,6 +295,7 @@ def test_real_config_merge_writes_jsonc_and_keeps_user_settings(tmp_path):
             "op123",
             sys.executable,
             str(Path("app/worker_agent/jsonc.py")),
+            str(result_file),
         ],
         input=source,
         text=True,
@@ -378,13 +304,13 @@ def test_real_config_merge_writes_jsonc_and_keeps_user_settings(tmp_path):
     assert result.returncode == 0, result.stderr
     config = json.loads(target.read_text())
     assert config["provider"]["custom"] == original["provider"]["custom"]
-    assert config["provider"]["astra-gateway"]["options"]["baseURL"] == "http://127.0.0.1:8110/v1"
+    assert config["provider"]["nexus-gateway"]["options"]["baseURL"] == "http://127.0.0.1:8110/v1"
     assert config["mcp"]["custom-mcp"] == original["mcp"]["custom-mcp"]
     assert config["mcp"]["worker-mcp"]["url"] == "http://127.0.0.1:9/mcp"
     assert config["permission"] == original["permission"]
-    assert config["model"] == "astra-gateway/test-model"
+    assert config["model"] == "nexus-gateway/test-model"
     assert config["mcp"]["nexus-library"]["headers"]["Authorization"] == "Bearer mcp-test"
-    backup = json.loads((tmp_path / "opencode.jsonc.astra-backup-op123").read_text().split("\n", 1)[1])
+    backup = json.loads((tmp_path / "opencode.jsonc.nexus-backup-op123").read_text().split("\n", 1)[1])
     assert backup == original
     assert target.stat().st_mode & 0o777 == 0o600
     assert (tmp_path / "skill" / "review" / "SKILL.md").read_text(encoding="utf-8") == "# review\n"
@@ -409,27 +335,6 @@ def test_e2e_config_points_at_the_free_model_and_omits_the_gateway_key():
     assert "agw_do_not_read" not in encoded
 
 
-def test_api_streams_progress_and_final_result_without_secrets(monkeypatch):
-    employee_id = asyncio.run(employee())
-
-    async def run(self, emit):
-        await self.step(emit, "安装", "passed", "完成")
-        await self._finish(True)
-        await emit({"type": "result", "success": True, "status": "AVAILABLE"})
-
-    monkeypatch.setattr(RemoteProvisioner, "run", run)
-    with TestClient(app) as client:
-        response = client.post(f"/api/employees/{employee_id}/environment/deploy")
-        assert response.status_code == 200
-        assert "application/x-ndjson" in response.headers["content-type"]
-        events = [json.loads(line) for line in response.text.splitlines()]
-        assert events[0]["type"] == "step"
-        assert events[-1]["success"] is True
-        assert "test-ssh-secret" not in response.text
-        result = client.get(f"/api/employees/{employee_id}").json()
-        assert result["execution_environment"]["status"] == "AVAILABLE"
-
-
 @pytest.mark.asyncio
 async def test_native_busy_refuses_maintenance_before_install():
     env, op = await reserve(await employee())
@@ -441,60 +346,7 @@ async def test_native_busy_refuses_maintenance_before_install():
 
     worker.ssh = type("SSH", (), {"run_command": staticmethod(run_command)})()
     with pytest.raises(RuntimeError, match="正在执行"):
-        await worker._native_idle()
-    await worker._finish(False, "busy")
-
-
-@pytest.mark.asyncio
-async def test_timeout_reports_failure_and_closes_connection(monkeypatch):
-    env, op = await reserve(await employee())
-    worker = RemoteProvisioner(env, op)
-    monkeypatch.setattr(worker.settings, "remote_deploy_timeout_seconds", 0.02)
-
-    class SSH:
-        closed = False
-
-        async def close(self):
-            self.closed = True
-
-    ssh = SSH()
-
-    async def open_session(_env):
-        return ssh
-
-    async def blocked():
-        await asyncio.Event().wait()
-
-    monkeypatch.setattr(worker.runtime, "open_session", open_session)
-    monkeypatch.setattr(worker, "_native_idle", blocked)
-    events = []
-
-    async def emit(event):
-        events.append(event)
-
-    await worker.run(emit)
-    assert ssh.closed
-    assert events[-1]["success"] is False
-    assert "超时" in events[-1]["message"]
-    async with SessionLocal() as db:
-        current = await db.get(OpenCodeExecutionEnvironment, env.id)
-        assert current.status_detail["operation"]["state"] == "FAILED"
-
-
-@pytest.mark.asyncio
-async def test_failed_deploy_revokes_only_its_new_key(monkeypatch):
-    env, op = await reserve(await employee())
-    worker = RemoteProvisioner(env, op)
-    worker.new_key_id, worker.old_key_id = "new-key", "old-key"
-    revoked = []
-
-    class Service:
-        async def revoke_key(self, key_id, **_kwargs):
-            revoked.append(key_id)
-
-    monkeypatch.setattr(worker, "_gateway_service", lambda *_args: Service())
-    await worker._finish(False, "download failed")
-    assert revoked == ["new-key"]
+        await worker._native_idle(strict=True)
 
 
 def test_deleted_tunnel_helpers_have_no_callers():
@@ -544,8 +396,19 @@ chmod 755 "$prefix/bin/opencode"
     )
     npm.chmod(0o755)
     script = Path("app/runtime/remote_install.sh").read_text()
-    source = script.split("# Keep npm's installation", 1)[1].split("step 'OpenCode 安装' passed", 1)[0]
-    source = source[source.index("\n") + 1 :].replace("$HOME/.local/share/astra", "$fixture_root")
+    source = script.split(
+        "# npm is installed under the Worker-specific prefix, never into a shared global path.\n",
+        1,
+    )[1].split("step 'OpenCode 安装' passed", 1)[0]
+    source = (
+        'fail() { printf "%s\\n" "$*" >&2; exit 1; }\n'
+        "runtime_changed=false\n"
+        'npm_prefix="$fixture_root/npm"\n'
+        'npm_package="$npm_prefix/lib/node_modules/opencode-ai/package.json"\n'
+        'npm_binary="$npm_prefix/bin/opencode"\n'
+        'npm_cache="$fixture_root/npm-cache"\n'
+        + source
+    )
     env = dict(os.environ, PATH=str(stub_dir) + os.pathsep + os.environ["PATH"])
     env.update(
         fixture_root=str(fixture_root),
@@ -609,6 +472,7 @@ def test_install_script_installs_venv_package_for_the_selected_python(tmp_path):
     python = bindir / "python3.12"
     python.write_text(
         "#!/bin/sh\n"
+        "if [ \"$1\" = \"-\" ]; then exec /usr/bin/python3 \"$@\"; fi\n"
         "for arg in \"$@\"; do\n"
         "  case \"$arg\" in\n"
         "    *ensurepip*) exit 1 ;;\n"
@@ -623,7 +487,16 @@ def test_install_script_installs_venv_package_for_the_selected_python(tmp_path):
     apt.write_text("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$APT_LOG\"\nexit 0\n")
     apt.chmod(0o755)
     payload = tmp_path / "payload.json"
-    payload.write_text("{}")
+    payload.write_text(
+        json.dumps(
+            {
+                "action": "deploy",
+                "environment_id": 1,
+                "opencode_server_port": 4096,
+                "config_path": str(tmp_path / "opencode.jsonc"),
+            }
+        )
+    )
     env = {
         **os.environ,
         "HOME": str(tmp_path),
@@ -716,7 +589,7 @@ async def test_failed_venv_does_not_rotate_the_worker_token(monkeypatch):
     assert not any(isinstance(item, str) and item.endswith(".env") for item in calls)
     pip = next(item for item in calls if isinstance(item, tuple) and "pip install" in item[1])
     assert pip[0] == 300
-    assert pip[1].startswith("/usr/bin/python3.12 -m venv /opt/nexus/worker/venv && ")
+    assert pip[1].startswith("/usr/bin/python3.12 -m venv /opt/nexus/workers/7/venv && ")
     assert "-i https://pypi.example.invalid/simple " in pip[1]
 
 

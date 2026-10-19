@@ -6,6 +6,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import os
 import random
 import threading
 import time
@@ -13,9 +14,11 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 import httpx
 
+from app.worker_agent import __version__
 from app.worker_agent.files import (
     FILE_COMMAND_LIMIT,
     FILE_COMMANDS,
@@ -37,6 +40,9 @@ from app.worker_gateway.protocol import (
 
 Connect = Callable[[], Awaitable["FrameTransport"]]
 
+CONTROL_COMMANDS = {"inspect_runtime", "status", "restart_opencode", "switch_channel"}
+INSPECTION_COMMANDS = {"inspect_runtime", "status"}
+
 
 class FrameTransport(Protocol):
     async def send(self, message: dict[str, Any]) -> None: ...
@@ -52,7 +58,7 @@ class AgentConfig:
     worker_instance_id: str
     environment_id: int
     token: str
-    agent_version: str = "0.1.0"
+    agent_version: str = __version__
     ping_seconds: float = 20
     ping_timeout_seconds: float = 10
     auth_timeout_seconds: float = 10
@@ -123,11 +129,52 @@ def reconnect_delay(attempt: int, minimum: float, maximum: float, rng: random.Ra
     return min(maximum, step + rng.uniform(0, minimum))
 
 
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _bound_opencode_port(opencode_url: str) -> int | None:
+    try:
+        parts = urlsplit(opencode_url)
+        if parts.scheme not in {"http", "https"} or parts.hostname not in _LOOPBACK_HOSTS:
+            return None
+        return parts.port
+    except ValueError:
+        return None
+
+
+def _same_workspace(requested: str, configured: str) -> bool:
+    if not requested or not configured:
+        return False
+    try:
+        return os.path.realpath(requested) == os.path.realpath(configured)
+    except OSError:
+        return False
+
+
+def _binding_error(data: dict[str, Any], workspace_root: str, opencode_url: str) -> str | None:
+    """危险动作只能操作本 Worker 自己绑定的工作区和端口。"""
+
+    try:
+        port = int(data.get("port"))
+    except (TypeError, ValueError):
+        return "OpenCode 端口无效"
+    bound = _bound_opencode_port(opencode_url)
+    if bound is None:
+        return "未绑定本机 OpenCode 端口"
+    if port != bound:
+        return "OpenCode 端口与 Worker 绑定不一致"
+    if not _same_workspace(str(data.get("workspace") or ""), workspace_root):
+        return "工作区与 Worker 绑定不一致"
+    return None
+
+
 def handle_command(
     message: WorkerMessage,
     supervisor: RuntimeSupervisor,
     *,
     workspace_root: str = "",
+    opencode_url: str = "",
+    gate: Callable[[], None] | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     name = message.payload.get("name")
     data = message.payload.get("data")
@@ -152,25 +199,27 @@ def handle_command(
     if name == "switch_channel":
         from app.worker_agent.channel_switch import apply_channel_switch
 
-        try:
-            port = int(data.get("port"))
-        except (TypeError, ValueError):
-            return None, "OpenCode 端口无效"
+        error = _binding_error(data, workspace_root, opencode_url)
+        if error is not None:
+            return None, error
+        port = int(data["port"])
         try:
             return apply_channel_switch(
-                workspace=str(data.get("workspace") or ""), port=port
+                workspace=str(data.get("workspace") or ""), port=port, gate=gate
             ), None
         except (RuntimeError, OSError, ValueError) as exc:
             return None, str(exc)
     if name == "restart_opencode":
         from app.worker_agent.channel_switch import restart_local_opencode
 
+        error = _binding_error(data, workspace_root, opencode_url)
+        if error is not None:
+            return None, error
+        port = int(data["port"])
         try:
-            port = int(data.get("port"))
-        except (TypeError, ValueError):
-            return None, "OpenCode 端口无效"
-        try:
-            restart_local_opencode(str(data.get("workspace") or ""), port)
+            restart_local_opencode(
+                str(data.get("workspace") or ""), port, gate=gate
+            )
         except (RuntimeError, OSError, ValueError) as exc:
             return None, str(exc)
         return {"restarted": True}, None
@@ -178,9 +227,19 @@ def handle_command(
         return {"pong": True}, None
     if name == "echo":
         return {"echo": data}, None
+    if name == "inspect_runtime":
+        from app.worker_agent.inspection import inspect_runtime_from_payload
+
+        try:
+            result = inspect_runtime_from_payload(opencode_url, workspace_root, data)
+        except ValueError:
+            return None, "invalid_data"
+        return result, None
     if name == "status":
+        from app.worker_agent.inspection import status_summary
+
         return {
-            "opencode": "unmanaged",
+            **status_summary(opencode_url),
             "restart_on_disconnect": False,
             "restarts": supervisor.restart_count,
         }, None
@@ -208,7 +267,9 @@ class WorkerConnectionManager:
         self.ledger = CommandLedger(config.command_dedupe_limit, config.command_dedupe_ttl_seconds)
         self.http_tasks: dict[str, asyncio.Task[None]] = {}
         self.file_tasks: dict[str, asyncio.Task[None]] = {}
+        self.control_tasks: dict[str, asyncio.Task[None]] = {}
         self.file_slots = asyncio.Semaphore(FILE_COMMAND_LIMIT)
+        self.inspection_slots = asyncio.Semaphore(1)
         self.event_tasks: dict[str, asyncio.Task[None]] = {}
         self.closed = threading.Event()
         self.event_seq: dict[str, int] = {}
@@ -299,6 +360,9 @@ class WorkerConnectionManager:
                 if name in FILE_COMMANDS:
                     self._start_file(transport, incoming, epoch)
                     continue
+                if name in CONTROL_COMMANDS:
+                    self._start_control(transport, incoming, epoch)
+                    continue
                 if name == "subscribe_events":
                     self._start_events(transport, incoming, epoch)
                     continue
@@ -316,13 +380,17 @@ class WorkerConnectionManager:
                 task.cancel()
             for task in list(self.file_tasks.values()):
                 task.cancel()
+            for task in list(self.control_tasks.values()):
+                task.cancel()
             pending = [
                 *self.http_tasks.values(),
                 *self.event_tasks.values(),
                 *self.file_tasks.values(),
+                *self.control_tasks.values(),
             ]
             if pending:
                 await asyncio.gather(*pending, return_exceptions=True)
+            self.control_tasks.clear()
             heartbeat_stop.set()
             if heartbeat is not None:
                 heartbeat.cancel()
@@ -389,6 +457,117 @@ class WorkerConnectionManager:
             task = asyncio.current_task()
             if self.http_tasks.get(incoming.request_id) is task:
                 self.http_tasks.pop(incoming.request_id, None)
+
+    def _start_control(
+        self, transport: FrameTransport, incoming: WorkerMessage, epoch: int
+    ) -> None:
+        """Dedup before queueing; control probes never block the receive loop."""
+
+        if not frame_acceptable(incoming, epoch, self.clock()):
+            return
+        now = self.clock()
+        recorded = self.ledger.lookup(incoming.request_id, now)
+        if recorded is not None and recorded.state == "executing":
+            asyncio.create_task(transport.send(self._duplicate(incoming).to_dict()))
+            return
+        if recorded is not None and recorded.state == "done":
+            asyncio.create_task(
+                transport.send(
+                    self._response(
+                        incoming,
+                        "result",
+                        recorded.result,
+                        recorded.error_code,
+                        error=recorded.error,
+                    ).to_dict()
+                )
+            )
+            return
+        current = self.control_tasks.get(incoming.request_id)
+        if current is not None and not current.done():
+            return
+        self.ledger.begin(incoming.request_id, now)
+        task = asyncio.create_task(
+            self._execute_control(transport, incoming, epoch, closed=self.closed)
+        )
+        self.control_tasks[incoming.request_id] = task
+
+    def _control_gate(
+        self, epoch: int, deadline: int | None, closed: threading.Event
+    ) -> Callable[[], None]:
+        """危险动作每次副作用前检查当前 epoch、连接状态和命令有效期。"""
+
+        def gate() -> None:
+            if closed.is_set() or self.epoch != epoch:
+                raise RuntimeError("控制命令已失效")
+            if deadline is None or int(self.clock()) >= int(deadline):
+                raise RuntimeError("控制命令已过期")
+
+        return gate
+
+    async def _execute_control(
+        self,
+        transport: FrameTransport,
+        incoming: WorkerMessage,
+        epoch: int,
+        *,
+        closed: threading.Event,
+    ) -> None:
+        name = str(incoming.payload.get("name") or "")
+        gate = self._control_gate(epoch, incoming.expires_at, closed)
+        try:
+            if not frame_acceptable(incoming, epoch, self.clock()):
+                self.ledger.finish(incoming.request_id, None, "epoch_conflict", self.clock())
+                return
+            await transport.send(self._response(incoming, "ack", None, None).to_dict())
+            if closed.is_set() or self.epoch != epoch:
+                self.ledger.finish(incoming.request_id, None, "epoch_conflict", self.clock())
+                return
+            if name in INSPECTION_COMMANDS:
+                async with self.inspection_slots:
+                    result, error_code = await asyncio.to_thread(
+                        handle_command,
+                        incoming,
+                        self.supervisor,
+                        workspace_root=self.config.workspace_root,
+                        opencode_url=self.config.opencode_url,
+                        gate=gate,
+                    )
+            else:
+                result, error_code = await asyncio.to_thread(
+                    handle_command,
+                    incoming,
+                    self.supervisor,
+                    workspace_root=self.config.workspace_root,
+                    opencode_url=self.config.opencode_url,
+                    gate=gate,
+                )
+            if closed.is_set() or self.epoch != epoch:
+                self.ledger.finish(incoming.request_id, None, "epoch_conflict", self.clock())
+                return
+            self._note_event_control(name, result)
+            self.ledger.finish(incoming.request_id, result, error_code, self.clock())
+            await transport.send(
+                self._response(incoming, "result", result, error_code).to_dict()
+            )
+        except asyncio.CancelledError:
+            return
+        except (ConnectionError, OSError):
+            return
+        except Exception as exc:
+            self.ledger.finish(incoming.request_id, None, "io", self.clock(), error=str(exc))
+            try:
+                await transport.send(
+                    self._response(
+                        incoming, "result", None, "io", error="控制命令执行失败"
+                    ).to_dict()
+                )
+            except (ConnectionError, OSError):
+                return
+        finally:
+            task = asyncio.current_task()
+            if self.control_tasks.get(incoming.request_id) is task:
+                self.control_tasks.pop(incoming.request_id, None)
 
     def _start_file(self, transport: FrameTransport, incoming: WorkerMessage, epoch: int) -> None:
         if not frame_acceptable(incoming, epoch, self.clock()):
@@ -569,7 +748,10 @@ class WorkerConnectionManager:
         await transport.send(self._response(incoming, "ack", None, None).to_dict())
         self.ledger.begin(incoming.request_id, now)
         result, error_code = handle_command(
-            incoming, self.supervisor, workspace_root=self.config.workspace_root
+            incoming,
+            self.supervisor,
+            workspace_root=self.config.workspace_root,
+            opencode_url=self.config.opencode_url,
         )
         self._note_event_control(incoming.payload.get("name"), result)
         self.ledger.finish(incoming.request_id, result, error_code, self.clock())
@@ -713,12 +895,12 @@ def _message_fields(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_agent_config(environ: dict[str, str]) -> AgentConfig:
-    token = environ.get("ASTRA_WORKER_TOKEN", "").strip()
+    token = environ.get("NEXUS_WORKER_TOKEN", "").strip()
     if not token:
-        raise SystemExit("缺少 ASTRA_WORKER_TOKEN")
-    url = environ.get("ASTRA_WORKER_GATEWAY_URL", "").strip()
-    worker_id = environ.get("ASTRA_WORKER_INSTANCE_ID", "").strip()
-    environment = environ.get("ASTRA_WORKER_ENVIRONMENT_ID", "").strip()
+        raise SystemExit("缺少 NEXUS_WORKER_TOKEN")
+    url = environ.get("NEXUS_WORKER_GATEWAY_URL", "").strip()
+    worker_id = environ.get("NEXUS_WORKER_INSTANCE_ID", "").strip()
+    environment = environ.get("NEXUS_WORKER_ENVIRONMENT_ID", "").strip()
     if not url or not worker_id or not environment:
         raise SystemExit("缺少 Worker Gateway 地址、实例 ID 或环境 ID")
     return AgentConfig(
@@ -726,9 +908,9 @@ def load_agent_config(environ: dict[str, str]) -> AgentConfig:
         worker_instance_id=worker_id,
         environment_id=int(environment),
         token=token,
-        agent_version=environ.get("ASTRA_WORKER_AGENT_VERSION", "0.1.0"),
-        opencode_url=environ.get("ASTRA_WORKER_OPENCODE_URL", "http://127.0.0.1:14096"),
-        workspace_root=environ.get("ASTRA_WORKER_WORKSPACE_ROOT", "").strip(),
+        agent_version=__version__,
+        opencode_url=environ.get("NEXUS_WORKER_OPENCODE_URL", "http://127.0.0.1:14096"),
+        workspace_root=environ.get("NEXUS_WORKER_WORKSPACE_ROOT", "").strip(),
     )
 
 

@@ -1,0 +1,2792 @@
+{
+  "phase": "qa",
+  "status": "failed",
+  "run_id": "78c7fad10dfd495dbfeb2f03959b2e6c",
+  "started_at": "2026-10-19T04:28:34.800071+00:00",
+  "repo": "/Users/niuniu/程序/Astra-worktrees/nexus-v1.4.5-workers",
+  "settings_prefix": "ASTRA_",
+  "checks": [
+    {
+      "name": "services.preflight",
+      "status": "PASS",
+      "detail": {
+        "ok": true,
+        "services": {
+          "redis": {
+            "name": "redis",
+            "pid": 83324,
+            "port": 61267,
+            "zombie": false,
+            "running": true,
+            "create_time_matches": true,
+            "cwd_matches": true,
+            "pgid": 83324,
+            "pgid_matches": true,
+            "listener_owned": true,
+            "listeners": [
+              {
+                "pid": 83324,
+                "address": "127.0.0.1",
+                "port": 61267
+              }
+            ],
+            "ok": true,
+            "ping": {
+              "ok": true,
+              "response": "+PONG\r\n"
+            }
+          },
+          "mcp": {
+            "name": "mcp",
+            "pid": 83390,
+            "port": 61269,
+            "zombie": false,
+            "running": true,
+            "create_time_matches": true,
+            "cwd_matches": true,
+            "pgid": 83390,
+            "pgid_matches": true,
+            "listener_owned": true,
+            "listeners": [
+              {
+                "pid": 83390,
+                "address": "127.0.0.1",
+                "port": 61269
+              }
+            ],
+            "ok": true
+          },
+          "gateway": {
+            "name": "gateway",
+            "pid": 83515,
+            "port": 61271,
+            "zombie": false,
+            "running": true,
+            "create_time_matches": true,
+            "cwd_matches": true,
+            "pgid": 83515,
+            "pgid_matches": true,
+            "listener_owned": true,
+            "listeners": [
+              {
+                "pid": 83515,
+                "address": "127.0.0.1",
+                "port": 61271
+              }
+            ],
+            "ok": true
+          },
+          "api": {
+            "name": "api",
+            "pid": 83676,
+            "port": 61273,
+            "zombie": false,
+            "running": true,
+            "create_time_matches": true,
+            "cwd_matches": true,
+            "pgid": 83676,
+            "pgid_matches": true,
+            "listener_owned": true,
+            "listeners": [
+              {
+                "pid": 83676,
+                "address": "127.0.0.1",
+                "port": 61273
+              }
+            ],
+            "ok": true
+          },
+          "vite": {
+            "name": "vite",
+            "pid": 83683,
+            "port": 61275,
+            "zombie": false,
+            "running": true,
+            "create_time_matches": true,
+            "cwd_matches": true,
+            "pgid": 83683,
+            "pgid_matches": true,
+            "listener_owned": true,
+            "listeners": [
+              {
+                "pid": 83683,
+                "address": "127.0.0.1",
+                "port": 61275
+              }
+            ],
+            "ok": true
+          },
+          "api_health": {
+            "status": 200,
+            "json": {
+              "status": "ok",
+              "time": "2026-10-19T04:26:17.705873+00:00"
+            },
+            "text": "{\"status\":\"ok\",\"time\":\"2026-10-19T04:26:17.705873+00:00\"}"
+          },
+          "gateway_health": {
+            "status": 200,
+            "json": {
+              "status": "ok",
+              "instance_id": "qa-gateway-4c90183f8f",
+              "runtime_healthy": true
+            },
+            "text": "{\"status\":\"ok\",\"instance_id\":\"qa-gateway-4c90183f8f\",\"runtime_healthy\":true}"
+          },
+          "vite_index": {
+            "status": 200,
+            "json": null,
+            "text": "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n  <head>\n    <script type=\"module\" src=\"/@vite/client\"></script>\n\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Nexus v1.4.2</title>\n    <link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\" />\n  </head>\n  <body>\n    <div id=\"app\"></div>\n    <script type=\"module\" src=\"/src/main.ts\"></script>\n  </body>\n</html>\n"
+          }
+        }
+      }
+    },
+    {
+      "name": "gateway",
+      "status": "PASS",
+      "detail": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "gateway.pool",
+            "status": "PASS",
+            "detail": {
+              "pool_id": "gp_97a0f650829a"
+            }
+          },
+          {
+            "name": "gateway.route",
+            "status": "PASS",
+            "detail": {
+              "model": "qa-model",
+              "route_id": "gr_66031d804b35"
+            }
+          },
+          {
+            "name": "gateway.key",
+            "status": "PASS",
+            "detail": {
+              "key_id": "gk_3a16dcb4ef34",
+              "key_prefix": "agw_[REDACTED]..."
+            }
+          },
+          {
+            "name": "gateway.models_auth",
+            "status": "PASS",
+            "detail": {
+              "unauthenticated": 401,
+              "bad_key": 401,
+              "good_key": 200
+            }
+          },
+          {
+            "name": "gateway.models_visibility",
+            "status": "PASS",
+            "detail": {
+              "models": [
+                "qa-model"
+              ],
+              "note": "Only /v1/models authentication and visibility were checked; no chat completion or model inference was sent."
+            }
+          }
+        ],
+        "model_inference_verified": false,
+        "chat_called": false,
+        "models": [
+          "qa-model"
+        ]
+      }
+    },
+    {
+      "name": "mcp",
+      "status": "PASS",
+      "detail": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "mcp.auth_required",
+            "status": "PASS",
+            "detail": {
+              "unauth_ok": false,
+              "error": "unhandled errors in a TaskGroup (1 sub-exception)"
+            }
+          },
+          {
+            "name": "mcp.authenticated_tools",
+            "status": "PASS",
+            "detail": {
+              "tools": [
+                "library_feedback",
+                "library_get",
+                "library_related",
+                "library_search"
+              ],
+              "error": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "repository.register",
+      "status": "PASS",
+      "detail": {
+        "ok": true,
+        "repository": {
+          "id": "a6b4a527453d4565a8bb8fe42b2f8e66",
+          "url": "file:///srv/nexus-v145-qa/source.git",
+          "branch": "main"
+        },
+        "created": true
+      }
+    },
+    {
+      "name": "worker.worker-a.setup",
+      "status": "PASS",
+      "detail": {
+        "ok": true,
+        "worker_id": "worker-a",
+        "created": false
+      }
+    },
+    {
+      "name": "worker.worker-a.repository",
+      "status": "FAIL",
+      "detail": {
+        "ok": false,
+        "status": 409,
+        "error": {
+          "status": 409,
+          "json": {
+            "detail": "Worker 已绑定仓库"
+          },
+          "text": "{\"detail\":\"Worker 已绑定仓库\"}"
+        }
+      }
+    },
+    {
+      "name": "workers.reset",
+      "status": "PASS",
+      "detail": {
+        "results": [
+          {
+            "environment_id": 1,
+            "cmd": "systemctl stop nexus-opencode-1.service nexus-worker-1.service 2>/dev/null || true; systemctl disable nexus-opencode-1.service nexus-worker-1.service 2>/dev/null || true; rm -rf /etc/nexus/opencode/1; rm -f /etc/nexus/worker-1.env /etc/systemd/system/nexus-opencode-1.service /etc/systemd/system/nexus-worker-1.service; systemctl daemon-reload",
+            "out": "",
+            "err": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "worker.worker-a.maintenance.terminal",
+      "status": "PASS",
+      "detail": {
+        "detail": "INTERRUPTED"
+      }
+    },
+    {
+      "name": "worker.worker-a.maintenance.succeeded",
+      "status": "FAIL",
+      "detail": {
+        "id": "op_d27bfef2e3894ab5bf396576e5acd054",
+        "environment_id": 1,
+        "action": "deploy",
+        "state": "INTERRUPTED",
+        "stage": "interrupted",
+        "attempt": 1,
+        "requested_by": "v145-qa",
+        "requested_at": "2026-10-19T04:26:18.150371+00:00",
+        "started_at": "2026-10-19T04:26:18.452814+00:00",
+        "finished_at": "2026-10-19T04:27:34.074246+00:00",
+        "lease_owner": null,
+        "lease_until": null,
+        "cancel_requested": false,
+        "danger_dispatched": true,
+        "reconcile_required": false,
+        "reconcile_only": false,
+        "execution_channel": "ssh",
+        "execution_reason": "安装系统依赖与 per-environment 运行时需要 SSH 管理通道",
+        "retry_of_attempt": null,
+        "target_revision": {
+          "opencode_version": "1.18.35",
+          "worker_agent_version": "0.4.0",
+          "model_name": "qa-model",
+          "opencode_path": "/root/nexus-v145/opencode-worker-a",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "branch": "main",
+          "skills": [
+            "nexus-v145-qa-skill"
+          ],
+          "mcp": [],
+          "capability_revision": "a1b55c8de29a4c10"
+        },
+        "before_snapshot": {
+          "environment_id": 1,
+          "mode": "LINUX_REMOTE",
+          "name": "QA Worker A Linux",
+          "host": "127.0.0.1",
+          "port": 56060,
+          "username": "root",
+          "has_ssh_password": true,
+          "opencode_server_port": 44135,
+          "opencode_path": "/root/nexus-v145/opencode-worker-a",
+          "model_name": "qa-model",
+          "workspace_root": "/root/nexus-v145/worker-a",
+          "repository_id": "924842e6c92a46ed99e37391688c4852",
+          "labels": [
+            "qa",
+            "v145",
+            "linux"
+          ],
+          "capability_revision": ""
+        },
+        "after_snapshot": {
+          "checks": [
+            {
+              "name": "SSH 连接与执行检查",
+              "state": "passed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "name": "部署配置",
+              "state": "passed",
+              "passed": true,
+              "detail": "已准备员工专属中转、数字图书馆与安全连接"
+            },
+            {
+              "name": "运行状态检查",
+              "state": "passed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "name": "系统依赖",
+              "state": "passed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "name": "Node.js 与 npm",
+              "state": "passed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "name": "Git 工作树",
+              "state": "passed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "name": "OpenCode 安装",
+              "state": "passed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "name": "写入前状态检查",
+              "state": "passed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "name": "工程目录",
+              "state": "passed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "name": "全局 OpenCode 配置",
+              "state": "passed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "name": "模型中转连接",
+              "state": "failed",
+              "passed": false,
+              "detail": "中转 HTTP 404"
+            }
+          ],
+          "message": "中转 HTTP 404",
+          "probe_status": "UNKNOWN",
+          "opencode_version": "1.18.35",
+          "worker_agent_version": "1.4.5",
+          "model_name": "nexus-gateway/qa-model",
+          "repository": {
+            "url": "file:///srv/nexus-v145-qa/source.git",
+            "branch": "main",
+            "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+            "dirty": false,
+            "remote_commit": null
+          },
+          "changed": {
+            "runtime": true,
+            "configuration": true,
+            "skills": true,
+            "repository": true
+          },
+          "equipment": []
+        },
+        "error_code": "remote_state_unknown",
+        "error_message": "中转 HTTP 404",
+        "events": [
+          {
+            "id": 1,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "started",
+            "stage": "preflight",
+            "name": "开始维护",
+            "state": "PREFLIGHT",
+            "message": "开始执行 deploy",
+            "detail": {
+              "attempt": 1,
+              "reconcile_required": false
+            },
+            "created_at": "2026-10-19T04:26:18.467616+00:00"
+          },
+          {
+            "id": 2,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "preflight",
+            "name": "SSH 连接与执行检查",
+            "state": "running",
+            "message": "",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:26:18.470894+00:00"
+          },
+          {
+            "id": 3,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "preflight",
+            "name": "SSH 连接与执行检查",
+            "state": "passed",
+            "message": "",
+            "detail": {
+              "passed": true
+            },
+            "created_at": "2026-10-19T04:26:18.592498+00:00"
+          },
+          {
+            "id": 4,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "部署配置",
+            "state": "running",
+            "message": "",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:26:18.597938+00:00"
+          },
+          {
+            "id": 5,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "部署配置",
+            "state": "passed",
+            "message": "已准备员工专属中转、数字图书馆与安全连接",
+            "detail": {
+              "passed": true
+            },
+            "created_at": "2026-10-19T04:26:18.619701+00:00"
+          },
+          {
+            "id": 6,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "运行状态检查",
+            "state": "running",
+            "message": "",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:26:18.708659+00:00"
+          },
+          {
+            "id": 7,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "运行状态检查",
+            "state": "passed",
+            "message": "",
+            "detail": {
+              "passed": true
+            },
+            "created_at": "2026-10-19T04:26:18.730385+00:00"
+          },
+          {
+            "id": 8,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "系统依赖",
+            "state": "running",
+            "message": "",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:26:18.731799+00:00"
+          },
+          {
+            "id": 9,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "系统依赖",
+            "state": "passed",
+            "message": "",
+            "detail": {
+              "passed": true
+            },
+            "created_at": "2026-10-19T04:26:26.391938+00:00"
+          },
+          {
+            "id": 10,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "Node.js 与 npm",
+            "state": "running",
+            "message": "",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:26:26.393768+00:00"
+          },
+          {
+            "id": 11,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "Node.js 与 npm",
+            "state": "passed",
+            "message": "",
+            "detail": {
+              "passed": true
+            },
+            "created_at": "2026-10-19T04:26:31.133538+00:00"
+          },
+          {
+            "id": 12,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "Git 工作树",
+            "state": "running",
+            "message": "",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:26:31.136256+00:00"
+          },
+          {
+            "id": 13,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "Git 工作树",
+            "state": "passed",
+            "message": "",
+            "detail": {
+              "passed": true
+            },
+            "created_at": "2026-10-19T04:26:31.138884+00:00"
+          },
+          {
+            "id": 14,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "OpenCode 安装",
+            "state": "running",
+            "message": "",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:26:31.141205+00:00"
+          },
+          {
+            "id": 15,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "OpenCode 安装",
+            "state": "passed",
+            "message": "",
+            "detail": {
+              "passed": true
+            },
+            "created_at": "2026-10-19T04:27:33.936984+00:00"
+          },
+          {
+            "id": 16,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "写入前状态检查",
+            "state": "running",
+            "message": "",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:27:33.938912+00:00"
+          },
+          {
+            "id": 17,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "写入前状态检查",
+            "state": "passed",
+            "message": "",
+            "detail": {
+              "passed": true
+            },
+            "created_at": "2026-10-19T04:27:33.963883+00:00"
+          },
+          {
+            "id": 18,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "工程目录",
+            "state": "running",
+            "message": "",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:27:33.965779+00:00"
+          },
+          {
+            "id": 19,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "工程目录",
+            "state": "passed",
+            "message": "",
+            "detail": {
+              "passed": true
+            },
+            "created_at": "2026-10-19T04:27:33.982852+00:00"
+          },
+          {
+            "id": 20,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "全局 OpenCode 配置",
+            "state": "running",
+            "message": "",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:27:33.984273+00:00"
+          },
+          {
+            "id": 21,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "configure",
+            "name": "全局 OpenCode 配置",
+            "state": "passed",
+            "message": "",
+            "detail": {
+              "passed": true
+            },
+            "created_at": "2026-10-19T04:27:34.000150+00:00"
+          },
+          {
+            "id": 22,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "verify",
+            "name": "模型中转连接",
+            "state": "running",
+            "message": "",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:27:34.027906+00:00"
+          },
+          {
+            "id": 23,
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "attempt": 1,
+            "type": "step",
+            "stage": "verify",
+            "name": "模型中转连接",
+            "state": "failed",
+            "message": "中转 HTTP 404",
+            "detail": {
+              "passed": false
+            },
+            "created_at": "2026-10-19T04:27:34.070935+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "name": "worker.worker-a.maintenance.sse_resume",
+      "status": "PASS",
+      "detail": {
+        "duplicate_ids": [],
+        "fallback": false,
+        "errors": []
+      }
+    },
+    {
+      "name": "worker.worker-a.worker.health",
+      "status": "FAIL",
+      "detail": {
+        "environment_id": 1,
+        "employee_id": "worker-a",
+        "enabled": true,
+        "connection": {
+          "channel": "ssh",
+          "state": "offline",
+          "last_heartbeat_at": null,
+          "epoch": null
+        },
+        "maintenance": {
+          "state": "INTERRUPTED",
+          "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+          "stage": "interrupted",
+          "attempt": 1
+        },
+        "runtime_health": {
+          "status": "UNKNOWN",
+          "last_checked_at": "2026-10-19T04:27:34.072001+00:00",
+          "capability": {
+            "desired_revision": "a1b55c8de29a4c10",
+            "checked_at": "2026-10-19T04:26:17.737269+00:00",
+            "runtime_status": "pending",
+            "error": ""
+          },
+          "equipment": []
+        },
+        "repository": null,
+        "schedulable": false,
+        "blocking": [
+          {
+            "code": "maintenance_active",
+            "message": "环境正在维护"
+          },
+          {
+            "code": "worker_offline",
+            "message": "Worker 通道离线"
+          },
+          {
+            "code": "runtime_unknown",
+            "message": "环境状态为 UNKNOWN，禁止调度"
+          },
+          {
+            "code": "equipment_pending",
+            "message": "装备配置等待部署生效"
+          },
+          {
+            "code": "capability_not_applied",
+            "message": "装备绑定尚未应用"
+          }
+        ]
+      }
+    },
+    {
+      "name": "worker.worker-a.worker.ssh",
+      "status": "PASS",
+      "detail": {
+        "detail": "real SSH/systemd/config evidence collected"
+      }
+    },
+    {
+      "name": "worker.worker-a.worker.units",
+      "status": "FAIL",
+      "detail": {
+        "opencode": {
+          "active": "inactive",
+          "enabled": "not-found"
+        },
+        "worker": {
+          "active": "inactive",
+          "enabled": "not-found"
+        }
+      }
+    },
+    {
+      "name": "worker.worker-a.worker.opencode_loopback",
+      "status": "FAIL",
+      "detail": {
+        "port": 44135,
+        "addresses": [],
+        "loopback_only": false
+      }
+    },
+    {
+      "name": "worker.worker-a.worker.skill_installed",
+      "status": "PASS",
+      "detail": {
+        "detail": "present"
+      }
+    },
+    {
+      "name": "worker.worker-a.worker.skill_discovered",
+      "status": "FAIL",
+      "detail": {
+        "ok": false,
+        "error": "ERROR:<urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "name": "worker.worker-a.worker.mcp_connected",
+      "status": "FAIL",
+      "detail": {
+        "ok": false,
+        "error": "ERROR:<urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "name": "worker.worker-a.worker.git_clone",
+      "status": "PASS",
+      "detail": {
+        "head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+        "branch": "main",
+        "origin": "file:///srv/nexus-v145-qa/source.git",
+        "dirty": false,
+        "expected_head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+        "expected_origin": "file:///srv/nexus-v145-qa/source.git",
+        "clone_matches_fixture": true
+      }
+    },
+    {
+      "name": "worker.worker-a.worker.env_prefix_alignment",
+      "status": "FAIL",
+      "detail": {
+        "expected_prefix": "NEXUS",
+        "keys": [],
+        "source": {
+          "worker_agent_reads_astra": [],
+          "worker_agent_reads_nexus": [
+            "NEXUS_WORKER_CHILD_ENV_ALLOW",
+            "NEXUS_WORKER_ENVIRONMENT_ID",
+            "NEXUS_WORKER_GATEWAY_URL",
+            "NEXUS_WORKER_INSTANCE_ID",
+            "NEXUS_WORKER_OPENCODE_BIN",
+            "NEXUS_WORKER_OPENCODE_UNIT",
+            "NEXUS_WORKER_OPENCODE_URL",
+            "NEXUS_WORKER_TOKEN",
+            "NEXUS_WORKER_WORKSPACE_ROOT"
+          ],
+          "provisioner_writes_astra": [],
+          "provisioner_writes_nexus": [
+            "NEXUS_WORKER_ENVIRONMENT_ID",
+            "NEXUS_WORKER_GATEWAY_URL",
+            "NEXUS_WORKER_INSTANCE_ID",
+            "NEXUS_WORKER_OPENCODE_BIN",
+            "NEXUS_WORKER_OPENCODE_UNIT",
+            "NEXUS_WORKER_OPENCODE_URL",
+            "NEXUS_WORKER_TOKEN",
+            "NEXUS_WORKER_WORKSPACE_ROOT"
+          ],
+          "currently_astra_wired": false,
+          "currently_nexus_wired": true,
+          "prefix_mismatch": false
+        }
+      }
+    },
+    {
+      "name": "worker.worker-a.worker.config_provider",
+      "status": "PASS",
+      "detail": {
+        "path": "/etc/nexus/opencode/1/opencode.jsonc",
+        "model": "nexus-gateway/qa-model",
+        "providers": [
+          "nexus-gateway"
+        ],
+        "provider_has_api_key": true,
+        "mcp_names": [
+          "nexus-library"
+        ],
+        "mcp_auth_header_present": true
+      }
+    },
+    {
+      "name": "worker.worker-a.worker.config_provider_alignment",
+      "status": "PASS",
+      "detail": {
+        "expected": "nexus-gateway",
+        "configured": [
+          "nexus-gateway"
+        ]
+      }
+    },
+    {
+      "name": "actions.update_disable_restore",
+      "status": "PENDING",
+      "detail": {
+        "current_actions": [
+          "check",
+          "deploy",
+          "disable",
+          "restart",
+          "restore",
+          "update"
+        ],
+        "missing_actions": [],
+        "note": "exposed by the current API but not exercised by this qa phase"
+      }
+    },
+    {
+      "name": "git.update",
+      "status": "PENDING",
+      "detail": {
+        "note": "the fixture proves a real clone; the maintenance update/fetch action is not exposed yet"
+      }
+    },
+    {
+      "name": "aliases.workers",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    }
+  ],
+  "gateway": {
+    "ok": true,
+    "checks": [
+      {
+        "name": "gateway.pool",
+        "status": "PASS",
+        "detail": {
+          "pool_id": "gp_97a0f650829a"
+        }
+      },
+      {
+        "name": "gateway.route",
+        "status": "PASS",
+        "detail": {
+          "model": "qa-model",
+          "route_id": "gr_66031d804b35"
+        }
+      },
+      {
+        "name": "gateway.key",
+        "status": "PASS",
+        "detail": {
+          "key_id": "gk_3a16dcb4ef34",
+          "key_prefix": "agw_[REDACTED]..."
+        }
+      },
+      {
+        "name": "gateway.models_auth",
+        "status": "PASS",
+        "detail": {
+          "unauthenticated": 401,
+          "bad_key": 401,
+          "good_key": 200
+        }
+      },
+      {
+        "name": "gateway.models_visibility",
+        "status": "PASS",
+        "detail": {
+          "models": [
+            "qa-model"
+          ],
+          "note": "Only /v1/models authentication and visibility were checked; no chat completion or model inference was sent."
+        }
+      }
+    ],
+    "model_inference_verified": false,
+    "chat_called": false,
+    "models": [
+      "qa-model"
+    ]
+  },
+  "mcp": {
+    "ok": true,
+    "checks": [
+      {
+        "name": "mcp.auth_required",
+        "status": "PASS",
+        "detail": {
+          "unauth_ok": false,
+          "error": "unhandled errors in a TaskGroup (1 sub-exception)"
+        }
+      },
+      {
+        "name": "mcp.authenticated_tools",
+        "status": "PASS",
+        "detail": {
+          "tools": [
+            "library_feedback",
+            "library_get",
+            "library_related",
+            "library_search"
+          ],
+          "error": null
+        }
+      }
+    ]
+  },
+  "workers": [
+    {
+      "ok": true,
+      "worker_id": "worker-a",
+      "created": false
+    }
+  ],
+  "deployments": [
+    {
+      "ok": false,
+      "worker_id": "worker-a",
+      "environment_id": 1,
+      "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+      "operation": {
+        "ok": true,
+        "state": "INTERRUPTED",
+        "detail": {
+          "id": "op_d27bfef2e3894ab5bf396576e5acd054",
+          "environment_id": 1,
+          "action": "deploy",
+          "state": "INTERRUPTED",
+          "stage": "interrupted",
+          "attempt": 1,
+          "requested_by": "v145-qa",
+          "requested_at": "2026-10-19T04:26:18.150371+00:00",
+          "started_at": "2026-10-19T04:26:18.452814+00:00",
+          "finished_at": "2026-10-19T04:27:34.074246+00:00",
+          "lease_owner": null,
+          "lease_until": null,
+          "cancel_requested": false,
+          "danger_dispatched": true,
+          "reconcile_required": false,
+          "reconcile_only": false,
+          "execution_channel": "ssh",
+          "execution_reason": "安装系统依赖与 per-environment 运行时需要 SSH 管理通道",
+          "retry_of_attempt": null,
+          "target_revision": {
+            "opencode_version": "1.18.35",
+            "worker_agent_version": "0.4.0",
+            "model_name": "qa-model",
+            "opencode_path": "/root/nexus-v145/opencode-worker-a",
+            "repository_id": "924842e6c92a46ed99e37391688c4852",
+            "branch": "main",
+            "skills": [
+              "nexus-v145-qa-skill"
+            ],
+            "mcp": [],
+            "capability_revision": "a1b55c8de29a4c10"
+          },
+          "before_snapshot": {
+            "environment_id": 1,
+            "mode": "LINUX_REMOTE",
+            "name": "QA Worker A Linux",
+            "host": "127.0.0.1",
+            "port": 56060,
+            "username": "root",
+            "has_ssh_password": true,
+            "opencode_server_port": 44135,
+            "opencode_path": "/root/nexus-v145/opencode-worker-a",
+            "model_name": "qa-model",
+            "workspace_root": "/root/nexus-v145/worker-a",
+            "repository_id": "924842e6c92a46ed99e37391688c4852",
+            "labels": [
+              "qa",
+              "v145",
+              "linux"
+            ],
+            "capability_revision": ""
+          },
+          "after_snapshot": {
+            "checks": [
+              {
+                "name": "SSH 连接与执行检查",
+                "state": "passed",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "name": "部署配置",
+                "state": "passed",
+                "passed": true,
+                "detail": "已准备员工专属中转、数字图书馆与安全连接"
+              },
+              {
+                "name": "运行状态检查",
+                "state": "passed",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "name": "系统依赖",
+                "state": "passed",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "name": "Node.js 与 npm",
+                "state": "passed",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "name": "Git 工作树",
+                "state": "passed",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "name": "OpenCode 安装",
+                "state": "passed",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "name": "写入前状态检查",
+                "state": "passed",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "name": "工程目录",
+                "state": "passed",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "name": "全局 OpenCode 配置",
+                "state": "passed",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "name": "模型中转连接",
+                "state": "failed",
+                "passed": false,
+                "detail": "中转 HTTP 404"
+              }
+            ],
+            "message": "中转 HTTP 404",
+            "probe_status": "UNKNOWN",
+            "opencode_version": "1.18.35",
+            "worker_agent_version": "1.4.5",
+            "model_name": "nexus-gateway/qa-model",
+            "repository": {
+              "url": "file:///srv/nexus-v145-qa/source.git",
+              "branch": "main",
+              "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+              "dirty": false,
+              "remote_commit": null
+            },
+            "changed": {
+              "runtime": true,
+              "configuration": true,
+              "skills": true,
+              "repository": true
+            },
+            "equipment": []
+          },
+          "error_code": "remote_state_unknown",
+          "error_message": "中转 HTTP 404",
+          "events": [
+            {
+              "id": 1,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "started",
+              "stage": "preflight",
+              "name": "开始维护",
+              "state": "PREFLIGHT",
+              "message": "开始执行 deploy",
+              "detail": {
+                "attempt": 1,
+                "reconcile_required": false
+              },
+              "created_at": "2026-10-19T04:26:18.467616+00:00"
+            },
+            {
+              "id": 2,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "preflight",
+              "name": "SSH 连接与执行检查",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:18.470894+00:00"
+            },
+            {
+              "id": 3,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "preflight",
+              "name": "SSH 连接与执行检查",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:18.592498+00:00"
+            },
+            {
+              "id": 4,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "部署配置",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:18.597938+00:00"
+            },
+            {
+              "id": 5,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "部署配置",
+              "state": "passed",
+              "message": "已准备员工专属中转、数字图书馆与安全连接",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:18.619701+00:00"
+            },
+            {
+              "id": 6,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "运行状态检查",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:18.708659+00:00"
+            },
+            {
+              "id": 7,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "运行状态检查",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:18.730385+00:00"
+            },
+            {
+              "id": 8,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "系统依赖",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:18.731799+00:00"
+            },
+            {
+              "id": 9,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "系统依赖",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:26.391938+00:00"
+            },
+            {
+              "id": 10,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "Node.js 与 npm",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:26.393768+00:00"
+            },
+            {
+              "id": 11,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "Node.js 与 npm",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:31.133538+00:00"
+            },
+            {
+              "id": 12,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "Git 工作树",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:31.136256+00:00"
+            },
+            {
+              "id": 13,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "Git 工作树",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:31.138884+00:00"
+            },
+            {
+              "id": 14,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "OpenCode 安装",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:31.141205+00:00"
+            },
+            {
+              "id": 15,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "OpenCode 安装",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:27:33.936984+00:00"
+            },
+            {
+              "id": 16,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "写入前状态检查",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:27:33.938912+00:00"
+            },
+            {
+              "id": 17,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "写入前状态检查",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:27:33.963883+00:00"
+            },
+            {
+              "id": 18,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "工程目录",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:27:33.965779+00:00"
+            },
+            {
+              "id": 19,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "工程目录",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:27:33.982852+00:00"
+            },
+            {
+              "id": 20,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "全局 OpenCode 配置",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:27:33.984273+00:00"
+            },
+            {
+              "id": 21,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "全局 OpenCode 配置",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:27:34.000150+00:00"
+            },
+            {
+              "id": 22,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "verify",
+              "name": "模型中转连接",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:27:34.027906+00:00"
+            },
+            {
+              "id": 23,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "verify",
+              "name": "模型中转连接",
+              "state": "failed",
+              "message": "中转 HTTP 404",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:27:34.070935+00:00"
+            }
+          ]
+        },
+        "events": [
+          {
+            "id": "1",
+            "type": "started",
+            "data": {
+              "id": 1,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "started",
+              "stage": "preflight",
+              "name": "开始维护",
+              "state": "PREFLIGHT",
+              "message": "开始执行 deploy",
+              "detail": {
+                "attempt": 1,
+                "reconcile_required": false
+              },
+              "created_at": "2026-10-19T04:26:18.467616+00:00"
+            }
+          },
+          {
+            "id": "2",
+            "type": "step",
+            "data": {
+              "id": 2,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "preflight",
+              "name": "SSH 连接与执行检查",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:18.470894+00:00"
+            }
+          },
+          {
+            "id": "3",
+            "type": "step",
+            "data": {
+              "id": 3,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "preflight",
+              "name": "SSH 连接与执行检查",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:18.592498+00:00"
+            }
+          },
+          {
+            "id": "4",
+            "type": "step",
+            "data": {
+              "id": 4,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "部署配置",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:18.597938+00:00"
+            }
+          },
+          {
+            "id": "5",
+            "type": "step",
+            "data": {
+              "id": 5,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "部署配置",
+              "state": "passed",
+              "message": "已准备员工专属中转、数字图书馆与安全连接",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:18.619701+00:00"
+            }
+          },
+          {
+            "id": "6",
+            "type": "step",
+            "data": {
+              "id": 6,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "运行状态检查",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:18.708659+00:00"
+            }
+          },
+          {
+            "id": "7",
+            "type": "step",
+            "data": {
+              "id": 7,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "运行状态检查",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:18.730385+00:00"
+            }
+          },
+          {
+            "id": "8",
+            "type": "step",
+            "data": {
+              "id": 8,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "系统依赖",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:18.731799+00:00"
+            }
+          },
+          {
+            "id": "9",
+            "type": "step",
+            "data": {
+              "id": 9,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "系统依赖",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:26.391938+00:00"
+            }
+          },
+          {
+            "id": "10",
+            "type": "step",
+            "data": {
+              "id": 10,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "Node.js 与 npm",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:26.393768+00:00"
+            }
+          },
+          {
+            "id": "11",
+            "type": "step",
+            "data": {
+              "id": 11,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "Node.js 与 npm",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:31.133538+00:00"
+            }
+          },
+          {
+            "id": "12",
+            "type": "step",
+            "data": {
+              "id": 12,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "Git 工作树",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:31.136256+00:00"
+            }
+          },
+          {
+            "id": "13",
+            "type": "step",
+            "data": {
+              "id": 13,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "Git 工作树",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:26:31.138884+00:00"
+            }
+          },
+          {
+            "id": "14",
+            "type": "step",
+            "data": {
+              "id": 14,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "OpenCode 安装",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:26:31.141205+00:00"
+            }
+          },
+          {
+            "id": "15",
+            "type": "step",
+            "data": {
+              "id": 15,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "OpenCode 安装",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:27:33.936984+00:00"
+            }
+          },
+          {
+            "id": "16",
+            "type": "step",
+            "data": {
+              "id": 16,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "写入前状态检查",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:27:33.938912+00:00"
+            }
+          },
+          {
+            "id": "17",
+            "type": "step",
+            "data": {
+              "id": 17,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "写入前状态检查",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:27:33.963883+00:00"
+            }
+          },
+          {
+            "id": "18",
+            "type": "step",
+            "data": {
+              "id": 18,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "工程目录",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:27:33.965779+00:00"
+            }
+          },
+          {
+            "id": "19",
+            "type": "step",
+            "data": {
+              "id": 19,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "工程目录",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:27:33.982852+00:00"
+            }
+          },
+          {
+            "id": "20",
+            "type": "step",
+            "data": {
+              "id": 20,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "全局 OpenCode 配置",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:27:33.984273+00:00"
+            }
+          },
+          {
+            "id": "21",
+            "type": "step",
+            "data": {
+              "id": 21,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "configure",
+              "name": "全局 OpenCode 配置",
+              "state": "passed",
+              "message": "",
+              "detail": {
+                "passed": true
+              },
+              "created_at": "2026-10-19T04:27:34.000150+00:00"
+            }
+          },
+          {
+            "id": "22",
+            "type": "step",
+            "data": {
+              "id": 22,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "verify",
+              "name": "模型中转连接",
+              "state": "running",
+              "message": "",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:27:34.027906+00:00"
+            }
+          },
+          {
+            "id": "23",
+            "type": "step",
+            "data": {
+              "id": 23,
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "attempt": 1,
+              "type": "step",
+              "stage": "verify",
+              "name": "模型中转连接",
+              "state": "failed",
+              "message": "中转 HTTP 404",
+              "detail": {
+                "passed": false
+              },
+              "created_at": "2026-10-19T04:27:34.070935+00:00"
+            }
+          }
+        ],
+        "event_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23
+        ],
+        "duplicate_event_ids": [],
+        "sse_resume_verified": true,
+        "used_polling_fallback": false,
+        "sse_errors": [],
+        "end_state": "INTERRUPTED"
+      },
+      "health": {
+        "ok": false,
+        "status": 200,
+        "health": {
+          "environment_id": 1,
+          "employee_id": "worker-a",
+          "enabled": true,
+          "connection": {
+            "channel": "ssh",
+            "state": "offline",
+            "last_heartbeat_at": null,
+            "epoch": null
+          },
+          "maintenance": {
+            "state": "INTERRUPTED",
+            "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "stage": "interrupted",
+            "attempt": 1
+          },
+          "runtime_health": {
+            "status": "UNKNOWN",
+            "last_checked_at": "2026-10-19T04:27:34.072001+00:00",
+            "capability": {
+              "desired_revision": "a1b55c8de29a4c10",
+              "checked_at": "2026-10-19T04:26:17.737269+00:00",
+              "runtime_status": "pending",
+              "error": ""
+            },
+            "equipment": []
+          },
+          "repository": null,
+          "schedulable": false,
+          "blocking": [
+            {
+              "code": "maintenance_active",
+              "message": "环境正在维护"
+            },
+            {
+              "code": "worker_offline",
+              "message": "Worker 通道离线"
+            },
+            {
+              "code": "runtime_unknown",
+              "message": "环境状态为 UNKNOWN，禁止调度"
+            },
+            {
+              "code": "equipment_pending",
+              "message": "装备配置等待部署生效"
+            },
+            {
+              "code": "capability_not_applied",
+              "message": "装备绑定尚未应用"
+            }
+          ]
+        }
+      },
+      "ssh": {
+        "worker_id": "worker-a",
+        "environment_id": 1,
+        "workspace": "/root/nexus-v145/worker-a",
+        "port": 44135,
+        "units": {
+          "opencode": {
+            "active": "inactive",
+            "enabled": "not-found"
+          },
+          "worker": {
+            "active": "inactive",
+            "enabled": "not-found"
+          }
+        },
+        "listener": {
+          "port": 44135,
+          "addresses": [],
+          "loopback_only": false
+        },
+        "config": {
+          "path": "/etc/nexus/opencode/1/opencode.jsonc",
+          "model": "nexus-gateway/qa-model",
+          "providers": [
+            "nexus-gateway"
+          ],
+          "provider_has_api_key": true,
+          "mcp_names": [
+            "nexus-library"
+          ],
+          "mcp_auth_header_present": true
+        },
+        "skill_file": "present",
+        "opencode_skill_probe": {
+          "ok": false,
+          "error": "ERROR:<urlopen error [Errno 111] Connection refused>"
+        },
+        "opencode_mcp_probe": {
+          "ok": false,
+          "error": "ERROR:<urlopen error [Errno 111] Connection refused>"
+        },
+        "worker_env": {
+          "path": "/etc/nexus/worker-1.env",
+          "error": "[Errno 2] No such file"
+        },
+        "git": {
+          "head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "branch": "main",
+          "origin": "file:///srv/nexus-v145-qa/source.git",
+          "dirty": false,
+          "expected_head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+          "expected_origin": "file:///srv/nexus-v145-qa/source.git",
+          "clone_matches_fixture": true
+        },
+        "git_update_note": "This proves a real clone from the VM-local bare fixture. The maintenance action `update` is not exposed yet, so fetch/pull is PENDING_IMPLEMENTATION."
+      },
+      "checks": [
+        {
+          "name": "maintenance.terminal",
+          "status": "PASS",
+          "detail": "INTERRUPTED"
+        },
+        {
+          "name": "maintenance.succeeded",
+          "status": "FAIL",
+          "detail": {
+            "id": "op_d27bfef2e3894ab5bf396576e5acd054",
+            "environment_id": 1,
+            "action": "deploy",
+            "state": "INTERRUPTED",
+            "stage": "interrupted",
+            "attempt": 1,
+            "requested_by": "v145-qa",
+            "requested_at": "2026-10-19T04:26:18.150371+00:00",
+            "started_at": "2026-10-19T04:26:18.452814+00:00",
+            "finished_at": "2026-10-19T04:27:34.074246+00:00",
+            "lease_owner": null,
+            "lease_until": null,
+            "cancel_requested": false,
+            "danger_dispatched": true,
+            "reconcile_required": false,
+            "reconcile_only": false,
+            "execution_channel": "ssh",
+            "execution_reason": "安装系统依赖与 per-environment 运行时需要 SSH 管理通道",
+            "retry_of_attempt": null,
+            "target_revision": {
+              "opencode_version": "1.18.35",
+              "worker_agent_version": "0.4.0",
+              "model_name": "qa-model",
+              "opencode_path": "/root/nexus-v145/opencode-worker-a",
+              "repository_id": "924842e6c92a46ed99e37391688c4852",
+              "branch": "main",
+              "skills": [
+                "nexus-v145-qa-skill"
+              ],
+              "mcp": [],
+              "capability_revision": "a1b55c8de29a4c10"
+            },
+            "before_snapshot": {
+              "environment_id": 1,
+              "mode": "LINUX_REMOTE",
+              "name": "QA Worker A Linux",
+              "host": "127.0.0.1",
+              "port": 56060,
+              "username": "root",
+              "has_ssh_password": true,
+              "opencode_server_port": 44135,
+              "opencode_path": "/root/nexus-v145/opencode-worker-a",
+              "model_name": "qa-model",
+              "workspace_root": "/root/nexus-v145/worker-a",
+              "repository_id": "924842e6c92a46ed99e37391688c4852",
+              "labels": [
+                "qa",
+                "v145",
+                "linux"
+              ],
+              "capability_revision": ""
+            },
+            "after_snapshot": {
+              "checks": [
+                {
+                  "name": "SSH 连接与执行检查",
+                  "state": "passed",
+                  "passed": true,
+                  "detail": ""
+                },
+                {
+                  "name": "部署配置",
+                  "state": "passed",
+                  "passed": true,
+                  "detail": "已准备员工专属中转、数字图书馆与安全连接"
+                },
+                {
+                  "name": "运行状态检查",
+                  "state": "passed",
+                  "passed": true,
+                  "detail": ""
+                },
+                {
+                  "name": "系统依赖",
+                  "state": "passed",
+                  "passed": true,
+                  "detail": ""
+                },
+                {
+                  "name": "Node.js 与 npm",
+                  "state": "passed",
+                  "passed": true,
+                  "detail": ""
+                },
+                {
+                  "name": "Git 工作树",
+                  "state": "passed",
+                  "passed": true,
+                  "detail": ""
+                },
+                {
+                  "name": "OpenCode 安装",
+                  "state": "passed",
+                  "passed": true,
+                  "detail": ""
+                },
+                {
+                  "name": "写入前状态检查",
+                  "state": "passed",
+                  "passed": true,
+                  "detail": ""
+                },
+                {
+                  "name": "工程目录",
+                  "state": "passed",
+                  "passed": true,
+                  "detail": ""
+                },
+                {
+                  "name": "全局 OpenCode 配置",
+                  "state": "passed",
+                  "passed": true,
+                  "detail": ""
+                },
+                {
+                  "name": "模型中转连接",
+                  "state": "failed",
+                  "passed": false,
+                  "detail": "中转 HTTP 404"
+                }
+              ],
+              "message": "中转 HTTP 404",
+              "probe_status": "UNKNOWN",
+              "opencode_version": "1.18.35",
+              "worker_agent_version": "1.4.5",
+              "model_name": "nexus-gateway/qa-model",
+              "repository": {
+                "url": "file:///srv/nexus-v145-qa/source.git",
+                "branch": "main",
+                "commit": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+                "dirty": false,
+                "remote_commit": null
+              },
+              "changed": {
+                "runtime": true,
+                "configuration": true,
+                "skills": true,
+                "repository": true
+              },
+              "equipment": []
+            },
+            "error_code": "remote_state_unknown",
+            "error_message": "中转 HTTP 404",
+            "events": [
+              {
+                "id": 1,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "started",
+                "stage": "preflight",
+                "name": "开始维护",
+                "state": "PREFLIGHT",
+                "message": "开始执行 deploy",
+                "detail": {
+                  "attempt": 1,
+                  "reconcile_required": false
+                },
+                "created_at": "2026-10-19T04:26:18.467616+00:00"
+              },
+              {
+                "id": 2,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "preflight",
+                "name": "SSH 连接与执行检查",
+                "state": "running",
+                "message": "",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:26:18.470894+00:00"
+              },
+              {
+                "id": 3,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "preflight",
+                "name": "SSH 连接与执行检查",
+                "state": "passed",
+                "message": "",
+                "detail": {
+                  "passed": true
+                },
+                "created_at": "2026-10-19T04:26:18.592498+00:00"
+              },
+              {
+                "id": 4,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "部署配置",
+                "state": "running",
+                "message": "",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:26:18.597938+00:00"
+              },
+              {
+                "id": 5,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "部署配置",
+                "state": "passed",
+                "message": "已准备员工专属中转、数字图书馆与安全连接",
+                "detail": {
+                  "passed": true
+                },
+                "created_at": "2026-10-19T04:26:18.619701+00:00"
+              },
+              {
+                "id": 6,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "运行状态检查",
+                "state": "running",
+                "message": "",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:26:18.708659+00:00"
+              },
+              {
+                "id": 7,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "运行状态检查",
+                "state": "passed",
+                "message": "",
+                "detail": {
+                  "passed": true
+                },
+                "created_at": "2026-10-19T04:26:18.730385+00:00"
+              },
+              {
+                "id": 8,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "系统依赖",
+                "state": "running",
+                "message": "",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:26:18.731799+00:00"
+              },
+              {
+                "id": 9,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "系统依赖",
+                "state": "passed",
+                "message": "",
+                "detail": {
+                  "passed": true
+                },
+                "created_at": "2026-10-19T04:26:26.391938+00:00"
+              },
+              {
+                "id": 10,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "Node.js 与 npm",
+                "state": "running",
+                "message": "",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:26:26.393768+00:00"
+              },
+              {
+                "id": 11,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "Node.js 与 npm",
+                "state": "passed",
+                "message": "",
+                "detail": {
+                  "passed": true
+                },
+                "created_at": "2026-10-19T04:26:31.133538+00:00"
+              },
+              {
+                "id": 12,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "Git 工作树",
+                "state": "running",
+                "message": "",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:26:31.136256+00:00"
+              },
+              {
+                "id": 13,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "Git 工作树",
+                "state": "passed",
+                "message": "",
+                "detail": {
+                  "passed": true
+                },
+                "created_at": "2026-10-19T04:26:31.138884+00:00"
+              },
+              {
+                "id": 14,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "OpenCode 安装",
+                "state": "running",
+                "message": "",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:26:31.141205+00:00"
+              },
+              {
+                "id": 15,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "OpenCode 安装",
+                "state": "passed",
+                "message": "",
+                "detail": {
+                  "passed": true
+                },
+                "created_at": "2026-10-19T04:27:33.936984+00:00"
+              },
+              {
+                "id": 16,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "写入前状态检查",
+                "state": "running",
+                "message": "",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:27:33.938912+00:00"
+              },
+              {
+                "id": 17,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "写入前状态检查",
+                "state": "passed",
+                "message": "",
+                "detail": {
+                  "passed": true
+                },
+                "created_at": "2026-10-19T04:27:33.963883+00:00"
+              },
+              {
+                "id": 18,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "工程目录",
+                "state": "running",
+                "message": "",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:27:33.965779+00:00"
+              },
+              {
+                "id": 19,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "工程目录",
+                "state": "passed",
+                "message": "",
+                "detail": {
+                  "passed": true
+                },
+                "created_at": "2026-10-19T04:27:33.982852+00:00"
+              },
+              {
+                "id": 20,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "全局 OpenCode 配置",
+                "state": "running",
+                "message": "",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:27:33.984273+00:00"
+              },
+              {
+                "id": 21,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "configure",
+                "name": "全局 OpenCode 配置",
+                "state": "passed",
+                "message": "",
+                "detail": {
+                  "passed": true
+                },
+                "created_at": "2026-10-19T04:27:34.000150+00:00"
+              },
+              {
+                "id": 22,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "verify",
+                "name": "模型中转连接",
+                "state": "running",
+                "message": "",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:27:34.027906+00:00"
+              },
+              {
+                "id": 23,
+                "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+                "attempt": 1,
+                "type": "step",
+                "stage": "verify",
+                "name": "模型中转连接",
+                "state": "failed",
+                "message": "中转 HTTP 404",
+                "detail": {
+                  "passed": false
+                },
+                "created_at": "2026-10-19T04:27:34.070935+00:00"
+              }
+            ]
+          }
+        },
+        {
+          "name": "maintenance.sse_resume",
+          "status": "PASS",
+          "detail": {
+            "duplicate_ids": [],
+            "fallback": false,
+            "errors": []
+          }
+        },
+        {
+          "name": "worker.health",
+          "status": "FAIL",
+          "detail": {
+            "environment_id": 1,
+            "employee_id": "worker-a",
+            "enabled": true,
+            "connection": {
+              "channel": "ssh",
+              "state": "offline",
+              "last_heartbeat_at": null,
+              "epoch": null
+            },
+            "maintenance": {
+              "state": "INTERRUPTED",
+              "operation_id": "op_d27bfef2e3894ab5bf396576e5acd054",
+              "stage": "interrupted",
+              "attempt": 1
+            },
+            "runtime_health": {
+              "status": "UNKNOWN",
+              "last_checked_at": "2026-10-19T04:27:34.072001+00:00",
+              "capability": {
+                "desired_revision": "a1b55c8de29a4c10",
+                "checked_at": "2026-10-19T04:26:17.737269+00:00",
+                "runtime_status": "pending",
+                "error": ""
+              },
+              "equipment": []
+            },
+            "repository": null,
+            "schedulable": false,
+            "blocking": [
+              {
+                "code": "maintenance_active",
+                "message": "环境正在维护"
+              },
+              {
+                "code": "worker_offline",
+                "message": "Worker 通道离线"
+              },
+              {
+                "code": "runtime_unknown",
+                "message": "环境状态为 UNKNOWN，禁止调度"
+              },
+              {
+                "code": "equipment_pending",
+                "message": "装备配置等待部署生效"
+              },
+              {
+                "code": "capability_not_applied",
+                "message": "装备绑定尚未应用"
+              }
+            ]
+          }
+        },
+        {
+          "name": "worker.ssh",
+          "status": "PASS",
+          "detail": "real SSH/systemd/config evidence collected"
+        },
+        {
+          "name": "worker.units",
+          "status": "FAIL",
+          "detail": {
+            "opencode": {
+              "active": "inactive",
+              "enabled": "not-found"
+            },
+            "worker": {
+              "active": "inactive",
+              "enabled": "not-found"
+            }
+          }
+        },
+        {
+          "name": "worker.opencode_loopback",
+          "status": "FAIL",
+          "detail": {
+            "port": 44135,
+            "addresses": [],
+            "loopback_only": false
+          }
+        },
+        {
+          "name": "worker.skill_installed",
+          "status": "PASS",
+          "detail": "present"
+        },
+        {
+          "name": "worker.skill_discovered",
+          "status": "FAIL",
+          "detail": {
+            "ok": false,
+            "error": "ERROR:<urlopen error [Errno 111] Connection refused>"
+          }
+        },
+        {
+          "name": "worker.mcp_connected",
+          "status": "FAIL",
+          "detail": {
+            "ok": false,
+            "error": "ERROR:<urlopen error [Errno 111] Connection refused>"
+          }
+        },
+        {
+          "name": "worker.git_clone",
+          "status": "PASS",
+          "detail": {
+            "head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+            "branch": "main",
+            "origin": "file:///srv/nexus-v145-qa/source.git",
+            "dirty": false,
+            "expected_head": "4f7ad4b565d02224bfd4bccda6cb6a0c65a46a59",
+            "expected_origin": "file:///srv/nexus-v145-qa/source.git",
+            "clone_matches_fixture": true
+          }
+        },
+        {
+          "name": "worker.env_prefix_alignment",
+          "status": "FAIL",
+          "detail": {
+            "expected_prefix": "NEXUS",
+            "keys": [],
+            "source": {
+              "worker_agent_reads_astra": [],
+              "worker_agent_reads_nexus": [
+                "NEXUS_WORKER_CHILD_ENV_ALLOW",
+                "NEXUS_WORKER_ENVIRONMENT_ID",
+                "NEXUS_WORKER_GATEWAY_URL",
+                "NEXUS_WORKER_INSTANCE_ID",
+                "NEXUS_WORKER_OPENCODE_BIN",
+                "NEXUS_WORKER_OPENCODE_UNIT",
+                "NEXUS_WORKER_OPENCODE_URL",
+                "NEXUS_WORKER_TOKEN",
+                "NEXUS_WORKER_WORKSPACE_ROOT"
+              ],
+              "provisioner_writes_astra": [],
+              "provisioner_writes_nexus": [
+                "NEXUS_WORKER_ENVIRONMENT_ID",
+                "NEXUS_WORKER_GATEWAY_URL",
+                "NEXUS_WORKER_INSTANCE_ID",
+                "NEXUS_WORKER_OPENCODE_BIN",
+                "NEXUS_WORKER_OPENCODE_UNIT",
+                "NEXUS_WORKER_OPENCODE_URL",
+                "NEXUS_WORKER_TOKEN",
+                "NEXUS_WORKER_WORKSPACE_ROOT"
+              ],
+              "currently_astra_wired": false,
+              "currently_nexus_wired": true,
+              "prefix_mismatch": false
+            }
+          }
+        },
+        {
+          "name": "worker.config_provider",
+          "status": "PASS",
+          "detail": {
+            "path": "/etc/nexus/opencode/1/opencode.jsonc",
+            "model": "nexus-gateway/qa-model",
+            "providers": [
+              "nexus-gateway"
+            ],
+            "provider_has_api_key": true,
+            "mcp_names": [
+              "nexus-library"
+            ],
+            "mcp_auth_header_present": true
+          }
+        },
+        {
+          "name": "worker.config_provider_alignment",
+          "status": "PASS",
+          "detail": {
+            "expected": "nexus-gateway",
+            "configured": [
+              "nexus-gateway"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "pending_alignment": [],
+  "not_verified": [
+    "model inference / chat completions (intentionally not called)",
+    "Task execution with a real prompt (intentionally not called)",
+    "future maintenance actions update/disable/restore (not exposed by this working tree)",
+    "browser UI interactions or screenshots (Codex will drive Cua)",
+    "remote private-repository PAT/push (the fixture is a VM-local file:// bare repository)"
+  ],
+  "real_worker_acceptance_claimed": false,
+  "note": "This harness exercises real processes and APIs. A successful run is automated evidence, not a substitute for human acceptance."
+}

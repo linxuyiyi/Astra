@@ -23,7 +23,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.config.settings import Settings, get_settings
 from app.database import SessionLocal
-from app.gateway.security import gateway_key_digest, verify_gateway_key
+from app.gateway.security import CredentialCipher, CredentialError, gateway_key_digest, verify_gateway_key
 from app.models import (
     OpenCodeExecutionEnvironment,
     WorkerCommand,
@@ -136,6 +136,7 @@ class WorkerGateway:
             raise WorkerGatewayError("unknown_environment", "执行环境不存在")
         token = f"wtk_{token_urlsafe(32)}"
         digest = gateway_key_digest(token)
+        token_ciphertext = self._token_ciphertext(token)
         existing = await session.scalar(
             select(WorkerInstance).where(WorkerInstance.environment_id == environment_id)
         )
@@ -145,6 +146,7 @@ class WorkerGateway:
                 id=f"wrk_{token_hex(16)}",
                 environment_id=environment_id,
                 token_digest=digest,
+                token_ciphertext=token_ciphertext,
                 status="offline",
                 epoch=0,
             )
@@ -159,7 +161,13 @@ class WorkerGateway:
         result = await session.execute(
             update(WorkerInstance)
             .where(WorkerInstance.id == worker_id, WorkerInstance.epoch == previous_epoch)
-            .values(token_digest=digest, epoch=new_epoch, status="offline", updated_at=now)
+            .values(
+                token_digest=digest,
+                token_ciphertext=token_ciphertext,
+                epoch=new_epoch,
+                status="offline",
+                updated_at=now,
+            )
         )
         if result.rowcount != 1:
             await session.rollback()
@@ -170,6 +178,15 @@ class WorkerGateway:
         self._close_local_socket(worker_id, previous_epoch)
         self._db_epochs[worker_id] = new_epoch
         return EnrollResult(worker_id, environment_id, token, new_epoch, True)
+
+    def _token_ciphertext(self, token: str) -> str | None:
+        try:
+            cipher = CredentialCipher(self.settings.gateway_master_key)
+        except CredentialError:
+            return None
+        if not cipher.available:
+            return None
+        return cipher.encrypt(token)
 
     async def authenticate(self, session: AsyncSession, message: WorkerMessage, token: str) -> AuthOk:
         if message.type != "command" or message.payload.get("name") != "authenticate":

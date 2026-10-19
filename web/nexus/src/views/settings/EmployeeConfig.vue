@@ -11,45 +11,45 @@
       class="employee-config-form"
       :model="form"
       :rules="formRules"
-      :disabled="maintaining"
+      :disabled="maintenanceBusy"
       label-position="left"
       label-width="160px"
       scroll-to-error
       @submit.prevent="save"
     >
-      <ElDivider content-position="left">基本信息</ElDivider>
+      <ElDivider content-position="left">关联员工与执行资源</ElDivider>
 
-      <ElFormItem v-if="!creating" label="Worker ID">
+      <ElFormItem v-if="!creating" label="关联员工 ID">
         <IdDisplay :value="employee?.id ?? ''" :max-width="200" />
       </ElFormItem>
-      <ElFormItem v-else label="Worker ID" prop="id">
+      <ElFormItem v-else label="关联员工 ID" prop="id">
         <ElInput v-model.trim="form.id" placeholder="worker-04" />
       </ElFormItem>
-      <ElFormItem label="Worker 名称" prop="name">
+      <ElFormItem label="关联员工名称" prop="name">
         <ElInput v-model.trim="form.name" placeholder="Worker-04" />
       </ElFormItem>
-      <ElFormItem label="Worker 形象" prop="character_id">
+      <ElFormItem label="关联员工形象" prop="character_id">
         <div class="employee-character-field">
-          <ElRadioGroup v-model="form.character_id" class="employee-character-options" aria-label="Worker 形象" data-testid="employee-character-picker">
+          <ElRadioGroup v-model="form.character_id" class="employee-character-options" aria-label="关联员工形象" data-testid="employee-character-picker">
             <ElRadio v-for="character in employeeCharacters" :key="character.id" :value="character.id" border>
               <img :src="employeeCharacterSource(character.id)" alt="" draggable="false" />
               <span>{{ character.name }}</span>
             </ElRadio>
           </ElRadioGroup>
-          <p class="employee-character-help">与首页数字空间共用形象，保存后应用到该 Worker。</p>
+          <p class="employee-character-help">沿用关联员工的界面形象，仅用于标识，不改变 Worker 的执行资源与部署方式。</p>
         </div>
       </ElFormItem>
-      <ElFormItem label="岗位" prop="role">
+      <ElFormItem label="关联员工岗位" prop="role">
         <ElInput v-model.trim="form.role" placeholder="测试平台开发" />
       </ElFormItem>
       <ElFormItem prop="default_work_area">
-        <template #label>默认办公区域 <FieldHelp label="默认办公区域" help="无特定任务场景时，Worker 会出现在这个区域。" /></template>
+        <template #label>默认办公区域 <FieldHelp label="默认办公区域" help="无特定任务场景时，关联员工会出现在这个区域。" /></template>
         <ElSelect v-model="form.default_work_area">
           <ElOption v-for="area in workspaceAreas" :key="area.id" :value="area.id" :label="area.name" />
         </ElSelect>
       </ElFormItem>
-      <ElFormItem label="说明">
-        <ElInput v-model="form.description" type="textarea" :rows="4" placeholder="说明该 Worker 的工作职责与边界" />
+      <ElFormItem label="关联员工说明">
+        <ElInput v-model="form.description" type="textarea" :rows="4" placeholder="说明关联员工的工作职责与边界；Worker 部署与维护以执行资源字段为准" />
       </ElFormItem>
 
       <ElDivider content-position="left">工作范围</ElDivider>
@@ -66,14 +66,14 @@
         </ElCheckboxGroup>
       </ElFormItem>
 
-      <ElDivider content-position="left">运行配置</ElDivider>
+      <ElDivider content-position="left">派单配置</ElDivider>
 
       <ElFormItem>
-        <template #label>启用 Worker <FieldHelp label="启用 Worker" help="停用后不再自动分配新任务" /></template>
-        <ElSwitch v-model="form.enabled" aria-label="启用 Worker" />
+        <template #label>允许平台调度 <FieldHelp label="允许平台调度" help="关闭后不再向关联员工派发新任务；Worker 环境、仓库与维护记录不会被删除。" /></template>
+        <ElSwitch v-model="form.enabled" aria-label="允许平台调度" />
       </ElFormItem>
       <ElFormItem>
-        <template #label>自动领取任务 <FieldHelp label="自动领取任务" help="空闲时可以领取匹配的新任务。每位 Worker 同时只处理一项任务。" /></template>
+        <template #label>自动领取任务 <FieldHelp label="自动领取任务" help="空闲时可以领取匹配的新任务。每位关联员工同时只处理一项任务。" /></template>
         <ElSwitch v-model="form.auto_claim" aria-label="自动领取任务" />
       </ElFormItem>
       <ElFormItem>
@@ -86,14 +86,15 @@
           <ElTag :type="statusTagType(employee?.status ?? 'UNKNOWN')">
             {{ runtimeLabel }}
           </ElTag>
-          <p>{{ paused ? 'Worker 已暂停接单，不会领取新任务。' : 'Worker 可正常领取匹配任务。' }}</p>
+          <p>{{ paused ? '关联员工已暂停接单，不会领取新任务。' : '关联员工可正常领取匹配任务。' }}</p>
           <ElButton :disabled="statusChanging || (!paused && currentTaskCount > 0)" @click="toggleRuntime">
             {{ statusChanging ? '处理中…' : paused ? '继续接单' : '暂停接单' }}
           </ElButton>
         </div>
       </ElFormItem>
 
-      <ElDivider content-position="left">环境配置</ElDivider>
+      <ElDivider content-position="left">执行资源环境</ElDivider>
+      <p class="maintenance-help">以下字段描述 Agent Worker 的服务器、工作目录与接入方式；关联员工的身份与职责不在这里扩展。</p>
 
       <div data-testid="environment-form">
         <ElFormItem>
@@ -103,15 +104,16 @@
             <ElRadioButton value="LINUX_REMOTE"><Server :size="15" /> Linux 远程</ElRadioButton>
           </ElRadioGroup>
         </ElFormItem>
-        <ElFormItem label="环境名称" prop="environment.name">
-          <ElInput v-model.trim="form.environment.name" />
+        <ElFormItem prop="environment.name">
+          <template #label>Worker 名称 <FieldHelp label="Worker 名称" help="Worker 作为执行资源的显示名称，与环境资源 ID 对应。" /></template>
+          <ElInput v-model.trim="form.environment.name" placeholder="生产环境 Worker-04" />
         </ElFormItem>
         <ElFormItem prop="environment.opencode_path">
-          <template #label>Agent 可执行文件 <FieldHelp label="Agent 可执行文件" help="正式 Runtime 由该 OpenCode 启动 Server；显式 fallback 时才使用 CLI。" /></template>
+          <template #label>OpenCode 可执行文件 <FieldHelp label="OpenCode 可执行文件" help="正式 Runtime 由该 OpenCode 启动 Server；显式 fallback 时才使用 CLI。" /></template>
           <ElInput v-model.trim="form.environment.opencode_path" :placeholder="form.environment.mode === 'LOCAL' ? 'opencode 或 C:\\Program Files\\OpenCode\\opencode.exe' : '/usr/local/bin/opencode'" />
         </ElFormItem>
         <ElFormItem>
-          <template #label>Agent 模型 <FieldHelp label="Agent 模型" help="留空时使用 Agent 自身或平台默认模型。" /></template>
+          <template #label>OpenCode 模型 <FieldHelp label="OpenCode 模型" help="留空时使用 Agent 自身或平台默认模型。" /></template>
           <ElInput v-model.trim="form.environment.model_name" placeholder="opencode/glm-5.1" />
         </ElFormItem>
         <ElFormItem label="环境说明">
@@ -141,41 +143,13 @@
           </ElFormItem>
         </template>
 
-        <template v-if="!creating">
-          <ElFormItem label="连接状态">
-            <ElSpace :size="8">
-              <ElTag :type="statusTagType(selectedEnvironmentStatus)">
-                {{ statusLabel(selectedEnvironmentStatus) }}
-              </ElTag>
-              <ElButton :disabled="testing || maintaining" @click="testConnection"><RefreshCw :size="13" :class="{ spin: testing }" /> {{ testing ? '检测中' : '测试连接' }}</ElButton>
-            </ElSpace>
-          </ElFormItem>
-          <template v-if="selectedEnvironment">
-            <ElFormItem label="Server 地址"><span class="static-value">{{ serverAddress }}</span></ElFormItem>
-            <ElFormItem label="工作目录"><span class="static-value">{{ selectedEnvironment.workspace_root || '—' }}</span></ElFormItem>
-            <ElFormItem label="模型"><span class="static-value">{{ selectedEnvironment.model_name || '—' }}</span></ElFormItem>
-            <ElFormItem label="最近检测"><span class="static-value">{{ formatTime(selectedEnvironment.last_checked_at) }}</span></ElFormItem>
-          </template>
+        <template v-if="!creating && selectedEnvironment">
+          <ElFormItem label="Server 地址"><span class="static-value">{{ serverAddress }}</span></ElFormItem>
+          <ElFormItem label="工作目录"><span class="static-value">{{ selectedEnvironment.workspace_root || '—' }}</span></ElFormItem>
+          <ElFormItem label="模型"><span class="static-value">{{ selectedEnvironment.model_name || '—' }}</span></ElFormItem>
+          <ElFormItem label="目标仓库"><span class="static-value">{{ repositoryCopy }}</span></ElFormItem>
+          <ElFormItem label="最近检测"><span class="static-value">{{ formatTime(selectedEnvironment.last_checked_at) }}</span></ElFormItem>
         </template>
-
-        <ElFormItem v-if="!creating && form.environment.mode === 'LINUX_REMOTE'" label="远程部署">
-          <div class="remote-maintenance">
-            <ElSpace wrap :size="8">
-              <ElButton data-testid="deploy-environment" type="primary" :loading="maintenanceAction === 'deploy'" :disabled="maintenanceDisabled" @click="maintain('deploy')">一键部署</ElButton>
-              <ElButton data-testid="restart-environment" :loading="maintenanceAction === 'restart'" :disabled="maintenanceDisabled" @click="maintain('restart')">重启 OpenCode Serve</ElButton>
-            </ElSpace>
-            <p class="maintenance-help">{{ isDirty ? '请先保存配置，再执行部署或重启。' : currentTaskCount > 0 ? 'Worker 有未结束任务，请先结束任务再维护环境。' : '部署会安装依赖、设置 npm 镜像，并备份、合并当前 SSH 用户的全局 OpenCode 模型中转和数字图书馆配置。' }}</p>
-          </div>
-        </ElFormItem>
-
-        <div v-if="checks.length" data-testid="environment-checks" class="environment-checks">
-          <article v-for="check in checks" :key="check.name">
-            <RefreshCw v-if="check.state === 'running'" :size="14" class="spin" />
-            <CheckCircle2 v-else-if="check.passed" :size="14" class="is-passed" />
-            <CircleX v-else :size="14" class="is-failed" />
-            <div><strong>{{ check.name }}</strong><small>{{ check.detail }}</small></div>
-          </article>
-        </div>
       </div>
 
       <ElAlert
@@ -190,44 +164,47 @@
       />
     </ElForm>
 
-    <div v-if="maintaining" class="remote-operation-cancel">
-      <ElButton data-testid="cancel-environment-operation" @click="maintenanceController?.abort()">取消操作</ElButton>
-    </div>
+    <template v-if="!creating && selectedEnvironment">
+      <ElDivider content-position="left">维护操作</ElDivider>
+      <WorkerMaintenancePanel
+        :controller="maintenance"
+        :disabled-reason="maintenanceBlockedReason"
+        @changed="onMaintenanceChanged"
+      />
+    </template>
 
     <StickyActionBar v-if="isDirty && !embedded" :dirty="isDirty" :saving="saving" :save-label="creating ? '创建 Worker' : '保存配置'" @save="save" @cancel="reset" />
   </component>
 </template>
 
 <script setup lang="ts">
-import { CheckCircle2, CircleX, Laptop, RefreshCw, Server } from 'lucide-vue-next'
-import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElCheckbox, ElCheckboxGroup, ElDivider, ElForm, ElFormItem, ElInput, ElOption, ElRadio, ElRadioGroup, ElRadioButton, ElSelect, ElSpace, ElSwitch, ElTag } from 'element-plus'
+import { Laptop, Server } from 'lucide-vue-next'
+import { computed, reactive, ref, watch } from 'vue'
+import { ElAlert, ElButton, ElCheckbox, ElCheckboxGroup, ElDivider, ElForm, ElFormItem, ElInput, ElOption, ElRadio, ElRadioGroup, ElRadioButton, ElSelect, ElSwitch, ElTag } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { api, maintainEnvironment } from '@/api/client'
+import { api } from '@/api/client'
 import type { Employee, TaskCategory, TaskType } from '@/api/types'
 import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
 import FieldHelp from '@/components/forms/FieldHelp.vue'
 import IdDisplay from '@/components/astra/IdDisplay.vue'
 import StickyActionBar from '@/components/astra/StickyActionBar.vue'
+import WorkerMaintenancePanel from '@/components/worker/WorkerMaintenancePanel.vue'
+import { useWorkerMaintenance } from '@/composables/useWorkerMaintenance'
 import { workspaceAreas, type WorkspaceAreaId } from '@/features/workspace/sceneLayout'
 import { employeeCharacters, employeeCharacterSource } from '@/features/workspace/characterAssets'
 import { useAstraStore } from '@/stores/astra'
-import { employeeDisplayName, formatTime, statusLabel, statusTagType, workerFacingMessage } from '@/utils/format'
+import { isMaintenanceActive, repositorySummary, workerRepository } from '@/features/workers/presentation'
+import { employeeDisplayName, formatTime, statusTagType } from '@/utils/format'
 
 const props = defineProps<{ employee: Employee | null; creating: boolean; categories: TaskCategory[]; embedded?: boolean }>()
-const emit = defineEmits<{ (e: 'saved', id: string, environmentOk?: boolean): void }>()
+const emit = defineEmits<{ (e: 'saved', id: string): void }>()
 const store = useAstraStore()
 
 const formRef = ref<FormInstance | null>(null)
 const saving = ref(false)
-const testing = ref(false)
-const maintenanceAction = ref<'deploy' | 'restart' | null>(null)
-const maintaining = computed(() => maintenanceAction.value !== null)
-const maintenanceController = ref<AbortController | null>(null)
 const statusChanging = ref(false)
 const message = ref('')
 const messageIsError = ref(false)
-const checks = ref<Array<{ name: string; passed: boolean; detail: string; state?: string }>>([])
 const originalSnapshot = ref('')
 
 const emptyEnvironment = () => ({ mode: 'LOCAL' as 'LOCAL' | 'LINUX_REMOTE', name: '本地 Agent 工作环境', description: '', host: '', port: 22 as number | string, username: '', ssh_password: '', opencode_server_port: 14096 as number | string, opencode_path: 'opencode', model_name: '', workspace_root: '', labels: [] as string[] })
@@ -238,10 +215,10 @@ const portValidator = (_rule: unknown, value: unknown, callback: (error?: Error)
   callback(value !== '' && Number.isInteger(numeric) && numeric >= 1 && numeric <= 65535 ? undefined : new Error('端口需在 1-65535 之间'))
 }
 const formRules = computed<FormRules>(() => ({
-  id: [{ required: true, message: '请输入 Worker ID', trigger: 'blur' }],
-  name: [{ required: true, message: '请输入 Worker 名称', trigger: 'blur' }],
+  id: [{ required: true, message: '请输入关联员工 ID', trigger: 'blur' }],
+  name: [{ required: true, message: '请输入关联员工名称', trigger: 'blur' }],
   role: [{ required: true, message: '请输入岗位', trigger: 'blur' }],
-  'environment.name': [{ required: true, message: '请输入环境名称', trigger: 'blur' }],
+  'environment.name': [{ required: true, message: '请输入 Worker 名称', trigger: 'blur' }],
   'environment.opencode_path': [{ required: true, message: '请输入 Agent 可执行文件', trigger: 'blur' }],
   'environment.workspace_root': [{ required: true, message: '请输入工作空间', trigger: 'blur' }],
   'environment.opencode_server_port': [{ required: true, message: '请输入 OpenCode Server Port', trigger: 'blur' }, { validator: portValidator, trigger: 'blur' }],
@@ -252,14 +229,17 @@ const formRules = computed<FormRules>(() => ({
 }))
 
 const selectedEnvironment = computed(() => props.employee?.execution_environment ?? null)
-const selectedEnvironmentStatus = computed(() => selectedEnvironment.value?.status ?? 'UNKNOWN')
 const currentTaskCount = computed(() => props.employee?.current_task_count ?? 0)
+const maintenance = useWorkerMaintenance(computed(() => selectedEnvironment.value?.id ?? null))
+const maintenanceBusy = computed(() => maintenance.busyAction.value !== null || isMaintenanceActive(maintenance.operation.value?.state))
+const maintenanceBlockedReason = computed(() => saving.value ? '正在保存配置，暂不能执行维护操作。' : isDirty.value ? '请先保存配置，再执行部署、更新、重启或禁用。' : '')
 const paused = computed(() => props.employee?.status === 'PAUSED')
 const serverAddress = computed(() => {
   const env = selectedEnvironment.value
   if (!env) return '—'
   return env.mode === 'LINUX_REMOTE' ? `${env.host ?? ''} → 127.0.0.1:${env.opencode_server_port}（SSH）` : `127.0.0.1:${env.opencode_server_port}`
 })
+const repositoryCopy = computed(() => repositorySummary(workerRepository(selectedEnvironment.value, maintenance.health.value)))
 
 const EMPLOYEE_RUNTIME_LABEL: Record<string, string> = {
   IDLE: '空闲',
@@ -282,7 +262,7 @@ function fill(employee?: Employee) {
     enabled: employee?.enabled ?? true, auto_claim: employee?.auto_claim ?? true, auto_execute: employee?.auto_execute ?? true,
     environment: environment ? { mode: environment.mode, name: environment.name, description: environment.description, host: environment.host ?? '', port: environment.port, username: environment.username ?? '', ssh_password: '', opencode_server_port: environment.opencode_server_port ?? 14096, opencode_path: environment.opencode_path, model_name: environment.model_name ?? '', workspace_root: environment.workspace_root, labels: [...environment.labels] } : emptyEnvironment(),
   })
-  checks.value = []; message.value = ''; messageIsError.value = false
+  message.value = ''; messageIsError.value = false
   originalSnapshot.value = snapshot()
   formRef.value?.clearValidate()
 }
@@ -296,8 +276,7 @@ function snapshot(): string {
   })
 }
 const isDirty = computed(() => snapshot() !== originalSnapshot.value)
-const maintenanceDisabled = computed(() => isDirty.value || saving.value || testing.value || maintaining.value || currentTaskCount.value > 0)
-const busy = computed(() => saving.value || maintaining.value)
+const busy = computed(() => saving.value || maintenanceBusy.value)
 
 watch([() => props.employee?.id, () => props.creating], () => { fill(props.employee ?? undefined) }, { immediate: true })
 
@@ -315,7 +294,7 @@ function environmentChanged() {
 }
 
 async function save() {
-  if (maintaining.value) return
+  if (maintenanceBusy.value) return
   message.value = ''; messageIsError.value = false
   const valid = formRef.value ? await formRef.value.validate().catch(() => false) : true
   if (!valid) return
@@ -323,69 +302,21 @@ async function save() {
   saving.value = true
   try {
     let employeeId = props.employee?.id ?? ''
-    let shouldCheckEnvironment = false
     if (props.creating) {
       const created = await api.createEmployee({ id: form.id, ...employeePayload(), execution_environment: environmentPayload() })
-      employeeId = created.id; shouldCheckEnvironment = true
+      employeeId = created.id
     } else {
       await api.updateEmployee(employeeId, employeePayload())
-      if (environmentChanged()) { await api.updateEnvironment(employeeId, environmentPayload()); shouldCheckEnvironment = true }
+      if (environmentChanged()) await api.updateEnvironment(employeeId, environmentPayload())
     }
-    const checkResult = shouldCheckEnvironment ? await api.testEnvironment(employeeId) : null
-    const environmentOk = checkResult ? checkResult.status === 'AVAILABLE' : true
     await store.refresh()
     originalSnapshot.value = snapshot()
-    if (checkResult) {
-      checks.value = checkResult.checks; messageIsError.value = !environmentOk
-      message.value = environmentOk ? '配置已保存，工作环境检测正常。' : '配置已保存，但工作环境检测异常，请查看检查项。'
-    } else {
-      message.value = '配置已保存，工作环境状态保持不变。'
-    }
-    emit('saved', employeeId, environmentOk)
+    messageIsError.value = false
+    message.value = '配置已保存。请执行“检查”以读取 Worker 健康与装备状态。'
+    emit('saved', employeeId)
   } catch (error) {
     messageIsError.value = true; message.value = error instanceof Error ? error.message : '保存失败'
   } finally { saving.value = false }
-}
-
-async function maintain(action: 'deploy' | 'restart') {
-  if (!props.employee || maintenanceDisabled.value) return
-  maintenanceAction.value = action
-  maintenanceController.value = new AbortController()
-  message.value = action === 'deploy' ? '正在部署远程环境，首次安装可能需要几分钟。' : '正在重启 OpenCode Serve。'
-  messageIsError.value = false
-  checks.value = []
-  try {
-    const result = await maintainEnvironment(props.employee.id, action, (event) => {
-      if (event.type !== 'step' || !event.name) return
-      checks.value = checks.value.filter((item) => item.name !== event.name)
-      checks.value.push({ name: event.name, passed: event.passed ?? false, detail: workerFacingMessage(event.detail || (event.state === 'running' ? '正在执行…' : '完成')), state: event.state })
-    }, maintenanceController.value.signal)
-    message.value = result.success ? action === 'deploy' ? '部署完成，远程 Worker 环境可用。' : 'OpenCode Serve 已重启，健康检查通过。' : workerFacingMessage(result.message || '环境操作失败')
-    messageIsError.value = !result.success
-  } catch (error) {
-    messageIsError.value = true
-    message.value = maintenanceController.value.signal.aborted ? '操作已取消，请核对远端状态后重试。' : error instanceof Error ? error.message : '环境操作失败'
-  } finally {
-    maintenanceAction.value = null
-    maintenanceController.value = null
-    await store.refresh()
-    await nextTick()
-    if (props.employee) {
-      form.environment.opencode_path = props.employee.execution_environment?.opencode_path ?? form.environment.opencode_path
-      form.environment.model_name = props.employee.execution_environment?.model_name ?? ''
-      originalSnapshot.value = snapshot()
-    }
-  }
-}
-
-async function testConnection() {
-  if (!props.employee) return
-  testing.value = true
-  try {
-    const result = await api.testEnvironment(props.employee.id)
-    checks.value = result.checks; message.value = result.status === 'AVAILABLE' ? '环境正常，可以处理新任务。' : '环境异常，请根据检查项处理。'; messageIsError.value = result.status !== 'AVAILABLE'
-    await store.refresh()
-  } catch (error) { messageIsError.value = true; message.value = error instanceof Error ? error.message : '检测失败' } finally { testing.value = false }
 }
 
 async function toggleRuntime() {
@@ -395,8 +326,15 @@ async function toggleRuntime() {
     const action = paused.value ? 'resume' : 'pause'
     await api.employeeAction(props.employee.id, action)
     await store.refresh()
-    message.value = action === 'resume' ? 'Worker 已恢复接单。' : 'Worker 已暂停接单，不会领取新任务。'
+    message.value = action === 'resume' ? '关联员工已恢复接单。' : '关联员工已暂停接单，不会领取新任务。'
   } catch (error) { messageIsError.value = true; message.value = error instanceof Error ? error.message : '状态更新失败' } finally { statusChanging.value = false }
+}
+
+async function onMaintenanceChanged() {
+  await store.refresh()
+  if (isDirty.value) return
+  const fresh = store.employees.find((item) => item.id === props.employee?.id)
+  if (fresh) fill(fresh)
 }
 
 function reset() {
@@ -417,20 +355,11 @@ defineExpose({ getDirty: () => isDirty.value, dirty: isDirty, saving: busy, rese
 .employee-character-options :deep(.el-radio.is-checked) { background: var(--el-color-primary-light-9); }
 .employee-character-help { margin: 8px 0 0; color: var(--el-text-color-secondary); font-size: var(--astra-font-helper); line-height: 1.6; }
 @media (max-width: 600px) { .employee-character-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.remote-maintenance { width: 100%; }
-.remote-operation-cancel { display: flex; justify-content: flex-end; margin-top: 12px; }
 .maintenance-help { margin: 8px 0 0; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); line-height: 1.6; }
 .employee-config-form :deep(.el-input), .employee-config-form :deep(.el-select) { width: 100%; }
 .employee-config-form :deep(.el-checkbox-group) { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .runtime-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
 .runtime-row p { flex: 1; min-width: 0; margin: 0; color: var(--el-text-color-secondary); font-size: var(--el-font-size-extra-small); }
 .static-value { color: var(--el-text-color-primary); overflow-wrap: anywhere; }
-.environment-checks { display: grid; gap: 8px; margin: 2px 0 16px; }
-.environment-checks article { display: flex; align-items: flex-start; gap: 8px; }
-.environment-checks article > svg { flex: none; margin-top: 3px; }
-.environment-checks .is-passed { color: var(--el-color-success); }
-.environment-checks .is-failed { color: var(--el-color-danger); }
-.environment-checks strong { display: block; font-size: var(--el-font-size-base); }
-.environment-checks small { display: block; color: var(--el-text-color-secondary); }
 .form-message { margin-top: 4px; }
 </style>

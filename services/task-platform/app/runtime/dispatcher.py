@@ -6,9 +6,10 @@ from sqlalchemy.orm import selectinload
 
 from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
 from app.event_bus import event_bus
-from app.models import DigitalEmployee, Task
+from app.models import DigitalEmployee, Task, WorkerMaintenanceOperation
 from app.runtime.capability import binding_names, dispatch_allowed
 from app.runtime.environment import environment_snapshot
+from app.runtime.maintenance import ACTIVE_STATES
 from app.runtime.occupancy import occupying_exists, sync_employee_occupancy
 from app.runtime.repository import read_base_commit
 from app.runtime.worker_files import environment_uses_worker
@@ -58,6 +59,15 @@ class Dispatcher:
         )
         if assigned:
             return assigned
+        maintained_environment_ids = set(
+            (
+                await self.session.scalars(
+                    select(WorkerMaintenanceOperation.environment_id).where(
+                        WorkerMaintenanceOperation.state.in_(ACTIVE_STATES)
+                    )
+                )
+            ).all()
+        )
         candidates = (
             (
                 await self.session.execute(
@@ -111,6 +121,7 @@ class Dispatcher:
                 employee
                 for employee in employees
                 if employee.execution_environment
+                and employee.execution_environment.id not in maintained_environment_ids
                 and employee.execution_environment.status == EnvironmentStatus.AVAILABLE
                 and runtime_assignment_block(employee.execution_environment, task) is None
                 and task.task_type in employee.task_types
@@ -119,14 +130,35 @@ class Dispatcher:
             employee = compatible[0] if compatible else None
             if not employee:
                 continue
-            task.employee_id = employee.id
             environment = employee.execution_environment
+            # Read the workspace before taking the shared maintenance lock so a
+            # remote Worker call never runs inside the environment-row lock.
             snapshot = environment_snapshot(environment)
             if await environment_uses_worker(environment):
                 head = await workspace_head_commit(environment, environment.workspace_root)
                 snapshot["base_commit"] = head or ""
             else:
                 snapshot["base_commit"] = read_base_commit(environment.workspace_root)
+            from fastapi import HTTPException
+
+            from app.runtime.remote_provisioning import guard_environment_write
+
+            try:
+                # The maintained-id query above is only a prefilter. Recheck the
+                # canonical maintenance fact under the shared environment lock
+                # immediately before assignment, then commit the assignment and
+                # release the row lock.
+                await guard_environment_write(self.session, environment)
+                from app.runtime.maintenance import scheduling_block
+
+                blocked = await scheduling_block(self.session, environment)
+                if blocked:
+                    await self.session.rollback()
+                    return None
+            except HTTPException:
+                await self.session.rollback()
+                return None
+            task.employee_id = employee.id
             task.base_commit = snapshot["base_commit"] or None
             task.execution_environment_snapshot = snapshot
             task.claimed_at = datetime.now(UTC)

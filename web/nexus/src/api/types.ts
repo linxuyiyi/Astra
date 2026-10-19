@@ -39,6 +39,8 @@ export interface ExecutionEnvironment {
   opencode_path: string
   model_name: string | null
   workspace_root: string
+  repository_id?: string | null
+  branch?: string | null
   status: 'UNKNOWN' | 'CHECKING' | 'AVAILABLE' | 'UNAVAILABLE'
   status_detail: Record<string, unknown>
   labels: string[]

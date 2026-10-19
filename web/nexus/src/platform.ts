@@ -68,20 +68,6 @@ export async function listWorkers(): Promise<PlatformWorker[]> {
   return read(await fetch("/api/workers"));
 }
 
-export async function maintainWorker(id: string, action: "deploy" | "restart"): Promise<string> {
-  const response = await fetch(`/api/employees/${id}/environment/${action}`, { method: "POST" });
-  if (!response.ok || !response.body) throw new Error(response.statusText || "环境操作失败");
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let last = "";
-  while (true) {
-    const chunk = await reader.read();
-    if (chunk.done) break;
-    last += decoder.decode(chunk.value, { stream: true });
-  }
-  return last.trim().split("\n").filter(Boolean).at(-1) ?? "已发送";
-}
-
 export async function listGatewayRoutes(): Promise<Array<{ id: string; model: string; enabled: boolean; pool_id: string }>> {
   return read(await fetch("/api/gateway/routes"));
 }

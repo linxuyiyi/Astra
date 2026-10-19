@@ -52,7 +52,7 @@
 
 ### 2.1 DeepSeek（聊天模型）
 - OpenAI 兼容：`OPENAI_BASE_URL=https://api.deepseek.com`，模型 `deepseek-flash`，密钥 `DEEPSEEK_API_KEY`（脚本把它同时作为 `OPENAI_API_KEY`）。
-- 三处用到：Agent Service 凭证（`bootstrap_chat_model.py` 登记）、Worker 的 OpenCode（provider `deepseek` 或经网关 `astra-gateway/deepseek-flash`）、llm_wiki 的 LLM 配置（customEndpoint `https://api.deepseek.com/v1`）。
+- 三处用到：Agent Service 凭证（`bootstrap_chat_model.py` 登记）、Worker 的 OpenCode（provider `deepseek` 或经网关 `nexus-gateway/deepseek-flash`）、llm_wiki 的 LLM 配置（customEndpoint `https://api.deepseek.com/v1`）。
 - 上游繁忙时会返回 "Service is too busy"/503 或长时间 `: keep-alive`，见 §7。
 - 检查：`curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $DEEPSEEK_API_KEY" https://api.deepseek.com/models` 应为 200。
 
@@ -69,13 +69,13 @@
 ### 2.4 远程 Worker SSH
 - root（或有 sudo 的用户）+ 密码，密码存于 Astra DB（API 只回 `has_ssh_password`）。
 - 远端需能访问 npm 源（默认 `https://registry.npmmirror.com`）安装 Node/OpenCode。
-- 网关 8110 与图书馆 MCP 8201 由远端 Worker 直连内网地址。部署拒绝 `127.0.0.1` / `localhost`。设置 `ASTRA_REMOTE_GATEWAY_LOCAL_URL`、`ASTRA_MCP_RESOURCE_SERVER_URL` 和 `ASTRA_WORKER_AGENT_GATEWAY_URL` 为 Worker 能访问的地址。OpenCode 仍只听远端 `127.0.0.1` 上的环境端口（默认 14096）。
+- 网关 8110 与图书馆 MCP 8201 由远端 Worker 直连内网地址。部署拒绝 `127.0.0.1` / `localhost`。设置 `NEXUS_REMOTE_GATEWAY_LOCAL_URL`、`NEXUS_MCP_RESOURCE_SERVER_URL` 和 `NEXUS_WORKER_AGENT_GATEWAY_URL` 为 Worker 能访问的地址。OpenCode 仍只听远端 `127.0.0.1` 上的环境端口（默认 14096）。
 
 ### 2.5 密钥
 | 密钥 | 生成 | 说明 |
 |---|---|---|
 | `ASTRA_GATEWAY_MASTER_KEY` | `python -c 'from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())'` | 加密网关节点下游凭据；**丢失后已有节点凭据无法解密** |
-| `ASTRA_MCP_API_KEY` | `python -c 'import secrets;print(secrets.token_urlsafe(32))'` | Library MCP Bearer；远程部署拒绝 stdio MCP |
+| `NEXUS_MCP_API_KEY` | `python -c 'import secrets;print(secrets.token_urlsafe(32))'` | Library MCP Bearer；远程部署拒绝 stdio MCP |
 | `ASTRA_LLM_WIKI_API_TOKEN` | 同上 | 写入 llm_wiki `apiConfig.token`（Web 版实际未强制，见 §9） |
 脚本保存在 `$NEXUS_STATE_DIR/secrets.env`（0600），已存在则复用。box 上旧部署是 `/workspace/nexus-p2/.gwmaster`、`.mcpkey`、`.llmwikitoken`、`.llmwikiproject`（均 0600）。
 
@@ -86,14 +86,14 @@
 | 变量 | 必填 | 默认 | 作用 |
 |---|---|---|---|
 | ASTRA_GATEWAY_MASTER_KEY | 是 | — | 网关 Fernet 主密钥 |
-| ASTRA_MCP_TRANSPORT | 是（远程 Worker） | stdio | 设 `streamable-http` |
-| ASTRA_MCP_API_KEY | 是（streamable-http） | — | Library MCP Bearer |
-| ASTRA_MCP_HOST / ASTRA_MCP_PORT | 否 | 127.0.0.1 / 8201 | Library MCP 监听 |
-| ASTRA_TASK_MCP_PORT | 否 | 8202 | Task MCP 端口 |
+| NEXUS_MCP_TRANSPORT | 是（远程 Worker） | stdio | 设 `streamable-http` |
+| NEXUS_MCP_API_KEY | 是（streamable-http） | — | Library MCP Bearer |
+| NEXUS_MCP_HOST / NEXUS_MCP_PORT | 否 | 127.0.0.1 / 8201 | Library MCP 监听 |
+| NEXUS_TASK_MCP_PORT | 否 | 8202 | Task MCP 端口 |
 | ASTRA_GATEWAY_PROBE_TIMEOUT_SECONDS | 建议 | — | 设 30，避免探测过慢 |
 | ASTRA_REDIS_URL | 是 | redis://localhost:6379/1 | Celery、API 中转，以及 Worker Gateway 的默认连接总线。不用 db 0，避免和 v0.9 抢同一个库 |
-| ASTRA_WORKER_GATEWAY_BUS | 否 | auto | `auto` 在 `ASTRA_REDIS_URL` 非空时用 Redis，使 API 与 Celery 共用一个连接所有者。URL 为空时退回 memory，启动日志和 `/api/worker-gateway/health` 的 `warning` 为「仅单进程可用」。需要单进程或强制 Redis 时分别设 `memory`、`redis` |
-| ASTRA_WORKER_GATEWAY_ADMIN_KEY | 否 | 启动脚本生成一次 | Worker Gateway 登记、查询和下发的内部密钥，请求头 `X-Astra-Worker-Gateway-Key`。留空时 `ops/dev/astra_service.py` 在拉起 API 前写入 `ops/env/.env`（加锁、原子替换、权限 0600）。API 进程不各自生成；密钥缺失时管理接口返回 401，进程仍可启动。WebSocket 使用 Worker token，健康检查不需要这把密钥 |
+| NEXUS_WORKER_GATEWAY_BUS | 否 | auto | `auto` 在 `ASTRA_REDIS_URL` 非空时用 Redis，使 API 与 Celery 共用一个连接所有者。URL 为空时退回 memory，启动日志和 `/api/worker-gateway/health` 的 `warning` 为「仅单进程可用」。需要单进程或强制 Redis 时分别设 `memory`、`redis` |
+| NEXUS_WORKER_GATEWAY_ADMIN_KEY | 否 | 启动脚本生成一次 | Worker Gateway 登记、查询和下发的内部密钥，请求头 `X-Astra-Worker-Gateway-Key`。留空时 `ops/dev/astra_service.py` 在拉起 API 前写入 `ops/env/.env`（加锁、原子替换、权限 0600）。API 进程不各自生成；密钥缺失时管理接口返回 401，进程仍可启动。WebSocket 使用 Worker token，健康检查不需要这把密钥 |
 | ASTRA_OUTBOX_INTERVAL / ASTRA_OUTBOX_RETRY_SECONDS | 否 | — | 唤醒 outbox 轮询（验证用 2 / 5） |
 | ASTRA_OPENCODE_MODEL | 是 | — | `deepseek/deepseek-flash`（provider/model） |
 | ASTRA_OPENCODE_SERVER_PORT / ASTRA_ASSISTANT_OPENCODE_PORT | 否 | 14096 / 14097 | 平台/助手 OpenCode，只监听 127.0.0.1 |
@@ -105,7 +105,7 @@
 | ASTRA_LLM_WIKI_API_TOKEN | 同上 | — | Bearer token |
 | ASTRA_LLM_WIKI_PROJECT_ID | 同上 | — | llm_wiki 项目 UUID（`.llm-wiki/project.json`） |
 | ASTRA_LLM_WIKI_TIMEOUT | 否 | 10 | 远端仿真时建议 30 |
-| ASTRA_REMOTE_OPENCODE_VERSION / ASTRA_REMOTE_NODE_VERSION / ASTRA_REMOTE_NPM_REGISTRY | 否 | 1.18.35 / 22.23.3 / npmmirror | 远程一键部署 |
+| NEXUS_REMOTE_OPENCODE_VERSION / NEXUS_REMOTE_NODE_VERSION / NEXUS_REMOTE_NPM_REGISTRY | 否 | 1.18.35 / 22.23.3 / npmmirror | 远程一键部署 |
 | ASTRA_DATABASE_* | 生产 | dev 用 SQLite | 生产把 `ASTRA_DATABASE_URL` 指到 MySQL |
 | ASTRA_SERVICE_BACKEND_PORT / _GATEWAY_PORT / _FRONTEND_PORT | 否 | 8100 / 8110 / 5173 | astra_service 端口 |
 
@@ -179,7 +179,7 @@ OpenCode：`npm i -g --prefix ~/.local opencode-ai@1.18.35`，`~/.config/opencod
 ```bash
 export PATH=$HOME/.local/bin:$PATH
 cd $R/services/task-platform && ASTRA_GATEWAY_MASTER_KEY=$(cat ../.gwmaster) ASTRA_GATEWAY_PROBE_TIMEOUT_SECONDS=30 \
-  ASTRA_MCP_TRANSPORT=streamable-http ASTRA_MCP_API_KEY=$(cat ../.mcpkey) \
+  NEXUS_MCP_TRANSPORT=streamable-http NEXUS_MCP_API_KEY=$(cat ../.mcpkey) \
   ASTRA_LLM_WIKI_ENABLED=true ASTRA_LLM_WIKI_API_BASE_URL=http://127.0.0.1:19828/api/v1 \
   ASTRA_LLM_WIKI_API_TOKEN=$(cat ../.llmwikitoken) ASTRA_LLM_WIKI_PROJECT_ID=$(cat ../.llmwikiproject) ASTRA_LLM_WIKI_TIMEOUT=30 \
   ASTRA_REDIS_URL=redis://localhost:6379/1 ASTRA_OUTBOX_INTERVAL=2 ASTRA_OUTBOX_RETRY_SECONDS=5 \
@@ -245,7 +245,7 @@ curl -X POST $B/nodes  -H 'Content-Type: application/json' -d '{"name":"deepseek
 curl -X POST $B/routes -H 'Content-Type: application/json' -d '{"model":"deepseek-flash","pool_id":"<pool>"}'
 curl -X POST $B/nodes/<node>/probe     # 直到 HEALTHY → ACTIVE
 ```
-远程 Worker 的模型写 `astra-gateway/deepseek-flash`，baseURL 为内网 Gateway，例如 `http://10.0.0.8:8110/v1`。
+远程 Worker 的模型写 `nexus-gateway/deepseek-flash`，baseURL 为内网 Gateway，例如 `http://10.0.0.8:8110/v1`。
 
 ### 5.9 llm_wiki Web 版部署与项目创建
 **主机选择**：首选 aarch64 + glibc ≥ 2.28 的 Linux 直接运行（`LLM_WIKI_DATA_DIR=/var/lib/llm-wiki ./start.sh` 或包内 `llm-wiki-web.service`）。x86_64 主机只能 qemu 仿真（实测可用但慢、吃内存）。CentOS 7 必须容器化。
@@ -289,10 +289,10 @@ curl -X POST $B/nodes/<node>/probe     # 直到 HEALTHY → ACTIVE
 8. Astra：在 `start_astra.sh` 加 `ASTRA_LLM_WIKI_*` 后重启，`POST /api/library/service/resync`。
 
 ### 5.10 远程 Worker
-1. 管理台/`POST /api/employees` 创建员工，`execution_environment`：`mode=LINUX_REMOTE`、`host`、`port=22`、`username=root`、`ssh_password`、`opencode_server_port=14096`、`workspace_root=/root/astra-p2-remote`、`model_name=astra-gateway/deepseek-flash`。
+1. 管理台/`POST /api/employees` 创建员工，`execution_environment`：`mode=LINUX_REMOTE`、`host`、`port=22`、`username=root`、`ssh_password`、`opencode_server_port=14096`、`workspace_root=/root/astra-p2-remote`、`model_name=nexus-gateway/deepseek-flash`。
 2. `POST /api/employees/<id>/environment/deploy`（NDJSON 流，11 步：SSH、配置、依赖、Node、Git、OpenCode、工作区、全局配置、Serve 健康、网关鉴权+模型路由、图书馆 MCP）。
 3. `POST …/environment/restart` 可重复执行；部署会改写远端 `~/.config/opencode/opencode.json`（自动备份）。
-前提：`ASTRA_MCP_TRANSPORT=streamable-http` + `ASTRA_MCP_API_KEY`、`ASTRA_GATEWAY_MASTER_KEY` 已配置，网关路由 ACTIVE。
+前提：`NEXUS_MCP_TRANSPORT=streamable-http` + `NEXUS_MCP_API_KEY`、`ASTRA_GATEWAY_MASTER_KEY` 已配置，网关路由 ACTIVE。
 
 ---
 
@@ -312,7 +312,7 @@ curl -X POST $B/nodes/<node>/probe     # 直到 HEALTHY → ACTIVE
 | 10 | 端到端 | `services/task-platform/.venv/bin/python tools/e2e/e2e_library.py`（带 `ASTRA_LLM_WIKI_*`；仿真主机建议 `ASTRA_LIBRARY_E2E_WAIT=600`）→ exit 0，结果 `.astra/library-e2e-result.json` |
 | 11 | 单测 | `cd services/task-platform && .venv/bin/pytest`（498 passed）；`cd services/nexus-api && .venv/bin/pytest`（36 passed） |
 | 12 | 任务冒烟 | 员工私聊让其 `nexus_task_create` → Worker 执行 → 唤醒到源会话（见 LIVE_REPORT.md 用例 1-5） |
-| 13 | 远程 Worker | deploy NDJSON 全部 PASS；派发任务后远端 OpenCode 以 `astra-gateway/deepseek-flash` 运行 |
+| 13 | 远程 Worker | deploy NDJSON 全部 PASS；派发任务后远端 OpenCode 以 `nexus-gateway/deepseek-flash` 运行 |
 
 ---
 
@@ -334,7 +334,7 @@ curl -X POST $B/nodes/<node>/probe     # 直到 HEALTHY → ACTIVE
 | 本地 Worker 环境测试失败 | OpenCode 端口与平台 Serve 14096 冲突、工作区目录不存在 | 改用其他端口并先建目录 |
 | 任务卡 WAITING：`external_directory` | 仓库在任务工作区外，OpenCode 请求权限 | 回复 always，或把仓库放进工作区 |
 | `./start_astra.sh restart` 后仍是旧配置，或提示没有停干净 | 旧进程的 pid 与 create_time 对不上，或 8100 仍接受连接 | `astra_service.py dev stop` 会保留 `astra-service.json` 并以非 0 退出。确认记录里的 pid 已退出、8100 不再接受连接后再 start |
-| 部署 deploy 被拒：stdio MCP | 远程要求 streamable-http | 设 `ASTRA_MCP_TRANSPORT`/`ASTRA_MCP_API_KEY` |
+| 部署 deploy 被拒：stdio MCP | 远程要求 streamable-http | 设 `NEXUS_MCP_TRANSPORT`/`NEXUS_MCP_API_KEY` |
 | 节点凭据无法解密 | 换了/丢了 `ASTRA_GATEWAY_MASTER_KEY` | 固定保存主密钥；丢失只能重建节点 |
 | 图书馆 "知识服务：异常 — 未启用 llm_wiki" | `ASTRA_LLM_WIKI_ENABLED` 未设 | 按 §2.6 设置并重启 |
 | 同步全部 `HTTP 405` | 用了桌面版 llm_wiki（无 Source file API） | 换 Web Edition 0.6.11 |

@@ -57,7 +57,7 @@ def _environment(workspace: str, repository_id: str = "repo-1"):
         name="local",
         workspace_root=workspace,
         repository_id=repository_id,
-        model_name="astra-gateway/demo",
+        model_name="nexus-gateway/demo",
         status=EnvironmentStatus.AVAILABLE,
         status_detail=write_capability({}, ready),
     )
@@ -129,7 +129,7 @@ async def test_dispatch_stays_on_one_repository_and_records_the_base_commit(sess
     assert claimed.base_commit == head
     assert claimed.execution_environment_snapshot["base_commit"] == head
     assert claimed.execution_environment_snapshot["capability_revision"] == binding_revision(["review"])
-    assert claimed.execution_environment_snapshot["model_name"] == "astra-gateway/demo"
+    assert claimed.execution_environment_snapshot["model_name"] == "nexus-gateway/demo"
     assert await Dispatcher(session).claim_once() is None
     waiting = await session.get(Task, "T-next")
     assert waiting.employee_id is None

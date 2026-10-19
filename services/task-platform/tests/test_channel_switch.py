@@ -19,7 +19,7 @@ def _config(path, *, gateway="http://127.0.0.1:19998", mcp="http://127.0.0.1:199
             {
                 "provider": {
                     "other": {"options": {"baseURL": "http://keep"}},
-                    "astra-gateway": {
+                    "nexus-gateway": {
                         "npm": "@ai-sdk/openai-compatible",
                         "options": {"baseURL": gateway, "apiKey": "gw-secret"},
                     },
@@ -50,7 +50,7 @@ def test_switch_writes_direct_urls_and_returns_effective_override(tmp_path):
 
     def read_effective():
         written = json.loads(path.read_text(encoding="utf-8"))
-        written["provider"]["astra-gateway"]["options"]["baseURL"] = "http://127.0.0.1:19999"
+        written["provider"]["nexus-gateway"]["options"]["baseURL"] = "http://127.0.0.1:19999"
         return written
 
     result = apply_channel_switch(
@@ -58,15 +58,15 @@ def test_switch_writes_direct_urls_and_returns_effective_override(tmp_path):
         port=4096,
         config_path=path,
         environ={
-            "ASTRA_REMOTE_GATEWAY_URL": "http://10.0.0.8:8110",
-            "ASTRA_MCP_RESOURCE_URL": "http://10.0.0.8:8201/mcp",
+            "NEXUS_REMOTE_GATEWAY_URL": "http://10.0.0.8:8110",
+            "NEXUS_MCP_RESOURCE_URL": "http://10.0.0.8:8201/mcp",
         },
         probe=lambda url: probed.append(url) or True,
         reload=lambda: reloads.append(1),
         read_effective=read_effective,
     )
     stored = json.loads(path.read_text(encoding="utf-8"))
-    options = stored["provider"]["astra-gateway"]["options"]
+    options = stored["provider"]["nexus-gateway"]["options"]
     library = stored["mcp"]["nexus-library"]
     assert options["baseURL"] == "http://10.0.0.8:8110"
     assert options["apiKey"] == "gw-secret"
@@ -80,7 +80,7 @@ def test_switch_writes_direct_urls_and_returns_effective_override(tmp_path):
     }
     assert reloads == [1]
     assert probed == ["http://10.0.0.8:8110", "http://10.0.0.8:8201/mcp"]
-    assert (path.parent / "opencode.json.astra-backup-switch").is_file()
+    assert (path.parent / "opencode.json.nexus-backup").is_file()
 
 
 def test_switch_merges_existing_jsonc(tmp_path):
@@ -94,16 +94,16 @@ def test_switch_merges_existing_jsonc(tmp_path):
         port=4096,
         config_path=path,
         environ={
-            "ASTRA_REMOTE_GATEWAY_URL": "http://10.0.0.8:8110",
-            "ASTRA_MCP_RESOURCE_URL": "http://10.0.0.8:8201/mcp",
+            "NEXUS_REMOTE_GATEWAY_URL": "http://10.0.0.8:8110",
+            "NEXUS_MCP_RESOURCE_URL": "http://10.0.0.8:8201/mcp",
         },
         probe=lambda _url: True,
         reload=lambda: None,
         read_effective=lambda: json.loads(jsonc.read_text(encoding="utf-8")),
     )
     stored = json.loads(jsonc.read_text(encoding="utf-8"))
-    assert stored["provider"]["astra-gateway"]["options"]["baseURL"] == "http://10.0.0.8:8110"
-    assert stored["provider"]["astra-gateway"]["options"]["apiKey"] == "gw-secret"
+    assert stored["provider"]["nexus-gateway"]["options"]["baseURL"] == "http://10.0.0.8:8110"
+    assert stored["provider"]["nexus-gateway"]["options"]["apiKey"] == "gw-secret"
     assert path.read_text(encoding="utf-8") == original
 
 
@@ -124,7 +124,7 @@ def test_switch_stops_before_reload_when_probe_or_config_fails(tmp_path):
     assert path.read_text(encoding="utf-8") == original
 
     path.write_text("{}\n", encoding="utf-8")
-    with pytest.raises(RuntimeError, match="astra-gateway"):
+    with pytest.raises(RuntimeError, match="nexus-gateway"):
         apply_channel_switch(
             workspace=str(tmp_path),
             port=4096,
@@ -163,12 +163,17 @@ def test_switch_command_ignores_payload_urls(monkeypatch):
             },
         },
     )
-    result, error = handle_command(message, RuntimeSupervisor())
+    result, error = handle_command(
+            message,
+            RuntimeSupervisor(),
+            workspace_root="/srv/work",
+            opencode_url="http://127.0.0.1:4096",
+        )
     assert error is None
     assert result["reloaded"] is True
     assert captured["workspace"] == "/srv/work"
     assert captured["port"] == 4096
-    assert set(captured) == {"workspace", "port"}
+    assert set(captured) == {"workspace", "port", "gate"}
 
 
 def test_disconnect_does_not_reload(monkeypatch):

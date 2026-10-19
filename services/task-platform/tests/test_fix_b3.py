@@ -371,7 +371,7 @@ def test_direct_config_merges_the_gateway_into_jsonc(tmp_path):
         json.dumps(
             {
                 "theme": "overwrite-me",
-                "provider": {"astra-gateway": {"options": {"apiKey": "k", "baseURL": "http://old/v1"}}},
+                "provider": {"nexus-gateway": {"options": {"apiKey": "k", "baseURL": "http://old/v1"}}},
                 "mcp": {"nexus-library": {"url": "http://old/mcp"}},
             }
         ),
@@ -381,8 +381,8 @@ def test_direct_config_merges_the_gateway_into_jsonc(tmp_path):
     written = json.loads(jsonc.read_text(encoding="utf-8"))
     assert written["theme"] == "dark"
     assert written["mcp"]["custom"] == {"enabled": False}
-    assert written["provider"]["astra-gateway"]["options"]["baseURL"] == "http://10.0.0.8:8110/v1"
-    assert written["provider"]["astra-gateway"]["options"]["apiKey"] == "k"
+    assert written["provider"]["nexus-gateway"]["options"]["baseURL"] == "http://10.0.0.8:8110/v1"
+    assert written["provider"]["nexus-gateway"]["options"]["apiKey"] == "k"
     assert written["mcp"]["nexus-library"]["url"] == "http://10.0.0.8:8201/mcp"
     assert "overwrite-me" not in jsonc.read_text(encoding="utf-8")
     assert json.loads(legacy.read_text(encoding="utf-8"))["theme"] == "overwrite-me"
@@ -446,7 +446,7 @@ def _git_stub() -> str:
             args = args[2:]
         command = args[0] if args else ""
         rest = args[1:]
-        record = {"argv": sys.argv[1:], "command": command, "token": os.environ.get("ASTRA_GIT_TOKEN", "")}
+        record = {"argv": sys.argv[1:], "command": command, "token": os.environ.get("NEXUS_GIT_TOKEN", "")}
         askpass = os.environ.get("GIT_ASKPASS")
         if askpass and Path(askpass).is_file():
             record["askpass"] = Path(askpass).read_text()

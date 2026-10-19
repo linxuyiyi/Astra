@@ -583,6 +583,7 @@ class WorkerInstance(Base):
         ForeignKey("opencode_execution_environments.id", ondelete="CASCADE"), unique=True, index=True
     )
     token_digest: Mapped[str] = mapped_column(String(64))
+    token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="offline", index=True)
     epoch: Mapped[int] = mapped_column(Integer, default=0)
     agent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -662,3 +663,64 @@ class WorkerHttpSlot(Base):
     worker_instance_id: Mapped[str] = mapped_column(String(80), primary_key=True)
     epoch: Mapped[int] = mapped_column(Integer, primary_key=True)
     inflight: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
+class WorkerMaintenanceOperation(Base):
+    """独立持久化的 Agent Worker 维护操作；HTTP 断线不改变它。"""
+
+    __tablename__ = "worker_maintenance_operations"
+    __table_args__ = (
+        UniqueConstraint(
+            "active_environment_id", name="uq_worker_maintenance_active_environment"
+        ),
+        Index("ix_worker_maintenance_state_lease", "state", "lease_until"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    environment_id: Mapped[int] = mapped_column(
+        ForeignKey("opencode_execution_environments.id", ondelete="CASCADE"), index=True
+    )
+    action: Mapped[str] = mapped_column(String(32))
+    state: Mapped[str] = mapped_column(String(32), default="QUEUED", index=True)
+    stage: Mapped[str] = mapped_column(String(64), default="queued", server_default="queued")
+    requested_by: Mapped[str] = mapped_column(String(120), default="api")
+    attempt: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    lease_owner: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    lease_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    danger_dispatched: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    reconcile_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    reconcile_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    target_revision: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    before_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    after_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    execution_channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    execution_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_of_attempt: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    active_environment_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+class WorkerMaintenanceEvent(Base):
+    """维护步骤事件；自增 id 作为 SSE 可续传游标。"""
+
+    __tablename__ = "worker_maintenance_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    operation_id: Mapped[str] = mapped_column(
+        ForeignKey("worker_maintenance_operations.id", ondelete="CASCADE"), index=True
+    )
+    attempt: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    type: Mapped[str] = mapped_column(String(32), default="step")
+    stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    message: Mapped[str] = mapped_column(Text, default="")
+    detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)

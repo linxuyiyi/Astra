@@ -299,13 +299,6 @@ def test_employee_scope_environment_and_category_configuration(tmp_path):
         )
         assert invalid_area.status_code == 422
 
-        (tmp_path / "employee-workspace").mkdir()
-        checked = client.post("/api/employees/astra-api-v03/environment/test")
-        assert checked.status_code == 200
-        assert checked.json()["status"] == "AVAILABLE"
-        assert all(item["passed"] for item in checked.json()["checks"])
-
-
 def test_employee_without_task_history_can_be_deleted(tmp_path):
     with TestClient(app) as client:
         category = client.post(

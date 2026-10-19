@@ -41,7 +41,7 @@ FRONTEND_PORT = int(os.getenv("ASTRA_SERVICE_FRONTEND_PORT", "15174"))
 # 由同机 nginx 反代 /v1；模型长连接绝不进入主 Backend。
 GATEWAY_HOST = os.getenv("ASTRA_SERVICE_GATEWAY_HOST", "127.0.0.1")
 GATEWAY_PORT = int(os.getenv("ASTRA_SERVICE_GATEWAY_PORT", "18110"))
-TASK_MCP_PORT = int(os.getenv("ASTRA_TASK_MCP_PORT", "18202"))
+TASK_MCP_PORT = int(os.getenv("NEXUS_TASK_MCP_PORT", "18202"))
 
 
 def parse_args() -> argparse.Namespace:

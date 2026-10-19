@@ -231,7 +231,7 @@ def main():
         os.environ["ASTRA_SEED_DEMO"] = "false"
         os.environ["ASTRA_ASSISTANT_ENABLED"] = "false"
         os.environ["ASTRA_LLM_WIKI_ENABLED"] = "true"
-        os.environ["ASTRA_MCP_TRANSPORT"] = "stdio"
+        os.environ["NEXUS_MCP_TRANSPORT"] = "stdio"
         os.environ["ASTRA_RUNTIME_DIR"] = f"{temp}/run"
         environment = dict(os.environ)
         subprocess.run(

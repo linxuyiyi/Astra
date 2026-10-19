@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import signal
+import socket
 import subprocess
 import time
 import urllib.error
@@ -22,8 +23,9 @@ from pathlib import Path
 from app.worker_agent.jsonc import loads_jsonc
 from app.worker_agent.process_env import child_environ
 
-_GATEWAY_ENV = "ASTRA_REMOTE_GATEWAY_URL"
-_MCP_ENV = "ASTRA_MCP_RESOURCE_URL"
+_GATEWAY_ENV = "NEXUS_REMOTE_GATEWAY_URL"
+_MCP_ENV = "NEXUS_MCP_RESOURCE_URL"
+_PROVIDER = "nexus-gateway"
 _DEFAULT_GATEWAY = "http://127.0.0.1:8110"
 _DEFAULT_MCP = "http://127.0.0.1:8201/mcp"
 _HEALTH_WAIT_SECONDS = 15
@@ -33,6 +35,7 @@ _UNIT_NAME = re.compile(r"^[A-Za-z0-9_:.@-]+$")
 Probe = Callable[[str], bool]
 Reload = Callable[[], None]
 ReadEffective = Callable[[], dict]
+Gate = Callable[[], None]
 
 
 def global_config_path(environ: dict[str, str] | None = None) -> Path:
@@ -89,17 +92,17 @@ def write_direct_config(path: Path, *, gateway_url: str, mcp_url: str) -> None:
     if jsonc.is_file():
         config = _read_config(jsonc)
         target = jsonc
-        gateway = _mapping(_mapping(_mapping(config, "provider"), "astra-gateway"), "options")
+        gateway = _mapping(_mapping(_mapping(config, "provider"), _PROVIDER), "options")
         legacy_path = jsonc.with_suffix(".json")
         if gateway is None and legacy_path.is_file():
             legacy = _read_config(legacy_path)
-            provider = _mapping(_mapping(legacy, "provider"), "astra-gateway")
+            provider = _mapping(_mapping(legacy, "provider"), _PROVIDER)
             if isinstance(provider, dict):
                 providers = config.get("provider")
                 if not isinstance(providers, dict):
                     providers = {}
                     config["provider"] = providers
-                providers["astra-gateway"] = provider
+                providers[_PROVIDER] = provider
             library = _mapping(_mapping(legacy, "mcp"), "nexus-library")
             if isinstance(library, dict):
                 mcp = config.get("mcp")
@@ -112,13 +115,13 @@ def write_direct_config(path: Path, *, gateway_url: str, mcp_url: str) -> None:
         target = path
     else:
         raise RuntimeError("全局 OpenCode 配置不存在，未重载")
-    options = _mapping(_mapping(_mapping(config, "provider"), "astra-gateway"), "options")
+    options = _mapping(_mapping(_mapping(config, "provider"), _PROVIDER), "options")
     library = _mapping(_mapping(config, "mcp"), "nexus-library")
     if options is None or "apiKey" not in options or "baseURL" not in options:
-        raise RuntimeError("全局配置缺少 astra-gateway，未重载")
+        raise RuntimeError("全局配置缺少 nexus-gateway，未重载")
     if library is None or "url" not in library:
         raise RuntimeError("全局配置缺少 nexus-library，未重载")
-    backup = target.with_name(target.name + ".astra-backup-switch")
+    backup = target.with_name(target.name + ".nexus-backup")
     shutil.copy2(target if target.is_file() else path, backup)
     os.chmod(backup, 0o600)
     options["baseURL"] = gateway_url
@@ -179,17 +182,95 @@ def _listener_pid(port: int) -> int | None:
     return None
 
 
-def restart_local_opencode(workspace: str, port: int, *, environ: dict[str, str] | None = None) -> None:
+def _check_gate(gate: Gate | None) -> None:
+    if gate is not None:
+        gate()
+
+
+def _probe_listener(port: int, *, timeout: float = 1.0) -> bool:
+    """只有明确的 ECONNREFUSED 才能证明端口上没有监听者。"""
+
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    probe.settimeout(timeout)
+    try:
+        probe.connect(("127.0.0.1", port))
+    except ConnectionRefusedError:
+        return False
+    except OSError as exc:
+        raise RuntimeError("无法确认 OpenCode 监听状态，拒绝执行维护") from exc
+    finally:
+        probe.close()
+    return True
+
+
+def _read_native_status(port: int, workspace: str) -> None:
+    query = urllib.parse.urlencode({"directory": workspace})
+    url = f"http://127.0.0.1:{port}/session/status?{query}"
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=3) as response:
+            body = response.read(65536)
+    except urllib.error.HTTPError as exc:
+        exc.close()
+        raise RuntimeError("无法确认 OpenCode 原生 Session 状态，拒绝执行维护") from exc
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise RuntimeError("无法确认 OpenCode 原生 Session 状态，拒绝执行维护") from exc
+    try:
+        states = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("无法确认 OpenCode 原生 Session 状态，拒绝执行维护") from exc
+    if not isinstance(states, dict):
+        raise RuntimeError("无法确认 OpenCode 原生 Session 状态，拒绝执行维护")
+    busy = False
+    malformed = False
+    for item in states.values():
+        if not isinstance(item, dict):
+            malformed = True
+            continue
+        kind = item.get("type")
+        if kind in {"busy", "retry"}:
+            busy = True
+        elif kind != "idle":
+            malformed = True
+    if busy:
+        raise RuntimeError("OpenCode 存在正在执行的 Session，请先停止执行再维护环境")
+    if malformed:
+        raise RuntimeError("无法确认 OpenCode 原生 Session 状态，拒绝执行维护")
+
+
+def assert_native_idle(workspace: str, port: int, *, gate: Gate | None = None) -> bool:
+    """只读检查本机原生 Session。返回端口上是否已有监听者。
+
+    空对象表示空闲；只有明确的连接拒绝才视为没有运行中的 OpenCode。
+    Timeout 或其它 OSError 都保守拒绝。
+    """
+
+    _check_gate(gate)
+    if not _probe_listener(port):
+        return False
+    _read_native_status(port, workspace)
+    return True
+
+
+def restart_local_opencode(
+    workspace: str,
+    port: int,
+    *,
+    environ: dict[str, str] | None = None,
+    gate: Gate | None = None,
+) -> None:
     folder = Path(workspace)
     if not folder.is_dir():
         raise RuntimeError("Workspace 不存在，未重载 OpenCode")
     if port < 1 or port > 65535:
         raise RuntimeError("OpenCode 端口无效")
+    listener = assert_native_idle(workspace, port, gate=gate)
     env = environ if environ is not None else os.environ
-    unit = (env.get("ASTRA_WORKER_OPENCODE_UNIT") or "").strip()
+    unit = (env.get("NEXUS_WORKER_OPENCODE_UNIT") or "").strip()
     if unit:
         if _UNIT_NAME.fullmatch(unit) is None:
             raise RuntimeError("OpenCode systemd 单元名无效")
+        _check_gate(gate)
         completed = subprocess.run(
             ["systemctl", "restart", unit],
             check=False,
@@ -199,14 +280,17 @@ def restart_local_opencode(workspace: str, port: int, *, environ: dict[str, str]
         )
         if completed.returncode != 0:
             raise RuntimeError("systemd 重载 OpenCode 失败")
-        _wait_until_healthy(port)
+        _wait_until_healthy(port, gate=gate)
         return
-    pid = _listener_pid(port)
-    if pid == os.getpid():
-        raise RuntimeError("拒绝结束当前进程")
-    if pid is not None:
+    if listener:
+        pid = _listener_pid(port)
+        if pid is None:
+            raise RuntimeError("无法确认 OpenCode 监听进程，未重载")
+        if pid == os.getpid():
+            raise RuntimeError("拒绝结束当前进程")
         if not _opencode_listener(pid):
             raise RuntimeError("端口上的进程不是 OpenCode，未重载")
+        _check_gate(gate)
         os.kill(pid, signal.SIGTERM)
         deadline = time.monotonic() + _EXIT_WAIT_SECONDS
         while time.monotonic() < deadline:
@@ -215,23 +299,38 @@ def restart_local_opencode(workspace: str, port: int, *, environ: dict[str, str]
             time.sleep(0.1)
         else:
             raise RuntimeError("OpenCode 没有在时限内退出")
-    binary = env.get("ASTRA_WORKER_OPENCODE_BIN") or "opencode"
-    subprocess.Popen(
-        [binary, "serve", "--hostname", "127.0.0.1", "--port", str(port)],
-        cwd=folder,
-        env=child_environ(env),
-        start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    _wait_until_healthy(port)
+    else:
+        _check_gate(gate)
+        binary = env.get("NEXUS_WORKER_OPENCODE_BIN") or "opencode"
+        subprocess.Popen(
+            [binary, "serve", "--hostname", "127.0.0.1", "--port", str(port)],
+            cwd=folder,
+            env=child_environ(env),
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    _wait_until_healthy(port, gate=gate)
 
 
-def _wait_until_healthy(port: int) -> None:
+def _wait_until_healthy(port: int, *, gate: Gate | None = None) -> None:
+    """GET /global/health 必须是 2xx JSON 且 healthy=true，401/404 不算健康。"""
+
     health = f"http://127.0.0.1:{port}/global/health"
     deadline = time.monotonic() + _HEALTH_WAIT_SECONDS
     while time.monotonic() < deadline:
-        if probe_url(health, timeout=0.5):
+        _check_gate(gate)
+        payload: object = None
+        try:
+            request = urllib.request.Request(health, method="GET")
+            with urllib.request.urlopen(request, timeout=0.5) as response:
+                body = response.read(65536)
+            payload = json.loads(body.decode("utf-8"))
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError):
+            payload = None
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            payload = None
+        if isinstance(payload, dict) and payload.get("healthy") is True:
             return
         time.sleep(0.2)
     raise RuntimeError("OpenCode 重载后健康检查失败")
@@ -282,21 +381,29 @@ def apply_channel_switch(
     probe: Probe | None = None,
     reload: Reload | None = None,
     read_effective: ReadEffective | None = None,
+    gate: Gate | None = None,
 ) -> dict[str, str | bool]:
+    _check_gate(gate)
+    if port < 1 or port > 65535:
+        raise RuntimeError("OpenCode 端口无效")
     gateway_url, mcp_url = direct_urls(environ)
     probe_fn = probe or probe_url
     for url in (gateway_url, mcp_url):
         if not probe_fn(url):
             raise RuntimeError("内网 Gateway 或 MCP 探测失败")
+    assert_native_idle(workspace, port, gate=gate)
     path = config_path or global_config_path(environ)
+    _check_gate(gate)
     write_direct_config(path, gateway_url=gateway_url, mcp_url=mcp_url)
     if reload is None:
-        restart_local_opencode(workspace, port, environ=environ)
+        restart_local_opencode(workspace, port, environ=environ, gate=gate)
     else:
+        _check_gate(gate)
         reload()
+    _check_gate(gate)
     effective = read_effective() if read_effective is not None else read_effective_config(port, workspace)
     return {
-        "gateway_url": _address(effective, ("provider", "astra-gateway", "options", "baseURL")),
+        "gateway_url": _address(effective, ("provider", _PROVIDER, "options", "baseURL")),
         "mcp_url": _address(effective, ("mcp", "nexus-library", "url")),
         "reloaded": True,
     }

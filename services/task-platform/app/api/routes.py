@@ -43,18 +43,12 @@ from app.models import (
     WorkerInstance,
 )
 from app.runtime.capability import binding_entries, stamp_desired
-from app.runtime.environment import (
-    CheckItem,
-    ExecutionEnvironmentRuntime,
-    checks_status,
-)
 from app.runtime.presentation import project_channel_health
 from app.runtime.repository import related_tasks
 from app.schemas import (
     EmployeeCreate,
     EmployeePatch,
     EmployeeRead,
-    EnvironmentCheckResult,
     EventRead,
     ExecutionEnvironmentRead,
     ExecutionEnvironmentWrite,
@@ -106,16 +100,12 @@ async def require_employee(employee_id: str, session: AsyncSession) -> DigitalEm
 
 async def employee_read(employee: DigitalEmployee, session: AsyncSession) -> EmployeeRead:
     start, end = day_bounds()
-    sessions = await load_sessions(
-        session, employee_id=employee.id, start=start, end=end, overlap=True
-    )
+    sessions = await load_sessions(session, employee_id=employee.id, start=start, end=end, overlap=True)
     today = datetime.now(ZoneInfo(get_settings().timezone)).date()
     day_sessions = [item for item in sessions if session_local_date(item) == today]
     usage = await summarize_sessions(session, day_sessions, window=(start, end))
     apply_day_tokens(usage, aggregate_usage_by_day(sessions).get(today.isoformat()))
-    completed = await count_completed_tasks(
-        session, employee_id=employee.id, start=start, end=end
-    )
+    completed = await count_completed_tasks(session, employee_id=employee.id, start=start, end=end)
     base = EmployeeRead.model_validate(employee)
     environment = employee.execution_environment
     worker_status = None
@@ -408,65 +398,6 @@ async def update_employee_environment(
     return environment
 
 
-@router.post("/employees/{employee_id}/environment/test", response_model=EnvironmentCheckResult)
-async def test_employee_environment(employee_id: str, session: AsyncSession = Depends(get_session)):
-    employee = await require_employee(employee_id, session)
-    environment = employee.execution_environment
-    from app.runtime.remote_provisioning import guard_environment_write
-
-    await guard_environment_write(session, environment)
-    if not environment:
-        raise HTTPException(status_code=409, detail="员工尚未配置 Agent 工作环境")
-    environment.status = EnvironmentStatus.CHECKING
-    from datetime import timedelta
-    from uuid import uuid4
-
-    check_id = uuid4().hex
-    kept_capability = None
-    detail = environment.status_detail if isinstance(environment.status_detail, dict) else {}
-    if isinstance(detail.get("capability"), dict):
-        kept_capability = dict(detail["capability"])
-    environment.status_detail = {"operation": {
-        "id": check_id, "action": "test", "state": "RUNNING",
-        "expires_at": (datetime.now(UTC) + timedelta(minutes=5)).isoformat(),
-    }}
-    await session.commit()
-    checked_at = datetime.now(UTC)
-    try:
-        checks = await ExecutionEnvironmentRuntime().test(environment)
-    except Exception as exc:
-        checks = [CheckItem("环境检查", False, str(exc))]
-    new_status = checks_status(checks)
-    detail = {
-        "checks": [{"name": item.name, "passed": item.passed, "detail": item.detail} for item in checks]
-    }
-    if kept_capability is not None:
-        detail["capability"] = kept_capability
-    result = await session.execute(
-        update(OpenCodeExecutionEnvironment)
-        .where(
-            OpenCodeExecutionEnvironment.id == environment.id,
-            OpenCodeExecutionEnvironment.status_detail["operation"]["id"].as_string() == check_id,
-        )
-        .values(status=new_status, last_checked_at=checked_at, status_detail=detail)
-        .execution_options(synchronize_session=False)
-    )
-    if result.rowcount != 1:
-        await session.rollback()
-        raise HTTPException(409, "环境状态已变化，旧检查结果未写入")
-    session.add(
-        Event(
-            employee_id=employee.id,
-            event_type="ENVIRONMENT_CHECKED",
-            phase="environment",
-            message="Agent 工作环境检查完成",
-            detail={"status": new_status, **detail},
-        )
-    )
-    await session.commit()
-    return {"status": new_status, "checked_at": checked_at, "checks": detail["checks"]}
-
-
 @router.get("/employees/{employee_id}/usage")
 async def get_employee_usage(
     employee_id: str,
@@ -517,9 +448,7 @@ async def delete_employee(employee_id: str, session: AsyncSession = Depends(get_
         update(KnowledgeUsage).where(KnowledgeUsage.employee_id == employee_id).values(employee_id=None)
     )
     await session.execute(
-        update(KnowledgeFeedback)
-        .where(KnowledgeFeedback.employee_id == employee_id)
-        .values(employee_id=None)
+        update(KnowledgeFeedback).where(KnowledgeFeedback.employee_id == employee_id).values(employee_id=None)
     )
     await session.execute(delete(Event).where(Event.employee_id == employee_id))
     session.add(
@@ -761,9 +690,7 @@ async def delete_task(task_id: str, session: AsyncSession = Depends(get_session)
         .values(source_task_id=None, source_session_id=None)
     )
     await session.execute(
-        update(KnowledgeUsage)
-        .where(KnowledgeUsage.task_id == task_id)
-        .values(task_id=None, session_id=None)
+        update(KnowledgeUsage).where(KnowledgeUsage.task_id == task_id).values(task_id=None, session_id=None)
     )
     await session.execute(
         update(KnowledgeFeedback).where(KnowledgeFeedback.task_id == task_id).values(task_id=None)

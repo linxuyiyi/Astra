@@ -1,0 +1,208 @@
+{
+  "meta": {
+    "generated_at": "2026-10-19T04:30:16.908730+00:00",
+    "target_ip": "47.77.219.113",
+    "inventory_mode": "strictly-read-only",
+    "source_line": 12,
+    "duration_ms": 17852
+  },
+  "connection": {
+    "ok": true,
+    "method": "ssh-paramiko",
+    "error_type": null,
+    "latency_ms": 1248,
+    "username": "root"
+  },
+  "system": {
+    "hostname": "izrj925o44gdbjfx22lf80z",
+    "arch": "x86_64",
+    "kernel": "3.10.0-514.26.2.el7.x86_64",
+    "uname": "Linux izrj925o44gdbjfx22lf80z 3.10.0-514.26.2.el7.x86_64 #1 SMP Tue Jul 4 15:04:05 UTC 2017 x86_64 x86_64 x86_64 GNU/Linux",
+    "os_release": {
+      "pretty_name": "CentOS Linux 7 (Core)",
+      "id": "centos",
+      "version_id": "7",
+      "kernel": "3.10.0-514.26.2.el7.x86_64"
+    },
+    "systemd": "systemd 219",
+    "system_state": "degraded",
+    "failed_units": [
+      {
+        "name": "postfix.service",
+        "load": "loaded",
+        "active": "failed",
+        "sub": "failed"
+      }
+    ],
+    "failed_units_count": 1
+  },
+  "resources": {
+    "cpu_count": 2,
+    "cpu_model": "Intel(R) Xeon(R) Platinum",
+    "memory": {
+      "total_bytes": 1843666944,
+      "used_bytes": 190001152,
+      "free_bytes": 379183104,
+      "swap_total_bytes": 2147479552,
+      "swap_used_bytes": 0
+    },
+    "memory_human": "              total        used        free      shared  buff/cache   available\nMem:           1.7G        181M        361M        280K        1.2G        1.4G\nSwap:          2.0G          0B        2.0G\n",
+    "disk": "Filesystem     Type  Size  Used Avail Use% Mounted on\n/dev/vda1      ext4   40G  9.8G   28G  27% /\n"
+  },
+  "services": [],
+  "listening": [
+    {
+      "proto": "udp",
+      "state": "UNCONN",
+      "address": "*",
+      "port": 68,
+      "process": "dhclient"
+    },
+    {
+      "proto": "udp",
+      "state": "UNCONN",
+      "address": "172.18.0.1",
+      "port": 123,
+      "process": "ntpd"
+    },
+    {
+      "proto": "udp",
+      "state": "UNCONN",
+      "address": "172.17.13.60",
+      "port": 123,
+      "process": "ntpd"
+    },
+    {
+      "proto": "udp",
+      "state": "UNCONN",
+      "address": "127.0.0.1",
+      "port": 123,
+      "process": "ntpd"
+    },
+    {
+      "proto": "udp",
+      "state": "UNCONN",
+      "address": "*",
+      "port": 123,
+      "process": "ntpd"
+    },
+    {
+      "proto": "udp",
+      "state": "UNCONN",
+      "address": "*",
+      "port": 14498,
+      "process": "dhclient"
+    },
+    {
+      "proto": "udp",
+      "state": "UNCONN",
+      "address": "::",
+      "port": 123,
+      "process": "ntpd"
+    },
+    {
+      "proto": "udp",
+      "state": "UNCONN",
+      "address": "::",
+      "port": 48535,
+      "process": "dhclient"
+    },
+    {
+      "proto": "tcp",
+      "state": "LISTEN",
+      "address": "*",
+      "port": 22,
+      "process": "sshd"
+    }
+  ],
+  "directories": {
+    "/opt": [
+      "astra",
+      "containerd",
+      "llm_wiki",
+      "llm-wiki-web-build",
+      "llm-wiki-web.zip"
+    ],
+    "/srv": [],
+    "/root": [
+      "astra-p2-remote"
+    ],
+    "git_workspaces": [
+      "/opt/astra/projects/astra-02",
+      "/root/astra-p2-remote"
+    ]
+  },
+  "versions": {
+    "python3": {
+      "path": null,
+      "version": null
+    },
+    "python": {
+      "path": "/usr/bin/python",
+      "version": "Python 2.7.5"
+    },
+    "node": {
+      "path": "/usr/local/bin/node",
+      "version": "v22.23.3"
+    },
+    "npm": {
+      "path": "/usr/local/bin/npm",
+      "version": "10.9.9"
+    },
+    "opencode": {
+      "path": "/usr/local/bin/opencode",
+      "version": "1.18.33"
+    },
+    "git": {
+      "path": "/usr/local/bin/git",
+      "version": "git version 2.43.7"
+    },
+    "python3_candidates": []
+  },
+  "docker": {
+    "available": true,
+    "containers": [
+      {
+        "name": "llm-wiki-web",
+        "status": "Restarting (1) 27 seconds ago",
+        "ports": ""
+      }
+    ],
+    "error_type": null,
+    "version": "Docker version 27.3.1, build ce12230",
+    "compose_version": "docker: 'compose' is not a docker command."
+  },
+  "ports": {
+    "listening_tcp": [
+      22
+    ],
+    "docker_host_mapped": [],
+    "suggested_free": [
+      18000,
+      18001,
+      18002,
+      18003,
+      18004,
+      18005,
+      18006,
+      18007,
+      18008,
+      18009
+    ],
+    "note": "free ports inferred from ss listening set and docker mappings; no bind test performed"
+  },
+  "recommendation": {
+    "isolated_directory": "/opt/nexus-v1.4.5",
+    "candidate_ports": [
+      18000,
+      18001,
+      18002,
+      18003,
+      18004
+    ],
+    "notes": [
+      "reuse no existing Nexus/Astra/OpenCode unit or directory",
+      "deploy into a fresh directory and new unit names to avoid touching existing workers"
+    ]
+  }
+}

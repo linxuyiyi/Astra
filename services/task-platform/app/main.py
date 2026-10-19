@@ -4,11 +4,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.environment_routes import router as environment_router
 from app.api.gateway_routes import gateway_error_handler
 from app.api.gateway_routes import router as gateway_router
 from app.api.library_routes import library_error_handler
 from app.api.library_routes import router as library_router
+from app.api.maintenance_routes import router as maintenance_router
 from app.api.repository_routes import router as repository_router
 from app.api.routes import router
 from app.api.worker_routes import router as worker_router
@@ -20,6 +20,7 @@ from app.database import SessionLocal, init_database
 from app.gateway.security import CredentialError
 from app.gateway.service import GatewayError
 from app.library_service import LibraryError
+from app.runtime.maintenance import health_observer, maintenance_executor
 from app.runtime.recovery import supervise_sessions
 from app.seed import seed_demo_data
 from app.worker_gateway.routes import router as worker_gateway_router
@@ -45,12 +46,18 @@ async def lifespan(_: FastAPI):
     warn_if_admin_key_missing(settings.worker_gateway_admin_key)
     supervisor = asyncio.create_task(supervise_sessions())
     worker_sweep = asyncio.create_task(sweep_worker_gateway())
+    maintenance = asyncio.create_task(maintenance_executor())
+    health = asyncio.create_task(health_observer())
     try:
         yield
     finally:
         supervisor.cancel()
         worker_sweep.cancel()
-        await asyncio.gather(supervisor, worker_sweep, return_exceptions=True)
+        maintenance.cancel()
+        health.cancel()
+        await asyncio.gather(
+            supervisor, worker_sweep, maintenance, health, return_exceptions=True
+        )
         orchestrator = get_orchestrator()
         if orchestrator:
             await orchestrator.stop()
@@ -77,7 +84,7 @@ app.include_router(router)
 app.include_router(repository_router)
 app.include_router(worker_router)
 app.include_router(worker_gateway_router)
-app.include_router(environment_router)
+app.include_router(maintenance_router)
 app.include_router(workspace_router)
 app.include_router(library_router)
 app.include_router(gateway_router)

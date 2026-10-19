@@ -1,7 +1,8 @@
-"""OpenCode 进程监督占位。
+"""OpenCode 观测 helper。
 
-通信断开是网络故障。OpenCode 健康时不得因为 WebSocket 断开而重启。
-阶段 1 不拉起 OpenCode 进程；进程退出与断线是两条分开的路径。
+OpenCode 进程由 systemd 管理，本类不拉起、不重启进程，只记录观测结果。
+通信断开是网络故障，健康状态由 Worker 本地只读探测给出；断线绝不触发
+OpenCode restart。
 """
 
 

@@ -555,6 +555,11 @@ class RuntimeService:
 
         try:
             await guard_environment_write(self.session, environment)
+            from app.runtime.maintenance import scheduling_block
+
+            blocked = await scheduling_block(self.session, environment)
+            if blocked:
+                raise RuntimeStateError(blocked)
         except HTTPException as exc:
             raise RuntimeStateError(str(exc.detail)) from exc
         from app.runtime.dispatcher import runtime_assignment_block

@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from secrets import token_urlsafe
 
-ENV_NAME = "ASTRA_WORKER_GATEWAY_ADMIN_KEY"
+ENV_NAME = "NEXUS_WORKER_GATEWAY_ADMIN_KEY"
 logger = logging.getLogger(__name__)
 _warned = False
 

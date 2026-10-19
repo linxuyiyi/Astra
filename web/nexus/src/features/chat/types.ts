@@ -1,41 +1,11 @@
-import type { Attachment, ChatMessage, Channel, Employee } from "@/types";
+import type { Channel, Employee } from "@/types";
 
 export type ChatTargetKind = "contact" | "group";
 
-export interface LiveTool {
-  id: string;
-  name: string;
-  input: string;
-  output: string;
-  state: string;
-}
-
-export interface LiveLine {
-  employeeId: string;
-  name: string;
-  text: string;
-  tools: LiveTool[];
-}
-
-export type ChatAdapterEvent =
-  | { type: "messages"; messages: ChatMessage[] }
-  | { type: "live"; lines: LiveLine[] }
-  | { type: "notice"; text: string }
-  | { type: "finished" };
-
-export interface TriggeredMember {
-  employee_id: string;
-  name: string;
-  accepted: boolean;
-  detail: string;
-}
-
-export interface ChatSendOutcome {
-  message: ChatMessage;
-  notice: string;
-  triggered: TriggeredMember[];
-}
-
+/**
+ * 会话绑定：聊天岛只从这里取 agent/session 与任务查询条件。
+ * 消息读取、订阅与发送都在 web/nexus-chat 里，不再经过适配器。
+ */
 export interface ChatAdapter {
   readonly key: string;
   readonly kind: ChatTargetKind;
@@ -44,9 +14,6 @@ export interface ChatAdapter {
   readonly canSend: boolean;
   readonly conversationId: string | null;
   readonly sessionId: string | null;
-  load(): Promise<ChatMessage[]>;
-  send(text: string, attachmentIds: string[], signal: AbortSignal): Promise<ChatSendOutcome>;
-  follow(signal: AbortSignal, emit: (event: ChatAdapterEvent) => void): Promise<void>;
   taskQuery(): Record<string, string>;
 }
 
@@ -71,18 +38,9 @@ export interface ChatSessionState {
   adapter: ChatAdapter | null;
   status: "loading" | "ready" | "error";
   error: string;
-  messages: ChatMessage[];
-  liveLines: LiveLine[];
-  notice: string;
-  draft: string;
-  draftFiles: Attachment[];
-  uploading: boolean;
-  sending: boolean;
   tasks: import("@/platform").PlatformTask[];
   tasksLoading: boolean;
   taskError: string;
   taskGeneration: number;
-  generation: number;
-  abort: AbortController | null;
   tab: "tasks" | "materials" | "memory" | "members";
 }

@@ -52,131 +52,11 @@
         <div v-else class="chat-head"><h2>数字员工</h2></div>
 
         <iframe
-          v-if="islandVisible"
           class="chat-island"
           :src="islandSrc"
           title="Nexus 对话"
         />
-        <div v-if="!islandVisible" ref="messageBox" class="chat-messages">
-          <div v-if="activeState?.status === 'error'" class="msg system"><div class="bubble">{{ activeState.error }}</div></div>
-          <div
-            v-else-if="activeState && !activeState.messages.length && !activeState.liveLines.length && !activeState.notice"
-            class="empty"
-          >{{ activeTarget?.kind === "group" ? "开始一次群组讨论，用 @员工名 唤醒成员" : `与 ${activeTarget?.name} 开始交流` }}</div>
-          <div v-if="!activeState" class="empty">还没有联系人或群组</div>
 
-          <div
-            v-for="message in activeState?.messages || []"
-            :key="message.id"
-            class="msg"
-            :class="{ user: message.sender === 'user' }"
-          >
-            <div class="msg__body">
-              <div class="muted">{{ senderLabel(message) }}</div>
-              <div v-if="message.text" class="bubble markdown" v-html="renderMarkdown(message.text)"></div>
-              <template v-for="tool in message.tools || []" :key="tool.id">
-                <template v-if="tool.name === 'contact_employee'">
-                  <details v-if="contactState(tool).kind === 'unknown'" class="tool-status tool-status--unknown">
-                    <summary>{{ contactState(tool).text }}</summary>
-                    <pre v-if="contactState(tool).raw">{{ contactState(tool).raw }}</pre>
-                  </details>
-                  <div v-else class="tool-status">{{ contactState(tool).text }}</div>
-                </template>
-                <details v-else class="tool-card tool-card--collapsed">
-                  <summary><b>{{ tool.name || "工具" }}</b><span class="muted">{{ toolSummary(tool) }}</span></summary>
-                  <div class="tool-card__body">
-                    <div v-if="tool.input"><span class="section-label">参数</span><pre>{{ tool.input }}</pre></div>
-                    <div v-if="tool.output"><span class="section-label">结果</span><pre>{{ tool.output }}</pre></div>
-                    <small v-if="tool.state === 'error'" class="muted">工具失败</small>
-                  </div>
-                </details>
-              </template>
-              <div class="message-attachments">
-                <a
-                  v-for="file in message.attachments"
-                  :key="file.id"
-                  class="sent-attachment"
-                  :class="{ image: isImage(file.type) }"
-                  :href="attachmentUrl(file.id)"
-                  :download="file.name"
-                  target="_blank"
-                >
-                  <img v-if="isImage(file.type)" :src="attachmentUrl(file.id)" :alt="file.name" />
-                  <span><b>{{ file.name }}</b><small class="muted">{{ formatSize(file.size) }}</small></span>
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <div v-for="line in activeState?.liveLines || []" :key="`live-${line.employeeId}`" class="msg">
-            <div class="msg__body">
-              <div class="muted">{{ line.name }}</div>
-              <div v-if="line.text" class="bubble markdown" v-html="renderMarkdown(line.text)"></div>
-              <template v-for="tool in line.tools" :key="tool.id">
-                <template v-if="tool.name === 'contact_employee'">
-                  <details v-if="contactState(tool).kind === 'unknown'" class="tool-status tool-status--unknown">
-                    <summary>{{ contactState(tool).text }}</summary>
-                    <pre v-if="contactState(tool).raw">{{ contactState(tool).raw }}</pre>
-                  </details>
-                  <div v-else class="tool-status">{{ contactState(tool).text }}</div>
-                </template>
-                <details v-else class="tool-card tool-card--collapsed">
-                  <summary><b>{{ tool.name || "工具" }}</b><span class="muted">{{ toolSummary(tool) }}</span></summary>
-                  <div class="tool-card__body">
-                    <div v-if="tool.input"><span class="section-label">参数</span><pre>{{ tool.input }}</pre></div>
-                    <div v-if="tool.output"><span class="section-label">结果</span><pre>{{ tool.output }}</pre></div>
-                  </div>
-                </details>
-              </template>
-            </div>
-          </div>
-
-          <div v-if="activeState?.notice" class="msg system"><div class="bubble">{{ activeState.notice }}</div></div>
-        </div>
-
-        <div v-if="activeTarget && !islandVisible" class="chat-compose">
-          <div v-if="activeTarget.kind === 'group'" class="chips" style="margin-bottom: 8px">
-            <button
-              v-for="employee in enabledMembers"
-              :key="employee.id"
-              class="chip"
-              type="button"
-              @click="insertMention(employee.name)"
-            >@{{ employee.name }}</button>
-          </div>
-          <div v-if="draftFiles.length" class="draft-attachments">
-            <div v-for="file in draftFiles" :key="file.id" class="draft-file">
-              <img v-if="isImage(file.type)" :src="attachmentUrl(file.id)" :alt="file.name" />
-              <div><b>{{ file.name }}</b><small class="muted">{{ formatSize(file.size) }}</small></div>
-              <el-button link type="danger" @click="removeDraftFile(file.id)">移除</el-button>
-            </div>
-          </div>
-          <div
-            class="compose-box"
-            :class="{ dropping }"
-            @dragover.prevent="dropping = canSend"
-            @dragleave="dropping = false"
-            @drop.prevent="onDrop"
-          >
-            <el-button :disabled="!canSend" @click="fileInput?.click()">附件</el-button>
-            <input ref="fileInput" type="file" multiple hidden @change="onPick" />
-            <textarea
-              v-model="draft"
-              :disabled="!canSend"
-              rows="2"
-              :placeholder="composePlaceholder"
-              @input="onInput"
-              @paste="onPaste"
-              @keydown.enter.exact.prevent="send"
-            />
-            <el-button type="primary" :disabled="!canSend || (!draft.trim() && !draftFiles.length)" @click="send">发送</el-button>
-          </div>
-          <div v-if="mentionOpen && mentionMatches.length" class="mention-box">
-            <button v-for="employee in mentionMatches" :key="employee.id" type="button" @click="insertMention(employee.name)">
-              {{ employee.avatar }} {{ employee.name }} · {{ employee.domain }}
-            </button>
-          </div>
-        </div>
       </article>
 
       <aside v-if="activeState && asideOpen" class="panel aside">
@@ -222,7 +102,6 @@
         <div v-else-if="activeState.tab === 'memory' && activeTarget?.kind === 'contact'" style="padding: 16px">
           <div class="section-label">会话</div>
           <div class="mono">{{ activeState.adapter?.sessionId || "发送后才会创建" }}</div>
-          <div v-if="latestReply" class="detail-excerpt" style="margin-top: 12px">{{ latestReply }}</div>
         </div>
 
         <div v-else-if="activeState.tab === 'members' && activeTarget?.kind === 'group'" style="padding: 0 16px 16px">
@@ -269,11 +148,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import {
-  attachmentUrl,
   createConversation,
   currentUid,
   getKnowledge,
@@ -282,14 +160,13 @@ import {
   listChannels,
   listEmployees,
   saveChannel,
-  uploadAttachment,
 } from "@/api";
 import TaskRail from "@/components/TaskRail.vue";
 import { listTasks, listWorkers, type PlatformTask, type PlatformWorker } from "@/platform";
-import type { Attachment, ChatMessage, Channel, Employee, ResourceCatalog } from "@/types";
+import type { Channel, Employee, ResourceCatalog } from "@/types";
 import { GroupChatAdapter, PrivateChatAdapter } from "@/features/chat/adapters";
-import type { ChatAdapterEvent, ChatSessionState, ChatTarget } from "@/features/chat/types";
-import { mergeMessages, sameIds, selectionIsCurrent } from "@/features/chat/sessionState";
+import type { ChatSessionState, ChatTarget } from "@/features/chat/types";
+import { selectionIsCurrent } from "@/features/chat/sessionState";
 
 const route = useRoute();
 const router = useRouter();
@@ -306,10 +183,6 @@ const filterOptions = [
 const selectedKey = ref("");
 const sessions = reactive<Record<string, ChatSessionState>>({});
 const asideOpen = ref(true);
-const messageBox = ref<HTMLElement | null>(null);
-const fileInput = ref<HTMLInputElement | null>(null);
-const dropping = ref(false);
-const mentionOpen = ref(false);
 const groupDialogOpen = ref(false);
 const groupEditingId = ref<string | null>(null);
 const groupSaving = ref(false);
@@ -371,7 +244,6 @@ const activeTarget = computed(() => activeState.value?.target ?? null);
 // 阶段 A 的临时开关：?island=1 时中间区换成 Nexus 聊天岛（只读预览）。
 // 默认关闭，旧渲染仍可回退；阶段 D 收敛时删除这个开关和旧渲染分支。
 const islandVisible = computed(() => {
-  if (route.query.island !== "1") return false;
   const target = activeTarget.value;
   if (!target) return false;
   if (target.kind === "group") return Boolean(target.channel?.id);
@@ -385,56 +257,21 @@ const islandSrc = computed(() => {
   const id = activeState.value?.adapter?.conversationId ?? "";
   return `/nexus-chat/index.html?conversation=${encodeURIComponent(id)}`;
 });
-const enabledMembers = computed(() => (activeTarget.value?.members ?? []).filter((item) => item.enabled));
 const rightTabs = computed(() => activeTarget.value?.kind === "group"
   ? [{ value: "tasks" as const, label: "任务" }, { value: "members" as const, label: "成员" }, { value: "materials" as const, label: "资料" }]
   : [{ value: "tasks" as const, label: "任务" }, { value: "materials" as const, label: "资料" }, { value: "memory" as const, label: "记忆" }]);
-const draft = computed({
-  get: () => activeState.value?.draft ?? "",
-  set: (value: string) => { if (activeState.value) activeState.value.draft = value; },
-});
-const draftFiles = computed(() => activeState.value?.draftFiles ?? []);
-const canSend = computed(() => Boolean(activeState.value?.adapter?.canSend && !activeState.value.sending && !activeState.value.uploading));
-const composePlaceholder = computed(() => {
-  if (!activeTarget.value) return "选择联系人或群组后开始交流";
-  if (activeTarget.value.kind === "contact" && !activeTarget.value.enabled) return "该联系人已禁用，历史消息仍可查看";
-  if (activeState.value?.uploading) return "正在上传附件…";
-  return activeTarget.value.kind === "group" ? "发送消息，@数字员工，或拖入、粘贴图片…" : "发送消息，或拖入、粘贴图片…";
-});
-const mentionMatches = computed(() => {
-  if (activeTarget.value?.kind !== "group") return [];
-  const match = draft.value.match(/(?:^|\s)@([^\s]*)$/);
-  if (!match) return [];
-  return enabledMembers.value.filter((item) => item.name.includes(match[1] ?? ""));
-});
+
+
+
 const nameById = computed(() => {
   const names: Record<string, string> = {};
   for (const employee of employees.value) names[employee.id] = employee.name;
   for (const worker of workers.value) names[worker.id] = worker.name;
   return names;
 });
-const latestReply = computed(() => [...(activeState.value?.messages ?? [])].reverse().find((item) => item.sender !== "user")?.text ?? "");
 
-function isImage(type: string) {
-  return type.startsWith("image/");
-}
 
-function formatSize(size: number) {
-  if (size < 1024) return "小于 1 KB";
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  return `${(size / 1048576).toFixed(1)} MB`;
-}
 
-function renderMarkdown(value: string) {
-  const escaped = value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  return escaped
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\n/g, "<br>");
-}
 
 function resourceLabel(catalog: ResourceCatalog, id: string) {
   return catalog.items.find((item) => item.id === id)?.name ?? id;
@@ -446,35 +283,8 @@ function toolLabel(id: string) {
   return name === id ? "工作区工具" : name;
 }
 
-function senderLabel(message: ChatMessage) {
-  const speaker = message.speaker || "";
-  const me = currentUid();
-  if (message.sender === "user" && (!speaker || speaker === "user" || (me && speaker === me))) return "你";
-  const identity = speaker && speaker !== "user" ? speaker : message.sender;
-  return employees.value.find((item) => item.id === identity)?.name ?? identity ?? "数字员工";
-}
 
-function toolSummary(tool: { state: string }) {
-  if (tool.state === "error") return "失败";
-  if (tool.state === "running") return "执行中";
-  return tool.state === "done" ? "完成" : "";
-}
 
-function contactState(tool: { output: string; state: string }) {
-  const raw = tool.output?.trim() ?? "";
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw) as { ok?: boolean; peer?: string; error?: string };
-      if (parsed.ok) return { kind: "ok" as const, text: `已联系 ${parsed.peer ?? "同事"}`, raw };
-      return { kind: "error" as const, text: `联系失败：${parsed.error || "未投递"}`, raw };
-    } catch {
-      /* 运行中的流式 JSON 不完整，按状态继续展示。 */
-    }
-  }
-  if (tool.state === "running") return { kind: "running" as const, text: "正在联系同事…", raw };
-  if (tool.state === "error") return { kind: "error" as const, text: "联系失败", raw };
-  return { kind: "unknown" as const, text: "联系结果未知", raw };
-}
 
 function createState(target: ChatTarget): ChatSessionState {
   return {
@@ -483,19 +293,10 @@ function createState(target: ChatTarget): ChatSessionState {
     adapter: null,
     status: "loading",
     error: "",
-    messages: [],
-    liveLines: [],
-    notice: "",
-    draft: "",
-    draftFiles: [],
-    uploading: false,
-    sending: false,
     tasks: [],
     tasksLoading: false,
     taskError: "",
     taskGeneration: 0,
-    generation: 0,
-    abort: null,
     tab: "tasks",
   };
 }
@@ -505,42 +306,7 @@ function ensureState(target: ChatTarget) {
   return sessions[target.key];
 }
 
-function stopFollow(key: string) {
-  const state = sessions[key];
-  if (!state) return;
-  state.abort?.abort();
-  state.abort = null;
-  state.generation += 1;
-}
 
-function startFollow(state: ChatSessionState) {
-  if (disposed || !state.adapter) return;
-  // 聊天岛接管时，同一会话只能有一个事件流消费者：旧适配器在这里让位。
-  if (route.query.island === "1") {
-    const ready = state.target.kind === "group"
-      ? Boolean(state.target.channel?.id)
-      : Boolean(state.adapter.conversationId);
-    if (ready) {
-      state.abort?.abort();
-      state.abort = null;
-      return;
-    }
-  }
-  state.abort?.abort();
-  const controller = new AbortController();
-  state.abort = controller;
-  const generation = ++state.generation;
-  const emit = (event: ChatAdapterEvent) => {
-    if (disposed || state.generation !== generation || controller.signal.aborted) return;
-    if (event.type === "messages") state.messages = mergeMessages(state.messages, event.messages);
-    else if (event.type === "live") state.liveLines = event.lines;
-    else if (event.type === "notice") state.notice = event.text;
-  };
-  void state.adapter.follow(controller.signal, emit).catch((error) => {
-    if (controller.signal.aborted || state.generation !== generation) return;
-    state.notice = error instanceof Error ? error.message : "事件流中断";
-  });
-}
 
 async function prepareContact(state: ChatSessionState) {
   const employee = state.target.employee;
@@ -598,9 +364,7 @@ async function selectTarget(key: string, options: { fromRoute?: boolean } = {}) 
   if (!target) return;
   if (!options.fromRoute && selectedKey.value === key && sessions[key]?.adapter) return;
   const generation = ++selectionGeneration;
-  if (selectedKey.value && selectedKey.value !== key) stopFollow(selectedKey.value);
   selectedKey.value = key;
-  mentionOpen.value = false;
   localStorage.setItem("nexus_chat_last", key);
   if (!options.fromRoute) updateRoute(target);
   const state = ensureState(target);
@@ -611,11 +375,8 @@ async function selectTarget(key: string, options: { fromRoute?: boolean } = {}) 
   if (!selectionIsCurrent(selectedKey.value, key, generation, selectionGeneration, disposed)) return;
   if (state.adapter) {
     state.status = "ready";
-    startFollow(state);
     void loadTasks(state);
   }
-  await nextTick();
-  if (messageBox.value) messageBox.value.scrollTop = messageBox.value.scrollHeight;
 }
 
 function routeTargetKey() {
@@ -639,106 +400,11 @@ async function applyRouteTarget() {
   await selectTarget(key, { fromRoute: true });
 }
 
-async function addFileList(files: File[]) {
-  const state = activeState.value;
-  if (!state || !canSend.value) return;
-  const key = state.key;
-  if (state.draftFiles.length + files.length > 6) ElMessage.warning("每条消息最多添加 6 个附件");
-  state.uploading = true;
-  for (const file of files.slice(0, 6 - state.draftFiles.length)) {
-    if (!file.size) {
-      ElMessage.warning("不能添加空文件");
-      continue;
-    }
-    if (file.size > 20 * 1024 * 1024) {
-      ElMessage.warning("单个附件不能超过 20 MB");
-      continue;
-    }
-    const named = file.name ? file : new File([file], "截图.png", { type: file.type || "image/png" });
-    try {
-      const attachment = await uploadAttachment(named);
-      const current = sessions[key];
-      if (current) current.draftFiles.push(attachment);
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : "附件上传失败");
-    }
-  }
-  const current = sessions[key];
-  if (current) current.uploading = false;
-}
 
-function removeDraftFile(id: string) {
-  if (!activeState.value) return;
-  activeState.value.draftFiles = activeState.value.draftFiles.filter((item) => item.id !== id);
-}
 
-function onPick(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const files = Array.from(input.files ?? []);
-  input.value = "";
-  void addFileList(files);
-}
 
-function onDrop(event: DragEvent) {
-  dropping.value = false;
-  void addFileList(Array.from(event.dataTransfer?.files ?? []));
-}
 
-function onPaste(event: ClipboardEvent) {
-  const fromFiles = Array.from(event.clipboardData?.files ?? []);
-  const fromItems = Array.from(event.clipboardData?.items ?? [])
-    .filter((item) => item.type.startsWith("image/"))
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => Boolean(file));
-  const files = fromFiles.length ? fromFiles : fromItems;
-  if (!files.length) return;
-  event.preventDefault();
-  void addFileList(files);
-}
 
-function insertMention(name: string) {
-  if (!activeState.value) return;
-  activeState.value.draft = activeState.value.draft.replace(/(?:^|\s)@[^\s]*$/, "").trim();
-  activeState.value.draft = `${activeState.value.draft}${activeState.value.draft ? " " : ""}@${name} `;
-  mentionOpen.value = false;
-}
-
-function onInput() {
-  mentionOpen.value = activeTarget.value?.kind === "group" && mentionMatches.value.length > 0 && /(?:^|\s)@[^\s]*$/.test(draft.value);
-}
-
-async function send() {
-  const state = activeState.value;
-  if (!state?.adapter || !canSend.value) return;
-  const text = state.draft.trim();
-  const fileIds = state.draftFiles.map((item) => item.id);
-  if (!text && !fileIds.length) return;
-  const key = state.key;
-  const adapter = state.adapter;
-  const sentDraft = state.draft;
-  state.sending = true;
-  state.notice = "";
-  try {
-    const result = await adapter.send(text, fileIds, new AbortController().signal);
-    const current = sessions[key];
-    if (!current || current.adapter !== adapter) return;
-    current.messages = mergeMessages(current.messages, [result.message]);
-    if (current.draft === sentDraft) current.draft = "";
-    if (sameIds(current.draftFiles.map((item) => item.id), fileIds)) current.draftFiles = [];
-    current.notice = result.notice;
-    mentionOpen.value = false;
-    if (selectedKey.value === key) {
-      startFollow(current);
-      void loadTasks(current);
-    }
-  } catch (error) {
-    const current = sessions[key];
-    if (current && current.adapter === adapter) current.notice = error instanceof Error ? error.message : "发送失败";
-  } finally {
-    const current = sessions[key];
-    if (current) current.sending = false;
-  }
-}
 
 function openGroupDialog(channel?: Channel) {
   groupEditingId.value = channel?.id ?? null;
@@ -772,8 +438,6 @@ async function saveGroup() {
     const target = targets.value.find((item) => item.key === key);
     const existing = sessions[key];
     if (existing && target?.channel) {
-      const wasSelected = selectedKey.value === key;
-      if (wasSelected) stopFollow(key);
       existing.target = target;
       if (existing.adapter instanceof GroupChatAdapter) {
         existing.adapter.setChannel(target.channel, employees.value);
@@ -782,10 +446,7 @@ async function saveGroup() {
       }
       existing.status = "ready";
       existing.error = "";
-      if (wasSelected) {
-        startFollow(existing);
-        void loadTasks(existing);
-      }
+      void loadTasks(existing);
     } else {
       await selectTarget(key);
     }
@@ -797,16 +458,7 @@ async function saveGroup() {
   }
 }
 
-watch(search, () => { mentionOpen.value = false; });
 watch(() => [route.query.employee, route.query.group, route.query.type], () => { void applyRouteTarget(); });
-watch(() => activeState.value?.messages, async () => {
-  await nextTick();
-  if (messageBox.value) messageBox.value.scrollTop = messageBox.value.scrollHeight;
-});
-watch(() => activeState.value?.liveLines, async () => {
-  await nextTick();
-  if (messageBox.value) messageBox.value.scrollTop = messageBox.value.scrollHeight;
-});
 watch(() => activeState.value?.tab, (tab) => {
   if (tab === "tasks" && activeState.value) void loadTasks(activeState.value);
 });
@@ -847,8 +499,6 @@ onBeforeUnmount(() => {
   disposed = true;
   selectionGeneration += 1;
   for (const state of Object.values(sessions)) {
-    state.abort?.abort();
-    state.generation += 1;
     state.taskGeneration += 1;
   }
   preparePromises.clear();
@@ -867,26 +517,5 @@ onBeforeUnmount(() => {
 .chat-target__meta { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .chat-target__meta b, .chat-target__meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-head__actions { display: flex; gap: 8px; align-items: center; }
-.msg__body { min-width: 0; }
 .chip.sel { background: #e5f6ed; border-color: #aad8c2; color: #187956; }
-.compose-box.dropping { outline: 2px dashed #187956; }
-.sent-attachment.image, .draft-file { display: flex; gap: 8px; align-items: center; }
-.sent-attachment img, .draft-file img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; }
-.tool-card { margin-top: 8px; padding: 8px; border: 1px solid #d7e3dc; border-radius: 8px; background: #f7fbf8; }
-.tool-card pre { white-space: pre-wrap; margin: 4px 0 0; font-size: 12px; }
-.tool-card--collapsed { padding: 0; overflow: hidden; }
-.tool-card--collapsed summary { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; list-style: none; }
-.tool-card--collapsed summary::-webkit-details-marker { display: none; }
-.tool-card--collapsed summary::before { content: "▸"; color: #7b9386; }
-.tool-card--collapsed[open] summary::before { transform: rotate(90deg); }
-.tool-card--collapsed summary span { margin-left: auto; }
-.tool-card__body { padding: 0 10px 10px; }
-.tool-status { display: inline-flex; margin-top: 8px; padding: 5px 9px; border: 1px solid #cfe5d8; border-radius: 999px; background: #f0faf4; color: #2a7d5c; font-size: 11px; }
-.tool-status--unknown { display: block; width: fit-content; cursor: pointer; }
-.tool-status--unknown summary { list-style: none; }
-.tool-status--unknown summary::-webkit-details-marker { display: none; }
-.tool-status--unknown pre { margin: 6px 0 0; max-width: 480px; white-space: pre-wrap; color: #5f746a; }
-.markdown :deep(code) { font-family: ui-monospace, monospace; }
-.mention-box { margin-top: 8px; background: white; border: 1px solid #dbece0; border-radius: 12px; padding: 6px; }
-.mention-box button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 8px; cursor: pointer; }
 </style>

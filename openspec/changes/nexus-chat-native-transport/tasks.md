@@ -45,3 +45,10 @@
   - 验证：`PYTHONPATH=services/nexus-api ... pytest services/nexus-api/tests`（98 passed, 4 skipped）；
     `services/nexus-api/.venv/bin/ruff check services/nexus-api/nexus_api services/nexus-api/tests`；
     `cd web/nexus && npm run type-check && npm run build`
+
+## 5. 收敛（阶段 D）
+
+- [x] 5.1 移除 `?island=1` 开关，聊天岛成为默认渲染
+- [x] 5.2 删除旧消息列表、旧输入区、旧 SSE 适配器与相关 CSS
+- [x] 5.3 适配器只保留会话绑定与任务查询，不再解析事件
+- [x] 5.4 回归：nexus-api 测试、web type-check/build、单元测试

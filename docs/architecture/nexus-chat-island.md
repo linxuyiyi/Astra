@@ -9,7 +9,8 @@ Element Plus 也不变——聊天岛在独立 iframe 文档里跑，Tailwind �
 **阶段 B：私聊读写已接管。** 聊天岛读原生消息、订阅 `raw=1` 事件流、经 Nexus 发送与停止；
 `?island=1` 时旧适配器不再订阅，避免双消费者。群组、附件、人工确认仍未迁移。
 
-默认关闭，旧渲染可随时回退；阶段 D 收敛时删除开关与旧渲染分支。
+阶段 D 已收敛：聊天岛是默认渲染，`?island=1` 开关、旧消息列表/输入区、
+旧 SSE 适配器与相关 CSS 都已删除。
 
 真实模型的一轮对话还没验：本机没有启用的模型路由，网关（18100）未运行，员工建不出来。
 
@@ -78,10 +79,12 @@ iframe 是独立文档，父级 CSS 不会进来，必须走这个桥接。
 
 ```bash
 cd web/nexus && npm run dev
-# 打开 http://localhost:15174/chat?island=1&employee=<员工 id>
+# 打开 http://localhost:15174/chat?employee=<员工 id>
+# 群组：http://localhost:15174/chat?group=<群组 id>
 ```
 
-需要该会话已有 `agentscope_session_id`，否则聊天岛显示空态。
+打开联系人时 Nexus 会先建会话，聊天岛随即接管；还没有 Session 时显示空态，
+首条消息发送后由 Nexus 建 Session。
 
 ## 已验证 / 未验证
 

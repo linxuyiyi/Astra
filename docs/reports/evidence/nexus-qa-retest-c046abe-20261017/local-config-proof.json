@@ -1,0 +1,6 @@
+{
+  "task_mcp_keys_nonempty_and_equal": true,
+  "env_mode": "0o600",
+  "local_assistant_enabled": "false",
+  "favicon_file_exists": false
+}

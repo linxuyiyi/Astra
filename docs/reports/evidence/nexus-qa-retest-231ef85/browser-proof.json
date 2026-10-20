@@ -1,0 +1,14 @@
+{
+  "send_button": {
+    "x": 1016,
+    "y": 798,
+    "width": 58,
+    "height": 32
+  },
+  "hit": {
+    "nav": false
+  },
+  "iframe_count": 0,
+  "shows_missing_ui": true,
+  "page_errors": []
+}

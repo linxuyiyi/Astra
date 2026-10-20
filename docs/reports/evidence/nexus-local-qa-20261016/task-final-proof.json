@@ -1,0 +1,16 @@
+{
+  "task_id": "T-20261016-39F2BE",
+  "before_status": "RUNNING",
+  "content": "NEXUS_QA_OK_20261016",
+  "unchanged_git_head": true,
+  "workspace": "/Users/niuniu/程序/Astra/.astra/qa-20261016/.astra-tasks/astra-01/T-20261016-39F2BE-env-1",
+  "confirm_http": 200,
+  "after": {
+    "status": "SUCCEEDED",
+    "runtime_state": "SUCCEEDED",
+    "current_progress": "任务已人工确认完成",
+    "current_session_id": "ses_ebb5b8183ffevLkJ1P2jFPPyQB",
+    "runtime_error": null
+  },
+  "source_conversation": "conv_64320bfdd0cb"
+}

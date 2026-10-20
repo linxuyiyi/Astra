@@ -1,0 +1,2 @@
+[READY] nexus-api: http://127.0.0.1:8120/api/health
+nexus-api ready; log /tmp/nexus-api.log

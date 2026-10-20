@@ -1,0 +1,129 @@
+{
+  "opencode-server": {
+    "pid": 95077,
+    "log": "/Users/niuniu/程序/Astra/.astra/logs/opencode-server.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/.astra/qa-20261016/runtime/node_modules/opencode-ai/bin/opencode.exe",
+      "serve",
+      "--hostname",
+      "127.0.0.1",
+      "--port",
+      "4096"
+    ],
+    "cwd": "/Users/niuniu/程序/Astra"
+  },
+  "backend": {
+    "pid": 95081,
+    "log": "/Users/niuniu/程序/Astra/.astra/logs/backend.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/.venv/bin/python",
+      "-m",
+      "uvicorn",
+      "app.main:app",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "8100",
+      "--reload"
+    ],
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform"
+  },
+  "runtime-beat": {
+    "pid": 95082,
+    "log": "/Users/niuniu/程序/Astra/.astra/logs/runtime-beat.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/.venv/bin/python",
+      "-m",
+      "celery",
+      "-A",
+      "app.runtime.celery_app:celery",
+      "beat",
+      "--loglevel=INFO",
+      "--schedule=/Users/niuniu/程序/Astra/.astra/run/celerybeat-schedule"
+    ],
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform"
+  },
+  "runtime-control": {
+    "pid": 95083,
+    "log": "/Users/niuniu/程序/Astra/.astra/logs/runtime-control.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/.venv/bin/python",
+      "-m",
+      "celery",
+      "-A",
+      "app.runtime.celery_app:celery",
+      "worker",
+      "--loglevel=INFO",
+      "--pool=solo",
+      "--queues=control",
+      "--hostname=astra-control@%h"
+    ],
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform"
+  },
+  "runtime-agent": {
+    "pid": 95088,
+    "log": "/Users/niuniu/程序/Astra/.astra/logs/runtime-agent.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/.venv/bin/python",
+      "-m",
+      "celery",
+      "-A",
+      "app.runtime.celery_app:celery",
+      "worker",
+      "--loglevel=INFO",
+      "--pool=solo",
+      "--queues=agent",
+      "--hostname=astra-agent@%h"
+    ],
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform"
+  },
+  "task-mcp": {
+    "pid": 95091,
+    "log": "/Users/niuniu/程序/Astra/.astra/logs/task-mcp.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/services/task-platform/.venv/bin/astra-task-mcp"
+    ],
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform"
+  },
+  "library-mcp": {
+    "pid": 95092,
+    "log": "/Users/niuniu/程序/Astra/.astra/logs/library-mcp.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/.venv/bin/python",
+      "-m",
+      "app.mcp_server"
+    ],
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform"
+  },
+  "gateway": {
+    "pid": 95093,
+    "log": "/Users/niuniu/程序/Astra/.astra/logs/gateway.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/.venv/bin/python",
+      "-m",
+      "uvicorn",
+      "app.gateway.server:app",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "8110",
+      "--reload"
+    ],
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform"
+  },
+  "frontend": {
+    "pid": 95097,
+    "log": "/Users/niuniu/程序/Astra/.astra/logs/frontend.log",
+    "command": [
+      "/opt/homebrew/lib/node_modules/npm/bin/npm-cli.js",
+      "run",
+      "dev",
+      "--",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "5174"
+    ],
+    "cwd": "/Users/niuniu/程序/Astra/web/nexus"
+  }
+}

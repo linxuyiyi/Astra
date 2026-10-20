@@ -1,0 +1,36 @@
+...F                                                                     [100%]
+=================================== FAILURES ===================================
+_________________ test_probe_network_performs_real_dns_and_tcp _________________
+
+    def test_probe_network_performs_real_dns_and_tcp():
+        async def scenario():
+            server = await asyncio.start_server(lambda _r, w: w.close(), "127.0.0.1", 0)
+            port = server.sockets[0].getsockname()[1]
+            client = HttpGatewayProbeClient(2.0)
+            reachable = (
+                await client.probe(SimpleNamespace(base_url=f"http://127.0.0.1:{port}"), ["NETWORK"], None)
+            )[0]
+            server.close()
+            await server.wait_closed()
+            refused = (
+                await client.probe(SimpleNamespace(base_url=f"http://127.0.0.1:{port}"), ["NETWORK"], None)
+            )[0]
+            unresolved = (
+                await client.probe(
+                    SimpleNamespace(base_url="http://astra-no-such-host.invalid:80"), ["NETWORK"], None
+                )
+            )[0]
+            return reachable, refused, unresolved
+    
+        reachable, refused, unresolved = asyncio.run(scenario())
+        assert reachable.success is True
+        assert reachable.detail["port"] > 0
+        assert refused.success is False
+>       assert unresolved.success is False
+E       AssertionError: assert True is False
+E        +  where True = ProbeOutcome(probe_type='NETWORK', success=True, latency_ms=4, status_code=None, error=None, detail={'host': 'astra-no-such-host.invalid', 'port': 80}).success
+
+tests/test_gateway_control.py:459: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_gateway_control.py::test_probe_network_performs_real_dns_and_tcp
+1 failed, 3 passed, 28 warnings in 0.69s

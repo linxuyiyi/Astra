@@ -1,0 +1,5 @@
+{
+  "real_tool_reply": "Error executing tool nexus_task_start",
+  "actual_runtime_error": "员工 astra-01；环境 本地 Agent (LOCAL)；Workspace=/Users/niuniu/程序/Astra/.astra/qa-20261016/workspaces；Server Port=14096；启动方式=本机后台进程；端口冲突：Serve 的启动 Workspace 与员工配置不一致",
+  "task_status_after_failure": "PENDING"
+}

@@ -1,0 +1,85 @@
+{
+  "head": "c046abeda9cb4ade5d891df51e22948fba68f996",
+  "branch": "cursor/nexus-v1-0-1-phase2-f6f2",
+  "remote_branch": "c046abeda9cb4ade5d891df51e22948fba68f996",
+  "psutil": "7.2.2",
+  "records": [
+    {
+      "name": "opencode-server",
+      "pid": 98874,
+      "alive": true,
+      "create_time_matches": true,
+      "port": null
+    },
+    {
+      "name": "backend",
+      "pid": 98880,
+      "alive": true,
+      "create_time_matches": true,
+      "port": null
+    },
+    {
+      "name": "runtime-beat",
+      "pid": 98890,
+      "alive": true,
+      "create_time_matches": true,
+      "port": null
+    },
+    {
+      "name": "runtime-control",
+      "pid": 98894,
+      "alive": true,
+      "create_time_matches": true,
+      "port": null
+    },
+    {
+      "name": "runtime-agent",
+      "pid": 98912,
+      "alive": true,
+      "create_time_matches": true,
+      "port": null
+    },
+    {
+      "name": "task-mcp",
+      "pid": 98929,
+      "alive": true,
+      "create_time_matches": true,
+      "port": null
+    },
+    {
+      "name": "library-mcp",
+      "pid": 98932,
+      "alive": true,
+      "create_time_matches": true,
+      "port": null
+    },
+    {
+      "name": "gateway",
+      "pid": 98945,
+      "alive": true,
+      "create_time_matches": true,
+      "port": null
+    },
+    {
+      "name": "frontend",
+      "pid": 98949,
+      "alive": true,
+      "create_time_matches": true,
+      "port": null
+    },
+    {
+      "name": "agent",
+      "pid": 98832,
+      "alive": true,
+      "create_time_matches": true,
+      "port": 8000
+    },
+    {
+      "name": "nexus-api",
+      "pid": 98857,
+      "alive": true,
+      "create_time_matches": true,
+      "port": 8120
+    }
+  ]
+}

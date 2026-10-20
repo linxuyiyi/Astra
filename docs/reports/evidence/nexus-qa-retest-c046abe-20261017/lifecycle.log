@@ -1,0 +1,10 @@
+first-start agent_service 0
+first-start nexus_api 0
+first-start astra 0
+first-stop astra 0
+first-stop nexus_api 0
+first-stop agent_service 0
+second-start agent_service 0
+second-start nexus_api 0
+second-start astra 0
+Lifecycle PASS: start -> stop -> all owned ports released -> start; all records have create_time

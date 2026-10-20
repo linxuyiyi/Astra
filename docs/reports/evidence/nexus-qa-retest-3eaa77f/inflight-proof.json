@@ -1,0 +1,9 @@
+{
+  "first_http": 500,
+  "second_http": 409,
+  "second_body": {
+    "detail": "\u540c\u4e00\u4e8b\u4ef6\u6b63\u5728\u6295\u9012"
+  },
+  "accepted_count": 0,
+  "scope": "isolated ASGI fault injection, original production route registration, no annotation patch"
+}

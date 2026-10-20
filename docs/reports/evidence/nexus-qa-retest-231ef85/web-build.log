@@ -1,0 +1,18 @@
+
+> nexus-web@1.0.1 build
+> vue-tsc --noEmit -p tsconfig.json && vite build
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 4007 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     0.40 kB │ gzip:   0.28 kB
+dist/assets/index-CcG8TSDe.css    433.51 kB │ gzip:  60.36 kB
+dist/assets/index-B_fD7HAQ.js   2,000.41 kB │ gzip: 644.81 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 6.55s

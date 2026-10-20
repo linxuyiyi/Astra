@@ -1,0 +1,101 @@
+[
+  {
+    "name": "opencode-server",
+    "pid": 95919,
+    "create_time": 1792161826.012368,
+    "pgid": 95919,
+    "cwd": "/Users/niuniu/程序/Astra",
+    "command": "/Users/niuniu/程序/Astra/.astra/qa-20261016/runtime/node_modules/opencode-ai/bin/opencode.exe serve --hostname 127.0.0.1 --port 4096",
+    "action": "verified before stop"
+  },
+  {
+    "name": "backend",
+    "pid": 95920,
+    "create_time": 1792161826.435038,
+    "pgid": 95920,
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform",
+    "command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m uvicorn app.main:app --host 127.0.0.1 --port 8100 --reload",
+    "action": "verified before stop"
+  },
+  {
+    "name": "runtime-beat",
+    "pid": 95924,
+    "create_time": 1792161826.947071,
+    "pgid": 95924,
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform",
+    "command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m celery -A app.runtime.celery_app:celery beat --loglevel=INFO --schedule=/Users/niuniu/程序/Astra/.astra/run/celerybeat-schedule",
+    "action": "verified before stop"
+  },
+  {
+    "name": "runtime-control",
+    "pid": 95925,
+    "create_time": 1792161827.459395,
+    "pgid": 95925,
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform",
+    "command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m celery -A app.runtime.celery_app:celery worker --loglevel=INFO --pool=solo --queues=control --hostname=astra-control@%h",
+    "action": "verified before stop"
+  },
+  {
+    "name": "runtime-agent",
+    "pid": 95928,
+    "create_time": 1792161827.971869,
+    "pgid": 95928,
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform",
+    "command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m celery -A app.runtime.celery_app:celery worker --loglevel=INFO --pool=solo --queues=agent --hostname=astra-agent@%h",
+    "action": "verified before stop"
+  },
+  {
+    "name": "task-mcp",
+    "pid": 95931,
+    "create_time": 1792161828.479395,
+    "pgid": 95931,
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform",
+    "command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python /Users/niuniu/程序/Astra/services/task-platform/.venv/bin/astra-task-mcp",
+    "action": "verified before stop"
+  },
+  {
+    "name": "library-mcp",
+    "pid": 95932,
+    "create_time": 1792161828.985794,
+    "pgid": 95932,
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform",
+    "command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m app.mcp_server",
+    "action": "verified before stop"
+  },
+  {
+    "name": "gateway",
+    "pid": 95933,
+    "create_time": 1792161829.492597,
+    "pgid": 95933,
+    "cwd": "/Users/niuniu/程序/Astra/services/task-platform",
+    "command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m uvicorn app.gateway.server:app --host 127.0.0.1 --port 8110 --reload",
+    "action": "verified before stop"
+  },
+  {
+    "name": "frontend",
+    "pid": 95937,
+    "create_time": 1792161829.996611,
+    "pgid": 95937,
+    "cwd": "/Users/niuniu/程序/Astra/web/nexus",
+    "command": "npm run dev --host 127.0.0.1 --port 5174        ",
+    "action": "verified before stop"
+  },
+  {
+    "name": "agent",
+    "pid": 94966,
+    "create_time": 1792161713.941809,
+    "pgid": 94959,
+    "cwd": "/Users/niuniu/程序/Astra",
+    "command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python /Users/niuniu/程序/Astra/services/agent-service/agent_service.py",
+    "action": "verified before stop"
+  },
+  {
+    "name": "nexus-api",
+    "pid": 95029,
+    "create_time": 1792161715.491988,
+    "pgid": 95022,
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+    "command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python /Users/niuniu/程序/Astra/services/nexus-api/.venv/bin/uvicorn nexus_api.main:app --app-dir /Users/niuniu/程序/Astra/services/nexus-api --host 127.0.0.1 --port 8120",
+    "action": "verified before stop"
+  }
+]

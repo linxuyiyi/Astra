@@ -1,0 +1,12 @@
+E501 Line too long (112 > 110)
+   --> services/nexus-api/nexus_api/main.py:636:111
+    |
+634 |         return requested, {"available": False, "items": []}
+635 |
+636 |     async def accepted_skills(client: AgentScopeClient, requested: list[str], previous: list[str]) -> list[str]:
+    |                                                                                                               ^^
+637 |         requested = lines(requested)
+638 |         catalog: list[dict[str, str]] | None = None
+    |
+
+Found 1 error.

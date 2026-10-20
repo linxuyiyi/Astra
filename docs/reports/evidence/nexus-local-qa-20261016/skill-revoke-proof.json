@@ -1,0 +1,26 @@
+{
+  "configured": {
+    "saved_skills": [
+      "task-management"
+    ],
+    "agentscope_ok": true,
+    "mcp_names": [
+      "nexus-task"
+    ],
+    "task_tool_count": 15,
+    "workspace_skills": [
+      "任务管理"
+    ]
+  },
+  "revoked": {
+    "saved_skills": [],
+    "agentscope_ok": true,
+    "mcp_names": [
+      "nexus-task"
+    ],
+    "task_tool_count": 15,
+    "workspace_skills": [
+      "任务管理"
+    ]
+  }
+}

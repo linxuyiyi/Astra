@@ -1,0 +1,7 @@
+{
+  "disabled_target_http": 409,
+  "disabled_detail": {
+    "detail": "员工已禁用，稍后再投递"
+  },
+  "reenabled_target_http": 200
+}

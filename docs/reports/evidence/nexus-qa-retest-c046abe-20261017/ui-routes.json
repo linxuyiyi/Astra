@@ -1,0 +1,87 @@
+[
+  {
+    "route": "/employees",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/chat",
+    "errors": [],
+    "httpErrors": [],
+    "sendHit": {
+      "nav": false
+    }
+  },
+  {
+    "route": "/team",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/tasks",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/workers",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/workers/astra-01",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/library",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/gateway/overview",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/gateway/nodes",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/gateway/routes",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/gateway/keys",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/gateway/logs",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/settings",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/interventions",
+    "errors": [],
+    "httpErrors": []
+  },
+  {
+    "route": "/tasks/T-20261016-DEBE47",
+    "errors": [],
+    "httpErrors": [],
+    "frameTitle": "Task Workspace"
+  },
+  {
+    "route": "/tasks/T-20261016-39F2BE",
+    "errors": [],
+    "httpErrors": [],
+    "missingUiExplicit": true
+  }
+]

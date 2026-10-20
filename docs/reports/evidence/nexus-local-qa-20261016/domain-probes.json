@@ -1,0 +1,20 @@
+{
+  "ownership": {
+    "other_employee_get_ok": true,
+    "other_employee_update_ok": true,
+    "new_title": "employee B changed A",
+    "anonymous_list_count": 1
+  },
+  "duplicate_delivery": {
+    "same_outbox_send_count": 2,
+    "outcomes": [
+      "1",
+      "1"
+    ]
+  },
+  "outage_recovery": {
+    "status_after_outage": "failed",
+    "attempts": 30,
+    "delivered_after_service_restored": 0
+  }
+}

@@ -1,0 +1,2 @@
+[READY] agent: http://127.0.0.1:8000/health
+agent ready; log /tmp/nexus-agent-service.log

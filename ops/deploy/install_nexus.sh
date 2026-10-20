@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nexus v1.0.1 (Phase 1 + Phase 2) one-click installer. Idempotent; safe to re-run.
+# Nexus v1.4.7 one-click installer. Idempotent; safe to re-run.
 # shellcheck disable=SC1090
 # Usage: ops/deploy/install_nexus.sh [--env-file F] [--preflight-only] [--skip-web-build]
 #        [--with-llm-wiki] [--remote-worker HOST] [--no-systemd] [--yes]
@@ -47,7 +47,7 @@ load_env_file() {
 load_env_file "$SCRIPT_DIR/../env/.env"
 
 : "${NEXUS_REPO_URL:=https://github.com/linmumuxx-ux/Astra}"
-: "${NEXUS_BRANCH:=cursor/nexus-v1-0-1-phase2-f6f2}"
+: "${NEXUS_BRANCH:=codex/nexus-v1.4.7}"
 : "${NEXUS_ROOT:=/opt/nexus}"
 : "${NEXUS_STATE_DIR:=/var/lib/nexus}"
 : "${NEXUS_BIND_HOST:=127.0.0.1}"

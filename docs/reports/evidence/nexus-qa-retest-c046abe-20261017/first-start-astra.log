@@ -1,0 +1,94 @@
+[PASS] 当前操作系统
+  当前值: Darwin 25.5.0 (arm64)
+  原因: 已识别运行平台
+  建议: 无需处理
+[PASS] Python 版本
+  当前值: /Users/niuniu/程序/Astra/.venv/bin/python (3.14.3)
+  原因: 版本满足项目要求
+  建议: 无需处理
+[PASS] Python 必要依赖
+  当前值: 已安装
+  原因: 依赖完整
+  建议: 无需处理
+[PASS] Astra Workspace 目录
+  当前值: /Users/niuniu/程序/Astra/backend/workspaces
+  原因: 目录存在且可写
+  建议: 无需处理
+[PASS] 日志目录
+  当前值: /Users/niuniu/程序/Astra/.astra/logs
+  原因: 目录存在且可写
+  建议: 无需处理
+[PASS] 运行状态目录
+  当前值: /Users/niuniu/程序/Astra/.astra/run
+  原因: 目录存在且可写
+  建议: 无需处理
+[PASS] 默认 Agent 可执行文件
+  当前值: /Users/niuniu/程序/Astra/.astra/qa-20261016/runtime/node_modules/opencode-ai/bin/opencode.exe
+  原因: 1.18.33
+  建议: 无需处理
+[PASS] OpenCode Runtime
+  当前值: http://127.0.0.1:4096
+  原因: 本机受管 Server 将由 Astra 启动器启动并执行健康检查
+  建议: 无需处理
+[PASS] 平台助手 Runtime
+  当前值: disabled
+  原因: 已显式关闭平台助手
+  建议: 无需处理
+[PASS] Redis 连接
+  当前值: redis://127.0.0.1:6379/0
+  原因: 连接成功
+  建议: 无需处理
+[PASS] 数据库连接
+  当前值: /Users/niuniu/程序/Astra/services/task-platform/data/astra.db
+  原因: 连接成功
+  建议: 无需处理
+[PASS] 数据库隔离
+  当前值: 非 Astra 表=0
+  原因: 当前数据库仅包含 Astra 表
+  建议: 无需处理
+[PASS] 数据库表与迁移
+  当前值: revision=0036_experience_space_and_key_last_used, tables=32
+  原因: 表结构与迁移已到最新
+  建议: 无需处理
+
+自检完成：13 项通过，0 项警告，0 项失败。
+[PREP] database migration
+[PREP] preflight
+[START] opencode-server
+[READY] employee OpenCode Server (1.18.33)
+[START] backend
+[START] runtime-beat
+[START] runtime-control
+[START] runtime-agent
+[START] task-mcp
+[START] library-mcp
+[START] gateway
+[START] frontend
+[READY] backend: http://127.0.0.1:8100/api/health
+[READY] runtime-control
+[READY] runtime-agent
+[READY] gateway: http://127.0.0.1:8110/healthz
+[READY] task-mcp: http://127.0.0.1:8202/health
+[READY] frontend: http://127.0.0.1:5174
+
+================================================================
+Astra DEV started
+Console : http://localhost:5174
+API     : http://localhost:8100/api/health
+Docs    : http://localhost:8100/docs
+Gateway : http://localhost:8110/v1/models
+Task MCP: http://127.0.0.1:8202/mcp
+Logs    : /Users/niuniu/程序/Astra/.astra/logs
+================================================================
+Astra mode: dev
+[RUNNING] opencode-server      PID=98690 LOG=/Users/niuniu/程序/Astra/.astra/logs/opencode-server.log
+[RUNNING] backend              PID=98707 LOG=/Users/niuniu/程序/Astra/.astra/logs/backend.log
+[RUNNING] runtime-beat         PID=98712 LOG=/Users/niuniu/程序/Astra/.astra/logs/runtime-beat.log
+[RUNNING] runtime-control      PID=98714 LOG=/Users/niuniu/程序/Astra/.astra/logs/runtime-control.log
+[RUNNING] runtime-agent        PID=98716 LOG=/Users/niuniu/程序/Astra/.astra/logs/runtime-agent.log
+[RUNNING] task-mcp             PID=98728 LOG=/Users/niuniu/程序/Astra/.astra/logs/task-mcp.log
+[RUNNING] library-mcp          PID=98729 LOG=/Users/niuniu/程序/Astra/.astra/logs/library-mcp.log
+[RUNNING] gateway              PID=98732 LOG=/Users/niuniu/程序/Astra/.astra/logs/gateway.log
+[RUNNING] frontend             PID=98735 LOG=/Users/niuniu/程序/Astra/.astra/logs/frontend.log
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.

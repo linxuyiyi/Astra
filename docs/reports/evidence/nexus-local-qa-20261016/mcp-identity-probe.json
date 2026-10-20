@@ -1,0 +1,61 @@
+[
+  {
+    "identity": {},
+    "http": 200,
+    "structuredContent": {
+      "task_id": "T-20261016-39F2BE",
+      "title": "QA1016真实工程链路",
+      "status": "PENDING",
+      "task_type": "ISSUE",
+      "category_id": "testing-platform",
+      "worker_id": "astra-01",
+      "responsible_employee_id": "emp_c87ba2e75783",
+      "source_session_id": "eb88707e187844b3b1f586a7897dc0c5",
+      "source_channel_id": null,
+      "current_progress": "已分配给 Astra-01，等待启动",
+      "ok": true,
+      "description": "在当前工程根目录创建 qa-1016.txt，内容为 NEXUS_QA_OK_20261016。不得提交 Git。只改这一个文件。",
+      "acceptance_criteria": [
+        {
+          "id": "AC-01",
+          "content": "文件存在且内容正确"
+        },
+        {
+          "id": "AC-02",
+          "content": "没有 Git 提交"
+        }
+      ]
+    }
+  },
+  {
+    "identity": {
+      "X-Nexus-Employee-Id": "unrelated-employee",
+      "X-Nexus-Session-Id": "fake-session"
+    },
+    "http": 200,
+    "structuredContent": {
+      "task_id": "T-20261016-39F2BE",
+      "title": "QA1016真实工程链路",
+      "status": "PENDING",
+      "task_type": "ISSUE",
+      "category_id": "testing-platform",
+      "worker_id": "astra-01",
+      "responsible_employee_id": "emp_c87ba2e75783",
+      "source_session_id": "eb88707e187844b3b1f586a7897dc0c5",
+      "source_channel_id": null,
+      "current_progress": "已分配给 Astra-01，等待启动",
+      "ok": true,
+      "description": "在当前工程根目录创建 qa-1016.txt，内容为 NEXUS_QA_OK_20261016。不得提交 Git。只改这一个文件。",
+      "acceptance_criteria": [
+        {
+          "id": "AC-01",
+          "content": "文件存在且内容正确"
+        },
+        {
+          "id": "AC-02",
+          "content": "没有 Git 提交"
+        }
+      ]
+    }
+  }
+]

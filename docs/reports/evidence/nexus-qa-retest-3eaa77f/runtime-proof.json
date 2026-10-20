@@ -1,0 +1,32 @@
+{
+  "serve_identity_checks": [
+    {
+      "name": "Agent 命令存在",
+      "passed": true,
+      "detail": "已找到 /Users/niuniu/程序/Astra/.astra/qa-20261016/runtime/node_modules/opencode-ai/bin/opencode.exe"
+    },
+    {
+      "name": "Agent 命令可启动",
+      "passed": true,
+      "detail": "1.18.33"
+    },
+    {
+      "name": "Workspace 可用",
+      "passed": true,
+      "detail": "可写：/Users/niuniu/程序/Astra/.astra/qa-20261016/workspaces"
+    },
+    {
+      "name": "OpenCode Server",
+      "passed": false,
+      "detail": "Serve 的启动 Workspace 与员工配置不一致"
+    }
+  ],
+  "structured_start_failure": {
+    "ok": false,
+    "error": "Workspace 或端口归属冲突",
+    "task_id": "QA-RETEST-RUNTIME",
+    "status": "PENDING",
+    "failure_code": "WORKSPACE_CONFLICT",
+    "hint": "检查该员工的端口是否被其他员工或工作区占用"
+  }
+}

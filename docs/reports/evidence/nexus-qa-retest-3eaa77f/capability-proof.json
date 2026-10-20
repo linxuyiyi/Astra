@@ -1,0 +1,40 @@
+{
+  "stale_registration_http": 201,
+  "before_resave": {
+    "mcp_names": [
+      "nexus-task"
+    ],
+    "authorization_matches_config": false,
+    "skills": [
+      "任务管理"
+    ]
+  },
+  "resave_outcome": {
+    "ok": true,
+    "detail": ""
+  },
+  "after_resave": {
+    "mcp_names": [
+      "nexus-task"
+    ],
+    "authorization_matches_config": true,
+    "skills": [
+      "任务管理"
+    ]
+  },
+  "revoked_saved_skills": [],
+  "after_revoke": {
+    "mcp_names": [],
+    "authorization_matches_config": false,
+    "skills": []
+  },
+  "restored": {
+    "mcp_names": [
+      "nexus-task"
+    ],
+    "authorization_matches_config": true,
+    "skills": [
+      "任务管理"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "case": "no_key",
+    "http": 401,
+    "ok": false,
+    "error": "未授权"
+  },
+  {
+    "case": "wrong_key",
+    "http": 401,
+    "ok": false,
+    "error": "未授权"
+  },
+  {
+    "case": "other_employee",
+    "http": 200,
+    "ok": false,
+    "error": "任务不存在"
+  },
+  {
+    "case": "owner",
+    "http": 200,
+    "ok": true,
+    "error": null
+  }
+]

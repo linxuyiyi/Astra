@@ -1,8 +1,8 @@
-# Nexus v1.0.1 开发约定
+# Nexus v1.4.7 开发约定
 
 只放所有代码任务都要遵守的规则。OpenSpec 产物规则在 `openspec/config.yaml`，工具与集成细节见 `docs/architecture/OPENSPEC_SUPERPOWERS.md`；按需查阅，不要每轮加载整套教程。
 
-本分支的产品是 **Nexus v1.0.1**。数字员工、私聊、团队和 `contact_employee` 由 `services/nexus-api` 与 `services/agent-service` 承担。任务、Worker、OpenCode、网关和图书馆在 `services/task-platform`，由 `web/nexus` 经 `/api` 调用。
+本分支的产品是 **Nexus v1.4.7**。数字员工、私聊、团队和 `contact_employee` 由 `services/nexus-api` 与 `services/agent-service` 承担。任务、Worker、OpenCode、网关和图书馆在 `services/task-platform`，由 `web/nexus` 经 `/api` 调用。
 
 ## 项目范围
 

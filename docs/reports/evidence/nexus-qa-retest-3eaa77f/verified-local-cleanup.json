@@ -1,0 +1,67 @@
+[
+  {
+    "pid": 40098,
+    "name": "backend",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 40102,
+    "name": "old-beat",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 40103,
+    "name": "old-control",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 40107,
+    "name": "old-agent",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 40115,
+    "name": "old-library",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 40116,
+    "name": "old-gateway",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 40119,
+    "name": "old-web",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 95077,
+    "name": "opencode-server",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 95082,
+    "name": "runtime-beat",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 95083,
+    "name": "runtime-control",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 95088,
+    "name": "runtime-agent",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 95091,
+    "name": "task-mcp",
+    "action": "stopped after command/cwd/group verification"
+  },
+  {
+    "pid": 95097,
+    "name": "frontend",
+    "action": "stopped after command/cwd/group verification"
+  }
+]

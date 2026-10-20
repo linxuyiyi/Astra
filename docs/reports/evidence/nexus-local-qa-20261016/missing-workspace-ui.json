@@ -1,0 +1,11 @@
+{
+  "url": "http://127.0.0.1:5174/opencode-workspace/1.18.35/index.html",
+  "http": 200,
+  "returned_nexus_spa": true,
+  "runtime_version": "1.18.35",
+  "committed_ui_versions": [
+    "1.18.31",
+    "1.18.33",
+    "1.2.27"
+  ]
+}

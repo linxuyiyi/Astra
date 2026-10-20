@@ -1,0 +1,16 @@
+{
+  "models_statuses": [
+    401,
+    401,
+    401,
+    401,
+    200
+  ],
+  "activation_seconds": 4.1,
+  "chat_http": 200,
+  "reply": "QA_GATEWAY_OK",
+  "last_used_recorded": true,
+  "revoke_http": 200,
+  "after_revoke_http": 401,
+  "delete_http": 204
+}

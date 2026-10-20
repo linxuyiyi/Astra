@@ -1,0 +1,25 @@
+{
+  "while_disabled": {
+    "delivered": 0,
+    "status": "pending",
+    "attempts": 32,
+    "last_error": "{\"detail\":\"员工已禁用，稍后再投递\"}"
+  },
+  "after_reenabled": {
+    "delivered": 1,
+    "status": "delivered",
+    "attempts": 32
+  },
+  "same_integer_event_again": {
+    "http": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "queried_and_reported_succeeded": true,
+  "native_tool_names": [
+    "mcp__nexus-task__nexus_task_get",
+    "mcp__nexus-task__nexus_task_get"
+  ],
+  "native_matching_hint_blocks": 1
+}

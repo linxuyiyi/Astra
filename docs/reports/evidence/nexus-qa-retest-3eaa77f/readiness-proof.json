@@ -1,0 +1,5 @@
+{
+  "health_http": 500,
+  "wait_http_exit": 1,
+  "stderr": "not ready: http://127.0.0.1:55680/health; log /tmp/nexus-qa-ready.log\n"
+}

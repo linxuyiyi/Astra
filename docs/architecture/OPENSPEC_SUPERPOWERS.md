@@ -1,10 +1,10 @@
 # 项目内 OpenSpec + Superpowers 集成
 
-Nexus v1.0.1 继续使用仓库里已经提交的 OpenSpec 与 Superpowers，**clone 后启动 OpenCode 即可使用**，
+Nexus v1.4.7 继续使用仓库里已经提交的 OpenSpec 与 Superpowers，**clone 后启动 OpenCode 即可使用**，
 不依赖任何全局安装、`~/.config`、`~/.opencode` 或 Home 目录配置。
 没有在仓库外再找一套 Superpowers，也没有补写缺失的 skill。
 
-## Nexus v1.0.1 盘点（只记录仓库里真实存在的文件）
+## Nexus OpenSpec / Superpowers 盘点（只记录仓库里真实存在的文件）
 
 2026-10-13 在仓库根目录 `.opencode/` 核对（当时分支记录为 Nexus v1.0.1）。Phase 2 的实现在 `services/task-platform` 与 `web/nexus`，不在名为 `nexus/` 的目录。结果如下。
 

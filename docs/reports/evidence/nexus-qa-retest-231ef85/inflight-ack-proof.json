@@ -1,0 +1,10 @@
+{
+  "first_http": 500,
+  "second_http": 200,
+  "second_body": {
+    "ok": true
+  },
+  "inbox_attempts": 1,
+  "inbox_accepted": 0,
+  "test_scope": "isolated ASGI; injected global Request only to bypass independent route annotation defect"
+}

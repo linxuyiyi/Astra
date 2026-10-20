@@ -1,0 +1,4 @@
+{
+  "http": 422,
+  "body": "{\"detail\":[{\"type\":\"missing\",\"loc\":[\"query\",\"request\"],\"msg\":\"Field required\",\"input\":null},{\"type\":\"string_type\",\"loc\":[\"body\",\"event_id\"],\"msg\":\"Input should be a valid string\",\"input\":12345}]}"
+}

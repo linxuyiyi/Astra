@@ -1,0 +1,10 @@
+[STOP] frontend (PID=98735)
+[STOP] gateway (PID=98732)
+[STOP] library-mcp (PID=98729)
+[STOP] task-mcp (PID=98728)
+[STOP] runtime-agent (PID=98716)
+[STOP] runtime-control (PID=98714)
+[STOP] runtime-beat (PID=98712)
+[STOP] backend (PID=98707)
+[STOP] opencode-server (PID=98690)
+Astra stopped.

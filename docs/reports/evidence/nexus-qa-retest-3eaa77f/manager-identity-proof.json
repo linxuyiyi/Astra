@@ -1,0 +1,44 @@
+[
+  {
+    "name": "backend",
+    "pid": 95920,
+    "command0": "/Users/niuniu/程序/Astra/.venv/bin/python",
+    "actual_command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m uvicorn app.main:app --host 127.0.0.1 --port 8100 --reload",
+    "command_matches": false
+  },
+  {
+    "name": "runtime-beat",
+    "pid": 95924,
+    "command0": "/Users/niuniu/程序/Astra/.venv/bin/python",
+    "actual_command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m celery -A app.runtime.celery_app:celery beat --loglevel=INFO --schedule=/Users/niuniu/程序/Astra/.astra/run/celerybeat-schedule",
+    "command_matches": false
+  },
+  {
+    "name": "runtime-control",
+    "pid": 95925,
+    "command0": "/Users/niuniu/程序/Astra/.venv/bin/python",
+    "actual_command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m celery -A app.runtime.celery_app:celery worker --loglevel=INFO --pool=solo --queues=control --hostname=astra-control@%h",
+    "command_matches": false
+  },
+  {
+    "name": "runtime-agent",
+    "pid": 95928,
+    "command0": "/Users/niuniu/程序/Astra/.venv/bin/python",
+    "actual_command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m celery -A app.runtime.celery_app:celery worker --loglevel=INFO --pool=solo --queues=agent --hostname=astra-agent@%h",
+    "command_matches": false
+  },
+  {
+    "name": "task-mcp",
+    "pid": 95931,
+    "command0": "/Users/niuniu/程序/Astra/services/task-platform/.venv/bin/astra-task-mcp",
+    "actual_command": "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python /Users/niuniu/程序/Astra/services/task-platform/.venv/bin/astra-task-mcp",
+    "command_matches": true
+  },
+  {
+    "name": "frontend",
+    "pid": 95937,
+    "command0": "/opt/homebrew/lib/node_modules/npm/bin/npm-cli.js",
+    "actual_command": "npm run dev --host 127.0.0.1 --port 5174",
+    "command_matches": false
+  }
+]

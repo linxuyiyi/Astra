@@ -1,0 +1,6 @@
+{
+  "health_http": 500,
+  "wait_http_exit_code": 0,
+  "stdout": "",
+  "stderr": ""
+}

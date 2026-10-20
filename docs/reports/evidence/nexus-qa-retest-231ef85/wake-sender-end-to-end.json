@@ -1,0 +1,6 @@
+{
+  "delivered": 0,
+  "status": "failed",
+  "attempts": 1,
+  "last_error": "{\"detail\":[{\"type\":\"missing\",\"loc\":[\"query\",\"request\"],\"msg\":\"Field required\",\"input\":null},{\"type\":\"string_type\",\"loc\":[\"body\",\"event_id\"],\"msg\":\"Input should be a valid string\",\"input\":999876}]}"
+}

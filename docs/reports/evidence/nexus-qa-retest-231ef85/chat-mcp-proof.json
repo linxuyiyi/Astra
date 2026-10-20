@@ -1,0 +1,12 @@
+{
+  "accepted": {
+    "accepted": true,
+    "detail": "",
+    "session_id": "eb88707e187844b3b1f586a7897dc0c5"
+  },
+  "tools": [
+    "mcp__nexus-task__nexus_task_get",
+    "mcp__nexus-task__nexus_task_get"
+  ],
+  "reply": "查询结果（nexus_task_get 真实返回）：\n\n- 编号：**T-20261016-39F2BE**\n- 最新状态：**SUCCEEDED**\n\n未修改、未创建任何任务。"
+}

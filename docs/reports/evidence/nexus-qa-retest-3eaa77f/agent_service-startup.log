@@ -1,0 +1,1 @@
+agent service ready; log /tmp/nexus-agent-service.log

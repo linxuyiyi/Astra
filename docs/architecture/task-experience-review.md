@@ -1,6 +1,6 @@
 # 任务经验复盘（Experience Review）
 
-> 状态：已实现核心链路，默认关闭。开启：`NEXUS_EXPERIENCE_REVIEW_ENABLED=true`。
+> 状态：已实现核心链路，默认关闭。开启：`NEXUS_EXPERIENCE_REVIEW_ENABLED=true`；`NEXUS_EXPERIENCE_REVIEW_SHADOW_MODE=true` 时只分析不写入候选，正式启用需设为 `false`。
 
 ## 边界
 

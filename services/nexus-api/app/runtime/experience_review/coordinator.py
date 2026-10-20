@@ -146,6 +146,8 @@ async def _fail_or_retry(
     job.attempts += 1
     job.error_code = code
     job.error_message = message[:2000]
+    if job.phase in {WRITING, VALIDATING}:
+        job.phase = "REDUCE"
     job.lease_owner = None
     job.lease_token = None
     job.lease_until = None
@@ -335,6 +337,9 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
                             NO_FINDINGS,
                             zero_reason="no_evidence_backed_candidate" if candidates else "no_findings",
                         )
+                        return job
+                    if settings.experience_review_shadow_mode:
+                        await _finish(session, job, SUCCEEDED, zero_reason="shadow_mode")
                         return job
                     job.status = WRITING
                     job.phase = WRITING

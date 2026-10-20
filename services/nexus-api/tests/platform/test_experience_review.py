@@ -9,7 +9,15 @@ from sqlalchemy import func, select
 
 from app.config.settings import get_settings
 from app.database import SessionLocal
-from app.models import Event, ExperienceReviewJob, Task
+from app.models import (
+    AgentWorker,
+    Event,
+    ExperienceEvidence,
+    ExperienceReviewJob,
+    KnowledgeItem,
+    RuntimeSession,
+    Task,
+)
 from app.runtime.experience_review import coordinator
 from app.runtime.experience_review.evidence import EvidenceError, validate_candidate
 from app.runtime.experience_review.schemas import Candidate, TraceEvent, TraceResult
@@ -218,6 +226,7 @@ class FakeLLM:
 async def test_process_job_map_reduce_and_write(monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "experience_review_enabled", True)
+    monkeypatch.setattr(settings, "experience_review_shadow_mode", False)
     task_id, event_id = await _task_and_event()
     async with SessionLocal() as session:
         task = await session.get(Task, task_id)
@@ -256,3 +265,61 @@ async def test_process_job_map_reduce_and_write(monkeypatch):
         assert job.status == coordinator.SUCCEEDED
         assert job.candidate_ids == ["KNOW-1"]
     assert written == ["升级前先读规则"]
+
+
+@pytest.mark.asyncio
+async def test_candidate_writer_persists_validated_evidence():
+    from uuid import uuid4
+
+    from app.runtime.experience_review.candidate_writer import write_candidates
+
+    suffix = uuid4().hex[:8]
+    async with SessionLocal() as session:
+        employee = AgentWorker(id=f"E-{suffix}", name="reviewer", role="worker")
+        task = Task(id=f"T-{suffix}", title="review", task_type="ISSUE", employee_id=employee.id)
+        binding = RuntimeSession(
+            id=f"ses_{suffix}",
+            task_id=task.id,
+            employee_id=employee.id,
+            workspace="/tmp/workspace",
+            environment={},
+            status="SUCCEEDED",
+        )
+        job = ExperienceReviewJob(
+            id=f"xrj_{suffix}",
+            confirmation_event_id=int(uuid4().int % 1_000_000_000),
+            review_key="a" * 64,
+            task_id=task.id,
+            task_id_snapshot=task.id,
+            root_session_id=binding.id,
+            confirmed_at=datetime.now(UTC),
+            source_snapshot={"root_session_id": binding.id},
+            status="WRITING",
+            phase="WRITING",
+            next_retry_at=datetime.now(UTC),
+            prompt_version="1",
+            model_id="test",
+            candidate_ids=[],
+        )
+        session.add_all([employee, task, binding, job])
+        await session.commit()
+
+    trace = _trace()
+    candidate = _candidate(["trace-000001", "trace-000002"])
+    async with SessionLocal() as session:
+        job = await session.get(ExperienceReviewJob, f"xrj_{suffix}")
+        ids = await write_candidates(session, job=job, trace=trace, candidates=[candidate])
+        await session.commit()
+        assert ids
+        item = await session.get(KnowledgeItem, ids[0])
+        assert item is not None
+        assert item.status == "candidate"
+        assert item.origin == "system_review"
+        evidence = (
+            await session.scalars(
+                select(ExperienceEvidence).where(ExperienceEvidence.knowledge_id == item.id)
+            )
+        ).all()
+        assert evidence
+        assert all(row.validation_status == "validated" for row in evidence)
+        assert evidence[0].native_session_id == "ses_1"

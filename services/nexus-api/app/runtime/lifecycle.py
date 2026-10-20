@@ -39,7 +39,15 @@ from app.executors.usage import (
     parse_opencode_usage,
     parse_usage_breakdowns,
 )
-from app.models import AgentWorker, OpenCodeExecutionEnvironment, RuntimeSession, Task, TaskCategory
+from app.models import (
+    AgentWorker,
+    ExperienceReviewJob,
+    KnowledgeItem,
+    OpenCodeExecutionEnvironment,
+    RuntimeSession,
+    Task,
+    TaskCategory,
+)
 from app.runtime.environment import environment_snapshot
 from app.runtime.occupancy import clear_execution_stop, occupying_clause, sync_employee_occupancy
 from app.runtime.opencode_model import direct_model, gateway_model
@@ -781,6 +789,35 @@ class RuntimeService:
                     task.turn_started_at = now
                     task.confirmed_at = None
                     task.submitted_at = None
+                    await self.session.execute(
+                        update(ExperienceReviewJob)
+                        .where(
+                            ExperienceReviewJob.task_id_snapshot == task.id,
+                            ExperienceReviewJob.status.in_(
+                                ("PENDING", "COLLECTING", "ANALYZING", "VALIDATING", "WRITING", "RETRY_WAIT")
+                            ),
+                        )
+                        .values(
+                            status="SUPERSEDED",
+                            error_code="new_round",
+                            error_message="任务已开始新的执行轮次",
+                            finished_at=now,
+                            lease_owner=None,
+                            lease_token=None,
+                            lease_until=None,
+                        )
+                    )
+                    await self.session.execute(
+                        update(KnowledgeItem)
+                        .where(
+                            KnowledgeItem.source_task_id == task.id,
+                            KnowledgeItem.origin == "system_review",
+                            KnowledgeItem.status == "candidate",
+                        )
+                        .values(
+                            review_note="任务已开始新执行轮次，候选可能过期；审核时请确认是否仍适用。"
+                        )
+                    )
                     await TaskService(self.session).transition(task, TaskStatus.RUNNING, commit=False)
                 await self.session.commit()
             return await self.deliver_first_submission(task.id)

@@ -1,5 +1,11 @@
 <template>
-  <el-popover placement="bottom-end" :width="370" trigger="click" :disabled="count === 0 && !unhealthy.length">
+  <el-popover
+    v-model:visible="open"
+    placement="bottom-end"
+    :width="370"
+    trigger="click"
+    :disabled="count === 0 && !unhealthy.length"
+  >
     <template #reference>
       <button type="button" class="attention-trigger" :class="{ alert: count > 0 }">
         ◉ 待处理
@@ -14,7 +20,7 @@
       <div v-if="tasks.length" class="attention-block">
         <div v-for="item in tasks" :key="item.id" class="attention-item">
           <span class="status-pill" :class="pillClass(item.status)">{{ statusText(item.status) }}</span>
-          <button type="button" @click="emit('select-task', item)">
+          <button type="button" @click="selectTask(item)">
             <b>{{ item.title }}</b>
             <small>{{ item.ownerName || "未关联员工" }} · {{ item.waitingReason || item.failureReason || formatTime(item.updatedAt) }}</small>
           </button>
@@ -24,7 +30,7 @@
       <div v-if="unhealthy.length" class="attention-block">
         <div v-for="item in unhealthy" :key="item.id" class="attention-item">
           <span class="status-pill" :class="item.health === 'error' ? 'fail' : 'muted'">{{ healthText(item.health) }}</span>
-          <button type="button" @click="emit('select-worker', item.id)">
+          <button type="button" @click="selectWorker(item.id)">
             <b>{{ item.name }}</b>
             <small>{{ employeeName(item.digitalEmployeeId) }} · {{ item.taskCount }} 项关联任务</small>
           </button>
@@ -38,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { HEALTH_TEXT, STATUS_TEXT, formatTime } from "../layout";
 import type { NebulaSnapshot, NebulaTask } from "../types";
@@ -49,6 +55,7 @@ const emit = defineEmits<{
   "select-worker": [workerId: string];
 }>();
 
+const open = ref(false);
 const tasks = computed(() => props.snapshot?.attentionTasks ?? []);
 const count = computed(() => tasks.value.length);
 const unhealthy = computed(() =>
@@ -58,6 +65,16 @@ const unhealthy = computed(() =>
 function employeeName(id: string | null): string {
   if (!id) return "未关联员工";
   return props.snapshot?.employees.find((item) => item.id === id)?.name ?? id;
+}
+
+function selectTask(task: NebulaTask): void {
+  emit("select-task", task);
+  open.value = false;
+}
+
+function selectWorker(workerId: string): void {
+  emit("select-worker", workerId);
+  open.value = false;
 }
 
 function statusText(status: string): string {

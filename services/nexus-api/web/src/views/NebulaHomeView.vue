@@ -37,9 +37,12 @@
       />
 
       <div class="top-right">
+        <RouterLink class="workbench-link" to="/chat" title="返回常规工作台">
+          ☰ 工作台
+        </RouterLink>
         <AttentionEntry
           :snapshot="store.snapshot"
-          @select-task="selectTask"
+          @select-task="selectTaskFromAttention"
           @select-worker="selectWorker"
         />
         <button
@@ -49,16 +52,17 @@
           :disabled="reduceMotion"
           :title="reduceMotion ? '减少动效已开启' : '环绕当前视野缓慢巡航'"
           @click="cruise = !cruise"
-        >
-          {{ cruise ? "◼ 停止巡航" : "◉ 镜头巡航" }}
-        </button>
+        >{{ cruise ? "◼ 停止巡航" : "◉ 镜头巡航" }}</button>
         <button type="button" @click="showCollaborations = !showCollaborations">
           {{ showCollaborations ? "隐藏协作连线" : "显示协作连线" }}
         </button>
         <button type="button" @click="resetView">◉ 重置视角</button>
-        <button type="button" :aria-pressed="reduceMotion" :class="{ pressed: reduceMotion }" @click="toggleMotion">
-          {{ reduceMotion ? "◐ 已减少动效" : "◑ 减少动效" }}
-        </button>
+        <button
+          type="button"
+          :aria-pressed="reduceMotion"
+          :class="{ pressed: reduceMotion }"
+          @click="toggleMotion"
+        >{{ reduceMotion ? "◐ 已减少动效" : "◑ 减少动效" }}</button>
       </div>
 
       <div class="search">
@@ -71,6 +75,18 @@
           </option>
         </select>
       </div>
+
+      <NodeHint
+        v-if="hintKind"
+        :kind="hintKind"
+        :employee="selectedEmployee"
+        :worker="selectedWorker"
+        :task="selectedTask"
+        :collaboration="selectedCollaboration"
+        :execution="selectedExecution"
+        :employees="store.employees"
+        @close="clearSelection"
+      />
 
       <div v-if="!store.snapshot && store.loading" class="stage-state">
         <div class="state-orbit">✦</div>
@@ -93,7 +109,7 @@
       <div class="guide">
         <div class="guide-title">
           读法
-          <small>每个节点、连线和数量都来自 Nexus 正式数据；画布不承担调度，也不模拟执行。</small>
+          <small>点击员工、Worker、任务卫星、执行光路或协作线，查看提示并跳转既有业务页。</small>
         </div>
         <div class="legend">
           <span style="--c: #58ebbb">执行光路</span>
@@ -101,24 +117,12 @@
           <span style="--c: #ff946f">人工阻塞</span>
           <span style="--c: #7faccf">跨星系职责请求</span>
           <span style="--c: #fb6484">执行异常</span>
-          <span style="--c: #d8e8e1">Worker 健康另行展示</span>
         </div>
       </div>
       <div class="tip">
-        三维透视 · 拖动环视 · 滚轮远近 · Shift+拖动平移 · 点击节点查看业务事实
+        拖动环视 · 滚轮远近 · Shift+拖动平移 · 方向键旋转 · 0 重置视角
       </div>
     </div>
-
-    <GalaxyInspector
-      v-model:tab="tab"
-      :snapshot="store.snapshot"
-      :employee="selectedEmployee"
-      :worker="selectedWorker"
-      :task="selectedTask"
-      :collaboration="selectedCollaboration"
-      @select="onInspectorSelect"
-      @refresh="refreshAll"
-    />
   </section>
 </template>
 
@@ -128,11 +132,10 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 import NebulaCanvas from "../features/nebula/components/NebulaCanvas.vue";
 import NebulaSummary from "../features/nebula/components/NebulaSummary.vue";
 import AttentionEntry from "../features/nebula/components/AttentionEntry.vue";
-import GalaxyInspector, { type InspectorTab } from "../features/nebula/components/GalaxyInspector.vue";
-import { getNebulaTask } from "../features/nebula/api";
+import NodeHint, { type NodeHintKind } from "../features/nebula/components/NodeHint.vue";
 import { buildScene, collaborationKey, type NebulaScene } from "../features/nebula/layout";
 import { useNebulaStore } from "../features/nebula/stores/nebulaStore";
-import type { NebulaEmployee, NebulaTask } from "../features/nebula/types";
+import type { NebulaTask } from "../features/nebula/types";
 import type { NebulaSelection } from "../features/nebula/renderer";
 
 const STORAGE_KEY = "nexus_nebula_selection";
@@ -146,25 +149,27 @@ const canvasRef = ref<InstanceType<typeof NebulaCanvas> | null>(null);
 const selectedEmployeeId = ref<string | null>(null);
 const selectedWorkerId = ref<string | null>(null);
 const selectedTaskId = ref<string | null>(null);
-const selectedTask = ref<NebulaTask | null>(null);
 const selectedCollaborationKey = ref<string | null>(null);
-const tab = ref<InspectorTab>("overview");
+const selectedExecutionKey = ref<string | null>(null);
+
 const showCollaborations = ref(true);
 const cruise = ref(false);
 const reduceMotion = ref(false);
 let motionMedia: MediaQueryList | null = null;
 let motionTouched = false;
 let hydrated = false;
-let taskRequestGeneration = 0;
 
 const scene = computed<NebulaScene | null>(() =>
   store.snapshot ? buildScene(store.snapshot) : null,
 );
-const selectedEmployee = computed<NebulaEmployee | null>(() =>
+const selectedEmployee = computed(() =>
   selectedEmployeeId.value ? store.employeeById.get(selectedEmployeeId.value) ?? null : null,
 );
 const selectedWorker = computed(() =>
   selectedWorkerId.value ? store.workerById.get(selectedWorkerId.value) ?? null : null,
+);
+const selectedTask = computed<NebulaTask | null>(() =>
+  selectedTaskId.value ? taskFromSnapshot(selectedTaskId.value) : null,
 );
 const selectedCollaboration = computed(() => {
   const key = selectedCollaborationKey.value;
@@ -174,6 +179,20 @@ const selectedCollaboration = computed(() => {
       (edge) => collaborationKey(edge.fromEmployeeId, edge.toEmployeeId) === key,
     ) ?? null
   );
+});
+const selectedExecution = computed(() => {
+  const key = selectedExecutionKey.value;
+  if (!key) return null;
+  return scene.value?.executionEdges.find((edge) => edge.key === key) ?? null;
+});
+
+const hintKind = computed<NodeHintKind | null>(() => {
+  if (selectedExecution.value) return "execution";
+  if (selectedTask.value) return "task";
+  if (selectedWorker.value) return "worker";
+  if (selectedCollaboration.value) return "collaboration";
+  if (selectedEmployee.value) return "employee";
+  return null;
 });
 
 function taskFromSnapshot(id: string): NebulaTask | null {
@@ -187,65 +206,45 @@ function taskFromSnapshot(id: string): NebulaTask | null {
   );
 }
 
-async function ensureSelectedTask(): Promise<void> {
-  const id = selectedTaskId.value;
-  if (!id) {
-    selectedTask.value = null;
-    return;
-  }
-  const cached = taskFromSnapshot(id);
-  if (cached) {
-    selectedTask.value = cached;
-    return;
-  }
-  const generation = ++taskRequestGeneration;
-  try {
-    const response = await getNebulaTask(id);
-    if (generation !== taskRequestGeneration) return;
-    selectedTask.value = response.task;
-    if (response.task.ownerId) selectedEmployeeId.value = response.task.ownerId;
-  } catch {
-    if (generation === taskRequestGeneration) selectedTask.value = null;
-  }
+function clearSelection(): void {
+  selectedEmployeeId.value = null;
+  selectedWorkerId.value = null;
+  selectedTaskId.value = null;
+  selectedCollaborationKey.value = null;
+  selectedExecutionKey.value = null;
 }
 
 function selectEmployee(id: string): void {
-  const employee = store.employeeById.get(id);
-  if (!employee) return;
+  if (!store.employeeById.get(id)) return;
   const reselect = selectedEmployeeId.value === id;
   selectedEmployeeId.value = id;
   selectedWorkerId.value = null;
   selectedTaskId.value = null;
-  selectedTask.value = null;
   selectedCollaborationKey.value = null;
-  tab.value = "chat";
+  selectedExecutionKey.value = null;
   if (reselect) canvasRef.value?.focusSelected();
 }
 
 function selectWorker(id: string): void {
   const worker = store.workerById.get(id);
   if (!worker) return;
-  if (!worker.digitalEmployeeId) {
-    void router.push(`/settings/workers/${id}`);
-    return;
-  }
-  selectedEmployeeId.value = worker.digitalEmployeeId;
   selectedWorkerId.value = id;
+  if (worker.digitalEmployeeId) selectedEmployeeId.value = worker.digitalEmployeeId;
   selectedTaskId.value = null;
-  selectedTask.value = null;
   selectedCollaborationKey.value = null;
-  tab.value = "tasks";
+  selectedExecutionKey.value = null;
 }
 
 function selectTask(task: NebulaTask): void {
   selectedTaskId.value = task.id;
-  selectedTask.value = task;
   if (task.ownerId) selectedEmployeeId.value = task.ownerId;
   selectedWorkerId.value = null;
   selectedCollaborationKey.value = null;
-  tab.value = "tasks";
-  const cached = taskFromSnapshot(task.id);
-  if (!cached) void ensureSelectedTask();
+  selectedExecutionKey.value = null;
+}
+
+function selectTaskFromAttention(task: NebulaTask): void {
+  selectTask(task);
 }
 
 function selectCollaboration(key: string): void {
@@ -257,17 +256,17 @@ function selectCollaboration(key: string): void {
   selectedEmployeeId.value = edge.fromEmployeeId;
   selectedWorkerId.value = null;
   selectedTaskId.value = null;
-  selectedTask.value = null;
-  tab.value = "overview";
+  selectedExecutionKey.value = null;
 }
 
-function clearSelection(): void {
-  selectedEmployeeId.value = null;
-  selectedWorkerId.value = null;
+function selectExecution(key: string): void {
+  const edge = scene.value?.executionEdges.find((item) => item.key === key);
+  if (!edge) return;
+  selectedExecutionKey.value = key;
+  selectedEmployeeId.value = edge.employeeId;
+  selectedWorkerId.value = edge.workerId;
   selectedTaskId.value = null;
-  selectedTask.value = null;
   selectedCollaborationKey.value = null;
-  tab.value = "overview";
 }
 
 function onCanvasSelect(selection: NebulaSelection): void {
@@ -280,35 +279,8 @@ function onCanvasSelect(selection: NebulaSelection): void {
   else if (selection.kind === "task") {
     const task = taskFromSnapshot(selection.id);
     if (task) selectTask(task);
-    else {
-      selectedTaskId.value = selection.id;
-      void ensureSelectedTask();
-      tab.value = "tasks";
-    }
-  } else if (selection.kind === "execution") {
-    const edge = scene.value?.executionEdges.find((item) => item.key === selection.id);
-    if (edge) selectWorker(edge.workerId);
-  } else if (selection.kind === "collaboration") {
-    selectCollaboration(selection.id);
-  }
-}
-
-function onInspectorSelect(payload: {
-  kind: "employee" | "worker" | "task" | "collaboration";
-  id: string;
-  task?: NebulaTask;
-  employeeId?: string;
-}): void {
-  if (payload.kind === "employee") selectEmployee(payload.id);
-  else if (payload.kind === "worker") selectWorker(payload.id);
-  else if (payload.kind === "collaboration") selectCollaboration(payload.id);
-  else if (payload.task) selectTask(payload.task);
-  else {
-    selectedTaskId.value = payload.id;
-    if (payload.employeeId) selectedEmployeeId.value = payload.employeeId;
-    tab.value = "tasks";
-    void ensureSelectedTask();
-  }
+  } else if (selection.kind === "execution") selectExecution(selection.id);
+  else if (selection.kind === "collaboration") selectCollaboration(selection.id);
 }
 
 function onFocusSelect(event: Event): void {
@@ -330,7 +302,6 @@ function toggleMotion(): void {
 
 async function refreshAll(): Promise<void> {
   await store.refresh();
-  if (selectedTaskId.value) await ensureSelectedTask();
 }
 
 function readStoredSelection(): Record<string, string> {
@@ -347,21 +318,15 @@ function readStoredSelection(): Record<string, string> {
 function restoreSelection(): void {
   const query = route.query;
   const stored = readStoredSelection();
-  const employee = typeof query.employee === "string" ? query.employee : stored.employee ?? "";
-  const worker = typeof query.worker === "string" ? query.worker : stored.worker ?? "";
-  const task = typeof query.task === "string" ? query.task : stored.task ?? "";
-  const collaboration = typeof query.collab === "string" ? query.collab : stored.collab ?? "";
-  const storedTab = typeof query.tab === "string" ? query.tab : stored.tab ?? "";
-  selectedEmployeeId.value = employee || null;
-  selectedWorkerId.value = worker || null;
-  selectedTaskId.value = task || null;
-  selectedCollaborationKey.value = collaboration || null;
-  tab.value = ["chat", "tasks", "overview", "attention"].includes(storedTab)
-    ? (storedTab as InspectorTab)
-    : employee
-      ? "chat"
-      : "overview";
-  if (selectedTaskId.value) void ensureSelectedTask();
+  selectedEmployeeId.value =
+    (typeof query.employee === "string" ? query.employee : stored.employee) || null;
+  selectedWorkerId.value =
+    (typeof query.worker === "string" ? query.worker : stored.worker) || null;
+  selectedTaskId.value =
+    (typeof query.task === "string" ? query.task : stored.task) || null;
+  selectedCollaborationKey.value =
+    (typeof query.collab === "string" ? query.collab : stored.collab) || null;
+  selectedExecutionKey.value = null;
 }
 
 function syncRoute(): void {
@@ -370,7 +335,6 @@ function syncRoute(): void {
   if (selectedWorkerId.value) query.worker = selectedWorkerId.value;
   if (selectedTaskId.value) query.task = selectedTaskId.value;
   if (selectedCollaborationKey.value) query.collab = selectedCollaborationKey.value;
-  if (tab.value !== "overview" || selectedEmployeeId.value) query.tab = tab.value;
   const current = route.query;
   const same =
     Object.keys(query).length === Object.keys(current).length &&
@@ -380,7 +344,7 @@ function syncRoute(): void {
 }
 
 watch(
-  [selectedEmployeeId, selectedWorkerId, selectedTaskId, selectedCollaborationKey, tab],
+  [selectedEmployeeId, selectedWorkerId, selectedTaskId, selectedCollaborationKey],
   () => {
     localStorage.setItem(
       STORAGE_KEY,
@@ -389,7 +353,6 @@ watch(
         worker: selectedWorkerId.value ?? "",
         task: selectedTaskId.value ?? "",
         collab: selectedCollaborationKey.value ?? "",
-        tab: tab.value,
       }),
     );
     if (hydrated) syncRoute();
@@ -405,27 +368,20 @@ watch(
       selectedWorkerId.value = null;
       selectedTaskId.value = null;
     }
-    if (selectedWorkerId.value) {
-      const worker = snapshot.workers.find((item) => item.id === selectedWorkerId.value);
-      if (!worker) selectedWorkerId.value = null;
-      else if (!selectedEmployeeId.value && worker.digitalEmployeeId) {
-        selectedEmployeeId.value = worker.digitalEmployeeId;
-      }
+    if (selectedWorkerId.value && !snapshot.workers.some((item) => item.id === selectedWorkerId.value)) {
+      selectedWorkerId.value = null;
+    }
+    if (selectedTaskId.value && !taskFromSnapshot(selectedTaskId.value)) {
+      selectedTaskId.value = null;
     }
     if (selectedCollaborationKey.value) {
       const stillThere = snapshot.collaborationEdges.some(
-        (edge) => collaborationKey(edge.fromEmployeeId, edge.toEmployeeId) === selectedCollaborationKey.value,
+        (edge) =>
+          collaborationKey(edge.fromEmployeeId, edge.toEmployeeId) === selectedCollaborationKey.value,
       );
       if (!stillThere) selectedCollaborationKey.value = null;
     }
-    if (selectedTaskId.value) {
-      const found = taskFromSnapshot(selectedTaskId.value);
-      if (found) selectedTask.value = found;
-    }
-    if (!hydrated) {
-      hydrated = true;
-      if (selectedTaskId.value) void ensureSelectedTask();
-    }
+    if (!hydrated) hydrated = true;
   },
   { immediate: true },
 );
@@ -457,25 +413,21 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .nebula-home {
-  display: flex;
-  flex: 1 1 auto;
+  position: relative;
+  width: 100%;
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  border-radius: 16px;
-  border: 1px solid #0c3b33;
-  background: #031a1a;
-  box-shadow: 0 20px 50px rgba(3, 30, 25, .18);
+  background: #010e16;
 }
 .nebula-stage {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
   background: radial-gradient(ellipse at 49% 43%, #0b3c34 0%, #052923 46%, #031a1a 90%);
   font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
-.visual-top { position: absolute; top: 22px; left: 26px; pointer-events: none; z-index: 3; max-width: calc(100% - 520px); }
+.visual-top { position: absolute; top: 22px; left: 26px; pointer-events: none; z-index: 3; max-width: calc(100% - 600px); }
 .eyebrow { font-size: 9px; font-weight: 750; letter-spacing: 2.4px; color: #67cba8; }
 .live-indicator {
   display: inline-block; margin-left: 10px; border-radius: 12px; background: #0b543c;
@@ -487,15 +439,20 @@ onBeforeUnmount(() => {
 .live-indicator[data-state="connecting"] { color: #9dbab0; border-color: #3d6459; background: #123b33; }
 .visual-top h1 { margin: 7px 0 6px; font-size: 23px; font-weight: 740; letter-spacing: .2px; color: #e6fff2; text-shadow: 0 0 14px #0e574760; }
 .visual-top p { margin: 0; font-size: 11px; color: #85afa1; }
-.top-right { position: absolute; right: 22px; top: 22px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; z-index: 4; max-width: calc(100% - 40px); }
-.top-right button {
-  background: #103f38df; color: #b7e2d3; border: 1px solid #366a5d; border-radius: 9px;
-  padding: 7px 10px; font-size: 10px; cursor: pointer; white-space: nowrap;
+.top-right {
+  position: absolute; right: 22px; top: 20px; display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap; justify-content: flex-end; z-index: 8; max-width: calc(100% - 40px);
 }
-.top-right button:hover { background: #155246; }
+.top-right button, .workbench-link {
+  background: #103f38df; color: #b7e2d3; border: 1px solid #366a5d; border-radius: 9px;
+  padding: 7px 10px; font-size: 10px; cursor: pointer; white-space: nowrap; text-decoration: none;
+}
+.top-right button:hover, .workbench-link:hover { background: #155246; }
 .top-right button.pressed { background: #128e6f; color: #e2fff4; border-color: #5de6bb; box-shadow: 0 0 18px #2fc39455; }
+.top-right button:disabled { opacity: .5; cursor: not-allowed; }
+.workbench-link { background: #0d483c; color: #d5f4e9; border-color: #347b67; }
 .search {
-  position: absolute; right: 22px; top: 66px; z-index: 4; display: flex; align-items: center; gap: 6px;
+  position: absolute; right: 22px; top: 64px; z-index: 4; display: flex; align-items: center; gap: 6px;
   background: #0a4036c9; border: 1px solid #316a58; border-radius: 9px; padding: 6px 9px;
   color: #7fd0b3; font-size: 11px; backdrop-filter: blur(10px);
 }
@@ -514,10 +471,10 @@ onBeforeUnmount(() => {
   content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
   background: var(--c); margin-right: 5px; vertical-align: 1px;
 }
-.tip { position: absolute; right: 22px; bottom: 18px; color: #88bba8; font-size: 9px; text-align: right; pointer-events: none; z-index: 3; max-width: 330px; line-height: 1.6; }
+.tip { position: absolute; right: 22px; bottom: 18px; color: #88bba8; font-size: 9px; text-align: right; pointer-events: none; z-index: 3; max-width: 360px; line-height: 1.6; }
 .stage-state {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  z-index: 5; text-align: center; color: #b7e2d3; font-size: 12px; line-height: 1.8;
+  z-index: 15; text-align: center; color: #b7e2d3; font-size: 12px; line-height: 1.8;
   background: #052920d9; border: 1px solid #ffffff21; border-radius: 14px;
   padding: 22px 26px; max-width: 420px; backdrop-filter: blur(12px);
 }
@@ -527,28 +484,25 @@ onBeforeUnmount(() => {
 .state-link { display: inline-flex; margin-top: 10px; color: #8fffd5; font-size: 11px; }
 .stage-notice {
   position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
-  z-index: 6; background: #4a3512e8; border: 1px solid #a27a37; color: #ffe0b8;
+  z-index: 16; background: #4a3512e8; border: 1px solid #a27a37; color: #ffe0b8;
   border-radius: 9px; padding: 7px 11px; font-size: 10px; display: flex; gap: 8px; align-items: center;
   max-width: min(620px, calc(100% - 40px)); line-height: 1.5;
 }
 .stage-notice button { border: 0; background: #79531d; color: #fff0d2; border-radius: 5px; font-size: 9px; padding: 3px 7px; cursor: pointer; }
 @media (max-width: 1500px) {
-  .visual-top { max-width: calc(100% - 520px); }
+  .visual-top { max-width: calc(100% - 560px); }
   .visual-top h1 { font-size: 20px; }
   .guide { max-width: calc(100% - 390px); }
 }
 @media (max-width: 1180px) {
   .visual-top { display: none; }
-  .top-right { max-width: 430px; }
+  .top-right { max-width: 620px; }
   .guide { max-width: calc(100% - 360px); }
   .tip { display: none; }
 }
 @media (max-width: 900px) {
-  .nebula-home { flex-direction: column; height: 100%; overflow: auto; }
-  .nebula-stage { flex: 1 1 54vh; min-height: 46vh; }
+  .nebula-home { position: fixed; inset: 0; }
   .top-right { right: 12px; top: 12px; max-width: calc(100% - 24px); }
-  .visual-top { left: 14px; top: 14px; max-width: calc(100% - 180px); }
-  .visual-top h1 { font-size: 16px; }
   .search { right: 12px; top: 58px; }
   .guide { left: 12px; bottom: 12px; max-width: calc(100% - 24px); }
   .guide-title small { display: none; }

@@ -89,7 +89,7 @@ type NebulaSnapshot = {
 web/src/views/NebulaHomeView.vue                 首页容器、选中/路由恢复、交互
 web/src/features/nebula/
   types.ts                                       DTO 契约
-  api.ts                                         只读投影 API + 任务完成确认
+  api.ts                                         首页只读投影 API
   layout.ts                                      稳定星系布局、轨道、光路与协作曲线
   camera.ts                                      透视投影、聚焦、旋转/缩放/平移/巡航
   renderer.ts                                    Canvas 2D 渲染与命中检测
@@ -97,13 +97,13 @@ web/src/features/nebula/
   components/NebulaCanvas.vue                    画布与键鼠交互
   components/NebulaSummary.vue                   全局指标与连接状态
   components/AttentionEntry.vue                  待人工/失败/异常 Worker 入口
-  components/GalaxyInspector.vue                 员工/Worker/任务/协作面板
-  components/EmployeeConversation.vue            复用 `/nexus-chat/index.html` 聊天岛
+  components/NodeHint.vue                        点击节点后的轻量提示与业务页跳转
 ```
 
-- 对话复用现有私聊会话创建接口和聊天岛，不复制消息、SSE、附件或权限逻辑。
-- 首页不提供“添加任务/分配 Worker/完成任务/发起协作”等模拟按钮。唯一写操作是任务详情中的“按服务端结果确认完成”，且只在 `WAITING + sessionStatus=SUCCEEDED + 无 pendingMessageId` 时出现，调用既有 `POST /api/tasks/{id}/confirm`。
-- 画布只消费标准化场景；所有选中状态写入路由 query，从任务中心返回时恢复员工/Worker/任务与面板。
+- 首页不内嵌对话或业务面板。点击员工、Worker、任务卫星、执行光路、协作线后显示轻量 `NodeHint`；提示中的链接跳转到既有聊天页、任务中心、Worker 详情和员工配置。
+- 首页不提供“添加任务/分配 Worker/完成任务/发起协作”等模拟按钮，也不在首页写任务状态。所有业务动作都跳转既有页面完成。
+- 画布只消费标准化场景；选中状态写入路由 query，直接打开或从其他页面返回时可恢复选中对象。
+- 全屏首页不渲染站点顶部导航；右上角仅保留“工作台”入口和画布控制。
 - `prefers-reduced-motion` 或页面“减少动效”开启时停止巡航、粒子和流动光点；后台标签页暂停渲染循环。
 - 视觉资源全部本地打包，无运行时公网 CDN。
 

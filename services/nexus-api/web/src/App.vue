@@ -1,6 +1,6 @@
 <template>
   <div class="app" :class="{ 'app--nebula': route.path === '/' }">
-    <header class="top">
+    <header v-if="route.path !== '/'" class="top">
       <div class="brand">
         <div class="mark">✦</div>
         <div class="brandname">NEXUS <span class="version">v1.4.8</span></div>
@@ -100,9 +100,17 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.app--nebula { padding: 12px 16px 14px; }
+.app--nebula {
+  padding: 0;
+  gap: 0;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #010e16;
+}
 .app--nebula .top,
 .app--nebula .page { max-width: none; }
+.app--nebula .page { height: 100dvh; overflow: hidden; }
 
 .top-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .top-nav a {
@@ -119,5 +127,6 @@ onBeforeUnmount(() => {
 @media (max-width: 900px) {
   .env-text { max-width: 120px; }
   .top-nav a { padding: 6px 9px; }
+  .app--nebula { height: 100dvh; min-height: 100dvh; overflow: hidden; }
 }
 </style>

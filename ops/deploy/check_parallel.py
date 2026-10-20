@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
-TASK_PLATFORM = ROOT / "services" / "task-platform"
+TASK_PLATFORM = ROOT / "services" / "nexus-api"
 
 # Values v0.9 binds, taken from the defaults this branch moved away from.
 V09_DATABASE_NAME = "astra"
@@ -72,7 +72,7 @@ def collect() -> list[tuple[bool, str, str]]:
     from app.executors.opencode_local_server import SERVE_LOCK_DIR
     from app.gateway.runtime import LEASE_KEY, REVOKED_KEYS_KEY
     from app.runtime.celery_app import celery
-    from app.runtime.remote_provisioning import AGENT_VENV, WORKER_INSTALL_DIR, WORKER_SECRET_DIR
+    from app.runtime.remote_provisioning import WORKER_SECRET_DIR, agent_venv, worker_install_dir
     from app.worker_gateway.bus import RedisRouteBus
 
     settings = Settings(_env_file=None)
@@ -145,13 +145,13 @@ def collect() -> list[tuple[bool, str, str]]:
 
     path_hit = V09_OPT in provisioning or V09_ETC in provisioning
     add(
-        AGENT_VENV.startswith("/opt/nexus/")
-        and WORKER_INSTALL_DIR.startswith("/opt/nexus/")
+        agent_venv(1).startswith("/opt/nexus/")
+        and worker_install_dir(1).startswith("/opt/nexus/")
         and WORKER_SECRET_DIR == "/etc/nexus"
         and "NEXUS_ROOT:=/opt/nexus" in install
         and not path_hit,
         "opt and etc paths",
-        f"{AGENT_VENV}, {WORKER_SECRET_DIR}",
+        f"{agent_venv(1)}, {WORKER_SECRET_DIR}",
     )
 
     nexus_ports = {

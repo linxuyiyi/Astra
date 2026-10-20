@@ -12,7 +12,7 @@ context: |
   本分支的产品是 Nexus v1.4.7：Vue 3 + Element Plus 前端、Python HTTP API、AgentScope 2.0.10 Agent Service。
   Agent、Session、Skill、Knowledge 与对话记忆只存在于 AgentScope；Nexus 不平行实现，也不提供模型配置界面。
   一位数字员工是一个独立 Agent。对话绑定 Session。对等同事联系使用自定义工具 contact_employee（inbox + wakeup + MessageBus），不使用 Agent Team（Leader→Worker），也不脚本化多 Agent 回复。
-  新代码放在 services/task-platform（Task、Run、Employee、Runtime）和 web/nexus。历史产品文档在 docs/archive，不作为当前实现位置。
+  新代码放在 services/nexus-api：nexus_api/（对话、员工目录）、app/（Task、Run、Employee、Runtime、网关控制面、图书馆）、web/（前端）与 chat-island/（聊天岛）。历史产品文档在 docs/archive，不作为当前实现位置。
   openspec/specs/ 中现存 capability 是 Astra 历史契约。Nexus change 只新增自己的 capability，不修改这些历史 spec。
   保留现有 OpenSpec 工作流与 Superpowers 集成；Superpowers 只使用仓库内已存在的 skill，不虚构缺失项。
   本项目只对行为契约、跨模块架构、数据模型与权限变更使用 OpenSpec；小修复直接走代码及针对性验证。

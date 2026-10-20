@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Opt-in: exercise Astra HTTP, MCP stdio and the configured live llm_wiki.
 
-Run with services/task-platform/.venv/bin/python tools/e2e/e2e_library.py. Uses an isolated Astra
+Run with services/nexus-api/.venv/bin/python tools/e2e/e2e_library.py. Uses an isolated Astra
 DB, writes one uniquely named source to the configured project, and archives it
 on exit. It never stops llm_wiki or modifies its configuration/source code.
 """

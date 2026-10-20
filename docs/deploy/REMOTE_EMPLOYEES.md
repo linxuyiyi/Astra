@@ -6,7 +6,7 @@
 
 平台的 API 中转必须启用并至少有一个启用的模型路由。员工模型留空时部署选择首个路由，也可填写 `nexus-gateway/<路由模型>`。部署为员工创建专属 Key，重复部署复用有效 Key；失败时吊销本次新建 Key，修复后可再次部署。
 
-数字图书馆须运行 HTTP MCP。`ops/env/.env` 设置 `NEXUS_MCP_TRANSPORT=streamable-http`、`NEXUS_MCP_API_KEY=<服务密钥>`，重启平台并运行 `python -m app.mcp_server`（在 `services/task-platform` 内，使用项目虚拟环境）。平台和图书馆服务须加载同一份配置。服务管理命令见 [部署指南](../../ops/deploy/DEPLOYMENT_GUIDE.md)。
+数字图书馆须运行 HTTP MCP。`ops/env/.env` 设置 `NEXUS_MCP_TRANSPORT=streamable-http`、`NEXUS_MCP_API_KEY=<服务密钥>`，重启平台并运行 `python -m app.mcp_server`（在 `services/nexus-api` 内，使用项目虚拟环境）。平台和图书馆服务须加载同一份配置。服务管理命令见 [部署指南](../../ops/deploy/DEPLOYMENT_GUIDE.md)。
 
 远端 OpenCode 只听 `127.0.0.1` 上的环境端口，默认 14096。Worker 直连内网的 API 中转和图书馆，部署拒绝回环地址。SSH 只用于安装和 Worker 离线时的维护。
 

@@ -16,12 +16,12 @@ Element Plus 也不变——聊天岛在独立 iframe 文档里跑，Tailwind �
 变化，旧文档销毁即取消订阅，切回后历史完整；1440×900 与 1920×1080 下仍是三栏
 （`shell-1920-20261020.png`）。
 
-真实模型的一轮对话还没验：本机没有启用的模型路由，网关（18100）未运行，员工建不出来。
+真实模型的一轮对话还没验：本机没有启用的模型路由，网关（18110）未运行，员工建不出来。
 
 ## 目录
 
 ```
-web/nexus-chat/                 React 子应用（独立 npm 包）
+services/nexus-api/chat-island/ React 子应用（独立 npm 包）
   UPSTREAM.json                 vendored 版本、commit、被替换的模块
   UPSTREAM.sha256               逐文件哈希，用来检测与上游的漂移
   CHANGES.md                    与上游的差异
@@ -41,13 +41,13 @@ Vite alias + tsconfig paths 替换模块，`useMessages.ts`、`ChatContent.tsx`�
 ## 构建
 
 ```bash
-cd web/nexus-chat && npm install && npm run build   # 产出 web/nexus/public/nexus-chat/
-cd web/nexus && npm run type-check && npm run build
+cd services/nexus-api/chat-island && npm install && npm run build   # 产出 services/nexus-api/web/public/nexus-chat/
+cd services/nexus-api/web && npm run type-check && npm run build
 ```
 
-产物（315 个文件、12 MB）**不入库**：`web/nexus/public/nexus-chat/` 在 `.gitignore` 里，
-由 `ops/deploy/install_nexus.sh` 在 `web/nexus` 之前构建（聊天岛产物必须先进 public，
-Vite 才会把它拷进 dist）。本地 `npm run dev` 前要先跑一次 `web/nexus-chat` 的 build。
+产物（315 个文件、12 MB）**不入库**：`services/nexus-api/web/public/nexus-chat/` 在 `.gitignore` 里，
+由 `ops/deploy/install_nexus.sh` 在 `services/nexus-api/web` 之前构建（聊天岛产物必须先进 public，
+Vite 才会把它拷进 dist）。本地 `npm run dev` 前要先跑一次 `services/nexus-api/chat-island` 的 build。
 
 聊天岛的改版必须走上面的构建，不要手改 `assets/*` 的哈希文件。
 
@@ -60,7 +60,7 @@ Vue 聊天页 ──iframe──> /nexus-chat/index.html?conversation=<id>
 
 - 只接受 conversation id，agent / session 由后端数据推导；URL 里不能直接指定 AgentScope
   的 agent/session，避免改参数读别人的会话。
-- 鉴权口径与 `web/nexus/src/api.ts` 一致：SSO 由 nginx 注入 `X-Remote-User`；没有 SSO 时
+- 鉴权口径与 `services/nexus-api/web/src/api.ts` 一致：SSO 由 nginx 注入 `X-Remote-User`；没有 SSO 时
   回退到 localStorage 的 `nexus_owner_id`（`X-Owner-Id`）。
 - 不使用设置页 iframe 那套 `server_url=/agentscope-api/` + `username=nexus` 的浏览器自称身份。
 
@@ -75,14 +75,14 @@ Vue 聊天页 ──iframe──> /nexus-chat/index.html?conversation=<id>
 
 ## 主题
 
-`src/nexus/theme.css` 直接 `@import` 了 `web/nexus/src/styles/tokens.css`，再把它映射到
+`src/nexus/theme.css` 直接 `@import` 了 `services/nexus-api/web/src/styles/tokens.css`，再把它映射到
 shadcn 的语义变量（`--primary`、`--border`、`--muted`…），所以薄荷绿只有一份定义。
 iframe 是独立文档，父级 CSS 不会进来，必须走这个桥接。
 
 ## 预览
 
 ```bash
-cd web/nexus && npm run dev
+cd services/nexus-api/web && npm run dev
 # 打开 http://localhost:15174/chat?employee=<员工 id>
 # 群组：http://localhost:15174/chat?group=<群组 id>
 ```
@@ -94,8 +94,8 @@ cd web/nexus && npm run dev
 
 已验证：
 
-- `web/nexus-chat`：`tsc --noEmit` 通过，`vite build` 通过（主包 1.9 MB / gzip 568 KB）。
-- `web/nexus`：`npm run type-check`、`npm run build` 通过，`dist/nexus-chat/` 有产物。
+- `services/nexus-api/chat-island`：`tsc --noEmit` 通过，`vite build` 通过（主包 1.9 MB / gzip 568 KB）。
+- `services/nexus-api/web`：`npm run type-check`、`npm run build` 通过，`dist/nexus-chat/` 有产物。
 - `npm test`：17 个既有测试通过。
 - 无头 Chrome（1280×860）加载构建产物，用 mock 的 `/api/v1/conversations/{id}` 渲染一段
   含 Markdown、代码块、工具调用的历史：用户气泡右对齐、助手消息左对齐、代码高亮、
@@ -140,8 +140,8 @@ OLLAMA_MODELS=/tmp/ollama-models ollama pull qwen2.5:3b
 
 # 2. 网关数据面（18110）与 Task API（18100）
 . ops/env/.env
-(cd services/task-platform && .venv/bin/uvicorn app.main:app --port 18100 &)
-(cd services/task-platform && .venv/bin/uvicorn app.gateway.server:app --port 18110 &)
+(cd services/nexus-api && .venv/bin/uvicorn nexus_api.service:app --port 18120 &)
+(cd services/nexus-api && .venv/bin/uvicorn app.gateway.server:app --port 18110 &)
 
 # 3. 建池 / 节点 / 路由（base_url 不带 /v1，网关自己追加 /v1/chat/completions）
 curl -X POST localhost:18100/api/gateway/pools -d '{"name":"本地 Ollama"}'

@@ -16,7 +16,7 @@ export OPENAI_MODEL="${OPENAI_MODEL:-deepseek-flash}"
 if [ -z "${OPENAI_API_KEY:-}" ] && [ -n "${DEEPSEEK_API_KEY:-}" ]; then
   export OPENAI_API_KEY="$DEEPSEEK_API_KEY"
 fi
-PY="$ROOT/services/task-platform/.venv/bin/python"
+PY="$ROOT/services/nexus-api/.venv/bin/python"
 case "$ACTION" in
   start|stop|status)
     exec "$PY" "$ROOT/ops/dev/service_ctl.py" nexus-api "$ACTION"

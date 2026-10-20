@@ -1,7 +1,7 @@
 # Nexus v1.4.7 完整部署指南
 
 > 依据 2026-10-14 ~ 10-20 在部署机（box，Debian 13 x86_64）与 `LLM_WIKI_HOST` 指向的远程主机（CentOS 7.3 x86_64）上的实际部署整理，并按 v1.4.7 的默认端口、迁移 head 与能力更新。
-> 代码：<https://github.com/linxuyiyi/Astra>，分支 `codex/nexus-v1.4.7`（迁移到 `0051_rename_workers_table`）。
+> 代码：<https://github.com/linxuyiyi/Astra>，分支 `codex/nexus-v1.4.7`（迁移到 `0052_t_nexus_table_prefix`）。
 > 一键脚本：`ops/deploy/install_nexus.sh`（配置模板 `ops/env/.env.example`）。本文每一步都可以手工执行，脚本只是把它们串起来。
 
 ---
@@ -12,12 +12,10 @@
 |---|---|---|---|
 | Redis | 6379 | redis-server 或 `services/agent-service/docker-compose.yml` | AgentScope 存储与消息总线、Nexus Celery/网关吊销表 |
 | Agent Service（AgentScope 2.0.10） | 18000 | `services/agent-service/agent_service.py` | 员工会话、私聊/邮箱/团队讨论、知识库。默认绑定 `0.0.0.0`，对外部署建议改 `127.0.0.1` 或加反代 |
-| Nexus Task API（task-platform） | 18100 | `ops/dev/astra_service.py dev start`（uvicorn） | 任务、Worker、网关控制面、数字图书馆 API。默认绑定 `0.0.0.0` |
 | Nexus API Gateway（API 中转数据面） | 18110 | 同上（`app.gateway.server`） | OpenAI 兼容 `/v1`，远程 Worker 直连内网地址 |
-| Nexus API | 18120 | `uvicorn nexus_api.main:app` | Nexus 前端的 `/api/v1` |
+| Nexus API（统一服务） | 18120 | `uvicorn nexus_api.service:app` | 员工对话 `/api/v1`、任务 `/api`、Worker Gateway WebSocket、前端静态资源。唯一对外 HTTP 服务 |
 | Library MCP | 18201 | 同 astra_service（`nexus-library-mcp`，streamable-http） | 员工/OpenCode 查询数字图书馆 |
 | Task MCP | 18202 | 同 astra_service（`astra-task-mcp`） | 员工会话里的 `nexus_task_*` 工具 |
-| Nexus Web | 15174 | 同 astra_service（开发起 Vite，生产提供已构建页面） | 唯一前端。代理 `/api/v1→18120`、`/api→18100`、`/v1→18110`。默认绑定 `0.0.0.0` |
 | 平台 OpenCode / 助手 OpenCode | 14096 / 14097 | astra_service 拉起 `opencode serve` | 只监听 127.0.0.1。平台 Serve 使用 14096，本地 Worker 不要占用它 |
 | 本地 Worker OpenCode | 自定（如 14196） | Nexus runtime 拉起 | 每个 Worker 一个端口 |
 | llm_wiki Web 版（远端） | 18080（网关）/ 19829（内部） | Docker 容器 `llm-wiki-web` | 只绑 127.0.0.1 |
@@ -107,7 +105,7 @@
 | ASTRA_LLM_WIKI_TIMEOUT | 否 | 10 | 远端仿真时建议 30 |
 | NEXUS_REMOTE_OPENCODE_VERSION / NEXUS_REMOTE_NODE_VERSION / NEXUS_REMOTE_NPM_REGISTRY | 否 | 1.18.35 / 22.23.3 / npmmirror | 远程一键部署 |
 | ASTRA_DATABASE_* | 生产 | dev 用 SQLite | 生产把 `ASTRA_DATABASE_URL` 指到 MySQL |
-| ASTRA_SERVICE_BACKEND_PORT / _GATEWAY_PORT / _FRONTEND_PORT | 否 | 18100 / 18110 / 15174 | astra_service 端口 |
+| NEXUS_API_PORT / ASTRA_SERVICE_GATEWAY_PORT | 否 | 18120 / 18110 | 统一 API 与网关数据面端口 |
 
 **Agent Service（`ops/env/.env.example`）**
 
@@ -152,7 +150,7 @@ cp /opt/nexus/ops/env/.env.example /opt/nexus/ops/env/.env && chmod 600 /opt/nex
 
 ## 4. （手工）部署顺序总览
 
-1. Redis → 2. task-platform venv + alembic → 3. `astra_service.py`（Task API、Celery、OpenCode、Task MCP、管理台）→ 4. Agent Service + 聊天模型登记 → 5. Nexus API → 6. 网关路由 deepseek-flash → 7. llm_wiki 部署与项目创建 → 8. 远程 Worker 部署。Task MCP 和管理台不单独启动。
+1. Redis → 2. nexus-api venv + alembic → 3. `astra_service.py`（Celery、Gateway、OpenCode、Task MCP、Library MCP）→ 4. Agent Service + 聊天模型登记 → 5. Nexus API（统一服务，含前端）→ 6. 网关路由 deepseek-flash → 7. llm_wiki 部署与项目创建 → 8. 远程 Worker 部署。Task MCP 和 Gateway 不单独作为对外 API。
 
 ## 5. 分步说明
 
@@ -164,23 +162,23 @@ bash $R/services/agent-service/redis.sh        # 已有 PONG 则跳过；有 doc
 redis-cli ping                       # PONG
 ```
 
-### 5.2 task-platform venv 与迁移
+### 5.2 nexus-api venv 与迁移
 ```bash
-cd $R/services/task-platform
+cd $R/services/nexus-api
 python3 -m venv .venv && .venv/bin/pip install -U pip && .venv/bin/pip install -e '.[dev]'   # 或 uv pip install -e .[dev]
-.venv/bin/python -m alembic upgrade head        # 到 0051_rename_workers_table
+.venv/bin/python -m alembic upgrade head        # 到 0052_t_nexus_table_prefix
 ```
 `astra_service.py` 在监听前执行 `alembic upgrade head`（`prepare()`）。安装脚本生成的 `nexus-astra` 单元通过 ExecStart 调用 `astra_service.py dev restart`，因此 systemd 重启同样会迁移，效果与原先静态单元的 `ExecStartPre` 相同。仓库不再提交静态 unit 文件。重启前先备份数据库。`0037` 的 downgrade 会删除 `gateway_runtime_events`，已记录的运行事件不可恢复。`0038` 的 downgrade 会删除 `gateway_requests.gateway_instance_id`、`gateway_instance_started_at`、`outcome` 三列，不删除运行事件表。
 
 `0038` 之后，未完成调用按处理实例的心跳代次回收：实例失联时标成 `outcome=lost`（结果未知），不写成 500 或成功。`finished_at` 为空且 `gateway_instance_id` 为空的历史行保持原样，统计单独列为 legacy_open，查询不会按等待时间猜测成败。需要处理时只读列出这些行。保留清理只删除已经写下 `finished_at` 的终态历史。
 
-0049 给网关路由增加 `target_model`、给调用日志增加 `actual_model`；0050/0051 把 Worker 环境迁到数字员工并重命名 `workers` 表。依赖版本以 `pyproject.toml` 和 `uv.lock` 为准。
+0049 给网关路由增加 `target_model`、给调用日志增加 `actual_model`；0050/0051 把 Worker 环境迁到数字员工并重命名 `workers` 表；0052 把所有业务表统一为 `t_nexus_` 前缀。依赖版本以 `pyproject.toml` 和 `requirements.txt` 为准。
 
 ### 5.3 Task API / Celery / OpenCode
 OpenCode：`npm i -g --prefix ~/.local opencode-ai@1.18.35`，`~/.config/opencode/opencode.json` 增加 deepseek provider（apiKey 写 `{env:DEEPSEEK_API_KEY}`，不要写明文）。
 ```bash
 export PATH=$HOME/.local/bin:$PATH
-cd $R/services/task-platform && ASTRA_GATEWAY_MASTER_KEY=$(cat ../.gwmaster) ASTRA_GATEWAY_PROBE_TIMEOUT_SECONDS=30 \
+cd $R/services/nexus-api && ASTRA_GATEWAY_MASTER_KEY=$(cat ../.gwmaster) ASTRA_GATEWAY_PROBE_TIMEOUT_SECONDS=30 \
   NEXUS_MCP_TRANSPORT=streamable-http NEXUS_MCP_API_KEY=$(cat ../.mcpkey) \
   ASTRA_LLM_WIKI_ENABLED=true ASTRA_LLM_WIKI_API_BASE_URL=http://127.0.0.1:19828/api/v1 \
   ASTRA_LLM_WIKI_API_TOKEN=$(cat ../.llmwikitoken) ASTRA_LLM_WIKI_PROJECT_ID=$(cat ../.llmwikiproject) ASTRA_LLM_WIKI_TIMEOUT=30 \
@@ -189,7 +187,7 @@ cd $R/services/task-platform && ASTRA_GATEWAY_MASTER_KEY=$(cat ../.gwmaster) AST
   ASTRA_AGENTSCOPE_BASE_URL=http://127.0.0.1:18000 ASTRA_AGENTSCOPE_USER_ID=nexus \
   .venv/bin/python ../ops/dev/astra_service.py dev start
 ```
-（即 `ops/dev/start_astra.sh [start|restart|stop|status]`。）Python 用新会话拉起 Task API 18100（uvicorn --reload）、Gateway 18110、Library MCP 18201、Task MCP 18202、Celery beat、队列 `nexus-control` 和 agent、OpenCode 14096/14097、管理台 15174，并记录 pid 与 create_time。健康检查只认 HTTP 2xx。停不干净时保留 `astra-service.json` 并以非 0 退出。启动前会做自检。
+（即 `ops/dev/start_astra.sh [start|restart|stop|status]`。）Python 用新会话拉起 Gateway 18110、Library MCP 18201、Task MCP 18202、Celery beat、队列 `nexus-control` 和 agent、OpenCode 14096/14097，并记录 pid 与 create_time。统一 API 与前端由 `nexus-api` 服务（18120）提供。健康检查只认 HTTP 2xx。停不干净时保留 `astra-service.json` 并以非 0 退出。启动前会做自检。
 
 ### 5.4 Task MCP
 
@@ -204,7 +202,7 @@ ops/dev/start_astra.sh start     # 或 restart / stop / status
 
 配置中心的 AgentScope 子页内嵌官方 AgentScope v2.0.10 Web UI：
 
-- 静态产物：`web/nexus/public/agentscope-ui/`，随 `web/nexus` 构建复制到 `dist/agentscope-ui/`。
+- 静态产物：`services/nexus-api/web/public/agentscope-ui/`，随前端构建复制到 `dist/agentscope-ui/`。
 - 同源 API：开发由 `vite.config.ts` 的 `/agentscope-api/` 代理，生产由 `nginx-nexus.conf` 代理到 AgentScope（默认 `127.0.0.1:18000`）。保留浏览器 `X-User-ID`。
 - 默认入口：`/settings/agentscope`；无需手工填写 `server_url`。`/api/v1/runtime` 的 `agentscope_user_id` 用于写入同源 localStorage。
 - 原生 Skill/MCP Hub：`services/agent-service/agent_service.py` 注入 `ClawSkillHub`、`GitHubMCPHub`；health 的 `skill_hubs`/`mcp_hubs` 应为 `ok`。
@@ -233,16 +231,16 @@ OPENAI_MODEL=deepseek-flash OPENAI_API_KEY="$DEEPSEEK_API_KEY" NEXUS_AGENTSCOPE_
 ops/dev/start_nexus_api.sh start
 ```
 
-### 5.7 web/nexus
+### 5.7 Nexus Web
 ```bash
-cd $R/web/nexus && npm ci && npm run build        # vue-tsc + vite build → dist/
+cd $R/services/nexus-api/web && npm ci && npm run build        # vue-tsc + vite build → dist/
 ```
-管理台（15174）由 `astra_service.py` 拉起，不要再单独执行 `vite preview`。开发模式起 Vite，生产构建完成后由同一 Python 进程提供页面。启停与 5.4 相同：`ops/dev/start_astra.sh start|restart|stop|status`（macOS 与 Linux 都走 `astra_service.py`）。`vite.config.ts` 代理 `/api/v1 → 18120`、`/api → 18100`、`/v1 → 18110`。对外发布请用 nginx 反代（参考 `ops/deploy/nginx-nexus.conf`）。反向代理注入 `X-Verified-UID`（示例取上游 `X-Remote-User`），浏览器不能自己带这个头。`GET /api/v1/me` 返回当前 UID。没有代理时，页面把本地输入的 UID 放在 `X-Owner-Id` 里发送。不要使用 `?uid=`。
+生产由统一 `nexus-api` 进程（18120）直接托管 `web/dist`，不要再单独执行 `vite preview`。开发模式可单独起 Vite：`cd services/nexus-api/web && npm run dev`；`vite.config.ts` 把 `/api` 与 `/api/v1` 都代理到 `18120`、`/v1` 代理到 `18110`。对外发布请用 nginx 反代（参考 `ops/deploy/nginx-nexus.conf`）。反向代理注入 `X-Verified-UID`（示例取上游 `X-Remote-User`），浏览器不能自己带这个头。`GET /api/v1/me` 返回当前 UID。没有代理时，页面把本地输入的 UID 放在 `X-Owner-Id` 里发送。不要使用 `?uid=`。
 
 ### 5.8 网关路由 deepseek-flash
 在管理台「API 中转」或 API：
 ```bash
-B=http://127.0.0.1:18100/api/gateway
+B=http://127.0.0.1:18120/api/gateway
 curl -X POST $B/pools  -H 'Content-Type: application/json' -d '{"name":"deepseek-pool"}'
 curl -X POST $B/nodes  -H 'Content-Type: application/json' -d '{"name":"deepseek","base_url":"https://api.deepseek.com","pool_id":"<pool>","api_key":"<从环境注入>","models":["deepseek-flash"],"request_timeout_seconds":90}'
 curl -X POST $B/routes -H 'Content-Type: application/json' -d '{"model":"deepseek-flash","pool_id":"<pool>"}'
@@ -305,16 +303,16 @@ curl -X POST $B/nodes/<node>/probe     # 直到 HEALTHY → ACTIVE
 | # | 检查 | 命令 / 期望 |
 |---|---|---|
 | 1 | Redis | `redis-cli ping` → PONG |
-| 2 | Task API | `curl :18100/api/health` → `{"status":"ok"}` |
+| 2 | 统一 API | `curl :18120/api/health` → `{"status":"ok","product":"nexus"}` |
 | 3 | Agent Service | `bash services/agent-service/healthcheck.sh` |
 | 4 | Nexus API | `curl :18120/api/v1/knowledge`（200；AgentScope 可达且已配置知识库时 `available:true`） |
 | 5 | Gateway / MCP | `ss -ltn` 有 18110、18201、18202 |
-| 6 | Web | `curl -I :15174/`；`/chat /tasks /library /gateway/overview /settings/employees /settings/skills /settings/mcps` 200 |
+| 6 | Web | `curl -I :18120/`；`/chat /tasks /library /gateway/overview /settings/employees /settings/skills /settings/mcps` 200 |
 | 7 | 网关 | 管理台节点 ACTIVE；`/api/gateway/routes` 含 deepseek-flash |
-| 8 | 图书馆 | `curl :18100/api/library/service/status` → `enabled:true, healthy:true`；`POST /service/resync` 后知识 `sync_status=synced` |
+| 8 | 图书馆 | `curl :18120/api/library/service/status` → `enabled:true, healthy:true`；`POST /service/resync` 后知识 `sync_status=synced` |
 | 9 | llm_wiki 检索 | `POST :19828/api/v1/projects/<id>/search {"query":"pytest","topK":5}` 有 `wiki/…` 命中 |
-| 10 | 端到端 | `services/task-platform/.venv/bin/python tools/e2e/e2e_library.py`（带 `ASTRA_LLM_WIKI_*`；仿真主机建议 `ASTRA_LIBRARY_E2E_WAIT=600`）→ exit 0，结果 `.astra/library-e2e-result.json` |
-| 11 | 单测 | `cd services/task-platform && .venv/bin/pytest`；`PYTHONPATH=services/nexus-api services/nexus-api/.venv/bin/pytest services/nexus-api/tests`；均需全部通过 |
+| 10 | 端到端 | `services/nexus-api/.venv/bin/python tools/e2e/e2e_library.py`（带 `ASTRA_LLM_WIKI_*`；仿真主机建议 `ASTRA_LIBRARY_E2E_WAIT=600`）→ exit 0，结果 `.astra/library-e2e-result.json` |
+| 11 | 单测 | `cd services/nexus-api && .venv/bin/pytest tests/platform tests/nexus`；`ruff check app nexus_api tests`；均需全部通过 |
 | 12 | 任务冒烟 | 员工私聊让其 `nexus_task_create` → Worker 执行 → 唤醒到源会话（见 LIVE_REPORT.md 用例 1-5） |
 | 13 | 远程 Worker | deploy NDJSON 全部 PASS；派发任务后远端 OpenCode 以 `nexus-gateway/deepseek-flash` 运行 |
 
@@ -337,7 +335,7 @@ curl -X POST $B/nodes/<node>/probe     # 直到 HEALTHY → ACTIVE
 | 对端回复不出现在私聊 | `json.dumps` 转义换行导致 key 不匹配；跳过了含回复的消息 | fix_peer_replies.diff |
 | 本地 Worker 环境测试失败 | OpenCode 端口与平台 Serve 14096 冲突、工作区目录不存在 | 改用其他端口并先建目录 |
 | 任务卡 WAITING：`external_directory` | 仓库在任务工作区外，OpenCode 请求权限 | 回复 always，或把仓库放进工作区 |
-| `./start_astra.sh restart` 后仍是旧配置，或提示没有停干净 | 旧进程的 pid 与 create_time 对不上，或 18100 仍接受连接 | `astra_service.py dev stop` 会保留 `astra-service.json` 并以非 0 退出。确认记录里的 pid 已退出、18100 不再接受连接后再 start |
+| `./start_astra.sh restart` 后仍是旧配置，或提示没有停干净 | 旧进程的 pid 与 create_time 对不上，或 18120/18110 仍接受连接 | `astra_service.py dev stop` 会保留 `astra-service.json` 并以非 0 退出。确认记录里的 pid 已退出、18120/18110 不再接受连接后再 start |
 | 部署 deploy 被拒：stdio MCP | 远程要求 streamable-http | 设 `NEXUS_MCP_TRANSPORT`/`NEXUS_MCP_API_KEY` |
 | 节点凭据无法解密 | 换了/丢了 `ASTRA_GATEWAY_MASTER_KEY` | 固定保存主密钥；丢失只能重建节点 |
 | 图书馆 "知识服务：异常 — 未启用 llm_wiki" | `ASTRA_LLM_WIKI_ENABLED` 未设 | 按 §2.6 设置并重启 |
@@ -371,14 +369,15 @@ ops/dev/start_nexus_api.sh start      # 18120
 **升级**：
 ```bash
 git -C $R fetch origin && git -C $R merge --ff-only origin/codex/nexus-v1.4.7
-cd $R/services/task-platform && .venv/bin/pip install -e '.[dev]' && .venv/bin/python -m alembic upgrade head
+cd $R/services/nexus-api && .venv/bin/pip install -e '.[dev]' && .venv/bin/python -m alembic upgrade head
 cd $R/services/nexus-api && .venv/bin/pip install -r requirements.txt
-cd $R/web/nexus && npm ci && npm run build
+cd $R/services/nexus-api/chat-island && npm ci && npm run build
+cd $R/services/nexus-api/web && npm ci && npm run build
 # 然后按上面重启；或直接重跑 ops/deploy/install_nexus.sh（幂等）
 ```
 原地升级重跑安装脚本时，若还留着旧的独立单元 `nexus-task-mcp` 或 `nexus-web`，脚本会 `stop`、`disable`、删除 `/etc/systemd/system` 下对应单元文件并 `daemon-reload`。单元不存在时这一步直接跳过，不报错。Task MCP 与管理台之后只随 `astra_service.py` 启停。
 
-升级前备份：`services/task-platform` 的 SQLite/MySQL、`services/nexus-api/data/nexus.sqlite3`、Redis（AgentScope 数据与凭证）、`/var/lib/llm-wiki`、`secrets.env`/`.gwmaster`/`.mcpkey`。远程 Worker 升级后执行一次 `environment/restart`。
+升级前备份：`services/nexus-api/data/nexus.db`（旧版本另有 `services/task-platform/data/nexus.db` 与 `services/nexus-api/data/nexus.sqlite3`）、Redis（AgentScope 数据与凭证）、`/var/lib/llm-wiki`、`secrets.env`/`.gwmaster`/`.mcpkey`。远程 Worker 升级后执行一次 `environment/restart`。
 
 `nexus-astra` 重启会经 `astra_service.py` 执行 `alembic upgrade head`，所以重启也会跑迁移；升级或重启前先备份数据库。从 `0037_gateway_runtime_events` 降级会删除 `gateway_runtime_events` 表。从 `0038_gateway_request_lifecycle` 降级会删除调用日志上的实例代次与 `outcome` 列。`finished_at` 为空且没有 `gateway_instance_id` 的历史未完成行不会被自动改写成失败或成功。
 

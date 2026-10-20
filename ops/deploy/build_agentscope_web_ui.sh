@@ -8,7 +8,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DEST="$ROOT/web/nexus/public/agentscope-ui"
+DEST="$ROOT/services/nexus-api/web/public/agentscope-ui"
 META="$ROOT/web/agentscope-ui"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/agentscope-web-ui.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT

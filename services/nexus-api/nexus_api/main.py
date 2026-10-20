@@ -261,7 +261,7 @@ def data_dir() -> Path:
 
 
 def db_path() -> Path:
-    return data_dir() / "nexus.sqlite3"
+    return data_dir() / "nexus.db"
 
 
 def load_chat_model_config() -> dict[str, Any] | None:
@@ -636,7 +636,7 @@ def reserve_peer_delivery(
     key = message.strip()
     duplicate = connection.execute(
         """
-        SELECT 1 FROM peer_deliveries
+        SELECT 1 FROM t_nexus_peer_deliveries
         WHERE scope = ? AND sender_agent_id = ? AND target_agent_id = ? AND message_key = ?
         """,
         (scope, sender_agent_id, target_agent_id, key),
@@ -644,20 +644,20 @@ def reserve_peer_delivery(
     if duplicate:
         raise HTTPException(status_code=409, detail="已经把同样的话交给对方，不要再联系。")
     sender_count = connection.execute(
-        "SELECT COUNT(*) AS count FROM peer_deliveries WHERE scope = ? AND sender_agent_id = ?",
+        "SELECT COUNT(*) AS count FROM t_nexus_peer_deliveries WHERE scope = ? AND sender_agent_id = ?",
         (scope, sender_agent_id),
     ).fetchone()["count"]
     if sender_count >= SENDER_CONTACT_LIMIT:
         raise HTTPException(status_code=409, detail="你在这次讨论里已经联系过同事，不要继续互相调用。")
     scope_count = connection.execute(
-        "SELECT COUNT(*) AS count FROM peer_deliveries WHERE scope = ?",
+        "SELECT COUNT(*) AS count FROM t_nexus_peer_deliveries WHERE scope = ?",
         (scope,),
     ).fetchone()["count"]
     if scope_count >= SCOPE_CONTACT_LIMIT:
         raise HTTPException(status_code=409, detail="这次讨论的同事联系已经达到上限，停止继续联系。")
     connection.execute(
         """
-        INSERT INTO peer_deliveries (
+        INSERT INTO t_nexus_peer_deliveries (
             id, scope, sender_agent_id, target_agent_id, message_key, created_at
         ) VALUES (?, ?, ?, ?, ?, ?)
         """,
@@ -671,7 +671,7 @@ def inbound_private_scope(connection, agent_id: str | None) -> str | None:
         return None
     row = connection.execute(
         """
-        SELECT scope FROM peer_deliveries
+        SELECT scope FROM t_nexus_peer_deliveries
         WHERE target_agent_id = ? AND scope LIKE 'private:%'
         ORDER BY created_at DESC, id DESC
         LIMIT 1
@@ -718,14 +718,14 @@ async def peer_replies_for_conversation(
 ) -> list[dict[str, Any]]:
     """把同事在自己邮箱里写下的正文带回用户正在看的私聊。不由发送方代写。"""
     rows = connection.execute(
-        "SELECT * FROM peer_deliveries WHERE scope = ? ORDER BY created_at, id",
+        "SELECT * FROM t_nexus_peer_deliveries WHERE scope = ? ORDER BY created_at, id",
         (f"private:{conversation_id}",),
     ).fetchall()
     visible: list[dict[str, Any]] = []
     transcripts: dict[str, list[Any]] = {}
     for row in rows:
         employee = connection.execute(
-            "SELECT * FROM employees WHERE agentscope_agent_id = ?",
+            "SELECT * FROM t_nexus_employees WHERE agentscope_agent_id = ?",
             (row["target_agent_id"],),
         ).fetchone()
         if employee is None or not employee["mailbox_session_id"]:
@@ -758,7 +758,7 @@ def session_owned_by(connection, employee_id: str, session_id: str, mailbox_sess
         return True
     conversation = connection.execute(
         """
-        SELECT 1 FROM conversations
+        SELECT 1 FROM t_nexus_conversations
         WHERE employee_id = ? AND agentscope_session_id = ?
         """,
         (employee_id, session_id),
@@ -767,7 +767,7 @@ def session_owned_by(connection, employee_id: str, session_id: str, mailbox_sess
         return True
     member = connection.execute(
         """
-        SELECT 1 FROM channel_members
+        SELECT 1 FROM t_nexus_channel_members
         WHERE employee_id = ? AND agentscope_session_id = ?
         """,
         (employee_id, session_id),
@@ -822,14 +822,14 @@ def attachment_visible(connection, attachment_id: str, owner_uid: str, requester
         return True
     rows = connection.execute(
         """
-        SELECT channel_id FROM messages
+        SELECT channel_id FROM t_nexus_messages
         WHERE channel_id IS NOT NULL AND attachments_json LIKE ?
         """,
         (f'%"{attachment_id}"%',),
     ).fetchall()
     for item in rows:
         member = connection.execute(
-            "SELECT 1 FROM channel_humans WHERE channel_id = ? AND user_uid = ?",
+            "SELECT 1 FROM t_nexus_channel_humans WHERE channel_id = ? AND user_uid = ?",
             (item["channel_id"], requester),
         ).fetchone()
         if member is not None:
@@ -842,7 +842,7 @@ def claim_private_session(connection, conversation_id: str, session_id: str, wor
 
     connection.execute(
         """
-        UPDATE conversations
+        UPDATE t_nexus_conversations
         SET agentscope_session_id = ?, workspace_id = ?, updated_at = ?
         WHERE id = ? AND agentscope_session_id IS NULL
         """,
@@ -850,7 +850,7 @@ def claim_private_session(connection, conversation_id: str, session_id: str, wor
     )
     connection.commit()
     row = connection.execute(
-        "SELECT agentscope_session_id FROM conversations WHERE id = ?",
+        "SELECT agentscope_session_id FROM t_nexus_conversations WHERE id = ?",
         (conversation_id,),
     ).fetchone()
     stored = row["agentscope_session_id"] if row is not None else None
@@ -935,13 +935,13 @@ def create_app() -> FastAPI:
         return employee_session_ids(connection, employee)
 
     def load_employee(connection, employee_id: str) -> dict[str, Any]:
-        row = connection.execute("SELECT * FROM employees WHERE id = ?", (employee_id,)).fetchone()
+        row = connection.execute("SELECT * FROM t_nexus_employees WHERE id = ?", (employee_id,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="员工不存在")
         return employee_from_row(row)
 
     def find_duplicate(connection, name: str, domain: str, exclude: str | None) -> str | None:
-        rows = connection.execute("SELECT id, name, domain FROM employees").fetchall()
+        rows = connection.execute("SELECT id, name, domain FROM t_nexus_employees").fetchall()
         for row in rows:
             if exclude and row["id"] == exclude:
                 continue
@@ -1097,13 +1097,13 @@ def create_app() -> FastAPI:
 
         add(employee.get("mailbox_session_id"))
         conversations = connection.execute(
-            "SELECT id, agentscope_session_id FROM conversations WHERE employee_id = ?",
+            "SELECT id, agentscope_session_id FROM t_nexus_conversations WHERE employee_id = ?",
             (employee["id"],),
         ).fetchall()
         for row in conversations:
             add(row["agentscope_session_id"], conversation_id=row["id"])
         members = connection.execute(
-            "SELECT channel_id, agentscope_session_id FROM channel_members WHERE employee_id = ?",
+            "SELECT channel_id, agentscope_session_id FROM t_nexus_channel_members WHERE employee_id = ?",
             (employee["id"],),
         ).fetchall()
         for row in members:
@@ -1167,7 +1167,7 @@ def create_app() -> FastAPI:
             },
         )
         connection.execute(
-            "UPDATE employees SET capability_json = ? WHERE id = ?",
+            "UPDATE t_nexus_employees SET capability_json = ? WHERE id = ?",
             (json.dumps(record, ensure_ascii=False), employee["id"]),
         )
         connection.commit()
@@ -1175,7 +1175,7 @@ def create_app() -> FastAPI:
     def save_agent_link(connection, employee_id: str, sync: dict[str, Any]) -> None:
         connection.execute(
             """
-            UPDATE employees
+            UPDATE t_nexus_employees
             SET agentscope_agent_id = ?, mailbox_session_id = ?, updated_at = ?
             WHERE id = ?
             """,
@@ -1195,7 +1195,7 @@ def create_app() -> FastAPI:
         now = utcnow()
         connection.execute(
             """
-            INSERT INTO employees (
+            INSERT INTO t_nexus_employees (
                 id, name, domain, description, instructions, avatar, enabled,
                 knowledge_json, skills_json, mcp_json, tools_json, agentscope_agent_id,
                 mailbox_session_id, model_route_id, created_at, updated_at
@@ -1224,12 +1224,12 @@ def create_app() -> FastAPI:
     def list_messages(connection, *, conversation_id: str | None = None, channel_id: str | None = None):
         if conversation_id:
             rows = connection.execute(
-                "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at",
+                "SELECT * FROM t_nexus_messages WHERE conversation_id = ? ORDER BY created_at",
                 (conversation_id,),
             ).fetchall()
         else:
             rows = connection.execute(
-                "SELECT * FROM messages WHERE channel_id = ? ORDER BY created_at",
+                "SELECT * FROM t_nexus_messages WHERE channel_id = ? ORDER BY created_at",
                 (channel_id,),
             ).fetchall()
         return [message_from_row(row) for row in rows]
@@ -1243,7 +1243,9 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail="每条消息最多添加 6 个附件")
         found: list[dict[str, Any]] = []
         for attachment_id in attachment_ids:
-            row = connection.execute("SELECT * FROM attachments WHERE id = ?", (attachment_id,)).fetchone()
+            row = connection.execute(
+                "SELECT * FROM t_nexus_attachments WHERE id = ?", (attachment_id,)
+            ).fetchone()
             if row is None or (owner_id is not None and row["owner_uid"] != owner_id):
                 raise HTTPException(status_code=404, detail="附件不存在")
             found.append(
@@ -1260,7 +1262,9 @@ def create_app() -> FastAPI:
     def attachment_bytes(connection, message: dict[str, Any]) -> list[tuple[str, str, bytes]]:
         files: list[tuple[str, str, bytes]] = []
         for item in message.get("attachments") or []:
-            row = connection.execute("SELECT * FROM attachments WHERE id = ?", (item["id"],)).fetchone()
+            row = connection.execute(
+                "SELECT * FROM t_nexus_attachments WHERE id = ?", (item["id"],)
+            ).fetchone()
             if row is None:
                 continue
             files.append((row["name"], row["media_type"], Path(row["path"]).read_bytes()))
@@ -1284,7 +1288,7 @@ def create_app() -> FastAPI:
         ]
         connection.execute(
             """
-            INSERT INTO messages (
+            INSERT INTO t_nexus_messages (
                 id, conversation_id, channel_id, sender, text, attachments_json, accepted,
                 speaker_uid, created_at
             ) VALUES (?, ?, ?, 'user', ?, ?, 0, ?, ?)
@@ -1300,7 +1304,7 @@ def create_app() -> FastAPI:
             ),
         )
         connection.commit()
-        row = connection.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
+        row = connection.execute("SELECT * FROM t_nexus_messages WHERE id = ?", (message_id,)).fetchone()
         return message_from_row(row)
 
     async def ensure_session(
@@ -1337,7 +1341,7 @@ def create_app() -> FastAPI:
         async with await conversation_lock(lock_id):
             row = connection.execute(
                 """
-                SELECT agentscope_session_id FROM channel_members
+                SELECT agentscope_session_id FROM t_nexus_channel_members
                 WHERE channel_id = ? AND employee_id = ?
                 """,
                 (channel_id, employee["id"]),
@@ -1364,7 +1368,7 @@ def create_app() -> FastAPI:
             await sync_employee_skills(client, employee, [session_id], connection, store)
             connection.execute(
                 """
-                UPDATE channel_members SET agentscope_session_id = ?
+                UPDATE t_nexus_channel_members SET agentscope_session_id = ?
                 WHERE channel_id = ? AND employee_id = ? AND agentscope_session_id IS NULL
                 """,
                 (session_id, channel_id, employee["id"]),
@@ -1372,7 +1376,7 @@ def create_app() -> FastAPI:
             connection.commit()
             stored = connection.execute(
                 """
-                SELECT agentscope_session_id FROM channel_members
+                SELECT agentscope_session_id FROM t_nexus_channel_members
                 WHERE channel_id = ? AND employee_id = ?
                 """,
                 (channel_id, employee["id"]),
@@ -2067,7 +2071,7 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/internal/mailbox")
     def mailbox(agent_id: str, connection=Depends(database)) -> dict[str, str]:
         row = connection.execute(
-            "SELECT mailbox_session_id FROM employees WHERE agentscope_agent_id = ?",
+            "SELECT mailbox_session_id FROM t_nexus_employees WHERE agentscope_agent_id = ?",
             (agent_id,),
         ).fetchone()
         if row is None or not row["mailbox_session_id"]:
@@ -2086,7 +2090,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/v1/employees")
     def employees(q: str = "", connection=Depends(database)) -> dict[str, Any]:
-        rows = connection.execute("SELECT * FROM employees ORDER BY created_at").fetchall()
+        rows = connection.execute("SELECT * FROM t_nexus_employees ORDER BY created_at").fetchall()
         items = [employee_from_row(row) for row in rows]
         needle = q.strip().lower()
         if needle:
@@ -2146,7 +2150,7 @@ def create_app() -> FastAPI:
         skills, knowledge, tools, mcps = await chosen_resources(client, body, current, connection)
         connection.execute(
             """
-            UPDATE employees
+            UPDATE t_nexus_employees
             SET name = ?, domain = ?, description = ?, instructions = ?, avatar = ?, enabled = ?,
                 knowledge_json = ?, skills_json = ?, mcp_json = ?, tools_json = ?,
                 model_route_id = ?, updated_at = ?
@@ -2223,9 +2227,9 @@ def create_app() -> FastAPI:
                 await client.delete_agent(employee["agentscope_agent_id"])
             except AgentScopeError as exc:
                 raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-        connection.execute("DELETE FROM channel_members WHERE employee_id = ?", (employee_id,))
-        connection.execute("DELETE FROM resource_sync WHERE employee_id = ?", (employee_id,))
-        connection.execute("DELETE FROM employees WHERE id = ?", (employee_id,))
+        connection.execute("DELETE FROM t_nexus_channel_members WHERE employee_id = ?", (employee_id,))
+        connection.execute("DELETE FROM t_nexus_resource_sync WHERE employee_id = ?", (employee_id,))
+        connection.execute("DELETE FROM t_nexus_employees WHERE id = ?", (employee_id,))
         connection.commit()
         return {"deleted": True}
 
@@ -2247,7 +2251,7 @@ def create_app() -> FastAPI:
         filename = file.filename or "未命名文件"
         connection.execute(
             """
-            INSERT INTO attachments (id, owner_uid, name, media_type, size, path, created_at)
+            INSERT INTO t_nexus_attachments (id, owner_uid, name, media_type, size, path, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (attachment_id, owner_id, filename, media_type, len(content), str(target), utcnow()),
@@ -2261,7 +2265,9 @@ def create_app() -> FastAPI:
         owner_id: str = Depends(require_owner),
         connection=Depends(database),
     ) -> FileResponse:
-        row = connection.execute("SELECT * FROM attachments WHERE id = ?", (attachment_id,)).fetchone()
+        row = connection.execute(
+            "SELECT * FROM t_nexus_attachments WHERE id = ?", (attachment_id,)
+        ).fetchone()
         visible = row is not None and Path(row["path"]).is_file() and attachment_visible(
             connection,
             attachment_id,
@@ -2287,7 +2293,7 @@ def create_app() -> FastAPI:
         load_employee(connection, employee_id)
         rows = connection.execute(
             """
-            SELECT * FROM conversations
+            SELECT * FROM t_nexus_conversations
             WHERE employee_id = ? AND owner_id = ?
             ORDER BY created_at
             """,
@@ -2318,7 +2324,7 @@ def create_app() -> FastAPI:
         load_employee(connection, employee_id)
         existing = connection.execute(
             """
-            SELECT * FROM conversations
+            SELECT * FROM t_nexus_conversations
             WHERE employee_id = ? AND owner_id = ? AND kind = 'private'
             """,
             (employee_id, owner_id),
@@ -2335,7 +2341,7 @@ def create_app() -> FastAPI:
         name = body.name.strip() or "私聊"
         connection.execute(
             """
-            INSERT OR IGNORE INTO conversations (
+            INSERT OR IGNORE INTO t_nexus_conversations (
                 id, employee_id, owner_id, kind, name, agentscope_session_id, created_at, updated_at
             ) VALUES (?, ?, ?, 'private', ?, NULL, ?, ?)
             """,
@@ -2344,7 +2350,7 @@ def create_app() -> FastAPI:
         connection.commit()
         stored = connection.execute(
             """
-            SELECT * FROM conversations
+            SELECT * FROM t_nexus_conversations
             WHERE employee_id = ? AND owner_id = ? AND kind = 'private'
             """,
             (employee_id, owner_id),
@@ -2359,7 +2365,7 @@ def create_app() -> FastAPI:
 
     def owned_conversation(connection, conversation_id: str, owner_id: str):
         row = connection.execute(
-            "SELECT * FROM conversations WHERE id = ? AND owner_id = ?",
+            "SELECT * FROM t_nexus_conversations WHERE id = ? AND owner_id = ?",
             (conversation_id, owner_id),
         ).fetchone()
         if row is None:
@@ -2483,7 +2489,7 @@ def create_app() -> FastAPI:
         if message["text"] and row["name"] in {"新对话", "私聊"}:
             title = message["text"] if len(message["text"]) <= 20 else message["text"][:20] + "…"
             connection.execute(
-                "UPDATE conversations SET name = ?, updated_at = ? WHERE id = ?",
+                "UPDATE t_nexus_conversations SET name = ?, updated_at = ? WHERE id = ?",
                 (title, utcnow(), conversation_id),
             )
             connection.commit()
@@ -2586,7 +2592,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
         connection.execute(
             """
-            UPDATE conversations
+            UPDATE t_nexus_conversations
             SET agentscope_session_id = ?, workspace_id = ?, updated_at = ?
             WHERE id = ?
             """,
@@ -2624,11 +2630,11 @@ def create_app() -> FastAPI:
         )
 
     def channel_payload(connection, channel_id: str) -> dict[str, Any]:
-        row = connection.execute("SELECT * FROM channels WHERE id = ?", (channel_id,)).fetchone()
+        row = connection.execute("SELECT * FROM t_nexus_channels WHERE id = ?", (channel_id,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="讨论不存在")
         members = connection.execute(
-            "SELECT employee_id, agentscope_session_id FROM channel_members WHERE channel_id = ?",
+            "SELECT employee_id, agentscope_session_id FROM t_nexus_channel_members WHERE channel_id = ?",
             (channel_id,),
         ).fetchall()
         return {
@@ -2655,7 +2661,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/v1/channels")
     def list_channels(connection=Depends(database)) -> dict[str, Any]:
-        rows = connection.execute("SELECT id FROM channels ORDER BY created_at DESC").fetchall()
+        rows = connection.execute("SELECT id FROM t_nexus_channels ORDER BY created_at DESC").fetchall()
         return {"items": [channel_payload(connection, row["id"]) for row in rows]}
 
     @app.post("/api/v1/channels", status_code=201)
@@ -2664,13 +2670,14 @@ def create_app() -> FastAPI:
         channel_id = new_id("ch")
         now = utcnow()
         connection.execute(
-            "INSERT INTO channels (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO t_nexus_channels "
+            "(id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
             (channel_id, body.name.strip(), body.description.strip(), now, now),
         )
         for member_id in member_ids:
             connection.execute(
                 """
-                INSERT INTO channel_members (channel_id, employee_id, agentscope_session_id)
+                INSERT INTO t_nexus_channel_members (channel_id, employee_id, agentscope_session_id)
                 VALUES (?, ?, NULL)
                 """,
                 (channel_id, member_id),
@@ -2681,10 +2688,12 @@ def create_app() -> FastAPI:
     @app.patch("/api/v1/channels/{channel_id}")
     def update_channel(channel_id: str, body: ChannelBody, connection=Depends(database)) -> dict[str, Any]:
         channel_payload(connection, channel_id)
-        before = connection.execute("SELECT created_at FROM channels WHERE id = ?", (channel_id,)).fetchone()
+        before = connection.execute(
+            "SELECT created_at FROM t_nexus_channels WHERE id = ?", (channel_id,)
+        ).fetchone()
         member_ids = ensure_members_exist(connection, body.member_ids)
         connection.execute(
-            "UPDATE channels SET name = ?, description = ?, updated_at = ? WHERE id = ?",
+            "UPDATE t_nexus_channels SET name = ?, description = ?, updated_at = ? WHERE id = ?",
             (body.name.strip(), body.description.strip(), utcnow(), channel_id),
         )
         existing = {
@@ -2692,24 +2701,24 @@ def create_app() -> FastAPI:
             for row in connection.execute(
                 """
                 SELECT employee_id, agentscope_session_id, last_delivered_message_id
-                FROM channel_members WHERE channel_id = ?
+                FROM t_nexus_channel_members WHERE channel_id = ?
                 """,
                 (channel_id,),
             ).fetchall()
         }
-        connection.execute("DELETE FROM channel_members WHERE channel_id = ?", (channel_id,))
+        connection.execute("DELETE FROM t_nexus_channel_members WHERE channel_id = ?", (channel_id,))
         for member_id in member_ids:
             session_id, cursor = existing.get(member_id, (None, ""))
             connection.execute(
                 """
-                INSERT INTO channel_members (
+                INSERT INTO t_nexus_channel_members (
                     channel_id, employee_id, agentscope_session_id, last_delivered_message_id
                 ) VALUES (?, ?, ?, ?)
                 """,
                 (channel_id, member_id, session_id, cursor or ""),
             )
         connection.execute(
-            "UPDATE channels SET created_at = ? WHERE id = ?",
+            "UPDATE t_nexus_channels SET created_at = ? WHERE id = ?",
             (before["created_at"], channel_id),
         )
         connection.commit()
@@ -2728,7 +2737,7 @@ def create_app() -> FastAPI:
         if viewer:
             connection.execute(
                 """
-                INSERT INTO channel_humans (channel_id, user_uid, display_name)
+                INSERT INTO t_nexus_channel_humans (channel_id, user_uid, display_name)
                 VALUES (?, ?, ?)
                 ON CONFLICT(channel_id, user_uid) DO UPDATE SET display_name = excluded.display_name
                 """,
@@ -2774,7 +2783,7 @@ def create_app() -> FastAPI:
         store: ResourceStore,
     ) -> tuple[str, str]:
         row = connection.execute(
-            "SELECT record_agent_id, record_session_id FROM channels WHERE id = ?",
+            "SELECT record_agent_id, record_session_id FROM t_nexus_channels WHERE id = ?",
             (channel["id"],),
         ).fetchone()
         if row["record_session_id"] and row["record_agent_id"]:
@@ -2805,7 +2814,7 @@ def create_app() -> FastAPI:
             await sync_employee_skills(client, record_employee, [session_id], connection, store)
         connection.execute(
             """
-            UPDATE channels SET record_agent_id = ?, record_session_id = ?, updated_at = ?
+            UPDATE t_nexus_channels SET record_agent_id = ?, record_session_id = ?, updated_at = ?
             WHERE id = ?
             """,
             (agent_id, session_id, utcnow(), channel["id"]),
@@ -2828,7 +2837,7 @@ def create_app() -> FastAPI:
         if trusted:
             connection.execute(
                 """
-                INSERT INTO channel_humans (channel_id, user_uid, display_name)
+                INSERT INTO t_nexus_channel_humans (channel_id, user_uid, display_name)
                 VALUES (?, ?, ?)
                 ON CONFLICT(channel_id, user_uid) DO UPDATE SET display_name = excluded.display_name
                 """,
@@ -2894,7 +2903,7 @@ def create_app() -> FastAPI:
         history = [
             message_from_row(row)
             for row in connection.execute(
-                "SELECT * FROM messages WHERE channel_id = ? ORDER BY created_at, id",
+                "SELECT * FROM t_nexus_messages WHERE channel_id = ? ORDER BY created_at, id",
                 (channel_id,),
             ).fetchall()
         ]
@@ -2924,7 +2933,7 @@ def create_app() -> FastAPI:
             binding = connection.execute(
                 """
                 SELECT agentscope_session_id, last_delivered_message_id
-                FROM channel_members WHERE channel_id = ? AND employee_id = ?
+                FROM t_nexus_channel_members WHERE channel_id = ? AND employee_id = ?
                 """,
                 (channel_id, employee["id"]),
             ).fetchone()
@@ -2958,7 +2967,7 @@ def create_app() -> FastAPI:
                 )
                 connection.execute(
                     """
-                    UPDATE channel_members SET last_delivered_message_id = ?
+                    UPDATE t_nexus_channel_members SET last_delivered_message_id = ?
                     WHERE channel_id = ? AND employee_id = ?
                     """,
                     (message["id"], channel_id, employee["id"]),
@@ -2970,13 +2979,13 @@ def create_app() -> FastAPI:
                 result["session_id"] = binding["agentscope_session_id"]
             triggered.append(result)
         if any(item["accepted"] for item in triggered):
-            connection.execute("UPDATE messages SET accepted = 1 WHERE id = ?", (message["id"],))
+            connection.execute("UPDATE t_nexus_messages SET accepted = 1 WHERE id = ?", (message["id"],))
             connection.commit()
             message = message_from_row(
-                connection.execute("SELECT * FROM messages WHERE id = ?", (message["id"],)).fetchone()
+                connection.execute("SELECT * FROM t_nexus_messages WHERE id = ?", (message["id"],)).fetchone()
             )
         employee_messages = connection.execute(
-            "SELECT COUNT(*) AS count FROM messages WHERE channel_id = ? AND sender != 'user'",
+            "SELECT COUNT(*) AS count FROM t_nexus_messages WHERE channel_id = ? AND sender != 'user'",
             (channel_id,),
         ).fetchone()
         if employee_messages["count"]:
@@ -3176,7 +3185,7 @@ def create_app() -> FastAPI:
     ) -> dict[str, str]:
         target_name = name.strip()
         private = connection.execute(
-            "SELECT * FROM conversations WHERE agentscope_session_id = ?",
+            "SELECT * FROM t_nexus_conversations WHERE agentscope_session_id = ?",
             (session_id,),
         ).fetchone()
         if private is not None:
@@ -3209,12 +3218,12 @@ def create_app() -> FastAPI:
                 target["mailbox_session_id"],
             )
         member = connection.execute(
-            "SELECT * FROM channel_members WHERE agentscope_session_id = ?",
+            "SELECT * FROM t_nexus_channel_members WHERE agentscope_session_id = ?",
             (session_id,),
         ).fetchone()
         if member is None:
             mailbox_owner = connection.execute(
-                "SELECT id FROM employees WHERE mailbox_session_id = ?",
+                "SELECT id FROM t_nexus_employees WHERE mailbox_session_id = ?",
                 (session_id,),
             ).fetchone()
             if mailbox_owner is None:
@@ -3254,11 +3263,11 @@ def create_app() -> FastAPI:
         if not sender["agentscope_agent_id"]:
             raise HTTPException(status_code=404, detail="没有找到可联系的员工")
         channel = connection.execute(
-            "SELECT name FROM channels WHERE id = ?",
+            "SELECT name FROM t_nexus_channels WHERE id = ?",
             (member["channel_id"],),
         ).fetchone()
         peers = connection.execute(
-            "SELECT * FROM channel_members WHERE channel_id = ?",
+            "SELECT * FROM t_nexus_channel_members WHERE channel_id = ?",
             (member["channel_id"],),
         ).fetchall()
         client = client_of(request)
@@ -3387,7 +3396,7 @@ def create_app() -> FastAPI:
             employee = load_employee(connection, employee_id)
             existing = connection.execute(
                 """
-                SELECT * FROM conversations
+                SELECT * FROM t_nexus_conversations
                 WHERE employee_id = ? AND owner_id = ? AND kind = 'private'
                 """,
                 (employee_id, owner_id),
@@ -3397,7 +3406,7 @@ def create_app() -> FastAPI:
                 now = utcnow()
                 connection.execute(
                     """
-                    INSERT OR IGNORE INTO conversations (
+                    INSERT OR IGNORE INTO t_nexus_conversations (
                         id, employee_id, owner_id, kind, name, agentscope_session_id, created_at, updated_at
                     ) VALUES (?, ?, ?, 'private', '私聊', NULL, ?, ?)
                     """,
@@ -3406,7 +3415,7 @@ def create_app() -> FastAPI:
                 connection.commit()
                 existing = connection.execute(
                     """
-                    SELECT * FROM conversations
+                    SELECT * FROM t_nexus_conversations
                     WHERE employee_id = ? AND owner_id = ? AND kind = 'private'
                     """,
                     (employee_id, owner_id),
@@ -3420,7 +3429,7 @@ def create_app() -> FastAPI:
             conversation_id = existing["id"]
             async with await conversation_lock(conversation_id):
                 current = connection.execute(
-                    "SELECT * FROM conversations WHERE id = ?",
+                    "SELECT * FROM t_nexus_conversations WHERE id = ?",
                     (conversation_id,),
                 ).fetchone()
                 if current["agentscope_session_id"]:
@@ -3516,7 +3525,7 @@ def create_app() -> FastAPI:
         employee_id = body.employee_id.strip()
         if not employee_id and body.agent_id.strip():
             row = connection.execute(
-                "SELECT id FROM employees WHERE agentscope_agent_id = ?",
+                "SELECT id FROM t_nexus_employees WHERE agentscope_agent_id = ?",
                 (body.agent_id.strip(),),
             ).fetchone()
             if row is None:
@@ -3701,7 +3710,7 @@ def stream_cursor(after: str | None) -> str | None:
 
 
 def employee_by_name(connection, name: str) -> dict[str, Any] | None:
-    rows = connection.execute("SELECT * FROM employees").fetchall()
+    rows = connection.execute("SELECT * FROM t_nexus_employees").fetchall()
     for row in rows:
         employee = employee_from_row(row)
         if employee["name"] == name:

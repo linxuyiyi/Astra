@@ -93,12 +93,12 @@ def employee_session_ids(connection, employee: dict[str, Any]) -> list[str]:
 
     add(employee.get("mailbox_session_id"))
     for row in connection.execute(
-        "SELECT agentscope_session_id FROM conversations WHERE employee_id = ?",
+        "SELECT agentscope_session_id FROM t_nexus_conversations WHERE employee_id = ?",
         (employee["id"],),
     ).fetchall():
         add(row["agentscope_session_id"])
     for row in connection.execute(
-        "SELECT agentscope_session_id FROM channel_members WHERE employee_id = ?",
+        "SELECT agentscope_session_id FROM t_nexus_channel_members WHERE employee_id = ?",
         (employee["id"],),
     ).fetchall():
         add(row["agentscope_session_id"])
@@ -106,7 +106,7 @@ def employee_session_ids(connection, employee: dict[str, Any]) -> list[str]:
 
 
 def all_employees(connection) -> list[dict[str, Any]]:
-    rows = connection.execute("SELECT * FROM employees ORDER BY created_at").fetchall()
+    rows = connection.execute("SELECT * FROM t_nexus_employees ORDER BY created_at").fetchall()
     return [employee_from_row(row) for row in rows]
 
 
@@ -312,12 +312,12 @@ class ResourceStore:
 
     # -- 设置 -------------------------------------------------------------
     def get_setting(self, connection, key: str) -> str:
-        row = connection.execute("SELECT value FROM nexus_settings WHERE key = ?", (key,)).fetchone()
+        row = connection.execute("SELECT value FROM t_nexus_settings WHERE key = ?", (key,)).fetchone()
         return str(row["value"]) if row is not None else ""
 
     def set_setting(self, connection, key: str, value: str) -> None:
         connection.execute(
-            "INSERT INTO nexus_settings (key, value) VALUES (?, ?) "
+            "INSERT INTO t_nexus_settings (key, value) VALUES (?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, value),
         )
@@ -330,11 +330,11 @@ class ResourceStore:
 
 
 def skill_row(connection, skill_id: str):
-    return connection.execute("SELECT * FROM nexus_skills WHERE id = ?", (skill_id,)).fetchone()
+    return connection.execute("SELECT * FROM t_nexus_skills WHERE id = ?", (skill_id,)).fetchone()
 
 
 def mcp_row(connection, mcp_id: str):
-    return connection.execute("SELECT * FROM nexus_mcps WHERE id = ?", (mcp_id,)).fetchone()
+    return connection.execute("SELECT * FROM t_nexus_mcps WHERE id = ?", (mcp_id,)).fetchone()
 
 
 def local_skill_rows(connection, skill_ids: Iterable[str]) -> dict[str, Any]:
@@ -447,7 +447,7 @@ def _sync_summary(
         for session_id in sessions:
             row = connection.execute(
                 """
-                SELECT status, detail, revision, updated_at FROM resource_sync
+                SELECT status, detail, revision, updated_at FROM t_nexus_resource_sync
                 WHERE resource_type = ? AND resource_id = ? AND employee_id = ? AND session_id = ?
                 """,
                 (resource_type, resource_id, employee["id"], session_id),
@@ -680,7 +680,7 @@ def _set_sync(
 ) -> None:
     connection.execute(
         """
-        INSERT INTO resource_sync (
+        INSERT INTO t_nexus_resource_sync (
             resource_type, resource_id, employee_id, session_id, status, detail, revision, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(resource_type, resource_id, employee_id, session_id)
@@ -1275,7 +1275,7 @@ async def _sync_one_session(
 def _sync_row_state(connection, resource_type: str, resource_id: str, employee_id: str, session_id: str):
     return connection.execute(
         """
-        SELECT status, detail, revision FROM resource_sync
+        SELECT status, detail, revision FROM t_nexus_resource_sync
         WHERE resource_type = ? AND resource_id = ? AND employee_id = ? AND session_id = ?
         """,
         (resource_type, resource_id, employee_id, session_id),
@@ -1328,13 +1328,13 @@ def _headers_for_row(row, store: ResourceStore) -> dict[str, str]:
 
 
 def _require_skill_name(connection, name: str, exclude: str | None = None) -> None:
-    row = connection.execute("SELECT id FROM nexus_skills WHERE name = ?", (name,)).fetchone()
+    row = connection.execute("SELECT id FROM t_nexus_skills WHERE name = ?", (name,)).fetchone()
     if row is not None and row["id"] != exclude:
         raise ResourceError(f"技能名称已存在：{name}", 409)
 
 
 def _require_mcp_name(connection, name: str, exclude: str | None = None) -> None:
-    row = connection.execute("SELECT id FROM nexus_mcps WHERE name = ?", (name,)).fetchone()
+    row = connection.execute("SELECT id FROM t_nexus_mcps WHERE name = ?", (name,)).fetchone()
     if row is not None and row["id"] != exclude:
         raise ResourceError(f"MCP 名称已存在：{name}", 409)
 
@@ -1358,7 +1358,7 @@ def create_skill(
     metadata = file_metadata(files)
     connection.execute(
         """
-        INSERT INTO nexus_skills (
+        INSERT INTO t_nexus_skills (
             id, name, description, version, revision, runtime_name, files_json, enabled,
             created_at, updated_at
         ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
@@ -1370,7 +1370,7 @@ def create_skill(
     )
     connection.execute(
         """
-        INSERT INTO nexus_skill_versions (id, skill_id, version, note, files_json, created_at)
+        INSERT INTO t_nexus_skill_versions (id, skill_id, version, note, files_json, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
         """,
         (new_id("skv"), skill_id, version, "初始版本", json.dumps(metadata, ensure_ascii=False), now),
@@ -1396,7 +1396,7 @@ def update_skill(
     now = utcnow()
     if enabled is not None and bool(enabled) != bool(row["enabled"]):
         connection.execute(
-            "UPDATE nexus_skills SET enabled = ?, revision = revision + 1, updated_at = ? WHERE id = ?",
+            "UPDATE t_nexus_skills SET enabled = ?, revision = revision + 1, updated_at = ? WHERE id = ?",
             (int(enabled), now, skill_id),
         )
         changed = True
@@ -1410,7 +1410,7 @@ def update_skill(
         metadata = file_metadata(files)
         connection.execute(
             """
-            UPDATE nexus_skills
+            UPDATE t_nexus_skills
             SET name = ?, description = ?, version = ?, revision = revision + 1,
                 runtime_name = ?, files_json = ?, updated_at = ?
             WHERE id = ?
@@ -1422,7 +1422,7 @@ def update_skill(
         )
         connection.execute(
             """
-            INSERT INTO nexus_skill_versions (id, skill_id, version, note, files_json, created_at)
+            INSERT INTO t_nexus_skill_versions (id, skill_id, version, note, files_json, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (new_id("skv"), skill_id, version, note, json.dumps(metadata, ensure_ascii=False), now),
@@ -1444,7 +1444,7 @@ def restore_skill_version(
     if row is None:
         raise ResourceError("技能不存在", 404)
     source = connection.execute(
-        "SELECT 1 FROM nexus_skill_versions WHERE skill_id = ? AND version = ?",
+        "SELECT 1 FROM t_nexus_skill_versions WHERE skill_id = ? AND version = ?",
         (skill_id, version),
     ).fetchone()
     if source is None:
@@ -1465,18 +1465,18 @@ def delete_skill(connection, store: ResourceStore, skill_id: str) -> None:
     if row is None:
         raise ResourceError("技能不存在", 404)
     connection.execute(
-        "DELETE FROM resource_sync WHERE resource_type = 'skill' AND resource_id = ?",
+        "DELETE FROM t_nexus_resource_sync WHERE resource_type = 'skill' AND resource_id = ?",
         (skill_id,),
     )
-    connection.execute("DELETE FROM nexus_skill_versions WHERE skill_id = ?", (skill_id,))
-    connection.execute("DELETE FROM nexus_skills WHERE id = ?", (skill_id,))
+    connection.execute("DELETE FROM t_nexus_skill_versions WHERE skill_id = ?", (skill_id,))
+    connection.execute("DELETE FROM t_nexus_skills WHERE id = ?", (skill_id,))
     connection.commit()
     store.delete_skill_files(skill_id)
 
 
 def skill_versions(connection, skill_id: str) -> list[dict[str, Any]]:
     rows = connection.execute(
-        "SELECT version, note, files_json, created_at FROM nexus_skill_versions "
+        "SELECT version, note, files_json, created_at FROM t_nexus_skill_versions "
         "WHERE skill_id = ? ORDER BY version DESC",
         (skill_id,),
     ).fetchall()
@@ -1527,7 +1527,7 @@ def create_mcp(
     now = utcnow()
     connection.execute(
         """
-        INSERT INTO nexus_mcps (
+        INSERT INTO t_nexus_mcps (
             id, name, description, url, transport, headers_json, auth_type, auth_header,
             token_ciphertext, timeout, runtime_name, enabled, revision, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
@@ -1584,7 +1584,7 @@ def update_mcp(
         raise ResourceError("超时时间必须在 1 到 300 秒之间")
     connection.execute(
         """
-        UPDATE nexus_mcps
+        UPDATE t_nexus_mcps
         SET name = ?, description = ?, url = ?, transport = ?, headers_json = ?,
             auth_type = ?, auth_header = ?, token_ciphertext = ?, timeout = ?,
             enabled = ?, revision = revision + 1, updated_at = ?
@@ -1612,8 +1612,11 @@ def delete_mcp(connection, mcp_id: str) -> None:
     row = mcp_row(connection, mcp_id)
     if row is None:
         raise ResourceError("MCP 不存在", 404)
-    connection.execute("DELETE FROM resource_sync WHERE resource_type = 'mcp' AND resource_id = ?", (mcp_id,))
-    connection.execute("DELETE FROM nexus_mcps WHERE id = ?", (mcp_id,))
+    connection.execute(
+        "DELETE FROM t_nexus_resource_sync WHERE resource_type = 'mcp' AND resource_id = ?",
+        (mcp_id,),
+    )
+    connection.execute("DELETE FROM t_nexus_mcps WHERE id = ?", (mcp_id,))
     connection.commit()
 
 
@@ -1626,7 +1629,7 @@ async def skill_catalog(
     status: str = "",
 ) -> dict[str, Any]:
     employees = all_employees(connection)
-    local_rows = connection.execute("SELECT * FROM nexus_skills ORDER BY created_at").fetchall()
+    local_rows = connection.execute("SELECT * FROM t_nexus_skills ORDER BY created_at").fetchall()
     local_names = {str(row["name"]) for row in local_rows}
     items: list[dict[str, Any]] = []
     external_available = False
@@ -1698,7 +1701,7 @@ async def mcp_catalog(
     status: str = "",
 ) -> dict[str, Any]:
     employees = all_employees(connection)
-    local_rows = connection.execute("SELECT * FROM nexus_mcps ORDER BY created_at").fetchall()
+    local_rows = connection.execute("SELECT * FROM t_nexus_mcps ORDER BY created_at").fetchall()
     local_runtime_names = {str(row["runtime_name"]) for row in local_rows}
     items: list[dict[str, Any]] = []
     external_available = False

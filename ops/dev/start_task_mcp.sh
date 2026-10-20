@@ -8,7 +8,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ACTION="${1:-start}"
 export NEXUS_TASK_MCP_HOST="${NEXUS_TASK_MCP_HOST:-127.0.0.1}"
 export NEXUS_TASK_MCP_PORT="${NEXUS_TASK_MCP_PORT:-18202}"
-PY="$ROOT/services/task-platform/.venv/bin/python"
+PY="$ROOT/services/nexus-api/.venv/bin/python"
 case "$ACTION" in
   start|stop|status)
     exec "$PY" "$ROOT/ops/dev/service_ctl.py" task-mcp "$ACTION"

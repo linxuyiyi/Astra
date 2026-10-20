@@ -14,7 +14,7 @@ export AGENTSCOPE_REDIS_HOST="${AGENTSCOPE_REDIS_HOST:-127.0.0.1}"
 export AGENTSCOPE_REDIS_PORT="${AGENTSCOPE_REDIS_PORT:-6379}"
 export AGENTSCOPE_WORKSPACE_DIR="${AGENTSCOPE_WORKSPACE_DIR:-$ROOT/services/agent-service/data/workspaces}"
 export NEXUS_AGENTSCOPE_USER_ID="${NEXUS_AGENTSCOPE_USER_ID:-nexus}"
-PY="$ROOT/services/task-platform/.venv/bin/python"
+PY="$ROOT/services/nexus-api/.venv/bin/python"
 case "$ACTION" in
   start|stop|status)
     exec "$PY" "$ROOT/ops/dev/service_ctl.py" agent "$ACTION"

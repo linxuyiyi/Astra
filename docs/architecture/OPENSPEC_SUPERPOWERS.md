@@ -6,7 +6,7 @@ Nexus v1.4.7 继续使用仓库里已经提交的 OpenSpec 与 Superpowers，**c
 
 ## Nexus OpenSpec / Superpowers 盘点（只记录仓库里真实存在的文件）
 
-2026-10-13 在仓库根目录 `.opencode/` 核对（当时分支记录为 Nexus v1.0.1）。Phase 2 的实现在 `services/task-platform` 与 `web/nexus`，不在名为 `nexus/` 的目录。结果如下。
+2026-10-13 在仓库根目录 `.opencode/` 核对（当时分支记录为 Nexus v1.0.1）。Phase 2 的实现在 `services/nexus-api`（`app/` 与 `nexus_api/`）与 `services/nexus-api/web`，不在名为 `nexus/` 的目录。结果如下。
 
 Superpowers skill（15 个，均在 `.opencode/skills/<name>/SKILL.md`）：
 
@@ -90,7 +90,7 @@ schema 提示语已同步更正，避免"按需生成"与实际依赖冲突。�
 
 ### 重新生成 CLI bundle（维护用）
 
-升级 OpenSpec 后，在一台装有 `esbuild`（`web/nexus/node_modules/.bin` 内已有）的机器上执行：
+升级 OpenSpec 后，在一台装有 `esbuild`（`services/nexus-api/web/node_modules/.bin` 内已有）的机器上执行：
 
 ```bash
 node tools/e2e/build_openspec_bundle.mjs
@@ -98,7 +98,7 @@ node tools/e2e/build_openspec_bundle.mjs
 
 脚本会把 OpenSpec 打包成单个自包含 `.mjs`，并内联两处运行时 `require`
 （`package.json` 版本、`cross-spawn`），同时屏蔽 CLI 的重复自动执行。
-OpenSpec 来源优先级：`ASTRA_OPENSPEC_PACKAGE` → `web/nexus/node_modules` → 全局 npm root。
+OpenSpec 来源优先级：`ASTRA_OPENSPEC_PACKAGE` → `services/nexus-api/web/node_modules` → 全局 npm root。
 普通开发者不需要运行此脚本，直接使用已提交的 bundle。
 
 ## Superpowers
@@ -163,7 +163,7 @@ opencode agent list
   平台助手以仓库根为加载上下文，插件通过 `ASTRA_RUNTIME_ROLE=platform-assistant` 跳过 bootstrap 注入；
   助手仍可见 `/opsx-*`、`/sp-*` 命令与全部 skill，其主要约束是
   `.opencode/agents/platform-assistant.md` 中 `edit`/`write`/`bash`/`webfetch` 的 deny 权限。
-- 员工任务工作区是 `services/task-platform/.astra-tasks/<employee>/<task>` 下的独立 git worktree。
+- 员工任务工作区是 `services/nexus-api/.astra-tasks/<employee>/<task>` 下的独立 git worktree。
   该目录带自己的 `.git`，`discover_workspace_config()` 的向上查找在 git 根停止，
   因此**不会**加载 Astra 根的 `opencode.json`；若 worktree 由包含本集成的提交创建，
   会带上一份 `.opencode/` 副本（其中 skill 与命令可见，但 bootstrap 因工作目录不等于仓库根而不注入）。

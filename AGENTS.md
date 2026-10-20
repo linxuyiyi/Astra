@@ -2,7 +2,7 @@
 
 只放所有代码任务都要遵守的规则。OpenSpec 产物规则在 `openspec/config.yaml`，工具与集成细节见 `docs/architecture/OPENSPEC_SUPERPOWERS.md`；按需查阅，不要每轮加载整套教程。
 
-本分支的产品是 **Nexus v1.4.7**。数字员工、私聊、团队和 `contact_employee` 由 `services/nexus-api` 与 `services/agent-service` 承担。任务、Worker、OpenCode、网关和图书馆在 `services/task-platform`，由 `web/nexus` 经 `/api` 调用。
+本分支的产品是 **Nexus v1.4.7**。`services/nexus-api` 是唯一的 Nexus 服务：同一进程提供 `/api/v1`（数字员工、私聊、团队、`contact_employee`）、`/api`（任务、Worker、网关控制面、图书馆）、Worker Gateway WebSocket 和前端静态资源。前端在 `services/nexus-api/web`，聊天岛在 `services/nexus-api/chat-island`；OpenCode 网关数据面、Task MCP、Library MCP 与 AgentScope 仍是独立基础设施进程。
 
 ## 项目范围
 
@@ -28,7 +28,7 @@ Task → Run → Employee → Worker → OpenCode Session
 
 - Task、Run、Employee、Session 状态要保持一致。
 - 不要根据时间戳、日志、事件数量或前端状态反推 Runtime 状态。
-- Runtime 展示以 `services/task-platform/app/runtime/presentation.py` 为准。
+- Runtime 展示以 `services/nexus-api/app/runtime/presentation.py` 为准。
 - 修改生命周期时，要同时考虑失败、取消、超时、重试、重启、心跳丢失和恢复。
 - 优先解决状态流转问题，不要靠 fallback 兜底。
 
@@ -62,8 +62,8 @@ Task → Run → Employee → Worker → OpenCode Session
 
 ## 产品边界
 
-- 对话、员工目录和 Agent 绑定写在 `services/nexus-api`。任务、Worker、网关和图书馆沿用 `services/task-platform/app` 的现有服务，不另写一套状态机。
-- 前端是 `web/nexus`：Vue 3 + Element Plus。员工目录是 `services/nexus-api`：Python HTTP 服务，只通过 HTTP 调用 AgentScope，不内嵌、不 fork AgentScope。任务 API 是 `services/task-platform/app`。
+- 对话、员工目录和 Agent 绑定写在 `services/nexus-api/nexus_api`。任务、Worker、网关和图书馆沿用 `services/nexus-api/app` 的现有服务，不另写一套状态机。
+- 前端是 `services/nexus-api/web`：Vue 3 + Element Plus，构建产物由同一 FastAPI 服务托管。员工目录与任务 API 都由 `services/nexus-api` 提供；Nexus 只通过 HTTP 调用 AgentScope，不内嵌、不 fork AgentScope。
 - **AgentScope 2.0.10 Agent Service 是 Agent、Session、Skill、Knowledge 与对话记忆的唯一事实源。** Nexus 只保存员工目录、会话绑定和尚未被 Agent Service 接受的用户消息。不要在 Nexus 再实现一套 Agent、Session 或 Memory。
 - Nexus 不提供模型、凭证或供应商配置界面。模型配置留在 AgentScope。
 - 一位数字员工对应一个独立 Agent。一条私聊或一位员工在某个团队讨论中的上下文对应一条 Session。
@@ -74,7 +74,7 @@ Task → Run → Employee → Worker → OpenCode Session
 
 - AgentScope 版本以 `services/agent-service/agentscope.version` 为准，当前为 PyPI / GitHub tag `2.0.10`。接口说明以该 tag 的源码为准，见 `docs/architecture/agentscope-2.0.10.md`。
 - 正式部署是独立的 AgentScope Agent Service + Redis。`create_app` 的 workspace 隔离使用 `IsolationPolicy.PER_SESSION`，这样同一员工的多条对话不会被 `(user, agent, workspace)` 折成一条 Session。
-- 不把历史 Astra 行复制进 Nexus SQLite。任务库仍是 task platform 的 SQLAlchemy 库，新字段用 Alembic 增加。不要为了旧状态长期保留双写和猜测式 fallback。
+- 只有一个 `services/nexus-api/data/nexus.db`。所有业务表以 `t_nexus_` 开头；任务/Runtime 表由 Alembic 管理，聊天表由 `nexus_api.db` 初始化。新字段用 Alembic 增加，不长期保留双写和猜测式 fallback。旧库通过 `services/nexus-api/scripts/migrate_legacy_databases.py` 一次性合并。
 
 ## 前端表格（Element Plus）
 
@@ -84,7 +84,7 @@ Task → Run → Employee → Worker → OpenCode Session
 - 列表页保持同一套形态：分页（`el-pagination`）、加载（`v-loading`）、空态（`el-empty`）、失败可重试；新增页面沿用相邻页面的列宽与对齐。
 - 数据量用后端分页或限制返回量控制，不在前端全量渲染几百行。
 - 表格数据只取一个接口事实源，不在前端拼多份派生状态或跨接口合并。
-- 样式调整走 `web/nexus/src/styles/element-plus-theme.css` 的主题层，不在各页面写零散的 `.el-table` 覆盖。
+- 样式调整走 `services/nexus-api/web/src/styles/element-plus-theme.css` 的主题层，不在各页面写零散的 `.el-table` 覆盖。
 - 若确要迁移到 Tailwind/shadcn 等新方案：先拿单页试点并记录成本，按页面切片独立提交，不与业务改动混在一起。
 
 ## 验证
@@ -92,15 +92,13 @@ Task → Run → Employee → Worker → OpenCode Session
 先跑与本次改动最相关的检查，再根据影响范围扩大。
 
 ```bash
-# task platform
-cd services/task-platform && .venv/bin/pytest tests/<相关测试>
-.venv/bin/ruff check app tests
+# 统一服务（nexus_api 与 app 两套测试）
+cd services/nexus-api && .venv/bin/pytest tests/platform tests/nexus
+.venv/bin/ruff check app nexus_api tests
 
-# nexus api
-PYTHONPATH=services/nexus-api services/nexus-api/.venv/bin/pytest services/nexus-api/tests
-
-# web
-cd web/nexus && npm run type-check && npm run build
+# 前端
+cd services/nexus-api/web && npm run type-check && npm run build
+cd services/nexus-api/chat-island && npm run type-check && npm run build
 ```
 
 涉及核心 Runtime 或主要用户流程时，再运行对应 E2E。

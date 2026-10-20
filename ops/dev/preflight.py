@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-BACKEND_ROOT = PROJECT_ROOT / "services" / "task-platform"
+BACKEND_ROOT = PROJECT_ROOT / "services" / "nexus-api"
 sys.path.insert(0, str(BACKEND_ROOT))
 
 
@@ -76,7 +76,7 @@ def check_dependencies() -> CheckResult:
         not missing,
         "已安装" if not missing else f"缺少: {', '.join(missing)}",
         "依赖完整" if not missing else "当前解释器未安装全部后端依赖",
-        "无需处理" if not missing else "执行 python -m pip install -e services/task-platform",
+        "无需处理" if not missing else "执行 python -m pip install -e services/nexus-api",
     )
 
 
@@ -386,7 +386,7 @@ async def check_assistant_runtime(settings) -> CheckResult:
             False,
             entrypoint,
             "当前 Python 环境中缺少助手 MCP 入口",
-            "使用当前 Python 执行 python -m pip install -e services/task-platform",
+            "使用当前 Python 执行 python -m pip install -e services/nexus-api",
         )
 
     health = await manager.health()

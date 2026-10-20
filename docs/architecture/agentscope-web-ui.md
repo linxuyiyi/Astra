@@ -24,7 +24,7 @@
 ops/deploy/build_agentscope_web_ui.sh
 ```
 
-脚本不接收本地源码参数；它克隆固定 tag、校验 commit、按 frozen pnpm lock 安装并应用上述补丁，失败时直接退出且不覆盖现有产物。产物放在 `web/nexus/public/agentscope-ui/`，随 `npm run build` 进入 `dist/`。
+脚本不接收本地源码参数；它克隆固定 tag、校验 commit、按 frozen pnpm lock 安装并应用上述补丁，失败时直接退出且不覆盖现有产物。产物放在 `services/nexus-api/web/public/agentscope-ui/`，随 `npm run build` 进入 `dist/`。
 
 构建产物约 15 MB，主要是官方站点的动态语法高亮语言包、Mermaid/图表渲染器和代码差异组件；它们在聊天与工具结果中按需加载，删减会改变官方 UI 行为。因此保留官方构建输出，不做多版本兼容或裁剪。
 
@@ -32,7 +32,7 @@ ops/deploy/build_agentscope_web_ui.sh
 
 - UI 静态/深链接：`/agentscope-ui/`，Vite middleware 与 nginx 都回退到 `/agentscope-ui/index.html`；`/agentscope-ui/assets/` 直接读缓存文件。
 - API：`/agentscope-api/` 代理到 AgentScope 服务（默认 `http://127.0.0.1:18000/`），前缀剥离，保留浏览器 `X-User-ID`。
-- 开发：`web/nexus/vite.config.ts` 的 `VITE_AGENTSCOPE_PROXY_TARGET`。
+- 开发：`services/nexus-api/web/vite.config.ts` 的 `VITE_AGENTSCOPE_PROXY_TARGET`。
 - 生产：`ops/dev/astra_service.py` 把 `NEXUS_AGENTSCOPE_BASE_URL` 传给 Vite preview；`ops/deploy/nginx-nexus.conf` 提供同样的代理。
 - 用户上下文：`GET /api/v1/runtime` 返回 `agentscope_user_id`；`AgentscopeView` 在 iframe 加载前写入同源 `localStorage.username`。
 

@@ -37,7 +37,7 @@ def gateway_api_key() -> str:
 
 
 def task_platform_url() -> str:
-    return os.environ.get("NEXUS_TASK_PLATFORM_URL", "http://127.0.0.1:18100").rstrip("/")
+    return os.environ.get("NEXUS_TASK_PLATFORM_URL", "http://127.0.0.1:18120").rstrip("/")
 
 
 def redact_secret(text: str, secret: str) -> str:

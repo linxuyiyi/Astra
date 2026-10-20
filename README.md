@@ -2,7 +2,9 @@
 
 Nexus 是数字员工的目录和交流产品。推理、会话、技能、知识和记忆由 **AgentScope 2.0.10 Agent Service** 承担。Nexus 只通过 HTTP 调用它。
 
-任务、Agent Worker、API 网关和数字图书馆在 `services/task-platform`。员工目录在 `services/nexus-api`。页面只有 `web/nexus`。
+`services/nexus-api` 是唯一的 Nexus 服务：同一进程提供员工对话与目录、任务、Agent Worker、API 网关控制面、数字图书馆、Worker Gateway WebSocket 和前端静态资源。OpenCode 网关数据面、Task MCP、Library MCP 与 AgentScope 仍是独立基础设施进程。
+
+所有业务表以 `t_nexus_` 开头，统一存放在 `services/nexus-api/data/nexus.db`。
 
 ## 当前版本
 
@@ -17,10 +19,13 @@ v1.4.7 包含：
 ## 目录
 
 ```text
-services/task-platform   Task API、网关、Task MCP、Worker、Alembic
-services/nexus-api       员工目录、会话绑定、Skill/MCP 资源
+services/nexus-api       唯一 Nexus 服务（对话 + 任务 + Runtime + Worker + 网关控制面 + 图书馆）
+  nexus_api/             对话、员工目录、会话绑定、Skill/MCP 资源、统一入口
+  app/                   任务、Runtime、Worker、网关控制面、图书馆（Alembic）
+  web/                   唯一前端（Vue 3 + Element Plus）
+  chat-island/           聊天岛（React 子应用）
+  tests/                 nexus/ 与 platform/ 两套测试
 services/agent-service   AgentScope Agent Service
-web/nexus                唯一前端
 web/workspace-ui         OpenCode 工作台静态资源
 ops/dev                  本地启动与停止
 ops/deploy               安装脚本与部署说明
@@ -40,12 +45,10 @@ docs/reports             验证记录与证据
 | 服务 | 端口 | 目录 |
 |---|---|---|
 | Agent Service | 18000 | `services/agent-service` |
-| Task API | 18100 | `services/task-platform` |
-| Gateway | 18110 | `services/task-platform` |
-| Nexus API | 18120 | `services/nexus-api` |
-| Library MCP | 18201 | `services/task-platform` |
-| Task MCP | 18202 | `services/task-platform` |
-| Nexus Web | 15174 | `web/nexus` |
+| Nexus API + Web | 18120 | `services/nexus-api`（`nexus_api.service:app`） |
+| Gateway 数据面 | 18110 | `services/nexus-api/app/gateway/server.py` |
+| Library MCP | 18201 | `services/nexus-api/app/mcp_server.py` |
+| Task MCP | 18202 | `services/nexus-api/app/task_mcp.py` |
 | 员工 OpenCode | 14096 | 由 Task 平台拉起 |
 | 助手 OpenCode | 14097 | 由 Task 平台拉起 |
 | Redis | 6379 | Agent Service 与 Celery |
@@ -58,19 +61,20 @@ docs/reports             验证记录与证据
 cp ops/env/.env.example ops/env/.env
 redis-server --port 6379
 ops/dev/start_agent_service.sh start
-ops/dev/start_astra.sh start
-ops/dev/start_nexus_api.sh start
+ops/dev/start_astra.sh start      # Celery、Gateway、Task MCP、OpenCode 等辅助进程
+ops/dev/start_nexus_api.sh start  # 唯一 API + 已构建前端，18120
 ```
 
-页面开发：
+打开 `http://127.0.0.1:18120`。页面需要先构建：`cd services/nexus-api/web && npm ci && npm run build`（聊天岛先构建到 `web/public/nexus-chat`）。
+
+页面开发时可单独启动 Vite：
 
 ```bash
-cd web/nexus
-npm install
-npm run dev
+cd services/nexus-api/chat-island && npm run build
+cd services/nexus-api/web && npm install && npm run dev
 ```
 
-打开 `http://127.0.0.1:15174`。开发服务器把 `/api/v1` 代理到 `18120`，`/api` 代理到 `18100`，`/v1` 代理到 `18110`，`/agentscope-api` 代理到 `18000`。
+开发服务器把 `/api` 与 `/api/v1` 都代理到 `18120`，`/v1` 代理到 `18110`，`/agentscope-api` 代理到 `18000`。
 
 这些 `.sh` 只加载 `ops/env/.env` 并调用 Python。进程由 `ops/dev/astra_service.py` 和 `ops/dev/service_ctl.py` 拉起：`Popen(start_new_session=True)` 记下 pid、pgid、psutil `create_time` 和 cwd。停止前必须 pid 与 `create_time` 仍一致，然后向进程组发 `SIGTERM`，超时再 `SIGKILL`，并用本机 socket 确认端口已释放。健康检查用 urllib，只接受 HTTP 2xx。停不干净时状态文件保留，进程以非 0 退出。
 
@@ -81,9 +85,9 @@ npm run dev
 ## 检查
 
 ```bash
-cd services/task-platform && .venv/bin/ruff check app tests && .venv/bin/pytest
-PYTHONPATH=services/nexus-api services/nexus-api/.venv/bin/pytest services/nexus-api/tests
-cd web/nexus && npm run type-check && npm run build
+cd services/nexus-api && .venv/bin/ruff check app nexus_api tests && .venv/bin/pytest
+cd services/nexus-api/web && npm run type-check && npm run build
+cd services/nexus-api/chat-island && npm run type-check && npm run build
 ```
 
 部署见 [ops/deploy/DEPLOYMENT_GUIDE.md](ops/deploy/DEPLOYMENT_GUIDE.md)。Agent Service 的安装细节见 [docs/deploy/agentscope.md](docs/deploy/agentscope.md)。版本钉在 [services/agent-service/agentscope.version](services/agent-service/agentscope.version)。接口记录在 [docs/architecture/agentscope-2.0.10.md](docs/architecture/agentscope-2.0.10.md)。

@@ -24,20 +24,22 @@ workspaces/
 dump.rdb
 wiki/
 
-services/task-platform/data/
-services/task-platform/workspaces/
-services/task-platform/celerybeat-schedule*
 services/nexus-api/.venv/
 services/nexus-api/data/
+services/nexus-api/workspaces/
+services/nexus-api/celerybeat-schedule*
 services/agent-service/.venv-agentscope/
 services/agent-service/.venv-embedding/
 services/agent-service/data/
 services/agent-service/.env
 
-web/nexus/node_modules/
-web/nexus-chat/node_modules/
+services/nexus-api/web/node_modules/
+services/nexus-api/chat-island/node_modules/
 # 聊天岛产物由 npm run build 生成（部署脚本会先构建它）
-web/nexus/public/nexus-chat/
-web/nexus/dist/
+services/nexus-api/web/public/nexus-chat/
+services/nexus-api/web/dist/
 web/workspace-ui/node_modules/
 web/workspace-ui/upstream/**/node_modules/
+
+# 运行时锁文件
+ops/env/*.lock

@@ -1,3 +1,5 @@
+> **2026-10-20 架构更新**：Task Platform 已并入 `services/nexus-api`，统一使用 `nexus.db` 与 `t_nexus_` 表前缀。本文的目录、端口与模块边界是移交时的历史记录；当前实现见 README、AGENTS.md 与 `openspec/changes/nexus-unified-service/`。
+
 # Nexus 部署简化与在线配置开发交接方案
 
 > 状态说明（2026-10-20）：本文是 2026-10-17 的设计交接材料，文中的代码核对基线保留为当时快照。当前产品版本为 Nexus v1.4.7，分支 `codex/nexus-v1.4.7`；实施前以当前仓库、`AGENTS.md` 和 `openspec/config.yaml` 为准。

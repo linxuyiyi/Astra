@@ -30,11 +30,10 @@ def _load_procman():
 procman = _load_procman()
 
 ROOT = Path(__file__).resolve().parents[2]
-BACKEND = ROOT / "services" / "task-platform"
-FRONTEND = ROOT / "web" / "nexus"
+BACKEND = ROOT / "services" / "nexus-api"
+FRONTEND = ROOT / "services" / "nexus-api" / "web"
 
-BACKEND_HOST = os.getenv("ASTRA_SERVICE_BACKEND_HOST", "0.0.0.0")
-BACKEND_PORT = int(os.getenv("ASTRA_SERVICE_BACKEND_PORT", "18100"))
+BACKEND_PORT = int(os.getenv("NEXUS_API_PORT", "18120"))
 FRONTEND_HOST = os.getenv("ASTRA_SERVICE_FRONTEND_HOST", "0.0.0.0")
 FRONTEND_PORT = int(os.getenv("ASTRA_SERVICE_FRONTEND_PORT", "15174"))
 # API 中转数据面是独立 ASGI 进程（app.gateway.server:app）。默认只监听 loopback，
@@ -203,7 +202,7 @@ def validate_start(mode: str, settings: Any) -> None:
     if not (ROOT / "ops" / "env" / ".env").is_file():
         raise RuntimeError("env file not found; expected ops/env/.env")
     if not (FRONTEND / "node_modules").is_dir():
-        raise RuntimeError("web dependencies missing; run: cd web/nexus && npm ci")
+        raise RuntimeError("web dependencies missing; run: cd services/nexus-api/web && npm ci")
     missing = missing_workspace_ui_bundles(settings)
     if missing:
         detail = "; ".join(str(path) for path in missing)
@@ -246,7 +245,7 @@ def prepare(mode: str, settings: Any, npm: str, local_command: Any) -> None:
     if mode == "pro":
         run_checked(local_command(npm, ["run", "build"]), FRONTEND, "frontend production build")
         if not (FRONTEND / "dist" / "index.html").is_file():
-            raise RuntimeError("web/nexus/dist/index.html not found after build")
+            raise RuntimeError("services/nexus-api/web/dist/index.html not found after build")
 
 
 def http_ready(url: str, *, headers: dict[str, str] | None = None) -> bool:
@@ -335,25 +334,6 @@ def start_opencode(
         print(f"[WARN] platform assistant degraded: {exc}")
 
 
-def backend_command(mode: str) -> list[str]:
-    command = [
-        sys.executable,
-        "-m",
-        "uvicorn",
-        "app.main:app",
-        "--host",
-        BACKEND_HOST,
-        "--port",
-        str(BACKEND_PORT),
-    ]
-    # Uvicorn's Windows reload subprocess can run under a launcher/event-loop
-    # combination that cannot create asyncio subprocesses. Keep hot reload on
-    # Unix, but use explicit "dev restart" on Windows.
-    if mode == "dev" and os.name != "nt":
-        command.append("--reload")
-    return command
-
-
 def gateway_command(mode: str) -> list[str]:
     """独立 Gateway 数据面进程：只承载 /v1 转发，与任务 Runtime 隔离。"""
 
@@ -397,7 +377,7 @@ def core_services(
     npm: str,
     local_command: Any,
 ) -> list[tuple[str, list[str], Path, dict[str, str] | None]]:
-    """核心受管服务清单：Backend、Celery、Task MCP、可选 Library MCP/Gateway、Frontend。
+    """核心受管服务清单：Celery、Task MCP、可选 Library MCP/Gateway，开发模式再加 Vite。
 
     只组装命令，不做启动与就绪等待，便于脚本级校验。Gateway 仅在
     ``ASTRA_GATEWAY_ENABLED=true`` 时作为独立进程加入；长连接不进入 Backend。
@@ -405,7 +385,6 @@ def core_services(
 
     schedule = settings.resolved_runtime_dir / "celerybeat-schedule"
     services: list[tuple[str, list[str], Path, dict[str, str] | None]] = [
-        ("backend", backend_command(mode), BACKEND, None),
         (
             "runtime-beat",
             [
@@ -452,9 +431,10 @@ def core_services(
     frontend_env["VITE_AGENTSCOPE_PROXY_TARGET"] = os.environ.get(
         "NEXUS_AGENTSCOPE_BASE_URL", "http://127.0.0.1:18000"
     )
-    services.append(
-        ("frontend", frontend_command(mode, npm, local_command), FRONTEND, frontend_env)
-    )
+    if mode == "dev":
+        services.append(
+            ("frontend", frontend_command(mode, npm, local_command), FRONTEND, frontend_env)
+        )
     return services
 
 
@@ -472,14 +452,14 @@ def start_core(
         processes[name] = spawn(settings, name, command, cwd, env=env)
         wait_process(name, processes[name])
 
-    wait_http("backend", f"http://127.0.0.1:{BACKEND_PORT}/api/health")
     wait_worker("runtime-control", processes["runtime-control"])
     wait_worker("runtime-agent", processes["runtime-agent"])
     if "gateway" in processes:
         wait_http("gateway", f"http://127.0.0.1:{GATEWAY_PORT}/healthz")
     if "task-mcp" in processes:
         wait_http("task-mcp", f"http://127.0.0.1:{TASK_MCP_PORT}/health")
-    wait_http("frontend", f"http://127.0.0.1:{FRONTEND_PORT}")
+    if "frontend" in processes:
+        wait_http("frontend", f"http://127.0.0.1:{FRONTEND_PORT}")
 
 
 def status(settings: Any) -> int:
@@ -581,7 +561,8 @@ def start(
     print()
     print("=" * 64)
     print(f"Astra {mode.upper()} started")
-    print(f"Console : http://localhost:{FRONTEND_PORT}")
+    if mode == "dev":
+        print(f"Console : http://localhost:{FRONTEND_PORT}")
     print(f"API     : http://localhost:{BACKEND_PORT}/api/health")
     print(f"Docs    : http://localhost:{BACKEND_PORT}/docs")
     if settings.gateway_enabled:

@@ -4,7 +4,7 @@
 脚本只打印这次测量的数字，不判断 P95 是否达标。
 
 示例：
-  python tools/perf/workspace_open.py --base-url http://127.0.0.1:15174 --task-id T1
+  python tools/perf/workspace_open.py --base-url http://127.0.0.1:18120 --task-id T1
 """
 
 from __future__ import annotations

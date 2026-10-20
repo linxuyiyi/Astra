@@ -1,6 +1,6 @@
 # Agent Worker 维护与恢复
 
-本文只说明 Worker 环境的部署、检查、更新、重启、暂停与恢复。任务/Session 状态仍由 `services/task-platform` 的现有状态机维护，维护操作不释放占用。
+本文只说明 Worker 环境的部署、检查、更新、重启、暂停与恢复。任务/Session 状态仍由 `services/nexus-api/app` 的现有状态机维护，维护操作不释放占用。
 
 ## 动作语义
 

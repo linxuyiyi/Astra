@@ -56,7 +56,7 @@ load_env_file "$SCRIPT_DIR/../env/.env"
 : "${LLM_WIKI_LOCAL_PORT:=19828}"; : "${LLM_WIKI_REMOTE_PORT:=18080}"
 : "${REMOTE_WORKER_ID:=p2-remote}"; : "${REMOTE_WORKER_USER:=root}"; : "${REMOTE_WORKER_PORT:=22}"
 : "${REMOTE_WORKER_OPENCODE_PORT:=14096}"; : "${REMOTE_WORKER_WORKSPACE:=/root/nexus-remote}"
-PORTS=(6379 18000 18100 18110 18120 18201 18202 15174 14096 14097)
+PORTS=(6379 18000 18110 18120 18201 18202 14096 14097)
 [ "$WITH_WIKI" = 1 ] && PORTS+=("$LLM_WIKI_LOCAL_PORT")
 
 ver_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -1)" = "$2" ]; }
@@ -121,7 +121,7 @@ upsert_kv() { # file key value  (value never printed)
 }
 get_kv() { [ -f "$1" ] && grep "^$2=" "$1" | tail -1 | cut -d= -f2- || true; }
 wait_http() { # url name timeout_seconds
-  local py="$NEXUS_ROOT/services/task-platform/.venv/bin/python"
+  local py="$NEXUS_ROOT/services/nexus-api/.venv/bin/python"
   if "$py" "$NEXUS_ROOT/ops/dev/service_ctl.py" wait-http "$1" --timeout "${3:-60}"; then
     log "$2 健康"
   else
@@ -157,22 +157,20 @@ step_deps() {
   local ocv; ocv="$( (opencode --version || "$HOME/.local/bin/opencode" --version) 2>/dev/null | tail -1 || true)"
   if [ "$(oc_ver "$ocv")" != "$OPENCODE_VERSION" ]; then npm i -g --prefix "$HOME/.local" "opencode-ai@$OPENCODE_VERSION" >/dev/null; fi
   export PATH="$HOME/.local/bin:$PATH"
-  log "Python 虚拟环境（task platform / nexus api / agent service）"
+  log "Python 虚拟环境（nexus api / agent service）"
   local py=python3
-  [ -x "$NEXUS_ROOT/services/task-platform/.venv/bin/python" ] || $py -m venv "$NEXUS_ROOT/services/task-platform/.venv"
-  "$NEXUS_ROOT/services/task-platform/.venv/bin/pip" install -q -U pip
-  "$NEXUS_ROOT/services/task-platform/.venv/bin/pip" install -q -e "$NEXUS_ROOT/services/task-platform[dev]"
   [ -x "$NEXUS_ROOT/services/nexus-api/.venv/bin/python" ] || $py -m venv "$NEXUS_ROOT/services/nexus-api/.venv"
-  "$NEXUS_ROOT/services/nexus-api/.venv/bin/pip" install -q -r "$NEXUS_ROOT/services/nexus-api/requirements.txt"
+  "$NEXUS_ROOT/services/nexus-api/.venv/bin/pip" install -q -U pip
+  "$NEXUS_ROOT/services/nexus-api/.venv/bin/pip" install -q -e "$NEXUS_ROOT/services/nexus-api[dev]"
   [ -x "$NEXUS_ROOT/services/agent-service/.venv-agentscope/bin/python" ] || $py -m venv "$NEXUS_ROOT/services/agent-service/.venv-agentscope"
   "$NEXUS_ROOT/services/agent-service/.venv-agentscope/bin/pip" install -q -r "$NEXUS_ROOT/services/agent-service/requirements.txt"
   if [ "$SKIP_WEB" = 0 ]; then
-    # 聊天岛产物落在 web/nexus/public/nexus-chat/，必须先于 web/nexus 构建，
+    # 聊天岛产物落在 services/nexus-api/web/public/nexus-chat/，必须先于 web 构建，
     # 否则 Vite 拷 public 时拿不到它。
-    log "构建 web/nexus-chat（聊天岛）"
-    (cd "$NEXUS_ROOT/web/nexus-chat" && npm ci --no-audit --no-fund >/dev/null && npm run build >/dev/null)
-    log "构建 web/nexus"
-    (cd "$NEXUS_ROOT/web/nexus" && npm ci --no-audit --no-fund >/dev/null && npm run build >/dev/null)
+    log "构建 chat-island（聊天岛）"
+    (cd "$NEXUS_ROOT/services/nexus-api/chat-island" && npm ci --no-audit --no-fund >/dev/null && npm run build >/dev/null)
+    log "构建 Nexus Web"
+    (cd "$NEXUS_ROOT/services/nexus-api/web" && npm ci --no-audit --no-fund >/dev/null && npm run build >/dev/null)
   else log "跳过 Web 构建（--skip-web-build）"; fi
 }
 
@@ -180,7 +178,7 @@ step_secrets() {
   log "密钥（不存在才生成，保存在 $SECRETS，0600）"
   local v
   v="${ASTRA_GATEWAY_MASTER_KEY:-$(get_kv "$SECRETS" ASTRA_GATEWAY_MASTER_KEY)}"
-  [ -n "$v" ] || v="$("$NEXUS_ROOT/services/task-platform/.venv/bin/python" -c 'from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())')"
+  [ -n "$v" ] || v="$("$NEXUS_ROOT/services/nexus-api/.venv/bin/python" -c 'from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())')"
   upsert_kv "$SECRETS" ASTRA_GATEWAY_MASTER_KEY "$v"
   v="${NEXUS_MCP_API_KEY:-$(get_kv "$SECRETS" NEXUS_MCP_API_KEY)}"
   [ -n "$v" ] || v="$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')"
@@ -248,7 +246,7 @@ JSON
 
 step_migrate() {
   log "数据库迁移（alembic upgrade head）"
-  (set -a; . "$RUNENV"; . "$SECRETS"; set +a; cd "$NEXUS_ROOT/services/task-platform" && .venv/bin/python -m alembic upgrade head >/dev/null)
+  (set -a; . "$RUNENV"; . "$SECRETS"; set +a; cd "$NEXUS_ROOT/services/nexus-api" && .venv/bin/python -m alembic upgrade head >/dev/null)
 }
 
 # ---------- services ----------
@@ -278,13 +276,13 @@ UNIT
 }
 
 svc_detach() { # name cmd
-  local py="$NEXUS_ROOT/services/task-platform/.venv/bin/python"
+  local py="$NEXUS_ROOT/services/nexus-api/.venv/bin/python"
   (set -a; . "$RUNENV"; . "$SECRETS"; set +a
    SERVICE_CTL_STATE_DIR="$NEXUS_STATE_DIR" "$py" "$NEXUS_ROOT/ops/dev/service_ctl.py" detach "$1" --log "$LOGS/$1.log" -- bash -c "$2")
 }
 
 py_start() { # service_ctl name: agent, nexus-api
-  local py="$NEXUS_ROOT/services/task-platform/.venv/bin/python"
+  local py="$NEXUS_ROOT/services/nexus-api/.venv/bin/python"
   (set -a; . "$RUNENV"; . "$SECRETS"; set +a
    SERVICE_CTL_STATE_DIR="$NEXUS_STATE_DIR" "$py" "$NEXUS_ROOT/ops/dev/service_ctl.py" "$1" start)
 }
@@ -324,15 +322,14 @@ step_services() {
   retire_legacy_units
   log "启动服务（$( [ "$SYSTEMD" = 1 ] && echo systemd || echo python )）"
   local R="$NEXUS_ROOT"
-  start_service nexus-astra oneshot "cd $R/services/task-platform && .venv/bin/python $NEXUS_ROOT/ops/dev/astra_service.py dev restart" "cd $R/services/task-platform && .venv/bin/python $NEXUS_ROOT/ops/dev/astra_service.py dev stop"
-  wait_http http://127.0.0.1:18100/api/health "Task API(18100)" 90
-  # Task MCP 与管理台由 astra_service dev 拉起，这里不再重复启动。
+  start_service nexus-astra oneshot "cd $R/services/nexus-api && .venv/bin/python $NEXUS_ROOT/ops/dev/astra_service.py dev restart" "cd $R/services/nexus-api && .venv/bin/python $NEXUS_ROOT/ops/dev/astra_service.py dev stop"
+  # Task MCP、Celery、Gateway 与 OpenCode 由 astra_service dev 拉起。
   if [ "$SYSTEMD" = 1 ]; then
     start_service nexus-agent-service simple "exec $R/services/agent-service/.venv-agentscope/bin/python $R/services/agent-service/agent_service.py"
   else
     py_start agent
   fi
-  "$R/services/task-platform/.venv/bin/python" "$NEXUS_ROOT/ops/dev/service_ctl.py" wait-http http://127.0.0.1:18000/health --timeout 120 --header "X-User-ID: nexus" \
+  "$R/services/nexus-api/.venv/bin/python" "$NEXUS_ROOT/ops/dev/service_ctl.py" wait-http http://127.0.0.1:18000/health --timeout 120 --header "X-User-ID: nexus" \
     || die "Agent Service(18000) 未就绪"
   if [ -z "$(get_kv "$RUNENV" NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG)" ]; then
     log "登记聊天模型（bootstrap_chat_model.py）"
@@ -341,7 +338,7 @@ step_services() {
     printf 'NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG=%s\n' "$cfg" >> "$RUNENV"
   fi
   if [ "$SYSTEMD" = 1 ]; then
-    start_service nexus-api simple "cd $R/services/nexus-api && exec .venv/bin/uvicorn nexus_api.main:app --host 127.0.0.1 --port 18120"
+    start_service nexus-api simple "cd $R/services/nexus-api && exec .venv/bin/uvicorn nexus_api.service:app --host 127.0.0.1 --port 18120"
   else
     py_start nexus-api
   fi
@@ -350,9 +347,9 @@ step_services() {
 
 step_gateway_route() {
   log "网关路由 deepseek-flash（已存在则跳过）"
-  (set -a; . "$SECRETS"; set +a; "$NEXUS_ROOT/services/task-platform/.venv/bin/python" - <<'PY'
+  (set -a; . "$SECRETS"; set +a; "$NEXUS_ROOT/services/nexus-api/.venv/bin/python" - <<'PY'
 import os, httpx
-B = "http://127.0.0.1:18100/api/gateway"; c = httpx.Client(timeout=60)
+B = "http://127.0.0.1:18120/api/gateway"; c = httpx.Client(timeout=60)
 items = lambda r: r.json() if isinstance(r.json(), list) else r.json().get("items", [])
 pools = {p["name"]: p for p in items(c.get(B + "/pools"))}
 pool = pools.get("deepseek-pool") or c.post(B + "/pools", json={"name": "deepseek-pool"}).raise_for_status().json()
@@ -448,13 +445,12 @@ print("llm_wiki project ready")
 PY
   )
   log "Ingest pump（无头 Chrome 驱动 Web 版 ingest）"
-  local pyws="$NEXUS_ROOT/services/task-platform/.venv/bin/python"
-  "$pyws" -c 'import websocket' 2>/dev/null || "$NEXUS_ROOT/services/task-platform/.venv/bin/pip" install -q websocket-client
+  local pyws="$NEXUS_ROOT/services/nexus-api/.venv/bin/python"
+  "$pyws" -c 'import websocket' 2>/dev/null || "$NEXUS_ROOT/services/nexus-api/.venv/bin/pip" install -q websocket-client
   start_service nexus-llm-wiki-pump simple "LLM_WIKI_UI=http://127.0.0.1:$LLM_WIKI_LOCAL_PORT/ exec $pyws $NEXUS_ROOT/tools/llm_wiki/llm_wiki_ingest_pump.py"
   [ -f "$NEXUS_ROOT/tools/llm_wiki/llm_wiki_ingest_pump.py" ] || warn "仓库缺少 tools/llm_wiki/llm_wiki_ingest_pump.py，请从部署机复制"
-  start_service nexus-astra oneshot "cd $NEXUS_ROOT/services/task-platform && .venv/bin/python $NEXUS_ROOT/ops/dev/astra_service.py dev restart" "cd $NEXUS_ROOT/services/task-platform && .venv/bin/python $NEXUS_ROOT/ops/dev/astra_service.py dev stop"
-  wait_http http://127.0.0.1:18100/api/health "Task API(18100)" 90
-  curl -fsS -m 30 -X POST http://127.0.0.1:18100/api/library/service/resync >/dev/null || warn "图书馆重新同步请求失败"
+  start_service nexus-astra oneshot "cd $NEXUS_ROOT/services/nexus-api && .venv/bin/python $NEXUS_ROOT/ops/dev/astra_service.py dev restart" "cd $NEXUS_ROOT/services/nexus-api && .venv/bin/python $NEXUS_ROOT/ops/dev/astra_service.py dev stop"
+  curl -fsS -m 30 -X POST http://127.0.0.1:18120/api/library/service/resync >/dev/null || warn "图书馆重新同步请求失败"
 }
 
 step_remote_worker() {
@@ -462,9 +458,9 @@ step_remote_worker() {
   log "远程 Worker $REMOTE_WORKER_ID @ $REMOTE_WORKER"
   (REMOTE_WORKER="$REMOTE_WORKER" REMOTE_WORKER_ID="$REMOTE_WORKER_ID" REMOTE_WORKER_USER="$REMOTE_WORKER_USER" REMOTE_WORKER_PORT="$REMOTE_WORKER_PORT" \
    REMOTE_WORKER_OPENCODE_PORT="$REMOTE_WORKER_OPENCODE_PORT" REMOTE_WORKER_WORKSPACE="$REMOTE_WORKER_WORKSPACE" REMOTE_WORKER_SSH_PASSWORD="$REMOTE_WORKER_SSH_PASSWORD" \
-   "$NEXUS_ROOT/services/task-platform/.venv/bin/python" - <<'PY'
+   "$NEXUS_ROOT/services/nexus-api/.venv/bin/python" - <<'PY'
 import os, httpx
-e = os.environ; B = "http://127.0.0.1:18100/api"; c = httpx.Client(timeout=900)
+e = os.environ; B = "http://127.0.0.1:18120/api"; c = httpx.Client(timeout=900)
 wid = e["REMOTE_WORKER_ID"]
 env = {"mode": "LINUX_REMOTE", "name": wid, "host": e["REMOTE_WORKER"], "port": int(e["REMOTE_WORKER_PORT"]),
        "username": e["REMOTE_WORKER_USER"], "ssh_password": e["REMOTE_WORKER_SSH_PASSWORD"],
@@ -488,16 +484,16 @@ step_health() {
   local fails=0 u
   chk() { if curl -fsS -m 10 ${3:+-H "$3"} -o /dev/null "$1"; then printf '  ✓ %s\n' "$2"; else printf '  ✗ %s (%s)\n' "$2" "$1"; fails=$((fails+1)); fi; }
   redis-cli -p 6379 ping >/dev/null 2>&1 && echo "  ✓ Redis" || { echo "  ✗ Redis"; fails=$((fails+1)); }
-  chk http://127.0.0.1:18100/api/health "Task API 18100"
+  chk http://127.0.0.1:18120/api/health "Nexus API 18120"
   chk http://127.0.0.1:18000/health "Agent Service 18000" "X-User-ID: nexus"
   chk http://127.0.0.1:18120/api/v1/knowledge "Nexus API 18120"
   ss -ltn | grep -q ':18110 ' && echo "  ✓ Gateway 18110" || { echo "  ✗ Gateway 18110"; fails=$((fails+1)); }
   ss -ltn | grep -q ':18201 ' && echo "  ✓ Library MCP 18201" || { echo "  ✗ Library MCP 18201"; fails=$((fails+1)); }
   ss -ltn | grep -q ':18202 ' && echo "  ✓ Task MCP 18202" || { echo "  ✗ Task MCP 18202"; fails=$((fails+1)); }
-  [ -d "$NEXUS_ROOT/web/nexus/dist" ] && chk http://127.0.0.1:15174/ "Nexus Web 15174"
+  chk http://127.0.0.1:18120/ "Nexus Web(18120)"
   if [ "$WITH_WIKI" = 1 ]; then
     chk "http://127.0.0.1:$LLM_WIKI_LOCAL_PORT/api/v1/health" "llm_wiki"
-    u="$(curl -fsS -m 30 http://127.0.0.1:18100/api/library/service/status || true)"
+    u="$(curl -fsS -m 30 http://127.0.0.1:18120/api/library/service/status || true)"
     case "$u" in *'"healthy":true'*) echo "  ✓ 图书馆知识服务 healthy";; *) echo "  ✗ 图书馆知识服务未 healthy"; fails=$((fails+1));; esac
   fi
   touch "$NEXUS_STATE_DIR/installed"

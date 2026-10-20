@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Task platform supervisor: Task API 18100, gateway 18110, Celery, OpenCode, Nexus Web 15174.
+# Task runtime supervisor: gateway 18110, Celery, OpenCode, Task MCP 18202; API/Web 由 nexus-api 进程提供。
 # usage: ops/dev/start_astra.sh [start|restart|stop|status]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -17,8 +17,8 @@ export ASTRA_NEXUS_API_BASE="${ASTRA_NEXUS_API_BASE:-http://127.0.0.1:18120}"
 export ASTRA_AGENTSCOPE_BASE_URL="${ASTRA_AGENTSCOPE_BASE_URL:-http://127.0.0.1:18000}"
 export ASTRA_AGENTSCOPE_USER_ID="${ASTRA_AGENTSCOPE_USER_ID:-nexus}"
 export ASTRA_LLM_WIKI_API_BASE_URL="${ASTRA_LLM_WIKI_API_BASE_URL:-http://127.0.0.1:19828/api/v1}"
-PY="$ROOT/services/task-platform/.venv/bin/python"
-cd "$ROOT/services/task-platform"
+PY="$ROOT/services/nexus-api/.venv/bin/python"
+cd "$ROOT/services/nexus-api"
 case "$ACTION" in
   start|restart|stop|status)
     exec "$PY" "$ROOT/ops/dev/astra_service.py" dev "$ACTION"

@@ -10,7 +10,7 @@ from typing import Any
 from uuid import uuid4
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS employees (
+CREATE TABLE IF NOT EXISTS t_nexus_employees (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     domain TEXT NOT NULL,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS employees (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS conversations (
+CREATE TABLE IF NOT EXISTS t_nexus_conversations (
     id TEXT PRIMARY KEY,
     employee_id TEXT NOT NULL,
     owner_id TEXT NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS messages (
+CREATE TABLE IF NOT EXISTS t_nexus_messages (
     id TEXT PRIMARY KEY,
     conversation_id TEXT,
     channel_id TEXT,
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS messages (
     speaker_uid TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS channels (
+CREATE TABLE IF NOT EXISTS t_nexus_channels (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT NOT NULL,
@@ -60,20 +60,20 @@ CREATE TABLE IF NOT EXISTS channels (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS channel_members (
+CREATE TABLE IF NOT EXISTS t_nexus_channel_members (
     channel_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
     agentscope_session_id TEXT,
     last_delivered_message_id TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (channel_id, employee_id)
 );
-CREATE TABLE IF NOT EXISTS channel_humans (
+CREATE TABLE IF NOT EXISTS t_nexus_channel_humans (
     channel_id TEXT NOT NULL,
     user_uid TEXT NOT NULL,
     display_name TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (channel_id, user_uid)
 );
-CREATE TABLE IF NOT EXISTS attachments (
+CREATE TABLE IF NOT EXISTS t_nexus_attachments (
     id TEXT PRIMARY KEY,
     owner_uid TEXT NOT NULL DEFAULT '',
     name TEXT NOT NULL,
@@ -82,13 +82,13 @@ CREATE TABLE IF NOT EXISTS attachments (
     path TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS im_bots (
+CREATE TABLE IF NOT EXISTS t_nexus_im_bots (
     employee_id TEXT PRIMARY KEY,
     provider TEXT NOT NULL,
     bot_id TEXT NOT NULL,
     UNIQUE (provider, bot_id)
 );
-CREATE TABLE IF NOT EXISTS im_events (
+CREATE TABLE IF NOT EXISTS t_nexus_im_events (
     provider TEXT NOT NULL,
     event_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS im_events (
     claim_until TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (provider, event_id)
 );
-CREATE TABLE IF NOT EXISTS im_bindings (
+CREATE TABLE IF NOT EXISTS t_nexus_im_bindings (
     employee_id TEXT NOT NULL,
     kind TEXT NOT NULL,
     external_key TEXT NOT NULL DEFAULT '',
@@ -106,13 +106,13 @@ CREATE TABLE IF NOT EXISTS im_bindings (
     session_id TEXT NOT NULL,
     PRIMARY KEY (employee_id, kind, external_key, owner_uid)
 );
-CREATE TABLE IF NOT EXISTS im_threads (
+CREATE TABLE IF NOT EXISTS t_nexus_im_threads (
     employee_id TEXT NOT NULL,
     conversation_key TEXT NOT NULL,
     session_id TEXT NOT NULL,
     PRIMARY KEY (employee_id, conversation_key)
 );
-CREATE TABLE IF NOT EXISTS im_outbox (
+CREATE TABLE IF NOT EXISTS t_nexus_im_outbox (
     delivery_id TEXT PRIMARY KEY,
     employee_id TEXT NOT NULL,
     conversation_key TEXT NOT NULL,
@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS im_outbox (
     lease_until TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS peer_deliveries (
+CREATE TABLE IF NOT EXISTS t_nexus_peer_deliveries (
     id TEXT PRIMARY KEY,
     scope TEXT NOT NULL,
     sender_agent_id TEXT NOT NULL,
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS peer_deliveries (
     message_key TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS nexus_skills (
+CREATE TABLE IF NOT EXISTS t_nexus_skills (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT NOT NULL,
@@ -142,8 +142,8 @@ CREATE TABLE IF NOT EXISTS nexus_skills (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ux_nexus_skills_name ON nexus_skills(name);
-CREATE TABLE IF NOT EXISTS nexus_skill_versions (
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nexus_skills_name ON t_nexus_skills(name);
+CREATE TABLE IF NOT EXISTS t_nexus_skill_versions (
     id TEXT PRIMARY KEY,
     skill_id TEXT NOT NULL,
     version INTEGER NOT NULL,
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS nexus_skill_versions (
     created_at TEXT NOT NULL,
     UNIQUE (skill_id, version)
 );
-CREATE TABLE IF NOT EXISTS nexus_mcps (
+CREATE TABLE IF NOT EXISTS t_nexus_mcps (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
@@ -169,9 +169,9 @@ CREATE TABLE IF NOT EXISTS nexus_mcps (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ux_nexus_mcps_name ON nexus_mcps(name);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_nexus_mcps_runtime_name ON nexus_mcps(runtime_name);
-CREATE TABLE IF NOT EXISTS resource_sync (
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nexus_mcps_name ON t_nexus_mcps(name);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nexus_mcps_runtime_name ON t_nexus_mcps(runtime_name);
+CREATE TABLE IF NOT EXISTS t_nexus_resource_sync (
     resource_type TEXT NOT NULL,
     resource_id TEXT NOT NULL,
     employee_id TEXT NOT NULL,
@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS resource_sync (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (resource_type, resource_id, employee_id, session_id)
 );
-CREATE TABLE IF NOT EXISTS nexus_settings (
+CREATE TABLE IF NOT EXISTS t_nexus_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
@@ -199,53 +199,113 @@ def connect(path: Path) -> sqlite3.Connection:
     return connection
 
 
+LEGACY_TABLES = {
+    "employees": "t_nexus_employees",
+    "conversations": "t_nexus_conversations",
+    "messages": "t_nexus_messages",
+    "channels": "t_nexus_channels",
+    "channel_members": "t_nexus_channel_members",
+    "channel_humans": "t_nexus_channel_humans",
+    "attachments": "t_nexus_attachments",
+    "im_bots": "t_nexus_im_bots",
+    "im_events": "t_nexus_im_events",
+    "im_bindings": "t_nexus_im_bindings",
+    "im_threads": "t_nexus_im_threads",
+    "im_outbox": "t_nexus_im_outbox",
+    "peer_deliveries": "t_nexus_peer_deliveries",
+    "nexus_skills": "t_nexus_skills",
+    "nexus_skill_versions": "t_nexus_skill_versions",
+    "nexus_mcps": "t_nexus_mcps",
+    "resource_sync": "t_nexus_resource_sync",
+    "nexus_settings": "t_nexus_settings",
+}
+
+
+def _rename_legacy_tables(connection) -> None:
+    """One-time rename from the pre-unification table names.
+
+    Remove after every deployment has opened the unified ``nexus.db`` at least
+    once; fresh databases only ever see the ``t_nexus_`` names.
+    """
+    existing = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    for old, new in LEGACY_TABLES.items():
+        if old in existing and new not in existing:
+            connection.execute(f'ALTER TABLE "{old}" RENAME TO "{new}"')
+
+
 def init_db(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with connect(path) as connection:
+        _rename_legacy_tables(connection)
         connection.executescript(SCHEMA)
-        columns = {row[1] for row in connection.execute("PRAGMA table_info(messages)")}
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(t_nexus_messages)")}
         if "accepted" not in columns:
-            connection.execute("ALTER TABLE messages ADD COLUMN accepted INTEGER NOT NULL DEFAULT 0")
+            connection.execute("ALTER TABLE t_nexus_messages ADD COLUMN accepted INTEGER NOT NULL DEFAULT 0")
         if "speaker_uid" not in columns:
-            connection.execute("ALTER TABLE messages ADD COLUMN speaker_uid TEXT NOT NULL DEFAULT ''")
-        conversation_columns = {row[1] for row in connection.execute("PRAGMA table_info(conversations)")}
+            connection.execute("ALTER TABLE t_nexus_messages ADD COLUMN speaker_uid TEXT NOT NULL DEFAULT ''")
+        conversation_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(t_nexus_conversations)")
+        }
         if "kind" not in conversation_columns:
-            connection.execute("ALTER TABLE conversations ADD COLUMN kind TEXT NOT NULL DEFAULT 'private'")
+            connection.execute(
+                "ALTER TABLE t_nexus_conversations "
+                "ADD COLUMN kind TEXT NOT NULL DEFAULT 'private'"
+            )
         if "workspace_id" not in conversation_columns:
-            connection.execute("ALTER TABLE conversations ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''")
+            connection.execute(
+                "ALTER TABLE t_nexus_conversations "
+                "ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''"
+            )
         connection.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS ux_private_conversation
-            ON conversations(owner_id, employee_id, kind)
+            ON t_nexus_conversations(owner_id, employee_id, kind)
             """
         )
-        attachment_columns = {row[1] for row in connection.execute("PRAGMA table_info(attachments)")}
+        attachment_columns = {row[1] for row in connection.execute("PRAGMA table_info(t_nexus_attachments)")}
         if "owner_uid" not in attachment_columns:
-            connection.execute("ALTER TABLE attachments ADD COLUMN owner_uid TEXT NOT NULL DEFAULT ''")
-        channel_columns = {row[1] for row in connection.execute("PRAGMA table_info(channels)")}
+            connection.execute(
+                "ALTER TABLE t_nexus_attachments ADD COLUMN owner_uid TEXT NOT NULL DEFAULT ''"
+            )
+        channel_columns = {row[1] for row in connection.execute("PRAGMA table_info(t_nexus_channels)")}
         if "record_session_id" not in channel_columns:
-            connection.execute("ALTER TABLE channels ADD COLUMN record_agent_id TEXT NOT NULL DEFAULT ''")
-            connection.execute("ALTER TABLE channels ADD COLUMN record_session_id TEXT NOT NULL DEFAULT ''")
-        employee_columns = {row[1] for row in connection.execute("PRAGMA table_info(employees)")}
+            connection.execute(
+                "ALTER TABLE t_nexus_channels ADD COLUMN record_agent_id TEXT NOT NULL DEFAULT ''"
+            )
+            connection.execute(
+                "ALTER TABLE t_nexus_channels ADD COLUMN record_session_id TEXT NOT NULL DEFAULT ''"
+            )
+        employee_columns = {row[1] for row in connection.execute("PRAGMA table_info(t_nexus_employees)")}
         if "capability_json" not in employee_columns:
-            connection.execute("ALTER TABLE employees ADD COLUMN capability_json TEXT NOT NULL DEFAULT '{}'")
+            connection.execute(
+                "ALTER TABLE t_nexus_employees ADD COLUMN capability_json TEXT NOT NULL DEFAULT '{}'"
+            )
         if "model_route_id" not in employee_columns:
-            connection.execute("ALTER TABLE employees ADD COLUMN model_route_id TEXT NOT NULL DEFAULT ''")
+            connection.execute(
+                "ALTER TABLE t_nexus_employees ADD COLUMN model_route_id TEXT NOT NULL DEFAULT ''"
+            )
         if "mcp_json" not in employee_columns:
-            connection.execute("ALTER TABLE employees ADD COLUMN mcp_json TEXT NOT NULL DEFAULT '[]'")
-        member_columns = {row[1] for row in connection.execute("PRAGMA table_info(channel_members)")}
+            connection.execute("ALTER TABLE t_nexus_employees ADD COLUMN mcp_json TEXT NOT NULL DEFAULT '[]'")
+        member_columns = {row[1] for row in connection.execute("PRAGMA table_info(t_nexus_channel_members)")}
         if "last_delivered_message_id" not in member_columns:
             connection.execute(
-                "ALTER TABLE channel_members ADD COLUMN last_delivered_message_id TEXT NOT NULL DEFAULT ''"
+                "ALTER TABLE t_nexus_channel_members "
+                "ADD COLUMN last_delivered_message_id TEXT NOT NULL DEFAULT ''"
             )
-        event_columns = {row[1] for row in connection.execute("PRAGMA table_info(im_events)")}
+        event_columns = {row[1] for row in connection.execute("PRAGMA table_info(t_nexus_im_events)")}
         if "claim_token" not in event_columns:
-            connection.execute("ALTER TABLE im_events ADD COLUMN claim_token TEXT NOT NULL DEFAULT ''")
+            connection.execute(
+                "ALTER TABLE t_nexus_im_events ADD COLUMN claim_token TEXT NOT NULL DEFAULT ''"
+            )
         if "claim_until" not in event_columns:
-            connection.execute("ALTER TABLE im_events ADD COLUMN claim_until TEXT NOT NULL DEFAULT ''")
-        outbox_columns = {row[1] for row in connection.execute("PRAGMA table_info(im_outbox)")}
+            connection.execute(
+                "ALTER TABLE t_nexus_im_events ADD COLUMN claim_until TEXT NOT NULL DEFAULT ''"
+            )
+        outbox_columns = {row[1] for row in connection.execute("PRAGMA table_info(t_nexus_im_outbox)")}
         if "lease_until" not in outbox_columns:
-            connection.execute("ALTER TABLE im_outbox ADD COLUMN lease_until TEXT NOT NULL DEFAULT ''")
+            connection.execute(
+                "ALTER TABLE t_nexus_im_outbox ADD COLUMN lease_until TEXT NOT NULL DEFAULT ''"
+            )
 
 
 def new_id(prefix: str) -> str:

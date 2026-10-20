@@ -24,11 +24,11 @@ def bind_bot(connection, employee_id: str, provider: str, bot_id: str) -> dict[s
     if not provider or not bot_id:
         raise ImError("缺少机器人标识", 422)
     connection.execute(
-        "DELETE FROM im_bots WHERE employee_id = ? OR (provider = ? AND bot_id = ?)",
+        "DELETE FROM t_nexus_im_bots WHERE employee_id = ? OR (provider = ? AND bot_id = ?)",
         (employee_id, provider, bot_id),
     )
     connection.execute(
-        "INSERT INTO im_bots (employee_id, provider, bot_id) VALUES (?, ?, ?)",
+        "INSERT INTO t_nexus_im_bots (employee_id, provider, bot_id) VALUES (?, ?, ?)",
         (employee_id, provider, bot_id),
     )
     connection.commit()
@@ -42,7 +42,7 @@ def open_external(connection, employee_id: str, external_key: str, session_id: s
         raise ImError("外部群需要独立的会话", 422)
     private = connection.execute(
         """
-        SELECT agentscope_session_id FROM conversations
+        SELECT agentscope_session_id FROM t_nexus_conversations
         WHERE employee_id = ? AND kind = 'private' AND agentscope_session_id = ?
         """,
         (employee_id, session_id),
@@ -51,7 +51,7 @@ def open_external(connection, employee_id: str, external_key: str, session_id: s
         raise ImError("外部群不能复用私聊会话", 409)
     connection.execute(
         """
-        INSERT INTO im_bindings (employee_id, kind, external_key, owner_uid, session_id)
+        INSERT INTO t_nexus_im_bindings (employee_id, kind, external_key, owner_uid, session_id)
         VALUES (?, 'external', ?, '', ?)
         ON CONFLICT(employee_id, kind, external_key, owner_uid)
         DO UPDATE SET session_id = excluded.session_id
@@ -82,7 +82,7 @@ async def accept_inbound(
     if not provider or not event_id:
         raise ImError("缺少入站事件", 422)
     bot = connection.execute(
-        "SELECT employee_id FROM im_bots WHERE provider = ? AND bot_id = ?",
+        "SELECT employee_id FROM t_nexus_im_bots WHERE provider = ? AND bot_id = ?",
         (provider, bot_id.strip()),
     ).fetchone()
     if bot is None:
@@ -99,7 +99,7 @@ async def accept_inbound(
     token = new_id("clm")
     connection.execute(
         """
-        INSERT INTO im_events (provider, event_id, employee_id, session_id, accepted, claim_token)
+        INSERT INTO t_nexus_im_events (provider, event_id, employee_id, session_id, accepted, claim_token)
         VALUES (?, ?, ?, ?, 0, '')
         ON CONFLICT(provider, event_id) DO NOTHING
         """,
@@ -109,7 +109,7 @@ async def accept_inbound(
     expiry = (datetime.now(UTC) + timedelta(seconds=LEASE_SECONDS)).isoformat()
     claimed = connection.execute(
         """
-        UPDATE im_events
+        UPDATE t_nexus_im_events
         SET claim_token = ?, session_id = ?, employee_id = ?, claim_until = ?
         WHERE provider = ? AND event_id = ? AND accepted = 0
           AND (claim_token = '' OR claim_until = '' OR claim_until <= ?)
@@ -119,7 +119,7 @@ async def accept_inbound(
     connection.commit()
     if claimed.rowcount != 1:
         existing = connection.execute(
-            "SELECT * FROM im_events WHERE provider = ? AND event_id = ?",
+            "SELECT * FROM t_nexus_im_events WHERE provider = ? AND event_id = ?",
             (provider, event_id),
         ).fetchone()
         if existing is not None and existing["accepted"]:
@@ -132,7 +132,7 @@ async def accept_inbound(
         raise ImError("这个事件正在处理", 409)
     try:
         current = connection.execute(
-            "SELECT claim_token FROM im_events WHERE provider = ? AND event_id = ?",
+            "SELECT claim_token FROM t_nexus_im_events WHERE provider = ? AND event_id = ?",
             (provider, event_id),
         ).fetchone()
         if current is None or current["claim_token"] != token:
@@ -146,7 +146,7 @@ async def accept_inbound(
     except Exception:
         connection.execute(
             """
-            UPDATE im_events SET claim_token = '', claim_until = ''
+            UPDATE t_nexus_im_events SET claim_token = '', claim_until = ''
             WHERE provider = ? AND event_id = ? AND claim_token = ?
             """,
             (provider, event_id, token),
@@ -155,7 +155,7 @@ async def accept_inbound(
         raise
     finished = connection.execute(
         """
-        UPDATE im_events SET accepted = 1, claim_token = '', claim_until = ''
+        UPDATE t_nexus_im_events SET accepted = 1, claim_token = '', claim_until = ''
         WHERE provider = ? AND event_id = ? AND claim_token = ?
         """,
         (provider, event_id, token),
@@ -180,7 +180,7 @@ def contact_human(
         raise ImError("缺少主动联系的会话或正文", 422)
     connection.execute(
         """
-        INSERT INTO im_threads (employee_id, conversation_key, session_id)
+        INSERT INTO t_nexus_im_threads (employee_id, conversation_key, session_id)
         VALUES (?, ?, ?)
         ON CONFLICT(employee_id, conversation_key) DO UPDATE SET session_id = excluded.session_id
         """,
@@ -189,7 +189,7 @@ def contact_human(
     delivery_id = new_id("dlv")
     connection.execute(
         """
-        INSERT INTO im_outbox (
+        INSERT INTO t_nexus_im_outbox (
             delivery_id, employee_id, conversation_key, session_id, body, state, lease_until, created_at
         ) VALUES (?, ?, ?, ?, ?, 'queued', '', ?)
         """,
@@ -206,7 +206,7 @@ def claim_outbox(connection, *, lease_seconds: int = LEASE_SECONDS) -> dict[str,
     expiry = (datetime.now(UTC) + timedelta(seconds=lease_seconds)).isoformat()
     current = connection.execute(
         """
-        SELECT delivery_id FROM im_outbox
+        SELECT delivery_id FROM t_nexus_im_outbox
         WHERE state = 'inflight' AND (lease_until = '' OR lease_until <= ?)
         ORDER BY created_at, delivery_id
         LIMIT 1
@@ -215,17 +215,17 @@ def claim_outbox(connection, *, lease_seconds: int = LEASE_SECONDS) -> dict[str,
     ).fetchone()
     if current is not None:
         connection.execute(
-            "UPDATE im_outbox SET lease_until = ? WHERE delivery_id = ? AND state = 'inflight'",
+            "UPDATE t_nexus_im_outbox SET lease_until = ? WHERE delivery_id = ? AND state = 'inflight'",
             (expiry, current["delivery_id"]),
         )
         connection.commit()
         return _outbox_row(connection, current["delivery_id"])
     candidate = connection.execute(
         """
-        SELECT delivery_id FROM im_outbox
+        SELECT delivery_id FROM t_nexus_im_outbox
         WHERE state = 'queued'
           AND conversation_key NOT IN (
-            SELECT conversation_key FROM im_outbox WHERE state = 'inflight'
+            SELECT conversation_key FROM t_nexus_im_outbox WHERE state = 'inflight'
           )
         ORDER BY created_at, delivery_id
         LIMIT 1
@@ -235,7 +235,7 @@ def claim_outbox(connection, *, lease_seconds: int = LEASE_SECONDS) -> dict[str,
         return None
     claimed = connection.execute(
         """
-        UPDATE im_outbox SET state = 'inflight', lease_until = ?
+        UPDATE t_nexus_im_outbox SET state = 'inflight', lease_until = ?
         WHERE delivery_id = ? AND state = 'queued'
         """,
         (expiry, candidate["delivery_id"]),
@@ -247,7 +247,9 @@ def claim_outbox(connection, *, lease_seconds: int = LEASE_SECONDS) -> dict[str,
 
 
 def _outbox_row(connection, delivery_id: str) -> dict[str, str]:
-    row = connection.execute("SELECT * FROM im_outbox WHERE delivery_id = ?", (delivery_id,)).fetchone()
+    row = connection.execute(
+        "SELECT * FROM t_nexus_im_outbox WHERE delivery_id = ?", (delivery_id,)
+    ).fetchone()
     return {
         "delivery_id": row["delivery_id"],
         "employee_id": row["employee_id"],
@@ -260,14 +262,18 @@ def _outbox_row(connection, delivery_id: str) -> dict[str, str]:
 
 
 def acknowledge(connection, delivery_id: str) -> dict[str, str]:
-    row = connection.execute("SELECT * FROM im_outbox WHERE delivery_id = ?", (delivery_id,)).fetchone()
+    row = connection.execute(
+        "SELECT * FROM t_nexus_im_outbox WHERE delivery_id = ?", (delivery_id,)
+    ).fetchone()
     if row is None:
         raise ImError("没有这条投递", 404)
     if row["state"] != "acked":
-        connection.execute("UPDATE im_outbox SET state = 'acked' WHERE delivery_id = ?", (delivery_id,))
+        connection.execute(
+            "UPDATE t_nexus_im_outbox SET state = 'acked' WHERE delivery_id = ?", (delivery_id,)
+        )
         nxt = connection.execute(
             """
-            SELECT delivery_id FROM im_outbox
+            SELECT delivery_id FROM t_nexus_im_outbox
             WHERE conversation_key = ? AND state = 'queued'
             ORDER BY created_at, delivery_id
             LIMIT 1
@@ -276,7 +282,7 @@ def acknowledge(connection, delivery_id: str) -> dict[str, str]:
         ).fetchone()
         if nxt is not None:
             connection.execute(
-                "UPDATE im_outbox SET state = 'inflight' WHERE delivery_id = ?",
+                "UPDATE t_nexus_im_outbox SET state = 'inflight' WHERE delivery_id = ?",
                 (nxt["delivery_id"],),
             )
         connection.commit()
@@ -288,7 +294,7 @@ def redeliver(connection, conversation_key: str) -> dict[str, str]:
 
     row = connection.execute(
         """
-        SELECT * FROM im_outbox
+        SELECT * FROM t_nexus_im_outbox
         WHERE conversation_key = ? AND state = 'inflight'
         ORDER BY created_at, delivery_id
         LIMIT 1
@@ -315,7 +321,7 @@ def _session_for(
     if conversation_key:
         thread = connection.execute(
             """
-            SELECT session_id FROM im_threads
+            SELECT session_id FROM t_nexus_im_threads
             WHERE employee_id = ? AND conversation_key = ?
             """,
             (employee_id, conversation_key),
@@ -324,7 +330,7 @@ def _session_for(
     if external_key:
         binding = connection.execute(
             """
-            SELECT session_id FROM im_bindings
+            SELECT session_id FROM t_nexus_im_bindings
             WHERE employee_id = ? AND kind = 'external' AND external_key = ?
             """,
             (employee_id, external_key),
@@ -332,7 +338,7 @@ def _session_for(
         return binding["session_id"] if binding is not None else ""
     private = connection.execute(
         """
-        SELECT agentscope_session_id FROM conversations
+        SELECT agentscope_session_id FROM t_nexus_conversations
         WHERE employee_id = ? AND owner_id = ? AND kind = 'private'
         """,
         (employee_id, sender_uid),

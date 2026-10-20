@@ -14,6 +14,7 @@ from app.models import (
     Event,
     ExperienceEvidence,
     ExperienceReviewJob,
+    ExperienceReviewSegment,
     KnowledgeItem,
     RuntimeSession,
     Task,
@@ -346,6 +347,15 @@ async def test_candidate_writer_persists_validated_evidence():
         assert evidence
         assert all(row.validation_status == "validated" for row in evidence)
         assert evidence[0].native_session_id == "ses_1"
+        again = await write_candidates(session, job=job, trace=trace, candidates=[candidate])
+        await session.commit()
+        assert again == ids
+        count = await session.scalar(
+            select(func.count()).select_from(KnowledgeItem).where(
+                KnowledgeItem.source_task_id == job.task_id_snapshot
+            )
+        )
+        assert count == 1
 
 
 @pytest.mark.asyncio
@@ -429,3 +439,89 @@ def test_worker_trace_read_trimming_and_cursor(tmp_path, monkeypatch):
     assert result["next_before"] == "msg_0"
     assert result["messages"][0]["parts"][0]["state"]["output"].endswith("x")
     assert len(result["messages"][0]["parts"][0]["state"]["output"]) < 20000
+
+
+@pytest.mark.asyncio
+async def test_review_failure_keeps_task_status_and_retries(monkeypatch):
+    from app.runtime.experience_review.trace_reader import TraceUnavailable
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "experience_review_enabled", True)
+    task_id, event_id = await _task_and_event()
+    async with SessionLocal() as session:
+        task = await session.get(Task, task_id)
+        task.status = "SUCCEEDED"
+        event = await session.get(Event, event_id)
+        snapshot = {
+            "task_id": task_id,
+            "root_session_id": "ses_1",
+            "confirmed_at": datetime.now(UTC).isoformat(),
+            "source_session_ids": ["ses_1"],
+        }
+        job = await coordinator.enqueue_in_transaction(session, task=task, event=event, snapshot=snapshot)
+        await session.commit()
+        job_id = job.id
+
+    async def unavailable(_snapshot):
+        raise TraceUnavailable("offline")
+
+    monkeypatch.setattr(coordinator, "read_trace", unavailable)
+    result = await coordinator.process_job(job_id, llm=FakeLLM())
+    assert result is not None
+    assert result.status == coordinator.RETRY_WAIT
+    assert result.attempts == 1
+
+    async with SessionLocal() as session:
+        task = await session.get(Task, task_id)
+        job = await session.get(ExperienceReviewJob, job_id)
+        assert task.status == "SUCCEEDED"
+        assert job.status == coordinator.RETRY_WAIT
+
+
+@pytest.mark.asyncio
+async def test_next_segment_skips_completed_segment():
+    from uuid import uuid4
+
+    suffix = uuid4().hex[:8]
+    async with SessionLocal() as session:
+        job = ExperienceReviewJob(
+            id=f"xrj_{suffix}",
+            confirmation_event_id=int(uuid4().int % 1_000_000_000),
+            review_key=f"k{suffix}"[:64],
+            task_id_snapshot=f"T-{suffix}",
+            root_session_id=f"ses_{suffix}",
+            confirmed_at=datetime.now(UTC),
+            source_snapshot={},
+            status=coordinator.ANALYZING,
+            phase="MAP",
+            next_retry_at=datetime.now(UTC),
+            prompt_version="1",
+            candidate_ids=[],
+        )
+        first = ExperienceReviewSegment(
+            job_id=job.id,
+            segment_index=0,
+            source_refs=[],
+            input_digest="0" * 64,
+            token_estimate=10,
+            status="DONE",
+            attempts=1,
+            next_retry_at=datetime.now(UTC),
+        )
+        second = ExperienceReviewSegment(
+            job_id=job.id,
+            segment_index=1,
+            source_refs=[],
+            input_digest="1" * 64,
+            token_estimate=10,
+            status="PENDING",
+            attempts=0,
+            next_retry_at=datetime.now(UTC),
+        )
+        session.add_all([job, first, second])
+        await session.commit()
+
+    async with SessionLocal() as session:
+        nxt = await coordinator._next_segment(session, job.id)
+        assert nxt is not None
+        assert nxt.segment_index == 1

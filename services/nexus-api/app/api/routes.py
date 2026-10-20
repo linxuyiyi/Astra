@@ -29,6 +29,7 @@ from app.models import (
     CodeRepository,
     Event,
     ExperienceEvidence,
+    ExperienceReviewJob,
     KnowledgeFeedback,
     KnowledgeItem,
     KnowledgeUsage,
@@ -727,6 +728,25 @@ async def delete_task(task_id: str, session: AsyncSession = Depends(get_session)
         update(ExperienceEvidence)
         .where(ExperienceEvidence.task_id == task_id)
         .values(task_id=None, source_session_id=None)
+    )
+    now = datetime.now(UTC)
+    await session.execute(
+        update(ExperienceReviewJob)
+        .where(
+            ExperienceReviewJob.task_id_snapshot == task_id,
+            ExperienceReviewJob.status.in_(
+                ("PENDING", "COLLECTING", "ANALYZING", "VALIDATING", "WRITING", "RETRY_WAIT")
+            ),
+        )
+        .values(
+            status="SKIPPED_SOURCE_MISSING",
+            error_code="task_deleted",
+            error_message="任务已删除，复盘来源不可用",
+            finished_at=now,
+            lease_owner=None,
+            lease_token=None,
+            lease_until=None,
+        )
     )
     await session.execute(delete(TaskWakeOutbox).where(TaskWakeOutbox.task_id == task_id))
     await session.execute(delete(RuntimeSession).where(RuntimeSession.task_id == task_id))

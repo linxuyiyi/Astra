@@ -221,6 +221,57 @@ class Settings(BaseSettings):
             raise ValueError("知识服务地址必须为 http(s)://<host>[:port]/api/v1")
         return value.rstrip("/")
 
+    # 任务经验复盘：独立后台推理，不创建 AgentScope 长期 Agent。
+    experience_review_enabled: bool = Field(
+        default=False, validation_alias="NEXUS_EXPERIENCE_REVIEW_ENABLED"
+    )
+    experience_review_shadow_mode: bool = Field(
+        default=True, validation_alias="NEXUS_EXPERIENCE_REVIEW_SHADOW_MODE"
+    )
+    experience_review_gateway_url: str = Field(
+        default="http://127.0.0.1:18110/v1/chat/completions",
+        validation_alias="NEXUS_EXPERIENCE_REVIEW_GATEWAY_URL",
+    )
+    experience_review_model: str = Field(
+        default="deepseek-flash", validation_alias="NEXUS_EXPERIENCE_REVIEW_MODEL"
+    )
+    experience_review_gateway_key: str | None = Field(
+        default=None, validation_alias="NEXUS_EXPERIENCE_REVIEW_GATEWAY_KEY"
+    )
+    experience_review_context_tokens: int = Field(
+        default=32768, ge=4096, validation_alias="NEXUS_EXPERIENCE_REVIEW_CONTEXT_TOKENS"
+    )
+    experience_review_map_input_tokens: int = Field(
+        default=8000, ge=1024, validation_alias="NEXUS_EXPERIENCE_REVIEW_MAP_INPUT_TOKENS"
+    )
+    experience_review_reduce_input_tokens: int = Field(
+        default=8000, ge=1024, validation_alias="NEXUS_EXPERIENCE_REVIEW_REDUCE_INPUT_TOKENS"
+    )
+    experience_review_max_attempts: int = Field(
+        default=3, ge=1, le=10, validation_alias="NEXUS_EXPERIENCE_REVIEW_MAX_ATTEMPTS"
+    )
+    experience_review_max_candidates: int = Field(
+        default=3, ge=1, le=10, validation_alias="NEXUS_EXPERIENCE_REVIEW_MAX_CANDIDATES"
+    )
+    experience_review_max_messages: int = Field(
+        default=50000, ge=100, validation_alias="NEXUS_EXPERIENCE_REVIEW_MAX_MESSAGES"
+    )
+    experience_review_max_source_bytes: int = Field(
+        default=536870912, ge=1048576, validation_alias="NEXUS_EXPERIENCE_REVIEW_MAX_SOURCE_BYTES"
+    )
+    experience_review_max_concurrency: int = Field(
+        default=2, ge=1, le=16, validation_alias="NEXUS_EXPERIENCE_REVIEW_MAX_CONCURRENCY"
+    )
+    experience_review_scan_interval: int = Field(
+        default=30, ge=5, validation_alias="NEXUS_EXPERIENCE_REVIEW_SCAN_INTERVAL"
+    )
+    experience_review_lease_seconds: int = Field(
+        default=600, ge=30, validation_alias="NEXUS_EXPERIENCE_REVIEW_LEASE_SECONDS"
+    )
+    experience_review_page_size: int = Field(
+        default=20, ge=1, le=200, validation_alias="NEXUS_EXPERIENCE_REVIEW_PAGE_SIZE"
+    )
+
     nr_test_system_endpoint: str = "http://localhost:8000"
     nr_test_system_discover_path: str = "/api/astra/tasks"
     nr_test_system_result_path: str = "/api/astra/tasks/{external_task_id}/result"

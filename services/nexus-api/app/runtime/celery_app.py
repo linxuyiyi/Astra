@@ -5,6 +5,7 @@ from celery import Celery
 from app.config.settings import get_settings
 from app.database import init_database, worker_session
 from app.runtime.dispatcher import Dispatcher
+from app.runtime.experience_review.coordinator import process_job, scan_jobs
 from app.runtime.heartbeat import heartbeat_active_employees, mark_stale_employees_offline
 from app.runtime.lifecycle import RuntimeService
 from app.runtime.scout import TaskScout
@@ -25,12 +26,24 @@ celery.conf.update(
         "nexus.heartbeat-check": {"queue": "nexus-control"},
         "nexus.employee-heartbeat": {"queue": "nexus-control"},
         "nexus.task-wake": {"queue": "nexus-control"},
+        "nexus.experience-review.scan": {"queue": "nexus-review"},
+        "nexus.experience-review.process": {"queue": "nexus-review"},
     },
     beat_schedule={
         "nexus-task-wake": {"task": "nexus.task-wake", "schedule": float(settings.outbox_interval)},
         **(
             {"nexus-scout": {"task": "nexus.scout", "schedule": settings.scout_interval}}
             if NrTestSystemSource.enabled(settings)
+            else {}
+        ),
+        **(
+            {
+                "nexus-experience-review": {
+                    "task": "nexus.experience-review.scan",
+                    "schedule": float(settings.experience_review_scan_interval),
+                }
+            }
+            if settings.experience_review_enabled
             else {}
         ),
         "nexus-dispatch": {"task": "nexus.dispatch", "schedule": settings.dispatcher_interval},
@@ -70,6 +83,16 @@ def task_wake() -> int:
             return await deliver_pending(session, HttpWakeSender())
 
     return run_async(execute())
+
+
+@celery.task(name="nexus.experience-review.scan")
+def experience_review_scan() -> list[str]:
+    return run_async(scan_jobs())
+
+
+@celery.task(name="nexus.experience-review.process")
+def experience_review_process(job_id: str):
+    return run_async(process_job(job_id))
 
 
 @celery.task(name="nexus.scout")

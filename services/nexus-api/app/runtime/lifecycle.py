@@ -1857,6 +1857,7 @@ class RuntimeService:
             directory = Path(workspace)
             await client.session(directory, session_id)
             allowed = await session_tree(client, directory, session_id)
+            allowed_sessions = sorted(allowed)
             for sid in allowed:
                 if await client.status(directory, sid) in {"busy", "retry"}:
                     raise RuntimeStateError("Session 仍在执行，请先停止当前回复")
@@ -1910,6 +1911,40 @@ class RuntimeService:
         task.human_intervention = None
         # 投影之外只在确认和取消时清空 waiting_reason。
         task.waiting_reason = None
+        if get_settings().experience_review_enabled:
+            from app.runtime.experience_review.coordinator import enqueue_in_transaction
+
+            confirmed_at = task.confirmed_at
+            snapshot = {
+                "task_id": task.id,
+                "task": {
+                    "id": task.id,
+                    "title": task.title,
+                    "description": task.description,
+                    "task_type": task.task_type,
+                    "category_id": task.category_id,
+                    "repository_id": task.repository_id,
+                    "employee_id": task.employee_id,
+                },
+                "root_session_id": session_id,
+                "source_session_ids": allowed_sessions,
+                "employee_id": task.employee_id,
+                "workspace": workspace,
+                "turn_anchor_id": anchor,
+                "turn_started_at": task.turn_started_at.isoformat() if task.turn_started_at else None,
+                "confirmed_at": confirmed_at.isoformat(),
+                "native_watermarks": {session_id: anchor or ""},
+            }
+            event = await TaskService(self.session).add_event(
+                task,
+                "TASK_COMPLETION_CONFIRMED",
+                "review",
+                "人工确认完成，待经验复盘",
+                snapshot,
+                commit=False,
+            )
+            await self.session.flush()
+            await enqueue_in_transaction(self.session, task=task, event=event, snapshot=snapshot)
         await self.project(task, TaskStatus.SUCCEEDED, detail="任务已人工确认完成")
         return task
 

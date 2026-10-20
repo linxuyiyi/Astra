@@ -127,7 +127,8 @@ def collect() -> list[tuple[bool, str, str]]:
     add(
         celery.conf.task_default_queue == "nexus-control"
         and celery.conf.task_default_queue != V09_CELERY_QUEUE
-        and queues == {"nexus-control"}
+        and queues <= {"nexus-control", "nexus-review"}
+        and "nexus-control" in queues
         and not task_names,
         "celery queue",
         celery.conf.task_default_queue,

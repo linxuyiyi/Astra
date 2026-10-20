@@ -314,6 +314,75 @@ class TaskWakeOutbox(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
 
+class ExperienceReviewJob(Base):
+    """人工确认完成后的一次独立经验复盘。"""
+
+    __tablename__ = "t_nexus_experience_review_jobs"
+    __table_args__ = (
+        Index("ix_experience_review_status_retry", "status", "next_retry_at"),
+        Index("ix_experience_review_status_lease", "status", "lease_until"),
+        Index("ix_experience_review_task_confirmed", "task_id_snapshot", "confirmed_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    confirmation_event_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    review_key: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    task_id: Mapped[str | None] = mapped_column(
+        ForeignKey("t_nexus_tasks.id", ondelete="SET NULL"), nullable=True
+    )
+    task_id_snapshot: Mapped[str] = mapped_column(String(64), index=True)
+    root_session_id: Mapped[str] = mapped_column(String(160))
+    employee_id_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    turn_anchor_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    confirmed_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    source_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    source_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
+    phase: Mapped[str] = mapped_column(String(32), default="PENDING")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_retry_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    source_message_count: Mapped[int] = mapped_column(Integer, default=0)
+    segment_count: Mapped[int] = mapped_column(Integer, default=0)
+    completed_segment_count: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    zero_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    prompt_version: Mapped[str] = mapped_column(String(32), default="1")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class ExperienceReviewSegment(Base):
+    """大轨迹中的一个可独立分析、可断点恢复的片段。"""
+
+    __tablename__ = "t_nexus_experience_review_segments"
+    __table_args__ = (UniqueConstraint("job_id", "segment_index", name="uq_experience_review_segment"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("t_nexus_experience_review_jobs.id", ondelete="CASCADE"), index=True
+    )
+    segment_index: Mapped[int] = mapped_column(Integer)
+    source_refs: Mapped[list[str]] = mapped_column(JSON, default=list)
+    input_digest: Mapped[str] = mapped_column(String(64))
+    token_estimate: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    lease_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    next_retry_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    analysis_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
 class KnowledgeSpace(Base):
     __tablename__ = "t_nexus_knowledge_spaces"
 
@@ -528,6 +597,13 @@ class ExperienceEvidence(Base):
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     uri: Mapped[str | None] = mapped_column(Text, nullable=True)
     result: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_system: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    native_session_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    source_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    review_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    validation_status: Mapped[str] = mapped_column(
+        String(16), default="unverified", server_default="unverified"
+    )
     captured_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 

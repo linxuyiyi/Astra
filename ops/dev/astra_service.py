@@ -387,6 +387,16 @@ def core_services(
             BACKEND,
             None,
         ),
+        (
+            "runtime-review",
+            [
+                sys.executable, "-m", "celery", "-A", "app.runtime.celery_app:celery",
+                "worker", "--loglevel=INFO", "--concurrency=2", "--queues=nexus-review",
+                "--hostname=nexus-review@%h",
+            ],
+            BACKEND,
+            None,
+        ),
     ]
 
     services.append(("task-mcp", task_mcp_command(), BACKEND, None))
@@ -427,6 +437,7 @@ def start_core(
 
     wait_worker("runtime-control", processes["runtime-control"])
     wait_worker("runtime-agent", processes["runtime-agent"])
+    wait_worker("runtime-review", processes["runtime-review"])
     if "gateway" in processes:
         wait_http("gateway", f"http://127.0.0.1:{GATEWAY_PORT}/healthz")
     if "task-mcp" in processes:

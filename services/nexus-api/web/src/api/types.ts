@@ -207,6 +207,26 @@ export interface AstraEvent {
 }
 
 
+export interface ExperienceReviewJob {
+  id: string
+  task_id: string | null
+  task_id_snapshot: string
+  root_session_id: string
+  status: string
+  phase: string
+  attempts: number
+  source_message_count: number
+  segment_count: number
+  completed_segment_count: number
+  candidate_ids: string[]
+  zero_reason: string | null
+  error_code: string | null
+  error_message: string | null
+  confirmed_at: string
+  created_at: string
+  finished_at: string | null
+}
+
 export type KnowledgeType = 'document' | 'rule' | 'guide' | 'experience' | 'faq' | 'tool' | 'example'
 export type KnowledgeStatus = 'draft' | 'candidate' | 'published' | 'archived' | 'rejected'
 export type VerificationStatus = 'unverified' | 'verified' | 'failed'

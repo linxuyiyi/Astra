@@ -26,6 +26,7 @@ import type {
   TaskCategoryWrite,
   TaskUsage,
   TaskWorkspaceBinding,
+  ExperienceReviewJob,
 } from './types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? ''
@@ -83,6 +84,10 @@ export const api = {
   tasks: (query = '') => request<Task[]>(`/api/tasks${query}`),
   task: (id: string) => request<Task>(`/api/tasks/${id}`),
   taskWorkspace: (id: string) => request<TaskWorkspaceBinding>(`/api/tasks/${id}/workspace`),
+  experienceReviewJobs: (taskId: string) =>
+    request<ExperienceReviewJob[]>(`/api/library/review-jobs?task_id=${encodeURIComponent(taskId)}`),
+  retryExperienceReview: (id: string) =>
+    request<ExperienceReviewJob>(`/api/library/review-jobs/${encodeURIComponent(id)}/retry`, { method: 'POST' }),
   taskRepo: (id: string) => request<{name: string; branch: string; commit: string; dirty: boolean; changes: number}>(`/api/tasks/${id}/repo`),
   uploadTaskFile: async (id: string, file: File): Promise<{path: string}> => {
     const response = await fetch(`${API_BASE}/api/tasks/${id}/files/${encodeURIComponent(file.name)}`, { method: 'POST', body: file })

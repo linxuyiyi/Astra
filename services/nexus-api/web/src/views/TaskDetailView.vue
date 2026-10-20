@@ -36,6 +36,23 @@
     </ElHeader>
 
     <ElMain class="task-detail__main">
+      <div v-if="reviewJob" class="review-strip" data-testid="experience-review">
+        <ElTag :type="reviewJob.status === 'FAILED' ? 'danger' : reviewJob.status === 'SUCCEEDED' ? 'success' : 'info'">
+          经验复盘：{{ reviewStatusLabel }}
+        </ElTag>
+        <ElText v-if="reviewJob.segment_count" type="info">轨迹片段 {{ reviewJob.completed_segment_count }}/{{ reviewJob.segment_count }}</ElText>
+        <ElText v-if="reviewJob.candidate_ids.length" type="success">{{ reviewJob.candidate_ids.length }} 条候选经验</ElText>
+        <ElText v-else-if="reviewJob.zero_reason" type="info">{{ reviewJob.zero_reason }}</ElText>
+        <ElText v-if="reviewJob.error_message" type="danger">{{ reviewJob.error_message }}</ElText>
+        <RouterLink v-if="reviewJob.candidate_ids.length" :to="{ path: '/library', query: { status: 'candidate' } }">查看候选</RouterLink>
+        <ElButton
+          v-if="['FAILED', 'NO_FINDINGS', 'SKIPPED_SOURCE_MISSING'].includes(reviewJob.status)"
+          size="small"
+          :loading="reviewJobLoading"
+          data-testid="experience-review-retry"
+          @click="retryReviewJob"
+        >重试复盘</ElButton>
+      </div>
       <ElAlert
         v-if="error || task?.runtime_error || task?.pending_message_id"
         class="workspace-alert"
@@ -138,7 +155,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElContainer, ElDrawer, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElHeader, ElMain, ElOption, ElSelect, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag, ElText, ElTimeline, ElTimelineItem } from 'element-plus'
 import { api } from '@/api/client'
-import type { AstraEvent, Task, TaskUsage, TaskWorkspaceBinding } from '@/api/types'
+import type { AstraEvent, ExperienceReviewJob, Task, TaskUsage, TaskWorkspaceBinding } from '@/api/types'
 import FieldHelp from '@/components/forms/FieldHelp.vue'
 import RuntimeStatusBadge from '@/components/runtime/RuntimeStatusBadge.vue'
 import { useAstraStore } from '@/stores/astra'
@@ -157,6 +174,38 @@ const busy = ref(false)
 const loading = ref(false)
 const showInfo = ref(false)
 const frameKey = ref(0)
+const reviewJob = ref<ExperienceReviewJob | null>(null)
+const reviewJobLoading = ref(false)
+const reviewLabels: Record<string, string> = {
+  PENDING: '等待处理',
+  COLLECTING: '读取轨迹',
+  ANALYZING: '分析中',
+  VALIDATING: '校验证据',
+  WRITING: '写入候选',
+  SUCCEEDED: '已完成',
+  NO_FINDINGS: '无新经验',
+  RETRY_WAIT: '等待重试',
+  FAILED: '失败',
+  SUPERSEDED: '已失效',
+  SKIPPED_SOURCE_MISSING: '来源不可用',
+  SKIPPED_TOO_LARGE: '轨迹超出上限',
+}
+const reviewStatusLabel = computed(() => reviewJob.value ? reviewLabels[reviewJob.value.status] ?? reviewJob.value.status : '')
+async function loadReviewJob(id: string) {
+  try {
+    const jobs = await api.experienceReviewJobs(id)
+    if (id === String(route.params.id)) reviewJob.value = jobs[0] ?? null
+  } catch {
+    if (id === String(route.params.id)) reviewJob.value = null
+  }
+}
+async function retryReviewJob() {
+  if (!reviewJob.value) return
+  reviewJobLoading.value = true
+  try { reviewJob.value = await api.retryExperienceReview(reviewJob.value.id) }
+  catch { /* 错误由刷新后的状态兜底 */ }
+  finally { reviewJobLoading.value = false }
+}
 
 const owners = ref<NexusEmployee[]>([])
 const employeeName = computed(() => {
@@ -328,6 +377,7 @@ async function loadTask(id: string) {
     error.value = ''
     if (nextTask.workspace) await loadRepo(id)
     else repo.value = null
+    void loadReviewJob(id)
   } catch (reason) { if (id === String(route.params.id)) error.value = reason instanceof Error ? reason.message : '任务加载失败' }
 }
 async function action(name: string) {
@@ -337,7 +387,7 @@ async function action(name: string) {
   finally { busy.value = false }
 }
 async function reconnect() { await action('reconnect'); frameKey.value++ }
-watch(() => route.params.id, () => { selectedSession.value = ''; closeEvents(); showEvents.value = false; void load() }, { immediate: true })
+watch(() => route.params.id, () => { selectedSession.value = ''; reviewJob.value = null; closeEvents(); showEvents.value = false; void load() }, { immediate: true })
 onMounted(() => {
   timer = setInterval(() => { now.value = Date.now() }, 1000)
   void listEmployees().then(items => { owners.value = items }).catch(() => { owners.value = [] })
@@ -362,6 +412,8 @@ onBeforeUnmount(() => { clearInterval(timer); diffRequest?.abort(); closeEvents(
 .repo{max-width:400px}
 .repo :deep(.el-tag__content){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .task-detail__main{--el-main-padding:0;display:flex;flex-direction:column;min-height:0;overflow:hidden;background:var(--astra-bg-base)}
+.review-strip{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--astra-border);background:var(--astra-bg-panel);font-size:13px}
+.review-strip a{color:var(--astra-primary)}
 .workspace-alert{flex:none;border-radius:0}
 .workspace-alert__body{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:6px}
 .task-detail__frame{flex:1;width:100%;min-height:0;border:0;background:#fff}

@@ -67,6 +67,11 @@ class ExperienceEvidenceWrite(BaseModel):
     part_id: str | None = Field(default=None, max_length=160)
     file_path: str | None = None
     diff_hash: str | None = Field(default=None, max_length=64)
+    source_system: str | None = None
+    native_session_id: str | None = Field(default=None, max_length=160)
+    source_digest: str | None = Field(default=None, max_length=64)
+    review_job_id: str | None = Field(default=None, max_length=64)
+    validation_status: str = "unverified"
 
 
 class ExperienceEvidenceRead(LibraryORMModel):
@@ -81,6 +86,11 @@ class ExperienceEvidenceRead(LibraryORMModel):
     content: str | None
     uri: str | None
     result: str | None
+    source_system: str | None = None
+    native_session_id: str | None = None
+    source_digest: str | None = None
+    review_job_id: str | None = None
+    validation_status: str = "unverified"
     created_at: datetime
 
 
@@ -346,3 +356,33 @@ class LibraryServiceStatus(BaseModel):
     last_synced_at: datetime | None
     pending_count: int
     failed_count: int
+
+
+class ExperienceReviewSegmentRead(BaseModel):
+    id: int
+    segment_index: int
+    status: str
+    token_estimate: int
+    attempts: int
+    error_code: str | None = None
+
+
+class ExperienceReviewJobRead(BaseModel):
+    id: str
+    task_id: str | None
+    task_id_snapshot: str
+    root_session_id: str
+    status: str
+    phase: str
+    attempts: int
+    source_message_count: int
+    segment_count: int
+    completed_segment_count: int
+    candidate_ids: list[str] = Field(default_factory=list)
+    zero_reason: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    confirmed_at: datetime
+    created_at: datetime
+    finished_at: datetime | None = None
+    segments: list[ExperienceReviewSegmentRead] = Field(default_factory=list)

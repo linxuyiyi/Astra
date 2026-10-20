@@ -2,10 +2,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query, Request, status
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.library_schemas import (
+    ExperienceReviewJobRead,
+    ExperienceReviewSegmentRead,
     KnowledgeBatchIds,
     KnowledgeBatchMoveWrite,
     KnowledgeBatchPublishWrite,
@@ -39,8 +42,14 @@ from app.library_service import (
     LibraryPrincipal,
     LibraryValidationError,
 )
+from app.models import ExperienceReviewJob, ExperienceReviewSegment
 
 router = APIRouter(prefix="/api/library", tags=["digital-library"])
+
+
+def _require_review(principal: LibraryPrincipal) -> None:
+    if not principal.can_review:
+        raise LibraryForbidden("需要审核权限")
 
 
 def library_principal(
@@ -361,3 +370,123 @@ async def service_resync(
     principal: LibraryPrincipal = Depends(library_principal),
 ):
     return await KnowledgeService(session).resync(principal)
+
+
+def _job_read(job: ExperienceReviewJob, segments: list[ExperienceReviewSegment]) -> ExperienceReviewJobRead:
+    return ExperienceReviewJobRead(
+        id=job.id,
+        task_id=job.task_id,
+        task_id_snapshot=job.task_id_snapshot,
+        root_session_id=job.root_session_id,
+        status=job.status,
+        phase=job.phase,
+        attempts=job.attempts,
+        source_message_count=job.source_message_count,
+        segment_count=job.segment_count,
+        completed_segment_count=job.completed_segment_count,
+        candidate_ids=list(job.candidate_ids or []),
+        zero_reason=job.zero_reason,
+        error_code=job.error_code,
+        error_message=job.error_message,
+        confirmed_at=job.confirmed_at,
+        created_at=job.created_at,
+        finished_at=job.finished_at,
+        segments=[
+            ExperienceReviewSegmentRead(
+                id=segment.id,
+                segment_index=segment.segment_index,
+                status=segment.status,
+                token_estimate=segment.token_estimate,
+                attempts=segment.attempts,
+                error_code=segment.error_code,
+            )
+            for segment in segments
+        ],
+    )
+
+
+@router.get("/review-jobs", response_model=list[ExperienceReviewJobRead])
+async def experience_review_jobs(
+    task_id: str | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+    principal: LibraryPrincipal = Depends(library_principal),
+):
+    _require_review(principal)
+    query = select(ExperienceReviewJob)
+    if task_id:
+        query = query.where(ExperienceReviewJob.task_id_snapshot == task_id)
+    if status_filter:
+        query = query.where(ExperienceReviewJob.status == status_filter)
+    jobs = (
+        await session.scalars(
+            query.order_by(ExperienceReviewJob.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).all()
+    return [_job_read(job, []) for job in jobs]
+
+
+@router.get("/review-jobs/{job_id}", response_model=ExperienceReviewJobRead)
+async def experience_review_job(
+    job_id: str,
+    session: AsyncSession = Depends(get_session),
+    principal: LibraryPrincipal = Depends(library_principal),
+):
+    _require_review(principal)
+    job = await session.get(ExperienceReviewJob, job_id)
+    if job is None:
+        raise LibraryNotFound("复盘作业不存在")
+    segments = (
+        await session.scalars(
+            select(ExperienceReviewSegment)
+            .where(ExperienceReviewSegment.job_id == job.id)
+            .order_by(ExperienceReviewSegment.segment_index)
+        )
+    ).all()
+    return _job_read(job, list(segments))
+
+
+@router.get("/review-jobs/{job_id}/evidence/{trace_ref}")
+async def experience_review_evidence(
+    job_id: str,
+    trace_ref: str,
+    session: AsyncSession = Depends(get_session),
+    principal: LibraryPrincipal = Depends(library_principal),
+):
+    _require_review(principal)
+    job = await session.get(ExperienceReviewJob, job_id)
+    if job is None:
+        raise LibraryNotFound("复盘作业不存在")
+    from app.runtime.experience_review.trace_reader import TraceUnavailable, read_trace
+
+    try:
+        trace = await read_trace(job.source_snapshot)
+    except TraceUnavailable as exc:
+        raise LibraryConflict(f"原始证据不可用: {exc}") from exc
+    event = trace.evidence.get(trace_ref)
+    if event is None:
+        raise LibraryNotFound("复盘证据不存在")
+    return event.model_dump()
+
+
+@router.post("/review-jobs/{job_id}/retry", response_model=ExperienceReviewJobRead)
+async def experience_review_retry(
+    job_id: str,
+    session: AsyncSession = Depends(get_session),
+    principal: LibraryPrincipal = Depends(library_principal),
+):
+    if not principal.is_admin:
+        raise LibraryForbidden("需要管理员权限")
+    from app.runtime.experience_review.coordinator import retry_job
+
+    job = await retry_job(session, job_id)
+    if job is None:
+        raise LibraryConflict("只有失败、无发现或来源缺失的作业可以重试")
+    from app.runtime.celery_app import celery
+
+    celery.send_task("nexus.experience-review.process", args=[job.id], queue="nexus-review")
+    return _job_read(job, [])

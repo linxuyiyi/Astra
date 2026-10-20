@@ -81,6 +81,17 @@ cd services/nexus-api/web && npm install && npm run dev
 
 `NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG` 由 `services/agent-service/bootstrap_chat_model.py` 生成。页面上没有模型或凭证字段。
 
+## 任务经验复盘
+
+人工确认任务完成后，可可选开启平台侧独立复盘，把真实执行轨迹沉淀为领域经验与工作方法改进候选。默认关闭：
+
+```bash
+NEXUS_EXPERIENCE_REVIEW_ENABLED=true
+NEXUS_EXPERIENCE_REVIEW_MODEL=deepseek-flash
+```
+
+复盘只生成 candidate，必须人工审核发布；不会自动修改员工配置。详见 [docs/architecture/task-experience-review.md](docs/architecture/task-experience-review.md)。
+
 ## 检查
 
 ```bash

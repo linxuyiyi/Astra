@@ -1372,7 +1372,7 @@ class KnowledgeService:
             payload.source_employee_id, payload.source_task_id,
         )
         fingerprint = experience_fingerprint(payload.content_md)
-        actor = "assistant:nexus-task-experience-review" if review_session else "manual"
+        actor = "system:nexus-experience-review" if review_session else "manual"
         exact = await self.session.scalar(
             select(KnowledgeItem).where(
                 KnowledgeItem.type == "experience",
@@ -1403,7 +1403,7 @@ class KnowledgeService:
                 source_type="task" if review_session else "manual",
                 source_ref=payload.source_task_id, source_employee_id=payload.source_employee_id,
                 source_task_id=payload.source_task_id, source_session_id=source_session_id,
-                origin="assistant" if review_session else "manual",
+                origin="system_review" if review_session else "manual",
                 dedupe_key="global-experience", fingerprint=fingerprint,
                 experience_type=payload.experience_type or "other", scope=payload.scope,
                 source_ref_snapshot={
@@ -1448,7 +1448,13 @@ class KnowledgeService:
                 source_session_id=source_session_id, message_id=evidence.message_id,
                 part_id=evidence.part_id, file_path=evidence.file_path, diff_hash=evidence.diff_hash,
                 evidence_type=evidence.evidence_type, content=evidence.content,
-                uri=evidence.uri, result=evidence.result, captured_at=utcnow(),
+                uri=evidence.uri, result=evidence.result,
+                source_system=evidence.source_system,
+                native_session_id=evidence.native_session_id,
+                source_digest=evidence.source_digest,
+                review_job_id=evidence.review_job_id,
+                validation_status=evidence.validation_status,
+                captured_at=utcnow(),
             ))
         if verified_message_id and item.status == "candidate":
             item.verification_status = "verified"
@@ -1468,7 +1474,7 @@ class KnowledgeService:
         self.session.add(KnowledgeUsage(
             resource_id=f"astra:{item.id}", knowledge_id=item.id,
             employee_id=employee.id if employee else None, task_id=task.id if task else None,
-            session_id=source_session_id, tool_name="nexus_task_review_submit",
+            session_id=source_session_id, tool_name="nexus_experience_review",
             action="experience_submitted" if created else "experience_reused",
             result={"status": item.status},
         ))

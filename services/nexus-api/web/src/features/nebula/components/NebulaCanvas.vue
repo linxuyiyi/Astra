@@ -147,6 +147,7 @@ function onPointerDown(event: PointerEvent): void {
     y: point.y,
     moved: false,
   };
+  camera.beginOrbit(point.x, point.y, viewport());
   dragging.value = true;
   canvas.value?.setPointerCapture(event.pointerId);
   canvas.value?.focus({ preventScroll: true });
@@ -163,7 +164,7 @@ function onPointerMove(event: PointerEvent): void {
   if (!drag.moved && Math.abs(deltaX) + Math.abs(deltaY) > 5) drag.moved = true;
   if (!drag.moved) return;
   if (event.shiftKey) camera.panBy(deltaX, deltaY);
-  else camera.rotate(deltaX, deltaY);
+  else camera.orbitBy(deltaX, deltaY, viewport());
   drag.x = point.x;
   drag.y = point.y;
   hoveredKey = null;
@@ -185,6 +186,7 @@ function onPointerUp(event: PointerEvent): void {
 }
 
 function endDrag(): void {
+  camera.endOrbit();
   if (drag && canvas.value?.hasPointerCapture(drag.pointerId)) {
     canvas.value.releasePointerCapture(drag.pointerId);
   }

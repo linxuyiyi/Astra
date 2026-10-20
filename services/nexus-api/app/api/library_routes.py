@@ -486,7 +486,5 @@ async def experience_review_retry(
     job = await retry_job(session, job_id)
     if job is None:
         raise LibraryConflict("只有失败、无发现或来源缺失的作业可以重试")
-    from app.runtime.celery_app import celery
-
-    celery.send_task("nexus.experience-review.process", args=[job.id], queue="nexus-review")
+    # 只重置为 PENDING，由 Celery 扫描器领取；接口不直接依赖 Broker 可用性。
     return _job_read(job, [])

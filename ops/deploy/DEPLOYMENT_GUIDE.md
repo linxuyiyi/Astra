@@ -1,7 +1,7 @@
 # Nexus v1.4.7 完整部署指南
 
 > 依据 2026-10-14 ~ 10-20 在部署机（box，Debian 13 x86_64）与 `LLM_WIKI_HOST` 指向的远程主机（CentOS 7.3 x86_64）上的实际部署整理，并按 v1.4.7 的默认端口、迁移 head 与能力更新。
-> 代码：<https://github.com/linmumuxx-ux/Astra>，分支 `codex/nexus-v1.4.7`（迁移到 `0051_rename_workers_table`）。
+> 代码：<https://github.com/linxuyiyi/Astra>，分支 `codex/nexus-v1.4.7`（迁移到 `0051_rename_workers_table`）。
 > 一键脚本：`ops/deploy/install_nexus.sh`（配置模板 `ops/env/.env.example`）。本文每一步都可以手工执行，脚本只是把它们串起来。
 
 ---
@@ -137,10 +137,10 @@
 
 ## 3. 一键部署
 
-> `NEXUS_REPO_URL` 与 `NEXUS_BRANCH` 必须指向实际发布仓库和已推送的分支。本文按 `codex/nexus-v1.4.7` 编写；分支尚未推送时先推送，或改成实际发布分支。
+> `NEXUS_REPO_URL` 与 `NEXUS_BRANCH` 必须指向实际发布仓库和已推送的分支。本文按 `https://github.com/linxuyiyi/Astra` 的 `codex/nexus-v1.4.7` 编写；换仓库或分支时同步修改这两项。
 
 ```bash
-git clone -b codex/nexus-v1.4.7 https://github.com/linmumuxx-ux/Astra /opt/nexus
+git clone -b codex/nexus-v1.4.7 https://github.com/linxuyiyi/Astra /opt/nexus
 cp /opt/nexus/ops/env/.env.example /opt/nexus/ops/env/.env && chmod 600 /opt/nexus/ops/env/.env   # 填 DEEPSEEK_API_KEY 等
 /opt/nexus/ops/deploy/install_nexus.sh --preflight-only
 /opt/nexus/ops/deploy/install_nexus.sh [--with-llm-wiki] [--remote-worker 1.2.3.4] [--skip-web-build] [--no-systemd]

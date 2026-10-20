@@ -46,7 +46,7 @@ load_env_file() {
 [ -n "$ENV_FILE" ] && { [ -f "$ENV_FILE" ] || die "找不到 --env-file $ENV_FILE"; load_env_file "$ENV_FILE"; }
 load_env_file "$SCRIPT_DIR/../env/.env"
 
-: "${NEXUS_REPO_URL:=https://github.com/linmumuxx-ux/Astra}"
+: "${NEXUS_REPO_URL:=https://github.com/linxuyiyi/Astra}"
 : "${NEXUS_BRANCH:=codex/nexus-v1.4.7}"
 : "${NEXUS_ROOT:=/opt/nexus}"
 : "${NEXUS_STATE_DIR:=/var/lib/nexus}"

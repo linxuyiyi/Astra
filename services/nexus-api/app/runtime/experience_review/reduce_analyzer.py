@@ -27,6 +27,12 @@ SYSTEM = """你是独立的经验归纳器。输入是一组已结构化的局�
 ]}"""
 
 
+MERGE_SYSTEM = """你是经验归纳的最终合并器。输入是上一轮产出的一组候选经验。
+请去重、合并同一方法、保留每条候选的原始 evidence_refs，并最多保留配置允许的数量。
+不得新增输入中不存在的证据，不得把未验证的结果写成已验证。
+只输出 JSON：{"candidates":[...]}"""
+
+
 def _observation_view(item: Observation) -> dict[str, Any]:
     return item.model_dump()
 
@@ -75,6 +81,22 @@ async def reduce_observations(
     candidates: list[Candidate] = []
     for batch in batches:
         candidates.extend(await _reduce_batch(llm, task_meta=task_meta, observations=batch))
+    if len(batches) > 1 or len(candidates) > settings.experience_review_max_candidates:
+        payload = await llm.complete_json(
+            MERGE_SYSTEM,
+            json.dumps(
+                {
+                    "task": task_meta,
+                    "max_candidates": settings.experience_review_max_candidates,
+                    "candidates": [candidate.model_dump() for candidate in candidates],
+                },
+                ensure_ascii=False,
+            ),
+        )
+        try:
+            candidates = CandidateList.model_validate(payload).candidates
+        except Exception as exc:  # noqa: BLE001 - model JSON boundary
+            raise ReviewLLMError("bad_merge_json", f"最终合并 JSON 不合法: {exc}") from exc
     # 去重并限制数量；证据校验在 EvidenceValidator 中完成。
     deduped: list[Candidate] = []
     seen: set[str] = set()

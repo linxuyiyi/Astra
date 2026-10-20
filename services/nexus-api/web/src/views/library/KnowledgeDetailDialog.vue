@@ -66,7 +66,7 @@
               <template #default="{ row }">{{ row.task_id || '—' }}</template>
             </ElTableColumn>
             <ElTableColumn label="会话" width="130" show-overflow-tooltip>
-              <template #default="{ row }">{{ row.source_session_id || '—' }}</template>
+              <template #default="{ row }">{{ row.native_session_id || row.source_session_id || '—' }}</template>
             </ElTableColumn>
             <ElTableColumn label="结果" width="96">
               <template #default="{ row }">
@@ -328,6 +328,10 @@ const candidateFacts = computed(() => {
   return facts.filter((fact) => fact.value && fact.value !== '—')
 })
 const experienceFields = computed(() => [
+  { label: '经验类型', value: experienceValue(['kind', 'experience_type']) },
+  { label: '改进对象', value: experienceValue(['target_component']) },
+  { label: '建议改动', value: experienceValue(['proposed_change']) },
+  { label: '证据等级', value: experienceValue(['evaluation_level']) },
   { label: '问题现象', value: experienceValue(['problem_symptom', 'problem', 'symptom']) },
   { label: '原始异常 / 错误信息', value: experienceValue(['original_error', 'error', 'exception']) },
   { label: 'Agent 采取的处理方式', value: experienceValue(['handling', 'resolution', 'solution']) },

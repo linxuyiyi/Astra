@@ -1355,12 +1355,33 @@ class RuntimeService:
         """Best-effort final usage capture; cancellation semantics never depend on it."""
         try:
             allowed_sessions = await session_tree(client, directory, session_id)
-            messages = list(await client.messages(directory, session_id))
-            for child_session_id in sorted(allowed_sessions - {session_id}):
+            limit = get_settings().opencode_final_usage_max_messages
+            messages: list[dict] = []
+            for native_session_id in [session_id, *sorted(allowed_sessions - {session_id})]:
+                before: str | None = None
                 try:
-                    messages.extend(await client.messages(directory, child_session_id))
+                    while len(messages) < limit:
+                        page = await client.messages_page(
+                            directory,
+                            native_session_id,
+                            limit=min(100, limit - len(messages)),
+                            before=before,
+                        )
+                        batch = page.get("messages") if isinstance(page, dict) else []
+                        if not batch:
+                            break
+                        messages.extend(batch)
+                        before = page.get("next_before") if isinstance(page, dict) else None
+                        if not before:
+                            break
                 except OpenCodeSessionNotFound:
                     continue
+            if len(messages) >= limit:
+                logger.warning(
+                    "Final usage capture for %s reached the %s-message bound",
+                    session_id,
+                    limit,
+                )
             return messages, len(allowed_sessions)
         except Exception:
             logger.exception("Failed to collect final usage for Session %s", session_id)

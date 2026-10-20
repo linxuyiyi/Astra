@@ -391,8 +391,9 @@ def core_services(
             "runtime-review",
             [
                 sys.executable, "-m", "celery", "-A", "app.runtime.celery_app:celery",
-                "worker", "--loglevel=INFO", "--concurrency=2", "--queues=nexus-review",
-                "--hostname=nexus-review@%h",
+                "worker", "--loglevel=INFO",
+                "--concurrency", str(getattr(settings, "experience_review_max_concurrency", 2)),
+                "--queues=nexus-review", "--hostname=nexus-review@%h",
             ],
             BACKEND,
             None,

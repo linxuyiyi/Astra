@@ -145,6 +145,10 @@ class Settings(BaseSettings):
     # A turn with no assistant reply is only a failure after this window; a
     # freshly submitted prompt must never be classified as failed.
     opencode_no_reply_grace_seconds: int = Field(default=15, ge=1, le=3600)
+    # 确认完成时用量采集的有界读取；超过后按已读消息计算，避免拖慢人工确认。
+    opencode_final_usage_max_messages: int = Field(
+        default=5000, ge=100, validation_alias="NEXUS_FINAL_USAGE_MAX_MESSAGES"
+    )
     opencode_reconcile_interval_seconds: int = Field(default=10, ge=2, le=300)
     # restart must never start a second Session while the old one can still
     # write to the shared task workspace.

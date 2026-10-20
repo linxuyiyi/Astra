@@ -52,11 +52,11 @@ POST /api/tasks/{id}/confirm
 
 ## 配置
 
-见 `ops/env/.env.example` 的 `NEXUS_EXPERIENCE_REVIEW_*`。模型建议使用独立 Gateway Key，限制模型与额度。
+见 `ops/env/.env.example` 的 `NEXUS_EXPERIENCE_REVIEW_*`。模型建议使用独立 Gateway Key，限制模型与额度。人工确认的最终用量读取受 `NEXUS_FINAL_USAGE_MAX_MESSAGES` 限制。
 
 ## 当前限制
 
 - 远程 Worker 仍复用现有 `messages_page` 通道；超大单条消息的专门分帧协议尚未实现。
-- REDUCE 目前按批次归纳后合并，未实现无限层级 Reduce 树；批次上限由 `NEXUS_EXPERIENCE_REVIEW_REDUCE_INPUT_TOKENS` 控制。
+- REDUCE 已实现“批次归纳 + 最终合并”两级；超过最终候选上限时由合并器去重，未实现无限层级树。
 - restart 后旧 Job 的 `SUPERSEDED` 标记、任务删除的完整清理仍需补齐。
 - 任务复盘 UI 只显示状态与候选入口，数字图书馆的“改进前/后/证据”专用视图待补。

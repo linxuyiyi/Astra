@@ -58,6 +58,7 @@ async def write_candidates(
                 "kind": candidate.kind,
                 "target_component": candidate.target_component,
                 "proposed_change": candidate.proposed_change,
+                "evaluation_level": candidate.scope.get("evaluation_level", "observed"),
                 "evidence_verified": True,
             },
         )

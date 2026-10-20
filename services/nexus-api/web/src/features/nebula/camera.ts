@@ -85,6 +85,10 @@ export class NebulaCamera {
 
   beginOrbit(screenX: number, screenY: number, viewport: Viewport): void {
     this.focusId = null;
+    // 拖拽期间冻结聚焦动画，避免相机目标和缩放在旋转过程中继续移动，
+    // 导致反投影出来的轴心漂移。
+    this.targetGoal = { ...this.target };
+    this.zoomGoal = this.zoom;
     this.orbitAnchor = { x: screenX, y: screenY };
     this.orbitPivot = this.unproject(screenX, screenY, viewport);
   }

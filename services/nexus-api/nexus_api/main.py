@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import os
 import re
 from contextlib import asynccontextmanager
@@ -17,6 +18,7 @@ from fastapi import (
     Depends,
     FastAPI,
     File,
+    Form,
     Header,
     HTTPException,
     Query,
@@ -43,7 +45,48 @@ from .im import (
     redeliver,
 )
 from .model_route import ModelRouteError, chat_config_for_route, gateway_api_key, require_enabled_route
-from .task_skill import TASK_SKILL_ID, attach_task_capability, sync_task_capability, with_builtin_skill
+from .resources import (
+    MCP_AUTH_NONE,
+    MCP_TRANSPORT_HTTP,
+    SOURCE_AGENTSCOPE,
+    SOURCE_BUILTIN,
+    SOURCE_NEXUS,
+    ResourceError,
+    ResourceStore,
+    all_employees,
+    create_mcp,
+    create_skill,
+    delete_mcp,
+    delete_skill,
+    employee_session_ids,
+    employees_for,
+    external_skill_detail,
+    is_nexus_mcp,
+    is_nexus_skill,
+    local_mcp_rows,
+    local_skill_detail,
+    local_skill_rows,
+    mcp_catalog,
+    mcp_payload,
+    mcp_row,
+    mcp_sync_summary,
+    normalize_uploads,
+    restore_skill_version,
+    skill_catalog,
+    skill_row,
+    skill_sync_summary,
+    skill_versions,
+    sync_employee_resources,
+    test_mcp_connection,
+    update_mcp,
+    update_skill,
+)
+from .task_skill import (
+    TASK_SKILL_ID,
+    attach_task_capability,
+    skill_directory,
+    sync_task_capability,
+)
 
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 MAX_ATTACHMENTS = 6
@@ -63,6 +106,7 @@ IMAGE_BY_SUFFIX = {
 SENDER_CONTACT_LIMIT = 2
 SCOPE_CONTACT_LIMIT = 6
 UNATTENDED_PERMISSION = "dont_ask"
+logger = logging.getLogger("nexus.employee_skills")
 
 
 class EmployeeBody(BaseModel):
@@ -74,8 +118,70 @@ class EmployeeBody(BaseModel):
     enabled: bool = True
     knowledge: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
+    mcps: list[str] = Field(default_factory=list)
     tools: list[str] = Field(default_factory=list)
     model_route_id: str = ""
+
+
+class SkillFileBody(BaseModel):
+    path: str
+    content: str = ""
+    encoding: str = "utf8"
+
+
+class SkillCreateBody(BaseModel):
+    content: str = ""
+    files: list[SkillFileBody] = Field(default_factory=list)
+    enabled: bool = True
+
+
+class SkillUpdateBody(BaseModel):
+    content: str | None = None
+    files: list[SkillFileBody] | None = None
+    enabled: bool | None = None
+    note: str = ""
+
+
+class McpHeaderBody(BaseModel):
+    key: str
+    value: str = ""
+
+
+class McpBody(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    description: str = ""
+    url: str = ""
+    transport: str = MCP_TRANSPORT_HTTP
+    headers: list[McpHeaderBody] = Field(default_factory=list)
+    auth_type: str = MCP_AUTH_NONE
+    auth_header: str = "Authorization"
+    token: str | None = None
+    timeout: float = 30
+    enabled: bool = True
+
+
+class McpUpdateBody(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    url: str | None = None
+    transport: str | None = None
+    headers: list[McpHeaderBody] | None = None
+    auth_type: str | None = None
+    auth_header: str | None = None
+    token: str | None = None
+    timeout: float | None = None
+    enabled: bool | None = None
+
+
+class McpTestBody(BaseModel):
+    id: str = ""
+    name: str = ""
+    url: str = ""
+    headers: list[McpHeaderBody] | None = None
+    auth_type: str | None = None
+    auth_header: str | None = None
+    token: str = ""
+    timeout: float | None = None
 
 
 class ConversationBody(BaseModel):
@@ -463,12 +569,12 @@ def session_transcript(remote: list[Any], employee_id: str) -> list[dict[str, An
         attachments = metadata.get("attachments") if isinstance(metadata.get("attachments"), list) else []
         if role == "assistant" and not text and not tools:
             continue
-        raw_id = message.get("id")
+        raw_id = message.get("id") or metadata.get("message_id")
         name = message.get("name") if isinstance(message.get("name"), str) else ""
         created = message.get("created_at")
         found.append(
             {
-                "id": raw_id if isinstance(raw_id, str) and raw_id else f"remote_{len(found)}",
+                "id": str(raw_id) if raw_id else f"remote_{len(found)}",
                 "sender": "user" if role == "user" else employee_id,
                 "speaker": name or str(metadata.get("verified_uid") or ""),
                 "text": text,
@@ -678,6 +784,26 @@ def lines(values: list[str]) -> list[str]:
     return cleaned
 
 
+async def sync_employee_skills(
+    client: AgentScopeClient,
+    employee: dict[str, Any],
+    session_ids: list[str],
+    connection,
+    store: ResourceStore,
+    previous: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """把员工绑定的 Skill/MCP 收敛到会话。旧调用点共享这一入口。"""
+
+    return await sync_employee_resources(
+        client,
+        employee,
+        session_ids,
+        connection,
+        store,
+        previous=previous,
+    )
+
+
 _conversation_locks: dict[str, asyncio.Lock] = {}
 _conversation_locks_guard = asyncio.Lock()
 
@@ -753,6 +879,7 @@ def create_app() -> FastAPI:
         root.mkdir(parents=True, exist_ok=True)
         (root / "files").mkdir(parents=True, exist_ok=True)
         init_db(db_path())
+        app.state.resources = ResourceStore(root)
         app.state.agentscope = AgentScopeClient(
             os.environ.get("NEXUS_AGENTSCOPE_BASE_URL") or None,
             os.environ.get("NEXUS_AGENTSCOPE_USER_ID", "nexus"),
@@ -805,23 +932,7 @@ def create_app() -> FastAPI:
         return [str(item) for item in raw if item]
 
     def session_ids(connection, employee: dict[str, Any]) -> list[str]:
-        found: list[str] = []
-        mailbox = employee.get("mailbox_session_id")
-        if mailbox:
-            found.append(str(mailbox))
-        rows = connection.execute(
-            "SELECT agentscope_session_id FROM conversations WHERE employee_id = ?",
-            (employee["id"],),
-        ).fetchall()
-        rows += connection.execute(
-            "SELECT agentscope_session_id FROM channel_members WHERE employee_id = ?",
-            (employee["id"],),
-        ).fetchall()
-        for row in rows:
-            session_id = row["agentscope_session_id"]
-            if session_id and session_id not in found:
-                found.append(str(session_id))
-        return found
+        return employee_session_ids(connection, employee)
 
     def load_employee(connection, employee_id: str) -> dict[str, Any]:
         row = connection.execute("SELECT * FROM employees WHERE id = ?", (employee_id,)).fetchone()
@@ -868,32 +979,91 @@ def create_app() -> FastAPI:
         return requested, {"available": False, "items": []}
 
     async def accepted_skills(
-        client: AgentScopeClient, requested: list[str], previous: list[str]
+        client: AgentScopeClient,
+        requested: list[str],
+        previous: list[str],
+        connection,
     ) -> list[str]:
         requested = lines(requested)
-        catalog: list[dict[str, str]] | None = None
+        catalog: dict[str, dict[str, Any]] | None = None
         if client.configured:
             try:
-                catalog = await client.list_skills()
+                records = await client.list_skill_records()
+                catalog = {
+                    str(item.get("id") or item.get("skill_id") or ""): item
+                    for item in records
+                    if item.get("id") or item.get("skill_id")
+                }
             except AgentScopeError:
                 catalog = None
-        if catalog is not None:
-            allowed = {item["id"] for item in catalog} | {TASK_SKILL_ID}
-            unknown = [item for item in requested if item not in allowed]
-            if unknown:
-                raise HTTPException(status_code=422, detail="技能不在 AgentScope 技能库中")
-            return requested
-        extras = [item for item in requested if item not in set(previous) and item != TASK_SKILL_ID]
-        if extras:
-            raise HTTPException(status_code=422, detail="当前无法读取技能库，不能新增技能")
+        for ref in requested:
+            if ref == TASK_SKILL_ID:
+                continue
+            if is_nexus_skill(ref):
+                row = skill_row(connection, ref)
+                if row is None:
+                    raise HTTPException(status_code=422, detail="Nexus 技能不存在")
+                if not bool(row["enabled"]) and ref not in previous:
+                    raise HTTPException(status_code=422, detail="该技能已停用，不能新增绑定")
+                continue
+            if catalog is not None:
+                record = catalog.get(ref)
+                if record is None:
+                    raise HTTPException(status_code=422, detail="技能不在 AgentScope 技能库中")
+                if not bool(record.get("enabled", True)) and ref not in previous:
+                    raise HTTPException(status_code=422, detail="该 AgentScope 技能已停用，不能新增绑定")
+            elif ref not in previous:
+                raise HTTPException(status_code=422, detail="当前无法读取技能库，不能新增技能")
+        return requested
+
+    async def accepted_mcps(
+        client: AgentScopeClient,
+        requested: list[str],
+        previous: list[str],
+        connection,
+    ) -> list[str]:
+        requested = lines(requested)
+        catalog: dict[str, dict[str, Any]] | None = None
+        if client.configured:
+            try:
+                records = await client.list_mcp_records()
+                catalog = {
+                    str(item.get("id") or ""): item
+                    for item in records
+                    if item.get("id")
+                }
+            except AgentScopeError:
+                catalog = None
+        for ref in requested:
+            if is_nexus_mcp(ref):
+                row = mcp_row(connection, ref)
+                if row is None:
+                    raise HTTPException(status_code=422, detail="Nexus MCP 不存在")
+                if not bool(row["enabled"]) and ref not in previous:
+                    raise HTTPException(status_code=422, detail="该 MCP 已停用，不能新增绑定")
+                continue
+            if catalog is not None:
+                record = catalog.get(ref)
+                if record is None:
+                    raise HTTPException(status_code=422, detail="MCP 不在 AgentScope 已安装列表中")
+                if not bool(record.get("enabled", True)) and ref not in previous:
+                    raise HTTPException(status_code=422, detail="该 AgentScope MCP 已停用，不能新增绑定")
+            elif ref not in previous:
+                raise HTTPException(status_code=422, detail="当前无法读取 MCP 列表，不能新增 MCP")
         return requested
 
     async def chosen_resources(
         client: AgentScopeClient,
         body: EmployeeBody,
         previous: dict[str, list[str]],
-    ) -> tuple[list[str], list[str], list[str]]:
-        skills = await accepted_skills(client, body.skills, previous.get("skills", []))
+        connection,
+    ) -> tuple[list[str], list[str], list[str], list[str]]:
+        skills = await accepted_skills(
+            client, body.skills, previous.get("skills", []), connection
+        )
+        mcps = await accepted_mcps(
+            client, body.mcps, previous.get("mcps", []), connection
+        )
         knowledge, _knowledge = await accepted_from_catalog(
             client,
             body.knowledge,
@@ -910,7 +1080,7 @@ def create_app() -> FastAPI:
             unknown_detail="工具不在 AgentScope 可关联工具中",
             unavailable_detail="当前无法确认 AgentScope 工具，不能新增工具",
         )
-        return skills, knowledge, tools
+        return skills, knowledge, tools, mcps
 
     def task_sessions(connection, employee: dict[str, Any]) -> list[dict[str, str]]:
         found: list[dict[str, str]] = []
@@ -941,7 +1111,10 @@ def create_app() -> FastAPI:
         return found
 
     async def sync_agent(
-        client: AgentScopeClient, employee: dict[str, Any], connection
+        client: AgentScopeClient,
+        employee: dict[str, Any],
+        connection,
+        store: ResourceStore,
     ) -> dict[str, Any]:
         prompt = system_prompt(employee)
         agent_id = employee["agentscope_agent_id"]
@@ -962,16 +1135,37 @@ def create_app() -> FastAPI:
                     chat_model_config=config,
                     knowledge_base_ids=bound_knowledge(employee),
                 )
+            detail = ""
             if agent_id and mailbox:
                 await client.set_permission_mode(agent_id, mailbox, UNATTENDED_PERMISSION)
                 current = {**employee, "agentscope_agent_id": agent_id, "mailbox_session_id": mailbox}
+                synced = await sync_employee_skills(
+                    client, current, [mailbox], connection, store
+                )
+                detail = str(synced.get("detail") or "")
                 await sync_task_capability(client, current, task_sessions(connection, current))
-            return {"ok": True, "agent_id": agent_id, "mailbox_session_id": mailbox, "detail": ""}
+            return {"ok": True, "agent_id": agent_id, "mailbox_session_id": mailbox, "detail": detail}
         except AgentScopeError as exc:
             return {"ok": False, "agent_id": agent_id, "mailbox_session_id": mailbox, "detail": exc.detail}
 
     async def store_capability(connection, client: AgentScopeClient, employee: dict[str, Any]) -> None:
-        record = await inspect_employee(client, employee, utcnow())
+        local_skills = local_skill_rows(connection, employee.get("skills") or [])
+        local_mcps = local_mcp_rows(connection, employee.get("mcps") or [])
+        record = await inspect_employee(
+            client,
+            employee,
+            utcnow(),
+            custom_skills={
+                skill_id: str(row["name"])
+                for skill_id, row in local_skills.items()
+                if bool(row["enabled"])
+            },
+            custom_mcps={
+                mcp_id: str(row["runtime_name"])
+                for mcp_id, row in local_mcps.items()
+                if bool(row["enabled"])
+            },
+        )
         connection.execute(
             "UPDATE employees SET capability_json = ? WHERE id = ?",
             (json.dumps(record, ensure_ascii=False), employee["id"]),
@@ -995,6 +1189,7 @@ def create_app() -> FastAPI:
         skills: list[str],
         knowledge: list[str],
         tools: list[str],
+        mcps: list[str],
     ) -> dict[str, Any]:
         employee_id = new_id("emp")
         now = utcnow()
@@ -1002,9 +1197,9 @@ def create_app() -> FastAPI:
             """
             INSERT INTO employees (
                 id, name, domain, description, instructions, avatar, enabled,
-                knowledge_json, skills_json, tools_json, agentscope_agent_id,
+                knowledge_json, skills_json, mcp_json, tools_json, agentscope_agent_id,
                 mailbox_session_id, model_route_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
             """,
             (
                 employee_id,
@@ -1016,6 +1211,7 @@ def create_app() -> FastAPI:
                 int(body.enabled),
                 json.dumps(knowledge, ensure_ascii=False),
                 json.dumps(skills, ensure_ascii=False),
+                json.dumps(mcps, ensure_ascii=False),
                 json.dumps(tools, ensure_ascii=False),
                 body.model_route_id.strip(),
                 now,
@@ -1127,7 +1323,14 @@ def create_app() -> FastAPI:
             await client.set_permission_mode(agent_id, session_id, permission_mode)
         return session_id
 
-    async def claim_member_session(connection, client, employee, channel_id: str, name: str) -> str:
+    async def claim_member_session(
+        connection,
+        client,
+        employee,
+        channel_id: str,
+        name: str,
+        store: ResourceStore,
+    ) -> str:
         """群成员会话只绑定还是空的那一行。并发时使用先写入的那一个。"""
 
         lock_id = f"member:{channel_id}:{employee['id']}"
@@ -1158,6 +1361,7 @@ def create_app() -> FastAPI:
                 session_id,
                 UNATTENDED_PERMISSION,
             )
+            await sync_employee_skills(client, employee, [session_id], connection, store)
             connection.execute(
                 """
                 UPDATE channel_members SET agentscope_session_id = ?
@@ -1202,12 +1406,640 @@ def create_app() -> FastAPI:
             return {"available": False, "items": []}
         return {"available": True, "items": items}
 
-    @app.get("/api/v1/skills")
-    async def skills(request: Request) -> dict[str, Any]:
+    def resource_store(request: Request) -> ResourceStore:
+        return request.app.state.resources
+
+    def resource_error(exc: ResourceError) -> None:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    def decoded_skill_files(items: list[SkillFileBody]) -> dict[str, bytes]:
+        files: dict[str, bytes] = {}
+        for item in items:
+            try:
+                data = (
+                    base64.b64decode(item.content, validate=True)
+                    if item.encoding == "base64"
+                    else item.content.encode("utf-8")
+                )
+            except (ValueError, UnicodeEncodeError) as exc:
+                raise HTTPException(status_code=422, detail=f"{item.path} 内容不是合法编码") from exc
+            files[item.path] = data
+        return files
+
+    def skill_body_files(
+        body: SkillCreateBody | SkillUpdateBody,
+        current: dict[str, bytes] | None = None,
+    ) -> dict[str, bytes]:
+        if body.files:
+            files = decoded_skill_files(body.files)
+        elif current is not None:
+            files = dict(current)
+        else:
+            files = {}
+        if body.content is not None:
+            files["SKILL.md"] = body.content.encode("utf-8")
+        if not files:
+            raise HTTPException(status_code=422, detail="请提供 SKILL.md 内容")
+        return files
+
+    def mcp_headers(items: list[McpHeaderBody]) -> list[dict[str, str]]:
+        return [{"key": item.key, "value": item.value} for item in items]
+
+    async def external_skill_names(client: AgentScopeClient) -> set[str]:
+        if not client.configured:
+            return set()
+        try:
+            records = await client.list_skill_records()
+        except AgentScopeError:
+            return set()
+        return {
+            str(item.get("name") or item.get("display_name") or "")
+            for item in records
+            if item.get("name") or item.get("display_name")
+        }
+
+    def bound_employees(connection, field: str, ref: str) -> list[dict[str, Any]]:
+        return employees_for(all_employees(connection), field, ref)
+
+    def combined_sync(results: list[dict[str, Any]]) -> dict[str, Any]:
+        if not results:
+            return {"ok": True, "status": "applied", "detail": "暂无关联员工", "sessions": 0}
+        if any(item.get("status") == "error" for item in results):
+            status = "error"
+        elif any(item.get("status") != "applied" for item in results):
+            status = "pending"
+        else:
+            status = "applied"
+        details = [str(item.get("detail") or "") for item in results if item.get("detail")]
+        return {
+            "ok": status == "applied",
+            "status": status,
+            "detail": "；".join(dict.fromkeys(details))[:800],
+            "sessions": sum(int(item.get("sessions") or 0) for item in results),
+        }
+
+    async def sync_bound(request: Request, connection, field: str, ref: str) -> dict[str, Any]:
         client = client_of(request)
-        payload = await publish_catalog(client, client.list_skills)
-        payload["items"] = with_builtin_skill(payload["items"])
-        return payload
+        store = resource_store(request)
+        results: list[dict[str, Any]] = []
+        for employee in bound_employees(connection, field, ref):
+            results.append(
+                await sync_employee_skills(
+                    client,
+                    employee,
+                    employee_session_ids(connection, employee),
+                    connection,
+                    store,
+                    previous=employee,
+                )
+            )
+            latest = load_employee(connection, employee["id"])
+            await store_capability(connection, client, latest)
+        return combined_sync(results)
+
+    def builtin_skill_detail(connection) -> dict[str, Any]:
+        bound = bound_employees(connection, "skills", TASK_SKILL_ID)
+        directory = skill_directory()
+        files: list[dict[str, Any]] = []
+        if directory.is_dir():
+            for path in sorted(directory.rglob("*")):
+                if path.is_file():
+                    data = path.read_bytes()
+                    try:
+                        text = data.decode("utf-8")
+                    except UnicodeDecodeError:
+                        text = base64.b64encode(data).decode("ascii")
+                        encoding = "base64"
+                    else:
+                        encoding = "utf8"
+                    files.append(
+                        {
+                            "path": path.relative_to(directory).as_posix(),
+                            "size": len(data),
+                            "content": text,
+                            "encoding": encoding,
+                        }
+                    )
+        return {
+            "id": TASK_SKILL_ID,
+            "name": "任务管理",
+            "description": "内置任务技能，随任务能力挂载。",
+            "source": SOURCE_BUILTIN,
+            "version": "内置",
+            "enabled": True,
+            "editable": False,
+            "files": files,
+            "versions": [],
+            "employees": [
+                {"id": item["id"], "name": item["name"], "enabled": item["enabled"]}
+                for item in bound
+            ],
+            "sync": {
+                "status": "applied",
+                "detail": "由任务能力挂载逻辑维护",
+                "applied": len(bound),
+                "pending": 0,
+                "error": 0,
+            },
+        }
+
+    @app.get("/api/v1/skills")
+    async def skills(
+        request: Request,
+        q: str = "",
+        source: str = "",
+        status: str = "",
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        payload = await skill_catalog(
+            connection,
+            client_of(request),
+            q=q,
+            source=source,
+            status=status,
+        )
+        items = [
+            {"id": item["id"], "name": item["name"]}
+            for item in payload["items"]
+            if item.get("enabled")
+        ]
+        return {
+            "available": bool(payload.get("agentscope_available")) or any(
+                item["source"] == SOURCE_NEXUS for item in payload["items"] if item.get("enabled")
+            ),
+            "items": items,
+        }
+
+    @app.get("/api/v1/mcps")
+    async def mcps(
+        request: Request,
+        q: str = "",
+        source: str = "",
+        status: str = "",
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        payload = await mcp_catalog(
+            connection,
+            client_of(request),
+            q=q,
+            source=source,
+            status=status,
+        )
+        items = [
+            {"id": item["id"], "name": item["name"]}
+            for item in payload["items"]
+            if item.get("enabled")
+        ]
+        return {
+            "available": bool(payload.get("agentscope_available")) or any(
+                item["source"] == SOURCE_NEXUS for item in payload["items"] if item.get("enabled")
+            ),
+            "items": items,
+        }
+
+    @app.get("/api/v1/config/skills")
+    async def config_skills(
+        request: Request,
+        q: str = "",
+        source: str = "",
+        status: str = "",
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        return await skill_catalog(
+            connection,
+            client_of(request),
+            q=q,
+            source=source,
+            status=status,
+        )
+
+    @app.get("/api/v1/config/mcps")
+    async def config_mcps(
+        request: Request,
+        q: str = "",
+        source: str = "",
+        status: str = "",
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        return await mcp_catalog(
+            connection,
+            client_of(request),
+            q=q,
+            source=source,
+            status=status,
+        )
+
+    @app.post("/api/v1/config/skills", status_code=201)
+    async def create_skill_resource(
+        body: SkillCreateBody,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        files = skill_body_files(body)
+        try:
+            skill_id = create_skill(
+                connection,
+                resource_store(request),
+                files,
+                enabled=body.enabled,
+                external_names=await external_skill_names(client_of(request)),
+            )
+        except ResourceError as exc:
+            resource_error(exc)
+        detail = local_skill_detail(
+            connection,
+            resource_store(request),
+            skill_row(connection, skill_id),
+            all_employees(connection),
+        )
+        return {"skill": detail, "sync": detail["sync"]}
+
+    @app.post("/api/v1/config/skills/upload", status_code=201)
+    async def upload_skill_resource(
+        request: Request,
+        paths: str = Form("[]"),
+        enabled: bool = Form(True),
+        files: list[UploadFile] = File(...),
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        try:
+            declared = json.loads(paths)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=422, detail="paths 不是合法 JSON") from exc
+        if not isinstance(declared, list):
+            raise HTTPException(status_code=422, detail="paths 必须是数组")
+        entries: list[tuple[str, bytes]] = []
+        for index, upload in enumerate(files):
+            data = await upload.read()
+            if len(data) > 50 * 1024 * 1024:
+                raise HTTPException(status_code=422, detail=f"{upload.filename} 超过单文件 50MB 限制")
+            declared_path = declared[index] if index < len(declared) else upload.filename
+            entries.append((str(declared_path or upload.filename or "SKILL.md"), data))
+        try:
+            normalized = normalize_uploads(entries)
+            skill_id = create_skill(
+                connection,
+                resource_store(request),
+                normalized,
+                enabled=enabled,
+                external_names=await external_skill_names(client_of(request)),
+            )
+        except ResourceError as exc:
+            resource_error(exc)
+        detail = local_skill_detail(
+            connection,
+            resource_store(request),
+            skill_row(connection, skill_id),
+            all_employees(connection),
+        )
+        return {"skill": detail, "sync": detail["sync"]}
+
+    @app.get("/api/v1/config/skills/{skill_id}")
+    async def get_skill_resource(
+        skill_id: str,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        row = skill_row(connection, skill_id)
+        if row is not None:
+            detail = local_skill_detail(
+                connection,
+                resource_store(request),
+                row,
+                all_employees(connection),
+            )
+            return {"skill": detail}
+        if skill_id == TASK_SKILL_ID:
+            return {"skill": builtin_skill_detail(connection)}
+        if is_nexus_skill(skill_id):
+            raise HTTPException(status_code=404, detail="技能不存在")
+        try:
+            detail = await external_skill_detail(client_of(request), skill_id)
+        except AgentScopeError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        bound = bound_employees(connection, "skills", skill_id)
+        detail["employees"] = [
+            {"id": item["id"], "name": item["name"], "enabled": item["enabled"]}
+            for item in bound
+        ]
+        detail["sync"] = skill_sync_summary(connection, skill_id, 0, True, bound)
+        return {"skill": detail}
+
+    @app.patch("/api/v1/config/skills/{skill_id}")
+    async def update_skill_resource(
+        skill_id: str,
+        body: SkillUpdateBody,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        row = skill_row(connection, skill_id)
+        if row is None:
+            if is_nexus_skill(skill_id):
+                raise HTTPException(status_code=404, detail="技能不存在")
+            raise HTTPException(
+                status_code=422,
+                detail="AgentScope 技能由 AgentScope 管理，不能在 Nexus 编辑",
+            )
+        store = resource_store(request)
+        files = None
+        if body.files is not None:
+            files = decoded_skill_files(body.files)
+        if body.content is not None:
+            if files is None:
+                files = store.read_version_files(skill_id, int(row["version"]))
+            files["SKILL.md"] = body.content.encode("utf-8")
+        try:
+            changed = update_skill(
+                connection,
+                store,
+                skill_id,
+                files=files,
+                enabled=body.enabled,
+                note=body.note,
+                external_names=await external_skill_names(client_of(request)),
+            )
+        except ResourceError as exc:
+            resource_error(exc)
+        detail = local_skill_detail(
+            connection,
+            store,
+            skill_row(connection, skill_id),
+            all_employees(connection),
+        )
+        sync = detail["sync"]
+        if changed:
+            sync = await sync_bound(request, connection, "skills", skill_id)
+            detail = local_skill_detail(
+                connection,
+                store,
+                skill_row(connection, skill_id),
+                all_employees(connection),
+            )
+        return {"skill": detail, "sync": sync}
+
+    @app.delete("/api/v1/config/skills/{skill_id}")
+    def delete_skill_resource(
+        skill_id: str,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, bool]:
+        row = skill_row(connection, skill_id)
+        if row is None:
+            if is_nexus_skill(skill_id):
+                raise HTTPException(status_code=404, detail="技能不存在")
+            raise HTTPException(status_code=422, detail="AgentScope 技能不能从 Nexus 删除")
+        bound = bound_employees(connection, "skills", skill_id)
+        if bound:
+            names = "、".join(item["name"] for item in bound)
+            raise HTTPException(status_code=409, detail=f"技能仍被员工引用：{names}，请先取消绑定")
+        try:
+            delete_skill(connection, resource_store(request), skill_id)
+        except ResourceError as exc:
+            resource_error(exc)
+        return {"deleted": True}
+
+    @app.get("/api/v1/config/skills/{skill_id}/versions")
+    def skill_resource_versions(skill_id: str, connection=Depends(database)) -> dict[str, Any]:
+        if skill_row(connection, skill_id) is None:
+            raise HTTPException(status_code=404, detail="技能不存在")
+        return {"versions": skill_versions(connection, skill_id)}
+
+    @app.post("/api/v1/config/skills/{skill_id}/versions/{version}/restore")
+    async def restore_skill_resource(
+        skill_id: str,
+        version: int,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        try:
+            restore_skill_version(
+                connection,
+                resource_store(request),
+                skill_id,
+                version,
+                external_names=await external_skill_names(client_of(request)),
+            )
+        except ResourceError as exc:
+            resource_error(exc)
+        sync = await sync_bound(request, connection, "skills", skill_id)
+        detail = local_skill_detail(
+            connection,
+            resource_store(request),
+            skill_row(connection, skill_id),
+            all_employees(connection),
+        )
+        return {"skill": detail, "sync": sync}
+
+    @app.post("/api/v1/config/skills/{skill_id}/sync")
+    async def sync_skill_resource(
+        skill_id: str,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        if skill_id == TASK_SKILL_ID:
+            client = client_of(request)
+            results = [
+                await sync_task_capability(
+                    client,
+                    employee,
+                    task_sessions(connection, employee),
+                )
+                or {"status": "applied", "detail": ""}
+                for employee in bound_employees(connection, "skills", TASK_SKILL_ID)
+            ]
+            return {"sync": combined_sync(results)}
+        if skill_row(connection, skill_id) is None and is_nexus_skill(skill_id):
+            raise HTTPException(status_code=404, detail="技能不存在")
+        return {"sync": await sync_bound(request, connection, "skills", skill_id)}
+
+    def local_mcp_detail(connection, row) -> dict[str, Any]:
+        bound = bound_employees(connection, "mcps", row["id"])
+        sync = mcp_sync_summary(
+            connection,
+            row["id"],
+            int(row["revision"]),
+            bool(row["enabled"]),
+            bound,
+        )
+        return mcp_payload(row, bound, sync)
+
+    @app.post("/api/v1/config/mcps", status_code=201)
+    async def create_mcp_resource(
+        body: McpBody,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        try:
+            mcp_id = create_mcp(
+                connection,
+                resource_store(request),
+                name=body.name,
+                description=body.description,
+                url=body.url,
+                transport=body.transport,
+                headers=mcp_headers(body.headers),
+                auth_type=body.auth_type,
+                auth_header=body.auth_header,
+                token=body.token or "",
+                timeout=body.timeout,
+                enabled=body.enabled,
+            )
+        except ResourceError as exc:
+            resource_error(exc)
+        detail = local_mcp_detail(connection, mcp_row(connection, mcp_id))
+        return {"mcp": detail, "sync": detail["sync"]}
+
+    @app.get("/api/v1/config/mcps/{mcp_id}")
+    async def get_mcp_resource(
+        mcp_id: str,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        row = mcp_row(connection, mcp_id)
+        if row is not None:
+            return {"mcp": local_mcp_detail(connection, row)}
+        if is_nexus_mcp(mcp_id):
+            raise HTTPException(status_code=404, detail="MCP 不存在")
+        try:
+            records = await client_of(request).list_mcp_records()
+        except AgentScopeError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        record = next((item for item in records if str(item.get("id") or "") == mcp_id), None)
+        if record is None:
+            raise HTTPException(status_code=404, detail="MCP 不存在")
+        bound = bound_employees(connection, "mcps", mcp_id)
+        sync = mcp_sync_summary(connection, mcp_id, 0, bool(record.get("enabled", True)), bound)
+        return {
+            "mcp": external_mcp_detail(record, bound, sync),
+        }
+
+    def external_mcp_detail(record, bound, sync) -> dict[str, Any]:
+        return {
+            "id": str(record.get("id") or ""),
+            "name": str(record.get("name") or record.get("id") or ""),
+            "description": str(record.get("description") or ""),
+            "source": SOURCE_AGENTSCOPE,
+            "url": "",
+            "transport": "agent-scope",
+            "headers": [],
+            "auth_type": "managed",
+            "auth_header": "",
+            "has_token": False,
+            "timeout": 0,
+            "runtime_name": str(record.get("name") or ""),
+            "enabled": bool(record.get("enabled", True)),
+            "revision": 0,
+            "editable": False,
+            "employees": [
+                {"id": item["id"], "name": item["name"], "enabled": item["enabled"]}
+                for item in bound
+            ],
+            "sync": sync,
+        }
+
+    @app.patch("/api/v1/config/mcps/{mcp_id}")
+    async def update_mcp_resource(
+        mcp_id: str,
+        body: McpUpdateBody,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        row = mcp_row(connection, mcp_id)
+        if row is None:
+            if is_nexus_mcp(mcp_id):
+                raise HTTPException(status_code=404, detail="MCP 不存在")
+            raise HTTPException(
+                status_code=422,
+                detail="AgentScope MCP 由 AgentScope 管理，不能在 Nexus 编辑",
+            )
+        try:
+            update_mcp(
+                connection,
+                resource_store(request),
+                mcp_id,
+                name=body.name,
+                description=body.description,
+                url=body.url,
+                transport=body.transport,
+                headers=mcp_headers(body.headers) if body.headers is not None else None,
+                auth_type=body.auth_type,
+                auth_header=body.auth_header,
+                token=body.token,
+                timeout=body.timeout,
+                enabled=body.enabled,
+            )
+        except ResourceError as exc:
+            resource_error(exc)
+        sync = await sync_bound(request, connection, "mcps", mcp_id)
+        detail = local_mcp_detail(connection, mcp_row(connection, mcp_id))
+        return {"mcp": detail, "sync": sync}
+
+    @app.delete("/api/v1/config/mcps/{mcp_id}")
+    def delete_mcp_resource(mcp_id: str, request: Request, connection=Depends(database)) -> dict[str, bool]:
+        row = mcp_row(connection, mcp_id)
+        if row is None:
+            if is_nexus_mcp(mcp_id):
+                raise HTTPException(status_code=404, detail="MCP 不存在")
+            raise HTTPException(status_code=422, detail="AgentScope MCP 不能从 Nexus 删除")
+        bound = bound_employees(connection, "mcps", mcp_id)
+        if bound:
+            names = "、".join(item["name"] for item in bound)
+            raise HTTPException(status_code=409, detail=f"MCP 仍被员工引用：{names}，请先取消绑定")
+        try:
+            delete_mcp(connection, mcp_id)
+        except ResourceError as exc:
+            resource_error(exc)
+        return {"deleted": True}
+
+    @app.post("/api/v1/config/mcps/test")
+    async def test_mcp_draft(
+        body: McpTestBody,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        draft = body.model_dump(exclude_none=True, exclude={"id", "name"})
+        if "headers" in draft:
+            draft["headers"] = [
+                {"key": item["key"], "value": item["value"]} for item in draft["headers"]
+            ]
+        try:
+            result = await test_mcp_connection(
+                client_of(request),
+                connection,
+                resource_store(request),
+                mcp_id=body.id,
+                draft=draft,
+            )
+        except ResourceError as exc:
+            resource_error(exc)
+        except AgentScopeError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        return result
+
+    @app.post("/api/v1/config/mcps/{mcp_id}/test")
+    async def test_saved_mcp(mcp_id: str, request: Request, connection=Depends(database)) -> dict[str, Any]:
+        try:
+            result = await test_mcp_connection(
+                client_of(request),
+                connection,
+                resource_store(request),
+                mcp_id=mcp_id,
+            )
+        except ResourceError as exc:
+            resource_error(exc)
+        except AgentScopeError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        return result
+
+    @app.post("/api/v1/config/mcps/{mcp_id}/sync")
+    async def sync_mcp_resource(
+        mcp_id: str,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, Any]:
+        if mcp_row(connection, mcp_id) is None and is_nexus_mcp(mcp_id):
+            raise HTTPException(status_code=404, detail="MCP 不存在")
+        return {"sync": await sync_bound(request, connection, "mcps", mcp_id)}
 
     @app.get("/api/v1/internal/wake-target")
     def wake_target(
@@ -1279,14 +2111,21 @@ def create_app() -> FastAPI:
         except ModelRouteError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
         client = client_of(request)
-        skills, knowledge, tools = await chosen_resources(client, body, {})
-        employee = insert_employee(connection, body, skills, knowledge, tools)
-        sync = await sync_agent(client, employee, connection)
+        skills, knowledge, tools, mcps = await chosen_resources(client, body, {}, connection)
+        employee = insert_employee(connection, body, skills, knowledge, tools, mcps)
+        sync = await sync_agent(client, employee, connection, request.app.state.resources)
         save_agent_link(connection, employee["id"], sync)
         employee = load_employee(connection, employee["id"])
         await store_capability(connection, client, employee)
         employee = load_employee(connection, employee["id"])
-        return {"employee": employee, "agentscope": {"ok": sync["ok"], "detail": sync["detail"]}}
+        return {
+            "employee": employee,
+            "agentscope": {"ok": sync["ok"], "detail": sync["detail"]},
+            "sync": {
+                "status": "applied" if sync["ok"] else "pending",
+                "detail": sync["detail"],
+            },
+        }
 
     @app.patch("/api/v1/employees/{employee_id}")
     async def update_employee(
@@ -1304,12 +2143,13 @@ def create_app() -> FastAPI:
         except ModelRouteError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
         client = client_of(request)
-        skills, knowledge, tools = await chosen_resources(client, body, current)
+        skills, knowledge, tools, mcps = await chosen_resources(client, body, current, connection)
         connection.execute(
             """
             UPDATE employees
             SET name = ?, domain = ?, description = ?, instructions = ?, avatar = ?, enabled = ?,
-                knowledge_json = ?, skills_json = ?, tools_json = ?, model_route_id = ?, updated_at = ?
+                knowledge_json = ?, skills_json = ?, mcp_json = ?, tools_json = ?,
+                model_route_id = ?, updated_at = ?
             WHERE id = ?
             """,
             (
@@ -1321,6 +2161,7 @@ def create_app() -> FastAPI:
                 int(body.enabled),
                 json.dumps(knowledge, ensure_ascii=False),
                 json.dumps(skills, ensure_ascii=False),
+                json.dumps(mcps, ensure_ascii=False),
                 json.dumps(tools, ensure_ascii=False),
                 body.model_route_id.strip(),
                 utcnow(),
@@ -1330,7 +2171,7 @@ def create_app() -> FastAPI:
         connection.commit()
         employee = load_employee(connection, employee_id)
         previous_route = str(current.get("model_route_id") or "")
-        sync = await sync_agent(client, employee, connection)
+        sync = await sync_agent(client, employee, connection, request.app.state.resources)
         save_agent_link(connection, employee_id, sync)
         employee = load_employee(connection, employee_id)
         await store_capability(connection, client, employee)
@@ -1355,9 +2196,18 @@ def create_app() -> FastAPI:
                     )
             except AgentScopeError as exc:
                 raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        resource_sync = await sync_employee_skills(
+            client,
+            employee,
+            session_ids(connection, employee),
+            connection,
+            request.app.state.resources,
+            previous=current,
+        )
         return {
             "employee": employee,
             "agentscope": {"ok": sync["ok"], "detail": sync["detail"]},
+            "sync": resource_sync,
         }
 
     @app.delete("/api/v1/employees/{employee_id}")
@@ -1374,6 +2224,7 @@ def create_app() -> FastAPI:
             except AgentScopeError as exc:
                 raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
         connection.execute("DELETE FROM channel_members WHERE employee_id = ?", (employee_id,))
+        connection.execute("DELETE FROM resource_sync WHERE employee_id = ?", (employee_id,))
         connection.execute("DELETE FROM employees WHERE id = ?", (employee_id,))
         connection.commit()
         return {"deleted": True}
@@ -1678,6 +2529,13 @@ def create_app() -> FastAPI:
                                 session_id,
                                 workspace_id,
                             )
+                await sync_employee_skills(
+                    client,
+                    employee,
+                    [session_id],
+                    connection,
+                    request.app.state.resources,
+                )
                 await attach_task_capability(
                     client,
                     employee,
@@ -1695,6 +2553,7 @@ def create_app() -> FastAPI:
                     verified_uid=owner_id,
                     attachments=visible,
                     display_text=message["text"],
+                    message_id=message["id"],
                 )
                 message["accepted"] = True
                 outcome = {"accepted": True, "detail": "", "session_id": session_id}
@@ -1734,6 +2593,13 @@ def create_app() -> FastAPI:
             (session_id, workspace_id, utcnow(), conversation_id),
         )
         connection.commit()
+        await sync_employee_skills(
+            client,
+            employee,
+            [session_id],
+            connection,
+            request.app.state.resources,
+        )
         return {"session_id": session_id, "workspace_id": workspace_id}
 
     @app.get("/api/v1/conversations/{conversation_id}/stream")
@@ -1905,6 +2771,7 @@ def create_app() -> FastAPI:
         connection,
         client: AgentScopeClient,
         channel: dict[str, Any],
+        store: ResourceStore,
     ) -> tuple[str, str]:
         row = connection.execute(
             "SELECT record_agent_id, record_session_id FROM channels WHERE id = ?",
@@ -1934,6 +2801,8 @@ def create_app() -> FastAPI:
             chat_model_config=await model_for(client, record_employee) if record_employee else None,
             knowledge_base_ids=bound_knowledge(record_employee),
         )
+        if record_employee is not None:
+            await sync_employee_skills(client, record_employee, [session_id], connection, store)
         connection.execute(
             """
             UPDATE channels SET record_agent_id = ?, record_session_id = ?, updated_at = ?
@@ -1983,7 +2852,12 @@ def create_app() -> FastAPI:
         record = {"accepted": False, "detail": ""}
         if client.configured:
             try:
-                _agent_id, record_session = await ensure_record_session(connection, client, channel)
+                _agent_id, record_session = await ensure_record_session(
+                    connection,
+                    client,
+                    channel,
+                    request.app.state.resources,
+                )
                 if record_session:
                     await client.record_message(
                         record_session,
@@ -2061,6 +2935,14 @@ def create_app() -> FastAPI:
                     employee,
                     channel_id,
                     channel["name"],
+                    request.app.state.resources,
+                )
+                await sync_employee_skills(
+                    client,
+                    employee,
+                    [session_id],
+                    connection,
+                    request.app.state.resources,
                 )
                 await attach_task_capability(client, employee, session_id, channel_id=channel_id)
                 pending = messages_since(history, binding["last_delivered_message_id"] or "")
@@ -2150,8 +3032,7 @@ def create_app() -> FastAPI:
                 ],
             }
         ]
-        seen_sessions = {channel_id}
-        client = client_of(request)
+        seen_sessions = {channel["id"]}
         if client.configured:
             for member in channel["members"]:
                 session_id = member["agentscope_session_id"]
@@ -2311,6 +3192,13 @@ def create_app() -> FastAPI:
             )
             if unreachable:
                 raise HTTPException(status_code=404, detail="没有找到可联系的员工")
+            await sync_employee_skills(
+                client_of(request),
+                target,
+                [target["mailbox_session_id"]],
+                connection,
+                request.app.state.resources,
+            )
             return await hand_off(
                 connection,
                 client_of(request),
@@ -2346,6 +3234,13 @@ def create_app() -> FastAPI:
             scope = inbound_private_scope(connection, sender["agentscope_agent_id"])
             if scope is None:
                 scope = f"mailbox:{sender['id']}"
+            await sync_employee_skills(
+                client_of(request),
+                target,
+                [target["mailbox_session_id"]],
+                connection,
+                request.app.state.resources,
+            )
             return await hand_off(
                 connection,
                 client_of(request),
@@ -2386,9 +3281,17 @@ def create_app() -> FastAPI:
                         employee,
                         member["channel_id"],
                         channel["name"] if channel is not None else employee["name"],
+                        request.app.state.resources,
                     )
                 except AgentScopeError as exc:
                     raise HTTPException(status_code=503, detail=exc.detail) from exc
+            await sync_employee_skills(
+                client,
+                employee,
+                [peer_session],
+                connection,
+                request.app.state.resources,
+            )
             await attach_task_capability(
                 client,
                 employee,
@@ -2535,7 +3438,15 @@ def create_app() -> FastAPI:
                     session_id,
                     UNATTENDED_PERMISSION,
                 )
-                return claim_private_session(connection, conversation_id, session_id, workspace_id)
+                claimed = claim_private_session(connection, conversation_id, session_id, workspace_id)
+                await sync_employee_skills(
+                    client,
+                    employee,
+                    [claimed],
+                    connection,
+                    request.app.state.resources,
+                )
+                return claimed
 
         prior_reply: dict[str, Any] = {"cursor": None, "known": set()}
 

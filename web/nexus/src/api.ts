@@ -5,8 +5,13 @@ import type {
   ChatMessage,
   Conversation,
   Employee,
+  McpHeader,
+  McpResource,
+  McpTestResult,
   ResourceCatalog,
   RuntimeStatus,
+  SkillResource,
+  SkillVersion,
 } from "./types";
 
 const OWNER_KEY = "nexus_owner_id";
@@ -85,6 +90,10 @@ export async function getSkills(): Promise<ResourceCatalog> {
   return read(await fetch("/api/v1/skills"));
 }
 
+export async function getMcps(): Promise<ResourceCatalog> {
+  return read(await fetch("/api/v1/mcps"));
+}
+
 export async function getKnowledge(): Promise<ResourceCatalog> {
   return read(await fetch("/api/v1/knowledge"));
 }
@@ -106,7 +115,11 @@ export async function saveEmployee(body: Omit<Employee, "id" | "agentscope_agent
     headers: headers(),
     body: JSON.stringify(body),
   });
-  return read<{ employee: Employee; agentscope: { ok: boolean; detail: string } }>(response);
+  return read<{
+    employee: Employee;
+    agentscope: { ok: boolean; detail: string };
+    sync?: { status: string; detail: string };
+  }>(response);
 }
 
 export async function deleteEmployee(id: string): Promise<void> {
@@ -235,4 +248,157 @@ export async function readEventStream(
       onEvent(JSON.parse(raw) as Record<string, unknown>);
     }
   }
+}
+
+
+// ── 配置中心：Skill / MCP 资源 ─────────────────────────────────────────────
+
+export interface SkillResourceList {
+  available: boolean;
+  agentscope_available: boolean;
+  external_names?: string[];
+  items: SkillResource[];
+}
+
+function query(params: Record<string, string>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  const text = search.toString();
+  return text ? `?${text}` : "";
+}
+
+export async function listSkillResources(filters: { q?: string; source?: string; status?: string } = {}): Promise<SkillResourceList> {
+  return read(await fetch(`/api/v1/config/skills${query(filters)}`, { headers: headers(false) }));
+}
+
+export async function getSkillResource(id: string): Promise<{ skill: SkillResource }> {
+  return read(await fetch(`/api/v1/config/skills/${encodeURIComponent(id)}`, { headers: headers(false) }));
+}
+
+export interface SkillWriteBody {
+  content?: string;
+  files?: { path: string; content: string; encoding?: "utf8" | "base64" }[];
+  enabled?: boolean;
+  note?: string;
+}
+
+export async function createSkillResource(body: SkillWriteBody): Promise<{ skill: SkillResource; sync: { status: string; detail: string } }> {
+  return read(await fetch("/api/v1/config/skills", {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function uploadSkillDirectory(files: File[], enabled = true): Promise<{ skill: SkillResource; sync: { status: string; detail: string } }> {
+  const form = new FormData();
+  form.append("paths", JSON.stringify(files.map((file) => (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name)));
+  form.append("enabled", String(enabled));
+  for (const file of files) form.append("files", file, file.name);
+  return read(await fetch("/api/v1/config/skills/upload", {
+    method: "POST",
+    headers: headers(false),
+    body: form,
+  }));
+}
+
+export async function updateSkillResource(id: string, body: SkillWriteBody): Promise<{ skill: SkillResource; sync: { status: string; detail: string } }> {
+  return read(await fetch(`/api/v1/config/skills/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function deleteSkillResource(id: string): Promise<void> {
+  await read(await fetch(`/api/v1/config/skills/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers(false) }));
+}
+
+export async function skillResourceVersions(id: string): Promise<{ versions: SkillVersion[] }> {
+  return read(await fetch(`/api/v1/config/skills/${encodeURIComponent(id)}/versions`, { headers: headers(false) }));
+}
+
+export async function restoreSkillVersion(id: string, version: number): Promise<{ skill: SkillResource; sync: { status: string; detail: string } }> {
+  return read(await fetch(`/api/v1/config/skills/${encodeURIComponent(id)}/versions/${version}/restore`, {
+    method: "POST",
+    headers: headers(false),
+  }));
+}
+
+export async function syncSkillResource(id: string): Promise<{ sync: { status: string; detail: string } }> {
+  return read(await fetch(`/api/v1/config/skills/${encodeURIComponent(id)}/sync`, {
+    method: "POST",
+    headers: headers(false),
+  }));
+}
+
+export interface McpResourceList {
+  available: boolean;
+  agentscope_available: boolean;
+  items: McpResource[];
+}
+
+export interface McpWriteBody {
+  name?: string;
+  description?: string;
+  url?: string;
+  transport?: string;
+  headers?: McpHeader[];
+  auth_type?: string;
+  auth_header?: string;
+  token?: string;
+  timeout?: number;
+  enabled?: boolean;
+}
+
+export async function listMcpResources(filters: { q?: string; source?: string; status?: string } = {}): Promise<McpResourceList> {
+  return read(await fetch(`/api/v1/config/mcps${query(filters)}`, { headers: headers(false) }));
+}
+
+export async function getMcpResource(id: string): Promise<{ mcp: McpResource }> {
+  return read(await fetch(`/api/v1/config/mcps/${encodeURIComponent(id)}`, { headers: headers(false) }));
+}
+
+export async function createMcpResource(body: McpWriteBody): Promise<{ mcp: McpResource; sync: { status: string; detail: string } }> {
+  return read(await fetch("/api/v1/config/mcps", {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function updateMcpResource(id: string, body: McpWriteBody): Promise<{ mcp: McpResource; sync: { status: string; detail: string } }> {
+  return read(await fetch(`/api/v1/config/mcps/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function deleteMcpResource(id: string): Promise<void> {
+  await read(await fetch(`/api/v1/config/mcps/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers(false) }));
+}
+
+export async function testMcpDraft(body: McpWriteBody & { id?: string }): Promise<McpTestResult> {
+  return read(await fetch("/api/v1/config/mcps/test", {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function testSavedMcp(id: string): Promise<McpTestResult> {
+  return read(await fetch(`/api/v1/config/mcps/${encodeURIComponent(id)}/test`, {
+    method: "POST",
+    headers: headers(false),
+  }));
+}
+
+export async function syncMcpResource(id: string): Promise<{ sync: { status: string; detail: string } }> {
+  return read(await fetch(`/api/v1/config/mcps/${encodeURIComponent(id)}/sync`, {
+    method: "POST",
+    headers: headers(false),
+  }));
 }

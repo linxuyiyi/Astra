@@ -91,7 +91,25 @@ Workspace 内技能，`_router/_workspace.py`，前缀 `/workspace`。查询参�
 | POST | `/workspace/skill/from-library` | 从用户技能库装入 workspace |
 | DELETE | `/workspace/skill/{skill_name}` | 从 workspace 移除 |
 
-Nexus 的选择器只读 `GET /skill`。不在页面里编辑技能正文。
+Nexus 自建技能保存在 `data/skills/<id>/<version>/`，通过 `/workspace/skill/upload` 装入会话；AgentScope 已安装技能只读 `GET /skill`，通过 `/workspace/skill/from-library` 绑定，不在 Nexus 复制正文。同名技能在 AgentScope 里会加 “ (2)” 后缀，Nexus 收回时按前缀一并处理。
+
+## MCP
+
+`_router/_mcp.py` 管理用户 MCP 库，`_router/_workspace.py` 管理 Session 工作区。两套接口同样不要混用：
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| GET | `/mcp` | 列出已安装 MCP。响应不含渲染后的密钥配置 |
+| PATCH | `/mcp/{mcp_id}` | 改名、启停或重渲染凭据 |
+| DELETE | `/mcp/{mcp_id}` | 从库中删除，不收回已装入 workspace 的副本 |
+| GET | `/workspace/mcp` | 列出工作区 MCP，返回 `is_healthy`、`tools` 和 `error` |
+| POST | `/workspace/mcp` | 按 `MCPClient` 配置直接装入工作区 |
+| POST | `/workspace/mcp/from-library` | 按库 id 装入工作区 |
+| DELETE | `/workspace/mcp/{mcp_name}` | 从工作区移除 |
+
+Nexus 自建 MCP 保存 URL、非敏感请求头、超时和服务端加密的 Token，装入时拼成 `HttpMCPConfig`；AgentScope 已安装 MCP 只保存库 id，绑定走 `from-library`。连接测试通过 `/workspace/mcp` 的实时状态获取 Tool 列表，不另写 MCP 客户端。
+
+注意 `dont_ask` 权限模式会把 MCP Tool 的 PASSTHROUGH 权限转成 DENY。绑定 MCP 的会话使用 AgentScope 官方的 `bypass` 模式，否则员工能看见 Tool 却永远调不到。任务技能自带的 `nexus-task` MCP 仍由 `task_skill.py` 单独挂接。
 
 ## Knowledge
 

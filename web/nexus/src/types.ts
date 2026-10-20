@@ -8,7 +8,15 @@ export interface Employee {
   enabled: boolean;
   knowledge: string[];
   skills: string[];
+  mcps: string[];
   tools: string[];
+  capability?: {
+    runtime_status?: string;
+    error?: string;
+    checked_at?: string;
+    desired_revision?: string;
+    applied_revision?: string;
+  };
   agentscope_agent_id: string | null;
   mailbox_session_id: string | null;
   model_route_id?: string;
@@ -22,6 +30,94 @@ export interface SkillItem {
 export interface ResourceCatalog {
   available: boolean;
   items: SkillItem[];
+}
+
+export type ResourceSource = "nexus" | "agentscope" | "builtin";
+
+export interface ResourceEmployee {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
+export interface ResourceSync {
+  status: "applied" | "pending" | "error" | "disabled" | "unbound";
+  detail: string;
+  applied?: number;
+  pending?: number;
+  error?: number;
+  last_synced_at?: string;
+}
+
+export interface SkillFile {
+  path: string;
+  size: number;
+  content?: string;
+  encoding?: "utf8" | "base64";
+}
+
+export interface SkillVersion {
+  version: number;
+  note: string;
+  created_at: string;
+  files: { path: string; size: number }[];
+}
+
+export interface SkillResource {
+  id: string;
+  name: string;
+  description: string;
+  source: ResourceSource;
+  version: number | string;
+  revision?: number;
+  runtime_name?: string;
+  files: SkillFile[];
+  enabled: boolean;
+  editable: boolean;
+  employees: ResourceEmployee[];
+  sync: ResourceSync;
+  versions?: SkillVersion[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface McpHeader {
+  key: string;
+  value: string;
+}
+
+export interface McpResource {
+  id: string;
+  name: string;
+  description: string;
+  source: ResourceSource | "agentscope";
+  url: string;
+  transport: string;
+  headers: McpHeader[];
+  auth_type: string;
+  auth_header: string;
+  has_token: boolean;
+  timeout: number;
+  runtime_name?: string;
+  enabled: boolean;
+  revision?: number;
+  editable: boolean;
+  employees: ResourceEmployee[];
+  sync: ResourceSync;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface McpToolPreview {
+  name: string;
+  description: string;
+}
+
+export interface McpTestResult {
+  ok: boolean;
+  tools: McpToolPreview[];
+  error: string;
+  elapsed_ms: number;
 }
 
 export interface Attachment {

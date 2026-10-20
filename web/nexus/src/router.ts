@@ -9,6 +9,8 @@ import EmployeesView from "./views/EmployeesView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import AgentscopeView from "./views/settings/AgentscopeView.vue";
 import CategoryConfig from "./views/settings/CategoryConfig.vue";
+import SkillResourcesView from "./views/settings/SkillResourcesView.vue";
+import McpResourcesView from "./views/settings/McpResourcesView.vue";
 import GatewayView from "./views/gateway/GatewayView.vue";
 import GatewayNodeDetailView from "./views/gateway/GatewayNodeDetailView.vue";
 import GatewayOverview from "./views/gateway/GatewayOverview.vue";
@@ -71,6 +73,8 @@ export const router = createRouter({
         { path: "employees", name: "settings-employees", component: EmployeesView },
         { path: "workers", name: "settings-workers", component: EmployeeListView },
         { path: "workers/:id", name: "settings-worker-detail", component: EmployeeDetailView },
+        { path: "skills", name: "settings-skills", component: SkillResourcesView },
+        { path: "mcps", name: "settings-mcps", component: McpResourcesView },
         { path: "categories", name: "settings-categories", component: CategoryConfig },
         { path: "agentscope", name: "settings-agentscope", component: AgentscopeView },
       ],

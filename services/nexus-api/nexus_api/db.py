@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS employees (
     enabled INTEGER NOT NULL,
     knowledge_json TEXT NOT NULL,
     skills_json TEXT NOT NULL,
+    mcp_json TEXT NOT NULL DEFAULT '[]',
     tools_json TEXT NOT NULL,
     agentscope_agent_id TEXT,
     mailbox_session_id TEXT,
@@ -39,8 +40,6 @@ CREATE TABLE IF NOT EXISTS conversations (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS ux_private_conversation
-    ON conversations(owner_id, employee_id, kind);
 CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     conversation_id TEXT,
@@ -131,6 +130,62 @@ CREATE TABLE IF NOT EXISTS peer_deliveries (
     message_key TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS nexus_skills (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    revision INTEGER NOT NULL DEFAULT 1,
+    runtime_name TEXT NOT NULL,
+    files_json TEXT NOT NULL DEFAULT '[]',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nexus_skills_name ON nexus_skills(name);
+CREATE TABLE IF NOT EXISTS nexus_skill_versions (
+    id TEXT PRIMARY KEY,
+    skill_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    files_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    UNIQUE (skill_id, version)
+);
+CREATE TABLE IF NOT EXISTS nexus_mcps (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    url TEXT NOT NULL,
+    transport TEXT NOT NULL DEFAULT 'http',
+    headers_json TEXT NOT NULL DEFAULT '[]',
+    auth_type TEXT NOT NULL DEFAULT 'none',
+    auth_header TEXT NOT NULL DEFAULT 'Authorization',
+    token_ciphertext TEXT NOT NULL DEFAULT '',
+    timeout REAL NOT NULL DEFAULT 30,
+    runtime_name TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    revision INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nexus_mcps_name ON nexus_mcps(name);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_nexus_mcps_runtime_name ON nexus_mcps(runtime_name);
+CREATE TABLE IF NOT EXISTS resource_sync (
+    resource_type TEXT NOT NULL,
+    resource_id TEXT NOT NULL,
+    employee_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    detail TEXT NOT NULL DEFAULT '',
+    revision INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (resource_type, resource_id, employee_id, session_id)
+);
+CREATE TABLE IF NOT EXISTS nexus_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 
@@ -176,6 +231,8 @@ def init_db(path: Path) -> None:
             connection.execute("ALTER TABLE employees ADD COLUMN capability_json TEXT NOT NULL DEFAULT '{}'")
         if "model_route_id" not in employee_columns:
             connection.execute("ALTER TABLE employees ADD COLUMN model_route_id TEXT NOT NULL DEFAULT ''")
+        if "mcp_json" not in employee_columns:
+            connection.execute("ALTER TABLE employees ADD COLUMN mcp_json TEXT NOT NULL DEFAULT '[]'")
         member_columns = {row[1] for row in connection.execute("PRAGMA table_info(channel_members)")}
         if "last_delivered_message_id" not in member_columns:
             connection.execute(
@@ -218,6 +275,7 @@ def employee_from_row(row: sqlite3.Row) -> dict[str, Any]:
         "enabled": bool(row["enabled"]),
         "knowledge": _loads(row["knowledge_json"]),
         "skills": _loads(row["skills_json"]),
+        "mcps": _loads(row["mcp_json"]) if "mcp_json" in row.keys() else [],
         "tools": _loads(row["tools_json"]),
         "agentscope_agent_id": row["agentscope_agent_id"],
         "mailbox_session_id": row["mailbox_session_id"],

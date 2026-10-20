@@ -106,29 +106,6 @@
 .astra-mark:hover { border-color: var(--astra-warning); }
 .astra-mark[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--astra-primary-glow); }
 
-/* ── 筛选面板 ──────────────────────────────────────────────────────────
-   浅灰边框 + 白底 + 圆角，控件不再零散地摆在页面背景上。
-   左侧业务筛选按顺序横排，右侧关键词搜索整体靠右（margin-left: auto）；
-   右侧组 flex: none 且不换行，空间不足时整组落到下一行，不挤压搜索框。 */
-.astra-filter {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--astra-border);
-  border-radius: 10px;
-  background: var(--astra-bg-panel);
-}
-
-.astra-filter__fields { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
-
-.astra-filter__select { flex: none; width: 148px; }
-
-.astra-filter__keyword { flex: none; width: 240px; }
-
-.astra-filter__search { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
-
 /* ── 表格面板与页脚 ────────────────────────────────────────────────────
    表格占满筛选面板以下的剩余空间，表头固定；分页固定在底部，
    左侧数据总数、右侧分页控件。总数只在页脚出现一次。 */
@@ -165,8 +142,6 @@
 @media (max-width: 900px) {
   .astra-page { height: auto; min-height: 0; overflow: visible; }
   .astra-table-panel { min-height: 480px; }
-  .astra-filter__select { width: 132px; }
-  .astra-filter__search { margin-left: 0; }
 }
 
 
@@ -183,7 +158,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 14px 16px;
+  padding: 16px;
   overflow: auto;
 }
 .content-shell .el-card {
@@ -198,14 +173,6 @@
   border-bottom: 1px solid var(--astra-border);
 }
 .content-shell .el-card .el-card__body {
-  padding-left: 0;
-  padding-right: 0;
-}
-.content-shell .astra-filter {
-  border: 0;
-  border-bottom: 1px solid var(--astra-border);
-  border-radius: 0;
-  background: transparent;
   padding-left: 0;
   padding-right: 0;
 }
@@ -226,3 +193,68 @@
   border-radius: 0;
 }
 .content-shell .gateway-overview__metrics .el-card:last-child { border-right: 0; }
+
+
+/* ── 列表管理页统一骨架（Nexus 管理页面统一 UI 规范 v1.1）────────────────
+   el-card → 标题栏 → 查询工具栏 → el-table → el-pagination。
+   卡片 body 是列表页唯一的滚动容器：表格按内容自然增高，分页紧跟表格
+   右对齐，不再让页面和表格各滚一遍。整页管理页自带 .admin-card（含标题栏
+   与刷新 / 新建按钮），配置中心与 API 网关的子页复用父级 .content-shell
+   的标题栏，子页只负责工具栏、表格与分页。 */
+.admin-card {
+  --el-card-padding: 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.admin-card > .el-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.admin-card__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+
+.admin-card__title {
+  margin: 0;
+  color: var(--astra-text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.admin-card__actions { display: flex; flex: none; align-items: center; gap: 8px; }
+
+/* 列表页内容体：卡片 body（配置中心 / 网关的 .content-shell）是 flex 列容器，
+   这里必须 flex: none，否则内容比卡片高时会被压缩到卡片高度 —— 表格被裁掉半行、
+   分页却还在，页面看起来像坏了。子项同样不参与收缩，超出部分交给卡片 body 滚动。 */
+.admin-page { display: flex; flex: none; flex-direction: column; gap: 16px; }
+
+.admin-page > * { flex: none; }
+
+/* 左侧业务筛选、右侧关键词与搜索按钮；窄屏时搜索组整体换行。 */
+.admin-page__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.admin-page__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+
+.admin-page__search { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
+
+.admin-page__select { flex: none; width: 160px; }
+
+.admin-page__keyword { flex: none; width: 240px; }
+
+.admin-page__footer { display: flex; justify-content: flex-end; }
+
+/* 操作列按钮：统一 8px 间距。Element Plus 会给相邻 .el-button 加 12px 左外边距，
+   和 flex gap 叠加后疏密不一（下拉按钮前只有 gap、文字按钮前是 12px + gap），这里一并归零。 */
+.admin-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+
+.admin-actions .el-button + .el-button { margin-left: 0; }
+
+@media (max-width: 900px) {
+  .admin-page__search { margin-left: 0; }
+  .admin-page__select { width: 140px; }
+  .admin-page__keyword { width: 200px; }
+}

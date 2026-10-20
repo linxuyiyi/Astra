@@ -1,0 +1,85 @@
+{
+  "generated_at": "2026-10-20T12:50:00+08:00",
+  "branch": "codex/nexus-v1.4.7",
+  "agentscope_version": "2.0.10",
+  "skill": {
+    "id": "nsk_1ac062b6cbdc",
+    "name": "NexusE2E技能",
+    "version": 2,
+    "source": "nexus",
+    "sync_status": "applied",
+    "mailbox_workspace_skills": [
+      "NexusE2E技能"
+    ],
+    "updated_content_present": true
+  },
+  "mcp": {
+    "id": "nmp_8aedbaf3e2dc",
+    "name": "E2E任务MCP",
+    "runtime_name": "nexus_e2e_mcp_baf3e2dc",
+    "url": "http://127.0.0.1:8202/mcp",
+    "transport": "http",
+    "has_token": true,
+    "sync_status": "applied",
+    "mailbox_workspace_mcps": [
+      "nexus_e2e_mcp_baf3e2dc"
+    ],
+    "live_test_ok": true,
+    "live_tool_count": 15,
+    "live_tool_names": [
+      "mcp__nexus_e2e_mcp_baf3e2dc__nexus_task_create",
+      "mcp__nexus_e2e_mcp_baf3e2dc__nexus_task_get",
+      "mcp__nexus_e2e_mcp_baf3e2dc__nexus_task_list",
+      "mcp__nexus_e2e_mcp_baf3e2dc__nexus_task_update"
+    ]
+  },
+  "employee": {
+    "id": "emp_6f7a0cec2f89",
+    "agentscope_agent_id": "e7d6d8b8badb4324839efa66dcb8d32a",
+    "mailbox_session_id": "595dcdf8cce3428cb22226ea045b53d9",
+    "capability": {
+      "desired_revision": "f51d8c9a0c8f8547",
+      "checked_at": "2026-10-20T04:49:34.307567+00:00",
+      "runtime_status": "applied",
+      "error": "",
+      "applied_revision": "f51d8c9a0c8f8547"
+    }
+  },
+  "latest_session": {
+    "conversation_id": "conv_8f0139e734d4",
+    "agentscope_session_id": "726eb9739fdf422697fa244d3463e2a1",
+    "tool_calls": [
+      {
+        "name": "mcp__nexus_e2e_mcp_baf3e2dc__nexus_task_list",
+        "state": "finished"
+      }
+    ],
+    "tool_results": [
+      {
+        "name": "mcp__nexus_e2e_mcp_baf3e2dc__nexus_task_list",
+        "state": "success",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"ok\": true,\n  \"tasks\": []\n}",
+            "id": "b45a4d979bf241b9a6b9be8a4e5a880f",
+            "created_at": "2026-10-20T12:49:44.755651",
+            "finished_at": null
+          }
+        ]
+      }
+    ],
+    "assistant_text": [
+      "0"
+    ]
+  },
+  "credential_check": {
+    "token_not_in_config_lists": true,
+    "detail_returns_has_token_only": true
+  },
+  "restart_persistence": {
+    "skill_survived_restart": true,
+    "mcp_token_survived_restart": true,
+    "live_test_after_restart_ok": true
+  }
+}

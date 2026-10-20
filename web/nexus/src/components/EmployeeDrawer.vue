@@ -15,24 +15,25 @@
           <el-option v-for="item in avatars" :key="item" :label="item" :value="item" />
         </el-select>
       </el-form-item>
-      <el-form-item label="职责说明" required>
+      <el-form-item required>
+        <template #label>职责说明 <FieldHelp label="职责说明" help="职责是这个人负责什么。同事和任务会按这段话找到他。" /></template>
         <el-input v-model="form.description" type="textarea" :rows="3" placeholder="例如：负责测试平台的问题定位和需求澄清，不直接改生产配置。" />
-        <div class="muted" style="margin-top: 6px">职责是这个人负责什么。同事和任务会按这段话找到他。</div>
       </el-form-item>
-      <el-form-item label="工作指令" required>
+      <el-form-item required>
+        <template #label>工作指令 <FieldHelp label="工作指令" help="工作指令是他收到消息后怎么做。职责说范围，指令说步骤。" /></template>
         <el-input v-model="form.instructions" type="textarea" :rows="5" placeholder="例如：先确认现象和影响范围，信息不足时追问，需要同事时再联系对方。" />
-        <div class="muted" style="margin-top: 6px">工作指令是他收到消息后怎么做。职责说范围，指令说步骤。</div>
       </el-form-item>
-      <el-form-item label="模型路由">
+      <el-form-item>
+        <template #label>模型路由 <FieldHelp label="模型路由" help="只列出已启用的网关路由。密钥不会出现在这里。" /></template>
         <el-select v-model="form.model_route_id" clearable filterable placeholder="选择已启用的路由" style="width: 100%">
           <el-option v-for="item in routes" :key="item.id" :label="item.model" :value="item.id" />
         </el-select>
-        <div class="muted" style="margin-top: 6px">只列出已启用的网关路由。密钥不会出现在这里。</div>
         <div v-if="routeError" class="muted">{{ routeError }}</div>
         <div v-if="missingRoute" class="muted">当前路由不在已启用列表中。</div>
       </el-form-item>
       <div class="form-cap">知识与工具</div>
-      <el-form-item label="知识">
+      <el-form-item>
+        <template #label>知识 <FieldHelp label="知识" help="知识库当前读不到时不能新选。已保存的选择会保留，恢复目录后再改。" /></template>
         <el-select
           v-model="form.knowledge"
           multiple
@@ -43,10 +44,10 @@
         >
           <el-option v-for="item in knowledgeOptions" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
-        <div class="muted" style="margin-top: 6px">知识库当前读不到时不能新选。已保存的选择会保留，恢复目录后再改。</div>
         <el-button v-if="!catalogs.knowledge.available" style="margin-top: 8px" @click="emit('reload-catalogs')">重新读取知识库</el-button>
       </el-form-item>
-      <el-form-item label="技能">
+      <el-form-item>
+        <template #label>技能 <FieldHelp label="技能" help="技能来自配置中心的统一资源目录，包含 Nexus 自建、AgentScope 已安装和内置任务技能。正文在配置中心维护。" /></template>
         <el-select
           v-model="form.skills"
           multiple
@@ -57,9 +58,22 @@
         >
           <el-option v-for="item in skillOptions" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
-        <div class="muted" style="margin-top: 6px">任务管理是内置技能。其余技能仍来自 AgentScope，这里不能编写技能正文。</div>
       </el-form-item>
-      <el-form-item label="工具">
+      <el-form-item>
+        <template #label>MCP <FieldHelp label="MCP" help="MCP 来自配置中心的统一资源目录。保存后会把连接和 Tool 装入该员工的邮箱、私聊和团队会话。" /></template>
+        <el-select
+          v-model="form.mcps"
+          multiple
+          filterable
+          :placeholder="mcpOptions.length ? '选择 MCP' : '当前没有可选 MCP'"
+          style="width: 100%"
+          :disabled="!mcpOptions.length"
+        >
+          <el-option v-for="item in mcpOptions" :key="item.id" :label="item.name" :value="item.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item>
+        <template #label>工具 <FieldHelp label="工具" help="包含内置工作区工具（终端执行、文件读写等）与联系其他员工。MCP 工具可通过 AgentScope 配置接入。" /></template>
         <el-select
           v-model="form.tools"
           multiple
@@ -70,9 +84,6 @@
         >
           <el-option v-for="item in toolOptions" :key="item.id" :label="toolLabel(item)" :value="item.id" />
         </el-select>
-        <div class="muted" style="margin-top: 6px">
-          只能选择工作区里已经提供的工具，包括联系其他数字员工。不能手填目录外的名称。
-        </div>
       </el-form-item>
     </el-form>
     <template #footer>
@@ -89,14 +100,17 @@
 
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from "vue";
+import FieldHelp from "./forms/FieldHelp.vue";
 import type { Employee, ResourceCatalog } from "../types";
 import type { GatewayRoute } from "../api/gateway";
+import { formatToolLabel } from "../utils/tools";
 
 const props = defineProps<{
   open: boolean;
   employee: Employee | null;
   catalogs: {
     skills: ResourceCatalog;
+    mcps: ResourceCatalog;
     knowledge: ResourceCatalog;
     tools: ResourceCatalog;
   };
@@ -120,6 +134,7 @@ const form = reactive({
   enabled: true,
   knowledge: [] as string[],
   skills: [] as string[],
+  mcps: [] as string[],
   tools: [] as string[],
   model_route_id: "",
 });
@@ -148,6 +163,7 @@ function onClose() {
 }
 
 const skillOptions = computed(() => optionsFor(props.catalogs.skills, form.skills));
+const mcpOptions = computed(() => optionsFor(props.catalogs.mcps, form.mcps));
 const knowledgeOptions = computed(() => optionsFor(props.catalogs.knowledge, form.knowledge));
 const toolOptions = computed(() => optionsFor(props.catalogs.tools, form.tools));
 const missingRoute = computed(
@@ -166,6 +182,7 @@ watch(
     form.enabled = employee?.enabled ?? true;
     form.knowledge = [...(employee?.knowledge ?? [])];
     form.skills = [...(employee?.skills ?? [])];
+    form.mcps = [...(employee?.mcps ?? [])];
     form.tools = [...(employee?.tools ?? defaultTools())];
     form.model_route_id = employee?.model_route_id ?? "";
   },
@@ -181,9 +198,7 @@ function optionsFor(catalog: ResourceCatalog, selected: string[]) {
 }
 
 function toolLabel(item: { id: string; name: string }) {
-  if (item.id === "contact_employee") return "联系其他数字员工";
-  if (item.name && item.name !== item.id) return item.name;
-  return "工作区工具";
+  return formatToolLabel(item.id, item.name);
 }
 
 function defaultTools(): string[] {
@@ -202,6 +217,7 @@ function submit() {
     enabled: form.enabled,
     knowledge: [...form.knowledge],
     skills: [...form.skills],
+    mcps: [...form.mcps],
     tools: [...form.tools],
     model_route_id: form.model_route_id,
   });

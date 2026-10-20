@@ -92,6 +92,11 @@
             <span v-for="item in activeTarget.employee?.skills || []" :key="item" class="mini-chip">{{ resourceLabel(catalogs.skills, item) }}</span>
             <span v-if="!activeTarget.employee?.skills.length" class="muted">暂无</span>
           </div>
+          <div class="section-label">MCP</div>
+          <div class="resource-list">
+            <span v-for="item in activeTarget.employee?.mcps || []" :key="item" class="mini-chip">{{ resourceLabel(catalogs.mcps, item) }}</span>
+            <span v-if="!activeTarget.employee?.mcps.length" class="muted">暂无</span>
+          </div>
           <div class="section-label">工具</div>
           <div class="resource-list">
             <span v-for="item in activeTarget.employee?.tools || []" :key="item" class="mini-chip">{{ toolLabel(item) }}</span>
@@ -155,6 +160,7 @@ import {
   createConversation,
   currentUid,
   getKnowledge,
+  getMcps,
   getSkills,
   getTools,
   listChannels,
@@ -188,7 +194,12 @@ const groupEditingId = ref<string | null>(null);
 const groupSaving = ref(false);
 const groupForm = reactive({ name: "", description: "", memberIds: [] as string[] });
 const emptyCatalog = (): ResourceCatalog => ({ available: false, items: [] });
-const catalogs = ref({ skills: emptyCatalog(), knowledge: emptyCatalog(), tools: emptyCatalog() });
+const catalogs = ref({
+  skills: emptyCatalog(),
+  mcps: emptyCatalog(),
+  knowledge: emptyCatalog(),
+  tools: emptyCatalog(),
+});
 let taskTimer = 0;
 let selectionGeneration = 0;
 let disposed = false;
@@ -464,8 +475,9 @@ watch(() => activeState.value?.tab, (tab) => {
 });
 
 onMounted(async () => {
-  const [skills, knowledge, tools, employeeList, channelList, workerList] = await Promise.all([
+  const [skills, mcps, knowledge, tools, employeeList, channelList, workerList] = await Promise.all([
     getSkills().catch(() => emptyCatalog()),
+    getMcps().catch(() => emptyCatalog()),
     getKnowledge().catch(() => emptyCatalog()),
     getTools().catch(() => emptyCatalog()),
     listEmployees(),
@@ -473,7 +485,7 @@ onMounted(async () => {
     listWorkers().catch(() => []),
   ]);
   if (disposed) return;
-  catalogs.value = { skills, knowledge, tools };
+  catalogs.value = { skills, mcps, knowledge, tools };
   employees.value = employeeList;
   channels.value = channelList;
   workers.value = workerList;

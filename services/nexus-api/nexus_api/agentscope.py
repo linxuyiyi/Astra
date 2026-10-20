@@ -13,6 +13,25 @@ PINNED_VERSION = "2.0.10"
 # AgentScope 的 get_toolkit 还会自行挂上任务和团队工具，那些不在这份可选目录里。
 LAUNCHER_TOOLS = ("Bash", "Edit", "Glob", "Grep", "Read", "Write", "contact_employee", "contact_human")
 
+LAUNCHER_TOOL_META: dict[str, dict[str, str]] = {
+    "Bash": {
+        "name": "终端命令执行 (Bash)",
+        "category": "builtin",
+        "description": "在沙箱终端中运行 shell 命令",
+    },
+    "Read": {"name": "读取文件 (Read)", "category": "builtin", "description": "读取工作区指定文件内容"},
+    "Write": {"name": "写入文件 (Write)", "category": "builtin", "description": "在工作区新建或覆写文件"},
+    "Edit": {"name": "编辑文件 (Edit)", "category": "builtin", "description": "精确替换工作区文件指定行代码"},
+    "Glob": {"name": "查找文件 (Glob)", "category": "builtin", "description": "按通配符列出工作区匹配文件"},
+    "Grep": {"name": "搜索文本 (Grep)", "category": "builtin", "description": "正则表达式搜索工作区文件内容"},
+    "contact_employee": {
+        "name": "联系其他数字员工",
+        "category": "builtin",
+        "description": "向对等员工投递协作提示",
+    },
+    "contact_human": {"name": "联系人工介入", "category": "builtin", "description": "发起人工审核或求助请求"},
+}
+
 
 class AgentScopeError(Exception):
     def __init__(self, detail: str, status_code: int = 503) -> None:
@@ -195,6 +214,20 @@ class AgentScopeClient:
             raise AgentScopeError("AgentScope 创建会话后没有返回 session_id")
         return str(session_id)
 
+    async def create_probe_session(self, agent_id: str, name: str) -> str:
+        """Create a session without a model. Only used to validate workspace resources."""
+
+        response = await self.request(
+            "POST",
+            "/sessions/",
+            json={"agent_id": agent_id, "name": name},
+        )
+        payload = response.json()
+        session_id = payload.get("session_id")
+        if not session_id:
+            raise AgentScopeError("AgentScope 创建校验会话后没有返回 session_id")
+        return str(session_id)
+
     async def set_permission_mode(self, agent_id: str, session_id: str, mode: str) -> None:
         """把 Session 设成指定权限模式。运行中的 Session 会拒绝修改，调用方可以忽略。"""
         if not self.configured or not agent_id or not session_id:
@@ -218,8 +251,11 @@ class AgentScopeClient:
         verified_uid: str | None = None,
         attachments: list[dict[str, Any]] | None = None,
         display_text: str | None = None,
+        message_id: str | None = None,
     ) -> str:
         message: dict[str, Any] = {"name": user_name, "role": "user", "content": content}
+        if message_id:
+            message["id"] = message_id
         metadata: dict[str, Any] = {}
         if verified_uid:
             metadata["verified_uid"] = verified_uid
@@ -227,6 +263,8 @@ class AgentScopeClient:
             metadata["attachments"] = attachments
         if display_text is not None:
             metadata["display_text"] = display_text
+        if message_id:
+            metadata["message_id"] = message_id
         if metadata:
             message["metadata"] = metadata
         response = await self.request(
@@ -278,11 +316,21 @@ class AgentScopeClient:
         )
 
     async def list_user_mcp(self) -> list[dict[str, str]]:
+        return _named_items(await self.list_mcp_records(), "id", "name")
+
+    async def list_mcp_records(self) -> list[dict[str, Any]]:
         response = await self.request("GET", "/mcp")
         payload = response.json()
         if not isinstance(payload, list):
             raise AgentScopeError("AgentScope MCP 返回的不是列表")
-        return _named_items(payload, "id", "name")
+        return [item for item in payload if isinstance(item, dict)]
+
+    async def delete_mcp(self, mcp_id: str) -> None:
+        try:
+            await self.request("DELETE", f"/mcp/{mcp_id}")
+        except AgentScopeError as exc:
+            if exc.status_code != 404:
+                raise
 
     async def list_workspace_mcp(self, agent_id: str, session_id: str) -> list[dict[str, Any]]:
         response = await self.request(
@@ -296,11 +344,44 @@ class AgentScopeClient:
         return [item for item in payload if isinstance(item, dict)]
 
     async def list_skills(self) -> list[dict[str, str]]:
+        return _named_items(await self.list_skill_records(), "id", "skill_id", "name")
+
+    async def list_skill_records(self) -> list[dict[str, Any]]:
         response = await self.request("GET", "/skill")
         payload = response.json()
         if not isinstance(payload, list):
             raise AgentScopeError("AgentScope 技能库返回的不是列表")
-        return _named_items(payload, "id", "skill_id", "name")
+        return [item for item in payload if isinstance(item, dict)]
+
+    async def get_skill(self, skill_id: str) -> dict[str, Any]:
+        response = await self.request("GET", f"/skill/{skill_id}")
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise AgentScopeError("AgentScope 技能详情返回的不是对象")
+        return payload
+
+    async def add_workspace_skills_from_library(
+        self,
+        agent_id: str,
+        session_id: str,
+        skill_ids: list[str],
+    ) -> str:
+        """把用户技能库里的技能装入会话工作区。返回失败项描述，没有失败返回空串。"""
+
+        wanted = [item for item in skill_ids if item]
+        if not wanted:
+            return ""
+        response = await self.request(
+            "POST",
+            "/workspace/skill/from-library",
+            params={"agent_id": agent_id, "session_id": session_id},
+            json={"skill_ids": wanted},
+        )
+        payload = response.json()
+        failed = payload.get("failed") if isinstance(payload, dict) else None
+        if not isinstance(failed, dict) or not failed:
+            return ""
+        return "；".join(f"{name}：{reason}" for name, reason in failed.items())
 
     async def list_knowledge_bases(self) -> list[dict[str, str]]:
         items: list[dict[str, str]] = []
@@ -374,6 +455,7 @@ class AgentScopeClient:
             if before is None:
                 cursor = payload.get("event_cursor")
                 event_cursor = cursor if isinstance(cursor, str) else ""
+                is_running = bool(payload.get("is_running"))
             collected = page + collected if before else page
             if not payload.get("has_more") or not page:
                 break
@@ -408,18 +490,38 @@ class AgentScopeClient:
         return messages
 
     async def upload_workspace_skill(self, agent_id: str, session_id: str, directory: Path) -> None:
-        skill = directory / "SKILL.md"
-        data = skill.read_bytes()
-        manifest = json.dumps(
-            {"entries": [{"path": f"{directory.name}/SKILL.md", "size": len(data)}]},
-            ensure_ascii=False,
-        )
+        files = {
+            path.relative_to(directory).as_posix(): path.read_bytes()
+            for path in sorted(directory.rglob("*"))
+            if path.is_file()
+        }
+        await self.upload_workspace_skill_files(agent_id, session_id, directory.name, files)
+
+    async def upload_workspace_skill_files(
+        self,
+        agent_id: str,
+        session_id: str,
+        root: str,
+        files: dict[str, bytes],
+    ) -> None:
+        """Upload one skill folder. AgentScope re-checks the manifest and tar layout."""
+
+        safe_root = "".join(ch for ch in root if ch.isalnum() or ch in "-_.") or "skill"
+        entries = [
+            {"path": f"{safe_root}/{path}", "size": len(data)}
+            for path, data in files.items()
+        ]
+        manifest = json.dumps({"entries": entries}, ensure_ascii=False)
+        parts = [
+            ("files", (Path(path).name, data, "application/octet-stream"))
+            for path, data in files.items()
+        ]
         await self.request(
             "POST",
             "/workspace/skill/upload",
             params={"agent_id": agent_id, "session_id": session_id},
             data={"manifest": manifest},
-            files={"files": ("SKILL.md", data, "text/markdown")},
+            files=parts,
         )
 
     async def add_workspace_mcp(
@@ -429,11 +531,13 @@ class AgentScopeClient:
         *,
         url: str,
         headers: dict[str, str],
+        name: str = "nexus-task",
+        timeout: float = 30.0,
     ) -> None:
         payload = {
-            "name": "nexus-task",
+            "name": name,
             "is_stateful": False,
-            "mcp_config": {"type": "http_mcp", "url": url, "headers": headers, "timeout": 30},
+            "mcp_config": {"type": "http_mcp", "url": url, "headers": headers, "timeout": timeout},
         }
         try:
             await self.request(
@@ -446,9 +550,15 @@ class AgentScopeClient:
         except AgentScopeError as exc:
             if exc.status_code != 409:
                 raise
-        if await self._workspace_mcp_matches(agent_id, session_id, url=url, headers=headers):
+        if await self._workspace_mcp_matches(
+            agent_id,
+            session_id,
+            name=name,
+            url=url,
+            headers=headers,
+        ):
             return
-        await self.remove_workspace_mcp(agent_id, session_id)
+        await self.remove_workspace_mcp(agent_id, session_id, name)
         await self.request(
             "POST",
             "/workspace/mcp",
@@ -456,11 +566,35 @@ class AgentScopeClient:
             json=payload,
         )
 
+    async def add_workspace_mcps_from_library(
+        self,
+        agent_id: str,
+        session_id: str,
+        mcp_ids: list[str],
+    ) -> str:
+        """Put installed MCPs into a workspace by library id. Returns failures."""
+
+        wanted = [item for item in mcp_ids if item]
+        if not wanted:
+            return ""
+        response = await self.request(
+            "POST",
+            "/workspace/mcp/from-library",
+            params={"agent_id": agent_id, "session_id": session_id},
+            json={"mcp_ids": wanted},
+        )
+        payload = response.json()
+        failed = payload.get("failed") if isinstance(payload, dict) else None
+        if not isinstance(failed, dict) or not failed:
+            return ""
+        return "；".join(f"{name}：{reason}" for name, reason in failed.items())
+
     async def _workspace_mcp_matches(
         self,
         agent_id: str,
         session_id: str,
         *,
+        name: str,
         url: str,
         headers: dict[str, str],
     ) -> bool:
@@ -476,12 +610,22 @@ class AgentScopeClient:
         if not isinstance(payload, list):
             return False
         for item in payload:
-            if not isinstance(item, dict) or item.get("name") != "nexus-task":
+            if not isinstance(item, dict) or item.get("name") != name:
                 continue
             config = item.get("mcp_config") if isinstance(item.get("mcp_config"), dict) else {}
             current = config.get("headers") if isinstance(config.get("headers"), dict) else {}
             return config.get("url") == url and dict(current) == dict(headers)
         return False
+
+    async def session_status(self, agent_id: str, session_id: str) -> str:
+        response = await self.request(
+            "GET",
+            f"/sessions/{session_id}/status",
+            params={"agent_id": agent_id},
+        )
+        payload = response.json()
+        status = payload.get("status") if isinstance(payload, dict) else ""
+        return str(status or "idle")
 
     async def list_workspace_skills(self, agent_id: str, session_id: str) -> list[dict[str, Any]]:
         response = await self.request(
@@ -516,10 +660,19 @@ class AgentScopeClient:
             if exc.status_code != 404:
                 raise
 
-    async def list_launcher_tools(self) -> list[dict[str, str]]:
+    async def list_launcher_tools(self) -> list[dict[str, Any]]:
         if not await self.probe():
             raise AgentScopeError("AgentScope 未连接")
-        return [{"id": name, "name": name} for name in LAUNCHER_TOOLS]
+        results: list[dict[str, Any]] = []
+        for name in LAUNCHER_TOOLS:
+            meta = LAUNCHER_TOOL_META.get(name, {})
+            results.append({
+                "id": name,
+                "name": meta.get("name", name),
+                "category": meta.get("category", "builtin"),
+                "description": meta.get("description", ""),
+            })
+        return results
 
     def stream_session(self, agent_id: str, session_id: str, after: str | None = None) -> Any:
         client = self._client()

@@ -38,8 +38,10 @@ const emit = defineEmits<{ refresh: [] }>();
 
 const tiles = computed(() => {
   const totals = props.snapshot?.totals;
+  const interactive =
+    props.snapshot?.employees.filter((item) => item.interactionStatus === "available").length ?? 0;
   return [
-    { label: "数字员工星系", value: totals?.employees ?? 0, note: `${totals?.workers ?? 0} Worker`, tone: "" },
+    { label: "数字员工星系", value: totals?.employees ?? 0, note: `可交互 ${interactive}`, tone: "" },
     {
       label: "在线 Worker",
       value: totals?.workersOnline ?? 0,

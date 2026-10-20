@@ -370,7 +370,7 @@ function syncRoute(): void {
   if (selectedWorkerId.value) query.worker = selectedWorkerId.value;
   if (selectedTaskId.value) query.task = selectedTaskId.value;
   if (selectedCollaborationKey.value) query.collab = selectedCollaborationKey.value;
-  if (tab.value !== "overview") query.tab = tab.value;
+  if (tab.value !== "overview" || selectedEmployeeId.value) query.tab = tab.value;
   const current = route.query;
   const same =
     Object.keys(query).length === Object.keys(current).length &&

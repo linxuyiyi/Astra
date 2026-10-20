@@ -2640,6 +2640,26 @@ async def test_acceptance_confirm_releases_worker_and_continue_reuses_session(ru
     assert employee.status == "IDLE"
 
 
+async def test_restart_supersedes_pending_experience_review_job(runtime, monkeypatch):
+    from app.config.settings import get_settings
+    from app.models import ExperienceReviewJob
+
+    monkeypatch.setattr(get_settings(), "experience_review_enabled", True)
+    r = runtime
+    await r.service.send("T1", {"parts": [{"type": "text", "text": "go"}]})
+    await _complete_current_turn(r)
+    await r.service.confirm_completion("T1")
+    job = await r.session.scalar(
+        select(ExperienceReviewJob).where(ExperienceReviewJob.task_id_snapshot == "T1")
+    )
+    assert job is not None and job.status == "PENDING"
+
+    await r.service.start("T1", restart=True)
+    await r.session.refresh(job)
+    assert job.status == "SUPERSEDED"
+    assert job.error_code == "new_round"
+
+
 async def test_confirmation_creates_one_experience_review_job(runtime, monkeypatch):
     from app.config.settings import get_settings
     from app.models import ExperienceReviewJob

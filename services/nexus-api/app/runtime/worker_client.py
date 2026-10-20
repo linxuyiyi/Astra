@@ -182,6 +182,25 @@ class WorkerOpenCodeClient(OpenCodeServerClient):
             raise TimeoutError("Worker 未在时限内返回指令结果")
         return command_result(frame)
 
+    async def read_review_trace(
+        self,
+        directory: WorkspacePath,
+        session_id: str,
+        *,
+        limit: int,
+        before: str | None = None,
+    ) -> dict[str, Any]:
+        return await self.run_command(
+            "read_review_trace",
+            {
+                "session_id": session_id,
+                "workspace": str(directory),
+                "limit": limit,
+                "before": before,
+            },
+            session_id=session_id,
+        )
+
     async def health(self) -> dict[str, Any]:
         try:
             payload = await self.request("GET", "/global/health")

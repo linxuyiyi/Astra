@@ -7,7 +7,7 @@
 
 ## 2. 轨迹与证据
 
-- [x] 2.1 分页 TraceReader（本地与 Worker，复用现有 messages_page）
+- [x] 2.1 分页 TraceReader（本地 messages_page；Worker 只读 read_review_trace，响应约 128 KiB 有界）
 - [x] 2.2 标准化、因果切片、Token 预算
 - [x] 2.3 证据索引与服务端校验（伪造/跨 Session/水位）
 

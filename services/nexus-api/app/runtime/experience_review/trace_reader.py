@@ -66,12 +66,21 @@ async def read_trace(snapshot: dict[str, Any]) -> TraceResult:
                 session_messages: list[dict[str, Any]] = []
                 seen: set[str] = set()
                 while True:
-                    page = await client.messages_page(
-                        directory,
-                        session_id,
-                        limit=settings.experience_review_page_size,
-                        before=before,
-                    )
+                    reader = getattr(client, "read_review_trace", None)
+                    if callable(reader):
+                        page = await reader(
+                            directory,
+                            session_id,
+                            limit=settings.experience_review_page_size,
+                            before=before,
+                        )
+                    else:
+                        page = await client.messages_page(
+                            directory,
+                            session_id,
+                            limit=settings.experience_review_page_size,
+                            before=before,
+                        )
                     batch = page.get("messages") if isinstance(page, dict) else []
                     if not isinstance(batch, list) or not batch:
                         break

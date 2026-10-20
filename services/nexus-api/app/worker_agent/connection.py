@@ -40,7 +40,13 @@ from app.worker_gateway.protocol import (
 
 Connect = Callable[[], Awaitable["FrameTransport"]]
 
-CONTROL_COMMANDS = {"inspect_runtime", "status", "restart_opencode", "switch_channel"}
+CONTROL_COMMANDS = {
+    "inspect_runtime",
+    "status",
+    "restart_opencode",
+    "switch_channel",
+    "read_review_trace",
+}
 INSPECTION_COMMANDS = {"inspect_runtime", "status"}
 
 
@@ -223,6 +229,13 @@ def handle_command(
         except (RuntimeError, OSError, ValueError) as exc:
             return None, str(exc)
         return {"restarted": True}, None
+    if name == "read_review_trace":
+        from app.worker_agent.trace_read import read_trace_from_payload
+
+        try:
+            return read_trace_from_payload(opencode_url, workspace_root, data), None
+        except (ValueError, OSError) as exc:
+            return None, str(exc)
     if name == "ping":
         return {"pong": True}, None
     if name == "echo":

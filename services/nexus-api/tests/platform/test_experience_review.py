@@ -90,6 +90,29 @@ def test_segment_keeps_causal_events_and_refs():
     assert all(segment.digest for segment in segments)
 
 
+def test_large_trace_is_split_without_losing_refs():
+    events = [
+        TraceEvent(
+            ref=f"trace-{index:06d}",
+            session_id="ses_1",
+            message_id=f"msg_{index}",
+            part_id=f"prt_{index}",
+            role="assistant",
+            kind="tool_result",
+            tool="bash",
+            status="passed",
+            excerpt="x" * 400,
+            content_digest=str(index),
+        )
+        for index in range(1, 401)
+    ]
+    segments = segment_events(events, budget_tokens=200)
+    assert len(segments) > 1
+    flattened = [event.ref for segment in segments for event in segment.events]
+    assert flattened == [event.ref for event in events]
+    assert all(segment.token_estimate > 0 for segment in segments)
+
+
 def test_evidence_rejects_missing_cross_session_and_secret():
     trace = _trace()
     with pytest.raises(EvidenceError) as missing:
@@ -323,3 +346,86 @@ async def test_candidate_writer_persists_validated_evidence():
         assert evidence
         assert all(row.validation_status == "validated" for row in evidence)
         assert evidence[0].native_session_id == "ses_1"
+
+
+@pytest.mark.asyncio
+async def test_review_jobs_api_lists_and_retries(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.main import app as platform_app
+
+    task_id, event_id = await _task_and_event()
+    async with SessionLocal() as session:
+        task = await session.get(Task, task_id)
+        event = await session.get(Event, event_id)
+        snapshot = {
+            "task_id": task_id,
+            "root_session_id": "ses_1",
+            "confirmed_at": datetime.now(UTC).isoformat(),
+            "source_session_ids": ["ses_1"],
+        }
+        job = await coordinator.enqueue_in_transaction(session, task=task, event=event, snapshot=snapshot)
+        await session.commit()
+        job_id = job.id
+
+    with TestClient(platform_app) as client:
+        listed = client.get("/api/library/review-jobs", params={"task_id": task_id})
+        assert listed.status_code == 200
+        assert [item["id"] for item in listed.json()] == [job_id]
+        detail = client.get(f"/api/library/review-jobs/{job_id}")
+        assert detail.status_code == 200
+        assert detail.json()["status"] == "PENDING"
+
+    async with SessionLocal() as session:
+        job = await session.get(ExperienceReviewJob, job_id)
+        job.status = coordinator.FAILED
+        await session.commit()
+
+    with TestClient(platform_app) as client:
+        retried = client.post(f"/api/library/review-jobs/{job_id}/retry")
+        assert retried.status_code == 200
+        assert retried.json()["status"] == "PENDING"
+
+
+def test_worker_trace_read_trimming_and_cursor(tmp_path, monkeypatch):
+    import json
+
+    from app.worker_agent import trace_read
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    payload = [
+        {
+            "info": {"id": "msg_1", "role": "assistant"},
+            "parts": [
+                {
+                    "id": "prt_1",
+                    "type": "tool",
+                    "tool": "bash",
+                    "state": {"status": "passed", "output": "x" * 20000},
+                }
+            ],
+        }
+    ]
+
+    class Response:
+        headers = {"x-next-cursor": "msg_0"}
+
+        def read(self):
+            return json.dumps(payload).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(trace_read.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
+    result = trace_read.read_trace_from_payload(
+        "http://127.0.0.1:4096",
+        str(tmp_path),
+        {"session_id": "ses_1", "workspace": str(workspace), "limit": 20},
+    )
+    assert result["next_before"] == "msg_0"
+    assert result["messages"][0]["parts"][0]["state"]["output"].endswith("x")
+    assert len(result["messages"][0]["parts"][0]["state"]["output"]) < 20000

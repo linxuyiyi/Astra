@@ -1,9 +1,9 @@
 <template>
-  <div class="app">
+  <div class="app" :class="{ 'app--nebula': route.path === '/' }">
     <header class="top">
       <div class="brand">
         <div class="mark">✦</div>
-        <div class="brandname">NEXUS <span class="version">v1.4.7</span></div>
+        <div class="brandname">NEXUS <span class="version">v1.4.8</span></div>
       </div>
       <nav class="top-nav" aria-label="页面导航">
         <router-link
@@ -43,6 +43,7 @@ import type { RuntimeStatus } from "./types";
 const store = useAstraStore();
 const route = useRoute();
 const navItems = computed(() => [
+  { to: "/", label: "星云首页", active: route.path === "/" },
   { to: "/chat", label: "数字员工", active: route.path === "/chat" || route.path === "/team" },
   { to: "/tasks", label: "任务大厅", active: route.path.startsWith("/tasks") || route.path.startsWith("/interventions") },
   { to: "/library", label: "数字图书馆", active: route.path.startsWith("/library") },
@@ -99,6 +100,10 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.app--nebula { padding: 12px 16px 14px; }
+.app--nebula .top,
+.app--nebula .page { max-width: none; }
+
 .top-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .top-nav a {
   padding: 7px 12px; border-radius: 10px; color: #6c897a; text-decoration: none;

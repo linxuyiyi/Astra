@@ -30,6 +30,7 @@ from app.main import lifespan as platform_lifespan
 from app.worker_gateway.routes import router as worker_gateway_router
 
 from .main import create_app as create_chat_app
+from .nebula import router as nebula_router
 
 WEB_DIST = Path(__file__).resolve().parents[1] / "web" / "dist"
 API_PREFIXES = ("api/", "v1/", "agentscope-api/", "docs", "redoc", "openapi.json")
@@ -44,6 +45,7 @@ def _include_platform(app: FastAPI) -> None:
     app.include_router(workspace_router)
     app.include_router(library_router)
     app.include_router(gateway_router)
+    app.include_router(nebula_router)
     app.add_exception_handler(LibraryError, library_error_handler)
     app.add_exception_handler(GatewayError, gateway_error_handler)
     app.add_exception_handler(CredentialError, gateway_error_handler)

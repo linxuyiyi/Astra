@@ -889,7 +889,7 @@ def create_app() -> FastAPI:
         yield
         await app.state.agentscope.aclose()
 
-    app = FastAPI(title="Nexus", version="1.4.7", lifespan=lifespan)
+    app = FastAPI(title="Nexus", version="1.4.8", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -1385,7 +1385,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
-        return {"status": "ok", "product": "nexus", "version": "1.4.7"}
+        return {"status": "ok", "product": "nexus", "version": "1.4.8"}
 
     @app.get("/api/v1/me")
     def me(owner_id: str = Depends(require_owner)) -> dict[str, str]:

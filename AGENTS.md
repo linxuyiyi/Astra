@@ -76,6 +76,17 @@ Task → Run → Employee → Worker → OpenCode Session
 - 正式部署是独立的 AgentScope Agent Service + Redis。`create_app` 的 workspace 隔离使用 `IsolationPolicy.PER_SESSION`，这样同一员工的多条对话不会被 `(user, agent, workspace)` 折成一条 Session。
 - 不把历史 Astra 行复制进 Nexus SQLite。任务库仍是 task platform 的 SQLAlchemy 库，新字段用 Alembic 增加。不要为了旧状态长期保留双写和猜测式 fallback。
 
+## 前端表格（Element Plus）
+
+以下是默认做法（SHOULD）；某页确需偏离时，在改动说明里写清原因和影响面。
+
+- 表格统一用 Element Plus 的 `el-table` + `el-table-column`，不引入第二套表格库，也不为单个页面重写一套表格组件。
+- 列表页保持同一套形态：分页（`el-pagination`）、加载（`v-loading`）、空态（`el-empty`）、失败可重试；新增页面沿用相邻页面的列宽与对齐。
+- 数据量用后端分页或限制返回量控制，不在前端全量渲染几百行。
+- 表格数据只取一个接口事实源，不在前端拼多份派生状态或跨接口合并。
+- 样式调整走 `web/nexus/src/styles/element-plus-theme.css` 的主题层，不在各页面写零散的 `.el-table` 覆盖。
+- 若确要迁移到 Tailwind/shadcn 等新方案：先拿单页试点并记录成本，按页面切片独立提交，不与业务改动混在一起。
+
 ## 验证
 
 先跑与本次改动最相关的检查，再根据影响范围扩大。

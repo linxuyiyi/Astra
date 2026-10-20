@@ -19,11 +19,9 @@ from app.main import app
 from app.models import (
     AgentWorker,
     Base,
-    KnowledgeItem,
     OpenCodeExecutionEnvironment,
     RuntimeSession,
     Task,
-    TaskSummary,
 )
 from app.runtime.environment import environment_snapshot
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
@@ -757,38 +755,6 @@ async def test_retry_submission_is_not_stale_when_bound_session_is_still_running
     with pytest.raises(RuntimeStateError, match="已结束"):
         await r.service.retry_submission("T1")
     assert not r.native.sent
-
-
-async def test_failed_current_turn_summary_never_reuses_previous_success(runtime):
-    r = runtime
-    r.native.sessions["ses_current"] = [
-        {
-            "info": {
-                "id": "old_success",
-                "role": "assistant",
-                "time": {"completed": 1},
-                "finish": "stop",
-            },
-            "parts": [{"type": "text", "text": "上一轮修复完成，测试全部通过"}],
-        }
-    ]
-    await r.service.send(
-        "T1",
-        {"messageID": "msg_currentfail1", "parts": [{"type": "text", "text": "next"}]},
-    )
-    r.native.sessions["ses_current"] = [
-        r.native.sessions["ses_current"][0],
-        {"info": {"id": "msg_currentfail1", "role": "user"}, "parts": []},
-    ]
-    r.native.state = "idle"
-    r.task.turn_started_at = datetime.now(UTC) - timedelta(minutes=5)
-    await r.session.commit()
-
-    await r.service.refresh("T1")
-
-    summary = await r.session.scalar(select(TaskSummary).where(TaskSummary.task_id == "T1"))
-    assert r.task.status == "WAITING"
-    assert summary is None  # Task failure never fabricates a review from the last reply.
 
 
 async def test_turn_without_assistant_reply_projects_failed(runtime):
@@ -2443,19 +2409,6 @@ async def test_prepare_workspace_reuses_a_plain_bound_directory(tmp_path):
     task = Task(id="T9", title="t", task_type="ISSUE", workspace=str(workspace))
 
     assert await prepare_workspace(task, environment, reuse_existing=True) == str(workspace)
-
-
-async def test_completion_and_restart_do_not_create_reviews(runtime):
-    r = runtime
-    await r.service.send("T1", {"parts": [{"type": "text", "text": "go"}]})
-    await _complete_current_turn(r)
-    assert r.task.status == "WAITING"
-    await r.service.refresh("T1")
-    assert await r.session.scalar(select(func.count()).select_from(TaskSummary)) == 0
-    assert await r.session.scalar(select(func.count()).select_from(KnowledgeItem)) == 0
-    await r.service.start("T1", restart=True)
-    assert r.task.status == "RUNNING"
-    assert r.task.current_session_id != "ses_current"
 
 
 async def test_task_diff_retains_committed_and_uncommitted_unicode_files(runtime):

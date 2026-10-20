@@ -1,3 +1,5 @@
+> **已废弃（2026-10-20）**：平台助手及其任务复盘/总结已被数字员工替代并移除，见 `openspec/changes/nexus-remove-platform-assistant/`。本文保留为历史契约，不再代表当前实现。
+
 # 任务总结与经验沉淀
 
 ## Purpose

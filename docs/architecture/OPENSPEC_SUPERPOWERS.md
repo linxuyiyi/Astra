@@ -14,11 +14,9 @@ Superpowers skill（15 个，均在 `.opencode/skills/<name>/SKILL.md`）：
 
 OpenSpec skill（9 个）：`openspec-apply-change`、`openspec-archive-change`、`openspec-continue-change`、`openspec-explore`、`openspec-ff-change`、`openspec-new-change`、`openspec-propose`、`openspec-sync-specs`、`openspec-verify-change`。
 
-另外还有 1 个 Astra 产品 skill：`nexus-task-experience-review`。它不是 Superpowers，Nexus 产品不使用它。
-
 命令：`/opsx-apply`、`/opsx-archive`、`/opsx-continue`、`/opsx-explore`、`/opsx-ff`、`/opsx-new`、`/opsx-propose`、`/opsx-sync`、`/opsx-verify`，以及 `/sp-brainstorm`、`/sp-debug`、`/sp-execute`、`/sp-finish`、`/sp-plan`、`/sp-review`、`/sp-verify`。
 
-Agent：`code-reviewer` 属于这套开发集成。`platform-assistant` 是 Astra Runtime 代理，不是 Nexus 产品的一部分。
+Agent：`code-reviewer` 属于这套开发集成。平台助手已移除，不再有 `platform-assistant` 代理。
 
 未找到、因此没有写入文档的内容：独立的 Superpowers 包、额外的 skill 目录，或上述名单之外的 `/sp-*` 命令。
 
@@ -31,8 +29,7 @@ Astra/
 ├── .opencode/
 │   ├── commands/                         # /opsx-* 与 /sp-* 命令
 │   ├── agents/code-reviewer.md           # 只读代码评审子代理
-│   ├── agents/platform-assistant.md      # 平台助手（独立 Runtime 标记）
-│   ├── skills/                           # 25 个项目级 skill（OpenSpec 9 + Superpowers 15 + Astra 1）
+│   ├── skills/                           # 24 个项目级 skill（OpenSpec 9 + Superpowers 15）
 │   ├── plugins/superpowers.js            # skill 注册 + 可选 bootstrap 注入
 │   └── tools/openspec.mjs                # 自包含 OpenSpec CLI bundle（可提交产物）
 ├── openspec/
@@ -123,13 +120,11 @@ OpenSpec 来源优先级：`ASTRA_OPENSPEC_PACKAGE` → `services/nexus-api/web/
 关闭只影响常驻提示词，**skill 仍然注册且可通过原生 `skill` 工具显式调用**，
 `/sp-*` 命令也不受影响。
 
-注入还需同时满足（非仓库根目录、平台助手 Runtime、子代理会话均不注入）；
+注入还需同时满足（非仓库根目录、子代理会话均不注入）；
 子代理判定基于 session 的 `parentID`，不依赖模型自觉遵守提示词。
 
 ## 与 Astra 既有能力共存
 
-- `platform-assistant` agent 与 `nexus-task-experience-review` skill 已收敛为项目级：分别位于
-  `.opencode/agents/platform-assistant.md` 与 `.opencode/skills/nexus-task-experience-review/`。
 - OpenSpec/Superpowers 的 skill、命令、agent 命名（`openspec-*`、`opsx-*`、`sp-*`、`code-reviewer`）
   与既有资源无冲突，加载无重复项。
 
@@ -160,9 +155,6 @@ opencode agent list
 ## 已知边界与风险
 
 - 根目录 `.opencode/` 与 `opencode.json` 会被**同一 git worktree 内**的所有 OpenCode 进程继承。
-  平台助手以仓库根为加载上下文，插件通过 `ASTRA_RUNTIME_ROLE=platform-assistant` 跳过 bootstrap 注入；
-  助手仍可见 `/opsx-*`、`/sp-*` 命令与全部 skill，其主要约束是
-  `.opencode/agents/platform-assistant.md` 中 `edit`/`write`/`bash`/`webfetch` 的 deny 权限。
 - 员工任务工作区是 `services/nexus-api/.astra-tasks/<employee>/<task>` 下的独立 git worktree。
   该目录带自己的 `.git`，`discover_workspace_config()` 的向上查找在 git 根停止，
   因此**不会**加载 Astra 根的 `opencode.json`；若 worktree 由包含本集成的提交创建，

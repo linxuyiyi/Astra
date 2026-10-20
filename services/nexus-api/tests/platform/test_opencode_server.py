@@ -131,7 +131,6 @@ def task(**values) -> Task:
         "title": "Server runtime test",
         "description": "Use real structured events",
         "acceptance_criteria": [{"id": "AC-01", "content": "done"}],
-        "review_history": [],
     }
     defaults.update(values)
     return Task(**defaults)

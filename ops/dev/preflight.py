@@ -2,7 +2,6 @@
 import argparse
 import asyncio
 import importlib
-import json
 import platform
 import sys
 import tempfile
@@ -101,7 +100,6 @@ def check_writable_directory(item: str, path: Path) -> CheckResult:
 def astra_table_names() -> set[str]:
     # Mirror alembic/env.py: import every model module so all Astra tables are
     # registered on the shared metadata before the isolation check runs.
-    import app.assistant.models  # noqa: F401 - register assistant tables on shared metadata
     import app.gateway.models  # noqa: F401 - register gateway tables on shared metadata
     from app.models import Base
 
@@ -348,73 +346,6 @@ async def check_opencode_runtime(settings) -> CheckResult:
     )
 
 
-async def check_assistant_runtime(settings) -> CheckResult:
-    if not settings.assistant_enabled:
-        return result(
-            "平台助手 Runtime",
-            True,
-            "disabled",
-            "已显式关闭平台助手",
-            "无需处理",
-        )
-
-    from app.assistant.server import AssistantOpenCodeServerManager
-
-    manager = AssistantOpenCodeServerManager(settings)
-    project_root = manager.workspace
-    agent_path = project_root / ".opencode" / "agents" / "platform-assistant.md"
-    mcp_configured = False
-    config_path = project_root / "opencode.json"
-    if config_path.is_file():
-        try:
-            config = json.loads(config_path.read_text(encoding="utf-8"))
-            mcp_configured = "nexus-assistant" in (config.get("mcp") or {})
-        except (OSError, ValueError):
-            mcp_configured = False
-    if not agent_path.is_file() or not mcp_configured:
-        return result(
-            "平台助手 Runtime",
-            False,
-            project_root,
-            "项目级助手 Agent 或 nexus-assistant MCP 未配置",
-            "确认 .opencode/agents/platform-assistant.md 存在，且 opencode.json 配置了 nexus-assistant MCP",
-        )
-    entrypoint = manager.mcp_entrypoint
-    if not entrypoint.is_file():
-        return result(
-            "平台助手 Runtime",
-            False,
-            entrypoint,
-            "当前 Python 环境中缺少助手 MCP 入口",
-            "使用当前 Python 执行 python -m pip install -e services/nexus-api",
-        )
-
-    health = await manager.health()
-    if health.healthy:
-        return result(
-            "平台助手 Runtime",
-            True,
-            manager.base_url,
-            f"助手 OpenCode Server 已就绪，版本 {health.version or '未知'}",
-            "无需处理",
-        )
-    if not settings.assistant_opencode_url:
-        return result(
-            "平台助手 Runtime",
-            True,
-            manager.base_url,
-            "本机受管助手 Server 将由 Astra 启动器启动并执行健康检查",
-            "无需处理",
-        )
-    return result(
-        "平台助手 Runtime",
-        False,
-        manager.base_url,
-        f"外部助手 OpenCode Server 不可用：{health.detail}",
-        "启动 ASTRA_ASSISTANT_OPENCODE_URL 指定的 Server 并检查认证",
-    )
-
-
 def print_results(checks: list[CheckResult]) -> None:
     for check in checks:
         marker = "PASS" if check.passed else "FAIL" if check.blocking else "WARN"
@@ -463,7 +394,6 @@ async def main() -> int:
             check_writable_directory("运行状态目录", settings.resolved_runtime_dir),
             await check_agent(settings),
             await check_opencode_runtime(settings),
-            await check_assistant_runtime(settings),
             await check_redis(settings),
         ]
     )

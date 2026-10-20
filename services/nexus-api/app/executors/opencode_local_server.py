@@ -1,4 +1,4 @@
-"""Employee-local persistent Serve lifecycle; the assistant uses its own client."""
+"""Employee-local persistent Serve lifecycle."""
 
 from __future__ import annotations
 
@@ -79,8 +79,8 @@ class LocalOpenCodeServerExecutor(OpenCodeServerExecutor):
     async def ensure_ready(self):
         port = self.environment.opencode_server_port
         try:
-            if port in {self.settings.opencode_server_port, self.settings.assistant_opencode_port}:
-                raise RuntimeError("端口与平台公共/助手 Serve 冲突，请人工配置员工独立端口")
+            if port == self.settings.opencode_server_port:
+                raise RuntimeError("端口与平台公共 Serve 冲突，请人工配置员工独立端口")
             lock_timeout = self.settings.opencode_server_start_timeout_seconds + 10
             async with port_lock(port, lock_timeout) as owner_path:
                 owner = {"employee_id": self.environment.employee_id, "workspace": str(self.workspace)}

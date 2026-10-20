@@ -1,3 +1,5 @@
+> **说明（2026-10-20）**：平台助手已移除；文中助手相关条目仅作历史记录，其余规则仍适用。
+
 # console-data-refresh Specification
 
 ## Purpose

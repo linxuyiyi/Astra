@@ -26,7 +26,6 @@
               <ElDropdownItem v-if="task.status === 'RUNNING' || task.status === 'WAITING' || task.pending_message_id" command="stop">终止任务</ElDropdownItem>
               <ElDropdownItem v-if="task.current_session_id && task.status !== 'RUNNING' && !task.pending_message_id" command="restart">重新开始</ElDropdownItem>
               <ElDropdownItem v-if="task.workspace" command="changes">代码变更</ElDropdownItem>
-              <ElDropdownItem v-if="task.current_session_id" command="review" data-testid="task-review-open">总结与经验</ElDropdownItem>
               <ElDropdownItem command="info">任务信息</ElDropdownItem>
               <ElDropdownItem command="events" data-testid="task-events-open">实时事件</ElDropdownItem>
               <ElDropdownItem command="usage" data-testid="task-usage-open">用量</ElDropdownItem>
@@ -70,31 +69,6 @@
           <pre class="task-diff">{{ item.patch || '二进制文件或无文本差异' }}</pre>
         </ElCollapseItem>
       </ElCollapse>
-    </ElDrawer>
-    <ElDrawer v-model="showReview" title="任务总结与经验" size="min(720px, 100%)" data-testid="task-review-drawer">
-      <ElAlert v-if="reviewError" :title="reviewError" type="error" :closable="false" />
-      <ElText v-if="reviewLoading && !review">正在读取复盘…</ElText>
-      <template v-if="review">
-        <div class="task-review__status">
-          <ElTag data-testid="task-review-status" :type="review.status === 'failed' ? 'danger' : 'info'">{{ reviewStatusLabel }}</ElTag>
-          <ElText type="info">已尝试 {{ review.attempts }} 次</ElText>
-          <ElButton :loading="reviewLoading" @click="loadReview(String(route.params.id))">刷新复盘</ElButton>
-          <ElButton v-if="review.can_retry" type="primary" :loading="reviewRetrying" data-testid="task-review-retry" @click="retryReview">重试复盘</ElButton>
-        </div>
-        <ElAlert v-if="review.error" :title="review.error" type="error" :closable="false" />
-        <ElAlert v-if="review.summary && !review.summary_current" title="以下是历史轮次总结，当前轮次尚未完成复盘。" type="warning" :closable="false" />
-        <div v-if="review.summary" class="task-review__summary" data-testid="task-review-summary" v-html="safeSummary" />
-        <ElEmpty v-else :description="review.status === 'not_ready' ? '人工确认任务完成后，后台自动生成总结。' : '尚未生成任务总结，可刷新查看复盘进度。'" />
-        <h3>关联经验 <FieldHelp label="关联经验" help="候选经验须经人工审核发布；任务成功不代表经验已验证。" /></h3>
-        <ul v-if="review.experiences.length" class="task-review__experiences" data-testid="task-review-experiences">
-          <li v-for="item in review.experiences" :key="item.id">
-            <RouterLink :to="{ path: '/library', query: { knowledge: item.id } }">{{ item.title }}</RouterLink>
-            <ElTag size="small">{{ knowledgeStatusLabel[item.status] }}</ElTag>
-            <ElTag size="small" :type="item.verification_status === 'verified' ? 'success' : 'info'">{{ verificationLabel[item.verification_status] }}</ElTag>
-          </li>
-        </ul>
-        <ElEmpty v-else description="暂无关联经验；没有可复用价值时允许只保存总结。" :image-size="50" />
-      </template>
     </ElDrawer>
     <ElDrawer v-if="task" v-model="showInfo" class="task-info" title="任务信息" size="min(480px, 100%)">
       <dl class="task-facts">
@@ -160,13 +134,11 @@
 
 <script setup lang="ts">
 import { ArrowLeft } from 'lucide-vue-next'
-import DOMPurify from 'dompurify'
-import { marked } from 'marked'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElContainer, ElDrawer, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElHeader, ElMain, ElOption, ElSelect, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag, ElText, ElTimeline, ElTimelineItem } from 'element-plus'
 import { api } from '@/api/client'
-import type { AstraEvent, Task, TaskReview, TaskUsage, TaskWorkspaceBinding } from '@/api/types'
+import type { AstraEvent, Task, TaskUsage, TaskWorkspaceBinding } from '@/api/types'
 import FieldHelp from '@/components/forms/FieldHelp.vue'
 import RuntimeStatusBadge from '@/components/runtime/RuntimeStatusBadge.vue'
 import { useAstraStore } from '@/stores/astra'
@@ -185,35 +157,6 @@ const busy = ref(false)
 const loading = ref(false)
 const showInfo = ref(false)
 const frameKey = ref(0)
-const review = ref<TaskReview | null>(null)
-const showReview = ref(false)
-const reviewError = ref('')
-const reviewLoading = ref(false)
-const reviewRetrying = ref(false)
-const reviewLabels = { not_ready: '待人工确认完成', pending: '等待后台复盘', running: '正在复盘', completed: '复盘完成', failed: '复盘失败' }
-const knowledgeStatusLabel = { draft: '草稿', candidate: '待审核', published: '已发布', archived: '已归档', rejected: '已拒绝' }
-const verificationLabel = { unverified: '未验证', verified: '已验证', failed: '验证失败' }
-const reviewStatusLabel = computed(() => review.value ? reviewLabels[review.value.status] : '')
-const safeSummary = computed(() => DOMPurify.sanitize(marked.parse(review.value?.summary || '', { async: false }) as string, { USE_PROFILES: { html: true } }))
-async function loadReview(id: string) {
-  reviewLoading.value = true
-  try {
-    const value = await api.taskReview(id)
-    if (id === String(route.params.id)) { review.value = value; reviewError.value = '' }
-  } catch (reason) {
-    if (id === String(route.params.id)) reviewError.value = reason instanceof Error ? reason.message : '复盘读取失败'
-  } finally { if (id === String(route.params.id)) reviewLoading.value = false }
-}
-async function retryReview() {
-  const id = String(route.params.id)
-  reviewRetrying.value = true
-  try {
-    const value = await api.retryTaskReview(id)
-    if (id === String(route.params.id)) { review.value = value; reviewError.value = '' }
-  } catch (reason) {
-    if (id === String(route.params.id)) reviewError.value = reason instanceof Error ? reason.message : '复盘重试失败'
-  } finally { reviewRetrying.value = false }
-}
 
 const owners = ref<NexusEmployee[]>([])
 const employeeName = computed(() => {
@@ -299,7 +242,6 @@ function onDetailCommand(command: string | number) {
   else if (name === 'stop') void action('stop')
   else if (name === 'restart') void action('restart')
   else if (name === 'changes') openChanges()
-  else if (name === 'review') showReview.value = true
   else if (name === 'info') showInfo.value = true
   else if (name === 'events') void openEvents()
   else if (name === 'usage') void openUsage()
@@ -386,7 +328,6 @@ async function loadTask(id: string) {
     error.value = ''
     if (nextTask.workspace) await loadRepo(id)
     else repo.value = null
-    if (showReview.value) void loadReview(id)
   } catch (reason) { if (id === String(route.params.id)) error.value = reason instanceof Error ? reason.message : '任务加载失败' }
 }
 async function action(name: string) {
@@ -396,8 +337,7 @@ async function action(name: string) {
   finally { busy.value = false }
 }
 async function reconnect() { await action('reconnect'); frameKey.value++ }
-watch(() => route.params.id, () => { selectedSession.value = ''; review.value = null; showReview.value = false; reviewError.value = ''; closeEvents(); showEvents.value = false; void load() }, { immediate: true })
-watch(showReview, (open) => { if (open) void loadReview(String(route.params.id)) })
+watch(() => route.params.id, () => { selectedSession.value = ''; closeEvents(); showEvents.value = false; void load() }, { immediate: true })
 onMounted(() => {
   timer = setInterval(() => { now.value = Date.now() }, 1000)
   void listEmployees().then(items => { owners.value = items }).catch(() => { owners.value = [] })
@@ -430,11 +370,4 @@ onBeforeUnmount(() => { clearInterval(timer); diffRequest?.abort(); closeEvents(
 .task-info__criteria{margin:0;padding-left:18px;display:grid;gap:4px;line-height:1.6}
 .task-info__path{overflow-wrap:anywhere}
 .task-diff{white-space:pre;overflow:auto;font-family:monospace;font-size:12px}
-.task-review__status{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px}
-.task-review__summary{line-height:1.7;overflow-wrap:anywhere;margin:18px 0;color:var(--astra-text-primary)}
-.task-review__summary :deep(pre){overflow:auto;padding:12px;background:var(--astra-bg-base)}
-.task-review__summary :deep(img){max-width:100%}
-.task-review__experiences{list-style:none;padding:0;display:grid;gap:12px}
-.task-review__experiences li{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
-.task-review__experiences a{color:var(--astra-primary);margin-right:auto}
 </style>

@@ -210,7 +210,6 @@ class Task(RuntimeProjection, Base):
     human_intervention: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     suspension: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     execution_error: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    review_history: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     inactivity_alert: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     inactivity_alert_since: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     last_activity_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True, index=True)
@@ -236,9 +235,6 @@ class Task(RuntimeProjection, Base):
     @property
     def worker_id(self) -> str | None:
         return self.employee_id
-    summary: Mapped["TaskSummary | None"] = relationship(
-        back_populates="task", uselist=False, cascade="all, delete-orphan"
-    )
 
 
 class RuntimeSession(Base):
@@ -316,55 +312,6 @@ class TaskWakeOutbox(Base):
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
-
-
-class TaskSummary(Base):
-    """One durable summary per Task; Session facts are referenced, never mirrored."""
-
-    __tablename__ = "t_nexus_task_summaries"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    task_id: Mapped[str] = mapped_column(
-        ForeignKey("t_nexus_tasks.id", ondelete="CASCADE"), unique=True, index=True
-    )
-    primary_session_id: Mapped[str | None] = mapped_column(
-        ForeignKey("t_nexus_runtime_sessions.id", ondelete="SET NULL"), nullable=True
-    )
-    referenced_session_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
-    summary: Mapped[str] = mapped_column(Text, default="")
-    content_md: Mapped[str] = mapped_column(Text, default="")
-    acceptance_results: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
-    key_changes: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    source_status: Mapped[str] = mapped_column(String(32), default="PENDING")
-    generation: Mapped[int] = mapped_column(Integer, default=0)
-    stale: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    generated_by: Mapped[str] = mapped_column(String(120), default="nexus-task-experience-review")
-    source_ref_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    generated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
-
-    task: Mapped[Task] = relationship(back_populates="summary")
-
-
-class TaskReview(Base):
-    """Durable assistant review dispatch, independent of Task execution."""
-
-    __tablename__ = "t_nexus_task_reviews"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    task_id: Mapped[str] = mapped_column(ForeignKey("t_nexus_tasks.id", ondelete="CASCADE"), index=True)
-    source_session_id: Mapped[str] = mapped_column(
-        ForeignKey("t_nexus_runtime_sessions.id", ondelete="CASCADE")
-    )
-    source_status: Mapped[str] = mapped_column(String(32))
-    turn_anchor_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    final_message_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    status: Mapped[str] = mapped_column(String(24), default="pending")
-    assistant_session_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    attempts: Mapped[int] = mapped_column(Integer, default=0)
-    retry_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
-    error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    result: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
 class KnowledgeSpace(Base):

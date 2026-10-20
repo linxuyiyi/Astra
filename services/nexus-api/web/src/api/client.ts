@@ -22,7 +22,6 @@ import type {
   LibraryServiceStatus,
   RelatedTask,
   Task,
-  TaskReview,
   TaskCategory,
   TaskCategoryWrite,
   TaskUsage,
@@ -83,8 +82,6 @@ export const api = {
     request<CodeRepository>('/api/repositories', { method: 'POST', body: JSON.stringify(body) }),
   tasks: (query = '') => request<Task[]>(`/api/tasks${query}`),
   task: (id: string) => request<Task>(`/api/tasks/${id}`),
-  taskReview: (id: string) => request<TaskReview>(`/api/tasks/${encodeURIComponent(id)}/review`),
-  retryTaskReview: (id: string) => request<TaskReview>(`/api/tasks/${encodeURIComponent(id)}/review/retry`, { method: 'POST' }),
   taskWorkspace: (id: string) => request<TaskWorkspaceBinding>(`/api/tasks/${id}/workspace`),
   taskRepo: (id: string) => request<{name: string; branch: string; commit: string; dirty: boolean; changes: number}>(`/api/tasks/${id}/repo`),
   uploadTaskFile: async (id: string, file: File): Promise<{path: string}> => {

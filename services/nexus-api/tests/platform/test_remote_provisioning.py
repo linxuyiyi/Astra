@@ -27,7 +27,6 @@ from app.runtime.remote_provisioning import E2E_MODEL, RemoteProvisioner, manage
 @pytest.fixture(autouse=True)
 def isolated_settings(monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "assistant_enabled", False)
     monkeypatch.setattr(settings, "mcp_transport", "streamable-http")
     monkeypatch.setattr(settings, "remote_gateway_local_url", "http://10.0.0.8:8110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:8201/mcp")

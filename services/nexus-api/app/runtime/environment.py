@@ -181,7 +181,7 @@ class ExecutionEnvironmentRuntime:
             from app.executors.opencode_server import OpenCodeServerClient
 
             port = environment.opencode_server_port
-            if port in {self.settings.opencode_server_port, self.settings.assistant_opencode_port}:
+            if port in {self.settings.opencode_server_port}:
                 checks.append(
                     CheckItem("OpenCode Server", False, "端口与平台公共/助手 Serve 冲突，请配置独立端口")
                 )

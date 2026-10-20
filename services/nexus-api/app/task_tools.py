@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import Priority, TaskStatus, TaskType
 from app.executors.errors import OpenCodeExecutionTimeout, OpenCodeServerUnavailable
-from app.models import AgentWorker, Event, KnowledgeItem, Task, TaskCategory, TaskSummary
+from app.models import AgentWorker, Event, Task, TaskCategory
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 from app.schemas import AcceptanceCriterion, TaskCreate
 from app.services import TaskService
@@ -329,31 +329,6 @@ class TaskTools:
         if task.status in {TaskStatus.CANCELED.value, TaskStatus.FAILED.value, TaskStatus.PENDING.value}:
             return self._refuse(task, "当前状态不能确认完成")
         return await self._runtime(task, lambda: RuntimeService(self.session).confirm_completion(task.id))
-
-    async def summary(self, task_id: str) -> dict[str, Any]:
-        task = await self._owned(task_id)
-        if isinstance(task, dict):
-            return task
-        summary = await self.session.scalar(select(TaskSummary).where(TaskSummary.task_id == task.id))
-        candidates = (
-            await self.session.scalars(
-                select(KnowledgeItem).where(
-                    KnowledgeItem.source_task_id == task.id,
-                    KnowledgeItem.type == "experience",
-                )
-            )
-        ).all()
-        return {
-            "ok": True,
-            "task_id": task.id,
-            "status": task.status,
-            "summary": None
-            if summary is None
-            else {"summary": summary.summary, "content_md": summary.content_md, "stale": summary.stale},
-            "candidates": [
-                {"id": item.id, "title": item.title, "status": item.status} for item in candidates
-            ],
-        }
 
     async def _runtime(self, task: Task, call) -> dict[str, Any]:
         task_id = task.id

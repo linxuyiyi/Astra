@@ -1,8 +1,7 @@
 """数据库隔离自检回归。
 
-背景：迁移到 0031 后，``check_database`` 只注册了 ``app.assistant.models``，
-导致 ``Base.metadata`` 缺少 Gateway 表，8 张 ``gateway_*`` 表被误报为“非
-Astra 表”。这里直接校验注册与判定逻辑，不连接真实数据库。
+背景：数据库隔离检查必须注册全部模型；曾因只注册部分模型导致
+Gateway 表被误报为“非 Nexus 表”。这里直接校验注册与判定逻辑，不连接真实数据库。
 """
 
 from __future__ import annotations

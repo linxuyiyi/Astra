@@ -41,7 +41,6 @@ packages = ["app", "nexus_api"]
 [project.scripts]
 astra-library-mcp = "app.mcp_server:main"
 astra-task-mcp = "app.task_mcp:main"
-astra-assistant-mcp = "app.assistant.mcp_server:main"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

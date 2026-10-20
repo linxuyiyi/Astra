@@ -13,7 +13,8 @@ def test_session_architecture_has_no_legacy_execution_tables():
     }
     assert not legacy.intersection(Base.metadata.tables)
     assert "t_nexus_runtime_sessions" in Base.metadata.tables
-    assert "t_nexus_task_summaries" in Base.metadata.tables
+    assert "t_nexus_task_summaries" not in Base.metadata.tables
+    assert "t_nexus_task_reviews" not in Base.metadata.tables
     assert "result" not in Base.metadata.tables["t_nexus_tasks"].c
 
 

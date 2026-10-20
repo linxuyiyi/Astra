@@ -40,7 +40,6 @@ V09_PORTS = {
     "task_mcp": 8202,
     "web": 5174,
     "opencode": 4096,
-    "assistant_opencode": 4097,
 }
 
 
@@ -163,7 +162,6 @@ def collect() -> list[tuple[bool, str, str]]:
         "task_mcp": settings.task_mcp_port,
         "web": service.FRONTEND_PORT,
         "opencode": settings.opencode_server_port,
-        "assistant_opencode": settings.assistant_opencode_port,
     }
     occupied = set(V09_PORTS.values())
     shared = sorted(port for port in nexus_ports.values() if port in occupied)

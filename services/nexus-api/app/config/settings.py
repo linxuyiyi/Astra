@@ -221,24 +221,6 @@ class Settings(BaseSettings):
             raise ValueError("知识服务地址必须为 http(s)://<host>[:port]/api/v1")
         return value.rstrip("/")
 
-    # Platform assistant (NEXUS 平台助手). The assistant is an Astra
-    # project-level agent: it loads the project root's OpenCode config, skills
-    # and MCP, but keeps its own OpenCode Server/port/credentials so
-    # conversational sessions never share runtime state with digital-employee
-    # task execution. It owns no workspace.
-    assistant_enabled: bool = True
-    assistant_opencode_url: str | None = None
-    assistant_opencode_hostname: str = "127.0.0.1"
-    assistant_opencode_port: int = Field(default=14097, ge=1, le=65535)
-    assistant_opencode_username: str = "opencode"
-    assistant_opencode_password: str | None = None
-    assistant_agent: str = "platform-assistant"
-    assistant_model: str | None = None
-    assistant_user_id: str = "console-admin"
-    assistant_request_timeout_seconds: int = Field(default=120, ge=5, le=1800)
-    assistant_rate_limit_per_minute: int = Field(default=30, ge=1, le=600)
-    assistant_operation_ttl_minutes: int = Field(default=15, ge=1, le=1440)
-
     nr_test_system_endpoint: str = "http://localhost:8000"
     nr_test_system_discover_path: str = "/api/astra/tasks"
     nr_test_system_result_path: str = "/api/astra/tasks/{external_task_id}/result"
@@ -360,16 +342,6 @@ class Settings(BaseSettings):
             and not self.opencode_server_password
         ):
             raise ValueError("OpenCode Server 非 loopback 监听时必须配置密码")
-        assistant_url = urlparse(self.assistant_opencode_url) if self.assistant_opencode_url else None
-        if assistant_url and (assistant_url.scheme not in {"http", "https"} or not assistant_url.hostname):
-            raise ValueError("ASTRA_ASSISTANT_OPENCODE_URL 必须是完整的 HTTP(S) URL")
-        assistant_host = assistant_url.hostname if assistant_url else self.assistant_opencode_hostname
-        if (
-            self.assistant_enabled
-            and assistant_host not in {"127.0.0.1", "localhost", "::1"}
-            and not self.assistant_opencode_password
-        ):
-            raise ValueError("助手 OpenCode Server 非 loopback 部署时必须配置密码")
         if (
             self.mcp_transport == "streamable-http"
             and self.mcp_host not in {"127.0.0.1", "localhost", "::1"}
@@ -427,17 +399,6 @@ class Settings(BaseSettings):
             else self.opencode_server_hostname
         )
         return f"http://{host}:{self.opencode_server_port}"
-
-    @property
-    def resolved_assistant_opencode_url(self) -> str:
-        if self.assistant_opencode_url:
-            return self.assistant_opencode_url.rstrip("/")
-        host = (
-            "127.0.0.1"
-            if self.assistant_opencode_hostname in {"0.0.0.0", "::"}
-            else self.assistant_opencode_hostname
-        )
-        return f"http://{host}:{self.assistant_opencode_port}"
 
     @property
     def sqlalchemy_database_url(self) -> str:

@@ -55,18 +55,17 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_astra(mode: str) -> tuple[Any, Any, Any, Any]:
+def load_astra(mode: str) -> tuple[Any, Any, Any]:
     os.environ["ASTRA_ENVIRONMENT"] = "development" if mode == "dev" else "production"
     if mode == "pro":
         os.environ["ASTRA_SEED_DEMO"] = "false"
 
     sys.path.insert(0, str(BACKEND))
-    from app.assistant.server import AssistantOpenCodeServerManager
     from app.config.settings import get_settings
     from app.executors.process import local_command
     from app.runtime.opencode_server import OpenCodeServerManager
 
-    return get_settings(), OpenCodeServerManager, AssistantOpenCodeServerManager, local_command
+    return get_settings(), OpenCodeServerManager, local_command
 
 
 def state_path(settings: Any) -> Path:
@@ -288,7 +287,6 @@ def wait_worker(name: str, info: dict[str, Any], timeout: int = 60) -> None:
 def start_opencode(
     settings: Any,
     OpenCodeServerManager: Any,
-    AssistantOpenCodeServerManager: Any,
     processes: dict[str, dict[str, Any]],
 ) -> None:
     if settings.executor_type == "opencode_server":
@@ -307,31 +305,6 @@ def start_opencode(
         ensure_workspace_ui_bundle(health.version)
         print(f"[READY] employee OpenCode Server ({health.version or 'unknown'})")
 
-    assistant = AssistantOpenCodeServerManager(settings)
-    health = asyncio.run(assistant.health())
-    if health.healthy:
-        print(f"[READY] assistant OpenCode Server ({health.version or 'unknown'})")
-        return
-    if settings.assistant_opencode_url:
-        print(f"[WARN] external assistant OpenCode Server unavailable: {health.detail}")
-        return
-
-    try:
-        print("[START] assistant-opencode")
-        processes["assistant-opencode"] = spawn(
-            settings,
-            "assistant-opencode",
-            assistant.command(),
-            assistant.workspace,
-            env=assistant.process_environment(),
-        )
-        health = asyncio.run(assistant.wait_until_ready())
-        print(f"[READY] assistant OpenCode Server ({health.version or 'unknown'})")
-    except Exception as exc:
-        info = processes.pop("assistant-opencode", None)
-        if info:
-            procman.stop_managed(info)
-        print(f"[WARN] platform assistant degraded: {exc}")
 
 
 def gateway_command(mode: str) -> list[str]:
@@ -530,7 +503,6 @@ def start(
     mode: str,
     settings: Any,
     OpenCodeServerManager: Any,
-    AssistantOpenCodeServerManager: Any,
     local_command: Any,
 ) -> int:
     existing = managed_processes(settings)
@@ -543,7 +515,7 @@ def start(
     try:
         npm = find_npm()
         prepare(mode, settings, npm, local_command)
-        start_opencode(settings, OpenCodeServerManager, AssistantOpenCodeServerManager, processes)
+        start_opencode(settings, OpenCodeServerManager, processes)
         _provision_gateway_admin_key()
         start_core(mode, settings, npm, local_command, processes)
         save_state(settings, mode, processes)
@@ -576,9 +548,7 @@ def start(
 def main() -> int:
     args = parse_args()
     try:
-        settings, OpenCodeServerManager, AssistantOpenCodeServerManager, local_command = load_astra(
-            args.mode
-        )
+        settings, OpenCodeServerManager, local_command = load_astra(args.mode)
     except Exception as exc:
         print(f"[ERROR] failed to load Astra environment: {exc}")
         return 1
@@ -595,7 +565,6 @@ def main() -> int:
         args.mode,
         settings,
         OpenCodeServerManager,
-        AssistantOpenCodeServerManager,
         local_command,
     )
 

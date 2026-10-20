@@ -64,7 +64,6 @@ def build_task_prompt(
     )
     human_input = (task.human_intervention or {}).get("response")
     suspension = task.suspension or {}
-    review = (task.review_history or [])[-1] if task.review_history else {}
     retry_text = ""
     if retry:
         retry_text = "\n这是同一任务继续处理，请使用当前执行会话中的已有上下文。"
@@ -75,8 +74,6 @@ def build_task_prompt(
         context_text += f"\n已保留的当前进展：\n{task.current_progress}"
     if suspension.get("scene_context"):
         context_text += f"\n挂起时现场上下文：\n{suspension['scene_context']}"
-    if review.get("feedback"):
-        context_text += f"\n上次结果被退回的意见：\n{review['feedback']}"
     if human_input and not retry:
         context_text += f"\n人工补充信息：\n{human_input}"
 

@@ -312,7 +312,6 @@ class TaskRead(RuntimeRead):
     current_progress: str
     suspension: dict[str, Any] | None
     execution_error: dict[str, Any] | None
-    review_history: list[dict[str, Any]]
     inactivity_alert: bool
     inactivity_alert_since: datetime | None
     last_activity_at: datetime | None

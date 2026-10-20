@@ -13,7 +13,6 @@ from app.api.repository_routes import router as repository_router
 from app.api.routes import router
 from app.api.worker_routes import router as worker_router
 from app.api.workspace_routes import router as workspace_router
-from app.assistant.orchestrator import get_orchestrator, set_orchestrator
 from app.bootstrap import bootstrap_categories, bootstrap_employees, bootstrap_knowledge_spaces
 from app.config.settings import get_settings
 from app.database import SessionLocal, init_database
@@ -58,10 +57,6 @@ async def lifespan(_: FastAPI):
         await asyncio.gather(
             supervisor, worker_sweep, maintenance, health, return_exceptions=True
         )
-        orchestrator = get_orchestrator()
-        if orchestrator:
-            await orchestrator.stop()
-            set_orchestrator(None)
         from app.worker_gateway.service import get_gateway
 
         await get_gateway().aclose()

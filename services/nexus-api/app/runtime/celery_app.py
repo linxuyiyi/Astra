@@ -2,7 +2,6 @@ import asyncio
 
 from celery import Celery
 
-from app.assistant.review import reconcile_task_reviews
 from app.config.settings import get_settings
 from app.database import init_database, worker_session
 from app.runtime.dispatcher import Dispatcher
@@ -25,11 +24,9 @@ celery.conf.update(
         "nexus.dispatch": {"queue": "nexus-control"},
         "nexus.heartbeat-check": {"queue": "nexus-control"},
         "nexus.employee-heartbeat": {"queue": "nexus-control"},
-        "nexus.task-review": {"queue": "nexus-control"},
         "nexus.task-wake": {"queue": "nexus-control"},
     },
     beat_schedule={
-        "nexus-task-review": {"task": "nexus.task-review", "schedule": 30.0},
         "nexus-task-wake": {"task": "nexus.task-wake", "schedule": float(settings.outbox_interval)},
         **(
             {"nexus-scout": {"task": "nexus.scout", "schedule": settings.scout_interval}}
@@ -73,11 +70,6 @@ def task_wake() -> int:
             return await deliver_pending(session, HttpWakeSender())
 
     return run_async(execute())
-
-
-@celery.task(name="nexus.task-review")
-def task_review() -> list[str]:
-    return run_async(reconcile_task_reviews())
 
 
 @celery.task(name="nexus.scout")

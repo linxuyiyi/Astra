@@ -50,7 +50,6 @@ docs/reports             验证记录与证据
 | Library MCP | 18201 | `services/nexus-api/app/mcp_server.py` |
 | Task MCP | 18202 | `services/nexus-api/app/task_mcp.py` |
 | 员工 OpenCode | 14096 | 由 Task 平台拉起 |
-| 助手 OpenCode | 14097 | 由 Task 平台拉起 |
 | Redis | 6379 | Agent Service 与 Celery |
 
 ## 本地启动

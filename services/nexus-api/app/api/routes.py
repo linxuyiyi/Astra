@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.library_routes import library_principal
-from app.assistant.review import retry_review, review_detail
 from app.config.settings import get_settings
 from app.dashboard import (
     dashboard_activity,
@@ -37,8 +36,6 @@ from app.models import (
     RuntimeSession,
     Task,
     TaskCategory,
-    TaskReview,
-    TaskSummary,
     TaskWakeOutbox,
     WorkerInstance,
     WorkerMaintenanceEvent,
@@ -678,19 +675,6 @@ async def patch_task(task_id: str, payload: TaskUpdate, session: AsyncSession = 
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.get("/tasks/{task_id}/review")
-async def get_task_review(task_id: str, session: AsyncSession = Depends(get_session)):
-    return await review_detail(session, await require_task(task_id, session))
-
-
-@router.post("/tasks/{task_id}/review/retry")
-async def retry_task_review(task_id: str, session: AsyncSession = Depends(get_session)):
-    await require_task(task_id, session)
-    try:
-        return await retry_review(session, task_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
 
 DELETABLE_TASK_STATUSES = frozenset(
     {TaskStatus.PENDING, TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELED}
@@ -745,8 +729,6 @@ async def delete_task(task_id: str, session: AsyncSession = Depends(get_session)
         .values(task_id=None, source_session_id=None)
     )
     await session.execute(delete(TaskWakeOutbox).where(TaskWakeOutbox.task_id == task_id))
-    await session.execute(delete(TaskReview).where(TaskReview.task_id == task_id))
-    await session.execute(delete(TaskSummary).where(TaskSummary.task_id == task_id))
     await session.execute(delete(RuntimeSession).where(RuntimeSession.task_id == task_id))
     await session.delete(task)
     await session.commit()

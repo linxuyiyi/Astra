@@ -182,7 +182,6 @@ export interface Task extends RuntimeProjection {
   human_intervention: HumanIntervention | null
   suspension: Record<string, unknown> | null
   execution_error: Record<string, unknown> | null
-  review_history: Array<Record<string, unknown>>
   inactivity_alert: boolean
   inactivity_alert_since: string | null
   last_activity_at: string | null
@@ -206,25 +205,6 @@ export interface AstraEvent {
   detail: Record<string, unknown>
   created_at: string
 }
-
-export interface TaskReview {
-  status: 'not_ready' | 'pending' | 'running' | 'completed' | 'failed'
-  error: string | null
-  attempts: number
-  retry_at: string | null
-  enabled: boolean
-  can_retry: boolean
-  summary: string | null
-  summary_current: boolean
-  experiences: Array<{ id: string; title: string; status: KnowledgeStatus; verification_status: VerificationStatus }>
-}
-
-
-
-
-
-
-
 
 
 export type KnowledgeType = 'document' | 'rule' | 'guide' | 'experience' | 'faq' | 'tool' | 'example'

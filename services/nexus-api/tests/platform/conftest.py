@@ -37,7 +37,6 @@ async def prepare_process_schema():
     ``environment_uses_worker`` still reads ``worker_channel`` through SessionLocal.
     """
 
-    import app.assistant.models  # noqa: F401 - register assistant tables
     import app.gateway.models  # noqa: F401 - register gateway tables
     from app.database import init_database
 
@@ -77,17 +76,6 @@ def keep_redis_url_stable():
     gateway = gateway_service._gateway
     if gateway is not None and expected and gateway.settings.redis_url != expected:
         gateway_service._gateway = None
-
-
-@pytest.fixture(autouse=True)
-def isolate_assistant_command_test(request, monkeypatch):
-    """Keep command-construction tests independent from a local OpenCode install."""
-
-    if request.node.name == "test_assistant_server_manager_configures_isolated_runtime":
-        monkeypatch.setattr(
-            "app.executors.process.resolve_executable",
-            lambda executable: executable,
-        )
 
 
 def pytest_sessionfinish(session, exitstatus):

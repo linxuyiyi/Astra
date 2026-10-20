@@ -16,7 +16,7 @@
 | Nexus API（统一服务） | 18120 | `uvicorn nexus_api.service:app` | 员工对话 `/api/v1`、任务 `/api`、Worker Gateway WebSocket、前端静态资源。唯一对外 HTTP 服务 |
 | Library MCP | 18201 | 同 astra_service（`nexus-library-mcp`，streamable-http） | 员工/OpenCode 查询数字图书馆 |
 | Task MCP | 18202 | 同 astra_service（`astra-task-mcp`） | 员工会话里的 `nexus_task_*` 工具 |
-| 平台 OpenCode / 助手 OpenCode | 14096 / 14097 | astra_service 拉起 `opencode serve` | 只监听 127.0.0.1。平台 Serve 使用 14096，本地 Worker 不要占用它 |
+| 平台 OpenCode | 14096 | astra_service 拉起 `opencode serve` | 只监听 127.0.0.1。本地 Worker 不要占用它 |
 | 本地 Worker OpenCode | 自定（如 14196） | Nexus runtime 拉起 | 每个 Worker 一个端口 |
 | llm_wiki Web 版（远端） | 18080（网关）/ 19829（内部） | Docker 容器 `llm-wiki-web` | 只绑 127.0.0.1 |
 | llm_wiki 本机隧道 | 19828 | `ssh -L 19828:127.0.0.1:18080` | Nexus 的 `ASTRA_LLM_WIKI_API_BASE_URL` |
@@ -94,7 +94,7 @@
 | NEXUS_WORKER_GATEWAY_ADMIN_KEY | 否 | 启动脚本生成一次 | Worker Gateway 登记、查询和下发的内部密钥，请求头 `X-Astra-Worker-Gateway-Key`。留空时 `ops/dev/astra_service.py` 在拉起 API 前写入 `ops/env/.env`（加锁、原子替换、权限 0600）。API 进程不各自生成；密钥缺失时管理接口返回 401，进程仍可启动。WebSocket 使用 Worker token，健康检查不需要这把密钥 |
 | ASTRA_OUTBOX_INTERVAL / ASTRA_OUTBOX_RETRY_SECONDS | 否 | — | 唤醒 outbox 轮询（验证用 2 / 5） |
 | ASTRA_OPENCODE_MODEL | 是 | — | `deepseek/deepseek-flash`（provider/model） |
-| ASTRA_OPENCODE_SERVER_PORT / ASTRA_ASSISTANT_OPENCODE_PORT | 否 | 14096 / 14097 | 平台/助手 OpenCode，只监听 127.0.0.1 |
+| ASTRA_OPENCODE_SERVER_PORT | 否 | 14096 | 平台 OpenCode，只监听 127.0.0.1 |
 | ASTRA_OPENCODE_SERVER_VERSION | 否 | 1.18.35 | 唯一支持的 OpenCode 版本 |
 | ASTRA_NEXUS_API_BASE | 是 | — | `http://127.0.0.1:18120`（task-hint 唤醒） |
 | ASTRA_AGENTSCOPE_BASE_URL / ASTRA_AGENTSCOPE_USER_ID | 是 | — | `http://127.0.0.1:18000` / `nexus` |
@@ -187,7 +187,7 @@ cd $R/services/nexus-api && ASTRA_GATEWAY_MASTER_KEY=$(cat ../.gwmaster) ASTRA_G
   ASTRA_AGENTSCOPE_BASE_URL=http://127.0.0.1:18000 ASTRA_AGENTSCOPE_USER_ID=nexus \
   .venv/bin/python ../ops/dev/astra_service.py dev start
 ```
-（即 `ops/dev/start_astra.sh [start|restart|stop|status]`。）Python 用新会话拉起 Gateway 18110、Library MCP 18201、Task MCP 18202、Celery beat、队列 `nexus-control` 和 agent、OpenCode 14096/14097，并记录 pid 与 create_time。统一 API 与前端由 `nexus-api` 服务（18120）提供。健康检查只认 HTTP 2xx。停不干净时保留 `astra-service.json` 并以非 0 退出。启动前会做自检。
+（即 `ops/dev/start_astra.sh [start|restart|stop|status]`。）Python 用新会话拉起 Gateway 18110、Library MCP 18201、Task MCP 18202、Celery beat、队列 `nexus-control` 和 agent、OpenCode 14096，并记录 pid 与 create_time。统一 API 与前端由 `nexus-api` 服务（18120）提供。健康检查只认 HTTP 2xx。停不干净时保留 `astra-service.json` 并以非 0 退出。启动前会做自检。
 
 ### 5.4 Task MCP
 

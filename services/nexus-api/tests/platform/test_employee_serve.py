@@ -117,12 +117,11 @@ async def test_unstarted_serve_environment_is_available(serve):
     assert executor.environment.opencode_server_port not in local._processes
 
 
-async def test_reserved_assistant_and_global_ports_rejected(serve):
+async def test_reserved_global_port_rejected(serve):
     executor = serve("reserved")
-    for port in (executor.settings.opencode_server_port, executor.settings.assistant_opencode_port):
-        executor.environment.opencode_server_port = port
-        with pytest.raises(RuntimeError, match="公共/助手"):
-            await executor.ensure_ready()
+    executor.environment.opencode_server_port = executor.settings.opencode_server_port
+    with pytest.raises(RuntimeError, match="公共 Serve"):
+        await executor.ensure_ready()
 
 
 async def test_start_failure_does_not_execute_session(serve):

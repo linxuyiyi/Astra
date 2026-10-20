@@ -180,11 +180,6 @@ def build_mcp_server() -> MCPServer:
         """确认任务完成。只对执行中或等待确认的任务有效。"""
         return await _call("confirm", task_id=task_id)
 
-    @server.tool(name="nexus_task_summary", structured_output=True)
-    async def nexus_task_summary(task_id: str) -> dict[str, Any]:
-        """只读任务总结和候选经验。不要用它写入知识。"""
-        return await _call("summary", task_id=task_id)
-
     return server
 
 

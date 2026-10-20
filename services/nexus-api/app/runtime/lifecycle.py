@@ -356,7 +356,7 @@ class RuntimeService:
     async def apply_session_state(
         self, task: Task, state: SessionState
     ) -> None:
-        """Persist one derived Session outcome, project it independently of assistant reviews."""
+        """Persist one derived Session outcome, project it independently of review features."""
         await self._sync_session_state(task, state)
         await self._project_session_state(task, state)
 

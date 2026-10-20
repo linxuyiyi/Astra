@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,8 +77,14 @@ from app.models import utcnow
 
 QPS_WINDOW = timedelta(seconds=60)
 ERROR_WINDOW = timedelta(minutes=5)
-TREND_1H = timedelta(hours=1)
-TREND_15M = timedelta(minutes=15)
+TrendWindow = Literal["hour", "today", "7d", "30d"]
+# 趋势窗口与统计窗口使用同一组四档：跨度 + 固定桶宽（秒）。
+TREND_WINDOWS: dict[TrendWindow, tuple[timedelta, int]] = {
+    "hour": (timedelta(hours=1), 300),
+    "today": (timedelta(hours=24), 3600),
+    "7d": (timedelta(days=7), 6 * 3600),
+    "30d": (timedelta(days=30), 86400),
+}
 FAILURE_RATE_THRESHOLD = 0.02
 MIN_ERROR_SAMPLE = 20
 BUCKET_MIN_SAMPLE = 5
@@ -160,6 +166,13 @@ class RouteFact:
     pool_name: str
     route_enabled: bool
     pool_enabled: bool
+    # 透明路由：客户端请求 model，上游实际用 target_model。节点能力必须按实际模型判断，
+    # 否则「GLM-5.2 → GLM-5.3」会被错误判成不可服务。
+    target_model: str | None = None
+
+
+def route_model(route: RouteFact) -> str:
+    return route.target_model or route.model
 
 
 @dataclass
@@ -450,10 +463,11 @@ def _remaining_capacity(nodes: list[NodeFact], model_nodes: list[NodeFact]) -> i
 
 
 def _route_nodes(facts: HealthFacts, route: RouteFact) -> list[NodeFact]:
+    model = route_model(route)
     return [
         node
         for node in facts.nodes
-        if node.pool_id == route.pool_id and node.enabled and _supports(node, route.model)
+        if node.pool_id == route.pool_id and node.enabled and _supports(node, model)
     ]
 
 
@@ -493,13 +507,14 @@ def judge_health(facts: HealthFacts) -> HealthSummary:
         required_nodes.extend(
             node for node in supporting if node.scheduling == SCHEDULING_ACTIVE
         )
-        schedulable = [node for node in supporting if _schedulable(node, route.model)]
+        route_actual_model = route_model(route)
+        schedulable = [node for node in supporting if _schedulable(node, route_actual_model)]
         servable_nodes.extend(schedulable)
         weakened = [
             node
             for node in supporting
             if node.scheduling == SCHEDULING_ACTIVE
-            and _block(node, route.model) in WEAKENING_REASONS
+            and _block(node, route_actual_model) in WEAKENING_REASONS
         ]
         if schedulable and weakened:
             state = "degraded"
@@ -692,12 +707,11 @@ def build_trends(
     samples: list[RequestSample],
     *,
     now: datetime,
-    window: str,
+    window: TrendWindow,
     group_by: str,
     labels: dict[str, str],
 ) -> TrendRead:
-    span = TREND_1H if window == "1h" else TREND_15M
-    bucket_seconds = 300 if window == "1h" else 60
+    span, bucket_seconds = TREND_WINDOWS[window]
     start = now - span
     count = int(span.total_seconds() // bucket_seconds)
     starts = [start + timedelta(seconds=index * bucket_seconds) for index in range(count)]
@@ -882,6 +896,7 @@ class GatewayOpsService:
                     pool_name=pool_names.get(route.pool_id, route.pool_id),
                     route_enabled=bool(route.enabled),
                     pool_enabled=enabled,
+                    target_model=route.target_model,
                 )
             )
         samples = await self._load_samples(now - horizon)
@@ -912,12 +927,12 @@ class GatewayOpsService:
         facts = await self._facts(horizon=ERROR_WINDOW)
         return node_window_metrics(facts)
 
-    async def trends(self, *, window: str = "1h", group_by: str = "none") -> TrendRead:
-        if window not in ("1h", "15m"):
-            window = "1h"
+    async def trends(self, *, window: TrendWindow = "today", group_by: str = "none") -> TrendRead:
+        if window not in TREND_WINDOWS:
+            window = "today"
         if group_by not in ("none", "model", "node"):
             group_by = "none"
-        span = TREND_1H if window == "1h" else TREND_15M
+        span = TREND_WINDOWS[window][0]
         facts = await self._facts(horizon=span)
         labels = {node.id: node.name for node in facts.nodes}
         return build_trends(

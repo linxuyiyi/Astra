@@ -1,14 +1,17 @@
 <template>
-  <ElContainer direction="vertical" class="digital-library-page" data-testid="digital-library-page">
-    <AstraPageHeader title="数字图书馆" hide-title testid="library-header">
-      <template #actions>
-        <ElButton :icon="RefreshCw" :loading="refreshing" data-testid="library-refresh" @click="refreshAll">刷新</ElButton>
-        <template v-if="permissions?.can_manage">
-          <ElButton :icon="Upload" data-testid="library-import" @click="triggerImport">导入知识</ElButton>
-          <ElButton type="primary" :icon="Plus" data-testid="library-create" @click="beginCreate">新建知识</ElButton>
-        </template>
-      </template>
-    </AstraPageHeader>
+  <ElCard class="admin-card digital-library-card" data-testid="digital-library-page">
+    <template #header>
+      <div class="admin-card__header">
+        <h2 class="admin-card__title">数字图书馆</h2>
+        <div class="admin-card__actions">
+          <ElButton :icon="RefreshCw" :loading="refreshing" data-testid="library-refresh" @click="refreshAll">刷新</ElButton>
+          <template v-if="permissions?.can_manage">
+            <ElButton :icon="Upload" data-testid="library-import" @click="triggerImport">导入知识</ElButton>
+            <ElButton type="primary" :icon="Plus" data-testid="library-create" @click="beginCreate">新建知识</ElButton>
+          </template>
+        </div>
+      </div>
+    </template>
     <ElAlert v-if="libraryNotice" class="library-notice" :type="libraryNotice.level" show-icon :closable="false" :title="libraryNotice.title" data-testid="library-service-state">
       <p>{{ libraryNotice.next }}</p>
       <ElButton
@@ -63,6 +66,7 @@
             @delete="deleteFromList"
             @batch="onBatch"
             @page="setPage"
+            @size="setPageSize"
             @filter="setFilter"
             @clear-filter="clearFilters"
           />
@@ -127,18 +131,17 @@
         <ElButton type="primary" @click="deleteBlocked = null">知道了</ElButton>
       </template>
     </AstraDialog>
-  </ElContainer>
+  </ElCard>
 </template>
 
 <script setup lang="ts">
 import { Plus, RefreshCw, Upload } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElAlert, ElAside, ElButton, ElContainer, ElMain } from 'element-plus'
+import { ElAlert, ElAside, ElButton, ElCard, ElContainer, ElMain } from 'element-plus'
 import { api } from '@/api/client'
 import type { KnowledgeDetail, KnowledgeListItem, KnowledgePage, KnowledgeSpace, KnowledgeUsageRecord, LibraryPermissions, LibraryStats as LibraryStatsData, LibraryUsageSummary, LibraryServiceStatus, RelatedTask } from '@/api/types'
 import AstraDialog from '@/components/astra/AstraDialog.vue'
-import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
 import DirectoryPickerDialog from '@/views/library/DirectoryPickerDialog.vue'
@@ -184,7 +187,7 @@ async function resyncKnowledge() {
   finally { resyncing.value = false }
 }
 const page = ref<KnowledgePage>(emptyPage())
-const filters = reactive({ spaceId: null as string | null, type: '', status: '', sort: 'updated_desc', page: 1, keyword: '' })
+const filters = reactive({ spaceId: null as string | null, type: '', status: '', sort: 'updated_desc', page: 1, page_size: 20, keyword: '' })
 const queryInput = ref('')
 const statsActive = ref('all')
 const listLoading = ref(false)
@@ -308,7 +311,7 @@ async function loadAll() {
 async function loadList() {
   listLoading.value = true
   try {
-    const query = new URLSearchParams({ page: String(filters.page), page_size: '20', sort: filters.sort })
+    const query = new URLSearchParams({ page: String(filters.page), page_size: String(filters.page_size), sort: filters.sort })
     if (filters.spaceId) query.set('space_id', filters.spaceId)
     if (filters.type) query.set('type', filters.type)
     if (filters.status) query.set('status', filters.status)
@@ -330,6 +333,13 @@ function applyStat(value: string) {
 }
 function selectSpace(id: string | null) { filters.spaceId = id; filters.page = 1; statsActive.value = 'spaces'; loadList() }
 function setPage(value: number) { filters.page = value; loadList() }
+function setPageSize(value: number) {
+  filters.page_size = value
+  filters.page = 1
+  // 先乐观更新分页控件，等服务端返回再以 page_size 为准，避免切换后回弹。
+  page.value = { ...page.value, page_size: value, page: 1 }
+  void loadList()
+}
 function setFilter(key: 'type' | 'status' | 'sort', value: string) { filters[key] = value; filters.page = 1; statsActive.value = value === 'candidate' ? 'candidate' : 'filter'; loadList() }
 function clearFilters() { filters.type = ''; filters.status = ''; filters.sort = 'updated_desc'; filters.keyword = ''; filters.page = 1; queryInput.value = ''; statsActive.value = 'all'; loadList() }
 function beginCreate() { editorInitialContent.value = ''; editorInitialTitle.value = ''; editorInitialSpaceId.value = filters.spaceId ?? directoryOptions.value[0]?.id ?? ''; editorEditing.value = null; editorSourceType.value = 'manual'; editorError.value = ''; editorOpen.value = true }
@@ -483,20 +493,18 @@ function normalizeSpaces(nodes: KnowledgeSpace[]): KnowledgeSpace[] {
 <style scoped>
 /* 标题区、筛选面板、表格面板与页脚统一走 styles/page-layout.css。
    本页只保留「左目录树 + 右知识表格」的双栏骨架与页面独有的排版。 */
-.digital-library-page{height:100%;min-height:480px;padding:0 0 18px;overflow:hidden;gap:14px;background:var(--astra-bg-base)}
-.digital-library-page>.astra-page-header{flex:none}
 .hidden-input{display:none}
-.library-body{--el-main-padding:0;display:flex;flex:1 1 auto;min-height:0;flex-direction:column;gap:12px}
+.library-body{--el-main-padding:0;display:flex;flex-direction:column;gap:16px;min-width:0;overflow:visible}
 .library-error{flex:none}
 .library-service-reason{overflow:hidden;max-width:340px;color:var(--astra-danger);text-overflow:ellipsis;white-space:nowrap}
-.library-workspace{flex:1 1 auto;min-height:360px;overflow:hidden;border:1px solid var(--astra-border);border-radius:12px;background:var(--astra-bg-panel);box-shadow:var(--astra-shadow-panel)}
-.library-aside{--el-aside-width:300px;overflow:hidden}
-.library-content{--el-main-padding:0;min-width:0;overflow:hidden}
+.library-workspace{display:flex;min-height:360px;border:1px solid var(--astra-border);border-radius:12px;background:var(--astra-bg-panel);box-shadow:var(--astra-shadow-panel)}
+.library-aside{--el-aside-width:300px;overflow:visible}
+.library-content{--el-main-padding:0;min-width:0;overflow:visible}
 /* 发布弹窗用原生 select：标签行高与控件高度都对齐全局 32px 基准，
    与 ElForm（label-position="top"）的单列表单保持同一节奏。 */
 .move-knowledge-card label{display:grid;grid-template-rows:var(--astra-control-height) auto;gap:2px;margin-top:14px;color:var(--astra-text-secondary);font-size:var(--astra-font-body);line-height:var(--astra-control-height)}
 .move-knowledge-card select{height:var(--astra-control-height);padding:0 9px;color:var(--astra-text-primary);border:1px solid var(--astra-border);border-radius:8px;background:#fff;font:inherit}
 .delete-blocked{display:grid;gap:8px}.delete-blocked p{margin:0;color:var(--astra-text-secondary);line-height:1.6}.delete-blocked p strong{color:var(--astra-text-primary)}
 @media(max-width:1100px){.library-aside{--el-aside-width:270px}}
-@media(max-width:780px){.digital-library-page{height:auto;min-height:100%;overflow:visible}.library-workspace{min-height:420px}.library-aside{flex:none;height:300px;--el-aside-width:auto}.library-content{min-height:420px}.library-service-reason{max-width:100%}}
+@media(max-width:780px){.library-workspace{min-height:420px}.library-aside{flex:none;height:300px;--el-aside-width:auto}.library-content{min-height:420px}.library-service-reason{max-width:100%}}
 </style>

@@ -21,7 +21,7 @@ from sqlalchemy import select
 from app.config.settings import get_settings
 from app.database import SessionLocal
 from app.domain import EnvironmentStatus
-from app.models import DigitalEmployee, OpenCodeExecutionEnvironment
+from app.models import AgentWorker, OpenCodeExecutionEnvironment
 from app.runtime.maintenance import OperationLease, claim_next, submit_operation
 from app.runtime.remote_provisioning import RemoteProvisioner
 from app.worker_agent import inspection
@@ -333,7 +333,7 @@ def test_file_url_sanitizers_preserve_absolute_path():
 async def test_deploy_uses_written_credential_revision(monkeypatch):
     monkeypatch.setattr(get_settings(), "mcp_transport", "streamable-http")
     async with SessionLocal() as db:
-        db.add(DigitalEmployee(id="gitrev", name="gitrev", role="build"))
+        db.add(AgentWorker(id="gitrev", name="gitrev", role="build"))
         await db.flush()
         db.add(
             OpenCodeExecutionEnvironment(

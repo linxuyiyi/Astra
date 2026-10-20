@@ -102,10 +102,12 @@ def read_scope(node_id: str) -> str:
     return asyncio.run(run())
 
 
-def create_route(client: TestClient, pool_id: str, model: str) -> dict:
+def create_route(client: TestClient, pool_id: str, model: str, **extra) -> dict:
+    payload = {"model": model, "pool_id": pool_id}
+    payload.update(extra)
     response = client.post(
         "/api/gateway/routes",
-        json={"model": model, "pool_id": pool_id},
+        json=payload,
     )
     assert response.status_code == 201, response.text
     return response.json()
@@ -860,6 +862,38 @@ def test_route_invalid_reference_rejected_when_saved(gateway_env, invalid):
         stored = next(item for item in client.get("/api/gateway/routes").json() if item["id"] == route["id"])
         assert stored["model"] == route["model"]
         assert stored["pool_id"] == pool["id"]
+
+
+def test_route_target_model_can_be_saved_and_cleared(gateway_env):
+    with TestClient(app) as client:
+        pool = create_pool(client)
+        target_model = unique("upstream-model")
+        route = create_route(
+            client, pool["id"], unique("transparent-model"), target_model=target_model
+        )
+        assert route["target_model"] == target_model
+
+        def stored_route() -> dict:
+            response = client.get("/api/gateway/routes")
+            assert response.status_code == 200, response.text
+            return next(item for item in response.json() if item["id"] == route["id"])
+
+        assert stored_route()["target_model"] == target_model
+
+        renamed_target = unique("upstream-model")
+        patched = client.patch(
+            f"/api/gateway/routes/{route['id']}", json={"target_model": renamed_target}
+        )
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["target_model"] == renamed_target
+        assert stored_route()["target_model"] == renamed_target
+
+        cleared = client.patch(
+            f"/api/gateway/routes/{route['id']}", json={"target_model": None}
+        )
+        assert cleared.status_code == 200, cleared.text
+        assert cleared.json()["target_model"] is None
+        assert stored_route()["target_model"] is None
 
 
 def test_pool_can_be_disabled_while_referenced_but_cannot_be_deleted(gateway_env):

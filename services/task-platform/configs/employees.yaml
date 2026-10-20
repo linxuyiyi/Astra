@@ -1,21 +1,3 @@
-employees:
-  - id: astra-01
-    name: Astra-01
-    role: 测试平台开发
-    description: 负责测试平台问题和需求处理
-    enabled: true
-    task_types:
-      - ISSUE
-      - REQUIREMENT
-    category_ids:
-      - testing-platform
-      - automation-engineering
-    execution_environment:
-      mode: LOCAL
-      name: 本地 Agent
-      opencode_path: opencode
-      model_name: null  # 默认继承 ASTRA_OPENCODE_MODEL；员工需要特殊模型时再覆盖
-      workspace_root: ./workspaces/astra-01
-    policy:
-      auto_claim: true
-      auto_execute: true
+# Agent Worker 不再由平台预置。数字员工在 Nexus 目录中维护，
+# Worker 在配置中心按数字员工创建，避免启动时回填历史 Worker。
+employees: []

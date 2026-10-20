@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import Settings, get_settings
 from app.domain import EmployeeStatus
-from app.models import DigitalEmployee
+from app.models import AgentWorker
 
 
 async def heartbeat_active_employees(session: AsyncSession) -> list[str]:
@@ -19,10 +19,10 @@ async def mark_stale_employees_offline(session: AsyncSession, settings: Settings
     employees = (
         (
             await session.execute(
-                select(DigitalEmployee).where(
-                    DigitalEmployee.last_heartbeat.is_not(None),
-                    DigitalEmployee.last_heartbeat < threshold,
-                    DigitalEmployee.status.not_in(
+                select(AgentWorker).where(
+                    AgentWorker.last_heartbeat.is_not(None),
+                    AgentWorker.last_heartbeat < threshold,
+                    AgentWorker.status.not_in(
                         [EmployeeStatus.OFFLINE, EmployeeStatus.PAUSED, EmployeeStatus.ERROR]
                     ),
                 )

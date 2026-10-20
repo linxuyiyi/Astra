@@ -17,8 +17,8 @@ from app.database import get_session
 from app.executors.errors import OpenCodeSessionNotFound
 from app.main import app
 from app.models import (
+    AgentWorker,
     Base,
-    DigitalEmployee,
     KnowledgeItem,
     OpenCodeExecutionEnvironment,
     RuntimeSession,
@@ -150,7 +150,7 @@ async def runtime(tmp_path, monkeypatch):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     async with factory() as session:
-        employee = DigitalEmployee(id="E1", name="Engineer", role="build", status="IDLE")
+        employee = AgentWorker(id="E1", name="Engineer", role="build", status="IDLE")
         environment = OpenCodeExecutionEnvironment(
             employee_id="E1",
             mode="LOCAL",
@@ -339,7 +339,7 @@ async def test_manual_confirm_waits_for_business_confirmation(runtime):
     await _complete_current_turn(r)
 
     session = await r.session.get(RuntimeSession, "ses_current")
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     assert session.status == "SUCCEEDED"
     assert r.task.status == "WAITING"
     assert r.task.human_required_reason == "执行结束，待确认"
@@ -2165,7 +2165,7 @@ async def test_idle_employee_heartbeat_does_not_require_on_demand_server(runtime
         yield
 
     monkeypatch.setattr("app.runtime.lifecycle.connect", unavailable_connect)
-    employee = await runtime.session.get(DigitalEmployee, "E1")
+    employee = await runtime.session.get(AgentWorker, "E1")
     employee.status = "OFFLINE"
     runtime.task.status = "SUCCEEDED"
     await runtime.session.commit()
@@ -2599,7 +2599,7 @@ async def test_retry_then_final_error_waits_without_releasing_worker(runtime):
     assert binding.terminal_reason == "assistant_error"
     assert r.task.status == "WAITING"
     assert "执行错误" in r.task.human_required_reason
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     assert employee.current_task_count == 1
     assert employee.status == "WAIT_HUMAN"
 
@@ -2649,7 +2649,7 @@ async def test_disconnect_keeps_task_and_worker_until_reconcile(runtime):
     assert "状态待确认" in r.task.runtime_error
     binding = await r.session.get(RuntimeSession, session_id)
     assert binding.status == "UNKNOWN"
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     assert employee.current_task_count == 1
 
     await _complete_current_turn(r)
@@ -2664,7 +2664,7 @@ async def test_acceptance_confirm_releases_worker_and_continue_reuses_session(ru
 
     r = runtime
     r.task.responsible_employee_id = "E1"
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     employee.category_ids = ["testing"]
     employee.task_types = ["ISSUE"]
     r.task.category_id = "testing"
@@ -2728,7 +2728,7 @@ async def test_cancel_keeps_worker_until_execution_stops(runtime, monkeypatch):
 
     r = runtime
     await r.service.send("T1", {"parts": [{"type": "text", "text": "go"}]})
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     assert employee.current_task_count == 1
 
     async def stuck_abort(directory, sid):
@@ -2934,7 +2934,7 @@ async def test_cancel_does_not_release_worker_until_human_confirms(runtime):
     r = runtime
     await r.service.send("T1", {"parts": [{"type": "text", "text": "go"}]})
     await r.service.stop("T1")
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     await r.session.refresh(r.task)
     await r.session.refresh(employee)
     assert r.task.status == "CANCELED"
@@ -2975,7 +2975,7 @@ async def test_restart_clears_execution_stop_confirmation(runtime):
     r = runtime
     await r.service.stop("T1")
     await r.service.confirm_execution_stop("T1", operator="ada", reason="已停止")
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     await r.session.refresh(employee)
     assert employee.current_task_count == 0
 

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import Priority, TaskStatus, TaskType
 from app.executors.errors import OpenCodeExecutionTimeout, OpenCodeServerUnavailable
-from app.models import DigitalEmployee, Event, KnowledgeItem, Task, TaskCategory, TaskSummary
+from app.models import AgentWorker, Event, KnowledgeItem, Task, TaskCategory, TaskSummary
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 from app.schemas import AcceptanceCriterion, TaskCreate
 from app.services import TaskService
@@ -400,7 +400,7 @@ class TaskTools:
         return task
 
     async def _worker_refusal(self, worker_id: str, task_type: str, category_id: str) -> str | None:
-        worker = await self.session.get(DigitalEmployee, worker_id)
+        worker = await self.session.get(AgentWorker, worker_id)
         if not worker or not worker.enabled:
             return "指定 Worker 不存在或未启用"
         if task_type not in (worker.task_types or []):

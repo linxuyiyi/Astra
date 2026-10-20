@@ -149,7 +149,7 @@ def merge_timeline(
                         "session_id": session_id,
                         "created_at": created_at,
                         "kind": "human",
-                        "speaker": str(message.get("name") or "user"),
+                        "speaker": speaker,
                         "text": text,
                         "attachments": attachments,
                     }

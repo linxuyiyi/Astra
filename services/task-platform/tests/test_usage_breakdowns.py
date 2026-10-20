@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.executors.usage import parse_usage_breakdowns
-from app.models import Base, DigitalEmployee, RuntimeSession
+from app.models import AgentWorker, Base, RuntimeSession
 from app.usage import summarize_sessions
 
 
@@ -61,7 +61,7 @@ async def usage_db():
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
-        session.add(DigitalEmployee(id="E1", name="Engineer", role="build", status="IDLE"))
+        session.add(AgentWorker(id="E1", name="Engineer", role="build", status="IDLE"))
         await session.commit()
         yield session
     await engine.dispose()

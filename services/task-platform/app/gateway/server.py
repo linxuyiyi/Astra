@@ -116,6 +116,7 @@ class RequestRecord:
     key_id: str | None = None
     owner_id: str | None = None
     model: str | None = None
+    actual_model: str | None = None
     pool_id: str | None = None
     node_id: str | None = None
     streaming: bool = False
@@ -141,6 +142,7 @@ class RequestRecord:
             key_id=self.key_id,
             owner_id=self.owner_id,
             model=self.model,
+            actual_model=self.actual_model,
             pool_id=self.pool_id,
             node_id=self.node_id,
             streaming=self.streaming,
@@ -221,7 +223,14 @@ def elapsed_ms(started: datetime) -> int:
 
 
 def _frame_has_content(body: Mapping[str, Any]) -> bool:
-    """首个非空内容 token。role-only、空字符串和不完整帧都不算。"""
+    """首个非空有效内容 token。
+    
+    扣除 SSE 注释/控制消息（由上层过滤）后，识别首个具有实际生成的帧：
+    1. content: str (标准输出正文)
+    2. reasoning_content / reasoning: str (深度思考/推理模型 token，如 DeepSeek R1)
+    3. tool_calls: list (工具调用帧，含非空名称、参数或 ID)
+    空字符串、空参数、role-only 帧不算首 Token。
+    """
 
     choices = body.get("choices")
     if not isinstance(choices, list):
@@ -233,9 +242,25 @@ def _frame_has_content(body: Mapping[str, Any]) -> bool:
             part = choice.get(key)
             if not isinstance(part, dict):
                 continue
+            # 1. 可见正文 Token
             content = part.get("content")
             if isinstance(content, str) and content:
                 return True
+            # 2. 推理/深度思考 Token
+            reasoning = part.get("reasoning_content") or part.get("reasoning")
+            if isinstance(reasoning, str) and reasoning:
+                return True
+            # 3. 工具调用 Token
+            tool_calls = part.get("tool_calls")
+            if isinstance(tool_calls, list) and tool_calls:
+                for tc in tool_calls:
+                    if not isinstance(tc, dict):
+                        continue
+                    if tc.get("id"):
+                        return True
+                    fn = tc.get("function")
+                    if isinstance(fn, dict) and (fn.get("name") or fn.get("arguments")):
+                        return True
     return False
 
 
@@ -243,6 +268,7 @@ _REQUEST_COLUMNS = (
     "key_id",
     "owner_id",
     "model",
+    "actual_model",
     "pool_id",
     "node_id",
     "streaming",
@@ -617,6 +643,8 @@ class GatewayDataPlane:
             if pool is None or not pool.enabled:
                 raise model_not_found(model)
             record.pool_id = pool.id
+            actual_model = route.target_model if route.target_model else model
+            record.actual_model = actual_model
 
             if not self._runtime_healthy:
                 raise runtime_unavailable()
@@ -634,7 +662,7 @@ class GatewayDataPlane:
             tried: set[str] = set()
             for attempt in range(self._max_retries + 1):
                 node, node_lease, reasons = await self._pick_node(
-                    config=config, model=model, pool=pool, exclude=tried
+                    config=config, model=actual_model, pool=pool, exclude=tried
                 )
                 if node is None:
                     raise self._no_node_error(reasons)
@@ -644,8 +672,14 @@ class GatewayDataPlane:
                 try:
                     api_key = self._decode_node_key(node)
                     headers = build_upstream_headers(request.headers, node, api_key)
+                    if actual_model != model:
+                        upstream_payload = dict(payload)
+                        upstream_payload["model"] = actual_model
+                        upstream_body = json.dumps(upstream_payload).encode("utf-8")
+                    else:
+                        upstream_body = body
                     upstream_request = self.proxy.build_request(
-                        node, "POST", CHAT_PATH, headers=headers, content=body
+                        node, "POST", CHAT_PATH, headers=headers, content=upstream_body
                     )
                     # 额外上游尝试从真正发出的那一次起算。解密或组请求失败都不算。
                     if attempt > 0:
@@ -666,8 +700,17 @@ class GatewayDataPlane:
                     record.status_code = upstream.status_code
                     await self._complete_non_stream(record, upstream, node_scope)
                     await self._safe_release(SCOPE_NODE, node.id, node_lease)
+                    response_content = upstream.content
+                    if actual_model != model and 200 <= upstream.status_code < 300:
+                        try:
+                            resp_json = upstream.json()
+                            if isinstance(resp_json, dict):
+                                resp_json["model"] = model
+                                response_content = json.dumps(resp_json).encode("utf-8")
+                        except Exception:
+                            pass
                     return Response(
-                        content=upstream.content,
+                        content=response_content,
                         status_code=upstream.status_code,
                         headers=self._forward_response_headers(upstream),
                     )
@@ -870,6 +913,7 @@ class GatewayDataPlane:
 
     async def _record_usage(self, record: RequestRecord, usage: Mapping[str, Any] | None) -> None:
         if usage is None:
+            record.output_tps = None
             await self._record_usage_scopes(record, None, known=False)
             return
         input_tokens = int(usage.get("prompt_tokens") or 0)
@@ -878,14 +922,24 @@ class GatewayDataPlane:
         record.input_tokens = input_tokens
         record.output_tokens = output_tokens
         record.total_tokens = total_tokens
+        is_success = (
+            not record.stream_interrupted
+            and record.status_code is not None
+            and 200 <= record.status_code < 300
+        )
         if (
-            record.output_tokens
+            record.streaming
+            and is_success
+            and record.output_tokens is not None
+            and record.output_tokens > 1
             and record.duration_ms is not None
             and record.ttft_ms is not None
             and record.duration_ms > record.ttft_ms
         ):
-            seconds = (record.duration_ms - record.ttft_ms) / 1000
-            record.output_tps = round(record.output_tokens / seconds, 3) if seconds else None
+            seconds = (record.duration_ms - record.ttft_ms) / 1000.0
+            record.output_tps = round(record.output_tokens / seconds, 3) if seconds > 0 else None
+        else:
+            record.output_tps = None
         await self._record_usage_scopes(record, (input_tokens, output_tokens, total_tokens), True)
 
     async def _record_usage_scopes(

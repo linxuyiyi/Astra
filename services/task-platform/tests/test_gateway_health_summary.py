@@ -143,6 +143,18 @@ def test_no_traffic_with_fresh_probes_is_normal_and_error_rate_is_absent():
     assert summary.status == "normal"
     assert summary.stale is False
     assert summary.metrics.error_rate is None
+
+
+def test_transparent_route_uses_target_model_for_node_support():
+    """GLM-5.2 → GLM-5.3：节点只声明实际模型 5.3，也必须判为可服务。"""
+
+    route = _route(model="GLM-5.2", target_model="GLM-5.3")
+    node = _node(models=("GLM-5.3",))
+    summary = judge_health(_facts(routes=[route], nodes=[node]))
+    assert summary.status == "normal"
+    assert summary.impact[0].state == "normal"
+    # 对外展示的仍是客户端请求模型。
+    assert summary.impact[0].model == "GLM-5.2"
     assert summary.metrics.ttft_p95_ms is None
     assert any("无完成请求" in reason for reason in summary.reasons)
 
@@ -323,12 +335,33 @@ def test_window_p95_is_not_the_average_of_bucket_p95s():
         samples.append(_sample(ttft_ms=value, started_at=early, finished_at=early))
     for value in (100, 100, 100, 100, 100):
         samples.append(_sample(ttft_ms=value, started_at=late, finished_at=late))
-    trend = build_trends(samples, now=NOW, window="1h", group_by="none", labels={})
+    trend = build_trends(samples, now=NOW, window="hour", group_by="none", labels={})
     bucket_p95 = [point.ttft_p95_ms for point in trend.series[0].points if point.ttft_p95_ms is not None]
     assert bucket_p95
     averaged = round(sum(bucket_p95) / len(bucket_p95), 3)
     assert trend.ttft_p95_ms == 100
     assert trend.ttft_p95_ms != averaged
+
+
+@pytest.mark.parametrize(
+    ("window", "bucket_seconds", "bucket_count"),
+    [
+        ("hour", 300, 12),
+        ("today", 3600, 24),
+        ("7d", 21600, 28),
+        ("30d", 86400, 30),
+    ],
+)
+def test_trend_windows_match_stats_options_and_fixed_bucket_width(
+    window: str, bucket_seconds: int, bucket_count: int
+):
+    trend = build_trends([_sample()], now=NOW, window=window, group_by="none", labels={})
+    assert trend.window == window
+    assert trend.bucket_seconds == bucket_seconds
+    assert len(trend.series[0].points) == bucket_count
+    assert trend.window_start == NOW - timedelta(seconds=bucket_seconds * bucket_count)
+    assert trend.window_end == NOW
+    assert sum(point.requests for point in trend.series[0].points) == 1
 
 
 def test_upstream_429_excludes_gateway_local_rejections():
@@ -459,9 +492,9 @@ def test_health_summary_endpoint_and_runtime_event():
         nodes = client.get("/api/gateway/node-metrics")
         assert nodes.status_code == 200
         assert any(item["node_id"] == node_id and item["ttft_p95_ms"] == 48 for item in nodes.json())
-        trends = client.get("/api/gateway/trends", params={"window": "1h", "group_by": "node"})
+        trends = client.get("/api/gateway/trends", params={"window": "hour", "group_by": "node"})
         assert trends.status_code == 200
-        assert trends.json()["window"] == "1h"
+        assert trends.json()["window"] == "hour"
         events = client.get("/api/gateway/ops-events")
         assert events.status_code == 200
         matched = [
@@ -471,6 +504,30 @@ def test_health_summary_endpoint_and_runtime_event():
         ]
         assert matched
         assert matched[0]["kind"] == "health"
+    finally:
+        app.dependency_overrides.pop(gateway_runtime, None)
+
+
+@pytest.mark.parametrize(
+    ("window", "bucket_seconds", "bucket_count"),
+    [
+        ("hour", 300, 12),
+        ("today", 3600, 24),
+        ("7d", 21600, 28),
+        ("30d", 86400, 30),
+    ],
+)
+def test_trend_endpoint_accepts_each_stats_window(
+    window: str, bucket_seconds: int, bucket_count: int
+):
+    app.dependency_overrides[gateway_runtime] = lambda: InMemoryRuntimeStore()
+    try:
+        response = TestClient(app).get("/api/gateway/trends", params={"window": window})
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["window"] == window
+        assert body["bucket_seconds"] == bucket_seconds
+        assert len(body["series"][0]["points"]) == bucket_count
     finally:
         app.dependency_overrides.pop(gateway_runtime, None)
 

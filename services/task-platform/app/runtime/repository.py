@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.settings import get_settings
 from app.domain import EmployeeStatus, EnvironmentStatus
 from app.gateway.security import CredentialCipher
-from app.models import CodeRepository, DigitalEmployee, GitCredential, OpenCodeExecutionEnvironment, Task
+from app.models import AgentWorker, CodeRepository, GitCredential, OpenCodeExecutionEnvironment, Task
 from app.runtime.capability import binding_entries, stamp_desired
 
 Runner = Callable[[list[str], dict[str, str]], tuple[int, str, str]]
@@ -229,18 +229,18 @@ async def free_opencode_port(session: AsyncSession, host: str | None, preferred:
 
 async def copy_worker(
     session: AsyncSession,
-    source: DigitalEmployee,
+    source: AgentWorker,
     *,
     new_id: str,
     name: str,
     port: int | None = None,
-) -> DigitalEmployee:
+) -> AgentWorker:
     environment = source.execution_environment
     if environment is None:
         raise RepositoryBindingError("员工尚未配置 Agent 工作环境")
-    if await session.get(DigitalEmployee, new_id):
+    if await session.get(AgentWorker, new_id):
         raise RepositoryBindingError("员工 ID 已存在")
-    employee = DigitalEmployee(
+    employee = AgentWorker(
         id=new_id,
         name=name,
         role=source.role,

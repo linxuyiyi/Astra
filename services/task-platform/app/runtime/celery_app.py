@@ -102,8 +102,8 @@ def dispatch() -> str | None:
             if not task:
                 return None
             if task.employee_id:
-                from app.models import DigitalEmployee
-                employee = await session.get(DigitalEmployee, task.employee_id)
+                from app.models import AgentWorker
+                employee = await session.get(AgentWorker, task.employee_id)
                 if employee.auto_execute:
                     await RuntimeService(session).start(task.id)
             return task.id

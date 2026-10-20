@@ -172,7 +172,7 @@ async def check_database(settings) -> list[CheckResult]:
             config.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
             head_revision = ScriptDirectory.from_config(config).get_current_head()
             required_tables = {
-                "digital_employees",
+                "agent_workers",
                 "events",
                 "opencode_execution_environments",
                 "runtime_sessions",

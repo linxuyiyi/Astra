@@ -15,7 +15,8 @@ import GatewayView from "./views/gateway/GatewayView.vue";
 import GatewayNodeDetailView from "./views/gateway/GatewayNodeDetailView.vue";
 import GatewayOverview from "./views/gateway/GatewayOverview.vue";
 import GatewayNodes from "./views/gateway/GatewayNodes.vue";
-import GatewayPoolsRoutes from "./views/gateway/GatewayPoolsRoutes.vue";
+import GatewayPools from "./views/gateway/GatewayPools.vue";
+import GatewayRoutes from "./views/gateway/GatewayRoutes.vue";
 import GatewayKeys from "./views/gateway/GatewayKeys.vue";
 import GatewayRequests from "./views/gateway/GatewayRequests.vue";
 import GatewayAudits from "./views/gateway/GatewayAudits.vue";
@@ -23,6 +24,7 @@ import GatewayAudits from "./views/gateway/GatewayAudits.vue";
 const gatewayTabSegments: Record<string, string> = {
   overview: "overview",
   nodes: "nodes",
+  pools: "pools",
   routes: "routes",
   keys: "keys",
   logs: "logs",
@@ -66,7 +68,6 @@ export const router = createRouter({
     { path: "/library", name: "library", component: DigitalLibraryView },
     {
       path: "/settings",
-      name: "settings",
       component: SettingsView,
       children: [
         { path: "", redirect: "/settings/employees" },
@@ -90,7 +91,8 @@ export const router = createRouter({
         { path: "", name: "gateway", redirect: gatewayIndexRedirect },
         { path: "overview", name: "gateway-overview", component: GatewayOverview },
         { path: "nodes", name: "gateway-nodes", component: GatewayNodes },
-        { path: "routes", name: "gateway-routes", component: GatewayPoolsRoutes },
+        { path: "pools", name: "gateway-pools", component: GatewayPools },
+        { path: "routes", name: "gateway-routes", component: GatewayRoutes },
         { path: "keys", name: "gateway-keys", component: GatewayKeys },
         { path: "logs", name: "gateway-logs", component: GatewayRequests },
         { path: "audits", name: "gateway-audits", component: GatewayAudits },

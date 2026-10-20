@@ -11,45 +11,47 @@
       >清除筛选</ElButton>
     </header>
 
-    <AstraFilterPanel label="知识筛选" testid="knowledge-filter">
-      <ElSelect
-        class="astra-filter__select"
-        data-testid="knowledge-filter-type"
-        :model-value="filters.type"
-        aria-label="知识类型"
-        placeholder="类型：全部"
-        clearable
-        @update:model-value="applyFilter('type', $event)"
-      >
-        <ElOption v-for="item in types" :key="item.value" :value="item.value" :label="item.label" />
-      </ElSelect>
-      <ElSelect
-        class="astra-filter__select"
-        data-testid="knowledge-filter-status"
-        :model-value="filters.status"
-        aria-label="知识状态"
-        placeholder="状态：全部"
-        clearable
-        @update:model-value="applyFilter('status', $event)"
-      >
-        <ElOption v-for="item in statusOptions" :key="item.value" :value="item.value" :label="item.label" />
-      </ElSelect>
-      <ElSelect
-        class="astra-filter__select"
-        data-testid="knowledge-filter-sort"
-        :model-value="filters.sort"
-        aria-label="知识排序"
-        @update:model-value="applyFilter('sort', $event)"
-      >
-        <ElOption value="updated_desc" label="最近更新" />
-        <ElOption value="updated_asc" label="最早更新" />
-        <ElOption value="references_desc" label="引用最多" />
-        <ElOption value="title_asc" label="标题排序" />
-      </ElSelect>
-      <template #search>
+    <div class="admin-page__toolbar" role="search" aria-label="知识筛选">
+      <div class="admin-page__filters">
+        <ElSelect
+          class="admin-page__select"
+          data-testid="knowledge-filter-type"
+          :model-value="filters.type"
+          aria-label="知识类型"
+          placeholder="类型：全部"
+          clearable
+          @update:model-value="applyFilter('type', $event)"
+        >
+          <ElOption v-for="item in types" :key="item.value" :value="item.value" :label="item.label" />
+        </ElSelect>
+        <ElSelect
+          class="admin-page__select"
+          data-testid="knowledge-filter-status"
+          :model-value="filters.status"
+          aria-label="知识状态"
+          placeholder="状态：全部"
+          clearable
+          @update:model-value="applyFilter('status', $event)"
+        >
+          <ElOption v-for="item in statusOptions" :key="item.value" :value="item.value" :label="item.label" />
+        </ElSelect>
+        <ElSelect
+          class="admin-page__select"
+          data-testid="knowledge-filter-sort"
+          :model-value="filters.sort"
+          aria-label="知识排序"
+          @update:model-value="applyFilter('sort', $event)"
+        >
+          <ElOption value="updated_desc" label="最近更新" />
+          <ElOption value="updated_asc" label="最早更新" />
+          <ElOption value="references_desc" label="引用最多" />
+          <ElOption value="title_asc" label="标题排序" />
+        </ElSelect>
+      </div>
+      <div class="admin-page__search">
         <ElInput
           v-model="keywordDraft"
-          class="astra-filter__keyword"
+          class="admin-page__keyword"
           data-testid="knowledge-filter-keyword"
           aria-label="搜索当前空间"
           placeholder="搜索当前空间"
@@ -60,8 +62,8 @@
           <template #prefix><Search :size="15" /></template>
         </ElInput>
         <ElButton type="primary" :icon="Search" data-testid="knowledge-search" @click="runSearch">搜索</ElButton>
-      </template>
-    </AstraFilterPanel>
+      </div>
+    </div>
 
     <div v-if="selectedRows.length" class="knowledge-list__batch" aria-label="批量操作">
       <ElText>已选 {{ selectedRows.length }} 条</ElText>
@@ -74,7 +76,6 @@
       </ElSpace>
     </div>
 
-    <p class="knowledge-list__facts">审核表示能不能对外使用，验证表示内容有没有被确认。两者独立：待人工审核的条目也可以是已验证或未验证。</p>
     <div class="knowledge-table-wrap">
       <ElTable
         ref="tableRef"
@@ -82,7 +83,6 @@
         class="knowledge-table"
         element-loading-text="正在加载知识"
         :data="page.items"
-        height="100%"
         row-key="id"
         @row-click="onRowClick"
         @selection-change="onSelectionChange"
@@ -102,14 +102,26 @@
         <ElTableColumn label="验证" width="110">
           <template #default="{ row }"><ElTag :type="verificationTag(row.verification_status)" effect="plain">{{ verificationLabel(row.verification_status) }}</ElTag></template>
         </ElTableColumn>
-        <ElTableColumn label="操作" width="120">
+        <ElTableColumn label="操作" width="176" align="center">
           <template #default="{ row }">
-            <RowMenu primary="查看" :aria-label="row.title" :items="rowMenu(row)" @primary="openRow(row)" @command="(command) => onRowCommand(row, command)" />
+            <div class="admin-actions">
+              <ElButton link type="primary" @click.stop="openRow(row)">查看</ElButton>
+              <ElButton v-if="canManage" link type="primary" @click.stop="editRow(row)">编辑</ElButton>
+              <ElDropdown v-if="rowMenu(row).length" trigger="click" @command="(command: string) => onRowCommand(row, command)">
+                <ElButton link type="primary">更多</ElButton>
+                <template #dropdown>
+                  <ElDropdownMenu>
+                    <ElDropdownItem v-for="item in rowMenu(row)" :key="item.command" :command="item.command" :disabled="item.disabled">
+                      {{ item.label }}
+                    </ElDropdownItem>
+                  </ElDropdownMenu>
+                </template>
+              </ElDropdown>
+            </div>
           </template>
         </ElTableColumn>
         <template #empty>
           <ElEmpty v-if="!loading" :image-size="72" :description="hasFilters ? '没有匹配的知识' : '这里还没有知识'">
-            <ElText type="info">{{ hasFilters ? '调整搜索或筛选条件后重试。' : `当前位置：${spacePath}。你可以新建知识，或将已有知识移动到这里。` }}</ElText>
             <div class="empty-actions">
               <ElButton v-if="!hasFilters && canManage" type="primary" :icon="Plus" @click="emit('create')">新建知识</ElButton>
               <ElButton v-else-if="hasFilters" @click="emit('clear-filter')">清除筛选</ElButton>
@@ -119,32 +131,30 @@
       </ElTable>
     </div>
 
-    <!-- 总数始终展示（空列表也要看到「共 0 条」），只有分页在空列表时隐藏。
-         总数只在这里出现一次：目录路径行与筛选面板都不重复展示。 -->
-    <footer class="knowledge-list__footer">
-      <ElText type="info" data-testid="knowledge-total">共 {{ page.total }} 条</ElText>
+    <!-- 分页右对齐，总数由 el-pagination 的 total 展示，避免与目录路径行重复。 -->
+    <div class="admin-page__footer">
       <ElPagination
-        v-if="page.total > 0"
         :current-page="page.page"
         :page-size="page.page_size"
+        :page-sizes="[10, 20, 50]"
         :total="page.total"
-        layout="prev, pager, next"
+        layout="total, sizes, prev, pager, next"
         aria-label="知识列表分页"
         data-testid="knowledge-pagination"
         @current-change="emit('page', $event)"
+        @size-change="(size: number) => emit('size', size)"
       />
-    </footer>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { Plus, Search } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
-import { ElButton, ElEmpty, ElInput, ElOption, ElPagination, ElSelect, ElSpace, ElTable, ElTableColumn, ElTag, ElText, vLoading } from 'element-plus'
+import { ElButton, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElInput, ElOption, ElPagination, ElSelect, ElSpace, ElTable, ElTableColumn, ElTag, ElText, vLoading } from 'element-plus'
 import type { TableInstance } from 'element-plus'
 import type { KnowledgeListItem, KnowledgePage, KnowledgeStatus, VerificationStatus } from '@/api/types'
-import AstraFilterPanel from '@/components/astra/AstraFilterPanel.vue'
-import RowMenu, { type RowMenuItem } from '@/components/astra/RowMenu.vue'
+import type { RowMenuItem } from '@/components/astra/RowMenu.vue'
 
 // 只保留最常用的查询条件：类型、状态、排序与关键词。
 // 来源与标签筛选随「更多筛选」一并取消，filters 里也不再保留这两个维度。
@@ -170,6 +180,7 @@ const emit = defineEmits<{
   delete: [item: KnowledgeListItem]
   batch: [ids: string[], action: 'move' | 'archive' | 'publish' | 'delete']
   page: [page: number]
+  size: [size: number]
   filter: [key: keyof ListFilters, value: string]
   'clear-filter': []
 }>()
@@ -222,7 +233,7 @@ function editRow(row: Row) { emit('edit', row as KnowledgeListItem) }
 function moveRow(row: Row) { emit('move', row as KnowledgeListItem) }
 function rowMenu(row: Row): RowMenuItem[] {
   const items: RowMenuItem[] = []
-  if (props.canManage) items.push({ command: 'edit', label: '编辑' }, { command: 'move', label: '移动' })
+  if (props.canManage) items.push({ command: 'move', label: '移动' })
   if (props.canReview && (row.status === 'candidate' || row.status === 'draft')) items.push({ command: 'publish', label: '审核发布' })
   if (props.canManage && row.status !== 'archived') items.push({ command: 'archive', label: '归档' })
   if (props.canManage) items.push({ command: 'delete', label: '删除' })
@@ -250,19 +261,14 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('zh-CN', { month: 
 <style scoped>
 /* 筛选面板、行操作与表格外壳统一走 styles/page-layout.css，
    这里只保留「目录路径行、批量操作条、单元格排版」这些本页独有的部分。 */
-.knowledge-list{display:flex;flex-direction:column;min-width:0;height:100%;overflow:hidden;background:var(--astra-bg-panel)}
-.knowledge-list>*{flex:none}
-.knowledge-list>.knowledge-table-wrap{flex:1 1 auto;min-height:0}
+.knowledge-list{display:flex;flex-direction:column;gap:16px;min-width:0;background:var(--astra-bg-panel)}
 /* 目录路径行只做上下文提示，不再重复展示列表总数 —— 总数只在分页左侧出现一次。 */
 .knowledge-list__header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;padding:0 2px 1px}
 .knowledge-list h3{overflow:hidden;margin:0;color:var(--astra-text-primary);font-size:var(--astra-font-label);text-overflow:ellipsis;white-space:nowrap}
 .knowledge-list__batch{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 12px;border:1px solid var(--astra-border);border-radius:10px;background:var(--astra-primary-soft)}
-.knowledge-table-wrap{min-height:0}
 .knowledge-table{--el-table-border-color:var(--astra-border)}
 .knowledge-table .el-table__row{cursor:pointer}
 .knowledge-cell{display:grid;min-width:0;gap:2px}
-.knowledge-list__facts{margin:0;color:var(--astra-text-muted);line-height:1.5}
 .knowledge-cell strong{display:-webkit-box;overflow:hidden;color:var(--astra-text-primary);font-size:var(--astra-font-label);line-height:1.45;white-space:normal;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 .empty-actions{display:flex;justify-content:center;gap:8px}
-.knowledge-list__footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:2px}
 </style>

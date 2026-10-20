@@ -1,48 +1,54 @@
 <template>
-  <div class="astra-page" data-testid="task-list-page">
-    <AstraPageHeader title="任务大厅" hide-title testid="task-header">
-      <ElRadioGroup v-model="view" aria-label="任务大厅视图">
-        <ElRadioButton value="list">任务列表</ElRadioButton>
-        <ElRadioButton value="interventions">待处理</ElRadioButton>
-      </ElRadioGroup>
-      <template #actions>
-        <ElButton :icon="RefreshCw" :loading="store.loading" data-testid="task-refresh" @click="store.refresh()">刷新</ElButton>
-        <ElButton type="primary" :icon="Plus" data-testid="task-create" @click="createOpen = true">创建任务</ElButton>
-      </template>
-    </AstraPageHeader>
+  <ElCard class="admin-card" data-testid="task-list-page">
+    <template #header>
+      <div class="admin-card__header">
+        <div class="task-header-lead">
+          <h2 class="admin-card__title">任务大厅</h2>
+          <ElRadioGroup v-model="view" aria-label="任务大厅视图">
+            <ElRadioButton value="list">任务列表</ElRadioButton>
+            <ElRadioButton value="interventions">待处理</ElRadioButton>
+          </ElRadioGroup>
+        </div>
+        <div class="admin-card__actions">
+          <ElButton :icon="RefreshCw" :loading="store.loading" data-testid="task-refresh" @click="store.refresh()">刷新</ElButton>
+          <ElButton type="primary" :icon="Plus" data-testid="task-create" @click="createOpen = true">创建任务</ElButton>
+        </div>
+      </div>
+    </template>
 
     <InterventionPanel v-if="view === 'interventions'" />
 
-    <template v-else>
-    <AstraFilterPanel label="任务筛选" testid="task-filter">
-      <ElSelect v-model="filters.type" class="astra-filter__select" data-testid="task-filter-type" aria-label="任务类型" placeholder="类型：全部" clearable>
-        <ElOption value="ISSUE" label="问题" />
-        <ElOption value="REQUIREMENT" label="需求" />
-      </ElSelect>
-      <ElSelect v-model="filters.category" class="astra-filter__select" data-testid="task-filter-category" aria-label="任务分类" placeholder="分类：全部" clearable>
-        <ElOption v-for="item in store.categories" :key="item.id" :value="item.id" :label="item.name" />
-      </ElSelect>
-      <ElSelect v-model="filters.status" class="astra-filter__select" data-testid="task-filter-status" aria-label="任务状态" placeholder="状态：全部" clearable>
-        <ElOption value="ABNORMAL" label="执行失败" />
-        <ElOption v-for="item in statuses" :key="item" :value="item" :label="runtimeStatusLabel(item)" />
-      </ElSelect>
-      <ElSelect v-model="filters.employee" class="astra-filter__select" data-testid="task-filter-employee" aria-label="Worker" placeholder="Worker：全部" clearable>
-        <ElOption v-for="item in store.employees" :key="item.id" :value="item.id" :label="employeeDisplayName(item.name)" />
-      </ElSelect>
-      <ElSelect v-model="filters.owner" class="astra-filter__select" data-testid="task-filter-owner" aria-label="责任员工" placeholder="责任员工：全部" clearable>
-        <ElOption v-for="item in owners" :key="item.id" :value="item.id" :label="item.name" />
-      </ElSelect>
-      <template #search>
-        <ElInput v-model="filters.query" class="astra-filter__keyword" data-testid="task-filter-keyword" aria-label="搜索任务" placeholder="搜索任务编号 / 标题" clearable>
-          <template #prefix><Search :size="15" /></template>
-        </ElInput>
-        <ElButton type="primary" :icon="Search" data-testid="task-search" @click="applySearch">搜索</ElButton>
-        <ElButton :icon="RotateCcw" data-testid="task-filter-reset" @click="resetFilters">重置</ElButton>
-      </template>
-    </AstraFilterPanel>
+    <div v-else class="admin-page">
+      <div class="admin-page__toolbar" role="search" aria-label="任务筛选">
+        <div class="admin-page__filters">
+          <ElSelect v-model="filters.type" class="admin-page__select" data-testid="task-filter-type" aria-label="任务类型" placeholder="类型：全部" clearable>
+            <ElOption value="ISSUE" label="问题" />
+            <ElOption value="REQUIREMENT" label="需求" />
+          </ElSelect>
+          <ElSelect v-model="filters.category" class="admin-page__select" data-testid="task-filter-category" aria-label="任务分类" placeholder="分类：全部" clearable>
+            <ElOption v-for="item in store.categories" :key="item.id" :value="item.id" :label="item.name" />
+          </ElSelect>
+          <ElSelect v-model="filters.status" class="admin-page__select" data-testid="task-filter-status" aria-label="任务状态" placeholder="状态：全部" clearable>
+            <ElOption value="ABNORMAL" label="执行失败" />
+            <ElOption v-for="item in statuses" :key="item" :value="item" :label="runtimeStatusLabel(item)" />
+          </ElSelect>
+          <ElSelect v-model="filters.employee" class="admin-page__select" data-testid="task-filter-employee" aria-label="Worker" placeholder="Worker：全部" clearable>
+            <ElOption v-for="item in store.employees" :key="item.id" :value="item.id" :label="employeeDisplayName(item.name)" />
+          </ElSelect>
+          <ElSelect v-model="filters.owner" class="admin-page__select" data-testid="task-filter-owner" aria-label="责任数字员工" placeholder="责任数字员工：全部" clearable>
+            <ElOption v-for="item in owners" :key="item.id" :value="item.id" :label="item.name" />
+          </ElSelect>
+        </div>
+        <div class="admin-page__search">
+          <ElInput v-model="filters.query" class="admin-page__keyword" data-testid="task-filter-keyword" aria-label="搜索任务" placeholder="搜索任务编号 / 标题" clearable @keydown.enter.prevent="applySearch">
+            <template #prefix><Search :size="15" /></template>
+          </ElInput>
+          <ElButton type="primary" :icon="Search" data-testid="task-search" @click="applySearch">搜索</ElButton>
+          <ElButton :icon="RotateCcw" data-testid="task-filter-reset" @click="resetFilters">重置</ElButton>
+        </div>
+      </div>
 
-    <section class="astra-table-panel astra-table-panel--clickable" aria-label="任务列表">
-      <ElTable v-loading="store.loading" :data="paged" height="100%" row-key="id" @row-click="(row: Task) => openTask(row.id)">
+      <ElTable v-loading="store.loading" :data="paged" row-key="id" data-testid="task-table" @row-click="(row: Task) => openTask(row.id)">
         <ElTableColumn label="任务" min-width="280">
           <template #default="{ row }">
             <div class="task-title-cell">
@@ -58,7 +64,7 @@
             <ElText v-if="extraProgress(row as Task)" class="task-status-reason" type="info" :title="extraProgress(row as Task)">{{ extraProgress(row as Task) }}</ElText>
           </template>
         </ElTableColumn>
-        <ElTableColumn label="谁来做" width="168">
+        <ElTableColumn label="执行 Worker" width="180">
           <template #default="{ row }">
             <div class="task-who">
               <span>{{ employeeName(row.worker_id || row.employee_id) }}</span>
@@ -77,21 +83,24 @@
             <ElButton :icon="RefreshCw" @click="store.refresh()">重新加载</ElButton>
           </ElEmpty>
           <ElEmpty v-else-if="!store.loading" :image-size="72" :description="store.tasks.length ? '暂无符合条件的任务' : '暂无任务'">
-            <ElText type="info">{{ store.tasks.length ? '当前筛选条件下没有找到任务。' : '创建第一个任务后即可开始管理。' }}</ElText>
             <ElButton v-if="store.tasks.length" @click="resetFilters">清除筛选</ElButton>
             <ElButton v-else type="primary" :icon="Plus" @click="createOpen = true">创建任务</ElButton>
           </ElEmpty>
         </template>
       </ElTable>
-    </section>
 
-    <footer class="astra-page__footer">
-      <ElText type="info" data-testid="task-total">共 {{ total }} 条</ElText>
-      <nav aria-label="任务列表分页">
-        <ElPagination v-model:current-page="currentPage" v-model:page-size="pageSize" :total="total" :page-sizes="[20, 50, 100]" layout="sizes, prev, pager, next" data-testid="task-pagination" />
-      </nav>
-    </footer>
-    </template>
+      <div class="admin-page__footer">
+        <ElPagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50]"
+          :total="total"
+          layout="total, sizes, prev, pager, next"
+          aria-label="任务列表分页"
+          data-testid="task-pagination"
+        />
+      </div>
+    </div>
 
     <TaskCreateDrawer :open="createOpen || Boolean(editTask)" :task="editTask" @close="closeEditor" @created="onTaskCreated" @saved="onTaskSaved" />
 
@@ -113,20 +122,18 @@
         </ElSpace>
       </template>
     </ElDialog>
-  </div>
+  </ElCard>
 </template>
 
 <script setup lang="ts">
 import { Ban, Play, Plus, RefreshCw, RotateCcw, RotateCw, Search, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { ElButton, ElDialog, ElEmpty, ElInput, ElOption, ElPagination, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn, ElTag, ElText, vLoading } from 'element-plus'
+import { ElButton, ElCard, ElDialog, ElEmpty, ElInput, ElOption, ElPagination, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn, ElTag, ElText, vLoading } from 'element-plus'
 import { api } from '@/api/client'
 import type { Task, TaskPriority, TaskStatus } from '@/api/types'
 import { listEmployees } from '../api'
 import type { Employee as NexusEmployee } from '../types'
-import AstraFilterPanel from '@/components/astra/AstraFilterPanel.vue'
-import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
 import RowMenu, { type RowMenuItem } from '@/components/astra/RowMenu.vue'
 import RuntimeStatusBadge from '@/components/runtime/RuntimeStatusBadge.vue'
 import InterventionPanel from '@/components/task/InterventionPanel.vue'
@@ -196,9 +203,13 @@ const total = computed(() => filtered.value.length)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const paged = computed(() => filtered.value.slice((currentPage.value - 1) * pageSize.value, currentPage.value * pageSize.value))
 watch(totalPages, (value) => { currentPage.value = Math.min(currentPage.value, value) })
+watch(pageSize, () => { currentPage.value = 1 })
 
 const categoryName = (id: string | null) => store.categories.find((item) => item.id === id)?.name ?? '—'
-const employeeName = (id: string | null) => employeeDisplayName(store.employees.find((item) => item.id === id)?.name ?? '自动分配')
+const employeeName = (id: string | null) => {
+  const item = store.employees.find((employee) => employee.id === id)
+  return item?.execution_environment?.name || employeeDisplayName(item?.name ?? '自动分配')
+}
 const ownerName = (id: string | null) => owners.value.find((item) => item.id === id)?.name ?? ''
 function ownerLine(id: string | null) {
   if (!id) return '还没指定要问的人'
@@ -341,8 +352,9 @@ async function onTaskSaved() {
 </script>
 
 <style scoped>
-/* 页面骨架、标题区、筛选面板、表格面板与页脚统一走 styles/page-layout.css，
-   这里只保留表格单元格内部的排版。 */
+/* 页面骨架、标题栏、查询工具栏、表格与分页统一走 styles/page-layout.css，
+   这里只保留标题栏左侧视图切换与表格单元格内部的排版。 */
+.task-header-lead { display: flex; align-items: center; gap: 16px; }
 .task-title-cell { display: flex; align-items: flex-start; gap: 7px; min-width: 0; }
 .task-title-cell__link {
   display: -webkit-box; overflow: hidden; color: var(--astra-text-primary); font-size: var(--astra-font-label);

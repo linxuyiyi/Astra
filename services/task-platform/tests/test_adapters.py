@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.bootstrap import bootstrap_employees
 from app.config.settings import BACKEND_ROOT, Settings
-from app.models import Base, DigitalEmployee, OpenCodeExecutionEnvironment
+from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment
 from app.sources.nr_test_system import NrTestSystemSource
 
 
@@ -42,7 +42,7 @@ async def test_bootstrap_employee_from_v03_yaml(tmp_path, session):
     )
 
     await bootstrap_employees(session, tmp_path)
-    employee = await session.get(DigitalEmployee, "astra-config")
+    employee = await session.get(AgentWorker, "astra-config")
 
     assert employee is not None
     assert employee.status == "IDLE"

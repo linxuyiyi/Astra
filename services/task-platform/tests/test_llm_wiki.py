@@ -25,8 +25,8 @@ from app.library_schemas import (
 from app.library_service import KnowledgeService, LibraryPrincipal
 from app.llm_wiki import LlmWikiClient, LlmWikiError, knowledge_source_path
 from app.models import (
+    AgentWorker,
     Base,
-    DigitalEmployee,
     KnowledgeFeedback,
     KnowledgeItem,
     KnowledgeUsage,
@@ -120,7 +120,7 @@ async def wiki_env(tmp_path, monkeypatch):
     digest = hash_runtime_context(token)
     state["runtime_context"] = token
     async with sessions() as session:
-        session.add(DigitalEmployee(id="E-wiki", name="Wiki", role="build", status="IDLE"))
+        session.add(AgentWorker(id="E-wiki", name="Wiki", role="build", status="IDLE"))
         session.add(
             Task(
                 id="T-wiki",
@@ -477,3 +477,39 @@ def test_migration_backfills_usage_and_published_sources(tmp_path):
         assert "knowledge_sync" not in tables
     migrate("downgrade", "0028_usage_breakdowns_and_task_completion")
     migrate("upgrade", "0029_knowledge_sync_state")
+
+
+def test_llm_wiki_url_allows_remote_and_https():
+    from pydantic import ValidationError
+
+    from app.config.settings import Settings
+
+    # Valid URLs: local, remote IP, domain, https, custom port
+    for valid_url in (
+        "http://127.0.0.1:19828/api/v1",
+        "http://192.168.1.100:19828/api/v1",
+        "https://wiki.example.com/api/v1",
+        "https://wiki.company.internal:8443/api/v1",
+        "http://remote-host:8000/api/v1/",
+    ):
+        settings = Settings(
+            llm_wiki_api_base_url=valid_url,
+            _env_file=None,
+        )
+        assert settings.llm_wiki_api_base_url == valid_url.rstrip("/")
+
+    # Invalid URLs: invalid scheme, missing host, query params, fragments, auth, bad path
+    for invalid_url in (
+        "ftp://wiki.example.com/api/v1",
+        "http:///api/v1",
+        "https://wiki.example.com/api/v1?token=123",
+        "https://wiki.example.com/api/v1#section",
+        "https://user:pass@wiki.example.com/api/v1",
+        "https://wiki.example.com/api/v2",
+        "https://wiki.example.com/",
+    ):
+        with pytest.raises(ValidationError, match="llm_wiki_api_base_url"):
+            Settings(
+                llm_wiki_api_base_url=invalid_url,
+                _env_file=None,
+            )

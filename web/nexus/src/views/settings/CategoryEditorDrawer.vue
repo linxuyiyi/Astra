@@ -26,9 +26,9 @@
         <ElInput v-model.trim="form.description" type="textarea" :rows="2" placeholder="说明这个分类覆盖的业务范围" />
       </ElFormItem>
 
-      <ElFormItem label="排序" prop="sort_order">
+      <ElFormItem prop="sort_order">
+        <template #label>排序 <FieldHelp label="排序" help="数字越小越靠前，任务与 Worker 配置按此顺序展示。" /></template>
         <ElInputNumber v-model="form.sort_order" class="category-editor-form__sort" :min="0" :step="10" :precision="0" controls-position="right" />
-        <ElText class="category-editor-form__hint" type="info">数字越小越靠前，任务与 Worker 配置按此顺序展示。</ElText>
       </ElFormItem>
 
       <ElFormItem label="启用" prop="enabled">
@@ -84,8 +84,9 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElDrawer, ElForm, ElFormItem, ElInput, ElInputNumber, ElSpace, ElSwitch, ElTag, ElText } from 'element-plus'
+import { ElAlert, ElButton, ElDrawer, ElForm, ElFormItem, ElInput, ElInputNumber, ElSpace, ElSwitch, ElTag } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import FieldHelp from '@/components/forms/FieldHelp.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import type { TaskCategory, TaskCategoryWrite } from '@/api/types'
 
@@ -158,7 +159,6 @@ defineExpose({ getDirty: () => dirty.value })
 .category-editor-footer { display: flex; align-items: center; justify-content: flex-end; }
 .category-editor-form { display: grid; gap: 2px; }
 .category-editor-form__sort { width: 160px; }
-.category-editor-form__hint { flex-basis: 100%; margin-top: 2px; }
 .category-editor-form__prompt :deep(.el-textarea__inner) { line-height: 1.6; }
 .category-editor-form__error { margin-top: 4px; }
 </style>

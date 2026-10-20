@@ -5,24 +5,40 @@
     data-testid="employee-config-modal"
     :model-value="true"
     :title="drawerTitle"
-    size="min(600px, 100vw)"
+    size="min(680px, 100vw)"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :before-close="requestClose"
   >
-    <EmployeeConfig ref="configRef" :employee="employee" :creating="creating" :categories="categories" embedded @saved="onSaved" />
+    <EmployeeConfig
+      ref="configRef"
+      :employee="employee"
+      :creating="creating"
+      :categories="categories"
+      :digital-employees="digitalEmployees"
+      :digital-loading="digitalLoading"
+      embedded
+      @saved="onSaved"
+    />
 
     <template #footer>
       <ElSpace :size="8">
         <ElTag v-if="configRef?.dirty" type="warning" effect="light">有未保存修改</ElTag>
         <ElButton :disabled="configRef?.saving" @click="requestClose">取消</ElButton>
         <ElButton
+          :disabled="!configRef?.canSave || configRef?.saving"
+          :loading="configRef?.saving"
+          @click="configRef?.save(true)"
+        >
+          {{ creating ? '创建并部署' : '保存并部署' }}
+        </ElButton>
+        <ElButton
           type="primary"
           :loading="configRef?.saving"
-          :disabled="!configRef?.dirty"
+          :disabled="!configRef?.canSave"
           @click="configRef?.save()"
         >
-          {{ configRef?.saving ? '保存中' : creating ? '创建 Worker' : '保存' }}
+          {{ configRef?.saving ? '保存中' : creating ? '创建 Agent Worker' : '保存配置' }}
         </ElButton>
       </ElSpace>
     </template>
@@ -33,17 +49,25 @@
 import { computed, ref } from 'vue'
 import { ElButton, ElDrawer, ElSpace, ElTag } from 'element-plus'
 import type { Employee, TaskCategory } from '@/api/types'
+import type { Employee as DigitalEmployee } from '@/types'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
 import { employeeDisplayName } from '@/utils/format'
 import EmployeeConfig from '@/views/settings/EmployeeConfig.vue'
 
-const props = defineProps<{ open: boolean; employee: Employee | null; creating: boolean; categories: TaskCategory[] }>()
-const emit = defineEmits<{ (e: 'close'): void; (e: 'saved', id: string): void }>()
+const props = withDefaults(defineProps<{
+  open: boolean
+  employee: Employee | null
+  creating: boolean
+  categories: TaskCategory[]
+  digitalEmployees?: DigitalEmployee[]
+  digitalLoading?: boolean
+}>(), { digitalEmployees: () => [], digitalLoading: false })
+const emit = defineEmits<{ (e: 'close'): void; (e: 'saved', id: string, deployed: boolean): void }>()
 const configRef = ref<InstanceType<typeof EmployeeConfig> | null>(null)
 
 const drawerTitle = computed(() =>
-  props.creating ? '新建 Worker' : `编辑 ${employeeDisplayName(props.employee?.name)}`,
+  props.creating ? '新建 Agent Worker' : `编辑 ${props.employee?.execution_environment?.name || employeeDisplayName(props.employee?.name)}`,
 )
 
 // The config drawer is a form: overlay click and ESC never close it. Only the
@@ -63,9 +87,16 @@ async function requestClose() {
   }
   emit('close')
 }
-function onSaved(id: string) {
-  notify(props.creating ? 'Worker 已创建，请执行装备检查' : '配置已保存，请执行装备检查')
-  emit('saved', id)
+
+function onSaved(id: string, deployRequested: boolean) {
+  if (deployRequested) {
+    notify('配置已保存，正在提交一键部署…')
+    emit('saved', id, true)
+    emit('close')
+    return
+  }
+  notify(props.creating ? 'Agent Worker 已创建，请执行检查或部署' : '配置已保存，请执行检查或部署')
+  emit('saved', id, false)
   emit('close')
 }
 </script>

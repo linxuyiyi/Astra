@@ -11,6 +11,7 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.groups import HumanEvents, chat_inputs, merge_timeline, messages_since
 from nexus_api.main import create_app
@@ -706,3 +707,53 @@ def test_launcher_keeps_team_tools_and_does_not_construct_agent_create():
     assert "TeamCreate(" not in source
     assert "write_record_message" in source
     assert "MailboxSessionView" in source
+
+
+def test_timeline_keeps_two_identical_messages_sent_in_the_same_minute():
+    """用户连续发送同样的文字是两条消息，不能按内容指纹折叠。"""
+
+    streams = [
+        {
+            "session_id": "ses-a",
+            "label": "星河",
+            "messages": [
+                {
+                    "id": "m1",
+                    "role": "user",
+                    "name": "u1",
+                    "created_at": "2026-01-01T00:00:05+00:00",
+                    "metadata": {"display_text": "继续"},
+                    "content": [{"type": "text", "text": "继续"}],
+                },
+                {
+                    "id": "m2",
+                    "role": "user",
+                    "name": "u1",
+                    "created_at": "2026-01-01T00:00:06+00:00",
+                    "metadata": {"display_text": "继续"},
+                    "content": [{"type": "text", "text": "继续"}],
+                },
+            ],
+        }
+    ]
+    page = merge_timeline(streams)
+    assert [item["id"] for item in page["items"]] == ["m1", "m2"]
+
+
+def test_timeline_dedupes_the_same_message_id_across_sessions():
+    """同一条人类消息被写进多个员工会话，id 相同只出现一次。"""
+
+    message = {
+        "id": "m1",
+        "role": "user",
+        "name": "u1",
+        "created_at": "2026-01-01T00:00:05+00:00",
+        "metadata": {"display_text": "一起看"},
+        "content": [{"type": "text", "text": "一起看"}],
+    }
+    streams = [
+        {"session_id": "ses-a", "label": "星河", "messages": [dict(message)]},
+        {"session_id": "ses-b", "label": "知微", "messages": [dict(message)]},
+    ]
+    page = merge_timeline(streams)
+    assert [item["id"] for item in page["items"]] == ["m1"]

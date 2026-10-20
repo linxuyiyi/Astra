@@ -12,7 +12,7 @@ from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import EmployeeStatus, TaskStatus
-from app.models import DigitalEmployee, RuntimeSession, Task
+from app.models import AgentWorker, RuntimeSession, Task
 
 
 def clear_execution_stop(task: Task) -> None:
@@ -110,12 +110,12 @@ async def sync_employee_occupancy(
     employee_id: str | None,
     *,
     preferred: Task | None = None,
-) -> DigitalEmployee | None:
+) -> AgentWorker | None:
     """Write current_task_count from the occupancy predicate."""
 
     if not employee_id:
         return None
-    employee = await session.get(DigitalEmployee, employee_id)
+    employee = await session.get(AgentWorker, employee_id)
     if employee is None:
         return None
     rows = (

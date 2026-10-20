@@ -21,7 +21,7 @@ from app.database import SessionLocal, init_database
 from app.domain import ExecutionMode
 from app.main import app
 from app.models import (
-    DigitalEmployee,
+    AgentWorker,
     OpenCodeExecutionEnvironment,
     Task,
     WorkerCommand,
@@ -63,7 +63,7 @@ from tests.test_worker_gateway import ADMIN_HEADERS, bring_online, gateway_for
 async def environment_id() -> int:
     await init_database()
     async with SessionLocal() as session:
-        employee = DigitalEmployee(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
+        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
         session.add(employee)
         await session.flush()
         environment = OpenCodeExecutionEnvironment(

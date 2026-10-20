@@ -1,1 +1,1 @@
-"""Nexus v1.0.1 HTTP API."""
+"""Nexus v1.4.7 HTTP API."""

@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.library_schemas import LibraryResource, LibrarySubmitExperienceInput
 from app.library_service import KnowledgeService
 from app.models import (
+    AgentWorker,
     Base,
-    DigitalEmployee,
     KnowledgeItem,
     KnowledgeUsage,
     OpenCodeExecutionEnvironment,
@@ -33,7 +33,7 @@ async def context_session():
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
-        employee = DigitalEmployee(id="E1", name="Engineer", role="build", status="IDLE")
+        employee = AgentWorker(id="E1", name="Engineer", role="build", status="IDLE")
         environment = OpenCodeExecutionEnvironment(
             employee_id="E1", mode="LOCAL", name="test", workspace_root="/tmp/ws", status="AVAILABLE"
         )

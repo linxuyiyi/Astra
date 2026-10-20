@@ -120,6 +120,7 @@ class NodeRead(BaseModel):
 class RouteCreate(BaseModel):
     model: str = Field(min_length=1, max_length=200)
     pool_id: str
+    target_model: str | None = Field(default=None, max_length=200)
     description: str = ""
     enabled: bool = True
     weight: int = Field(default=1, ge=0)
@@ -128,6 +129,7 @@ class RouteCreate(BaseModel):
 class RoutePatch(BaseModel):
     model: str | None = Field(default=None, min_length=1, max_length=200)
     pool_id: str | None = None
+    target_model: str | None = Field(default=None, max_length=200)
     description: str | None = None
     enabled: bool | None = None
     weight: int | None = Field(default=None, ge=0)
@@ -139,6 +141,7 @@ class RouteRead(BaseModel):
     id: str
     model: str
     pool_id: str
+    target_model: str | None = None
     description: str
     enabled: bool
     weight: int
@@ -237,6 +240,7 @@ class RequestLogRead(BaseModel):
     key_id: str | None
     owner_id: str | None
     model: str | None
+    actual_model: str | None = None
     pool_id: str | None
     node_id: str | None
     streaming: bool

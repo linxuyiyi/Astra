@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.library_schemas import LibrarySubmitExperienceInput
 from app.library_service import KnowledgeService, LibraryPrincipal
 from app.models import (
+    AgentWorker,
     Base,
-    DigitalEmployee,
     ExperienceEvidence,
     KnowledgeItem,
     KnowledgeSpace,
@@ -29,7 +29,7 @@ async def experience_session():
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
-        session.add(DigitalEmployee(id="E1", name="员工", role="build"))
+        session.add(AgentWorker(id="E1", name="员工", role="build"))
         for index in (1, 2):
             session.add(Task(id=f"T{index}", title="任务", task_type="ISSUE", status="SUCCEEDED",
                              employee_id="E1", current_session_id=f"ses_{index}"))
@@ -123,7 +123,7 @@ async def test_manual_experience_is_unverified_and_deduped():
 def test_published_knowledge_survives_task_deletion():
     from app.database import SessionLocal
     from app.main import app
-    from app.models import DigitalEmployee, Task
+    from app.models import AgentWorker, Task
 
     suffix = uuid4().hex[:8]
     employee_id = f"E-DEL-{suffix}"
@@ -132,7 +132,7 @@ def test_published_knowledge_survives_task_deletion():
 
     async def setup():
         async with SessionLocal() as session:
-            session.add(DigitalEmployee(id=employee_id, name="Del", role="build", status="IDLE"))
+            session.add(AgentWorker(id=employee_id, name="Del", role="build", status="IDLE"))
             session.add(
                 Task(
                     id=task_id,

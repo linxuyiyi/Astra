@@ -69,7 +69,7 @@ def build_mcp_server() -> MCPServer:
         name="NEXUS Task",
         title="NEXUS 任务",
         version="1.0.1",
-        description="数字员工查询和控制自己负责的工程任务。",
+        description="Agent Worker 查询和控制自己负责的工程任务。",
         instructions=(
             "工程执行才创建任务。收到任务状态提示后先调用 nexus_task_get。"
             "总结和候选经验只读。非法操作会返回 ok=false，不要改口说已经成功。"

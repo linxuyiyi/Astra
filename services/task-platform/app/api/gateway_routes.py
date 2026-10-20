@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.database import get_session
-from app.gateway.health_summary import GatewayOpsService
+from app.gateway.health_summary import GatewayOpsService, TrendWindow
 from app.gateway.models import SCHEDULING_ACTIVE, SCHEDULING_DRAINING
 from app.gateway.observability import GatewayObservabilityService
 from app.gateway.probe import GatewayProbeClient, HttpGatewayProbeClient
@@ -425,7 +425,7 @@ async def get_gateway_node_metrics(
 
 @router.get("/trends", response_model=TrendRead)
 async def get_gateway_trends(
-    window: Literal["1h", "15m"] = "1h",
+    window: TrendWindow = "today",
     group_by: Literal["none", "model", "node"] = "none",
     service: GatewayOpsService = Depends(gateway_ops),
 ):

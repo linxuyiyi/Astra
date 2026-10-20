@@ -40,6 +40,8 @@ export interface ExecutionEnvironment {
   model_name: string | null
   workspace_root: string
   repository_id?: string | null
+  repository_url?: string | null
+  repository_branch?: string | null
   branch?: string | null
   status: 'UNKNOWN' | 'CHECKING' | 'AVAILABLE' | 'UNAVAILABLE'
   status_detail: Record<string, unknown>
@@ -99,8 +101,15 @@ export interface EmployeeUsage {
 
 export interface TaskUsage { summary: UsageSummary; tools: ToolUsage[]; sessions: number }
 
+export interface CodeRepository {
+  id: string
+  url: string
+  branch: string
+}
+
 export interface Employee extends RuntimeProjection {
   id: string
+  digital_employee_id: string | null
   name: string
   role: string
   description: string

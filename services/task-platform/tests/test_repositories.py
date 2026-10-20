@@ -65,7 +65,7 @@ def test_copy_keeps_the_repository_and_drops_secrets(monkeypatch, tmp_path):
     monkeypatch.setattr(get_settings(), "gateway_master_key", Fernet.generate_key().decode())
     with TestClient(app) as client:
         created = client.post(
-            "/api/employees",
+            "/api/agent-workers",
             json={
                 "id": "worker-source",
                 "name": "来源",
@@ -99,7 +99,7 @@ def test_copy_keeps_the_repository_and_drops_secrets(monkeypatch, tmp_path):
         assert PAT not in registered.text
         repository_id = registered.json()["id"]
         bound = client.post(
-            "/api/employees/worker-source/repository",
+            "/api/agent-workers/worker-source/repository",
             json={"repository_id": repository_id},
         )
         assert bound.status_code == 200, bound.text
@@ -134,7 +134,7 @@ def test_copy_keeps_the_repository_and_drops_secrets(monkeypatch, tmp_path):
 
     with TestClient(app) as client:
         copied = client.post(
-            "/api/employees/worker-source/copy",
+            "/api/agent-workers/worker-source/copy",
             json={"id": "worker-copy", "name": "副本"},
         )
         assert copied.status_code == 201, copied.text
@@ -159,12 +159,12 @@ def test_copy_keeps_the_repository_and_drops_secrets(monkeypatch, tmp_path):
             json={"url": "https://git.example/org/other.git", "branch": "main", "token": "another-token"},
         )
         refused = client.post(
-            "/api/employees/worker-source/repository",
+            "/api/agent-workers/worker-source/repository",
             json={"repository_id": other.json()["id"]},
         )
         assert refused.status_code == 409
         again = client.post(
-            "/api/employees/worker-source/repository",
+            "/api/agent-workers/worker-source/repository",
             json={"repository_id": repository_id},
         )
         assert again.status_code == 200

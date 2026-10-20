@@ -235,6 +235,7 @@ class GatewayObservabilityService:
             key_id=row.key_id,
             owner_id=row.owner_id,
             model=row.model,
+            actual_model=row.actual_model,
             pool_id=row.pool_id,
             node_id=row.node_id,
             streaming=row.streaming,
@@ -388,13 +389,22 @@ class GatewayObservabilityService:
             for target, value in (
                 (connect_values, connect_ms),
                 (ttfb_values, ttfb_ms),
-                (ttft_values, ttft_ms),
                 (duration_values, duration_ms),
-                (tps_values, output_tps),
             ):
                 number = _number(value)
                 if number is not None:
                     target.append(number)
+
+            # TTFT 与 Output TPS 属于流式生成质量指标：
+            # 1. 仅对成功且未中断的流式请求统计；
+            # 2. 非流式响应、中途断开、失败、单 Token（已为 None）不计入分母，避免失真。
+            if succeeded:
+                ttft_num = _number(ttft_ms)
+                if ttft_num is not None:
+                    ttft_values.append(ttft_num)
+                tps_num = _number(output_tps)
+                if tps_num is not None:
+                    tps_values.append(tps_num)
 
             if started_at is not None and finished_at is not None:
                 event_end = finished_at

@@ -14,7 +14,7 @@ from websockets.exceptions import ConnectionClosed
 
 from app.database import SessionLocal, init_database
 from app.models import (
-    DigitalEmployee,
+    AgentWorker,
     OpenCodeExecutionEnvironment,
     WorkerCommand,
     WorkerInstance,
@@ -91,7 +91,7 @@ class HoldingTransport:
 async def environment_id() -> int:
     await init_database()
     async with SessionLocal() as session:
-        employee = DigitalEmployee(id=f"emp-{uuid4().hex[:8]}", name="故障员工", role="执行")
+        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="故障员工", role="执行")
         session.add(employee)
         await session.flush()
         environment = OpenCodeExecutionEnvironment(
@@ -397,7 +397,7 @@ async def test_concurrent_request_id_replays_match_and_rejects_conflict(environm
     gateway = gateway_for()
     async with SessionLocal() as session:
         first = await gateway.enroll(session, environment_id)
-        employee = DigitalEmployee(id=f"emp-{uuid4().hex[:8]}", name="另一员工", role="执行")
+        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="另一员工", role="执行")
         session.add(employee)
         await session.flush()
         other_env = OpenCodeExecutionEnvironment(

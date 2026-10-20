@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 检查 Redis 与 AgentScope /health。Agent Service 的健康检查需要 X-User-ID。
 set -euo pipefail
-BASE="${NEXUS_AGENTSCOPE_BASE_URL:-http://127.0.0.1:8000}"
+BASE="${NEXUS_AGENTSCOPE_BASE_URL:-http://127.0.0.1:18000}"
 USER_ID="${NEXUS_AGENTSCOPE_USER_ID:-nexus}"
 PORT="${AGENTSCOPE_REDIS_PORT:-6379}"
 

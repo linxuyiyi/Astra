@@ -45,8 +45,7 @@
         </ElDescriptions>
 
         <section v-if="detail.status === 'candidate'" class="detail-section" aria-label="候选经验来源与证据">
-          <h3>来源证据</h3>
-          <ElText type="info">用于判断这条候选经验是否可信；仅展示实际存在的执行信息。</ElText>
+          <h3>来源证据 <FieldHelp label="来源证据" help="用于判断这条候选经验是否可信；仅展示实际存在的执行信息。" /></h3>
           <ElAlert v-if="detail.review_note" class="candidate-review-note" type="warning" show-icon :closable="false">
             <template #title>审核意见</template>
             <p class="candidate-review-note__body">{{ detail.review_note }}</p>
@@ -90,8 +89,8 @@
             <ElTag v-if="reviewDirty" type="warning" effect="light">有未保存修改</ElTag>
           </div>
           <ElForm v-if="reviewEditing" class="review-form" :model="review" label-position="top">
-            <ElText type="info">确认目标目录、标题、标签和 Markdown 后发布；发布成功后才进入员工检索范围。</ElText>
-            <ElFormItem label="目标目录" required>
+            <ElFormItem required>
+              <template #label>目标目录 <FieldHelp label="目标目录" help="确认目标目录、标题、标签和 Markdown 后发布；发布成功后才进入员工检索范围。" /></template>
               <ElSelect v-model="review.space_id" placeholder="请选择">
                 <ElOption v-for="dir in directories" :key="dir.id" :value="dir.id" :label="dir.name" />
               </ElSelect>
@@ -176,8 +175,7 @@
         <section v-if="relatedOpen" class="detail-section">
           <div class="detail-section__head">
             <div>
-              <h3>关联任务</h3>
-              <ElText type="info">来源任务及实际引用过该知识的任务。</ElText>
+              <h3>关联任务 <FieldHelp label="关联任务" help="来源任务及实际引用过该知识的任务。" /></h3>
             </div>
             <ElButton text :icon="X" aria-label="关闭关联任务" @click="relatedOpen = false" />
           </div>
@@ -232,6 +230,7 @@ import { useRouter } from 'vue-router'
 import { ElAlert, ElButton, ElDescriptions, ElDescriptionsItem, ElDrawer, ElForm, ElFormItem, ElInput, ElLink, ElOption, ElSelect, ElSkeleton, ElSpace, ElTable, ElTableColumn, ElTag, ElText } from 'element-plus'
 import type { InputInstance } from 'element-plus'
 import type { KnowledgeDetail, KnowledgeUsageRecord, RelatedTask } from '@/api/types'
+import FieldHelp from '@/components/forms/FieldHelp.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 
 const props = defineProps<{ open: boolean; detail: KnowledgeDetail | null; directories: Array<{ id: string; name: string; level: number }>; canReview: boolean; canManage: boolean; working: boolean; error: string; relatedTasks: RelatedTask[]; relatedLoading: boolean; usages: KnowledgeUsageRecord[]; usagesLoading: boolean }>()

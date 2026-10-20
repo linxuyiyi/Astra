@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
-from app.models import Base, DigitalEmployee, OpenCodeExecutionEnvironment, RuntimeSession, Task
+from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, RuntimeSession, Task
 from app.runtime.dispatcher import Dispatcher
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 from app.runtime.maintenance import submit_operation
@@ -27,7 +27,7 @@ async def session():
 
 
 def _employee(status=EmployeeStatus.IDLE, count=0):
-    return DigitalEmployee(
+    return AgentWorker(
         id="E1",
         name="Engineer",
         role="build",
@@ -108,7 +108,7 @@ async def test_unclaimed_pending_does_not_block_dispatch(session):
 
     assert claimed is not None
     assert claimed.id == "T1"
-    employee = await session.get(DigitalEmployee, "E1")
+    employee = await session.get(AgentWorker, "E1")
     assert employee.current_task_count == 1
 
 
@@ -129,7 +129,7 @@ async def test_stale_count_does_not_dispatch_over_unconfirmed_cancel(session):
     await session.commit()
 
     assert await Dispatcher(session).claim_once() is None
-    employee = await session.get(DigitalEmployee, "E1")
+    employee = await session.get(AgentWorker, "E1")
     assert employee.current_task_count == 0
 
 
@@ -157,7 +157,7 @@ async def test_human_release_then_dispatch(session):
     assert released.execution_stop_operator == "ada"
     assert released.execution_stop_session_id == "ses_1"
     assert released.execution_stop_attempt == 1
-    employee = await session.get(DigitalEmployee, "E1")
+    employee = await session.get(AgentWorker, "E1")
     assert employee.current_task_count == 0
     assert employee.status == EmployeeStatus.IDLE
 
@@ -183,7 +183,7 @@ async def test_release_rejects_running_and_mismatched_session(session):
     task.execution_stop_reason = "旧会话"
     await session.commit()
     await RuntimeService(session).project(task, TaskStatus.CANCELED, detail="仍占用")
-    employee = await session.get(DigitalEmployee, "E1")
+    employee = await session.get(AgentWorker, "E1")
     assert employee.current_task_count == 1
 
 
@@ -207,7 +207,7 @@ async def test_heartbeat_does_not_clear_occupied_worker(session, monkeypatch):
 
     monkeypatch.setattr("app.runtime.lifecycle.connect", connect)
     healthy = await RuntimeService(session).refresh_employee_heartbeats()
-    employee = await session.get(DigitalEmployee, "E1")
+    employee = await session.get(AgentWorker, "E1")
     assert probes
     assert healthy == ["E1"]
     assert employee.current_task_count == 1
@@ -224,7 +224,7 @@ async def test_maintenance_blocks_until_release_matches_unknown_session(session,
     )
     monkeypatch.setattr("app.runtime.remote_provisioning.get_settings", lambda: settings)
     monkeypatch.setattr("app.runtime.maintenance.get_settings", lambda: settings)
-    employee = DigitalEmployee(
+    employee = AgentWorker(
         id="E1",
         name="Remote",
         role="build",

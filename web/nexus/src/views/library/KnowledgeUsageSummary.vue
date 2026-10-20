@@ -33,7 +33,7 @@
           <div><span v-for="point in summary?.trend ?? []" :key="point.date" :title="`${point.date}：${point.reference_count} 次`"><i :style="{ height: `${barHeight(point.reference_count)}%` }" /><small>{{ point.date.slice(5) }}</small></span></div>
         </div>
       </div>
-      <p v-else class="usage-summary__empty">最近 {{ days }} 天暂无知识引用，数字员工使用知识后这里会展示引用趋势与 TOP 知识。</p>
+      <p v-else class="usage-summary__empty">最近 {{ days }} 天暂无知识引用</p>
     </AstraDialog>
   </section>
 </template>

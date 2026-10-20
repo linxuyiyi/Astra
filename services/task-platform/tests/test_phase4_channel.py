@@ -21,7 +21,7 @@ from app.config.settings import get_settings
 from app.database import SessionLocal, init_database
 from app.gateway.models import GatewayKey, GatewayPool, GatewayRoute
 from app.gateway.security import gateway_key_digest
-from app.models import DigitalEmployee, OpenCodeExecutionEnvironment, WorkerMaintenanceOperation
+from app.models import AgentWorker, OpenCodeExecutionEnvironment, WorkerMaintenanceOperation
 from app.runtime.environment import ExecutionEnvironmentRuntime
 from app.runtime.maintenance import OperationLease, submit_operation
 from app.runtime.opencode_model import gateway_model
@@ -83,7 +83,7 @@ async def _employee(**overrides) -> tuple[str, int]:
     await init_database()
     employee_id = "p4-" + uuid4().hex[:10]
     async with SessionLocal() as db:
-        db.add(DigitalEmployee(id=employee_id, name=employee_id, role="build", current_task_count=0))
+        db.add(AgentWorker(id=employee_id, name=employee_id, role="build", current_task_count=0))
         await db.flush()
         values = dict(
             employee_id=employee_id,

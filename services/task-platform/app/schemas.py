@@ -34,6 +34,8 @@ class ExecutionEnvironmentWrite(BaseModel):
     opencode_path: str = Field(default="opencode", min_length=1)
     model_name: str | None = Field(default=None, max_length=255)
     workspace_root: str = Field(default="./workspaces", min_length=1)
+    repository_id: str | None = Field(default=None, max_length=64)
+    branch: str | None = Field(default=None, max_length=255)
     labels: list[str] = Field(default_factory=list)
     skill_refs: list[str] | None = None
     mcp_refs: list[dict[str, Any]] | None = None
@@ -72,6 +74,8 @@ class ExecutionEnvironmentRead(ORMModel):
     model_name: str | None
     workspace_root: str
     repository_id: str | None = None
+    repository_url: str | None = None
+    repository_branch: str | None = None
     branch: str | None = None
     skill_refs: list[str] = Field(default_factory=list)
     mcp_refs: list[dict[str, Any]] = Field(default_factory=list)
@@ -138,6 +142,7 @@ class TaskCategoryRead(ORMModel):
 
 class EmployeeCreate(BaseModel):
     id: str
+    digital_employee_id: str | None = Field(default=None, max_length=64)
     name: str
     role: str
     description: str = ""
@@ -154,6 +159,7 @@ class EmployeeCreate(BaseModel):
 
 
 class EmployeePatch(BaseModel):
+    digital_employee_id: str | None = Field(default=None, max_length=64)
     name: str | None = None
     role: str | None = None
     description: str | None = None
@@ -179,6 +185,7 @@ class ChannelHealth(BaseModel):
 
 class EmployeeRead(RuntimeRead):
     id: str
+    digital_employee_id: str | None = None
     name: str
     role: str
     description: str

@@ -18,7 +18,7 @@ from app.domain import EnvironmentStatus
 from app.gateway.security import gateway_key_digest
 from app.main import app
 from app.models import (
-    DigitalEmployee,
+    AgentWorker,
     GitCredential,
     OpenCodeExecutionEnvironment,
     Task,
@@ -84,7 +84,7 @@ async def make_environment(**overrides):
     employee_id = "maint-" + uuid4().hex[:10]
     async with SessionLocal() as db:
         db.add(
-            DigitalEmployee(
+            AgentWorker(
                 id=employee_id,
                 name=employee_id,
                 role="build",
@@ -1197,7 +1197,7 @@ async def test_disable_only_pauses_dispatch_without_stopping_work():
     current = await read_operation(operation.id)
     assert current.state == "SUCCEEDED"
     async with SessionLocal() as db:
-        employee = await db.get(DigitalEmployee, employee_id)
+        employee = await db.get(AgentWorker, employee_id)
         assert employee.enabled is False
         stored = await db.get(Task, task.id)
         assert stored.status == "RUNNING"
@@ -1209,7 +1209,7 @@ async def test_disable_only_pauses_dispatch_without_stopping_work():
 async def test_restore_requires_real_health_then_enables(monkeypatch):
     environment_id, employee_id = await make_environment()
     async with SessionLocal() as db:
-        employee = await db.get(DigitalEmployee, employee_id)
+        employee = await db.get(AgentWorker, employee_id)
         employee.enabled = False
         await db.commit()
     operation = await make_operation(environment_id, action="restore")
@@ -1217,7 +1217,7 @@ async def test_restore_requires_real_health_then_enables(monkeypatch):
     current = await read_operation(operation.id)
     assert current.state == "SUCCEEDED"
     async with SessionLocal() as db:
-        employee = await db.get(DigitalEmployee, employee_id)
+        employee = await db.get(AgentWorker, employee_id)
         assert employee.enabled is True
 
 
@@ -1225,7 +1225,7 @@ async def test_restore_requires_real_health_then_enables(monkeypatch):
 async def test_restore_keeps_disabled_when_health_fails(monkeypatch):
     environment_id, employee_id = await make_environment()
     async with SessionLocal() as db:
-        employee = await db.get(DigitalEmployee, employee_id)
+        employee = await db.get(AgentWorker, employee_id)
         employee.enabled = False
         await db.commit()
 
@@ -1253,7 +1253,7 @@ async def test_restore_keeps_disabled_when_health_fails(monkeypatch):
     assert current.state == "FAILED"
     assert current.error_code == "health_not_available"
     async with SessionLocal() as db:
-        employee = await db.get(DigitalEmployee, employee_id)
+        employee = await db.get(AgentWorker, employee_id)
         assert employee.enabled is False
 
 
@@ -2422,7 +2422,7 @@ async def test_dirty_git_diff_does_not_block_but_real_equipment_drift_does(monke
     from app.runtime.dispatcher import Dispatcher
 
     async with SessionLocal() as db:
-        employee = await db.get(DigitalEmployee, environment.employee_id)
+        employee = await db.get(AgentWorker, environment.employee_id)
         employee.status = "IDLE"
         employee.auto_claim = True
         employee.auto_execute = False

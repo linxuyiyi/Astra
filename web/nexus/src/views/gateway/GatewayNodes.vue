@@ -1,52 +1,53 @@
 <template>
-  <section class="gateway-nodes astra-stack" data-testid="gateway-nodes">
+  <section class="admin-page" data-testid="gateway-nodes">
+    <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error" data-testid="gateway-nodes-error">
+      <ElButton type="primary" data-testid="gateway-nodes-retry" @click="load">重试</ElButton>
+    </ElAlert>
+
     <GatewayHeaderActions>
       <ElButton :loading="loading" :icon="RefreshCw" data-testid="gateway-nodes-refresh" @click="load">刷新</ElButton>
       <ElButton type="primary" :icon="Plus" data-testid="gateway-node-create" @click="openCreate">新增节点</ElButton>
     </GatewayHeaderActions>
 
-    <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error" data-testid="gateway-nodes-error">
-      <ElButton type="primary" data-testid="gateway-nodes-retry" @click="load">重试</ElButton>
-    </ElAlert>
-
-    <AstraFilterPanel label="节点筛选" testid="gateway-nodes-filter">
-      <ElSelect v-model="filters.health" class="astra-filter__select" data-testid="node-filter-health" aria-label="健康状态筛选" placeholder="健康：全部" clearable>
-        <ElOption v-for="item in healthOptions" :key="item.value" :value="item.value" :label="item.label" />
-      </ElSelect>
-      <ElSelect v-model="filters.scheduling" class="astra-filter__select" data-testid="node-filter-scheduling" aria-label="调度状态筛选" placeholder="调度：全部" clearable>
-        <ElOption v-for="item in schedulingOptions" :key="item.value" :value="item.value" :label="item.label" />
-      </ElSelect>
-      <ElSelect v-model="filters.config" class="astra-filter__select" data-testid="node-filter-config" aria-label="配置状态筛选" placeholder="配置：全部" clearable>
-        <ElOption value="ENABLED" label="启用" />
-        <ElOption value="DISABLED" label="禁用" />
-      </ElSelect>
-      <ElSelect v-model="filters.pool" class="astra-filter__select" data-testid="node-filter-pool" aria-label="资源池筛选" placeholder="资源池：全部" clearable>
-        <ElOption value="__none__" label="未分配" />
-        <ElOption v-for="pool in pools" :key="pool.id" :value="pool.id" :label="pool.name" />
-      </ElSelect>
-      <ElButton v-if="hasFilters" text type="primary" data-testid="gateway-nodes-clear" @click="clearFilters">清除筛选</ElButton>
-      <template #search>
+    <div class="admin-page__toolbar" role="search" aria-label="节点筛选" data-testid="gateway-nodes-filter">
+      <div class="admin-page__filters">
+        <ElSelect v-model="filters.health" class="admin-page__select" data-testid="node-filter-health" aria-label="健康状态筛选" placeholder="健康：全部" clearable>
+          <ElOption v-for="item in healthOptions" :key="item.value" :value="item.value" :label="item.label" />
+        </ElSelect>
+        <ElSelect v-model="filters.scheduling" class="admin-page__select" data-testid="node-filter-scheduling" aria-label="调度状态筛选" placeholder="调度：全部" clearable>
+          <ElOption v-for="item in schedulingOptions" :key="item.value" :value="item.value" :label="item.label" />
+        </ElSelect>
+        <ElSelect v-model="filters.config" class="admin-page__select" data-testid="node-filter-config" aria-label="配置状态筛选" placeholder="配置：全部" clearable>
+          <ElOption value="ENABLED" label="启用" />
+          <ElOption value="DISABLED" label="禁用" />
+        </ElSelect>
+        <ElSelect v-model="filters.pool" class="admin-page__select" data-testid="node-filter-pool" aria-label="资源池筛选" placeholder="资源池：全部" clearable>
+          <ElOption value="__none__" label="未分配" />
+          <ElOption v-for="pool in pools" :key="pool.id" :value="pool.id" :label="pool.name" />
+        </ElSelect>
+        <ElButton v-if="hasFilters" text type="primary" data-testid="gateway-nodes-clear" @click="clearFilters">清除筛选</ElButton>
+      </div>
+      <div class="admin-page__search">
         <ElInput
           v-model="filters.keyword"
-          class="astra-filter__keyword"
+          class="admin-page__keyword"
           data-testid="node-filter-keyword"
           aria-label="搜索节点"
           placeholder="搜索名称 / 地址 / 模型"
           clearable
-        >
-          <template #prefix><Search :size="15" /></template>
-        </ElInput>
-        <ElButton type="primary" :icon="Search" data-testid="gateway-nodes-search" @click="load">搜索</ElButton>
-      </template>
-    </AstraFilterPanel>
+          :prefix-icon="Search"
+          @keydown.enter.prevent="applySearch"
+        />
+        <ElButton type="primary" :icon="Search" data-testid="gateway-nodes-search" @click="applySearch">搜索</ElButton>
+      </div>
+    </div>
 
-    <section class="astra-table-panel astra-table-panel--clickable">
     <GatewayNodeTable
       :nodes="pagedNodes"
       :pools="pools"
       :busy-id="busyId"
       :loading="loading"
-      :empty-text="hasFilters ? '没有匹配的节点，调整筛选条件后重试。' : '暂无节点，点击「新增节点」开始配置。'"
+      :empty-text="hasFilters ? '没有匹配的节点' : '暂无节点'"
       @detail="openDetail"
       @probe="onProbe"
       @drain="onDrain"
@@ -55,20 +56,18 @@
       @edit="openEdit"
       @delete="onDelete"
     />
-    </section>
 
-    <footer v-if="filteredNodes.length" class="gateway-nodes__footer">
-      <ElText type="info" data-testid="gateway-nodes-total">共 {{ filteredNodes.length }} 条</ElText>
+    <div class="admin-page__footer">
       <ElPagination
-        :current-page="page"
-        :page-size="pageSize"
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :page-sizes="[10, 20, 50]"
         :total="filteredNodes.length"
-        layout="prev, pager, next"
+        layout="total, sizes, prev, pager, next"
         aria-label="节点列表分页"
         data-testid="gateway-nodes-pagination"
-        @current-change="page = $event"
       />
-    </footer>
+    </div>
 
     <ElCard shadow="never" data-testid="gateway-node-instances">
       <template #header>
@@ -78,7 +77,7 @@
       </template>
       <ElAlert v-if="instanceError" type="warning" show-icon :closable="false" :title="instanceError" />
       <ElTable v-else :data="instances" empty-text="暂无实例心跳。">
-        <ElTableColumn label="实例" prop="instance_id" min-width="150" />
+        <ElTableColumn label="实例" prop="instance_id" min-width="150" show-overflow-tooltip />
         <ElTableColumn label="状态" width="90">
           <template #default="{ row }"><ElTag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? '在线' : '已过期' }}</ElTag></template>
         </ElTableColumn>
@@ -114,8 +113,7 @@
 import { Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElAlert, ElButton, ElCard, ElInput, ElOption, ElPagination, ElSelect, ElTable, ElTableColumn, ElTag, ElText } from 'element-plus'
-import AstraFilterPanel from '@/components/astra/AstraFilterPanel.vue'
+import { ElAlert, ElButton, ElCard, ElInput, ElOption, ElPagination, ElSelect, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import {
   gatewayApi,
   type GatewayInstance,
@@ -149,7 +147,7 @@ const schedulingOptions = (['ACTIVE', 'DRAINING', 'BLOCKED'] as const)
 
 const filters = reactive({ keyword: '', health: '', scheduling: '', config: '', pool: '' })
 const page = ref(1)
-const pageSize = 10
+const pageSize = ref(20)
 
 const filteredNodes = computed(() => {
   const keyword = filters.keyword.trim().toLowerCase()
@@ -163,18 +161,24 @@ const filteredNodes = computed(() => {
   })
 })
 const pagedNodes = computed(() => {
-  const start = (page.value - 1) * pageSize
-  return filteredNodes.value.slice(start, start + pageSize)
+  const start = (page.value - 1) * pageSize.value
+  return filteredNodes.value.slice(start, start + pageSize.value)
 })
 const hasFilters = computed(() => Boolean(
   filters.keyword.trim() || filters.health || filters.scheduling || filters.config || filters.pool,
 ))
 
 watch(filteredNodes, (list) => {
-  const maxPage = Math.max(1, Math.ceil(list.length / pageSize))
+  const maxPage = Math.max(1, Math.ceil(list.length / pageSize.value))
   if (page.value > maxPage) page.value = maxPage
 })
 watch(filters, () => { page.value = 1 })
+watch(pageSize, () => { page.value = 1 })
+
+function applySearch() {
+  page.value = 1
+  void load()
+}
 
 function clearFilters() {
   filters.keyword = ''
@@ -294,7 +298,6 @@ onMounted(load)
 </script>
 
 <style scoped>
-.gateway-nodes__footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .gateway-nodes__card-head { display: grid; gap: 2px; }
 .gateway-nodes__card-head h4 { margin: 0; color: var(--astra-text-primary); }
 </style>

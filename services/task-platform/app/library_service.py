@@ -48,7 +48,7 @@ from app.library_schemas import (
 )
 from app.llm_wiki import LlmWikiClient, LlmWikiError, knowledge_source_path, wiki_resource_path
 from app.models import (
-    DigitalEmployee,
+    AgentWorker,
     ExperienceEvidence,
     KnowledgeAudit,
     KnowledgeFavorite,
@@ -720,7 +720,7 @@ class KnowledgeService:
         task_title = None
         if item.source_employee_id:
             employee_name = await self.session.scalar(
-                select(DigitalEmployee.name).where(DigitalEmployee.id == item.source_employee_id)
+                select(AgentWorker.name).where(AgentWorker.id == item.source_employee_id)
             )
         if item.source_task_id:
             task_title = await self.session.scalar(select(Task.title).where(Task.id == item.source_task_id))
@@ -938,8 +938,8 @@ class KnowledgeService:
         await self._item(knowledge_id, principal)
         rows = (
             await self.session.execute(
-                select(KnowledgeUsage, DigitalEmployee.name, Task.title)
-                .outerjoin(DigitalEmployee, KnowledgeUsage.employee_id == DigitalEmployee.id)
+                select(KnowledgeUsage, AgentWorker.name, Task.title)
+                .outerjoin(AgentWorker, KnowledgeUsage.employee_id == AgentWorker.id)
                 .outerjoin(Task, KnowledgeUsage.task_id == Task.id)
                 .where(
                     KnowledgeUsage.knowledge_id == knowledge_id,
@@ -1252,11 +1252,11 @@ class KnowledgeService:
         self,
         employee_id: str | None,
         task_id: str | None,
-    ) -> tuple[DigitalEmployee | None, Task | None]:
-        employee = await self.session.get(DigitalEmployee, employee_id) if employee_id else None
+    ) -> tuple[AgentWorker | None, Task | None]:
+        employee = await self.session.get(AgentWorker, employee_id) if employee_id else None
         task = await self.session.get(Task, task_id) if task_id else None
         if employee_id and not employee:
-            raise LibraryValidationError("数字员工不存在")
+            raise LibraryValidationError("Agent Worker 不存在")
         if task_id and not task:
             raise LibraryValidationError("来源任务不存在")
         if task and employee and task.employee_id != employee.id:

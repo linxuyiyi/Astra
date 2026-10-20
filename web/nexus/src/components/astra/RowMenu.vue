@@ -43,5 +43,5 @@ function onCommand(command: string | number) {
 </script>
 
 <style scoped>
-.row-menu { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.row-menu { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 </style>

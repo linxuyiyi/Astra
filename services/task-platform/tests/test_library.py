@@ -200,7 +200,7 @@ def test_candidate_experience_mcp_flow_preserves_provenance_and_review_audit():
     employee_id = unique("employee-library")
     with TestClient(app) as client:
         employee = client.post(
-            "/api/employees",
+            "/api/agent-workers",
             json={
                 "id": employee_id,
                 "name": "测试知识员工",

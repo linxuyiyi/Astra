@@ -13,7 +13,7 @@ from app.api.workspace_routes import persist_attachments, router, task_repo
 from app.config.settings import get_settings
 from app.database import SessionLocal, init_database
 from app.domain import ExecutionMode
-from app.models import DigitalEmployee, OpenCodeExecutionEnvironment, Task
+from app.models import AgentWorker, OpenCodeExecutionEnvironment, Task
 from app.runtime.environment import ExecutionEnvironmentRuntime, environment_from_snapshot
 from app.runtime.worker_files import WorkerFileError, git_command_payload, worker_git, worker_upload
 from app.runtime.workspace_changes import workspace_diff
@@ -139,7 +139,7 @@ async def test_worker_channel_does_not_open_ssh_or_read_the_password(monkeypatch
 async def test_snapshot_environment_follows_the_stored_channel(monkeypatch):
     await init_database()
     async with SessionLocal() as session:
-        employee = DigitalEmployee(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
+        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
         session.add(employee)
         await session.flush()
         environment = OpenCodeExecutionEnvironment(
@@ -276,7 +276,7 @@ async def test_file_api_still_validates_before_opencode_and_repo_overflow_is_dir
 
     await init_database()
     async with SessionLocal() as session:
-        employee = DigitalEmployee(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
+        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
         session.add(employee)
         await session.flush()
         environment = OpenCodeExecutionEnvironment(
@@ -370,7 +370,7 @@ async def test_upload_helper_is_what_the_route_calls(monkeypatch):
 async def test_repo_route_turns_uninstalled_worker_into_503():
     await init_database()
     async with SessionLocal() as session:
-        employee = DigitalEmployee(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
+        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
         session.add(employee)
         await session.flush()
         environment = OpenCodeExecutionEnvironment(

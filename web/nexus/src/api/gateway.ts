@@ -86,6 +86,7 @@ export interface GatewayNodeWrite {
 export interface GatewayRoute {
   id: string
   model: string
+  target_model: string | null
   pool_id: string
   description: string
   enabled: boolean
@@ -96,6 +97,7 @@ export interface GatewayRoute {
 
 export interface GatewayRouteWrite {
   model?: string
+  target_model?: string | null
   pool_id?: string
   description?: string
   enabled?: boolean
@@ -176,6 +178,7 @@ export interface GatewayRequestLog {
   key_id: string | null
   owner_id: string | null
   model: string | null
+  actual_model: string | null
   pool_id: string | null
   node_id: string | null
   streaming: boolean
@@ -362,7 +365,7 @@ export interface GatewayTrendSeries {
 }
 
 export interface GatewayTrend {
-  window: '1h' | '15m'
+  window: GatewayStatsWindow
   group_by: 'none' | 'model' | 'node'
   window_start: string
   window_end: string
@@ -503,7 +506,7 @@ export const gatewayApi = {
   nodeMetrics: (signal?: AbortSignal) =>
     gatewayRequest<GatewayNodeMetric[]>('/api/gateway/node-metrics', { signal }),
   trends: (
-    window: '1h' | '15m' = '1h',
+    window: GatewayStatsWindow = 'today',
     groupBy: 'none' | 'model' | 'node' = 'none',
     signal?: AbortSignal,
   ) =>

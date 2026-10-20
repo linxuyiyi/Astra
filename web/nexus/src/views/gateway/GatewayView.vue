@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { Activity, Boxes, ClipboardList, KeyRound, ScrollText, Server } from 'lucide-vue-next'
+import { Activity, Boxes, ClipboardList, KeyRound, Route as RouteIcon, ScrollText, Server } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { ElAside, ElCard, ElContainer, ElMain, ElMenu, ElMenuItem, ElMenuItemGroup } from 'element-plus'
@@ -56,7 +56,8 @@ const menuGroups = [
     label: '配置',
     items: [
       { id: 'nodes', label: '上游节点', path: '/gateway/nodes', icon: Server },
-      { id: 'routes', label: '资源池与路由', path: '/gateway/routes', icon: Boxes },
+      { id: 'pools', label: '资源池', path: '/gateway/pools', icon: Boxes },
+      { id: 'routes', label: '模型路由', path: '/gateway/routes', icon: RouteIcon },
       { id: 'keys', label: 'API Key', path: '/gateway/keys', icon: KeyRound },
     ],
   },
@@ -76,17 +77,19 @@ const activeSectionLabel = computed(() => menuItems.find((item) => item.path ===
   display: flex; flex-direction: column; height: 100%; min-height: 480px;
   padding: 0; overflow: hidden; background: var(--astra-bg-base); --astra-text-muted: #3a524c;
 }
-.gateway-page > .gateway-workspace { flex: 1 1 auto; }
+.gateway-page > .gateway-workspace { flex: 1 1 auto; min-height: 0; }
 .gateway-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
-.gateway-workspace { align-items: stretch; }
-.gateway-aside { --el-aside-width: 210px; border: 0; border-right: 1px solid var(--astra-border); border-radius: 12px 0 0 12px; background: transparent; overflow: auto; }
+.gateway-workspace { align-items: stretch; min-height: 0; }
+.gateway-aside { --el-aside-width: 210px; min-height: 0; border: 0; border-right: 1px solid var(--astra-border); border-radius: 12px 0 0 12px; background: transparent; overflow: auto; }
 .gateway-aside__title { min-height: 60px; display: flex; align-items: center; padding: 0 18px; color: var(--astra-text-primary); font-size: var(--astra-font-control); font-weight: var(--astra-weight-bold); }
 .gateway-menu { --el-menu-base-level-padding: 14px; --el-menu-item-height: 44px; border-right: 0; background: transparent; }
 .gateway-menu :deep(.el-menu-item) { gap: 8px; }
-.gateway-content { --el-main-padding: 0; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.gateway-content { --el-main-padding: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .gateway-content > .content-shell { flex: 1 1 auto; min-height: 0; }
-.gateway-shell > .el-card__header { padding: 14px 16px; }
+.gateway-shell { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; border: none; border-radius: 0; }
+.gateway-shell > .el-card__header { padding: 16px; flex: none; }
+.gateway-shell :deep(.el-card__body) { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px; scrollbar-gutter: stable; }
 .gateway-shell__header { display: flex; align-items: center; gap: 12px; min-height: 32px; }
-.gateway-shell__title { color: var(--astra-text-secondary); font-size: var(--astra-font-control); font-weight: var(--astra-weight-bold); }
+.gateway-shell__title { color: var(--astra-text-primary); font-size: 16px; font-weight: 600; }
 @media (max-width: 860px) { .gateway-aside { --el-aside-width: 170px; } }
 </style>

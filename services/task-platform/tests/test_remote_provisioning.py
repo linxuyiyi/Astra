@@ -18,7 +18,7 @@ from app.database import SessionLocal, init_database
 from app.gateway.models import GatewayKey
 from app.gateway.security import gateway_key_digest
 from app.main import app
-from app.models import DigitalEmployee, OpenCodeExecutionEnvironment, RuntimeSession, Task
+from app.models import AgentWorker, OpenCodeExecutionEnvironment, RuntimeSession, Task
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 from app.runtime.maintenance import submit_operation
 from app.runtime.remote_provisioning import E2E_MODEL, RemoteProvisioner, managed_config
@@ -38,7 +38,7 @@ async def employee(**overrides):
     await init_database()
     employee_id = "deploy-" + uuid4().hex[:10]
     async with SessionLocal() as db:
-        db.add(DigitalEmployee(id=employee_id, name=employee_id, role="build", current_task_count=0))
+        db.add(AgentWorker(id=employee_id, name=employee_id, role="build", current_task_count=0))
         await db.flush()
         values = dict(
             employee_id=employee_id,
@@ -211,7 +211,7 @@ async def test_operation_blocks_configuration_delete_and_test_api():
         for method, url, body in [
             (
                 "put",
-                f"/api/employees/{employee_id}/environment",
+                f"/api/agent-workers/{employee_id}/environment",
                 {
                     "mode": "LINUX_REMOTE",
                     "name": "Linux",
@@ -220,7 +220,7 @@ async def test_operation_blocks_configuration_delete_and_test_api():
                     "workspace_root": "/other",
                 },
             ),
-            ("delete", f"/api/employees/{employee_id}", None),
+            ("delete", f"/api/agent-workers/{employee_id}", None),
         ]:
             response = await client.request(method, url, json=body)
             assert response.status_code == 409, response.text

@@ -668,6 +668,7 @@ class GatewayControlService:
             "id": route.id,
             "model": route.model,
             "pool_id": route.pool_id,
+            "target_model": route.target_model,
             "description": route.description,
             "enabled": route.enabled,
             "weight": route.weight,

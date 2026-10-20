@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.assistant import review
 from app.domain import ExecutionMode
 from app.models import (
+    AgentWorker,
     Base,
-    DigitalEmployee,
     KnowledgeItem,
     OpenCodeExecutionEnvironment,
     RuntimeSession,
@@ -39,7 +39,7 @@ async def factory(monkeypatch):
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
-        session.add(DigitalEmployee(id="E1", name="员工", role="build"))
+        session.add(AgentWorker(id="E1", name="员工", role="build"))
         environment = OpenCodeExecutionEnvironment(
             employee_id="E1", mode="LOCAL", name="test", workspace_root="/bound", status="AVAILABLE",
         )

@@ -14,9 +14,9 @@ import app.gateway.models  # noqa: F401 - 注册 GatewayRoute 表
 from app.domain import EnvironmentStatus
 from app.gateway.models import GatewayRoute
 from app.models import (
+    AgentWorker,
     Base,
     CodeRepository,
-    DigitalEmployee,
     GitCredential,
     OpenCodeExecutionEnvironment,
 )
@@ -59,7 +59,7 @@ async def _seed(session, tmp_path: Path) -> OpenCodeExecutionEnvironment:
         "---\nname: review\ndescription: review code\n---\n# Review\n",
         encoding="utf-8",
     )
-    session.add(DigitalEmployee(id="emp-1", name="Employee", role="build"))
+    session.add(AgentWorker(id="emp-1", name="Employee", role="build"))
     session.add(
         CodeRepository(
             id="repo-1",

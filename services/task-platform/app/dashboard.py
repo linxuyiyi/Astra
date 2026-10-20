@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.domain import EmployeeStatus, RuntimeSessionStatus, TaskStatus
-from app.models import DigitalEmployee, Event, RuntimeSession, Task
+from app.models import AgentWorker, Event, RuntimeSession, Task
 from app.runtime.presentation import EMPLOYEE_LABELS, TASK_STATUS
 from app.services import dashboard_metrics
 from app.usage import day_bounds
@@ -50,7 +50,7 @@ def _local_date(value: datetime) -> str:
     return _aware(value).astimezone(timezone).date().isoformat()
 
 
-def _team_identity(employee: DigitalEmployee) -> tuple[str, str, int]:
+def _team_identity(employee: AgentWorker) -> tuple[str, str, int]:
     role = (employee.role or "").strip()
     category_ids = set(employee.category_ids or [])
     for team_id, name, order, pattern, categories in KNOWN_TEAMS:
@@ -94,7 +94,7 @@ async def _current_employee_tasks(session: AsyncSession) -> dict[str, tuple[Task
 
 
 def _employee_state(
-    employee: DigitalEmployee, task: Task | None, binding: RuntimeSession | None,
+    employee: AgentWorker, task: Task | None, binding: RuntimeSession | None,
 ) -> tuple[str, str]:
     if not employee.enabled:
         return "idle", "已停用"
@@ -154,7 +154,7 @@ def _attention_condition():
 
 async def dashboard_overview(session: AsyncSession) -> dict:
     metrics = await dashboard_metrics(session)
-    employees = (await session.scalars(select(DigitalEmployee))).all()
+    employees = (await session.scalars(select(AgentWorker))).all()
     current_tasks = await _current_employee_tasks(session)
     team_count = len({_team_identity(employee)[0] for employee in employees})
     attention_total = await session.scalar(select(func.count(Task.id)).where(_attention_condition()))
@@ -177,7 +177,7 @@ async def dashboard_overview(session: AsyncSession) -> dict:
 async def dashboard_employees(session: AsyncSession) -> dict:
     employees = (
         await session.scalars(
-            select(DigitalEmployee).order_by(DigitalEmployee.created_at, DigitalEmployee.id)
+            select(AgentWorker).order_by(AgentWorker.created_at, AgentWorker.id)
         )
     ).all()
     current_tasks = await _current_employee_tasks(session)
@@ -219,8 +219,8 @@ def _attention_status(task: Task) -> tuple[str, str]:
 async def dashboard_attention(session: AsyncSession) -> dict:
     rows = (
         await session.execute(
-            select(Task, DigitalEmployee.name, RuntimeSession)
-            .outerjoin(DigitalEmployee, Task.employee_id == DigitalEmployee.id)
+            select(Task, AgentWorker.name, RuntimeSession)
+            .outerjoin(AgentWorker, Task.employee_id == AgentWorker.id)
             .outerjoin(RuntimeSession, _current_session_condition())
             .where(_attention_condition())
             .order_by(Task.updated_at.desc())
@@ -289,8 +289,8 @@ async def dashboard_tasks(session: AsyncSession) -> dict:
             points[completed_key]["completed"] += 1
     recent_rows = (
         await session.execute(
-            select(Task, DigitalEmployee.name)
-            .outerjoin(DigitalEmployee, Task.employee_id == DigitalEmployee.id)
+            select(Task, AgentWorker.name)
+            .outerjoin(AgentWorker, Task.employee_id == AgentWorker.id)
             .order_by(Task.updated_at.desc())
             .limit(6)
         )
@@ -327,7 +327,7 @@ def _activity_copy(
 ) -> tuple[str, str]:
     title = task_title or "任务"
     if event.event_type == "EMPLOYEE_CREATED":
-        return "employee_created", f"新增数字员工：{employee_name or '数字员工'}"
+        return "employee_created", f"新增 Agent Worker：{employee_name or 'Agent Worker'}"
     if event.event_type == "TASK_CREATED":
         if task_source == "nr_test_system":
             return "schedule_triggered", f"定时任务触发：{title}"
@@ -344,15 +344,15 @@ def _activity_copy(
 async def dashboard_activity(session: AsyncSession) -> dict:
     rows = (
         await session.execute(
-            select(Event, DigitalEmployee.name, Task.title, Task.source)
-            .outerjoin(DigitalEmployee, Event.employee_id == DigitalEmployee.id)
+            select(Event, AgentWorker.name, Task.title, Task.source)
+            .outerjoin(AgentWorker, Event.employee_id == AgentWorker.id)
             .outerjoin(Task, Event.task_id == Task.id)
             .where(
                 Event.event_type.in_(ACTIVITY_EVENT_TYPES),
                 # 已删除目标的历史事件不能挤占首页，也不能提供失效的详情入口。
                 or_(
                     and_(Event.task_id.is_not(None), Task.id.is_not(None)),
-                    and_(Event.task_id.is_(None), DigitalEmployee.id.is_not(None)),
+                    and_(Event.task_id.is_(None), AgentWorker.id.is_not(None)),
                 ),
             )
             .order_by(Event.created_at.desc(), Event.id.desc())

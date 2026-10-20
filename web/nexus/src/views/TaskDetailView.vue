@@ -85,8 +85,7 @@
         <ElAlert v-if="review.summary && !review.summary_current" title="以下是历史轮次总结，当前轮次尚未完成复盘。" type="warning" :closable="false" />
         <div v-if="review.summary" class="task-review__summary" data-testid="task-review-summary" v-html="safeSummary" />
         <ElEmpty v-else :description="review.status === 'not_ready' ? '人工确认任务完成后，后台自动生成总结。' : '尚未生成任务总结，可刷新查看复盘进度。'" />
-        <h3>关联经验</h3>
-        <ElText type="info">候选经验须经人工审核发布；任务成功不代表经验已验证。</ElText>
+        <h3>关联经验 <FieldHelp label="关联经验" help="候选经验须经人工审核发布；任务成功不代表经验已验证。" /></h3>
         <ul v-if="review.experiences.length" class="task-review__experiences" data-testid="task-review-experiences">
           <li v-for="item in review.experiences" :key="item.id">
             <RouterLink :to="{ path: '/library', query: { knowledge: item.id } }">{{ item.title }}</RouterLink>
@@ -102,8 +101,8 @@
         <div><dt>任务目标</dt><dd>{{ task.description || '未写目标' }}</dd></div>
         <div><dt>当前状态</dt><dd>{{ task.runtime_status_label }}</dd></div>
         <div><dt>下一步</dt><dd>{{ nextStep }}</dd></div>
-        <div><dt>问谁</dt><dd>{{ responsibleName }}</dd></div>
-        <div><dt>谁执行</dt><dd>{{ employeeName }}</dd></div>
+        <div><dt>责任数字员工</dt><dd>{{ responsibleName }}</dd></div>
+        <div><dt>执行 Worker</dt><dd>{{ employeeName }}</dd></div>
         <div>
           <dt>验收标准</dt>
           <dd>
@@ -168,6 +167,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElContainer, ElDrawer, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElHeader, ElMain, ElOption, ElSelect, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag, ElText, ElTimeline, ElTimelineItem } from 'element-plus'
 import { api } from '@/api/client'
 import type { AstraEvent, Task, TaskReview, TaskUsage, TaskWorkspaceBinding } from '@/api/types'
+import FieldHelp from '@/components/forms/FieldHelp.vue'
 import RuntimeStatusBadge from '@/components/runtime/RuntimeStatusBadge.vue'
 import { useAstraStore } from '@/stores/astra'
 import { employeeDisplayName, formatTaskDuration, formatTime, formatTokens, priorityLabel, taskTypeLabel } from '@/utils/format'
@@ -219,7 +219,7 @@ const owners = ref<NexusEmployee[]>([])
 const employeeName = computed(() => {
   const workerId = task.value?.worker_id || task.value?.employee_id
   const employee = store.employees.find(item => item.id === workerId)
-  return employee ? employeeDisplayName(employee.name) : '未分配 Worker'
+  return employee?.execution_environment?.name || (employee ? employeeDisplayName(employee.name) : '未分配 Worker')
 })
 const responsibleName = computed(() => {
   const id = task.value?.responsible_employee_id

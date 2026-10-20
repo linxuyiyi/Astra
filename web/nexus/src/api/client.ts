@@ -1,6 +1,7 @@
 import { workerFacingMessage } from '@/utils/format'
 import type {
   AstraEvent,
+  CodeRepository,
   DashboardActivity,
   DashboardAttention,
   DashboardEmployees,
@@ -48,7 +49,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     const body = await response.json().catch(() => ({ detail: response.statusText }))
     const detail = body.detail ?? '请求失败'
     const message = typeof detail === 'string' ? detail : '请求失败'
-    const workerSurface = path.startsWith('/api/employees') || path.startsWith('/api/tasks')
+    const workerSurface = path.startsWith('/api/agent-workers') || path.startsWith('/api/tasks')
     throw new ApiError(workerSurface ? workerFacingMessage(message) : message, response.status)
   }
   return response.json() as Promise<T>
@@ -58,7 +59,7 @@ export const api = {
   metrics: () => request<Metrics>('/api/system/metrics'),
   health: () => request<{ status: string; time: string }>('/api/health'),
   dashboardOverview: (signal?: AbortSignal) => request<DashboardOverview>('/api/dashboard/overview', { signal }),
-  dashboardEmployees: (signal?: AbortSignal) => request<DashboardEmployees>('/api/dashboard/employees', { signal }),
+  dashboardEmployees: (signal?: AbortSignal) => request<DashboardEmployees>('/api/dashboard/agent-workers', { signal }),
   dashboardAttention: (signal?: AbortSignal) => request<DashboardAttention>('/api/dashboard/attention', { signal }),
   dashboardTasks: () => request<DashboardTasks>('/api/dashboard/tasks'),
   dashboardActivity: (signal?: AbortSignal) => request<DashboardActivity>('/api/dashboard/activity', { signal }),
@@ -66,17 +67,20 @@ export const api = {
   categories: (includeDisabled = false) => request<TaskCategory[]>(`/api/task-categories${includeDisabled ? '?include_disabled=true' : ''}`),
   createCategory: (body: TaskCategoryWrite) => request<TaskCategory>('/api/task-categories', { method: 'POST', body: JSON.stringify(body) }),
   updateCategory: (id: string, body: TaskCategoryWrite) => request<TaskCategory>(`/api/task-categories/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  employees: () => request<Employee[]>('/api/employees'),
-  employee: (id: string) => request<Employee>(`/api/employees/${id}`),
-  employeeUsage: (id: string, days = 7) => request<EmployeeUsage>(`/api/employees/${id}/usage?days=${days}`),
+  employees: () => request<Employee[]>('/api/agent-workers'),
+  employee: (id: string) => request<Employee>(`/api/agent-workers/${id}`),
+  employeeUsage: (id: string, days = 7) => request<EmployeeUsage>(`/api/agent-workers/${id}/usage?days=${days}`),
   createEmployee: (body: Record<string, unknown>) =>
-    request<Employee>('/api/employees', { method: 'POST', body: JSON.stringify(body) }),
+    request<Employee>('/api/agent-workers', { method: 'POST', body: JSON.stringify(body) }),
   updateEmployee: (id: string, body: Record<string, unknown>) =>
-    request<Employee>(`/api/employees/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    request<Employee>(`/api/agent-workers/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteEmployee: (id: string) =>
-    request<{ deleted: string }>(`/api/employees/${id}`, { method: 'DELETE' }),
+    request<{ deleted: string }>(`/api/agent-workers/${id}`, { method: 'DELETE' }),
   updateEnvironment: (id: string, body: Record<string, unknown>) =>
-    request<ExecutionEnvironment>(`/api/employees/${id}/environment`, { method: 'PUT', body: JSON.stringify(body) }),
+    request<ExecutionEnvironment>(`/api/agent-workers/${id}/environment`, { method: 'PUT', body: JSON.stringify(body) }),
+  repositories: () => request<CodeRepository[]>('/api/repositories'),
+  createRepository: (body: { url: string; branch: string; token: string }) =>
+    request<CodeRepository>('/api/repositories', { method: 'POST', body: JSON.stringify(body) }),
   tasks: (query = '') => request<Task[]>(`/api/tasks${query}`),
   task: (id: string) => request<Task>(`/api/tasks/${id}`),
   taskReview: (id: string) => request<TaskReview>(`/api/tasks/${encodeURIComponent(id)}/review`),
@@ -97,7 +101,7 @@ export const api = {
   deleteTask: (id: string) =>
     request<{ deleted: string }>(`/api/tasks/${id}`, { method: 'DELETE' }),
   employeeAction: (id: string, action: 'pause' | 'resume') =>
-    request<Employee>(`/api/employees/${id}/${action}`, { method: 'POST' }),
+    request<Employee>(`/api/agent-workers/${id}/${action}`, { method: 'POST' }),
   createTask: (body: Record<string, unknown>) =>
     request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(body) }),
   updateTask: (id: string, body: Record<string, unknown>) =>

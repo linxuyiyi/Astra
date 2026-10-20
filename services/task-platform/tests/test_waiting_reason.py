@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
-from app.models import Base, DigitalEmployee, OpenCodeExecutionEnvironment, RuntimeSession, Task
+from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, RuntimeSession, Task
 from app.runtime.dispatcher import Dispatcher
 from app.runtime.lifecycle import RuntimeService
 from app.runtime.session_state import SessionState, derive_session_state
@@ -43,7 +43,7 @@ def _task(**overrides):
 
 async def _ready(session):
     session.add(
-        DigitalEmployee(
+        AgentWorker(
             id="E1",
             name="Engineer",
             role="build",
@@ -299,7 +299,7 @@ async def test_continue_reuses_the_worker_worktree_and_session(session):
     task = await _ready(session)
     task.status = TaskStatus.WAITING
     session.add(
-        DigitalEmployee(
+        AgentWorker(
             id="E2",
             name="Other",
             role="build",

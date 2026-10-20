@@ -9,7 +9,7 @@ from app.dashboard import (
     dashboard_employees,
     dashboard_overview,
 )
-from app.models import Base, DigitalEmployee, Event, RuntimeSession, Task
+from app.models import AgentWorker, Base, Event, RuntimeSession, Task
 from app.runtime.presentation import TASK_STATUS
 
 
@@ -25,7 +25,7 @@ async def office_session():
 
 
 async def employee_task(session, *, employee_values=None, task_values=None, session_status="RUNNING"):
-    employee = DigitalEmployee(
+    employee = AgentWorker(
         id="E-office", name="办公室员工", role="开发", status="WORKING",
     )
     for key, value in (employee_values or {}).items():

@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.db import connect, init_db
 from nexus_api.im import ImError, accept_inbound, bind_bot, claim_outbox, contact_human
@@ -660,3 +661,79 @@ def test_late_assistant_message_is_still_enqueued(tmp_path):
     assert claimed is not None
     assert claimed["body"] == "晚到的回复"
     assert calls["n"] == 2
+
+
+def test_send_private_passes_message_id_to_trigger_chat(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    chats: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/agent/" and request.method == "POST":
+            return httpx.Response(201, json={"agent_id": "agent-1"})
+        if request.url.path == "/sessions/" and request.method == "POST":
+            return httpx.Response(201, json={"session_id": "ses-1"})
+        if request.url.path.startswith("/sessions/") and request.method == "PATCH":
+            return httpx.Response(200, json={"ok": True})
+        if request.url.path == "/chat/":
+            body = json.loads(request.content.decode())
+            chats.append(body)
+            return httpx.Response(200, json={"status": "started", "session_id": body["session_id"]})
+        if request.url.path == "/sessions/ses-1/messages":
+            # AgentScope returns the persisted message using the passed message_id
+            msg_id = chats[-1]["input"]["id"] if chats else "msg-fallback"
+            return httpx.Response(
+                200,
+                json={
+                    "messages": [
+                        {
+                            "id": msg_id,
+                            "role": "user",
+                            "name": "u1",
+                            "content": [{"type": "text", "text": "你好"}],
+                            "metadata": {"display_text": "你好", "message_id": msg_id},
+                            "created_at": "2026-01-01T00:00:00Z",
+                        }
+                    ],
+                    "event_cursor": "",
+                    "has_more": False,
+                },
+            )
+        return httpx.Response(404, json={"detail": "not found"})
+
+    transport = httpx.MockTransport(handler)
+    with TestClient(create_app()) as client:
+        client.app.state.agentscope = AgentScopeClient(
+            "http://agentscope.test",
+            "nexus",
+            httpx.AsyncClient(transport=transport, base_url="http://agentscope.test"),
+        )
+        emp = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
+        headers = {"X-User-ID": "u1", "X-Verified-UID": "u1"}
+        conv_resp = client.post(
+            f"/api/v1/employees/{emp['id']}/conversations",
+            headers=headers,
+            json={"name": "私聊"},
+        )
+        assert conv_resp.status_code in (200, 201), conv_resp.text
+        conv = conv_resp.json()
+        send_resp = client.post(
+            f"/api/v1/conversations/{conv['id']}/messages",
+            headers=headers,
+            json={"text": "你好", "attachment_ids": []},
+        )
+        assert send_resp.status_code == 200
+        sent_msg = send_resp.json()["message"]
+        assert sent_msg["accepted"] is True
+        assert len(chats) == 1
+        # Check that trigger_chat got the exact message id from send_private
+        assert chats[0]["input"]["id"] == sent_msg["id"]
+        assert chats[0]["input"]["metadata"]["message_id"] == sent_msg["id"]
+
+        # Check get_conversation returns the exact message id
+        get_resp = client.get(f"/api/v1/conversations/{conv['id']}", headers=headers)
+        assert get_resp.status_code == 200
+        history_msgs = get_resp.json()["messages"]
+        assert len(history_msgs) == 1
+        assert history_msgs[0]["id"] == sent_msg["id"]
+
+

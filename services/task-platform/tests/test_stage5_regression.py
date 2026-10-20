@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.domain import EmployeeStatus, TaskStatus
-from app.models import Base, DigitalEmployee, RuntimeSession, Task
+from app.models import AgentWorker, Base, RuntimeSession, Task
 from app.runtime import recovery
 from app.runtime.lifecycle import RuntimeService
 from app.runtime.session_connection import connect
@@ -98,7 +98,7 @@ class _TimeoutClient:
 async def _seed(factory, workspace: str):
     async with factory() as session:
         session.add(
-            DigitalEmployee(
+            AgentWorker(
                 id="E1",
                 name="Engineer",
                 role="build",

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.settings import get_settings
 from app.domain import PRIORITY_WEIGHT, EmployeeStatus, TaskStatus
 from app.event_bus import event_bus
-from app.models import DigitalEmployee, Event, Task
+from app.models import AgentWorker, Event, Task
 from app.runtime.wake_outbox import record_wake
 from app.schemas import TaskCreate, TaskUpdate
 from app.state_machine import TaskStateMachine
@@ -237,7 +237,7 @@ class EmployeeService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def set_status(self, employee: DigitalEmployee, status: EmployeeStatus) -> None:
+    async def set_status(self, employee: AgentWorker, status: EmployeeStatus) -> None:
         employee.status = status.value
         if status is not EmployeeStatus.OFFLINE:
             now = datetime.now(UTC)
@@ -248,7 +248,7 @@ class EmployeeService:
             {"type": "EMPLOYEE_STATUS_CHANGED", "employee_id": employee.id, "status": status.value}
         )
 
-    async def heartbeat(self, employee: DigitalEmployee) -> None:
+    async def heartbeat(self, employee: AgentWorker) -> None:
         now = datetime.now(UTC)
         employee.last_heartbeat = now
         employee.online_since = employee.online_since or now
@@ -264,8 +264,8 @@ async def dashboard_metrics(session: AsyncSession) -> dict:
     employee_counts = dict(
         (
             await session.execute(
-                select(DigitalEmployee.status, func.count(DigitalEmployee.id)).group_by(
-                    DigitalEmployee.status
+                select(AgentWorker.status, func.count(AgentWorker.id)).group_by(
+                    AgentWorker.status
                 )
             )
         ).all()

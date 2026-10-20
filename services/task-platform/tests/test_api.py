@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.database import SessionLocal
 from app.domain import TaskStatus
 from app.main import app
-from app.models import DigitalEmployee, OpenCodeExecutionEnvironment, RuntimeSession, Task
+from app.models import AgentWorker, CodeRepository, OpenCodeExecutionEnvironment, RuntimeSession, Task
 
 
 def task_payload(**overrides):
@@ -147,7 +147,7 @@ def test_task_delete_rejects_terminal_business_state_with_active_runtime():
     async def prepare(task_id: str) -> None:
         async with SessionLocal() as session:
             task = await session.get(Task, task_id)
-            session.add(DigitalEmployee(id="E-delete-guard", name="Guard", role="build", status="IDLE"))
+            session.add(AgentWorker(id="E-delete-guard", name="Guard", role="build", status="IDLE"))
             await session.flush()
             task.employee_id = "E-delete-guard"
             task.status = TaskStatus.FAILED
@@ -193,7 +193,7 @@ def test_home_dashboard_exposes_only_aggregated_business_sections():
             "attention_total",
         }
 
-        employees = client.get("/api/dashboard/employees")
+        employees = client.get("/api/dashboard/agent-workers")
         assert employees.status_code == 200
         for team in employees.json()["teams"]:
             for employee in team["employees"]:
@@ -259,7 +259,7 @@ def test_employee_scope_environment_and_category_configuration(tmp_path):
         category_id = category.json()["id"]
 
         created = client.post(
-            "/api/employees",
+            "/api/agent-workers",
             json={
                 "id": "astra-api-v03",
                 "name": "Astra API V0.4",
@@ -290,12 +290,12 @@ def test_employee_scope_environment_and_category_configuration(tmp_path):
         assert "capabilities" not in employee
 
         area_updated = client.patch(
-            "/api/employees/astra-api-v03", json={"default_work_area": "meeting"}
+            "/api/agent-workers/astra-api-v03", json={"default_work_area": "meeting"}
         )
         assert area_updated.status_code == 200
         assert area_updated.json()["default_work_area"] == "meeting"
         invalid_area = client.patch(
-            "/api/employees/astra-api-v03", json={"default_work_area": "unknown-area"}
+            "/api/agent-workers/astra-api-v03", json={"default_work_area": "unknown-area"}
         )
         assert invalid_area.status_code == 422
 
@@ -307,7 +307,7 @@ def test_employee_without_task_history_can_be_deleted(tmp_path):
         )
         assert category.status_code == 201
         created = client.post(
-            "/api/employees",
+            "/api/agent-workers",
             json={
                 "id": "astra-api-deletable",
                 "name": "可删除员工",
@@ -323,11 +323,11 @@ def test_employee_without_task_history_can_be_deleted(tmp_path):
             },
         )
         assert created.status_code == 201
-        assert client.delete("/api/employees/astra-api-deletable").json() == {
+        assert client.delete("/api/agent-workers/astra-api-deletable").json() == {
             "deleted": "astra-api-deletable"
         }
-        assert client.get("/api/employees/astra-api-deletable").status_code == 404
-        assert client.delete("/api/employees/astra-api-deletable").status_code == 404
+        assert client.get("/api/agent-workers/astra-api-deletable").status_code == 404
+        assert client.delete("/api/agent-workers/astra-api-deletable").status_code == 404
 
 
 def test_remote_ssh_password_is_never_returned_and_blank_update_keeps_value():
@@ -338,7 +338,7 @@ def test_remote_ssh_password_is_never_returned_and_blank_update_keeps_value():
         )
         assert category.status_code == 201
         created = client.post(
-            "/api/employees",
+            "/api/agent-workers",
             json={
                 "id": "astra-api-remote-password",
                 "name": "远程密码员工",
@@ -365,7 +365,7 @@ def test_remote_ssh_password_is_never_returned_and_blank_update_keeps_value():
         assert "ssh_password" not in environment
 
         updated = client.put(
-            "/api/employees/astra-api-remote-password/environment",
+            "/api/agent-workers/astra-api-remote-password/environment",
             json={
                 "mode": "LINUX_REMOTE",
                 "name": "远程 Agent 环境（已更新）",
@@ -389,3 +389,104 @@ def test_remote_ssh_password_is_never_returned_and_blank_update_keeps_value():
                 return row.ssh_password
 
         assert asyncio.run(load_password()) == "database-only-secret"
+
+
+def test_one_digital_employee_can_own_multiple_agent_workers(tmp_path):
+    with TestClient(app) as client:
+        category = client.post(
+            "/api/task-categories",
+            json={"name": "多 Worker 测试", "description": "一个数字员工对应多个 Worker"},
+        )
+        assert category.status_code == 201
+        category_id = category.json()["id"]
+
+        for suffix, port in (("a", 56199), ("b", 56299)):
+            created = client.post(
+                "/api/agent-workers",
+                json={
+                    "id": f"worker-shared-{suffix}",
+                    "digital_employee_id": "emp_shared",
+                    "name": "共享数字员工",
+                    "role": "测试工程",
+                    "category_ids": [category_id],
+                    "execution_environment": {
+                        "mode": "LOCAL",
+                        "name": f"共享 Worker {suffix.upper()}",
+                        "opencode_server_port": port,
+                        "opencode_path": sys.executable,
+                        "workspace_root": str(tmp_path / f"worker-{suffix}"),
+                    },
+                },
+            )
+            assert created.status_code == 201, created.text
+            assert created.json()["digital_employee_id"] == "emp_shared"
+
+        workers = client.get("/api/agent-workers").json()
+        shared = [item for item in workers if item["digital_employee_id"] == "emp_shared"]
+        assert {item["id"] for item in shared} == {"worker-shared-a", "worker-shared-b"}
+        assert {item["execution_environment"]["name"] for item in shared} == {
+            "共享 Worker A",
+            "共享 Worker B",
+        }
+
+
+def test_worker_environment_exposes_bound_repository_read(tmp_path):
+    async def seed_repository():
+        async with SessionLocal() as session:
+            session.add(
+                CodeRepository(
+                    id="repo-api-read",
+                    url="https://example.com/nexus/repository.git",
+                    branch="release",
+                )
+            )
+            await session.commit()
+
+    asyncio.run(seed_repository())
+    with TestClient(app) as client:
+        category = client.post(
+            "/api/task-categories",
+            json={"name": "仓库读取测试", "description": "验证 Worker 环境仓库字段"},
+        )
+        assert category.status_code == 201
+        created = client.post(
+            "/api/agent-workers",
+            json={
+                "id": "worker-repository-read",
+                "digital_employee_id": "emp_repository",
+                "name": "仓库 Worker",
+                "role": "工程执行",
+                "category_ids": [category.json()["id"]],
+                "execution_environment": {
+                    "mode": "LOCAL",
+                    "name": "仓库读取 Worker",
+                    "opencode_server_port": 56399,
+                    "opencode_path": sys.executable,
+                    "workspace_root": str(tmp_path / "repository-worker"),
+                },
+            },
+        )
+        assert created.status_code == 201, created.text
+
+        updated = client.put(
+            "/api/agent-workers/worker-repository-read/environment",
+            json={
+                "mode": "LOCAL",
+                "name": "仓库读取 Worker",
+                "opencode_server_port": 56399,
+                "opencode_path": sys.executable,
+                "workspace_root": str(tmp_path / "repository-worker"),
+                "repository_id": "repo-api-read",
+                "branch": "release",
+            },
+        )
+        assert updated.status_code == 200, updated.text
+        environment = updated.json()
+        assert environment["repository_id"] == "repo-api-read"
+        assert environment["repository_url"] == "https://example.com/nexus/repository.git"
+        assert environment["repository_branch"] == "release"
+
+        workers = client.get("/api/agent-workers").json()
+        worker = next(item for item in workers if item["id"] == "worker-repository-read")
+        assert worker["digital_employee_id"] == "emp_repository"
+        assert worker["execution_environment"]["repository_url"] == "https://example.com/nexus/repository.git"

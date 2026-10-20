@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.gateway.security import CredentialError
-from app.models import GitCredential, Task
+from app.models import CodeRepository, GitCredential, Task
 from app.runtime.repository import (
     CloneError,
     RepositoryBindingError,
@@ -50,6 +50,16 @@ class WorkerCopy(BaseModel):
 def _binding_error(exc: RepositoryBindingError) -> HTTPException:
     status_code = 404 if str(exc) == "仓库不存在" else 409
     return HTTPException(status_code=status_code, detail=str(exc))
+
+
+@router.get("/repositories", response_model=list[RepositoryRead])
+async def list_repositories(session: AsyncSession = Depends(get_session)):
+    rows = (
+        await session.scalars(
+            select(CodeRepository).order_by(CodeRepository.created_at.desc())
+        )
+    ).all()
+    return [RepositoryRead(id=row.id, url=row.url, branch=row.branch) for row in rows]
 
 
 @router.post("/repositories", response_model=RepositoryRead, status_code=201)
@@ -95,7 +105,7 @@ async def clone_registered_repository(
     return {"ok": True}
 
 
-@router.post("/employees/{employee_id}/repository")
+@router.post("/agent-workers/{employee_id}/repository")
 async def bind_employee_repository(
     employee_id: str,
     payload: RepositoryBind,
@@ -106,7 +116,7 @@ async def bind_employee_repository(
     employee = await require_employee(employee_id, session)
     environment = employee.execution_environment
     if environment is None:
-        raise HTTPException(status_code=409, detail="员工尚未配置 Agent 工作环境")
+        raise HTTPException(status_code=409, detail="Agent Worker 尚未配置执行环境")
     try:
         await bind_repository(session, environment, payload.repository_id)
     except RepositoryBindingError as exc:
@@ -114,7 +124,7 @@ async def bind_employee_repository(
     return await employee_read(await require_employee(employee_id, session), session)
 
 
-@router.post("/employees/{employee_id}/copy", status_code=201)
+@router.post("/agent-workers/{employee_id}/copy", status_code=201)
 async def copy_employee(
     employee_id: str,
     payload: WorkerCopy,

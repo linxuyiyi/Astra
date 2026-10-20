@@ -8,6 +8,7 @@ import json
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app
 from nexus_api.model_route import gateway_base_url

@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config.settings import get_settings
-from app.models import Base, DigitalEmployee, RuntimeSession, Task
+from app.models import AgentWorker, Base, RuntimeSession, Task
 from app.services import dashboard_metrics
 from app.usage import day_bounds, employee_usage, task_usage
 
@@ -19,7 +19,7 @@ async def usage_session():
     now = datetime.now(UTC)
     today = datetime.now(ZoneInfo(get_settings().timezone)).date().isoformat()
     async with factory() as session:
-        session.add(DigitalEmployee(id="E1", name="Engineer", role="build", status="IDLE"))
+        session.add(AgentWorker(id="E1", name="Engineer", role="build", status="IDLE"))
         session.add_all(
             [
                 Task(
@@ -137,7 +137,7 @@ async def test_today_work_duration_follows_task_span_not_short_session():
     task_finished = task_started + timedelta(minutes=15)
     today = task_finished.astimezone(ZoneInfo(get_settings().timezone)).date().isoformat()
     async with factory() as session:
-        session.add(DigitalEmployee(id="E1", name="Engineer", role="build", status="IDLE"))
+        session.add(AgentWorker(id="E1", name="Engineer", role="build", status="IDLE"))
         session.add(
             Task(
                 id="T1",

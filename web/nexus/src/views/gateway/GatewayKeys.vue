@@ -1,37 +1,38 @@
 <template>
-  <section class="gateway-keys astra-stack" data-testid="gateway-keys">
+  <section class="admin-page" data-testid="gateway-keys">
+    <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error" data-testid="gateway-keys-error">
+      <ElButton type="primary" data-testid="gateway-keys-retry" @click="load">重试</ElButton>
+    </ElAlert>
+
     <GatewayHeaderActions>
       <ElButton :loading="loading" :icon="RefreshCw" data-testid="gateway-keys-refresh" @click="load">刷新</ElButton>
       <ElButton type="primary" :icon="Plus" data-testid="gateway-keys-create" @click="openCreate">新增 Key</ElButton>
     </GatewayHeaderActions>
 
-    <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error" data-testid="gateway-keys-error">
-      <ElButton type="primary" data-testid="gateway-keys-retry" @click="load">重试</ElButton>
-    </ElAlert>
-
-    <AstraFilterPanel label="Key 筛选" testid="gateway-keys-filter">
-      <ElSelect v-model="filters.status" class="astra-filter__select" data-testid="key-filter-status" aria-label="Key 状态筛选" placeholder="状态：全部" clearable>
-        <ElOption value="enabled" label="启用" />
-        <ElOption value="disabled" label="停用" />
-        <ElOption value="revoked" label="已吊销" />
-      </ElSelect>
-      <ElButton v-if="hasFilters" text type="primary" data-testid="gateway-keys-clear" @click="clearFilters">清除筛选</ElButton>
-      <template #search>
+    <div class="admin-page__toolbar" role="search" aria-label="Key 筛选" data-testid="gateway-keys-filter">
+      <div class="admin-page__filters">
+        <ElSelect v-model="filters.status" class="admin-page__select" data-testid="key-filter-status" aria-label="Key 状态筛选" placeholder="状态：全部" clearable>
+          <ElOption value="enabled" label="启用" />
+          <ElOption value="disabled" label="停用" />
+          <ElOption value="revoked" label="已吊销" />
+        </ElSelect>
+        <ElButton v-if="hasFilters" text type="primary" data-testid="gateway-keys-clear" @click="clearFilters">清除筛选</ElButton>
+      </div>
+      <div class="admin-page__search">
         <ElInput
           v-model="filters.keyword"
-          class="astra-filter__keyword"
+          class="admin-page__keyword"
           data-testid="key-filter-keyword"
           aria-label="搜索 Key"
           placeholder="搜索名称 / 前缀 / 归属"
           clearable
-        >
-          <template #prefix><Search :size="15" /></template>
-        </ElInput>
-        <ElButton type="primary" :icon="Search" data-testid="gateway-keys-search" @click="load">搜索</ElButton>
-      </template>
-    </AstraFilterPanel>
+          :prefix-icon="Search"
+          @keydown.enter.prevent="applySearch"
+        />
+        <ElButton type="primary" :icon="Search" data-testid="gateway-keys-search" @click="applySearch">搜索</ElButton>
+      </div>
+    </div>
 
-    <section class="astra-table-panel">
     <ElTable
       v-loading="loading"
       :data="pagedKeys"
@@ -47,7 +48,7 @@
           </div>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="归属" min-width="120">
+      <ElTableColumn label="归属" min-width="120" show-overflow-tooltip>
         <template #default="{ row }">{{ row.owner_id || '未指定' }}</template>
       </ElTableColumn>
       <ElTableColumn label="状态" width="96">
@@ -56,39 +57,34 @@
           <ElTag v-else :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</ElTag>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="额度与并发" min-width="180">
+      <ElTableColumn label="额度与并发" min-width="180" show-overflow-tooltip>
         <template #default="{ row }">并发 {{ row.max_concurrency || '不限' }} · 时/日 {{ tokenLimitText(row.hourly_token_limit) }}/{{ tokenLimitText(row.daily_token_limit) }}</template>
       </ElTableColumn>
-      <ElTableColumn label="操作" width="120">
+      <ElTableColumn label="操作" width="190" align="center">
         <template #default="{ row }">
-          <RowMenu
-            primary="编辑"
-            :aria-label="(row as GatewayKey).name"
-            :disabled="busy"
-            :items="[{ command: 'revoke', label: '吊销', disabled: Boolean(row.revoked_at) }, { command: 'delete', label: '删除' }]"
-            @primary="openEdit(row as GatewayKey)"
-            @command="(command) => onKeyCommand(row as GatewayKey, command)"
-          />
+          <div class="admin-actions">
+            <ElButton link type="primary" :disabled="busy" @click="openEdit(row as GatewayKey)">编辑</ElButton>
+            <ElButton link type="warning" :disabled="busy || Boolean(row.revoked_at)" @click="revoke(row as GatewayKey)">吊销</ElButton>
+            <ElButton link type="danger" :disabled="busy" @click="removeKey(row as GatewayKey)">删除</ElButton>
+          </div>
         </template>
       </ElTableColumn>
       <template #empty>
         <ElEmpty v-if="!loading" :image-size="64" :description="emptyText" />
       </template>
     </ElTable>
-    </section>
 
-    <footer v-if="filteredKeys.length" class="gateway-keys__footer">
-      <ElText type="info" data-testid="gateway-keys-total">共 {{ filteredKeys.length }} 条</ElText>
+    <div class="admin-page__footer">
       <ElPagination
-        :current-page="page"
-        :page-size="pageSize"
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :page-sizes="[10, 20, 50]"
         :total="filteredKeys.length"
-        layout="prev, pager, next"
+        layout="total, sizes, prev, pager, next"
         aria-label="Key 列表分页"
         data-testid="gateway-keys-pagination"
-        @current-change="page = $event"
       />
-    </footer>
+    </div>
 
     <ElDrawer
       v-if="drawerOpen"
@@ -205,8 +201,6 @@ import {
   type GatewayKey,
   type GatewayKeyCreated,
 } from '@/api/gateway'
-import AstraFilterPanel from '@/components/astra/AstraFilterPanel.vue'
-import RowMenu from '@/components/astra/RowMenu.vue'
 import GatewayHeaderActions from '@/views/gateway/GatewayHeaderActions.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
@@ -241,7 +235,7 @@ const form = reactive({
   enabled: true,
 })
 
-const pageSize = 10
+const pageSize = ref(20)
 const filters = reactive({ keyword: '', status: '' })
 const page = ref(1)
 
@@ -256,19 +250,25 @@ const filteredKeys = computed(() => {
   })
 })
 const pagedKeys = computed(() => {
-  const start = (page.value - 1) * pageSize
-  return filteredKeys.value.slice(start, start + pageSize)
+  const start = (page.value - 1) * pageSize.value
+  return filteredKeys.value.slice(start, start + pageSize.value)
 })
 const hasFilters = computed(() => Boolean(filters.keyword.trim() || filters.status))
 const emptyText = computed(() => (hasFilters.value
-  ? '没有匹配的 Key，调整筛选条件后重试。'
-  : '暂无 Gateway Key，点击「新增 Key」开始创建。'))
+  ? '没有匹配的 Key'
+  : '暂无 Gateway Key'))
 
 watch(filters, () => { page.value = 1 })
+watch(pageSize, () => { page.value = 1 })
 watch(filteredKeys, (list) => {
-  const maxPage = Math.max(1, Math.ceil(list.length / pageSize))
+  const maxPage = Math.max(1, Math.ceil(list.length / pageSize.value))
   if (page.value > maxPage) page.value = maxPage
 })
+
+function applySearch() {
+  page.value = 1
+  void load()
+}
 
 function clearFilters() {
   filters.keyword = ''
@@ -317,11 +317,6 @@ function openCreate() {
   formError.value = ''
   initialSnapshot.value = formSnapshot()
   drawerOpen.value = true
-}
-
-function onKeyCommand(key: GatewayKey, command: string) {
-  if (command === 'revoke') void revoke(key)
-  if (command === 'delete') void removeKey(key)
 }
 
 function openEdit(key: GatewayKey) {
@@ -447,7 +442,6 @@ onMounted(load)
 </script>
 
 <style scoped>
-.gateway-keys__footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .key-cell { display: grid; gap: 2px; min-width: 0; }
 .key-cell strong { overflow: hidden; color: var(--astra-text-primary); font-size: var(--astra-font-label); text-overflow: ellipsis; white-space: nowrap; }
 .key-cell__id { overflow: hidden; color: var(--astra-text-muted); font-size: var(--astra-font-helper); text-overflow: ellipsis; white-space: nowrap; }

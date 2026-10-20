@@ -117,7 +117,7 @@ def build_mcp_server() -> MCPServer:
         name="NEXUS Digital Library",
         title="NEXUS 数字图书馆",
         version="1.0.0",
-        description="数字员工查询、引用和反馈正式知识的服务。",
+        description="Agent Worker 查询、引用和反馈正式知识的服务。",
         instructions=(
             "先使用 library_search 查找正式知识，再用 library_get 将选中的 Markdown 放入任务上下文。"
             "只负责执行任务；任务总结与经验由人工确认完成后的后台复盘统一处理。"

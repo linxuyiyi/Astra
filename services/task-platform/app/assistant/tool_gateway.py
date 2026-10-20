@@ -19,7 +19,7 @@ from app.assistant.cards import employee_card, knowledge_card, session_card, tas
 from app.assistant.operations import OperationService
 from app.assistant.review import review_detail
 from app.domain import RuntimeSessionStatus, TaskStatus
-from app.models import DigitalEmployee, KnowledgeItem, RuntimeSession, Task
+from app.models import AgentWorker, KnowledgeItem, RuntimeSession, Task
 
 MAX_LIMIT = 50
 
@@ -171,7 +171,7 @@ async def task_prepare_reassign(
     }
 
 
-def _employee_summary(employee: DigitalEmployee) -> dict[str, Any]:
+def _employee_summary(employee: AgentWorker) -> dict[str, Any]:
     return {
         "employee_id": employee.id,
         "name": employee.name,
@@ -188,22 +188,22 @@ async def employee_search(
     session: AsyncSession, *, keyword: str | None = None, limit: int = 20
 ) -> dict[str, Any]:
     limit = max(1, min(int(limit or 20), MAX_LIMIT))
-    query = select(DigitalEmployee)
+    query = select(AgentWorker)
     if keyword:
         like = f"%{keyword.strip()}%"
-        query = query.where(or_(DigitalEmployee.name.like(like), DigitalEmployee.role.like(like)))
-    rows = (await session.execute(query.order_by(DigitalEmployee.id).limit(limit))).scalars().all()
+        query = query.where(or_(AgentWorker.name.like(like), AgentWorker.role.like(like)))
+    rows = (await session.execute(query.order_by(AgentWorker.id).limit(limit))).scalars().all()
     return {"items": [_employee_summary(employee) for employee in rows], "total": len(rows)}
 
 
 async def employee_get(session: AsyncSession, employee_id: str) -> dict[str, Any]:
     employee = await session.scalar(
-        select(DigitalEmployee)
-        .options(selectinload(DigitalEmployee.execution_environment))
-        .where(DigitalEmployee.id == employee_id)
+        select(AgentWorker)
+        .options(selectinload(AgentWorker.execution_environment))
+        .where(AgentWorker.id == employee_id)
     )
     if not employee:
-        raise ValueError(f"数字员工不存在：{employee_id}")
+        raise ValueError(f"Agent Worker 不存在：{employee_id}")
     environment = employee.execution_environment
     active_tasks = (
         (
@@ -246,10 +246,10 @@ async def employee_recommend(
     only_available: bool = True,
 ) -> dict[str, Any]:
     """候选员工由平台规则决定，不让模型按名字猜。"""
-    query = select(DigitalEmployee).where(DigitalEmployee.enabled.is_(True))
+    query = select(AgentWorker).where(AgentWorker.enabled.is_(True))
     if only_available:
-        query = query.where(DigitalEmployee.status.in_(["IDLE", "WORKING", "WAIT_HUMAN"]))
-    rows = (await session.execute(query.order_by(DigitalEmployee.current_task_count))).scalars().all()
+        query = query.where(AgentWorker.status.in_(["IDLE", "WORKING", "WAIT_HUMAN"]))
+    rows = (await session.execute(query.order_by(AgentWorker.current_task_count))).scalars().all()
     candidates = []
     wanted_type = str(task_type or "").upper() or None
     for employee in rows:
@@ -451,8 +451,8 @@ async def operation_employee_load(session: AsyncSession) -> dict[str, Any]:
     rows = (
         (
             await session.execute(
-                select(DigitalEmployee).order_by(
-                    DigitalEmployee.current_task_count.desc(), DigitalEmployee.id
+                select(AgentWorker).order_by(
+                    AgentWorker.current_task_count.desc(), AgentWorker.id
                 )
             )
         )

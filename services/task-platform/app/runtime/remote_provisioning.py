@@ -384,7 +384,7 @@ class RemoteProvisioner:
                             return raw
             key, raw = await self._gateway_service(db).create_key(
                 GatewayKeyCreate(
-                    name=f"数字员工 {self.environment.employee_id}", owner_id=self.environment.employee_id
+                    name=f"Agent Worker {self.environment.employee_id}", owner_id=self.environment.employee_id
                 ),
                 actor="employee-deployment",
                 actor_role="admin",

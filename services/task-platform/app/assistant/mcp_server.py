@@ -74,12 +74,12 @@ def build_assistant_mcp_server() -> MCPServer:
 
     @server.tool(name="nexus_employee_search", structured_output=True)
     async def nexus_employee_search(keyword: str | None = None, limit: int = 20) -> dict[str, Any]:
-        """按名字或岗位搜索数字员工。"""
+        """按名字或岗位搜索 Agent Worker。"""
         return await _run(lambda session: tool_gateway.employee_search(session, keyword=keyword, limit=limit))
 
     @server.tool(name="nexus_employee_get", structured_output=True)
     async def nexus_employee_get(employee_id: str) -> dict[str, Any]:
-        """获取单个数字员工的详情、环境和当前任务。"""
+        """获取单个 Agent Worker 的详情、环境和当前任务。"""
         return await _run(lambda session: tool_gateway.employee_get(session, employee_id))
 
     @server.tool(name="nexus_employee_recommend", structured_output=True)
@@ -176,7 +176,7 @@ def build_assistant_mcp_server() -> MCPServer:
 
     @server.tool(name="nexus_operation_employee_load", structured_output=True)
     async def nexus_operation_employee_load() -> dict[str, Any]:
-        """各数字员工当前任务负载。"""
+        """各 Agent Worker 当前任务负载。"""
         return await _run(lambda session: tool_gateway.operation_employee_load(session))
 
     return server

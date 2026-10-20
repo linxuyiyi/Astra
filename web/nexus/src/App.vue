@@ -3,7 +3,7 @@
     <header class="top">
       <div class="brand">
         <div class="mark">✦</div>
-        <div class="brandname">NEXUS <span class="version">v1.4.2</span></div>
+        <div class="brandname">NEXUS <span class="version">v1.4.7</span></div>
       </div>
       <nav class="top-nav" aria-label="页面导航">
         <router-link
@@ -33,7 +33,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import AstraConfirmHost from "@/components/astra/AstraConfirmHost.vue";
 import { useAstraStore } from "@/stores/astra";
@@ -71,6 +71,16 @@ function submitUid() {
   identity.value = "ready";
 }
 
+async function refreshRuntime() {
+  try {
+    runtime.value = await getRuntime();
+  } catch {
+    runtime.value = { agentscope_version: "2.0.10", configured: false, reachable: false, agentscope_user_id: "nexus" };
+  }
+}
+
+let runtimeTimer = 0;
+
 onMounted(async () => {
   try {
     await resolveOwner();
@@ -79,11 +89,12 @@ onMounted(async () => {
     identity.value = "ask";
   }
   if (!store.lastUpdated) void store.refresh();
-  try {
-    runtime.value = await getRuntime();
-  } catch {
-    runtime.value = { agentscope_version: "2.0.10", configured: false, reachable: false, agentscope_user_id: "nexus" };
-  }
+  await refreshRuntime();
+  runtimeTimer = window.setInterval(refreshRuntime, 15_000);
+});
+
+onBeforeUnmount(() => {
+  if (runtimeTimer) window.clearInterval(runtimeTimer);
 });
 </script>
 

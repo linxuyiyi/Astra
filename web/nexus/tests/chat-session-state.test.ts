@@ -42,6 +42,22 @@ test('mergeMessages does not duplicate the same server message arriving twice', 
   assert.equal(twice.length, 1)
 })
 
+test('mergeMessages keeps two identical messages that the user really sent twice', () => {
+  // 两条不同的服务端消息，文本相同、时间相同，也必须都保留。
+  const first = mergeMessages([], [message('server_1', '继续', 5)])
+  const merged = mergeMessages(first, [message('server_2', '继续', 5)])
+  assert.deepEqual(merged.map((item) => item.id), ['server_1', 'server_2'])
+})
+
+test('mergeMessages replaces the optimistic message when the server echoes the same id', () => {
+  // 本地乐观消息与服务端回显共享同一个 id：合并成一条，且采用服务端字段。
+  const local = [message('local_1', '继续', 5)]
+  const server = [{ ...message('local_1', '继续', 5), accepted: true }]
+  const merged = mergeMessages(local, server)
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].id, 'local_1')
+})
+
 test('streamCursor only accepts numeric replay cursors', () => {
   assert.equal(streamCursor('', '12-3'), '12-3')
   assert.equal(streamCursor('12-3', 'bad-id'), '12-3')

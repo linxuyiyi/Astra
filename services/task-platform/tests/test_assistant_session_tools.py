@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.assistant import tool_gateway
-from app.models import Base, DigitalEmployee, RuntimeSession, Task
+from app.models import AgentWorker, Base, RuntimeSession, Task
 
 
 @pytest.fixture
@@ -12,7 +12,7 @@ async def session_tools_session():
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
-        session.add(DigitalEmployee(id="E1", name="Engineer", role="build", status="IDLE"))
+        session.add(AgentWorker(id="E1", name="Engineer", role="build", status="IDLE"))
         session.add_all(
             [
                 Task(id="T1", title="ok", task_type="ISSUE", status="SUCCEEDED", employee_id="E1"),

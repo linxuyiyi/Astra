@@ -20,7 +20,7 @@ from sqlalchemy.orm import selectinload
 from app.config.settings import get_settings
 from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
 from app.main import app
-from app.models import Base, DigitalEmployee, OpenCodeExecutionEnvironment, Task, TaskCategory
+from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, Task, TaskCategory
 from app.runtime.capability import (
     binding_entries,
     binding_revision,
@@ -198,7 +198,7 @@ def _employee(employee_id="E1", **overrides):
         category_ids=["testing"],
     )
     values.update(overrides)
-    return DigitalEmployee(**values)
+    return AgentWorker(**values)
 
 
 def _environment(employee_id="E1", **overrides):
@@ -406,9 +406,9 @@ async def test_copy_picks_a_free_port_or_the_requested_one(session):
     session.add_all([source, environment, other, occupied])
     await session.commit()
     loaded = await session.scalar(
-        select(DigitalEmployee)
-        .where(DigitalEmployee.id == "src")
-        .options(selectinload(DigitalEmployee.execution_environment))
+        select(AgentWorker)
+        .where(AgentWorker.id == "src")
+        .options(selectinload(AgentWorker.execution_environment))
     )
     await copy_worker(session, loaded, new_id="copy-a", name="副本")
     copied = await session.scalar(
@@ -418,9 +418,9 @@ async def test_copy_picks_a_free_port_or_the_requested_one(session):
     assert copied.port == 22
     assert dispatch_allowed(copied.status_detail, bindings=["review", "library"]) is False
     loaded = await session.scalar(
-        select(DigitalEmployee)
-        .where(DigitalEmployee.id == "src")
-        .options(selectinload(DigitalEmployee.execution_environment))
+        select(AgentWorker)
+        .where(AgentWorker.id == "src")
+        .options(selectinload(AgentWorker.execution_environment))
     )
     await copy_worker(session, loaded, new_id="copy-b", name="指定端口", port=15000)
     chosen = await session.scalar(

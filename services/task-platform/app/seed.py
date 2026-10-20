@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
 from app.models import (
-    DigitalEmployee,
+    AgentWorker,
     Event,
     OpenCodeExecutionEnvironment,
     RuntimeSession,
@@ -15,13 +15,13 @@ from app.runtime.environment import environment_snapshot
 
 
 async def seed_demo_data(session: AsyncSession) -> None:
-    if await session.scalar(select(func.count(DigitalEmployee.id))):
+    if await session.scalar(select(func.count(AgentWorker.id))):
         await upgrade_demo_v03(session)
         return
 
     now = datetime.now(UTC)
     employees = [
-        DigitalEmployee(
+        AgentWorker(
             id="astra-01",
             name="Astra-01",
             role="测试平台开发",
@@ -37,7 +37,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
             online_since=now - timedelta(hours=8),
             last_heartbeat=now,
         ),
-        DigitalEmployee(
+        AgentWorker(
             id="astra-02",
             name="Astra-02",
             role="自动化工程师",
@@ -53,7 +53,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
             online_since=now - timedelta(hours=6),
             last_heartbeat=now,
         ),
-        DigitalEmployee(
+        AgentWorker(
             id="astra-03",
             name="Astra-03",
             role="防线运营专员",
@@ -227,7 +227,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
             task_type="REQUIREMENT",
             category_id="quality-defense",
             title="优化防线异常通知内容",
-            description="数字员工已提交结果，等待管理员确认。",
+            description="Agent Worker 已提交结果，等待管理员确认。",
             acceptance_criteria=[{"id": "AC-01", "content": "通知内容清晰可定位"}],
             priority="HIGH",
             priority_weight=3,
@@ -328,7 +328,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
         task_row = await session.get(Task, task_id)
         task_row.current_session_id = session_id
     for employee_id in ("astra-01", "astra-02"):
-        employee_row = await session.get(DigitalEmployee, employee_id)
+        employee_row = await session.get(AgentWorker, employee_id)
         employee_row.current_task_count = 1
     session.add_all(
         [
@@ -360,7 +360,7 @@ async def seed_demo_data(session: AsyncSession) -> None:
 
 
 async def upgrade_demo_v03(session: AsyncSession) -> None:
-    employees = (await session.execute(select(DigitalEmployee))).scalars().all()
+    employees = (await session.execute(select(AgentWorker))).scalars().all()
     for employee in employees:
         employee.task_types = employee.task_types or ["ISSUE", "REQUIREMENT"]
         employee.category_ids = employee.category_ids or [

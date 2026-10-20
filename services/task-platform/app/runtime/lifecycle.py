@@ -39,7 +39,7 @@ from app.executors.usage import (
     parse_opencode_usage,
     parse_usage_breakdowns,
 )
-from app.models import DigitalEmployee, OpenCodeExecutionEnvironment, RuntimeSession, Task, TaskCategory
+from app.models import AgentWorker, OpenCodeExecutionEnvironment, RuntimeSession, Task, TaskCategory
 from app.runtime.environment import environment_snapshot
 from app.runtime.occupancy import clear_execution_stop, occupying_clause, sync_employee_occupancy
 from app.runtime.opencode_model import direct_model, gateway_model
@@ -529,9 +529,9 @@ class RuntimeService:
             else None
         )
         employee = await self.session.scalar(
-            select(DigitalEmployee)
-            .where(DigitalEmployee.id == task.employee_id)
-            .options(selectinload(DigitalEmployee.execution_environment))
+            select(AgentWorker)
+            .where(AgentWorker.id == task.employee_id)
+            .options(selectinload(AgentWorker.execution_environment))
             .with_for_update()
         )
         if not employee or not employee.enabled or not employee.execution_environment:
@@ -897,8 +897,8 @@ class RuntimeService:
             await self.session.rollback()
             raise RuntimeStateError("任务正在取消，不能提交新输入")
         employee = await self.session.scalar(
-            select(DigitalEmployee)
-            .where(DigitalEmployee.id == employee_id)
+            select(AgentWorker)
+            .where(AgentWorker.id == employee_id)
             .with_for_update()
         )
         occupied = await self.session.scalar(
@@ -1972,9 +1972,9 @@ class RuntimeService:
     async def refresh_employee_heartbeats(self):
         employees = (
             await self.session.scalars(
-                select(DigitalEmployee)
-                .options(selectinload(DigitalEmployee.execution_environment))
-                .where(DigitalEmployee.enabled.is_(True))
+                select(AgentWorker)
+                .options(selectinload(AgentWorker.execution_environment))
+                .where(AgentWorker.enabled.is_(True))
             )
         ).all()
         # The initial SELECT starts a transaction. Close it before any network
@@ -1997,7 +1997,7 @@ class RuntimeService:
             # absent OpenCode listener is normal; rely on the last explicit
             # environment check instead of marking the employee OFFLINE.
             if occupying is None:
-                fresh = await self.session.get(DigitalEmployee, employee.id)
+                fresh = await self.session.get(AgentWorker, employee.id)
                 if fresh:
                     await sync_employee_occupancy(self.session, fresh.id)
                     if fresh.status not in {EmployeeStatus.PAUSED, EmployeeStatus.ERROR}:
@@ -2019,7 +2019,7 @@ class RuntimeService:
             except Exception as exc:
                 probe_error = exc
 
-            fresh = await self.session.get(DigitalEmployee, employee.id)
+            fresh = await self.session.get(AgentWorker, employee.id)
             if not fresh:
                 await self.session.rollback()
                 continue

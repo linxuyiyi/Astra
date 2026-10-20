@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.config.settings import get_settings
 from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
 from app.main import app
-from app.models import Base, DigitalEmployee, OpenCodeExecutionEnvironment, Task
+from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, Task
 from app.runtime.capability import binding_revision, observe_bindings, write_capability
 from app.runtime.dispatcher import Dispatcher
 
@@ -28,7 +28,7 @@ async def session():
 
 
 def _employee():
-    return DigitalEmployee(
+    return AgentWorker(
         id="E1",
         name="Engineer",
         role="build",

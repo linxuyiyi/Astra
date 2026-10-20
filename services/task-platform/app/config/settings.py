@@ -208,15 +208,15 @@ class Settings(BaseSettings):
     def validate_llm_wiki_url(cls, value: str) -> str:
         parsed = urlparse(value)
         if (
-            parsed.scheme != "http"
-            or parsed.hostname != "127.0.0.1"
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
             or parsed.username
             or parsed.password
             or parsed.query
             or parsed.fragment
             or parsed.path.rstrip("/") != "/api/v1"
         ):
-            raise ValueError("知识服务地址必须为 http://127.0.0.1:<port>/api/v1")
+            raise ValueError("知识服务地址必须为 http(s)://<host>[:port]/api/v1")
         return value.rstrip("/")
 
     # Platform assistant (NEXUS 平台助手). The assistant is an Astra

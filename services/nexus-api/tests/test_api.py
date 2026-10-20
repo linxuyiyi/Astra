@@ -10,6 +10,7 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+
 from nexus_api.agentscope import AgentScopeClient, AgentScopeError
 from nexus_api.main import (
     assistant_messages,

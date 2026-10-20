@@ -15,8 +15,8 @@ from app.executors.opencode_cli import OpenCodeCLIExecutor
 from app.executors.process import windows_batch_command
 from app.executors.usage import parse_execution_seconds, parse_opencode_usage
 from app.models import (
+    AgentWorker,
     Base,
-    DigitalEmployee,
     Event,
     OpenCodeExecutionEnvironment,
     Task,
@@ -113,7 +113,7 @@ async def test_add_event_can_join_caller_transaction_without_implicit_commit(ses
 async def test_dispatcher_matches_type_and_category_and_limits_one_task(session, tmp_path):
     workspace = tmp_path / "employee-workspace"
     workspace.mkdir()
-    employee = DigitalEmployee(
+    employee = AgentWorker(
         id="astra-test",
         name="Astra Test",
         role="测试平台员工",
@@ -162,7 +162,7 @@ async def test_dispatcher_claims_task_assigned_to_employee_without_auto_claim(se
 
     workspace = tmp_path / "employee-workspace"
     workspace.mkdir()
-    employee = DigitalEmployee(
+    employee = AgentWorker(
         id="astra-assigned",
         name="Astra Assigned",
         role="指定员工",
@@ -209,7 +209,7 @@ async def test_dispatcher_keeps_unclaimed_pool_on_auto_claim(session, tmp_path):
     workspace = tmp_path / "employee-workspace"
     workspace.mkdir()
     session.add(
-        DigitalEmployee(
+        AgentWorker(
             id="astra-manual",
             name="Astra Manual",
             role="手动员工",
@@ -240,7 +240,7 @@ async def _assigned_task(session, tmp_path, *, auto_execute: bool, employee_id: 
     workspace = tmp_path / "employee-workspace"
     workspace.mkdir(exist_ok=True)
     session.add(
-        DigitalEmployee(
+        AgentWorker(
             id=employee_id,
             name="Dispatch Employee",
             role="调度员工",

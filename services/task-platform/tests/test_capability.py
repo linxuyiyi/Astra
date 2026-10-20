@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
-from app.models import Base, DigitalEmployee, OpenCodeExecutionEnvironment, Task
+from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, Task
 from app.runtime.capability import (
     binding_revision,
     discover_worker,
@@ -59,7 +59,7 @@ def test_failed_discovery_keeps_the_previous_applied_revision():
 
 
 def _employee():
-    return DigitalEmployee(
+    return AgentWorker(
         id="E1",
         name="Engineer",
         role="build",

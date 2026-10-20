@@ -26,11 +26,11 @@ from tests.test_worker_gateway import bring_online, gateway_for
 @pytest.fixture
 async def environment_id() -> int:
     from app.database import init_database
-    from app.models import DigitalEmployee, OpenCodeExecutionEnvironment
+    from app.models import AgentWorker, OpenCodeExecutionEnvironment
 
     await init_database()
     async with SessionLocal() as session:
-        employee = DigitalEmployee(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
+        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
         session.add(employee)
         await session.flush()
         environment = OpenCodeExecutionEnvironment(

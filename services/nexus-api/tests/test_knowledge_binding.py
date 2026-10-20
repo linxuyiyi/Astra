@@ -4,6 +4,7 @@ import json
 
 import httpx
 from fastapi.testclient import TestClient
+
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app
 

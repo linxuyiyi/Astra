@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
 from app.event_bus import event_bus
-from app.models import DigitalEmployee, Task, WorkerMaintenanceOperation
+from app.models import AgentWorker, Task, WorkerMaintenanceOperation
 from app.runtime.capability import binding_names, dispatch_allowed
 from app.runtime.environment import environment_snapshot
 from app.runtime.maintenance import ACTIVE_STATES
@@ -43,15 +43,15 @@ class Dispatcher:
         # Recover a committed assignment if a worker exited before starting its Session.
         assigned = await self.session.scalar(
             select(Task)
-            .join(DigitalEmployee, DigitalEmployee.id == Task.employee_id)
+            .join(AgentWorker, AgentWorker.id == Task.employee_id)
             .where(
                 Task.status == TaskStatus.PENDING,
                 Task.claimed_at.is_not(None),
                 Task.current_session_id.is_(None),
                 Task.pending_message_id.is_(None),
                 Task.runtime_error.is_(None),
-                DigitalEmployee.auto_execute.is_(True),
-                DigitalEmployee.enabled.is_(True),
+                AgentWorker.auto_execute.is_(True),
+                AgentWorker.enabled.is_(True),
             )
             .order_by(Task.claimed_at)
             .with_for_update(skip_locked=True)
@@ -95,22 +95,22 @@ class Dispatcher:
                 if parent is None or _parent_open(parent.status):
                     continue
             conditions = [
-                DigitalEmployee.status == EmployeeStatus.IDLE,
-                DigitalEmployee.enabled.is_(True),
-                ~occupying_exists(DigitalEmployee.id),
+                AgentWorker.status == EmployeeStatus.IDLE,
+                AgentWorker.enabled.is_(True),
+                ~occupying_exists(AgentWorker.id),
             ]
             if task.employee_id:
                 # 指定员工由人工分配，auto_claim 只约束无人认领的任务池。
-                conditions.append(DigitalEmployee.id == task.employee_id)
+                conditions.append(AgentWorker.id == task.employee_id)
             else:
-                conditions.append(DigitalEmployee.auto_claim.is_(True))
+                conditions.append(AgentWorker.auto_claim.is_(True))
             employees = (
                 (
                     await self.session.execute(
-                        select(DigitalEmployee)
-                        .options(selectinload(DigitalEmployee.execution_environment))
+                        select(AgentWorker)
+                        .options(selectinload(AgentWorker.execution_environment))
                         .where(*conditions)
-                        .order_by(DigitalEmployee.id)
+                        .order_by(AgentWorker.id)
                         .with_for_update(skip_locked=True)
                     )
                 )

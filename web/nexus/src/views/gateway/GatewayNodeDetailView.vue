@@ -1,415 +1,399 @@
 <template>
-    <ElContainer direction="vertical" class="gateway-node-page" data-testid="gateway-node-detail">
-      <ElHeader class="gateway-node-header">
-        <AstraPageHeader :title="node?.name ?? '节点详情'" :description="node?.base_url ?? '正在加载节点…'" testid="gateway-node-header">
-          <RouterLink class="gateway-node-back" to="/gateway/nodes">
-            <ArrowLeft :size="14" />节点列表
-          </RouterLink>
-          <ElText type="info" class="gateway-node-mono">{{ node?.id ?? '—' }}</ElText>
-          <span v-if="node" class="gateway-node-states" aria-label="节点状态">
-            <ElTag :type="tagType(healthTone(node.health_state))">{{ healthStateLabel(node.health_state) }}</ElTag>
-            <ElTag :type="tagType(schedulingTone(node.scheduling_state))">{{ schedulingStateLabel(node.scheduling_state) }}</ElTag>
-            <ElTag :type="node.config_state === 'ENABLED' ? 'success' : 'info'">{{ configStateLabel(node.config_state) }}</ElTag>
-            <ElTag effect="plain">{{ poolName(node.pool_id) }}</ElTag>
-          </span>
-          <template #actions>
-            <ElSpace v-if="node" class="gateway-node-actions" :size="8">
-              <ElButton type="primary" :icon="Pencil" data-testid="gateway-node-edit" @click="openEditor">编辑</ElButton>
-              <ElDropdown trigger="click" :disabled="working" @command="onNodeCommand">
-                <ElButton :loading="working || loading">更多</ElButton>
-                <template #dropdown>
-                  <ElDropdownMenu>
-                    <ElDropdownItem command="refresh" data-testid="gateway-node-refresh">刷新</ElDropdownItem>
-                    <ElDropdownItem command="probe" data-testid="gateway-node-probe">探测</ElDropdownItem>
-                    <ElDropdownItem v-if="node.scheduling_state === 'ACTIVE'" command="drain" data-testid="gateway-node-drain">安全下线</ElDropdownItem>
-                    <ElDropdownItem v-else command="restore" data-testid="gateway-node-restore">恢复调度</ElDropdownItem>
-                    <ElDropdownItem command="toggle" data-testid="gateway-node-toggle">{{ node.config_state === 'ENABLED' ? '禁用' : '启用' }}</ElDropdownItem>
-                  </ElDropdownMenu>
-                </template>
-              </ElDropdown>
-            </ElSpace>
+  <section class="gateway-node-page" data-testid="gateway-node-detail">
+    <ElAlert
+      v-if="error"
+      type="error"
+      show-icon
+      :closable="false"
+      :title="error"
+      data-testid="gateway-node-error"
+    >
+      <ElButton type="primary" data-testid="gateway-node-retry" @click="load">重试</ElButton>
+    </ElAlert>
+
+    <ElCard
+      v-if="!node"
+      v-loading="loading"
+      class="gateway-node-state"
+      element-loading-text="正在加载节点"
+      data-testid="gateway-node-state"
+    >
+      <ElEmpty v-if="!loading" :image-size="72" description="未找到该节点，或它已被删除。">
+        <ElButton type="primary" :icon="ArrowLeft" data-testid="gateway-node-back-empty" @click="backToList">返回节点列表</ElButton>
+      </ElEmpty>
+    </ElCard>
+
+    <template v-else>
+      <section class="gateway-node-identity" data-testid="gateway-node-header">
+        <div class="gateway-node-identity__main">
+          <RouterLink class="gateway-node-back" to="/gateway/nodes"><ArrowLeft :size="14" />节点列表</RouterLink>
+          <div class="gateway-node-identity__title">
+            <h2>{{ node.name }}</h2>
+            <span class="gateway-node-mono">{{ node.id }}</span>
+          </div>
+          <p class="gateway-node-identity__url">{{ node.base_url }}</p>
+        </div>
+        <ElSpace class="gateway-node-actions" :size="8">
+          <ElButton type="primary" :icon="Pencil" data-testid="gateway-node-edit" @click="openEditor">编辑</ElButton>
+          <ElDropdown trigger="click" :disabled="working" @command="onNodeCommand">
+            <ElButton :loading="working || loading">更多</ElButton>
+            <template #dropdown>
+              <ElDropdownMenu>
+                <ElDropdownItem command="refresh" data-testid="gateway-node-refresh">刷新</ElDropdownItem>
+                <ElDropdownItem command="probe" data-testid="gateway-node-probe">探测</ElDropdownItem>
+                <ElDropdownItem v-if="node.scheduling_state === 'ACTIVE'" command="drain" data-testid="gateway-node-drain">安全下线</ElDropdownItem>
+                <ElDropdownItem v-else command="restore" data-testid="gateway-node-restore">恢复调度</ElDropdownItem>
+                <ElDropdownItem command="toggle" data-testid="gateway-node-toggle">{{ node.config_state === 'ENABLED' ? '禁用' : '启用' }}</ElDropdownItem>
+              </ElDropdownMenu>
+            </template>
+          </ElDropdown>
+        </ElSpace>
+      </section>
+
+      <section class="gateway-node-status" :data-status="serveTone" data-testid="gateway-node-summary">
+        <div class="gateway-node-status__main">
+          <span class="gateway-node-status__pill">{{ serveSummary.title }}</span>
+          <p class="gateway-node-status__detail">{{ serveSummary.detail }}</p>
+        </div>
+        <div class="gateway-node-status__facts">
+          <span>健康 <b>{{ healthStateLabel(node.health_state) }}</b></span>
+          <span>调度 <b>{{ schedulingStateLabel(node.scheduling_state) }}</b></span>
+          <span>配置 <b>{{ configStateLabel(node.config_state) }}</b></span>
+          <span>资源池 <b>{{ poolName(node.pool_id) }}</b></span>
+          <span>最近探测 <b>{{ formatRelativeTime(node.last_checked_at) }}</b></span>
+        </div>
+      </section>
+
+      <div class="gateway-node-tabs">
+        <ElRadioGroup v-model="detailView" aria-label="节点内容" data-testid="gateway-node-nav">
+          <ElRadioButton value="summary">概况</ElRadioButton>
+          <ElRadioButton value="usage">用量</ElRadioButton>
+          <ElRadioButton value="ops">运维</ElRadioButton>
+        </ElRadioGroup>
+        <div v-if="detailView === 'usage'" class="gateway-node-tabs__tools">
+          <span class="gateway-node-tabs__label">统计窗口</span>
+          <ElRadioGroup v-model="statsWindow" aria-label="统计窗口" data-testid="gateway-node-window">
+            <ElRadioButton v-for="item in windows" :key="item.id" :value="item.id">{{ item.label }}</ElRadioButton>
+          </ElRadioGroup>
+        </div>
+      </div>
+
+      <div class="gateway-node-content" data-testid="gateway-node-content">
+    <!-- 概览 -->
+    <section v-show="showSection('overview')" id="overview" class="gateway-node-section" data-testid="gateway-node-section-overview">
+      <div class="gateway-node-grid">
+        <ElCard shadow="never" data-testid="gateway-node-info">
+          <template #header>
+            <div class="gateway-node-card-head">
+              <div><h4>节点信息</h4></div>
+            </div>
           </template>
-        </AstraPageHeader>
-      </ElHeader>
-
-      <ElMain class="gateway-node-body">
-        <ElAlert
-          v-if="error"
-          type="error"
-          show-icon
-          :closable="false"
-          :title="error"
-          data-testid="gateway-node-error"
-        >
-          <ElButton type="primary" data-testid="gateway-node-retry" @click="load">重试</ElButton>
-        </ElAlert>
-
-        <ElCard
-          v-if="!node"
-          v-loading="loading"
-          class="gateway-node-state"
-          element-loading-text="正在加载节点"
-          data-testid="gateway-node-state"
-        >
-          <ElEmpty v-if="!loading" :image-size="72" description="未找到该节点，或它已被删除。">
-            <ElButton type="primary" :icon="ArrowLeft" data-testid="gateway-node-back-empty" @click="backToList">返回节点列表</ElButton>
-          </ElEmpty>
+          <ElDescriptions :column="2">
+            <ElDescriptionsItem label="上游地址">{{ node.base_url }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="资源池">{{ poolName(node.pool_id) }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="认证方式">{{ authTypeLabel(node.auth_type) }} · {{ node.auth_header }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="凭据">{{ node.has_api_key ? '已配置（不回显）' : '未配置' }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="健康路径">{{ node.health_path || '继承默认' }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="支持模型">{{ node.models.length ? node.models.join('、') : '未配置' }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="最近探测">{{ formatDateTime(node.last_checked_at) }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="探测间隔">{{ node.probe_interval_seconds ?? '继承默认' }} 秒</ElDescriptionsItem>
+          </ElDescriptions>
         </ElCard>
 
-        <ElContainer v-else class="gateway-node-layout">
-          <ElMain class="gateway-node-content" data-testid="gateway-node-content">
-            <section class="gateway-node-summary" data-testid="gateway-node-summary">
-              <h3>{{ serveSummary.title }}</h3>
-              <p>{{ serveSummary.detail }}</p>
-            </section>
-            <ElRadioGroup v-model="detailView" aria-label="节点内容" data-testid="gateway-node-nav">
-              <ElRadioButton value="summary">概况</ElRadioButton>
-              <ElRadioButton value="usage">用量</ElRadioButton>
-              <ElRadioButton value="ops">运维</ElRadioButton>
-            </ElRadioGroup>
-            <!-- 概览 -->
-            <section v-show="showSection('overview')" id="overview" class="gateway-node-section" data-testid="gateway-node-section-overview">
-              <div class="gateway-node-grid">
-                <ElCard shadow="never" data-testid="gateway-node-info">
-                  <template #header>
-                    <div class="gateway-node-card-head">
-                      <div><h4>节点信息</h4></div>
-                    </div>
-                  </template>
-                  <ElDescriptions :column="2">
-                    <ElDescriptionsItem label="上游地址">{{ node.base_url }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="资源池">{{ poolName(node.pool_id) }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="认证方式">{{ authTypeLabel(node.auth_type) }} · {{ node.auth_header }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="凭据">{{ node.has_api_key ? '已配置（不回显）' : '未配置' }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="健康路径">{{ node.health_path || '继承默认' }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="支持模型">{{ node.models.length ? node.models.join('、') : '未配置' }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="最近探测">{{ formatDateTime(node.last_checked_at) }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="探测间隔">{{ node.probe_interval_seconds ?? '继承默认' }} 秒</ElDescriptionsItem>
-                  </ElDescriptions>
-                </ElCard>
+        <ElCard shadow="never" data-testid="gateway-node-probe-latest">
+          <template #header>
+            <div class="gateway-node-card-head">
+              <div><h4>最近一次探测</h4></div>
+              <ElTag :type="tagType(authenticationTone(probeAuthentication))">{{ authenticationLabel(probeAuthentication) }}</ElTag>
+            </div>
+          </template>
+          <p v-if="latestProbe" data-testid="gateway-node-probe-table">{{ probeTypeLabel(latestProbe.probe_type) }} · {{ latestProbe.success ? '通过' : '失败' }} · {{ latestProbe.latency_ms }} ms · {{ formatRelativeTime(latestProbe.created_at) }}</p>
+          <ElEmpty v-else :image-size="56" description="还没有探测记录。" />
+        </ElCard>
+      </div>
 
-                <ElCard shadow="never" data-testid="gateway-node-probe-latest">
-                  <template #header>
-                    <div class="gateway-node-card-head">
-                      <div><h4>最近一次探测</h4></div>
-                      <ElTag :type="tagType(authenticationTone(probeAuthentication))">{{ authenticationLabel(probeAuthentication) }}</ElTag>
-                    </div>
-                  </template>
-                  <p v-if="latestProbe" data-testid="gateway-node-probe-table">{{ probeTypeLabel(latestProbe.probe_type) }} · {{ latestProbe.success ? '通过' : '失败' }} · {{ latestProbe.latency_ms }} ms · {{ formatRelativeTime(latestProbe.created_at) }}</p>
-                  <ElEmpty v-else :image-size="56" description="还没有探测记录。" />
-                </ElCard>
+      <ElCard shadow="never" data-testid="gateway-node-health-history">
+        <template #header>
+          <div class="gateway-node-card-head">
+            <div><h4>探测历史</h4><ElText type="info">最近 {{ healthChecks.length }} 条</ElText></div>
+          </div>
+        </template>
+        <ElTable :data="healthChecks" row-key="id" max-height="360" data-testid="gateway-node-health-table">
+          <ElTableColumn label="类型" min-width="100">
+            <template #default="{ row }">{{ probeTypeLabel(row.probe_type) }}</template>
+          </ElTableColumn>
+          <ElTableColumn label="结果" width="80">
+            <template #default="{ row }">
+              <ElTag :type="row.success ? 'success' : 'danger'">{{ row.success ? '通过' : '失败' }}</ElTag>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="延迟" width="88">
+            <template #default="{ row }"><span class="gateway-node-num">{{ row.latency_ms }} ms</span></template>
+          </ElTableColumn>
+          <ElTableColumn label="状态码" width="80">
+            <template #default="{ row }"><span class="gateway-node-num">{{ row.status_code ?? '—' }}</span></template>
+          </ElTableColumn>
+          <ElTableColumn label="错误" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span v-if="row.error" class="gateway-node-err">{{ row.error }}</span>
+              <span v-else>—</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="时间" width="120">
+            <template #default="{ row }"><span class="gateway-node-num">{{ formatDateTime(row.created_at) }}</span></template>
+          </ElTableColumn>
+          <template #empty>
+            <ElEmpty v-if="!loading" :image-size="56" description="暂无探测记录。" />
+          </template>
+        </ElTable>
+      </ElCard>
+    </section>
+
+    <!-- Token -->
+    <section v-show="showSection('tokens')" id="tokens" class="gateway-node-section" data-testid="gateway-node-section-tokens">
+      <div class="gateway-node-metrics" aria-label="节点指标">
+        <ElCard v-for="metric in metricCards" :key="metric.id" shadow="never" :data-testid="`gateway-node-metric-${metric.id}`">
+          <ElStatistic :title="metric.label" :value="metric.value as number" />
+          <p class="gateway-node-metric-hint">{{ metric.hint }}</p>
+        </ElCard>
+      </div>
+      <div class="gateway-node-metrics gateway-node-metrics--three">
+        <ElCard v-for="metric in tokenCards" :key="metric.id" shadow="never" :data-testid="`gateway-node-token-${metric.id}`">
+          <ElStatistic :title="metric.label" :value="metric.value as number" />
+          <p class="gateway-node-metric-hint">{{ metric.hint }}</p>
+        </ElCard>
+      </div>
+      <ElCard shadow="never" data-testid="gateway-node-token-trend">
+        <template #header>
+          <div class="gateway-node-card-head">
+            <div><h4>Token 趋势</h4><ElText type="info">{{ windowLabel }}</ElText></div>
+          </div>
+        </template>
+        <GatewayTrendChart v-if="stats" :buckets="stats.trend" mode="tokens" tall />
+        <ElEmpty v-else :image-size="52" :description="loading ? '加载中…' : '暂无数据'" />
+      </ElCard>
+    </section>
+
+    <!-- 性能 -->
+    <section v-show="showSection('performance')" id="performance" class="gateway-node-section" data-testid="gateway-node-section-performance">
+      <div class="gateway-node-grid">
+        <ElCard shadow="never" data-testid="gateway-node-latency">
+          <template #header>
+            <div class="gateway-node-card-head">
+              <div><h4>性能指标</h4><ElText type="info">窗口平均</ElText></div>
+            </div>
+          </template>
+          <ElDescriptions :column="1">
+            <ElDescriptionsItem v-for="row in latencyRows" :key="row.label" :label="row.label">{{ row.value }}</ElDescriptionsItem>
+          </ElDescriptions>
+          <details class="gateway-node-advanced">
+            <summary>分位统计（p50 / p95）</summary>
+            <ElDescriptions :column="1">
+              <ElDescriptionsItem v-for="row in latencyAdvancedRows" :key="row.label" :label="row.label">{{ row.value }}</ElDescriptionsItem>
+            </ElDescriptions>
+          </details>
+          <div class="gateway-node-peak">
+            <span>峰值并发 <b>{{ stats?.peak_concurrency ?? '—' }}</b></span>
+            <span>QPS <b>{{ stats ? stats.qps.toFixed(2) : '—' }}</b></span>
+            <span>失败 <b class="gateway-node-peak--bad">{{ stats?.errors ?? '—' }}</b></span>
+          </div>
+        </ElCard>
+        <ElCard shadow="never" data-testid="gateway-node-request-trend">
+          <template #header>
+            <div class="gateway-node-card-head">
+              <div><h4>请求量趋势</h4><ElText type="info">{{ windowLabel }}</ElText></div>
+            </div>
+          </template>
+          <GatewayTrendChart v-if="stats" :buckets="stats.trend" mode="requests" />
+          <ElEmpty v-else :image-size="52" :description="loading ? '加载中…' : '暂无数据'" />
+        </ElCard>
+      </div>
+    </section>
+
+    <!-- 限制 -->
+    <section v-show="showSection('limits')" id="limits" class="gateway-node-section" data-testid="gateway-node-section-limits">
+      <div class="gateway-node-grid">
+        <ElCard shadow="never" data-testid="gateway-node-scheduling-limits">
+          <template #header>
+            <div class="gateway-node-card-head">
+              <div><h4>并发与权重</h4><ElText type="info">0 或空表示不限</ElText></div>
+            </div>
+          </template>
+          <ElDescriptions :column="1">
+            <ElDescriptionsItem label="最大并发">{{ node.max_concurrency || '不限' }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="有效权重">{{ node.weight }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="调度状态">
+              <ElTag :type="tagType(schedulingTone(node.scheduling_state))">{{ schedulingStateLabel(node.scheduling_state) }}</ElTag>
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="配置状态">
+              <ElTag :type="node.config_state === 'ENABLED' ? 'success' : 'info'">{{ configStateLabel(node.config_state) }}</ElTag>
+            </ElDescriptionsItem>
+          </ElDescriptions>
+        </ElCard>
+        <ElCard shadow="never" data-testid="gateway-node-quota">
+          <template #header>
+            <div class="gateway-node-card-head">
+              <div><h4>Token 额度 <FieldHelp label="Token 额度" help="额度按已完成请求计入，并发时可能略微超出限额。" /></h4></div>
+            </div>
+          </template>
+          <ElDescriptions :column="1">
+            <ElDescriptionsItem label="额度策略">{{ quotaPolicyLabel(node.quota_policy) }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="每小时限额">
+              {{ node.hourly_token_limit ?? '不限' }} · 本小时已用 {{ hourTokens ? formatTokens(hourTokens.total_tokens) : '—' }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="每日限额">
+              {{ node.daily_token_limit ?? '不限' }} · 今日已用 {{ dayTokens ? formatTokens(dayTokens.total_tokens) : '—' }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="未知用量请求（今日）">{{ dayTokens?.unknown_usage_requests ?? '—' }}</ElDescriptionsItem>
+          </ElDescriptions>
+          <p class="gateway-node-note">额度按已完成请求计入，并发时可能略微超出限额。</p>
+        </ElCard>
+      </div>
+    </section>
+
+    <!-- 健康 -->
+    <section v-show="showSection('health')" id="health" class="gateway-node-section" data-testid="gateway-node-section-health">
+      <div class="gateway-node-grid gateway-node-grid--full">
+        <ElCard shadow="never" data-testid="gateway-node-health-state">
+          <template #header>
+            <div class="gateway-node-card-head">
+              <div><h4>健康状态</h4></div>
+            </div>
+          </template>
+          <ElDescriptions :column="1">
+            <ElDescriptionsItem label="健康态">
+              <ElTag :type="tagType(healthTone(node.health_state))">{{ healthStateLabel(node.health_state) }}</ElTag>
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="连续成功">{{ node.success_streak }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="连续失败">{{ node.failure_streak }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="最近探测">{{ formatDateTime(node.last_checked_at) }}</ElDescriptionsItem>
+          </ElDescriptions>
+          <ElCollapse>
+            <ElCollapseItem title="原始探测详情" name="raw">
+              <pre class="gateway-node-snapshot" data-testid="gateway-node-health-detail">{{ JSON.stringify(node.health_detail, null, 2) }}</pre>
+            </ElCollapseItem>
+          </ElCollapse>
+        </ElCard>
+
+      </div>
+    </section>
+
+    <!-- 日志 -->
+    <section v-show="showSection('logs')" id="logs" class="gateway-node-section" data-testid="gateway-node-section-logs">
+      <ElCard shadow="never" data-testid="gateway-node-logs">
+        <template #header>
+          <div class="gateway-node-card-head">
+          <div>
+            <h4>调用日志</h4>
+            <ElText type="info">节点最近请求 · 元数据与测量值</ElText>
+          </div>
+          <ElButton :loading="logsLoading" :icon="RefreshCw" data-testid="gateway-node-logs-refresh" @click="loadRequests()">刷新</ElButton>
+        </div>
+        </template>
+        <ElTable
+          v-loading="logsLoading"
+          :data="requests.items"
+          row-key="id"
+          element-loading-text="正在加载调用日志"
+          data-testid="gateway-node-logs-table"
+        >
+          <ElTableColumn label="时间" width="116">
+            <template #default="{ row }"><span class="gateway-node-num">{{ formatDateTime(row.started_at) }}</span></template>
+          </ElTableColumn>
+          <ElTableColumn label="Key / 模型" min-width="160">
+            <template #default="{ row }">
+              <div class="gateway-node-cell">
+                <strong>{{ row.key_id ? row.key_id.slice(0, 12) : '—' }}</strong>
+                <span>{{ row.model ?? '—' }}</span>
               </div>
-            </section>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="状态" min-width="150">
+            <template #default="{ row }">
+              <ElTag v-if="row.outcome === 'lost'" type="warning">结果未知</ElTag>
+              <ElTag v-else-if="!row.finished_at && row.gateway_instance_id" type="info">进行中</ElTag>
+              <ElTag v-else-if="!row.finished_at" type="info">历史未完成</ElTag>
+              <ElTag v-else-if="row.error_code" type="danger" :title="row.error_code">{{ errorCause(row.error_code) }}</ElTag>
+              <ElTag v-else :type="row.status_code && row.status_code < 400 ? 'success' : 'warning'">{{ row.status_code ?? '—' }}</ElTag>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="流式" width="88">
+            <template #default="{ row }">{{ row.streaming ? 'SSE' : '普通' }}</template>
+          </ElTableColumn>
+          <ElTableColumn label="重试" width="68">
+            <template #default="{ row }"><span class="gateway-node-num">{{ row.retry_count }}</span></template>
+          </ElTableColumn>
+          <ElTableColumn label="Token（入 / 出 / 总）" width="150">
+            <template #default="{ row }"><span class="gateway-node-num">{{ tokenText(row as GatewayRequestLog) }}</span></template>
+          </ElTableColumn>
+          <ElTableColumn label="TTFT" width="96">
+            <template #default="{ row }"><span class="gateway-node-num">{{ latencyText(row.ttft_ms) }}</span></template>
+          </ElTableColumn>
+          <ElTableColumn label="总时长" width="96">
+            <template #default="{ row }"><span class="gateway-node-num">{{ latencyText(row.duration_ms) }}</span></template>
+          </ElTableColumn>
+          <template #empty>
+            <ElEmpty v-if="!logsLoading" :image-size="64" description="暂无调用记录。" />
+          </template>
+        </ElTable>
+        <footer class="gateway-node-footer">
+          <ElText type="info" data-testid="gateway-node-logs-total">共 {{ requests.total }} 条 · 第 {{ requests.page }} 页</ElText>
+          <ElPagination
+            :current-page="requests.page"
+            :page-size="requests.page_size"
+            :total="requests.total"
+            layout="prev, pager, next"
+            :disabled="logsLoading"
+            aria-label="节点调用日志分页"
+            data-testid="gateway-node-logs-pagination"
+            @current-change="loadRequests"
+          />
+        </footer>
+      </ElCard>
+    </section>
 
-            <!-- Token -->
-            <section v-show="showSection('tokens')" id="tokens" class="gateway-node-section" data-testid="gateway-node-section-tokens">
-              <header class="gateway-node-section__bar">
-                <h3>用量</h3>
-                <ElText type="info">{{ windowLabel }}窗口</ElText>
-                <ElRadioGroup v-model="statsWindow" class="gateway-node-window" aria-label="统计窗口" data-testid="gateway-node-window">
-                  <ElRadioButton v-for="item in windows" :key="item.id" :value="item.id">{{ item.label }}</ElRadioButton>
-                </ElRadioGroup>
-              </header>
-              <div class="gateway-node-metrics" aria-label="节点指标">
-                <ElCard v-for="metric in metricCards" :key="metric.id" shadow="never" :data-testid="`gateway-node-metric-${metric.id}`">
-                  <ElStatistic :title="metric.label" :value="metric.value as number" />
-                  <p class="gateway-node-metric-hint">{{ metric.hint }}</p>
-                </ElCard>
-              </div>
-              <div class="gateway-node-metrics gateway-node-metrics--three">
-                <ElCard v-for="metric in tokenCards" :key="metric.id" shadow="never" :data-testid="`gateway-node-token-${metric.id}`">
-                  <ElStatistic :title="metric.label" :value="metric.value as number" />
-                  <p class="gateway-node-metric-hint">{{ metric.hint }}</p>
-                </ElCard>
-              </div>
-              <ElCard shadow="never" data-testid="gateway-node-token-trend">
-                <template #header>
-                  <div class="gateway-node-card-head">
-                    <div><h4>Token 趋势</h4><ElText type="info">{{ windowLabel }}</ElText></div>
-                  </div>
-                </template>
-                <GatewayTrendChart v-if="stats" :buckets="stats.trend" mode="tokens" tall />
-                <ElEmpty v-else :image-size="52" :description="loading ? '加载中…' : '暂无数据'" />
-              </ElCard>
-            </section>
-
-            <!-- 性能 -->
-            <section v-show="showSection('performance')" id="performance" class="gateway-node-section" data-testid="gateway-node-section-performance">
-              <header class="gateway-node-section__bar">
-                <h3>性能</h3>
-                <ElText type="info">{{ windowLabel }}窗口平均</ElText>
-              </header>
-              <div class="gateway-node-grid">
-                <ElCard shadow="never" data-testid="gateway-node-latency">
-                  <template #header>
-                    <div class="gateway-node-card-head">
-                      <div><h4>性能指标</h4><ElText type="info">窗口平均</ElText></div>
-                    </div>
-                  </template>
-                  <ElDescriptions :column="1">
-                    <ElDescriptionsItem v-for="row in latencyRows" :key="row.label" :label="row.label">{{ row.value }}</ElDescriptionsItem>
-                  </ElDescriptions>
-                  <details class="gateway-node-advanced">
-                    <summary>分位统计（p50 / p95）</summary>
-                    <ElDescriptions :column="1">
-                      <ElDescriptionsItem v-for="row in latencyAdvancedRows" :key="row.label" :label="row.label">{{ row.value }}</ElDescriptionsItem>
-                    </ElDescriptions>
-                  </details>
-                  <div class="gateway-node-peak">
-                    <span>峰值并发 <b>{{ stats?.peak_concurrency ?? '—' }}</b></span>
-                    <span>QPS <b>{{ stats ? stats.qps.toFixed(2) : '—' }}</b></span>
-                    <span>失败 <b class="gateway-node-peak--bad">{{ stats?.errors ?? '—' }}</b></span>
-                  </div>
-                </ElCard>
-                <ElCard shadow="never" data-testid="gateway-node-request-trend">
-                  <template #header>
-                    <div class="gateway-node-card-head">
-                      <div><h4>请求量趋势</h4><ElText type="info">{{ windowLabel }}</ElText></div>
-                    </div>
-                  </template>
-                  <GatewayTrendChart v-if="stats" :buckets="stats.trend" mode="requests" />
-                  <ElEmpty v-else :image-size="52" :description="loading ? '加载中…' : '暂无数据'" />
-                </ElCard>
-              </div>
-            </section>
-
-            <!-- 限制 -->
-            <section v-show="showSection('limits')" id="limits" class="gateway-node-section" data-testid="gateway-node-section-limits">
-              <header class="gateway-node-section__bar">
-                <h3>限制</h3>
-
-              </header>
-              <div class="gateway-node-grid">
-                <ElCard shadow="never" data-testid="gateway-node-scheduling-limits">
-                  <template #header>
-                    <div class="gateway-node-card-head">
-                      <div><h4>并发与权重</h4><ElText type="info">0 或空表示不限</ElText></div>
-                    </div>
-                  </template>
-                  <ElDescriptions :column="1">
-                    <ElDescriptionsItem label="最大并发">{{ node.max_concurrency || '不限' }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="有效权重">{{ node.weight }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="调度状态">
-                      <ElTag :type="tagType(schedulingTone(node.scheduling_state))">{{ schedulingStateLabel(node.scheduling_state) }}</ElTag>
-                    </ElDescriptionsItem>
-                    <ElDescriptionsItem label="配置状态">
-                      <ElTag :type="node.config_state === 'ENABLED' ? 'success' : 'info'">{{ configStateLabel(node.config_state) }}</ElTag>
-                    </ElDescriptionsItem>
-                  </ElDescriptions>
-                </ElCard>
-                <ElCard shadow="never" data-testid="gateway-node-quota">
-                  <template #header>
-                    <div class="gateway-node-card-head">
-                      <div><h4>Token 额度</h4></div>
-                    </div>
-                  </template>
-                  <ElDescriptions :column="1">
-                    <ElDescriptionsItem label="额度策略">{{ quotaPolicyLabel(node.quota_policy) }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="每小时限额">
-                      {{ node.hourly_token_limit ?? '不限' }} · 本小时已用 {{ hourTokens ? formatTokens(hourTokens.total_tokens) : '—' }}
-                    </ElDescriptionsItem>
-                    <ElDescriptionsItem label="每日限额">
-                      {{ node.daily_token_limit ?? '不限' }} · 今日已用 {{ dayTokens ? formatTokens(dayTokens.total_tokens) : '—' }}
-                    </ElDescriptionsItem>
-                    <ElDescriptionsItem label="未知用量请求（今日）">{{ dayTokens?.unknown_usage_requests ?? '—' }}</ElDescriptionsItem>
-                  </ElDescriptions>
-                  <p class="gateway-node-note">额度按已完成请求计入，并发时可能略微超出限额。</p>
-                </ElCard>
-              </div>
-            </section>
-
-            <!-- 健康 -->
-            <section v-show="showSection('health')" id="health" class="gateway-node-section" data-testid="gateway-node-section-health">
-              <header class="gateway-node-section__bar">
-                <h3>健康</h3>
-
-              </header>
-              <div class="gateway-node-grid">
-                <ElCard shadow="never" data-testid="gateway-node-health-state">
-                  <template #header>
-                    <div class="gateway-node-card-head">
-                      <div><h4>健康状态</h4></div>
-                    </div>
-                  </template>
-                  <ElDescriptions :column="1">
-                    <ElDescriptionsItem label="健康态">
-                      <ElTag :type="tagType(healthTone(node.health_state))">{{ healthStateLabel(node.health_state) }}</ElTag>
-                    </ElDescriptionsItem>
-                    <ElDescriptionsItem label="连续成功">{{ node.success_streak }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="连续失败">{{ node.failure_streak }}</ElDescriptionsItem>
-                    <ElDescriptionsItem label="最近探测">{{ formatDateTime(node.last_checked_at) }}</ElDescriptionsItem>
-                  </ElDescriptions>
-                  <ElCollapse>
-                    <ElCollapseItem title="原始探测详情" name="raw">
-                      <pre class="gateway-node-snapshot" data-testid="gateway-node-health-detail">{{ JSON.stringify(node.health_detail, null, 2) }}</pre>
-                    </ElCollapseItem>
-                  </ElCollapse>
-                </ElCard>
-                <ElCard shadow="never" data-testid="gateway-node-health-history">
-                  <template #header>
-                    <div class="gateway-node-card-head">
-                      <div><h4>探测历史</h4><ElText type="info">最近 {{ healthChecks.length }} 条</ElText></div>
-                    </div>
-                  </template>
-                  <ElTable :data="healthChecks" row-key="id" max-height="360" data-testid="gateway-node-health-table">
-                    <ElTableColumn label="类型" min-width="100">
-                      <template #default="{ row }">{{ probeTypeLabel(row.probe_type) }}</template>
-                    </ElTableColumn>
-                    <ElTableColumn label="结果" width="80">
-                      <template #default="{ row }">
-                        <ElTag :type="row.success ? 'success' : 'danger'">{{ row.success ? '通过' : '失败' }}</ElTag>
-                      </template>
-                    </ElTableColumn>
-                    <ElTableColumn label="延迟" width="88">
-                      <template #default="{ row }"><span class="gateway-node-num">{{ row.latency_ms }} ms</span></template>
-                    </ElTableColumn>
-                    <ElTableColumn label="状态码" width="80">
-                      <template #default="{ row }"><span class="gateway-node-num">{{ row.status_code ?? '—' }}</span></template>
-                    </ElTableColumn>
-                    <ElTableColumn label="错误" min-width="150" show-overflow-tooltip>
-                      <template #default="{ row }">
-                        <span v-if="row.error" class="gateway-node-err">{{ row.error }}</span>
-                        <span v-else>—</span>
-                      </template>
-                    </ElTableColumn>
-                    <ElTableColumn label="时间" width="120">
-                      <template #default="{ row }"><span class="gateway-node-num">{{ formatDateTime(row.created_at) }}</span></template>
-                    </ElTableColumn>
-                    <template #empty>
-                      <ElEmpty v-if="!loading" :image-size="56" description="暂无探测记录。" />
-                    </template>
-                  </ElTable>
-                </ElCard>
-              </div>
-            </section>
-
-            <!-- 日志 -->
-            <section v-show="showSection('logs')" id="logs" class="gateway-node-section" data-testid="gateway-node-section-logs">
-              <header class="gateway-node-section__bar">
-                <h3>日志</h3>
-                <ElText type="info">元数据与测量值</ElText>
-                <ElButton
-                  :loading="logsLoading"
-                  :icon="RefreshCw"
-                  data-testid="gateway-node-logs-refresh"
-                  @click="loadRequests()"
-                >刷新日志</ElButton>
-              </header>
-              <ElCard shadow="never" data-testid="gateway-node-logs">
-                <template #header>
-                  <div class="gateway-node-card-head">
-                    <div><h4>调用日志</h4></div>
-                  </div>
-                </template>
-                <ElTable
-                  v-loading="logsLoading"
-                  :data="requests.items"
-                  row-key="id"
-                  element-loading-text="正在加载调用日志"
-                  data-testid="gateway-node-logs-table"
-                >
-                  <ElTableColumn label="时间" width="116">
-                    <template #default="{ row }"><span class="gateway-node-num">{{ formatDateTime(row.started_at) }}</span></template>
-                  </ElTableColumn>
-                  <ElTableColumn label="Key / 模型" min-width="160">
-                    <template #default="{ row }">
-                      <div class="gateway-node-cell">
-                        <strong>{{ row.key_id ? row.key_id.slice(0, 12) : '—' }}</strong>
-                        <span>{{ row.model ?? '—' }}</span>
-                      </div>
-                    </template>
-                  </ElTableColumn>
-                  <ElTableColumn label="状态" min-width="150">
-                    <template #default="{ row }">
-                      <ElTag v-if="row.outcome === 'lost'" type="warning">结果未知</ElTag>
-                      <ElTag v-else-if="!row.finished_at && row.gateway_instance_id" type="info">进行中</ElTag>
-                      <ElTag v-else-if="!row.finished_at" type="info">历史未完成</ElTag>
-                      <ElTag v-else-if="row.error_code" type="danger" :title="row.error_code">{{ errorCause(row.error_code) }}</ElTag>
-                      <ElTag v-else :type="row.status_code && row.status_code < 400 ? 'success' : 'warning'">{{ row.status_code ?? '—' }}</ElTag>
-                    </template>
-                  </ElTableColumn>
-                  <ElTableColumn label="流式" width="88">
-                    <template #default="{ row }">{{ row.streaming ? 'SSE' : '普通' }}</template>
-                  </ElTableColumn>
-                  <ElTableColumn label="重试" width="68">
-                    <template #default="{ row }"><span class="gateway-node-num">{{ row.retry_count }}</span></template>
-                  </ElTableColumn>
-                  <ElTableColumn label="Token（入 / 出 / 总）" width="150">
-                    <template #default="{ row }"><span class="gateway-node-num">{{ tokenText(row as GatewayRequestLog) }}</span></template>
-                  </ElTableColumn>
-                  <ElTableColumn label="TTFT" width="96">
-                    <template #default="{ row }"><span class="gateway-node-num">{{ latencyText(row.ttft_ms) }}</span></template>
-                  </ElTableColumn>
-                  <ElTableColumn label="总时长" width="96">
-                    <template #default="{ row }"><span class="gateway-node-num">{{ latencyText(row.duration_ms) }}</span></template>
-                  </ElTableColumn>
-                  <template #empty>
-                    <ElEmpty v-if="!logsLoading" :image-size="64" description="暂无调用记录。" />
-                  </template>
-                </ElTable>
-                <footer class="gateway-node-footer">
-                  <ElText type="info" data-testid="gateway-node-logs-total">共 {{ requests.total }} 条 · 第 {{ requests.page }} 页</ElText>
-                  <ElPagination
-                    :current-page="requests.page"
-                    :page-size="requests.page_size"
-                    :total="requests.total"
-                    layout="prev, pager, next"
-                    :disabled="logsLoading"
-                    aria-label="节点调用日志分页"
-                    data-testid="gateway-node-logs-pagination"
-                    @current-change="loadRequests"
-                  />
-                </footer>
-              </ElCard>
-            </section>
-
-            <!-- 配置 -->
-            <section v-show="showSection('config')" id="config" class="gateway-node-section" data-testid="gateway-node-section-config">
-              <header class="gateway-node-section__bar">
-                <h3>配置</h3>
-
-              </header>
-              <ElCard shadow="never" data-testid="gateway-node-config">
-                <template #header>
-                  <div class="gateway-node-card-head">
-                    <div><h4>节点配置</h4></div>
-                    <ElButton
-                      type="primary"
-                      plain
-                      :icon="Pencil"
-                      data-testid="gateway-node-config-edit"
-                      @click="openEditor"
-                    >编辑配置</ElButton>
-                  </div>
-                </template>
-                <ElDescriptions :column="2">
-                  <ElDescriptionsItem label="名称">{{ node.name }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="资源池">{{ poolName(node.pool_id) }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="Base URL">{{ node.base_url }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="认证">{{ authTypeLabel(node.auth_type) }} · {{ node.auth_header }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="连接 / 请求超时">
-                    {{ node.connect_timeout_seconds ?? '默认' }} / {{ node.request_timeout_seconds ?? '默认' }} 秒
-                  </ElDescriptionsItem>
-                  <ElDescriptionsItem label="健康路径">{{ node.health_path || '继承默认' }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="探测间隔">{{ node.probe_interval_seconds ?? '继承默认' }} 秒</ElDescriptionsItem>
-                  <ElDescriptionsItem label="支持模型">{{ node.models.length ? node.models.join('、') : '未配置' }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="权重 / 并发">{{ node.weight }} / {{ node.max_concurrency || '不限' }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="额度">
-                    {{ node.hourly_token_limit ?? '不限' }} / {{ node.daily_token_limit ?? '不限' }}（{{ quotaPolicyLabel(node.quota_policy) }}）
-                  </ElDescriptionsItem>
-                  <ElDescriptionsItem label="排序">{{ node.sort_order }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="创建 / 更新">
-                    {{ formatDateTime(node.created_at) }} / {{ formatDateTime(node.updated_at) }}
-                  </ElDescriptionsItem>
-                </ElDescriptions>
-              </ElCard>
-            </section>
-          </ElMain>
-        </ElContainer>
-      </ElMain>
-    </ElContainer>
+    <!-- 配置 -->
+    <section v-show="showSection('config')" id="config" class="gateway-node-section" data-testid="gateway-node-section-config">
+      <ElCard shadow="never" data-testid="gateway-node-config">
+        <template #header>
+          <div class="gateway-node-card-head">
+            <div><h4>节点配置</h4></div>
+            <ElButton
+              type="primary"
+              plain
+              :icon="Pencil"
+              data-testid="gateway-node-config-edit"
+              @click="openEditor"
+            >编辑配置</ElButton>
+          </div>
+        </template>
+        <ElDescriptions :column="2">
+          <ElDescriptionsItem label="名称">{{ node.name }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="资源池">{{ poolName(node.pool_id) }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="Base URL">{{ node.base_url }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="认证">{{ authTypeLabel(node.auth_type) }} · {{ node.auth_header }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="连接 / 请求超时">
+            {{ node.connect_timeout_seconds ?? '默认' }} / {{ node.request_timeout_seconds ?? '默认' }} 秒
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="健康路径">{{ node.health_path || '继承默认' }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="探测间隔">{{ node.probe_interval_seconds ?? '继承默认' }} 秒</ElDescriptionsItem>
+          <ElDescriptionsItem label="支持模型">{{ node.models.length ? node.models.join('、') : '未配置' }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="权重 / 并发">{{ node.weight }} / {{ node.max_concurrency || '不限' }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="额度">
+            {{ node.hourly_token_limit ?? '不限' }} / {{ node.daily_token_limit ?? '不限' }}（{{ quotaPolicyLabel(node.quota_policy) }}）
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="排序">{{ node.sort_order }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="创建 / 更新">
+            {{ formatDateTime(node.created_at) }} / {{ formatDateTime(node.updated_at) }}
+          </ElDescriptionsItem>
+        </ElDescriptions>
+      </ElCard>
+    </section>
+      </div>
+    </template>
 
     <GatewayNodeDrawer :open="editorOpen" :node="node" :pools="pools" @close="editorOpen = false" @saved="load" />
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -422,15 +406,12 @@ import {
   ElCard,
   ElCollapse,
   ElCollapseItem,
-  ElContainer,
   ElDescriptions,
   ElDescriptionsItem,
   ElDropdown,
   ElDropdownItem,
   ElDropdownMenu,
   ElEmpty,
-  ElHeader,
-  ElMain,
   ElPagination,
   ElRadioButton,
   ElRadioGroup,
@@ -453,7 +434,7 @@ import {
   type GatewayScopeStats,
   type GatewayStatsWindow,
 } from '@/api/gateway'
-import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
+import FieldHelp from '@/components/forms/FieldHelp.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
 import { formatTokens } from '@/utils/format'
@@ -490,6 +471,16 @@ function showSection(id: string) {
   if (detailView.value === 'usage') return id === 'tokens' || id === 'performance'
   return id === 'limits' || id === 'health' || id === 'logs' || id === 'config'
 }
+const serveTone = computed(() => {
+  const current = node.value
+  if (!current) return 'unknown'
+  if (current.config_state !== 'ENABLED') return 'down'
+  if (current.scheduling_state !== 'ACTIVE') return 'degraded'
+  if (current.health_state === 'UNHEALTHY') return 'down'
+  if (current.health_state === 'DEGRADED') return 'degraded'
+  if (current.health_state === 'UNKNOWN' || current.health_state === 'CHECKING') return 'unknown'
+  return 'normal'
+})
 const serveSummary = computed(() => {
   const current = node.value
   if (!current) return { title: '正在确认能否接请求', detail: '' }
@@ -765,51 +756,99 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.gateway-node-page { height: 100%; min-height: 0; padding: 0; overflow: hidden; background: transparent; }
-.gateway-node-summary { padding: 12px 14px; border: 1px solid var(--astra-border); border-radius: 12px; background: var(--astra-bg-panel); }
-.gateway-node-summary h3 { margin: 0 0 4px; color: var(--astra-text-primary); }
-.gateway-node-summary p { margin: 0; color: var(--astra-text-secondary); }
-/* 标题区由 AstraPageHeader 渲染，页面上边距统一由 .gateway-node-page 提供。 */
-.gateway-node-header { --el-header-height: auto; --el-header-padding: 0; flex: none; }
-.gateway-node-back { display: inline-flex; align-items: center; gap: 4px; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
+/* 节点详情：身份卡 → 服务状态 → 分段导航 → 内容卡片。
+   页面自身不再滚动，统一由网关壳的卡片 body 滚动，避免双层滚动。 */
+.gateway-node-page { display: flex; flex-direction: column; gap: 16px; }
+.gateway-node-state { min-height: 240px; }
+
+/* ── 身份卡 ───────────────────────────────────────────────────────── */
+.gateway-node-identity {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 16px; border: 1px solid var(--astra-border); border-radius: 12px; background: var(--astra-bg-panel);
+}
+.gateway-node-identity__main { display: grid; gap: 4px; min-width: 0; }
+.gateway-node-identity__title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
+.gateway-node-identity__title h2 { margin: 0; color: var(--astra-text-primary); font-size: 18px; line-height: 26px; }
+.gateway-node-identity__url { margin: 0; color: var(--astra-text-secondary); font-family: var(--astra-font-family); font-size: 12px; overflow-wrap: anywhere; }
+.gateway-node-back { display: inline-flex; align-items: center; gap: 4px; width: fit-content; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .gateway-node-back:hover { color: var(--astra-primary-bright); }
-.gateway-node-states { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .gateway-node-actions { flex: none; }
-.gateway-node-body { --el-main-padding: 0; display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; gap: 12px; overflow: hidden; }
-.gateway-node-state { flex: none; min-height: 200px; }
-.gateway-node-layout { flex: 1 1 auto; min-height: 0; overflow: hidden; }
-.gateway-node-content { --el-main-padding: 0 4px 0 0; display: grid; align-content: start; gap: 26px; min-width: 0; min-height: 0; overflow: auto; }
-.gateway-node-section { display: grid; gap: 12px; }
-.gateway-node-section__bar { display: flex; align-items: center; gap: 12px; }
-.gateway-node-section__bar h3 { margin: 0; margin-right: auto; color: var(--astra-text-primary); }
-.gateway-node-window { flex: none; }
-.gateway-node-metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+
+/* ── 服务状态 ─────────────────────────────────────────────────────── */
+.gateway-node-status {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px;
+  padding: 12px 16px; border: 1px solid var(--astra-border); border-radius: 12px; background: var(--astra-bg-panel);
+}
+.gateway-node-status[data-status='normal'] { border-color: #cfe9dd; background: #f3fbf6; }
+.gateway-node-status[data-status='degraded'] { border-color: #e8cd8f; background: #fff9ec; }
+.gateway-node-status[data-status='down'] { border-color: #e7a8ae; background: #fff5f6; }
+.gateway-node-status[data-status='unknown'] { border-color: #d5e0da; background: #f6f8f7; }
+.gateway-node-status__main { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
+.gateway-node-status__pill {
+  flex: none; padding: 3px 10px; border-radius: 999px;
+  background: #e3f4ec; color: #187956; font-size: 12px; font-weight: var(--astra-weight-bold);
+}
+.gateway-node-status[data-status='degraded'] .gateway-node-status__pill { background: #fbeac4; color: #8a5a08; }
+.gateway-node-status[data-status='down'] .gateway-node-status__pill { background: #f8dadd; color: #9f2f3a; }
+.gateway-node-status[data-status='unknown'] .gateway-node-status__pill { background: #e7eeeb; color: #5c736a; }
+.gateway-node-status__detail { margin: 0; color: var(--astra-text-secondary); }
+.gateway-node-status__facts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-left: auto; color: var(--astra-text-muted); font-size: 12px; }
+.gateway-node-status__facts b { color: var(--astra-text-primary); font-weight: 600; }
+
+/* ── 分段导航 ─────────────────────────────────────────────────────── */
+.gateway-node-tabs {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px;
+  padding: 8px 12px; border: 1px solid var(--astra-border); border-radius: 12px; background: var(--astra-bg-panel);
+}
+.gateway-node-tabs__tools { display: flex; align-items: center; gap: 8px; }
+.gateway-node-tabs__label { color: var(--astra-text-muted); font-size: 12px; }
+
+/* ── 内容 ─────────────────────────────────────────────────────────── */
+.gateway-node-content { display: grid; gap: 16px; }
+.gateway-node-section { display: grid; gap: 16px; }
+/* 网关壳会去掉内层卡片边框与左右内边距；详情页恢复，让每个区块成为独立卡片。 */
+.gateway-node-page :deep(.el-card) { border: 1px solid var(--astra-border); border-radius: 12px; background: var(--astra-bg-panel); }
+.gateway-node-page :deep(.el-card) > .el-card__header { padding-left: 16px; padding-right: 16px; }
+.gateway-node-page :deep(.el-card) > .el-card__body { padding-left: 16px; padding-right: 16px; }
+.gateway-node-metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
 .gateway-node-metrics--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .gateway-node-metrics :deep(.el-statistic__head) { color: var(--astra-text-muted); font-size: var(--astra-font-control); }
 .gateway-node-metrics :deep(.el-statistic__content) { color: var(--astra-text-primary); font-size: var(--astra-font-subtitle); font-weight: var(--astra-weight-bold); }
 .gateway-node-metric-hint { margin: 4px 0 0; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
-.gateway-node-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 12px; align-items: start; }
+.gateway-node-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.gateway-node-grid--full { grid-template-columns: 1fr; }
 .gateway-node-card-head { display: flex; align-items: flex-start; gap: 12px; }
 .gateway-node-card-head > div { margin-right: auto; }
-.gateway-node-card-head h4 { margin: 0; color: var(--astra-text-primary); font-size: var(--astra-font-control); }
+.gateway-node-card-head h4 { margin: 0; color: var(--astra-text-primary); font-size: 14px; line-height: 20px; }
+.gateway-node-card-head .el-text { margin-top: 2px; font-size: 12px; }
 .gateway-node-advanced { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--astra-border); }
 .gateway-node-advanced summary { color: var(--astra-text-muted); font-size: var(--astra-font-helper); cursor: pointer; }
 .gateway-node-advanced summary::-webkit-details-marker { display: none; }
 .gateway-node-advanced summary::before { content: '▸ '; }
 .gateway-node-advanced[open] summary::before { content: '▾ '; }
-.gateway-node-note { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .gateway-node-peak { display: flex; gap: 16px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--astra-border); color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .gateway-node-peak b { color: var(--astra-text-primary); font-variant-numeric: tabular-nums; }
 .gateway-node-peak--bad { color: var(--astra-danger); }
 .gateway-node-snapshot { max-height: 220px; margin: 10px 0 0; padding: 10px; overflow: auto; color: var(--astra-text-secondary); border: 1px solid var(--astra-border); border-radius: 8px; background: var(--astra-bg-base); font: var(--astra-font-helper)/1.5 var(--astra-font-family); white-space: pre-wrap; }
-.gateway-node-mono { font-family: var(--astra-font-family); font-size: var(--astra-font-helper); }
+.gateway-node-mono { font-family: var(--astra-font-family); font-size: var(--astra-font-helper); color: var(--astra-text-muted); }
 .gateway-node-num { white-space: nowrap; font-size: var(--astra-font-helper); font-variant-numeric: tabular-nums; }
 .gateway-node-err { color: var(--astra-danger); font-size: var(--astra-font-helper); }
 .gateway-node-cell { display: grid; min-width: 0; }
 .gateway-node-cell strong { color: var(--astra-text-primary); font-size: var(--astra-font-helper); }
 .gateway-node-cell span { color: var(--astra-text-muted); font-size: var(--astra-font-micro); }
 .gateway-node-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 12px; }
-@media (max-width: 1280px) { .gateway-node-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } .gateway-node-grid { grid-template-columns: 1fr; } }
-@media (max-width: 1000px) { .gateway-node-header { align-items: flex-start; flex-wrap: wrap; } }
-@media (max-width: 760px) { .gateway-node-actions { width: 100%; } .gateway-node-metrics, .gateway-node-metrics--three { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gateway-node-section__bar { flex-wrap: wrap; } .gateway-node-footer { flex-direction: column; align-items: flex-start; } }
+@media (max-width: 1280px) {
+  .gateway-node-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .gateway-node-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 1000px) {
+  .gateway-node-identity { flex-wrap: wrap; }
+}
+@media (max-width: 760px) {
+  .gateway-node-actions { width: 100%; }
+  .gateway-node-metrics, .gateway-node-metrics--three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gateway-node-tabs { align-items: flex-start; }
+  .gateway-node-status__facts { margin-left: 0; }
+  .gateway-node-footer { flex-direction: column; align-items: flex-start; }
+}
 </style>

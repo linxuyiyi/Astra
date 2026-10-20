@@ -126,6 +126,7 @@ class RouteConfig:
     pool_id: str
     enabled: bool
     weight: int
+    target_model: str | None = None
 
     @classmethod
     def from_snapshot(cls, item: Mapping[str, Any]) -> RouteConfig:
@@ -135,6 +136,7 @@ class RouteConfig:
             pool_id=_text(item.get("pool_id")),
             enabled=bool(item.get("enabled", True)),
             weight=int(item.get("weight") or 0),
+            target_model=item.get("target_model") or None,
         )
 
 

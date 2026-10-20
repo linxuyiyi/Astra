@@ -26,8 +26,8 @@ from app.domain import EmployeeStatus, EnvironmentStatus, RuntimeSessionStatus, 
 from app.event_bus import event_bus
 from app.library_service import KnowledgeService, LibraryPrincipal
 from app.models import (
+    AgentWorker,
     CodeRepository,
-    DigitalEmployee,
     Event,
     ExperienceEvidence,
     KnowledgeFeedback,
@@ -41,6 +41,8 @@ from app.models import (
     TaskSummary,
     TaskWakeOutbox,
     WorkerInstance,
+    WorkerMaintenanceEvent,
+    WorkerMaintenanceOperation,
 )
 from app.runtime.capability import binding_entries, stamp_desired
 from app.runtime.presentation import project_channel_health
@@ -87,18 +89,22 @@ async def require_task(task_id: str, session: AsyncSession) -> Task:
     return task
 
 
-async def require_employee(employee_id: str, session: AsyncSession) -> DigitalEmployee:
+async def require_employee(employee_id: str, session: AsyncSession) -> AgentWorker:
     employee = await session.scalar(
-        select(DigitalEmployee)
-        .where(DigitalEmployee.id == employee_id)
-        .options(selectinload(DigitalEmployee.execution_environment))
+        select(AgentWorker)
+        .where(AgentWorker.id == employee_id)
+        .options(
+            selectinload(AgentWorker.execution_environment).selectinload(
+                OpenCodeExecutionEnvironment.repository
+            )
+        )
     )
     if not employee:
-        raise HTTPException(status_code=404, detail="数字员工不存在")
+        raise HTTPException(status_code=404, detail="Agent Worker 不存在")
     return employee
 
 
-async def employee_read(employee: DigitalEmployee, session: AsyncSession) -> EmployeeRead:
+async def employee_read(employee: AgentWorker, session: AsyncSession) -> EmployeeRead:
     start, end = day_bounds()
     sessions = await load_sessions(session, employee_id=employee.id, start=start, end=end, overlap=True)
     today = datetime.now(ZoneInfo(get_settings().timezone)).date()
@@ -160,7 +166,7 @@ async def home_dashboard_overview(session: AsyncSession = Depends(get_session)) 
     return await dashboard_overview(session)
 
 
-@router.get("/dashboard/employees")
+@router.get("/dashboard/agent-workers")
 async def home_dashboard_employees(session: AsyncSession = Depends(get_session)) -> dict:
     return await dashboard_employees(session)
 
@@ -260,14 +266,18 @@ async def validate_category_ids(category_ids: list[str], session: AsyncSession) 
         raise HTTPException(status_code=422, detail=f"任务分类不存在或已停用：{', '.join(sorted(missing))}")
 
 
-@router.get("/employees", response_model=list[EmployeeRead])
+@router.get("/agent-workers", response_model=list[EmployeeRead])
 async def list_employees(session: AsyncSession = Depends(get_session)):
     employees = (
         (
             await session.execute(
-                select(DigitalEmployee)
-                .options(selectinload(DigitalEmployee.execution_environment))
-                .order_by(DigitalEmployee.id)
+                select(AgentWorker)
+                .options(
+                    selectinload(AgentWorker.execution_environment).selectinload(
+                        OpenCodeExecutionEnvironment.repository
+                    )
+                )
+                .order_by(AgentWorker.id)
             )
         )
         .scalars()
@@ -276,15 +286,18 @@ async def list_employees(session: AsyncSession = Depends(get_session)):
     return [await employee_read(employee, session) for employee in employees]
 
 
-@router.post("/employees", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
+@router.post("/agent-workers", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
 async def create_employee(payload: EmployeeCreate, session: AsyncSession = Depends(get_session)):
     await validate_category_ids(payload.category_ids, session)
     environment_payload = payload.execution_environment.model_dump()
+    repository_id = environment_payload.get("repository_id")
+    if repository_id and await session.get(CodeRepository, repository_id) is None:
+        raise HTTPException(status_code=422, detail="代码仓库不存在")
     skill_refs = environment_payload.pop("skill_refs", None)
     mcp_refs = environment_payload.pop("mcp_refs", None)
     employee_payload = payload.model_dump(exclude={"execution_environment"})
     employee_payload["task_types"] = [item.value for item in payload.task_types]
-    employee = DigitalEmployee(
+    employee = AgentWorker(
         **employee_payload,
         status=EmployeeStatus.IDLE,
         online_since=datetime.now(UTC),
@@ -311,7 +324,7 @@ async def create_employee(payload: EmployeeCreate, session: AsyncSession = Depen
                 employee_id=employee.id,
                 event_type="EMPLOYEE_CREATED",
                 phase="business",
-                message=f"新增数字员工：{employee.name}",
+                message=f"新增 Agent Worker：{employee.name}",
                 detail={"role": employee.role},
             )
         )
@@ -322,12 +335,12 @@ async def create_employee(payload: EmployeeCreate, session: AsyncSession = Depen
     return await employee_read(await require_employee(employee.id, session), session)
 
 
-@router.get("/employees/{employee_id}", response_model=EmployeeRead)
+@router.get("/agent-workers/{employee_id}", response_model=EmployeeRead)
 async def get_employee(employee_id: str, session: AsyncSession = Depends(get_session)):
     return await employee_read(await require_employee(employee_id, session), session)
 
 
-@router.patch("/employees/{employee_id}", response_model=EmployeeRead)
+@router.patch("/agent-workers/{employee_id}", response_model=EmployeeRead)
 async def patch_employee(
     employee_id: str, payload: EmployeePatch, session: AsyncSession = Depends(get_session)
 ):
@@ -343,7 +356,7 @@ async def patch_employee(
     return await employee_read(await require_employee(employee.id, session), session)
 
 
-@router.put("/employees/{employee_id}/environment", response_model=ExecutionEnvironmentRead)
+@router.put("/agent-workers/{employee_id}/environment", response_model=ExecutionEnvironmentRead)
 async def update_employee_environment(
     employee_id: str,
     payload: ExecutionEnvironmentWrite,
@@ -358,10 +371,19 @@ async def update_employee_environment(
         environment = OpenCodeExecutionEnvironment(employee_id=employee.id)
         session.add(environment)
     updates = payload.model_dump()
+    provided = payload.model_fields_set
     skill_refs = updates.pop("skill_refs", None)
     mcp_refs = updates.pop("mcp_refs", None)
     if not updates.get("ssh_password"):
         updates.pop("ssh_password", None)
+    if "repository_id" not in provided:
+        updates.pop("repository_id", None)
+    elif updates.get("repository_id") and await session.get(
+        CodeRepository, updates["repository_id"]
+    ) is None:
+        raise HTTPException(status_code=422, detail="代码仓库不存在")
+    if "branch" not in provided:
+        updates.pop("branch", None)
     previous = environment.status_detail if isinstance(environment.status_detail, dict) else {}
     bindings_changed = skill_refs is not None or mcp_refs is not None
     for key, value in updates.items():
@@ -381,6 +403,8 @@ async def update_employee_environment(
     environment.status_detail = detail
     await session.commit()
     await session.refresh(environment)
+    if environment.repository_id:
+        environment.repository = await session.get(CodeRepository, environment.repository_id)
     session.add(
         Event(
             employee_id=employee.id,
@@ -398,7 +422,7 @@ async def update_employee_environment(
     return environment
 
 
-@router.get("/employees/{employee_id}/usage")
+@router.get("/agent-workers/{employee_id}/usage")
 async def get_employee_usage(
     employee_id: str,
     days: int = Query(default=7, ge=1, le=30),
@@ -408,7 +432,7 @@ async def get_employee_usage(
     return await employee_usage(session, employee_id, days)
 
 
-@router.post("/employees/{employee_id}/pause", response_model=EmployeeRead)
+@router.post("/agent-workers/{employee_id}/pause", response_model=EmployeeRead)
 async def pause_employee(employee_id: str, session: AsyncSession = Depends(get_session)):
     employee = await require_employee(employee_id, session)
     if employee.current_task_count:
@@ -417,7 +441,7 @@ async def pause_employee(employee_id: str, session: AsyncSession = Depends(get_s
     return employee
 
 
-@router.post("/employees/{employee_id}/resume", response_model=EmployeeRead)
+@router.post("/agent-workers/{employee_id}/resume", response_model=EmployeeRead)
 async def resume_employee(employee_id: str, session: AsyncSession = Depends(get_session)):
     employee = await require_employee(employee_id, session)
     target = EmployeeStatus.WORKING if employee.current_task_count else EmployeeStatus.IDLE
@@ -425,7 +449,7 @@ async def resume_employee(employee_id: str, session: AsyncSession = Depends(get_
     return employee
 
 
-@router.delete("/employees/{employee_id}")
+@router.delete("/agent-workers/{employee_id}")
 async def delete_employee(employee_id: str, session: AsyncSession = Depends(get_session)):
     employee = await require_employee(employee_id, session)
     from app.runtime.remote_provisioning import guard_environment_write
@@ -451,11 +475,31 @@ async def delete_employee(employee_id: str, session: AsyncSession = Depends(get_
         update(KnowledgeFeedback).where(KnowledgeFeedback.employee_id == employee_id).values(employee_id=None)
     )
     await session.execute(delete(Event).where(Event.employee_id == employee_id))
+    environment = employee.execution_environment
+    if environment is not None:
+        operation_ids = (
+            await session.scalars(
+                select(WorkerMaintenanceOperation.id).where(
+                    WorkerMaintenanceOperation.environment_id == environment.id
+                )
+            )
+        ).all()
+        if operation_ids:
+            await session.execute(
+                delete(WorkerMaintenanceEvent).where(
+                    WorkerMaintenanceEvent.operation_id.in_(operation_ids)
+                )
+            )
+            await session.execute(
+                delete(WorkerMaintenanceOperation).where(
+                    WorkerMaintenanceOperation.environment_id == environment.id
+                )
+            )
     session.add(
         Event(
             event_type="EMPLOYEE_DELETED",
             phase="business",
-            message=f"删除数字员工：{employee.name}",
+            message=f"删除 Agent Worker：{employee.name}",
             detail={"role": employee.role},
         )
     )

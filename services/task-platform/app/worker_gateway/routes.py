@@ -1,4 +1,4 @@
-"""Worker Gateway HTTP 与 WebSocket。路径与数字员工别名 /api/workers 分开。"""
+"""Worker Gateway HTTP 与 WebSocket。路径与 Agent Worker 别名 /api/workers 分开。"""
 
 from __future__ import annotations
 

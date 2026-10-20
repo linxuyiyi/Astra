@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assistant.models import AssistantOperation
 from app.config.settings import Settings, get_settings
 from app.domain import Priority, TaskStatus, TaskType
-from app.models import DigitalEmployee, Task, TaskCategory
+from app.models import AgentWorker, Task, TaskCategory
 from app.schemas import AcceptanceCriterion, TaskCreate
 from app.services import TaskService
 
@@ -109,16 +109,16 @@ class OperationService:
         except ValueError as exc:
             raise OperationError(f"不支持的任务类型：{task_type}", status_code=400) from exc
 
-        employee: DigitalEmployee | None = None
+        employee: AgentWorker | None = None
         if employee_id:
-            employee = await self.session.get(DigitalEmployee, employee_id)
+            employee = await self.session.get(AgentWorker, employee_id)
             if not employee:
-                raise OperationError(f"数字员工不存在：{employee_id}", status_code=404)
+                raise OperationError(f"Agent Worker 不存在：{employee_id}", status_code=404)
             if not employee.enabled:
-                raise OperationError(f"数字员工 {employee.name} 已停用")
+                raise OperationError(f"Agent Worker {employee.name} 已停用")
             if task_type_enum.value not in employee.task_types:
                 raise OperationError(
-                    f"数字员工 {employee.name} 不支持任务类型 {task_type_label(task_type_enum.value)}"
+                    f"Agent Worker {employee.name} 不支持任务类型 {task_type_label(task_type_enum.value)}"
                 )
 
         category: TaskCategory | None = None
@@ -135,7 +135,7 @@ class OperationService:
         if category is None:
             raise OperationError("平台尚未配置任务分类，无法创建任务")
         if employee and employee.category_ids and category.id not in employee.category_ids:
-            raise OperationError(f"数字员工 {employee.name} 不支持任务分类 {category.name}")
+            raise OperationError(f"Agent Worker {employee.name} 不支持任务分类 {category.name}")
 
         if priority:
             try:
@@ -284,18 +284,18 @@ class OperationService:
 
     async def _require_eligible_employee(
         self, task: Task, employee_id: str
-    ) -> DigitalEmployee:
-        employee = await self.session.get(DigitalEmployee, employee_id)
+    ) -> AgentWorker:
+        employee = await self.session.get(AgentWorker, employee_id)
         if not employee:
-            raise OperationError(f"数字员工不存在：{employee_id}", status_code=404)
+            raise OperationError(f"Agent Worker 不存在：{employee_id}", status_code=404)
         if not employee.enabled:
-            raise OperationError(f"数字员工 {employee.name} 已停用")
+            raise OperationError(f"Agent Worker {employee.name} 已停用")
         if task.task_type not in employee.task_types:
             raise OperationError(
-                f"数字员工 {employee.name} 不支持任务类型 {task_type_label(task.task_type)}"
+                f"Agent Worker {employee.name} 不支持任务类型 {task_type_label(task.task_type)}"
             )
         if task.category_id and employee.category_ids and task.category_id not in employee.category_ids:
-            raise OperationError(f"数字员工 {employee.name} 不支持该任务分类")
+            raise OperationError(f"Agent Worker {employee.name} 不支持该任务分类")
         return employee
 
     async def confirm(self, operation_id: str, user_id: str) -> dict[str, Any]:

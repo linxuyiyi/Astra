@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.domain import RuntimeSessionStatus, TaskStatus
-from app.models import Base, DigitalEmployee, Event, RuntimeSession, Task, TaskWakeOutbox
+from app.models import AgentWorker, Base, Event, RuntimeSession, Task, TaskWakeOutbox
 from app.runtime.lifecycle import RuntimeService
 from app.runtime.opencode_model import direct_model, gateway_model, route_model_id
 from app.schemas import TaskCreate
@@ -112,7 +112,7 @@ async def test_refused_start_returns_ok_false_after_rollback(session):
 
 async def test_paused_finished_turn_stays_waiting(session):
     started = datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
-    session.add(DigitalEmployee(id="worker-1", name="执行员工", role="工程"))
+    session.add(AgentWorker(id="worker-1", name="执行员工", role="工程"))
     session.add(
         Task(
             id="T-paused",

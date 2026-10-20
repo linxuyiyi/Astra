@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from app.assistant.review import review_id
 from app.database import SessionLocal
 from app.main import app
-from app.models import DigitalEmployee, RuntimeSession, Task, TaskReview, TaskSummary
+from app.models import AgentWorker, RuntimeSession, Task, TaskReview, TaskSummary
 
 
 def test_review_api_exposes_failure_and_retries_same_record():
@@ -23,7 +23,7 @@ def test_review_api_exposes_failure_and_retries_same_record():
                         status="SUCCEEDED", current_session_id=session_id, last_message_id="turn_1")
             binding = RuntimeSession(id=session_id, task_id=task_id, employee_id=employee_id,
                                      workspace="/test", environment={}, status="SUCCEEDED")
-            session.add_all([DigitalEmployee(id=employee_id, name="复盘员工", role="build"), task, binding])
+            session.add_all([AgentWorker(id=employee_id, name="复盘员工", role="build"), task, binding])
             await session.flush()
             session.add(TaskReview(id=review_id(task, binding), task_id=task_id,
                                    source_session_id=session_id, source_status="SUCCEEDED",

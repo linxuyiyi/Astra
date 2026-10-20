@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import func, select
 
 import tests.test_session_workspace as session_workspace
-from app.models import DigitalEmployee, Event, RuntimeSession, TaskWakeOutbox
+from app.models import AgentWorker, Event, RuntimeSession, TaskWakeOutbox
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 
 
@@ -50,7 +50,7 @@ async def test_existing_succeeded_session_reprojects_running_task(runtime):
     assert r.task.status == "WAITING"
     assert r.task.human_required_reason == _ACCEPTANCE
     assert r.task.current_progress == _ACCEPTANCE
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     assert employee.current_task_count == 1
     before = await _waiting_counts(r.session)
 
@@ -170,7 +170,7 @@ async def test_unconfirmed_round_recovers_when_native_messages_reappear(runtime)
 async def test_cancel_does_not_release_worker_after_a_concurrent_new_turn(runtime):
     r = runtime
     await r.service.send("T1", {"parts": [{"type": "text", "text": "go"}]})
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     assert employee.current_task_count == 1
     assert r.native.state == "busy"
 
@@ -249,7 +249,7 @@ async def test_delayed_send_after_cancel_does_not_leave_native_busy(runtime):
         r.service.send("T1", {"parts": [{"type": "text", "text": "go"}]})
     )
     await asyncio.wait_for(started.wait(), 2)
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     await r.session.refresh(r.task)
     await r.session.refresh(employee)
     assert r.task.pending_message_id
@@ -291,7 +291,7 @@ async def test_delayed_retry_after_cancel_does_not_leave_native_busy(runtime):
     r.task.submission_attempts = {
         f"{pending_id}:1": {"request_id": "req_seed_cancel", "body_fetched_at": None},
     }
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     employee.current_task_count = 1
     employee.status = "WORKING"
     await r.session.commit()
@@ -324,7 +324,7 @@ async def test_delayed_retry_after_cancel_does_not_leave_native_busy(runtime):
 async def test_refresh_finishes_cancel_when_inflight_sender_is_gone(runtime):
     r = runtime
     pending_id = "msg_crash01"
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     employee.current_task_count = 1
     employee.status = "WORKING"
     r.task.status = "RUNNING"
@@ -364,7 +364,7 @@ async def test_refresh_finishes_cancel_when_inflight_sender_is_gone(runtime):
 async def test_refresh_finishes_cancel_when_inflight_message_landed(runtime):
     r = runtime
     pending_id = "msg_crash02"
-    employee = await r.session.get(DigitalEmployee, "E1")
+    employee = await r.session.get(AgentWorker, "E1")
     employee.current_task_count = 1
     employee.status = "WORKING"
     r.task.status = "RUNNING"

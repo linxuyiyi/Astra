@@ -4,7 +4,7 @@ import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import EmployeeStatus, EnvironmentStatus
-from app.models import DigitalEmployee, KnowledgeSpace, OpenCodeExecutionEnvironment, TaskCategory
+from app.models import AgentWorker, KnowledgeSpace, OpenCodeExecutionEnvironment, TaskCategory
 
 DEFAULT_CATEGORIES = (
     ("testing-platform", "测试平台", "测试平台相关问题与需求", 10),
@@ -13,7 +13,7 @@ DEFAULT_CATEGORIES = (
 )
 
 DEFAULT_KNOWLEDGE_SPACES = (
-    ("SPACE_PUBLIC", "公共知识库", "面向所有数字员工的通用知识", 10),
+    ("SPACE_PUBLIC", "公共知识库", "面向所有 Agent Worker 的通用知识", 10),
     ("SPACE_TESTING", "测试领域知识", "测试设计、执行与质量治理知识", 20),
     ("SPACE_DEVELOPMENT", "开发领域知识", "开发、集成与故障处理知识", 30),
     ("SPACE_PROJECT", "项目知识库", "项目约定、背景与交付知识", 40),
@@ -79,14 +79,14 @@ async def bootstrap_employees(session: AsyncSession, config_path) -> None:
     for item in payload.get("employees", []):
         if not item.get("enabled", True):
             continue
-        employee = await session.get(DigitalEmployee, item["id"])
+        employee = await session.get(AgentWorker, item["id"])
         if employee:
             continue
         now = datetime.now(UTC)
-        employee = DigitalEmployee(
+        employee = AgentWorker(
             id=item["id"],
             name=item.get("name", item["id"]),
-            role=item.get("role", "数字员工"),
+            role=item.get("role", "Agent Worker"),
             description=item.get("description", ""),
             default_work_area=item.get("default_work_area", "development"),
             status=EmployeeStatus.IDLE,

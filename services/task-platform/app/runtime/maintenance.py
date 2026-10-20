@@ -540,11 +540,11 @@ async def _finish_in_session(
             .values(**redact_data(environment_values, secrets))
         )
     if employee_id is not None and employee_values is not None:
-        from app.models import DigitalEmployee
+        from app.models import AgentWorker
 
         await session.execute(
-            update(DigitalEmployee)
-            .where(DigitalEmployee.id == employee_id)
+            update(AgentWorker)
+            .where(AgentWorker.id == employee_id)
             .values(**redact_data(employee_values, secrets))
         )
     if event_message:
@@ -1913,7 +1913,7 @@ async def _run_disable(lease: OperationLease, operation: WorkerMaintenanceOperat
 
 
 async def _run_restore(lease: OperationLease, operation: WorkerMaintenanceOperation, owner: str) -> None:
-    from app.models import DigitalEmployee
+    from app.models import AgentWorker
 
     await lease.set_stage("restore")
     probe = await observe_environment(operation.environment_id, persist=False)
@@ -1927,7 +1927,7 @@ async def _run_restore(lease: OperationLease, operation: WorkerMaintenanceOperat
             )
             return
         employee_id = environment.employee_id
-        employee = await session.get(DigitalEmployee, employee_id)
+        employee = await session.get(AgentWorker, employee_id)
     healthy = not probe["stale"] and probe["status"] == EnvironmentStatus.AVAILABLE
     if healthy:
         await finish_operation(
@@ -2386,13 +2386,13 @@ async def event_stream(operation_id: str, after_id: int) -> AsyncIterator[dict[s
 async def _schedulability_blockers(session, environment) -> list[dict[str, Any]]:
     """Single fact source for health blockers and pre-dispatch refusal."""
 
-    from app.models import DigitalEmployee, WorkerInstance
+    from app.models import AgentWorker, WorkerInstance
 
     if environment is None:
         return [{"code": "environment_missing", "message": "员工尚未配置运行环境"}]
     blockers: list[dict[str, Any]] = []
     employee = (
-        await session.get(DigitalEmployee, environment.employee_id) if environment.employee_id else None
+        await session.get(AgentWorker, environment.employee_id) if environment.employee_id else None
     )
     if employee is None or not employee.enabled:
         blockers.append({"code": "disabled", "message": "员工已停用"})
@@ -2451,7 +2451,7 @@ async def scheduling_block(session, environment) -> str | None:
 
 
 async def environment_health(session, environment_id: int) -> dict[str, Any] | None:
-    from app.models import DigitalEmployee, RuntimeSession, Task
+    from app.models import AgentWorker, RuntimeSession, Task
     from app.runtime.occupancy import occupying_clause, release_match_clause
 
     environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
@@ -2461,7 +2461,7 @@ async def environment_health(session, environment_id: int) -> dict[str, Any] | N
         select(WorkerInstance).where(WorkerInstance.environment_id == environment_id)
     )
     employee = (
-        await session.get(DigitalEmployee, environment.employee_id) if environment.employee_id else None
+        await session.get(AgentWorker, environment.employee_id) if environment.employee_id else None
     )
     active = await active_operation(session, environment_id)
     latest = active or await latest_operation(session, environment_id)

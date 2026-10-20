@@ -51,10 +51,19 @@ class TaskCategory(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
 
-class DigitalEmployee(RuntimeProjection, Base):
-    __tablename__ = "digital_employees"
+class AgentWorker(RuntimeProjection, Base):
+    """Agent Worker 的执行身份；一个 Nexus 数字员工可拥有多个 Worker。
+
+    `digital_employee_id` 指向 Nexus 数字员工目录，不建外键：目录与任务库分属
+    两个服务。Worker 自己的显示名称保存在执行环境的 `name` 上。
+    """
+
+    __tablename__ = "agent_workers"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    digital_employee_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(120))
     role: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text, default="")
@@ -103,7 +112,7 @@ class OpenCodeExecutionEnvironment(Base):
     __tablename__ = "opencode_execution_environments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    employee_id: Mapped[str] = mapped_column(ForeignKey("digital_employees.id"), unique=True, index=True)
+    employee_id: Mapped[str] = mapped_column(ForeignKey("agent_workers.id"), unique=True, index=True)
     repository_id: Mapped[str | None] = mapped_column(
         ForeignKey("code_repositories.id"), nullable=True, index=True
     )
@@ -129,7 +138,8 @@ class OpenCodeExecutionEnvironment(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
-    employee: Mapped[DigitalEmployee] = relationship(back_populates="execution_environment")
+    employee: Mapped[AgentWorker] = relationship(back_populates="execution_environment")
+    repository: Mapped["CodeRepository | None"] = relationship(lazy="joined")
     worker_instance: Mapped["WorkerInstance | None"] = relationship(
         back_populates="environment", uselist=False, cascade="all, delete-orphan"
     )
@@ -137,6 +147,14 @@ class OpenCodeExecutionEnvironment(Base):
     @property
     def has_ssh_password(self) -> bool:
         return bool(self.ssh_password)
+
+    @property
+    def repository_url(self) -> str | None:
+        return self.repository.url if self.repository is not None else None
+
+    @property
+    def repository_branch(self) -> str | None:
+        return self.branch or (self.repository.branch if self.repository is not None else None)
 
 
 class Task(RuntimeProjection, Base):
@@ -159,7 +177,7 @@ class Task(RuntimeProjection, Base):
     priority_weight: Mapped[int] = mapped_column(Integer, default=2)
     completion_policy: Mapped[str] = mapped_column(String(32), default="MANUAL_CONFIRM")
     status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
-    employee_id: Mapped[str | None] = mapped_column(ForeignKey("digital_employees.id"), nullable=True)
+    employee_id: Mapped[str | None] = mapped_column(ForeignKey("agent_workers.id"), nullable=True)
     responsible_employee_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     source_session_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     source_conversation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -208,7 +226,7 @@ class Task(RuntimeProjection, Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
-    employee: Mapped[DigitalEmployee | None] = relationship(back_populates="tasks")
+    employee: Mapped[AgentWorker | None] = relationship(back_populates="tasks")
     events: Mapped[list["Event"]] = relationship(back_populates="task", cascade="all, delete-orphan")
 
     @property
@@ -225,7 +243,7 @@ class RuntimeSession(Base):
     __tablename__ = "runtime_sessions"
     id: Mapped[str] = mapped_column(String(160), primary_key=True)
     task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id"), index=True)
-    employee_id: Mapped[str] = mapped_column(ForeignKey("digital_employees.id"))
+    employee_id: Mapped[str] = mapped_column(ForeignKey("agent_workers.id"))
     workspace: Mapped[str] = mapped_column(Text)
     workspace_base_commit: Mapped[str | None] = mapped_column(String(64), nullable=True)
     environment: Mapped[dict[str, Any]] = mapped_column(JSON)
@@ -267,7 +285,7 @@ class Event(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
-    employee_id: Mapped[str | None] = mapped_column(ForeignKey("digital_employees.id"), nullable=True)
+    employee_id: Mapped[str | None] = mapped_column(ForeignKey("agent_workers.id"), nullable=True)
     event_type: Mapped[str] = mapped_column(String(80), index=True)
     phase: Mapped[str] = mapped_column(String(80), default="system")
     message: Mapped[str] = mapped_column(Text)
@@ -390,7 +408,7 @@ class KnowledgeItem(Base):
     source_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source_ref: Mapped[str | None] = mapped_column(String(240), nullable=True)
     source_employee_id: Mapped[str | None] = mapped_column(
-        ForeignKey("digital_employees.id"), nullable=True, index=True
+        ForeignKey("agent_workers.id"), nullable=True, index=True
     )
     source_task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
     source_session_id: Mapped[str | None] = mapped_column(
@@ -484,7 +502,7 @@ class KnowledgeUsage(Base):
         ForeignKey("knowledge_items.id", ondelete="SET NULL"), nullable=True, index=True
     )
     employee_id: Mapped[str | None] = mapped_column(
-        ForeignKey("digital_employees.id"), nullable=True, index=True
+        ForeignKey("agent_workers.id"), nullable=True, index=True
     )
     task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
     session_id: Mapped[str | None] = mapped_column(
@@ -512,7 +530,7 @@ class KnowledgeFeedback(Base):
     actor_key: Mapped[str] = mapped_column(String(200))
     user_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     employee_id: Mapped[str | None] = mapped_column(
-        ForeignKey("digital_employees.id"), nullable=True, index=True
+        ForeignKey("agent_workers.id"), nullable=True, index=True
     )
     feedback_type: Mapped[str] = mapped_column(String(32), index=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)

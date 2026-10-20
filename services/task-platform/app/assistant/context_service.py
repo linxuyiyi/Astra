@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assistant.models import AssistantContextRef, AssistantConversation, AssistantMessage
 from app.assistant.schemas import PageContext
 from app.config.settings import get_settings
-from app.models import DigitalEmployee, KnowledgeItem, RuntimeSession, Task
+from app.models import AgentWorker, KnowledgeItem, RuntimeSession, Task
 
 PAGE_TYPE_LABEL = {
     "task": "任务详情",
@@ -52,10 +52,10 @@ class AssistantContextService:
                 )
                 return text, [("TASK", task.id)]
         elif entity_type == "employee" and entity_id:
-            employee = await self.session.get(DigitalEmployee, entity_id)
+            employee = await self.session.get(AgentWorker, entity_id)
             if employee:
                 text = (
-                    f"当前页面对象是数字员工 {employee.id}（{employee.name}），"
+                    f"当前页面对象是 Agent Worker {employee.id}（{employee.name}），"
                     f"岗位 {employee.role}，状态 {employee.status}。"
                 )
                 return text, [("EMPLOYEE", employee.id)]

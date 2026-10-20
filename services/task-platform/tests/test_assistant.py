@@ -31,7 +31,7 @@ from app.config.settings import PROJECT_ROOT, get_settings
 from app.database import SessionLocal, init_database
 from app.domain import Priority, TaskStatus, TaskType
 from app.main import app
-from app.models import DigitalEmployee, Task, TaskCategory
+from app.models import AgentWorker, Task, TaskCategory
 from app.schemas import AcceptanceCriterion, TaskCreate
 from app.services import TaskService
 
@@ -212,9 +212,9 @@ async def seed_employee_and_category():
     async with SessionLocal() as session:
         if not await session.get(TaskCategory, "assistant-test"):
             session.add(TaskCategory(id="assistant-test", name="助手测试分类"))
-        if not await session.get(DigitalEmployee, "emp-tuya"):
+        if not await session.get(AgentWorker, "emp-tuya"):
             session.add(
-                DigitalEmployee(
+                AgentWorker(
                     id="emp-tuya",
                     name="图丫丫",
                     role="测试工程师",
@@ -467,9 +467,9 @@ async def test_reassign_ready_task_requires_confirmation_and_revalidates_status(
     await init_database()
     await seed_employee_and_category()
     async with SessionLocal() as session:
-        if not await session.get(DigitalEmployee, "emp-reassign"):
+        if not await session.get(AgentWorker, "emp-reassign"):
             session.add(
-                DigitalEmployee(
+                AgentWorker(
                     id="emp-reassign",
                     name="重新分配员工",
                     role="测试工程师",

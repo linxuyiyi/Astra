@@ -1,15 +1,11 @@
 <template>
   <div class="astra-page agentscope-page" data-testid="agentscope-page">
-    <div class="agentscope-toolbar">
-      <div class="agentscope-status">
-        <ElTag :type="runtime?.reachable ? 'success' : 'danger'">{{ runtime?.reachable ? "可达" : "不可达" }}</ElTag>
-        <span>AgentScope {{ runtime?.agentscope_version ?? "2.0.10" }}</span>
-      </div>
-      <div class="agentscope-actions">
+    <SettingsHeaderActions>
+      <div class="settings-header-group">
         <ElButton :icon="RefreshCw" :loading="loading" @click="load">刷新</ElButton>
-        <ElButton :icon="ExternalLink" @click="openWindow">新窗口打开</ElButton>
+        <ElButton type="primary" :icon="ExternalLink" @click="openWindow">新窗口打开控制台</ElButton>
       </div>
-    </div>
+    </SettingsHeaderActions>
 
     <ElAlert v-if="error" type="warning" show-icon :closable="false" :title="error" />
 
@@ -28,7 +24,8 @@
 <script setup lang="ts">
 import { ExternalLink, RefreshCw } from "lucide-vue-next";
 import { onMounted, ref } from "vue";
-import { ElAlert, ElButton, ElTag } from "element-plus";
+import { ElAlert, ElButton } from "element-plus";
+import SettingsHeaderActions from "./SettingsHeaderActions.vue";
 import { getRuntime } from "@/api";
 import type { RuntimeStatus } from "@/types";
 
@@ -65,14 +62,38 @@ function openWindow() {
   window.open("/agentscope-ui/", "_blank", "noopener");
 }
 
-onMounted(load);
+onMounted(async () => {
+  await load();
+});
 </script>
 
 <style scoped>
-.agentscope-page { gap: 10px; }
-.agentscope-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; flex: none; }
-.agentscope-status { display: flex; align-items: center; gap: 8px; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); }
-.agentscope-actions { display: flex; gap: 8px; margin-left: auto; }
-.agentscope-frame { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; border-radius: 8px; background: #fff; }
-.agentscope-loading { flex: 1 1 auto; display: grid; place-items: center; color: var(--astra-text-muted); }
+.agentscope-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 8px;
+}
+.settings-header-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agentscope-frame {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 520px;
+  border: 1px solid var(--astra-border);
+  border-radius: 8px;
+  background: #fff;
+}
+.agentscope-loading {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  color: var(--astra-text-muted);
+}
 </style>
+

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.models import DigitalEmployee, KnowledgeItem, RuntimeSession, Task
+from app.models import AgentWorker, KnowledgeItem, RuntimeSession, Task
 from app.runtime.presentation import TASK_STATUS
 
 TASK_STATUS_LABEL = {key: value["label"] for key, value in TASK_STATUS.items()}
@@ -78,7 +78,7 @@ def task_card(task: Task) -> dict[str, Any]:
     }
 
 
-def employee_card(employee: DigitalEmployee) -> dict[str, Any]:
+def employee_card(employee: AgentWorker) -> dict[str, Any]:
     fields = [
         {"label": "状态", "value": EMPLOYEE_STATUS_LABEL.get(employee.status, employee.status)},
         {"label": "岗位", "value": employee.role},
@@ -92,7 +92,7 @@ def employee_card(employee: DigitalEmployee) -> dict[str, Any]:
         "status": employee.status,
         "status_label": EMPLOYEE_STATUS_LABEL.get(employee.status, employee.status),
         "fields": fields,
-        "actions": [_navigate("查看员工", f"/employees/{employee.id}")],
+        "actions": [_navigate("查看 Agent Worker", f"/settings/workers/{employee.id}")],
     }
 
 

@@ -2044,3 +2044,141 @@ def test_redis_revocation_set_is_append_only_and_marked_ready():
             await store.close()
 
     asyncio.run(scenario())
+
+
+def test_frame_has_content_supports_reasoning_and_tool_calls():
+    from app.gateway.server import _frame_has_content
+
+    # 1. role-only 不算
+    assert not _frame_has_content({"choices": [{"delta": {"role": "assistant"}}]})
+    # 2. 空内容不算
+    assert not _frame_has_content({"choices": [{"delta": {"content": ""}}]})
+    assert not _frame_has_content({"choices": [{"delta": {"content": None}}]})
+    # 3. 正文内容算
+    assert _frame_has_content({"choices": [{"delta": {"content": "Hello"}}]})
+    # 4. reasoning_content (DeepSeek R1 等推理模型) 算首 token
+    assert _frame_has_content({"choices": [{"delta": {"reasoning_content": "Thinking..."}}]})
+    assert _frame_has_content({"choices": [{"delta": {"reasoning": "Plan:"}}]})
+    assert not _frame_has_content({"choices": [{"delta": {"reasoning_content": ""}}]})
+    # 5. tool_calls (带 ID 或函数名/参数) 算首 token
+    assert _frame_has_content({"choices": [{"delta": {"tool_calls": [{"id": "call_123"}]}}]})
+    empty_call = {"function": {"name": "", "arguments": ""}}
+    assert not _frame_has_content({"choices": [{"delta": {"tool_calls": [empty_call]}}]})
+
+
+def test_output_tps_calculation_rules():
+    from app.gateway.server import GatewayDataPlane, RequestRecord
+
+    now = utcnow()
+    # 1. 成功且流式、Token 数 > 1：正常计算生成速度 Token/s
+    rec = RequestRecord(
+        id="r1",
+        started_at=now,
+        streaming=True,
+        status_code=200,
+        stream_interrupted=False,
+        duration_ms=2500,
+        ttft_ms=500,  # 生成耗时 = (2500 - 500) / 1000 = 2.0s
+    )
+    plane = GatewayDataPlane(
+        session_factory=SessionLocal,
+        config_state=GatewayConfigState(),
+        proxy=GatewayProxy(),
+        runtime=InMemoryRuntimeStore(),
+        cipher=CredentialCipher(Fernet.generate_key().decode()),
+    )
+    asyncio.run(plane._record_usage(rec, {"prompt_tokens": 10, "completion_tokens": 20}))
+    assert rec.output_tps == 10.0  # 20 tokens / 2.0s = 10.0 TPS
+
+    # 2. 单 Token：首 token 即末 token，不伪造生成速度
+    rec_single = RequestRecord(
+        id="r2",
+        started_at=now,
+        streaming=True,
+        status_code=200,
+        stream_interrupted=False,
+        duration_ms=2500,
+        ttft_ms=500,
+    )
+    asyncio.run(plane._record_usage(rec_single, {"prompt_tokens": 10, "completion_tokens": 1}))
+    assert rec_single.output_tps is None
+
+    # 3. 中途断开：不显示正常性能值
+    rec_interrupted = RequestRecord(
+        id="r3",
+        started_at=now,
+        streaming=True,
+        status_code=200,
+        stream_interrupted=True,
+        duration_ms=2500,
+        ttft_ms=500,
+    )
+    asyncio.run(plane._record_usage(rec_interrupted, {"prompt_tokens": 10, "completion_tokens": 20}))
+    assert rec_interrupted.output_tps is None
+
+    # 4. 非流式响应：不伪造 TPS
+    rec_non_stream = RequestRecord(
+        id="r4",
+        started_at=now,
+        streaming=False,
+        status_code=200,
+        stream_interrupted=False,
+        duration_ms=2500,
+        ttft_ms=500,
+    )
+    asyncio.run(plane._record_usage(rec_non_stream, {"prompt_tokens": 10, "completion_tokens": 20}))
+    assert rec_non_stream.output_tps is None
+
+
+def test_transparent_model_routing_a_to_b():
+    # 测试请求模型 A (GLM-5.2) -> 实际模型 B (GLM-5.3) 的透明路由
+    client_model = "GLM-5.2"
+    actual_model = "GLM-5.3"
+    cipher = CredentialCipher(Fernet.generate_key().decode())
+    upstream = MockUpstream()
+    node = node_dict(NODE_A, host="node-a.test", cipher=cipher, models=(actual_model,))
+    config = GatewayConfig.from_snapshot(
+        _snapshot(
+            nodes=[node],
+            routes=[
+                {
+                    "id": "gr-glm",
+                    "model": client_model,
+                    "target_model": actual_model,
+                    "pool_id": POOL_ID,
+                    "enabled": True,
+                    "weight": 1,
+                }
+            ],
+            keys=[key_dict(allowed_models=[client_model])],
+        )
+    )
+    kv = build_plane(upstream, config=config, cipher=cipher)
+    with TestClient(create_gateway_app(kv.plane)) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            headers=auth_headers(),
+            json={"model": client_model, "messages": [{"role": "user", "content": "hello"}]},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body.get("model") == client_model
+
+    assert len(upstream.requests) == 1
+    upstream_req_payload = json.loads(upstream.requests[0].content)
+    assert upstream_req_payload["model"] == actual_model
+
+    async def check_db():
+        async with SessionLocal() as session:
+            row = (
+                await session.scalars(
+                    select(GatewayRequest).order_by(GatewayRequest.started_at.desc()).limit(1)
+                )
+            ).first()
+            assert row is not None
+            assert row.model == client_model
+            assert row.actual_model == actual_model
+            assert row.status_code == 200
+
+    asyncio.run(check_db())
+

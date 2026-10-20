@@ -18,18 +18,14 @@
       scroll-to-error
       :disabled="busy"
     >
-      <ElText class="node-form__hint" type="info">
-        保存后节点先处于禁用与安全下线；完成 NETWORK/SERVICE/MODEL/STREAM 探测并达标后才能启用并进入「调度中」。
-      </ElText>
-
       <ElDivider content-position="left">连接与认证</ElDivider>
       <ElFormItem label="节点名称" prop="name">
         <ElInput v-model="form.name" placeholder="例如 主 Proxy 节点" />
       </ElFormItem>
-      <ElFormItem label="上游 Base URL（节点根地址）" prop="baseUrl">
+      <ElFormItem prop="baseUrl">
+        <template #label>上游 Base URL（节点根地址） <FieldHelp label="上游 Base URL" help="填节点根地址，不要带 /v1；Gateway 会自动追加 /v1/chat/completions。" /></template>
         <ElInput v-model="form.baseUrl" placeholder="https://proxy.example.com" />
       </ElFormItem>
-      <p class="node-form__note"><Info :size="13" />填节点根地址，不要带 /v1；Gateway 会自动追加 /v1/chat/completions。</p>
       <ElFormItem label="认证方式">
         <ElSelect v-model="form.authType">
           <ElOption value="BEARER" label="Bearer Token" />
@@ -40,7 +36,8 @@
       <ElFormItem label="认证 Header">
         <ElInput v-model="form.authHeader" :disabled="busy || form.authType === 'NONE'" placeholder="Authorization" />
       </ElFormItem>
-      <ElFormItem v-if="form.authType !== 'NONE'" label="上游凭据">
+      <ElFormItem v-if="form.authType !== 'NONE'">
+        <template #label>上游凭据 <FieldHelp label="上游凭据" help="凭据加密入库，任何响应与日志都不会回显明文；保存后输入框自动清空。" /></template>
         <ElInput
           v-model="form.apiKey"
           type="password"
@@ -49,7 +46,6 @@
           :placeholder="node?.has_api_key ? '已配置，留空保持不变' : '上游 Proxy 的 Token / 凭据值'"
         />
       </ElFormItem>
-      <p class="node-form__note"><ShieldCheck :size="13" />凭据加密入库，任何响应与日志都不会回显明文；保存后输入框自动清空。</p>
       <ElFormItem label="健康路径">
         <ElInput v-model="form.healthPath" placeholder="/health" />
       </ElFormItem>
@@ -67,7 +63,8 @@
       <ElFormItem label="支持模型（逗号或换行分隔）" prop="modelsText">
         <ElInput v-model="form.modelsText" type="textarea" :rows="3" placeholder="gpt-4o-mini&#10;claude-3-5-sonnet" />
       </ElFormItem>
-      <ElFormItem label="探测项目">
+      <ElFormItem>
+        <template #label>探测项目 <FieldHelp label="探测项目" help="必须同时勾选网络 / 服务 / 模型 / SSE 完成完整探测；局部探测不会让节点脱离 UNKNOWN。连续成功 2 次方为 HEALTHY。认证结果由真实模型调用状态推断（无独立认证探测）。" /></template>
         <ElCheckboxGroup v-model="form.probeTypes">
           <ElCheckbox v-for="type in probeTypes" :key="type" :value="type">{{ probeTypeLabel(type) }}</ElCheckbox>
         </ElCheckboxGroup>
@@ -81,7 +78,6 @@
           <ElTag v-if="probeChecks.length" :type="tagType(authenticationTone(probeAuthentication))">{{ authenticationLabel(probeAuthentication) }}</ElTag>
         </span>
       </div>
-      <p class="node-form__note"><Info :size="13" />必须同时勾选网络 / 服务 / 模型 / SSE 完成完整探测；局部探测不会让节点脱离 UNKNOWN。连续成功 2 次方为 HEALTHY。认证结果由真实模型调用状态推断（无独立认证探测）。</p>
       <ul v-if="probeChecks.length" class="node-probe-result" data-testid="gateway-node-probe-checks">
         <li v-for="check in probeChecks" :key="check.id">
           <CheckCircle2 v-if="check.success" :size="14" class="ok" /><XCircle v-else :size="14" class="bad" />
@@ -99,7 +95,8 @@
       <ElFormItem label="最大并发（0 为不限）">
         <ElInput v-model="form.maxConcurrency" type="number" min="0" />
       </ElFormItem>
-      <ElFormItem label="每小时 Token 限额">
+      <ElFormItem>
+        <template #label>每小时 Token 限额 <FieldHelp label="Token 额度" help="额度按自然小时 / 自然日统计已完成请求的实际 usage，未知用量记为 unknown，不估算为零。" /></template>
         <ElInput v-model="form.hourly" type="number" min="0" placeholder="不限" />
       </ElFormItem>
       <ElFormItem label="每日 Token 限额">
@@ -112,7 +109,6 @@
           <ElOption value="RECORD" label="达到限额仅记录" />
         </ElSelect>
       </ElFormItem>
-      <p class="node-form__note"><Timer :size="13" />额度按自然小时 / 自然日统计已完成请求的实际 usage，未知用量记为 unknown，不估算为零。</p>
 
       <ElDivider content-position="left">资源池与启用</ElDivider>
       <ElFormItem label="资源池">
@@ -124,7 +120,8 @@
       <ElFormItem label="排序">
         <ElInput v-model="form.sortOrder" type="number" />
       </ElFormItem>
-      <ElFormItem label="调度状态">
+      <ElFormItem>
+        <template #label>调度状态 <FieldHelp label="调度状态" help="保存后节点先处于禁用与安全下线；完成 NETWORK/SERVICE/MODEL/STREAM 探测并达标后才能启用并进入「调度中」。" /></template>
         <ElSelect v-model="form.scheduling">
           <ElOption value="ACTIVE" :disabled="activeOptionDisabled" label="调度中" />
           <ElOption value="DRAINING" label="安全下线" />
@@ -154,7 +151,7 @@
 </template>
 
 <script setup lang="ts">
-import { CheckCircle2, Info, ShieldCheck, Timer, TriangleAlert, XCircle } from 'lucide-vue-next'
+import { CheckCircle2, TriangleAlert, XCircle } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import {
   ElAlert,
@@ -185,6 +182,7 @@ import {
   type GatewaySchedulingState,
   type GatewayAuthType,
 } from '@/api/gateway'
+import FieldHelp from '@/components/forms/FieldHelp.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import {
   authenticationLabel,
@@ -497,7 +495,6 @@ function tagType(tone: GatewayTone): 'success' | 'warning' | 'danger' | 'info' {
 .node-form { display: grid; }
 .node-form :deep(.el-form-item) { margin-bottom: 14px; }
 .node-form :deep(.el-divider) { margin: 6px 0 16px; }
-.node-form__hint { display: block; margin-bottom: 4px; }
 .node-form__note { display: flex; align-items: center; gap: 6px; margin: 0 0 14px; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .node-form__note--warn { color: var(--astra-warning); }
 .node-form__probe-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }

@@ -718,6 +718,12 @@ class GatewayDataPlane:
         return JSONResponse({"object": "list", "data": data})
 
     async def handle_chat(self, request: Request) -> Response:
+        return await self._handle_model_request(request, path=CHAT_PATH)
+
+    async def handle_embeddings(self, request: Request) -> Response:
+        return await self._handle_model_request(request, path="/v1/embeddings")
+
+    async def _handle_model_request(self, request: Request, *, path: str) -> Response:
         config = self.config_state.config
         started = utcnow()
         record = RequestRecord(
@@ -748,6 +754,9 @@ class GatewayDataPlane:
                 raise invalid_request("请求体缺少 model")
             record.model = model
             record.streaming = bool(payload.get("stream"))
+            if path == "/v1/embeddings":
+                if record.streaming or "input" not in payload:
+                    raise invalid_request("嵌入请求需要 input，且不支持 stream")
 
             if key.allowed_models and model not in key.allowed_models:
                 raise key_forbidden(model)
@@ -798,7 +807,7 @@ class GatewayDataPlane:
                     else:
                         upstream_body = body
                     upstream_request = self.proxy.build_request(
-                        node, "POST", CHAT_PATH, headers=headers, content=upstream_body
+                        node, "POST", path, headers=headers, content=upstream_body
                     )
                     # 额外上游尝试从真正发出的那一次起算。解密或组请求失败都不算。
                     if attempt > 0:
@@ -1391,6 +1400,10 @@ def create_gateway_app(data_plane: GatewayDataPlane) -> FastAPI:
     @application.post(CHAT_PATH)
     async def chat_completions(request: Request) -> Response:
         return await data_plane.handle_chat(request)
+
+    @application.post("/v1/embeddings")
+    async def embeddings(request: Request) -> Response:
+        return await data_plane.handle_embeddings(request)
 
     return application
 

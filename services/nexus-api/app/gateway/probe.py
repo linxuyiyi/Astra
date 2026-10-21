@@ -21,29 +21,33 @@ from app.gateway.models import (
     AUTH_BEARER,
     AUTH_NONE,
     DEFAULT_HEALTH_PATH,
+    PROBE_EMBEDDING,
     PROBE_MODEL,
     PROBE_NETWORK,
     PROBE_SERVICE,
     PROBE_STREAM,
-    PROBE_TYPES,
 )
 
 PROBE_CHAT_PATH = "/v1/chat/completions"
 
 # 验证策略：常规一次 SSE，专项一次非流式；SCOPED 只用于诊断，不推进健康授权。
-PROBE_STRATEGIES = ("SSE", "NON_STREAM", "SCOPED")
+PROBE_STRATEGIES = ("SSE", "NON_STREAM", "EMBEDDING", "SCOPED")
 
 
 def probe_types_for_strategy(strategy: str) -> list[str]:
+    if strategy == "EMBEDDING":
+        return [PROBE_EMBEDDING]
     if strategy == "NON_STREAM":
         return [PROBE_MODEL]
     if strategy == "SCOPED":
-        return list(PROBE_TYPES)
+        return [PROBE_NETWORK, PROBE_SERVICE, PROBE_MODEL, PROBE_STREAM]
     return [PROBE_STREAM]
 
 
 def strategy_for_types(probe_types: list[str]) -> str:
     types = set(probe_types)
+    if types == {PROBE_EMBEDDING}:
+        return "EMBEDDING"
     if types == {PROBE_STREAM}:
         return "SSE"
     if types == {PROBE_MODEL}:
@@ -135,7 +139,9 @@ class HttpGatewayProbeClient:
             for probe_type in http_types:
                 start = time.perf_counter()
                 try:
-                    if probe_type == PROBE_STREAM:
+                    if probe_type == PROBE_EMBEDDING:
+                        call = self._probe_embedding(client, base, headers, node, start)
+                    elif probe_type == PROBE_STREAM:
                         call = self._probe_stream(client, base, headers, node, start)
                     elif probe_type == PROBE_MODEL:
                         call = self._probe_model(client, base, headers, node, start)
@@ -222,6 +228,25 @@ class HttpGatewayProbeClient:
             status_code=response.status_code,
             error=None if success else f"健康检查返回 {response.status_code}",
             detail={"path": path},
+        )
+
+    async def _probe_embedding(self, client, base, headers, node, start) -> ProbeOutcome:
+        models = list(getattr(node, "models", []) or [])
+        if not models:
+            return self._failed(PROBE_EMBEDDING, start, "节点未配置模型")
+        response = await client.post(
+            f"{base}/v1/embeddings", headers=headers,
+            json={"model": models[0], "input": "ping", "encoding_format": "float"},
+        )
+        try:
+            payload = response.json()
+            vector = payload["data"][0]["embedding"]
+            success = response.status_code == 200 and isinstance(vector, list) and bool(vector)
+        except (ValueError, KeyError, IndexError, TypeError):
+            success = False
+        return ProbeOutcome(
+            PROBE_EMBEDDING, success, self._elapsed(start), status_code=response.status_code,
+            error=None if success else "嵌入调用失败或未返回向量", detail={"model": models[0]},
         )
 
     async def _probe_model(

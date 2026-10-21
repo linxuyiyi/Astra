@@ -14,7 +14,6 @@ from pathlib import Path
 from app.executors.errors import OpenCodeServerUnavailable
 from app.executors.opencode_server import OpenCodeServerClient, OpenCodeServerExecutor
 from app.executors.process import local_command, process_group_options
-from app.runtime.opencode_workspace import discover_workspace_config
 
 # Only terminate processes started by this worker, never an unknown port owner.
 _processes: dict[int, subprocess.Popen] = {}
@@ -76,6 +75,12 @@ class LocalOpenCodeServerExecutor(OpenCodeServerExecutor):
             **kwargs,
         )
 
+    async def _verify_gateway(self):
+        from app.runtime.opencode_model import validate_gateway_config
+
+        config = await self.client.request("GET", "/config")
+        validate_gateway_config(config, dict(os.environ))
+
     async def ensure_ready(self):
         port = self.environment.opencode_server_port
         try:
@@ -96,6 +101,7 @@ class LocalOpenCodeServerExecutor(OpenCodeServerExecutor):
                     paths = await self.client.request("GET", "/path")
                     if Path(paths.get("directory", "")).resolve() != self.workspace:
                         raise RuntimeError("端口冲突：Serve 的启动 Workspace 与员工配置不一致")
+                    await self._verify_gateway()
                     owner_path.write_text(json.dumps(owner), encoding="utf-8")
                     return
                 process = _processes.get(port)
@@ -116,12 +122,6 @@ class LocalOpenCodeServerExecutor(OpenCodeServerExecutor):
                         raise RuntimeError(f"端口冲突：127.0.0.1:{port} 被其他进程占用") from exc
                 if not self.workspace.is_dir():
                     raise RuntimeError("Workspace 不存在")
-                if discover_workspace_config(self.workspace) is None:
-                    raise RuntimeError(
-                        f"Workspace 未提供 OpenCode 配置：{self.workspace} 及其父目录/全局 "
-                        "~/.config/opencode/ 下均无 opencode.json；Nexus 不会生成临时配置，"
-                        "请补齐工作区配置后重试"
-                    )
                 command = local_command(
                     self.environment.opencode_path,
                     [
@@ -132,11 +132,14 @@ class LocalOpenCodeServerExecutor(OpenCodeServerExecutor):
                         str(port),
                     ],
                 )
-                environment = os.environ.copy()
+                from app.runtime.opencode_model import gateway_environment
+
+                environment = gateway_environment(
+                    self.environment.model_name or self.settings.opencode_model, dict(os.environ)
+                )
                 environment.pop("OPENCODE_SERVER_PASSWORD", None)
                 environment.pop("OPENCODE_SERVER_USERNAME", None)
-                # The workspace owns its OpenCode config; Astra must never inject
-                # one through OPENCODE_CONFIG or it would shadow company providers.
+                # Workspace tools remain; the managed process overrides model connections only.
                 environment.pop("OPENCODE_CONFIG", None)
                 log_path = self.workspace / ".nexus-opencode-server.log"
                 with log_path.open("ab") as log:
@@ -163,6 +166,7 @@ class LocalOpenCodeServerExecutor(OpenCodeServerExecutor):
                         raise RuntimeError(f"Serve 退出码 {process.returncode}：{detail}；日志：{log_path}")
                     try:
                         await self.client.health()
+                        await self._verify_gateway()
                         return
                     except Exception as exc:
                         last_error = str(exc)

@@ -23,7 +23,7 @@
         <ElInput v-model="form.name" placeholder="例如 主 Proxy 节点" />
       </ElFormItem>
       <ElFormItem prop="baseUrl">
-        <template #label>上游 Base URL（节点根地址） <FieldHelp label="上游 Base URL" help="填节点根地址，不要带 /v1；Gateway 会自动追加 /v1/chat/completions。" /></template>
+        <template #label>上游 Base URL（节点根地址） <FieldHelp label="上游 Base URL" help="填节点根地址，不要带 /v1；Gateway 会追加聊天或 embedding 接口路径。" /></template>
         <ElInput v-model="form.baseUrl" placeholder="https://proxy.example.com" />
       </ElFormItem>
       <ElFormItem label="认证方式">
@@ -63,8 +63,16 @@
       <ElFormItem label="支持模型（逗号或换行分隔）" prop="modelsText">
         <ElInput v-model="form.modelsText" type="textarea" :rows="3" placeholder="gpt-4o-mini&#10;claude-3-5-sonnet" />
       </ElFormItem>
-      <ElFormItem>
-        <template #label>探测项目 <FieldHelp label="探测项目" help="必须同时勾选网络 / 服务 / 模型 / SSE 完成完整探测；局部探测不会让节点脱离 UNKNOWN。连续成功 2 次方为 HEALTHY。认证结果由真实模型调用状态推断（无独立认证探测）。" /></template>
+      <ElFormItem label="探测策略">
+        <ElSelect v-model="form.probeStrategy" data-testid="gateway-node-probe-strategy" @change="applyProbeStrategy">
+          <ElOption value="SSE" label="聊天流式" />
+          <ElOption value="NON_STREAM" label="聊天非流式" />
+          <ElOption value="EMBEDDING" label="向量嵌入" />
+          <ElOption value="SCOPED" label="诊断探测" />
+        </ElSelect>
+      </ElFormItem>
+      <ElFormItem v-if="form.probeStrategy === 'SCOPED'">
+        <template #label>探测项目 <FieldHelp label="探测项目" help="诊断探测仅用于定位问题，不推进节点健康授权。需要启用调度时，请选择聊天或向量嵌入策略完成验证。" /></template>
         <ElCheckboxGroup v-model="form.probeTypes">
           <ElCheckbox v-for="type in probeTypes" :key="type" :value="type">{{ probeTypeLabel(type) }}</ElCheckbox>
         </ElCheckboxGroup>
@@ -121,7 +129,7 @@
         <ElInput v-model="form.sortOrder" type="number" />
       </ElFormItem>
       <ElFormItem>
-        <template #label>调度状态 <FieldHelp label="调度状态" help="保存后节点先处于禁用与安全下线；完成 NETWORK/SERVICE/MODEL/STREAM 探测并达标后才能启用并进入「调度中」。" /></template>
+        <template #label>调度状态 <FieldHelp label="调度状态" help="保存后节点先处于禁用与安全下线；完成所选策略的探测并达标后才能启用并进入「调度中」。" /></template>
         <ElSelect v-model="form.scheduling">
           <ElOption value="ACTIVE" :disabled="activeOptionDisabled" label="调度中" />
           <ElOption value="DRAINING" label="安全下线" />
@@ -132,7 +140,7 @@
         <ElSwitch v-model="form.enabled" />
       </ElFormItem>
       <p v-if="!activationReady" class="node-form__note node-form__note--warn">
-        <TriangleAlert :size="13" />只有完成 NETWORK/SERVICE/MODEL/STREAM 完整探测并达到 HEALTHY/DEGRADED，且未修改连接配置（Base URL、认证、模型、健康路径）时，才可启用并进入「调度中」。
+        <TriangleAlert :size="13" />只有完成所选策略的完整探测并达到 HEALTHY/DEGRADED，且未修改连接配置（Base URL、认证、模型、健康路径）时，才可启用并进入「调度中」。
       </p>
 
       <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error" data-testid="gateway-node-error" />
@@ -221,7 +229,8 @@ const form = reactive({
   requestTimeout: '',
   probeInterval: '',
   modelsText: '',
-  probeTypes: [...probeTypes] as GatewayProbeType[],
+  probeStrategy: 'SSE',
+  probeTypes: ['STREAM'] as GatewayProbeType[],
   weight: '1',
   maxConcurrency: '0',
   hourly: '',
@@ -272,6 +281,7 @@ interface ConnectionBaseline {
   authType: GatewayAuthType
   authHeader: string
   healthPath: string
+  probeStrategy: string
   models: string
 }
 const baseline = ref<ConnectionBaseline | null>(null)
@@ -282,6 +292,7 @@ function connectionSnapshot(): ConnectionBaseline {
     authType: form.authType,
     authHeader: form.authHeader.trim() || 'Authorization',
     healthPath: form.healthPath.trim(),
+    probeStrategy: form.probeStrategy,
     models: parseNumberList(form.modelsText).join('\u0000'),
   }
 }
@@ -293,6 +304,7 @@ function baselineOf(node: GatewayNode | null): ConnectionBaseline | null {
     authType: node.auth_type,
     authHeader: node.auth_header,
     healthPath: node.health_path,
+    probeStrategy: node.probe_strategy,
     models: (node.models ?? []).join('\u0000'),
   }
 }
@@ -307,6 +319,7 @@ const connectionChanged = computed(() => {
     now.authType !== base.authType ||
     now.authHeader !== base.authHeader ||
     now.healthPath !== base.healthPath ||
+    now.probeStrategy !== base.probeStrategy ||
     now.models !== base.models
   )
 })
@@ -350,7 +363,8 @@ watch(
     form.requestTimeout = node?.request_timeout_seconds?.toString() ?? ''
     form.probeInterval = node?.probe_interval_seconds?.toString() ?? ''
     form.modelsText = (node?.models ?? []).join('\n')
-    form.probeTypes = [...probeTypes]
+    form.probeStrategy = node?.probe_strategy ?? 'SSE'
+    applyProbeStrategy()
     form.weight = String(node?.weight ?? 1)
     form.maxConcurrency = String(node?.max_concurrency ?? 0)
     form.hourly = node?.hourly_token_limit?.toString() ?? ''
@@ -364,6 +378,12 @@ watch(
   },
   { immediate: true },
 )
+
+function applyProbeStrategy() {
+  form.probeTypes = form.probeStrategy === 'EMBEDDING' ? ['EMBEDDING']
+    : form.probeStrategy === 'NON_STREAM' ? ['MODEL']
+    : form.probeStrategy === 'SSE' ? ['STREAM'] : [...probeTypes]
+}
 
 function intOrNull(value: string): number | null {
   const text = value.trim()
@@ -386,6 +406,7 @@ function basePayload(): GatewayNodeWrite {
     auth_type: form.authType,
     auth_header: form.authHeader.trim() || 'Authorization',
     health_path: form.healthPath.trim(),
+    probe_strategy: form.probeStrategy,
     connect_timeout_seconds: floatOrNull(form.connectTimeout),
     request_timeout_seconds: floatOrNull(form.requestTimeout),
     probe_interval_seconds: intOrNull(form.probeInterval),

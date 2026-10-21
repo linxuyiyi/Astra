@@ -839,9 +839,9 @@ async def test_employee_without_model_inherits_global_runtime_model(runtime, mon
 
     await runtime.service.start("T1", restart=True)
 
-    assert runtime.native.created_options[-1]["model_name"] == "local-proxy/GLM-5.2-Tester"
+    assert runtime.native.created_options[-1]["model_name"] == "nexus-gateway/GLM-5.2-Tester"
     current = await runtime.session.get(RuntimeSession, runtime.task.current_session_id)
-    assert current.model_name == "local-proxy/GLM-5.2-Tester"
+    assert current.model_name == "nexus-gateway/GLM-5.2-Tester"
 
 
 async def test_explicit_restart_supersedes_each_running_session(runtime):

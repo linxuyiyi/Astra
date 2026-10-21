@@ -8,7 +8,7 @@ export type GatewaySchedulingState = 'ACTIVE' | 'DRAINING' | 'BLOCKED'
 export type GatewayHealthState = 'UNKNOWN' | 'CHECKING' | 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY'
 export type GatewayAuthType = 'BEARER' | 'HEADER' | 'NONE'
 export type GatewayQuotaPolicy = 'STOP' | 'ALERT' | 'RECORD'
-export type GatewayProbeType = 'NETWORK' | 'SERVICE' | 'MODEL' | 'STREAM'
+export type GatewayProbeType = 'NETWORK' | 'SERVICE' | 'MODEL' | 'STREAM' | 'EMBEDDING'
 export type GatewayStatsScope = 'overview' | 'node' | 'pool' | 'model' | 'key'
 export type GatewayStatsWindow = 'hour' | 'today' | '7d' | '30d'
 
@@ -39,6 +39,7 @@ export interface GatewayNode {
   connect_timeout_seconds: number | null
   request_timeout_seconds: number | null
   health_path: string
+  probe_strategy: string
   probe_interval_seconds: number | null
   models: string[]
   weight: number
@@ -69,6 +70,7 @@ export interface GatewayNodeWrite {
   connect_timeout_seconds?: number | null
   request_timeout_seconds?: number | null
   health_path?: string
+  probe_strategy?: string
   probe_interval_seconds?: number | null
   models?: string[]
   weight?: number

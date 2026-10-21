@@ -129,3 +129,64 @@ async def test_bound_employee_retrieves_the_approved_document_only(tmp_path, mon
         assert not failed.agentscope_kb_id
 
     await engine.dispose()
+
+
+async def test_publishing_uses_gateway_credential_and_embedding_route(monkeypatch):
+    import json
+    from types import SimpleNamespace
+
+    import httpx
+
+    from app.config.settings import get_settings
+    from app.library_kb import sync_published_item
+
+    monkeypatch.setattr(
+        get_settings(), "kb_embedding_json", '{"model_route_id":"embed-route","dimensions":2}'
+    )
+    monkeypatch.setenv("NEXUS_GATEWAY_API_KEY", "agw_test_embedding")
+    monkeypatch.setenv("NEXUS_GATEWAY_OPENAI_BASE", "http://gateway.test/v1")
+    calls = []
+    original = httpx.AsyncClient
+
+    def handler(request):
+        calls.append(request)
+        path = request.url.path
+        if path == "/api/gateway/routes":
+            return httpx.Response(200, json=[{"id": "embed-route", "model": "my-embedding", "enabled": True}])
+        if path == "/credential/" and request.method == "GET":
+            return httpx.Response(200, json={"credentials": []})
+        if path == "/credential/":
+            data = json.loads(request.content)["data"]
+            assert data["base_url"] == "http://gateway.test/v1"
+            assert data["api_key"] == "agw_test_embedding"
+            return httpx.Response(200, json={"credential_id": "gateway-credential"})
+        if path == "/knowledge_bases/":
+            config = json.loads(request.content)["embedding_model_config"]
+            assert config == {
+                "type": "openai_credential",
+                "credential_id": "gateway-credential",
+                "model": "my-embedding",
+                "dimensions": 2,
+            }
+            return httpx.Response(200, json={"knowledge_base_id": "kb-embedding"})
+        if path.endswith("/documents"):
+            return httpx.Response(200, json={"document_id": "doc-embedding"})
+        raise AssertionError(path)
+
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda **kw: original(transport=httpx.MockTransport(handler), **kw)
+    )
+    item = SimpleNamespace(
+        status="published",
+        id="knowledge-embed",
+        title="标题",
+        summary="",
+        content_md="内容",
+        agentscope_kb_id=None,
+        agentscope_document_id=None,
+        agentscope_sync_status="pending",
+        agentscope_sync_error=None,
+    )
+    await sync_published_item(item)
+    assert item.agentscope_sync_status == "synced"
+    assert len(calls) == 5

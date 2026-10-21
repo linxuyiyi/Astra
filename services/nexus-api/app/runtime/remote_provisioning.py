@@ -28,6 +28,7 @@ from app.gateway.runtime import RedisRuntimeStore
 from app.gateway.schemas import GatewayKeyCreate
 from app.gateway.security import CredentialCipher, gateway_key_digest
 from app.gateway.service import GatewayControlService
+from app.gateway.urls import gateway_base
 from app.models import CodeRepository, GitCredential, OpenCodeExecutionEnvironment
 from app.runtime.capability import (
     binding_entries,
@@ -44,7 +45,6 @@ from app.runtime.opencode_model import route_model_id
 from app.runtime.repository import cipher, collect_skill_files
 
 PROVIDER_ID = "nexus-gateway"
-E2E_MODEL = "opencode/deepseek-v4.1-flash-free"
 WORKER_SECRET_DIR = "/etc/nexus"
 SYSTEMD_UNIT_DIR = "/etc/systemd/system"
 
@@ -188,29 +188,25 @@ def managed_config(
     gateway_key,
     mcp_url,
     mcp_key,
-    e2e=False,
     skills=None,
     mcp_refs=None,
 ):
     mcp = {"type": "remote", "url": mcp_url, "enabled": True, "oauth": False}
     if mcp_key:
         mcp["headers"] = {"Authorization": f"Bearer {mcp_key}"}
-    provider = None
-    if not e2e:
-        provider = {
-            "npm": "@ai-sdk/openai-compatible",
-            "name": "Nexus API 中转",
-            "options": {"baseURL": gateway_url, "apiKey": gateway_key},
-            "models": {name: {"name": name} for name in models},
-        }
+    provider = {
+        "npm": "@ai-sdk/openai-compatible",
+        "name": "Nexus API 中转",
+        "options": {"baseURL": gateway_base(gateway_url), "apiKey": gateway_key},
+        "models": {name: {"name": name} for name in models},
+    }
     return {
         "config_path": config_path,
-        "model": E2E_MODEL if e2e else f"{PROVIDER_ID}/{model}",
+        "model": f"{PROVIDER_ID}/{route_model_id(model)}",
         "provider": provider,
         "mcp": mcp,
         "mcp_refs": list(mcp_refs or []),
         "skills": list(skills or []),
-        "e2e": e2e,
     }
 
 
@@ -396,35 +392,30 @@ class RemoteProvisioner:
     async def _install(self, emit):
         await self.step(emit, "部署配置", "running")
         await self._ensure_safe()
-        e2e = (self.environment.model_name or "").strip() == E2E_MODEL
-        if e2e:
-            models: list[str] = []
-            selected = E2E_MODEL
-        else:
-            async with SessionLocal() as db:
-                models = list(
-                    await db.scalars(
-                        select(GatewayRoute.model)
-                        .where(GatewayRoute.enabled.is_(True))
-                        .order_by(GatewayRoute.model)
-                    )
+        async with SessionLocal() as db:
+            models = list(
+                await db.scalars(
+                    select(GatewayRoute.model)
+                    .where(GatewayRoute.enabled.is_(True))
+                    .order_by(GatewayRoute.model)
                 )
-            if not self.settings.gateway_enabled or not models:
-                raise RuntimeError("请先在 API 中转配置至少一个启用的模型路由")
-            selected = models[0]
-            if self.environment.model_name:
-                selected = route_model_id(self.environment.model_name)
-            if selected not in models:
-                raise RuntimeError("员工模型未匹配启用的中转路由，请留空或选择 nexus-gateway/<路由模型>")
+            )
+        if not self.settings.gateway_enabled or not models:
+            raise RuntimeError("请先在 API 中转配置至少一个启用的模型路由")
+        selected = models[0]
+        if self.environment.model_name:
+            selected = route_model_id(self.environment.model_name)
+        if selected not in models:
+            raise RuntimeError("员工模型未匹配启用的中转路由，请留空或选择 nexus-gateway/<路由模型>")
         home = (await self._command('printf "%s" "$HOME"')).splitlines()[0]
         if not home.startswith("/"):
             raise RuntimeError("无法确定远程用户目录")
         self.home = home
         config_path = f"/etc/nexus/opencode/{self.environment.id}/opencode.jsonc"
         self.config_path = config_path
-        raw = "" if e2e else await self._gateway_key(config_path, models)
+        raw = await self._gateway_key(config_path, models)
         gateway_url, mcp_url = await self._channel_endpoints()
-        self.target_model = E2E_MODEL if e2e else f"{PROVIDER_ID}/{selected}"
+        self.target_model = f"{PROVIDER_ID}/{selected}"
         self.target_binary = f"{home}/.local/share/nexus/workers/{self.environment.id}/bin/opencode"
         cache = f"{home}/.cache/nexus-provision"
         await self._command(f"install -d -m 700 {shlex.quote(cache)}")
@@ -438,7 +429,6 @@ class RemoteProvisioner:
             gateway_key=raw,
             mcp_url=mcp_url,
             mcp_key=self.settings.mcp_api_key,
-            e2e=e2e,
             skills=collect_skill_files(list(self.environment.skill_refs or []), skill_source),
             mcp_refs=list(self.environment.mcp_refs or []),
         )
@@ -543,7 +533,7 @@ class RemoteProvisioner:
 
     def _direct_endpoints(self) -> tuple[str, str]:
         return (
-            require_direct_url(self.settings.remote_gateway_local_url, "Gateway"),
+            gateway_base(require_direct_url(self.settings.remote_gateway_local_url, "Gateway")),
             require_direct_url(self.settings.mcp_resource_server_url, "图书馆 MCP"),
         )
 

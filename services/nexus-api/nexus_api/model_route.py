@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from app.gateway.urls import gateway_base
 from nexus_api.agentscope import AgentScopeClient, AgentScopeError
 
 _VENDOR_HOSTS = ("api.openai.com", "api.deepseek.com")
@@ -21,12 +22,13 @@ class ModelRouteError(Exception):
 
 def gateway_base_url() -> str:
     raw = os.environ.get("NEXUS_GATEWAY_OPENAI_BASE", "http://127.0.0.1:18110/v1").strip().rstrip("/")
-    if not raw.endswith("/v1"):
-        raise ModelRouteError("网关地址必须指向 /v1")
     host = raw.split("://", 1)[-1].split("/", 1)[0].lower()
     if any(item in host for item in _VENDOR_HOSTS):
         raise ModelRouteError("员工模型不能改成直连厂商")
-    return raw
+    try:
+        return gateway_base(raw)
+    except ValueError as exc:
+        raise ModelRouteError(str(exc)) from None
 
 
 def gateway_api_key() -> str:

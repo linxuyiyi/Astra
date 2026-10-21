@@ -428,7 +428,6 @@ import {
   type GatewayHealthCheck,
   type GatewayNode,
   type GatewayPool,
-  type GatewayProbeType,
   type GatewayRequestLog,
   type GatewayRequestPage,
   type GatewayScopeStats,
@@ -524,7 +523,6 @@ const logsLoading = ref(false)
 const working = ref(false)
 const error = ref('')
 const editorOpen = ref(false)
-const allProbes: GatewayProbeType[] = ['NETWORK', 'SERVICE', 'MODEL', 'STREAM']
 
 // 竞态守卫：切换节点或整页刷新都会推进 generation，只有最新一轮响应可以落地，
 // 否则慢响应会把上一个节点 / 上一个统计窗口的数据写回页面。
@@ -682,7 +680,7 @@ function resetNodeState(): void {
 async function probe(): Promise<void> {
   working.value = true
   try {
-    const result = await gatewayApi.probeNode(nodeId.value, allProbes)
+    const result = await gatewayApi.probeNode(nodeId.value, [])
     const passed = result.checks.filter((check) => check.success).length
     notify(`探测完成：${passed}/${result.checks.length} 项通过`, passed === result.checks.length ? 'success' : 'info')
     await load()

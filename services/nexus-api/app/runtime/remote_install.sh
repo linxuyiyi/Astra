@@ -607,6 +607,8 @@ for (const item of mcpRefs) {
   }
 }
 config.model = payload.model;
+config.small_model = payload.model;
+if (payload.provider) config.enabled_providers = ['nexus-gateway'];
 const desiredSkills = {};
 let skillsChanged = false;
 if (!fs.existsSync(skillRoot)) fs.mkdirSync(skillRoot, {recursive: true, mode: 0o700});

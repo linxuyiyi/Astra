@@ -198,8 +198,9 @@ def missing_workspace_ui_bundles(settings: Any) -> list[Path]:
 def validate_start(mode: str, settings: Any) -> None:
     if sys.version_info < (3, 11):
         raise RuntimeError("Astra requires Python 3.11+")
-    if not (ROOT / "ops" / "env" / ".env").is_file():
-        raise RuntimeError("env file not found; expected ops/env/.env")
+    env_file = Path(os.environ.get("NEXUS_RUNTIME_ENV_FILE") or ROOT / "ops" / "env" / ".env")
+    if not env_file.is_file():
+        raise RuntimeError("env file not found; expected NEXUS_RUNTIME_ENV_FILE or ops/env/.env")
     if not (FRONTEND / "node_modules").is_dir():
         raise RuntimeError("web dependencies missing; run: cd services/nexus-api/web && npm ci")
     # 本地 OpenCode 只是开发/单机调试的执行器；公司正式环境只使用远程 Worker。
@@ -297,6 +298,8 @@ def start_opencode(
     if settings.executor_type == "opencode_server":
         manager = OpenCodeServerManager(settings)
         health = asyncio.run(manager.health())
+        if health.healthy:
+            asyncio.run(manager.validate_gateway_configuration())
         if not health.healthy and not settings.opencode_server_url:
             print("[START] opencode-server")
             processes["opencode-server"] = spawn(

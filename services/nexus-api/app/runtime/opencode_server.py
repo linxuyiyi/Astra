@@ -44,7 +44,9 @@ class OpenCodeServerManager:
         )
 
     def process_environment(self) -> dict[str, str]:
-        environment = os.environ.copy()
+        from app.runtime.opencode_model import gateway_environment
+
+        environment = gateway_environment(self.settings.opencode_model, dict(os.environ))
         if self.settings.opencode_server_username:
             environment["OPENCODE_SERVER_USERNAME"] = self.settings.opencode_server_username
         if self.settings.opencode_server_password:
@@ -78,12 +80,22 @@ class OpenCodeServerManager:
         except (httpx.HTTPError, ValueError) as exc:
             return OpenCodeServerHealth(False, detail=str(exc))
 
+    async def validate_gateway_configuration(self) -> None:
+        from app.runtime.opencode_model import validate_gateway_config
+
+        async with httpx.AsyncClient(auth=self.auth, timeout=3) as client:
+            response = await client.get(f"{self.base_url}/config")
+            response.raise_for_status()
+            config = response.json()
+        validate_gateway_config(config, dict(os.environ))
+
     async def wait_until_ready(self) -> OpenCodeServerHealth:
         deadline = time.monotonic() + self.settings.opencode_server_start_timeout_seconds
         last = OpenCodeServerHealth(False, detail="尚未检查")
         while time.monotonic() < deadline:
             last = await self.health()
             if last.healthy:
+                await self.validate_gateway_configuration()
                 return last
             await asyncio.sleep(0.2)
         raise TimeoutError(f"OpenCode Server 未就绪: {last.detail}")

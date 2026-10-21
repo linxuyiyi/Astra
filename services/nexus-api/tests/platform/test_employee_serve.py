@@ -14,6 +14,8 @@ from app.runtime.environment import ExecutionEnvironmentRuntime, checks_status
 
 @pytest.fixture
 def serve(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXUS_GATEWAY_API_KEY", "agw_test_local_serve")
+    monkeypatch.setenv("NEXUS_GATEWAY_OPENAI_BASE", "http://127.0.0.1:18110/v1")
     monkeypatch.setattr(local.tempfile, "gettempdir", lambda: str(tmp_path))
     binary = tmp_path / "opencode-fixture"
     binary.write_text(
@@ -28,8 +30,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        data = {"directory": os.getcwd()} if self.path == "/path" else {
-            "healthy": not os.path.exists("unhealthy"), "version": "1.18.35"}
+        if self.path == "/config":
+            data = json.loads(os.environ["OPENCODE_CONFIG_CONTENT"])
+        elif self.path == "/path":
+            data = {"directory": os.getcwd()}
+        else:
+            data = {"healthy": not os.path.exists("unhealthy"), "version": "1.18.35"}
         self.wfile.write(json.dumps(data).encode())
     def log_message(self, *args): pass
 http.server.HTTPServer.allow_reuse_address = True
@@ -133,8 +139,6 @@ async def test_start_failure_does_not_execute_session(serve):
     executor.client.create_session.assert_not_awaited()
 
 
-
-
 async def test_unhealthy_owned_process_is_restarted(serve):
     executor = serve("restart")
     await executor.ensure_ready()
@@ -165,15 +169,14 @@ async def test_unready_server_times_out_without_session(serve):
     executor.client.create_session.assert_not_awaited()
 
 
-
-
-async def test_missing_workspace_config_refuses_to_start_serve(serve, monkeypatch):
+async def test_managed_gateway_config_starts_without_writing_workspace_config(serve):
     executor = serve("no-config")
     (executor.workspace / "opencode.json").unlink()
-    monkeypatch.setattr(local, "discover_workspace_config", lambda workspace: None)
-    with pytest.raises(RuntimeError, match="未提供 OpenCode 配置"):
-        await executor.ensure_ready()
-    assert executor.environment.opencode_server_port not in local._processes
+    await executor.ensure_ready()
+    config = await executor.client.request("GET", "/config")
+    assert config["enabled_providers"] == ["nexus-gateway"]
+    assert config["model"] == config["small_model"] == "nexus-gateway/model"
+    assert not (executor.workspace / "opencode.json").exists()
 
 
 async def test_missing_workspace_fails_environment_check(serve):

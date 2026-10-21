@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.database import SessionLocal
+from app.gateway.urls import gateway_base
 from app.models import (
     OpenCodeExecutionEnvironment,
     WorkerInstance,
@@ -354,7 +355,13 @@ def _mismatch(result: object) -> str | None:
     if not isinstance(result, dict) or result.get("verified") is not True:
         return "生效配置未核验，通道保持 ssh"
     settings = get_settings()
-    if not _same_direct_url(result.get("gateway_url"), settings.remote_gateway_local_url):
+    try:
+        same_gateway = gateway_base(str(result.get("gateway_url") or "")) == gateway_base(
+            settings.remote_gateway_local_url
+        )
+    except ValueError:
+        same_gateway = False
+    if not same_gateway:
         return "生效的 Gateway 地址与内网配置不一致，通道保持 ssh"
     if not _same_direct_url(result.get("mcp_url"), settings.mcp_resource_server_url):
         return "生效的 MCP 地址与内网配置不一致，通道保持 ssh"

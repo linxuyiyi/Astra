@@ -18,17 +18,23 @@ def test_unknown_executor_is_rejected():
 
 
 def test_kb_embedding_json_is_validated_and_kept_out_of_repr():
-    raw = (
-        '{"type":"openai_credential","credential_id":"cred-embed",'
-        '"model":"text-embedding-3-small","dimensions":1024}'
-    )
+    raw = '{"model_route_id":"route-embed","dimensions":1024}'
     settings = Settings(kb_embedding_json=raw)
 
     assert settings.kb_embedding_json == raw
-    assert "cred-embed" not in repr(settings)
+    assert "route-embed" not in repr(settings)
 
 
-@pytest.mark.parametrize("raw", ["not-json", "{}", '{"type":"openai_credential"}'])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "not-json",
+        "{}",
+        '{"type":"openai_credential"}',
+        '{"model_route_id":"embed","dimensions":0}',
+        '{"model_route_id":"embed","dimensions":true}',
+    ],
+)
 def test_invalid_kb_embedding_json_fails_at_startup(raw):
     with pytest.raises(ValidationError, match="NEXUS_KB_EMBEDDING_JSON"):
         Settings(kb_embedding_json=raw)

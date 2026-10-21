@@ -33,14 +33,21 @@ done
 
 # ---------- config (env wins over file; values never printed) ----------
 load_env_file() {
-  local f="$1" line key
+  local f="$1" line key value
   [ -f "$f" ] || return 0
   [ "$(stat -c %a "$f")" -le 600 ] || warn "$f 权限过宽，建议 chmod 600"
   while IFS= read -r line || [ -n "$line" ]; do
-    line="${line%%#*}"; line="${line%"${line##*[![:space:]]}"}"
+    line="${line%"${line##*[![:space:]]}"}"
     [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
     key="${line%%=*}"
-    [ -n "${!key:-}" ] || export "$key=${line#*=}"
+    value="${line#*=}"
+    # 同时支持 shell/dotenv 的外层引号，不执行配置中的命令或变量替换。
+    case "$value" in
+      \"*\") value="${value:1:${#value}-2}" ;;
+      \'*\') value="${value:1:${#value}-2}" ;;
+      *) value="${value%%[[:space:]]#*}" ;;
+    esac
+    [ -n "${!key:-}" ] || export "$key=$value"
   done < "$f"
 }
 [ -n "$ENV_FILE" ] && { [ -f "$ENV_FILE" ] || die "找不到 --env-file $ENV_FILE"; load_env_file "$ENV_FILE"; }
@@ -51,11 +58,12 @@ load_env_file "$SCRIPT_DIR/../env/.env"
 : "${NEXUS_ROOT:=/opt/nexus}"
 : "${NEXUS_STATE_DIR:=/var/lib/nexus}"
 : "${NEXUS_BIND_HOST:=127.0.0.1}"
-: "${OPENAI_BASE_URL:=https://api.deepseek.com}"
-: "${OPENAI_MODEL:=deepseek-flash}"
+: "${ASTRA_EXECUTOR_TYPE:=worker}"
+: "${NEXUS_GATEWAY_OPENAI_BASE:=http://127.0.0.1:${ASTRA_SERVICE_GATEWAY_PORT:-18110}/v1}"
 : "${REMOTE_WORKER_ID:=p2-remote}"; : "${REMOTE_WORKER_USER:=root}"; : "${REMOTE_WORKER_PORT:=22}"
 : "${REMOTE_WORKER_OPENCODE_PORT:=14096}"; : "${REMOTE_WORKER_WORKSPACE:=/root/nexus-remote}"
-PORTS=(6379 18000 18110 18120 18201 18202 14096)
+PORTS=(6379 18000 "${ASTRA_SERVICE_GATEWAY_PORT:-18110}" 18120 18201 18202)
+[ "$ASTRA_EXECUTOR_TYPE" != opencode_server ] || PORTS+=(14096)
 
 ver_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -1)" = "$2" ]; }
 oc_ver() { printf '%s' "$1" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
@@ -87,23 +95,26 @@ preflight() {
     ver_ge "$x" 3.11 && ok "Python $x" || bad "Python $x < 3.11"; fi
   if have node; then x="$(node -p 'process.versions.node')"; ver_ge "$x" 20 && ok "Node $x" || bad "Node $x < 20"; fi
   if have redis-server || have docker; then ok "Redis 来源：$(have redis-server && echo redis-server || echo docker)"; else bad "需要 redis-server 或 docker"; fi
-  have docker && ok "docker $(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" || note "未安装 docker（仅 llm_wiki 本机部署需要）"
-  x="$( (opencode --version || "$HOME/.local/bin/opencode" --version) 2>/dev/null | tail -1 || true)"
-  if [ "$(oc_ver "$x")" = "$OPENCODE_VERSION" ]; then ok "OpenCode $OPENCODE_VERSION"; else note "OpenCode ${x:-未安装}，将安装 opencode-ai@$OPENCODE_VERSION"; fi
+  if [ "$ASTRA_EXECUTOR_TYPE" = opencode_server ]; then
+    x="$( (opencode --version || "$HOME/.local/bin/opencode" --version) 2>/dev/null | tail -1 || true)"
+    if [ "$(oc_ver "$x")" = "$OPENCODE_VERSION" ]; then ok "OpenCode $OPENCODE_VERSION"; else note "本机执行模式将安装 OpenCode $OPENCODE_VERSION"; fi
+  elif [ "$ASTRA_EXECUTOR_TYPE" = worker ]; then
+    ok "远程 Worker 模式，不检查控制机 OpenCode"
+  else
+    bad "安装器 ASTRA_EXECUTOR_TYPE 只支持 worker 或 opencode_server"
+  fi
   for x in "${PORTS[@]}"; do
     if ss -ltnH "( sport = :$x )" 2>/dev/null | grep -q .; then
       if systemctl is-active --quiet "nexus-*" 2>/dev/null || [ -f "$NEXUS_STATE_DIR/installed" ]; then note "端口 $x 已占用（视为已部署的 Nexus 服务）"; else bad "端口 $x 已被占用"; fi
     else ok "端口 $x 空闲"; fi
   done
-  [ -n "${DEEPSEEK_API_KEY:-}" ] && ok "DEEPSEEK_API_KEY 已提供" || bad "缺少 DEEPSEEK_API_KEY"
-  if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
-    x="$(curl -s -m 20 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $DEEPSEEK_API_KEY" "${OPENAI_BASE_URL%/}/models" || true)"
-    [ "$x" = 200 ] && ok "DeepSeek /models 200" || note "DeepSeek /models 返回 $x（上游繁忙时可稍后重试）"
-  fi
   if [ "$WITH_WIKI" = 1 ]; then
+    [ -n "${ASTRA_LLM_WIKI_API_TOKEN:-}" ] || bad "已有 llm_wiki 需要 ASTRA_LLM_WIKI_API_TOKEN"
+    [ -n "${ASTRA_LLM_WIKI_PROJECT_ID:-}" ] || bad "已有 llm_wiki 需要 ASTRA_LLM_WIKI_PROJECT_ID"
     [ -n "${ASTRA_LLM_WIKI_API_BASE_URL:-}" ] && ok "llm_wiki 地址已配置" || bad "--with-llm-wiki 需要 ASTRA_LLM_WIKI_API_BASE_URL（例如 http://10.0.0.8:19828/api/v1）"
   fi
   if [ -n "$REMOTE_WORKER" ]; then
+    [ -n "${NEXUS_DEFAULT_MODEL:-}" ] || bad "--remote-worker 需要已配置的网关模型别名 NEXUS_DEFAULT_MODEL"
     [ -n "${REMOTE_WORKER_SSH_PASSWORD:-}" ] && ok "远程 Worker 密码已提供" || bad "--remote-worker 需要 REMOTE_WORKER_SSH_PASSWORD"
     timeout 10 bash -c "exec 3<>/dev/tcp/$REMOTE_WORKER/$REMOTE_WORKER_PORT" 2>/dev/null && ok "$REMOTE_WORKER:$REMOTE_WORKER_PORT 可达" || bad "$REMOTE_WORKER:$REMOTE_WORKER_PORT 不可达"
   fi
@@ -114,7 +125,7 @@ preflight() {
 # ---------- helpers ----------
 upsert_kv() { # file key value  (value never printed)
   local f="$1" k="$2" v="$3" tmp; touch "$f"; chmod 600 "$f"; tmp="$(mktemp)"
-  grep -v "^$k=" "$f" > "$tmp" || true; printf '%s=%s\n' "$k" "$v" >> "$tmp"; mv "$tmp" "$f"; chmod 600 "$f"
+  grep -v "^$k=" "$f" > "$tmp" || true; printf '%s=%q\n' "$k" "$v" >> "$tmp"; mv "$tmp" "$f"; chmod 600 "$f"
 }
 get_kv() { [ -f "$1" ] && grep "^$2=" "$1" | tail -1 | cut -d= -f2- || true; }
 wait_http() { # url name timeout_seconds
@@ -176,12 +187,12 @@ step_deps() {
 }
 
 step_secrets() {
-  log "密钥（不存在才生成，保存在 $SECRETS，0600）"
+  log "密钥（不存在才生成，保存在 ${SECRETS}，0600）"
   local v
   # shell-quote URL query parameters and encoded credentials for later sourcing.
-  printf -v v '%q' "$ASTRA_DATABASE_URL"
+  v="$ASTRA_DATABASE_URL"
   upsert_kv "$SECRETS" ASTRA_DATABASE_URL "$v"
-  printf -v v '%q' "$AGENTSCOPE_SQL_URL"
+  v="$AGENTSCOPE_SQL_URL"
   upsert_kv "$SECRETS" AGENTSCOPE_SQL_URL "$v"
   v="${ASTRA_GATEWAY_MASTER_KEY:-$(get_kv "$SECRETS" ASTRA_GATEWAY_MASTER_KEY)}"
   [ -n "$v" ] || v="$("$NEXUS_ROOT/services/nexus-api/.venv/bin/python" -c 'from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())')"
@@ -189,21 +200,33 @@ step_secrets() {
   v="${NEXUS_MCP_API_KEY:-$(get_kv "$SECRETS" NEXUS_MCP_API_KEY)}"
   [ -n "$v" ] || v="$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')"
   upsert_kv "$SECRETS" NEXUS_MCP_API_KEY "$v"
-  upsert_kv "$SECRETS" DEEPSEEK_API_KEY "$DEEPSEEK_API_KEY"
-  upsert_kv "$SECRETS" OPENAI_API_KEY "$DEEPSEEK_API_KEY"
+  v="${NEXUS_WORKER_GATEWAY_ADMIN_KEY:-$(get_kv "$SECRETS" NEXUS_WORKER_GATEWAY_ADMIN_KEY)}"
+  [ -n "$v" ] || v="$(python3 -c 'import secrets;print("wgk_"+secrets.token_urlsafe(32))')"
+  upsert_kv "$SECRETS" NEXUS_WORKER_GATEWAY_ADMIN_KEY "$v"
+  v="${NEXUS_GATEWAY_API_KEY:-$(get_kv "$SECRETS" NEXUS_GATEWAY_API_KEY)}"
+  [ -n "$v" ] || v="$(python3 -c 'import secrets;print("agw_"+secrets.token_urlsafe(32))')"
+  [[ "$v" =~ ^agw_[A-Za-z0-9_-]+$ ]] || die "NEXUS_GATEWAY_API_KEY 需要网关签发的 agw_ 密钥"
+  upsert_kv "$SECRETS" NEXUS_GATEWAY_API_KEY "$v"
+  if [ -n "${NEXUS_EXPERIENCE_REVIEW_GATEWAY_KEY:-}" ]; then
+    upsert_kv "$SECRETS" NEXUS_EXPERIENCE_REVIEW_GATEWAY_KEY "$NEXUS_EXPERIENCE_REVIEW_GATEWAY_KEY"
+  fi
   if [ "$WITH_WIKI" = 1 ]; then
-    v="${ASTRA_LLM_WIKI_API_TOKEN:-$(get_kv "$SECRETS" ASTRA_LLM_WIKI_API_TOKEN)}"; [ -n "$v" ] || v="$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')"
+    [ -n "${ASTRA_LLM_WIKI_API_TOKEN:-}" ] || die "缺少已有 llm_wiki token"
+    [ -n "${ASTRA_LLM_WIKI_PROJECT_ID:-}" ] || die "缺少已有 llm_wiki project_id"
+    v="$ASTRA_LLM_WIKI_API_TOKEN"
     upsert_kv "$SECRETS" ASTRA_LLM_WIKI_API_TOKEN "$v"
-    v="${ASTRA_LLM_WIKI_PROJECT_ID:-$(get_kv "$SECRETS" ASTRA_LLM_WIKI_PROJECT_ID)}"; [ -n "$v" ] || v="$(python3 -c 'import uuid;print(uuid.uuid4())')"
+    v="$ASTRA_LLM_WIKI_PROJECT_ID"
     upsert_kv "$SECRETS" ASTRA_LLM_WIKI_PROJECT_ID "$v"
   fi
 }
 
 step_runenv() {
   log "运行时环境 $RUNENV"
-  local R="$NEXUS_ROOT"
+  local R="$NEXUS_ROOT" gateway="${NEXUS_GATEWAY_OPENAI_BASE%/}"
+  [[ "$gateway" == */v1 ]] || gateway="$gateway/v1"
   { cat <<ENV
 PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
+ASTRA_OPENCODE_MODEL=nexus-gateway/${NEXUS_DEFAULT_MODEL:-default}
 ASTRA_GATEWAY_PROBE_TIMEOUT_SECONDS=30
 NEXUS_MCP_TRANSPORT=streamable-http
 NEXUS_MCP_HOST=127.0.0.1
@@ -212,7 +235,6 @@ NEXUS_TASK_MCP_PORT=18202
 ASTRA_REDIS_URL=redis://127.0.0.1:6379/1
 ASTRA_OUTBOX_INTERVAL=2
 ASTRA_OUTBOX_RETRY_SECONDS=5
-ASTRA_OPENCODE_MODEL=deepseek/deepseek-flash
 ASTRA_NEXUS_API_BASE=http://127.0.0.1:18120
 ASTRA_AGENTSCOPE_BASE_URL=http://127.0.0.1:18000
 ASTRA_AGENTSCOPE_USER_ID=nexus
@@ -228,12 +250,10 @@ NEXUS_AGENTSCOPE_BASE_URL=http://127.0.0.1:18000
 NEXUS_AGENTSCOPE_USER_ID=nexus
 NEXUS_TASK_MCP_URL=http://127.0.0.1:18202/mcp
 NEXUS_CHAT_PROVIDER=openai
-OPENAI_BASE_URL=$OPENAI_BASE_URL
-OPENAI_MODEL=$OPENAI_MODEL
 # 经验复盘默认关闭；开启后人工确认完成会创建复盘 Job。
 NEXUS_EXPERIENCE_REVIEW_ENABLED=false
-NEXUS_EXPERIENCE_REVIEW_GATEWAY_URL=http://127.0.0.1:18110/v1/chat/completions
-NEXUS_EXPERIENCE_REVIEW_MODEL=deepseek-flash
+NEXUS_EXPERIENCE_REVIEW_GATEWAY_URL=$gateway/chat/completions
+NEXUS_EXPERIENCE_REVIEW_MODEL=${NEXUS_DEFAULT_MODEL:-default}
 NEXUS_EXPERIENCE_REVIEW_SCAN_INTERVAL=30
 NEXUS_EXPERIENCE_REVIEW_MAX_CONCURRENCY=2
 ENV
@@ -244,16 +264,25 @@ ASTRA_LLM_WIKI_TIMEOUT=30
 ENV
   fi; } > "$RUNENV.new"
   mv "$RUNENV.new" "$RUNENV"; chmod 600 "$RUNENV"
-  if [ "${ASTRA_EXECUTOR_TYPE:-worker}" = "opencode_server" ]; then
-    # 本机 OpenCode 调试专用；正式部署只使用远程 Worker。
-    local oc="$HOME/.config/opencode/opencode.json"
-    if [ ! -f "$oc" ] || ! grep -q '"deepseek"' "$oc"; then
-      mkdir -p "$(dirname "$oc")"; [ -f "$oc" ] && cp "$oc" "$oc.bak.$(date +%s)"
-      cat > "$oc" <<'JSON'
-{"$schema":"https://opencode.ai/config.json","provider":{"deepseek":{"npm":"@ai-sdk/openai-compatible","name":"DeepSeek","options":{"baseURL":"https://api.deepseek.com/v1","apiKey":"{env:DEEPSEEK_API_KEY}"},"models":{"deepseek-flash":{"name":"deepseek-flash"}}}}}
-JSON
+  # systemd 和手动重启经 shell 读取同一份受保护环境。
+  local key v
+  for key in ASTRA_EXECUTOR_TYPE ASTRA_OPENCODE_MODEL NEXUS_GATEWAY_OPENAI_BASE NEXUS_DEFAULT_MODEL \
+    NEXUS_REMOTE_GATEWAY_LOCAL_URL NEXUS_MCP_RESOURCE_SERVER_URL NEXUS_WORKER_AGENT_GATEWAY_URL \
+    NEXUS_KB_EMBEDDING_JSON ASTRA_DATABASE_BACKEND ASTRA_DATA_DIR ASTRA_CONFIG_DIR \
+    ASTRA_WORKSPACE_ROOT ASTRA_LOG_DIR ASTRA_RUNTIME_DIR ASTRA_SEED_DEMO \
+    ASTRA_REDIS_URL ASTRA_GATEWAY_ENABLED \
+    ASTRA_LLM_WIKI_API_BASE_URL ASTRA_LLM_WIKI_TIMEOUT \
+    ASTRA_SERVICE_GATEWAY_HOST ASTRA_SERVICE_GATEWAY_PORT \
+    NEXUS_EXPERIENCE_REVIEW_ENABLED NEXUS_EXPERIENCE_REVIEW_MODEL \
+    NEXUS_EXPERIENCE_REVIEW_GATEWAY_URL; do
+    if [ "${!key+x}" = x ]; then
+      v="${!key}"
+      upsert_kv "$RUNENV" "$key" "$v"
     fi
-  fi
+  done
+  v="$RUNENV"
+  upsert_kv "$RUNENV" NEXUS_RUNTIME_ENV_FILE "$v"
+
 }
 
 step_migrate() {
@@ -261,6 +290,7 @@ step_migrate() {
   (set -a; . "$RUNENV"; . "$SECRETS"; set +a; cd "$NEXUS_ROOT/services/nexus-api" && .venv/bin/python -m alembic upgrade head >/dev/null)
   log "AgentScope 官方 SQL 初始化（独立数据库）"
   (set -a; . "$RUNENV"; . "$SECRETS"; set +a; cd "$NEXUS_ROOT/services/agent-service" && .venv-agentscope/bin/python agentscope_sql.py init)
+  (set -a; . "$RUNENV"; . "$SECRETS"; set +a; cd "$NEXUS_ROOT/services/nexus-api" && .venv/bin/python -m app.deployment gateway-key)
 }
 
 # ---------- services ----------
@@ -278,10 +308,8 @@ Type=$type
 $( [ "$type" = oneshot ] && echo RemainAfterExit=yes )
 User=$(id -un)
 WorkingDirectory=$NEXUS_ROOT
-EnvironmentFile=$RUNENV
-EnvironmentFile=$SECRETS
-ExecStart=/bin/bash -c '$exec'
-$( [ -n "$stop" ] && echo "ExecStop=/bin/bash -c '$stop'" )
+ExecStart=/bin/bash -c 'set -a; . "$RUNENV"; . "$SECRETS"; set +a; $exec'
+$( [ -n "$stop" ] && echo "ExecStop=/bin/bash -c 'set -a; . \"$RUNENV\"; . \"$SECRETS\"; set +a; $stop'" )
 $( [ "$type" = simple ] && echo "Restart=always" )
 RestartSec=5
 [Install]
@@ -354,22 +382,7 @@ step_services() {
 }
 
 step_gateway_route() {
-  log "网关路由 deepseek-flash（已存在则跳过）"
-  (set -a; . "$SECRETS"; set +a; "$NEXUS_ROOT/services/nexus-api/.venv/bin/python" - <<'PY'
-import os, httpx
-B = "http://127.0.0.1:18120/api/gateway"; c = httpx.Client(timeout=60)
-items = lambda r: r.json() if isinstance(r.json(), list) else r.json().get("items", [])
-pools = {p["name"]: p for p in items(c.get(B + "/pools"))}
-pool = pools.get("deepseek-pool") or c.post(B + "/pools", json={"name": "deepseek-pool"}).raise_for_status().json()
-if not any(n["name"] == "deepseek" for n in items(c.get(B + "/nodes"))):
-    c.post(B + "/nodes", json={"name": "deepseek", "base_url": os.environ.get("OPENAI_BASE_URL", "https://api.deepseek.com"),
-        "pool_id": pool["id"], "api_key": os.environ["DEEPSEEK_API_KEY"], "models": ["deepseek-flash"],
-        "request_timeout_seconds": 90}).raise_for_status()
-if not any(r["model"] == "deepseek-flash" for r in items(c.get(B + "/routes"))):
-    c.post(B + "/routes", json={"model": "deepseek-flash", "pool_id": pool["id"]}).raise_for_status()
-print("gateway route ok")
-PY
-  ) || warn "网关路由配置失败，请在管理台「API 中转」手工配置（见指南 §5.8）"
+  log "上游节点与模型路由由 API 网关控制面配置；安装器不持有厂商密钥"
 }
 
 # ---------- llm_wiki（已有服务器版本，按局域网地址接入） ----------
@@ -379,10 +392,11 @@ step_llm_wiki() {
   [ -n "$base" ] || die "--with-llm-wiki 需要 ASTRA_LLM_WIKI_API_BASE_URL（例如 http://10.0.0.8:19828/api/v1）"
   base="${base%/}"
   log "llm_wiki（接入已有服务器 $base）"
-  wait_http "$base/health" "llm_wiki" 90
+  (set -a; . "$RUNENV"; . "$SECRETS"; set +a; cd "$NEXUS_ROOT/services/nexus-api" && .venv/bin/python -m app.deployment wiki)
+
   # 模型端点由 llm_wiki 服务端配置为 Nexus 网关（NEXUS_GATEWAY_OPENAI_BASE + NEXUS_GATEWAY_API_KEY）。
   log "触发图书馆重新同步"
-  curl -fsS -m 30 -X POST http://127.0.0.1:18120/api/library/service/resync >/dev/null || warn "图书馆重新同步请求失败"
+  curl -fsS -m 30 -X POST http://127.0.0.1:18120/api/library/service/resync >/dev/null || die "图书馆重新同步请求失败"
 }
 
 step_remote_worker() {
@@ -397,7 +411,7 @@ wid = e["REMOTE_WORKER_ID"]
 env = {"mode": "LINUX_REMOTE", "name": wid, "host": e["REMOTE_WORKER"], "port": int(e["REMOTE_WORKER_PORT"]),
        "username": e["REMOTE_WORKER_USER"], "ssh_password": e["REMOTE_WORKER_SSH_PASSWORD"],
        "opencode_server_port": int(e["REMOTE_WORKER_OPENCODE_PORT"]), "workspace_root": e["REMOTE_WORKER_WORKSPACE"],
-       "model_name": "astra-gateway/deepseek-flash"}
+       "model_name": "nexus-gateway/" + e["NEXUS_DEFAULT_MODEL"]}
 if c.get(f"{B}/employees/{wid}").status_code == 404:
     c.post(f"{B}/employees", json={"id": wid, "name": wid, "role": "remote worker", "execution_environment": env}).raise_for_status()
 ok = True
@@ -419,7 +433,7 @@ step_health() {
   chk http://127.0.0.1:18120/api/health "Nexus API 18120"
   chk http://127.0.0.1:18000/health "Agent Service 18000" "X-User-ID: nexus"
   chk http://127.0.0.1:18120/api/v1/knowledge "Nexus API 18120"
-  ss -ltn | grep -q ':18110 ' && echo "  ✓ Gateway 18110" || { echo "  ✗ Gateway 18110"; fails=$((fails+1)); }
+  ss -ltn | grep -q ":${ASTRA_SERVICE_GATEWAY_PORT:-18110} " && echo "  ✓ Gateway 18110" || { echo "  ✗ Gateway 18110"; fails=$((fails+1)); }
   ss -ltn | grep -q ':18201 ' && echo "  ✓ Library MCP 18201" || { echo "  ✗ Library MCP 18201"; fails=$((fails+1)); }
   ss -ltn | grep -q ':18202 ' && echo "  ✓ Task MCP 18202" || { echo "  ✗ Task MCP 18202"; fails=$((fails+1)); }
   chk http://127.0.0.1:18120/ "Nexus Web(18120)"
@@ -428,9 +442,12 @@ step_health() {
     u="$(curl -fsS -m 30 http://127.0.0.1:18120/api/library/service/status || true)"
     case "$u" in *'"healthy":true'*) echo "  ✓ 图书馆知识服务 healthy";; *) echo "  ✗ 图书馆知识服务未 healthy"; fails=$((fails+1));; esac
   fi
+  [ "$fails" -eq 0 ] || die "$fails 项健康检查失败"
   touch "$NEXUS_STATE_DIR/installed"
-  [ "$fails" -eq 0 ] && log "部署完成。日志：$LOGS 与 $NEXUS_ROOT/.astra/logs" || die "$fails 项健康检查失败，见 DEPLOYMENT_GUIDE.md §7 排障"
+  log "部署完成。日志：$LOGS 与 $NEXUS_ROOT/.astra/logs" || die "$fails 项健康检查失败，见 DEPLOYMENT_GUIDE.md §7 排障"
 }
+
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then return 0; fi
 
 preflight
 [ "$PREFLIGHT_ONLY" = 1 ] && exit 0

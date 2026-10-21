@@ -16,7 +16,8 @@ Astra 负责长期任务的分配、执行、状态跟踪、人工介入和异�
 ## Runtime
 
 正式运行方式为 **OpenCode Server / Session / Event**。
-`opencode run` 只作为独立的 CLI fallback。
+公司正式部署为 `ASTRA_EXECUTOR_TYPE=worker`，控制机不安装、启动或校验本机 OpenCode；实际 Worker 保留版本校验。显式本机 `opencode_server` 仅作开发调试，受管主模型与 small model 也必须走 Nexus 网关。
+`opencode run` 只作为独立手工 CLI fallback。
 
 修改 Runtime 相关代码前，先理清：
 
@@ -34,7 +35,7 @@ Task → Run → Employee → Worker → OpenCode Session
 
 ## 数据兼容
 
-历史异常数据优先通过 **Alembic migration、backfill 或一次性修复脚本**处理。
+v1.4.8 公司从空 MySQL 8.0.36 部署，不保留早期迁移链或旧库导入。后续已发布 schema 的异常通过 **新 Alembic migration、backfill 或一次性修复脚本**处理，不修改已发布 init。
 
 不要为了兼容旧数据长期保留：
 
@@ -65,7 +66,8 @@ Task → Run → Employee → Worker → OpenCode Session
 - 对话、员工目录和 Agent 绑定写在 `services/nexus-api/nexus_api`。任务、Worker、网关和图书馆沿用 `services/nexus-api/app` 的现有服务，不另写一套状态机。
 - 前端是 `services/nexus-api/web`：Vue 3 + Element Plus，构建产物由同一 FastAPI 服务托管。员工目录与任务 API 都由 `services/nexus-api` 提供；Nexus 只通过 HTTP 调用 AgentScope，不内嵌、不 fork AgentScope。
 - **AgentScope 2.0.10 Agent Service 是 Agent、Session、Skill、Knowledge 与对话记忆的唯一事实源。** Nexus 只保存员工目录、会话绑定和尚未被 Agent Service 接受的用户消息。不要在 Nexus 再实现一套 Agent、Session 或 Memory。
-- Nexus 不提供模型、凭证或供应商配置界面。模型配置留在 AgentScope。
+- 员工/聊天配置不提供厂商模型或凭据编辑。API 网关控制面维护上游节点凭据与模型路由；员工只绑定已启用路由。AgentScope 登记指向 Nexus 网关的 credential，不保留另一套厂商模型配置。
+- 员工聊天、Worker、平台复盘与 embedding 统一经过 Nexus 网关，不回退直连。客户端地址为 `/v1`，上游节点地址为根地址。嵌入节点使用 `EMBEDDING` 探测，知识库配置只接受 `model_route_id` 与正整数 `dimensions`。
 - 一位数字员工对应一个独立 Agent。一条私聊或一位员工在某个团队讨论中的上下文对应一条 Session。
 - 员工之间的平等交流不使用 AgentScope Agent Team。Agent Team 是 Leader 派工给 Worker，不是对等同事。
 - 同事联系走部署在 Agent Service 上的自定义工具 `contact_employee`：向对方 Session 的 inbox 投递 `HintBlock`，再由 MessageBus 的 wakeup 唤醒对方自己推理。Nexus 不编排脚本化的多 Agent 回复。
@@ -75,6 +77,7 @@ Task → Run → Employee → Worker → OpenCode Session
 - AgentScope 版本以 `services/agent-service/agentscope.version` 为准，当前为 PyPI / GitHub tag `2.0.10`。接口说明以该 tag 的源码为准，见 `docs/architecture/agentscope-2.0.10.md`。
 - 正式部署是独立的 AgentScope Agent Service + Redis。`create_app` 的 workspace 隔离使用 `IsolationPolicy.PER_SESSION`，这样同一员工的多条对话不会被 `(user, agent, workspace)` 折成一条 Session。
 - 公司从空 MySQL 8.0.36 部署。全部 Nexus 自有业务表使用同一配置数据库，以 `t_nexus_` 开头，由单个 Alembic `0001_init` 初始化；服务启动只校验 schema。开发 SQLite 必须显式配置同一个数据库 URL。不提供历史库升级、导入或双写。后续新字段另加 Alembic revision，不修改已发布 init。
+- 安装器必须持久化执行模式、网关地址/监听配置和稳定调用密钥，保证干净进程重启一致；不在安装器绑定厂商或保存厂商直连 key。外部 llm_wiki 使用已有真实 token/project_id 并验证项目权限，不自动生成无法登记的值。
 - AgentScope 使用官方 `AsyncSQLAlchemyStorage` 和独立数据库，通过 `AGENTSCOPE_SQL_URL` 配置，schema 由官方 2.0.10 维护；RedisMessageBus 保留。Nexus 不接管或修改 AgentScope 的内部迁移。
 
 ## 前端表格（Element Plus）

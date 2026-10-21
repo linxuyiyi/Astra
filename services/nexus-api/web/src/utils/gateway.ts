@@ -21,7 +21,7 @@ export const quotaPolicyLabel = (value: string) =>
   ({ STOP: '停止新请求', ALERT: '仅告警', RECORD: '仅记录' }[value] ?? fallback(value))
 
 export const probeTypeLabel = (value: string) =>
-  ({ NETWORK: '网络', SERVICE: '服务', MODEL: '模型', STREAM: 'SSE 流式' }[value] ?? fallback(value))
+  ({ NETWORK: '网络', SERVICE: '服务', MODEL: '模型', STREAM: 'SSE 流式', EMBEDDING: '向量嵌入' }[value] ?? fallback(value))
 
 export const authTypeLabel = (value: string) =>
   ({ BEARER: 'Bearer Token', HEADER: '自定义 Header', NONE: '无认证' }[value] ?? fallback(value))
@@ -33,7 +33,7 @@ export type GatewayAuthenticationResult = 'PASS' | 'FAIL' | null
 export function authenticationResult(
   checks: Array<{ probe_type: string; success: boolean; status_code: number | null }>,
 ): GatewayAuthenticationResult {
-  const model = checks.find((check) => check.probe_type === 'MODEL')
+  const model = checks.find((check) => ['MODEL', 'STREAM', 'EMBEDDING'].includes(check.probe_type))
   if (!model) return null
   if (model.success) return 'PASS'
   if (model.status_code === 401 || model.status_code === 403) return 'FAIL'

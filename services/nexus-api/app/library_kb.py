@@ -9,7 +9,7 @@ import httpx
 
 from app.config.settings import get_settings
 
-_EMBEDDING_FIELDS = ("type", "credential_id", "model", "dimensions")
+_EMBEDDING_FIELDS = ("model_route_id", "dimensions")
 
 
 class KnowledgeMapError(Exception):
@@ -20,7 +20,7 @@ def embedding_config() -> dict[str, Any] | None:
     """图书馆同步到 AgentScope 知识库的 embedding 引用。
 
     由 NEXUS_KB_EMBEDDING_JSON 显式配置，Settings 启动时已校验格式。
-    网关暂未提供 /v1/embeddings，这里只接受 AgentScope 内的 credential 引用。
+    这里只接受已启用的网关路由，凭据由网关装配，不接受厂商 credential。
     """
 
     raw = get_settings().kb_embedding_json.strip()
@@ -168,11 +168,24 @@ async def sync_published_item(item) -> None:
     if config is None:
         return
     settings = get_settings()
-    api = AgentScopeKnowledgeApi(settings.agentscope_base_url, settings.agentscope_user_id, config)
+    from nexus_api.agentscope import AgentScopeClient
+    from nexus_api.model_route import ModelRouteError, chat_config_for_route
+
+    client = AgentScopeClient(settings.agentscope_base_url, settings.agentscope_user_id)
     try:
-        await map_published_item(item, api)
+        routed = await chat_config_for_route(client, config["model_route_id"])
+        routed.pop("parameters", None)
+        routed["dimensions"] = config["dimensions"]
+        api = AgentScopeKnowledgeApi(settings.agentscope_base_url, settings.agentscope_user_id, routed)
+        try:
+            await map_published_item(item, api)
+        finally:
+            await api.aclose()
+    except ModelRouteError as exc:
+        item.agentscope_sync_status = "failed"
+        item.agentscope_sync_error = str(exc)
     finally:
-        await api.aclose()
+        await client.aclose()
 
 
 async def retrieve_for_bindings(session, bound_kb_ids: list[str], query: str, api) -> list[dict[str, Any]]:

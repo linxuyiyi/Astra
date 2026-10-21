@@ -119,7 +119,6 @@ import {
   type GatewayInstance,
   type GatewayNode,
   type GatewayPool,
-  type GatewayProbeType,
 } from '@/api/gateway'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
@@ -138,7 +137,6 @@ const instanceError = ref('')
 const busyId = ref('')
 const drawerOpen = ref(false)
 const drawerNode = ref<GatewayNode | null>(null)
-const allProbes: GatewayProbeType[] = ['NETWORK', 'SERVICE', 'MODEL', 'STREAM']
 
 const healthOptions = (['HEALTHY', 'DEGRADED', 'UNHEALTHY', 'CHECKING', 'UNKNOWN'] as const)
   .map((value) => ({ value, label: healthStateLabel(value) }))
@@ -226,7 +224,7 @@ function openDetail(node: GatewayNode) {
 async function onProbe(node: GatewayNode) {
   busyId.value = node.id
   try {
-    const result = await gatewayApi.probeNode(node.id, allProbes)
+    const result = await gatewayApi.probeNode(node.id, [])
     const passed = result.checks.filter((check) => check.success).length
     notify(`${node.name} 探测完成：${passed}/${result.checks.length} 项通过`, passed === result.checks.length ? 'success' : 'info')
     await load()

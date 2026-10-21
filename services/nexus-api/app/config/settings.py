@@ -115,10 +115,8 @@ class Settings(BaseSettings):
     executor_type: str = "opencode_server"
     opencode_binary: str = "opencode"
     opencode_agent: str | None = None
-    # provider/model。模型 id 是 deepseek-flash，上游为 DeepSeek OpenAI 兼容接口
-    # https://api.deepseek.com。Worker 的 model_name 优先于这个全局后备。
-    # 对话模型仍是 OPENAI_MODEL=deepseek-flash，不使用这个字段。
-    opencode_model: str | None = "deepseek/deepseek-flash"
+    # 受管 Runtime 使用网关别名；Worker model_name 优先于这个默认值。
+    opencode_model: str | None = "nexus-gateway/default"
     nexus_api_base: str = "http://127.0.0.1:18120"
     agentscope_base_url: str = "http://127.0.0.1:18000"
     agentscope_user_id: str = "nexus"
@@ -182,7 +180,7 @@ class Settings(BaseSettings):
         default=90, ge=5, le=86400, validation_alias="NEXUS_WORKER_HEALTH_MAX_AGE_SECONDS"
     )
     remote_gateway_local_url: str = Field(
-        default="http://127.0.0.1:18110", validation_alias="NEXUS_REMOTE_GATEWAY_LOCAL_URL"
+        default="http://127.0.0.1:18110/v1", validation_alias="NEXUS_REMOTE_GATEWAY_LOCAL_URL"
     )
     remote_gateway_public_url: str | None = Field(
         default=None, validation_alias="NEXUS_REMOTE_GATEWAY_PUBLIC_URL"
@@ -210,8 +208,8 @@ class Settings(BaseSettings):
     llm_wiki_project_id: str = ""
     llm_wiki_timeout: float = Field(default=10, gt=0, le=300)
 
-    # 图书馆同步到 AgentScope 知识库时使用的 embedding credential 引用。
-    # 只放 credential_id，不放密钥；网关暂未代理 embeddings，先显式配置。
+    # 图书馆同步到 AgentScope 知识库时使用的 embedding 路由。
+    # 只配置网关路由和维度；凭据复用指向网关的内部 credential。
     kb_embedding_json: str = Field(default="", validation_alias="NEXUS_KB_EMBEDDING_JSON", repr=False)
 
     @field_validator("kb_embedding_json")
@@ -224,10 +222,13 @@ class Settings(BaseSettings):
             data = json.loads(raw)
         except json.JSONDecodeError:
             raise ValueError("NEXUS_KB_EMBEDDING_JSON 不是 JSON") from None
-        required = {"type", "credential_id", "model", "dimensions"}
-        if not isinstance(data, dict) or not required.issubset(data):
+        if (
+            not isinstance(data, dict) or set(data) != {"model_route_id", "dimensions"}
+            or not isinstance(data.get("model_route_id"), str) or not data["model_route_id"].strip()
+            or type(data.get("dimensions")) is not int or data["dimensions"] <= 0
+        ):
             raise ValueError(
-                "NEXUS_KB_EMBEDDING_JSON 必须是包含 type、credential_id、model、dimensions 的对象"
+                "NEXUS_KB_EMBEDDING_JSON 只接受非空 model_route_id 和正整数 dimensions"
             )
         return raw
 
@@ -259,7 +260,7 @@ class Settings(BaseSettings):
         validation_alias="NEXUS_EXPERIENCE_REVIEW_GATEWAY_URL",
     )
     experience_review_model: str = Field(
-        default="deepseek-flash", validation_alias="NEXUS_EXPERIENCE_REVIEW_MODEL"
+        default="default", validation_alias="NEXUS_EXPERIENCE_REVIEW_MODEL"
     )
     experience_review_gateway_key: str | None = Field(
         default=None, validation_alias="NEXUS_EXPERIENCE_REVIEW_GATEWAY_KEY"

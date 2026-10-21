@@ -166,7 +166,10 @@ def collect() -> list[tuple[bool, str, str]]:
     }
     occupied = set(V09_PORTS.values())
     shared = sorted(port for port in nexus_ports.values() if port in occupied)
-    listed = [int(item) for item in re.search(r"^PORTS=\(([^)]*)\)", install, re.M).group(1).split()]
+    # Extract literal defaults; configured live ports are already checked above.
+    listed = [int(item) for item in re.findall(
+        r"\d+", re.search(r"^PORTS=\(([^)]*)\)", install, re.M).group(1)
+    )]
     install_shared = sorted(port for port in listed if port != 6379 and port in occupied)
     add(
         not shared and not install_shared and nexus_ports["opencode"] != V09_PORTS["opencode"],

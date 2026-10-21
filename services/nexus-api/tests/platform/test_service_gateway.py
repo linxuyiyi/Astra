@@ -232,3 +232,21 @@ def test_production_rejects_cli_fallback_executor(tmp_path, monkeypatch):
         service.validate_start(
             "pro", _settings(executor_type="opencode_cli_fallback", gateway_enabled=False)
         )
+
+
+def test_shared_healthy_serve_rejects_old_vendor_config_before_reuse(monkeypatch):
+    from app.runtime.opencode_server import OpenCodeServerManager
+
+    class OldServe(OpenCodeServerManager):
+        async def health(self):
+            return SimpleNamespace(healthy=True)
+
+        async def validate_gateway_configuration(self):
+            raise RuntimeError("已有 Serve 未使用统一网关配置")
+
+    def unexpected_spawn(*args, **kwargs):
+        pytest.fail("不得接管或重启未通过配置校验的已有进程")
+
+    monkeypatch.setattr(service, "spawn", unexpected_spawn)
+    with pytest.raises(RuntimeError, match="统一网关"):
+        service.start_opencode(_settings(opencode_server_url=None, opencode_binary="opencode"), OldServe, {})

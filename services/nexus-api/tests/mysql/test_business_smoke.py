@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import socket
 import subprocess
@@ -14,6 +15,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from uuid import uuid4
 
@@ -62,7 +64,43 @@ def wait_ready(process, url: str) -> None:
     raise AssertionError("服务就绪超时；检查测试临时目录内日志")
 
 
-def test_mysql_api_restart_and_im_claim(tmp_path):
+@pytest.fixture
+def embedding_upstream():
+    calls = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            calls.append((self.path, payload))
+            response = json.dumps(
+                {
+                    "object": "list",
+                    "model": payload["model"],
+                    "data": [{"object": "embedding", "index": 0, "embedding": [0.1, -0.3]}],
+                    "usage": {"prompt_tokens": 3, "total_tokens": 3},
+                }
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+
+        def log_message(self, *_args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}", calls
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_mysql_api_restart_and_im_claim(tmp_path, embedding_upstream):
     url = make_url(os.environ["ASTRA_TEST_MYSQL_URL"])
     agent_url = make_url(os.environ["AGENTSCOPE_TEST_MYSQL_URL"])
     assert url.get_backend_name() == agent_url.get_backend_name() == "mysql"
@@ -73,7 +111,8 @@ def test_mysql_api_restart_and_im_claim(tmp_path):
         assert connection.execute(text("SELECT VERSION()")).scalar().startswith("8.0.36")
         assert "STRICT_TRANS_TABLES" in connection.execute(text("SELECT @@sql_mode")).scalar()
 
-    api_port, agent_port = unused_port(), unused_port()
+    api_port, agent_port, gateway_port = unused_port(), unused_port(), unused_port()
+    gateway = f"http://127.0.0.1:{gateway_port}"
     base = f"http://127.0.0.1:{api_port}"
     scope = f"http://127.0.0.1:{agent_port}"
     configs = tmp_path / "configs"
@@ -90,8 +129,9 @@ def test_mysql_api_restart_and_im_claim(tmp_path):
         "ASTRA_REDIS_URL": "redis://127.0.0.1:6379/14",
         "ASTRA_LLM_WIKI_ENABLED": "false",
         "ASTRA_GATEWAY_MASTER_KEY": Fernet.generate_key().decode(),
-        "NEXUS_GATEWAY_API_KEY": "mysql-smoke-key",
-        "NEXUS_GATEWAY_OPENAI_BASE": "http://127.0.0.1:18110/v1",
+        "NEXUS_GATEWAY_API_KEY": "agw_" + uuid4().hex,
+        "NEXUS_GATEWAY_OPENAI_BASE": gateway + "/v1",
+        "ASTRA_GATEWAY_CONFIG_POLL_INTERVAL": "1",
         "NEXUS_TASK_PLATFORM_URL": base,
         "NEXUS_AGENTSCOPE_BASE_URL": scope,
         "NEXUS_API_BASE": base,
@@ -107,6 +147,7 @@ def test_mysql_api_restart_and_im_claim(tmp_path):
     for args, cwd in [
         ([sys.executable, "-m", "alembic", "upgrade", "head"], SERVICE),
         ([os.environ["AGENTSCOPE_TEST_PYTHON"], "agentscope_sql.py", "init"], AGENT),
+        ([sys.executable, "-m", "app.deployment", "gateway-key"], SERVICE),
     ]:
         outcome = subprocess.run(args, cwd=cwd, env=env, capture_output=True, timeout=60)
         assert outcome.returncode == 0, "数据库初始化失败；请单独执行初始化检查"
@@ -133,6 +174,21 @@ def test_mysql_api_restart_and_im_claim(tmp_path):
 
     def start_all():
         for name, command, cwd, health in [
+            (
+                "gateway",
+                [
+                    sys.executable,
+                    "-m",
+                    "uvicorn",
+                    "app.gateway.server:app",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(gateway_port),
+                ],
+                SERVICE,
+                gateway + "/healthz",
+            ),
             ("agent", [os.environ["AGENTSCOPE_TEST_PYTHON"], "agent_service.py"], AGENT, scope + "/health"),
             (
                 "nexus",
@@ -164,6 +220,54 @@ def test_mysql_api_restart_and_im_claim(tmp_path):
                 "/api/gateway/routes", json={"model": f"mysql-{suffix}", "pool_id": "gp_default"}
             )
             assert route.status_code == 201, route.text
+            # 真实 SQL 控制面、Redis 探测状态和独立网关进程，只有上游返回固定测试向量。
+            vendor_model = "vendor-embed-" + suffix
+            embedding_alias = "embed-" + suffix
+            node = client.post(
+                "/api/gateway/nodes",
+                json={
+                    "name": embedding_alias,
+                    "pool_id": "gp_default",
+                    "base_url": embedding_upstream[0],
+                    "auth_type": "NONE",
+                    "models": [vendor_model],
+                    "probe_strategy": "EMBEDDING",
+                },
+            )
+            assert node.status_code == 201, node.text
+            for _ in range(2):
+                probe = client.post(f"/api/gateway/nodes/{node.json()['id']}/probe", json={})
+                assert probe.status_code == 200, probe.text
+            enabled = client.patch(
+                f"/api/gateway/nodes/{node.json()['id']}",
+                json={"config_state": "ENABLED", "scheduling_state": "ACTIVE"},
+            )
+            assert enabled.status_code == 200, enabled.text
+            embedding_route = client.post(
+                "/api/gateway/routes",
+                json={
+                    "model": embedding_alias,
+                    "target_model": vendor_model,
+                    "pool_id": "gp_default",
+                },
+            )
+            assert embedding_route.status_code == 201, embedding_route.text
+            deadline = time.monotonic() + 15
+            while True:
+                result = httpx.post(
+                    gateway + "/v1/embeddings",
+                    headers={"Authorization": "Bearer " + env["NEXUS_GATEWAY_API_KEY"]},
+                    json={"model": embedding_alias, "input": "真实 HTTP 代理验证", "dimensions": 2},
+                    timeout=5,
+                )
+                if result.status_code == 200 or time.monotonic() >= deadline:
+                    break
+                time.sleep(0.3)
+            assert result.status_code == 200, result.text
+            assert result.json()["model"] == embedding_alias
+            assert result.json()["data"][0]["embedding"] == [0.1, -0.3]
+            assert embedding_upstream[1][-1][0] == "/v1/embeddings"
+            assert embedding_upstream[1][-1][1]["model"] == vendor_model
             employee_response = client.post(
                 "/api/v1/employees",
                 json={

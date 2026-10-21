@@ -21,7 +21,7 @@ from app.main import app
 from app.models import AgentWorker, OpenCodeExecutionEnvironment, RuntimeSession, Task
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 from app.runtime.maintenance import submit_operation
-from app.runtime.remote_provisioning import E2E_MODEL, RemoteProvisioner, managed_config
+from app.runtime.remote_provisioning import RemoteProvisioner, managed_config
 
 
 @pytest.fixture(autouse=True)
@@ -317,22 +317,18 @@ def test_real_config_merge_writes_jsonc_and_keeps_user_settings(tmp_path):
     assert (repo / "SKILL.md").read_text(encoding="utf-8") == "untouched"
 
 
-def test_e2e_config_points_at_the_free_model_and_omits_the_gateway_key():
+def test_special_model_names_still_use_gateway():
     payload = managed_config(
         config_path="/tmp/opencode.jsonc",
-        model=E2E_MODEL,
+        model="opencode/deepseek-v4.1-flash-free",
         models=[],
         gateway_url="http://127.0.0.1:8110/v1",
         gateway_key="agw_do_not_read",
         mcp_url="http://127.0.0.1:8201/mcp",
         mcp_key="mcp-test",
-        e2e=True,
     )
-    encoded = json.dumps(payload)
-    assert payload["model"] == E2E_MODEL
-    assert payload["provider"] is None
-    assert payload["e2e"] is True
-    assert "agw_do_not_read" not in encoded
+    assert payload["model"] == "nexus-gateway/deepseek-v4.1-flash-free"
+    assert payload["provider"]["options"]["apiKey"] == "agw_do_not_read"
 
 
 @pytest.mark.asyncio

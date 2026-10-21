@@ -43,31 +43,25 @@ REASON_NODE_FULL = "NODE_FULL"
 REASON_QUOTA_EXCEEDED = "QUOTA_EXCEEDED"
 
 QUOTA_OK = "OK"
-QUOTA_WARN = "WARN"
-QUOTA_THROTTLE = "THROTTLE"
+QUOTA_ALERT = "ALERT"
 QUOTA_STOP = "STOP"
 QUOTA_RECORD = "RECORD"
 
-# 90% 降权、100% 停止新请求；告警（ALERT）在 100% 时重度降权，仅记录（RECORD）不阻止。
-_THROTTLE_FACTOR = {QUOTA_OK: 1.0, QUOTA_RECORD: 1.0, QUOTA_WARN: 0.6, QUOTA_THROTTLE: 0.1}
+# 额度只由 STOP 阻断新请求；ALERT/RECORD 在任意比例都不改变调度权重，
+# 告警与记录只体现在运行事件与页面状态。
 _DEGRADED_FACTOR = 0.5
 
 
 def quota_state(used_total: int, limit: int | None, policy: str) -> str:
     if limit is None or limit <= 0:
         return QUOTA_OK
-    ratio = used_total / limit
-    if ratio >= 1:
-        if policy == "STOP":
-            return QUOTA_STOP
-        if policy == "RECORD":
-            return QUOTA_RECORD
-        return QUOTA_THROTTLE  # ALERT：仍可服务但重度降权
-    if ratio >= 0.9:
-        return QUOTA_THROTTLE
-    if ratio >= 0.8:
-        return QUOTA_WARN
-    return QUOTA_OK
+    if used_total < limit:
+        return QUOTA_OK
+    if policy == "STOP":
+        return QUOTA_STOP
+    if policy == "RECORD":
+        return QUOTA_RECORD
+    return QUOTA_ALERT
 
 
 def node_quota_state(node: NodeConfig, hourly: TokenUsage, daily: TokenUsage) -> str:
@@ -155,11 +149,11 @@ async def read_node_schedule(
 def effective_weight(
     node: NodeConfig, hourly: TokenUsage, daily: TokenUsage, *, health_state: str | None = None
 ) -> float:
+    # 额度策略不参与权重：STOP 由 node_block_reason 阻断，ALERT/RECORD 只告警/记录。
     base = float(node.weight) if node.weight and node.weight > 0 else 1.0
-    state = node_quota_state(node, hourly, daily)
-    factor = _THROTTLE_FACTOR.get(state, 1.0)
+    factor = 1.0
     if (health_state if health_state is not None else HEALTH_UNKNOWN) == HEALTH_DEGRADED:
-        factor *= _DEGRADED_FACTOR
+        factor = _DEGRADED_FACTOR
     return max(base * factor, 0.001)
 
 
@@ -183,8 +177,7 @@ def _stricter(first: str, second: str) -> str:
     severity = {
         QUOTA_OK: 0,
         QUOTA_RECORD: 1,
-        QUOTA_WARN: 2,
-        QUOTA_THROTTLE: 3,
-        QUOTA_STOP: 4,
+        QUOTA_ALERT: 2,
+        QUOTA_STOP: 3,
     }
     return first if severity[first] >= severity[second] else second

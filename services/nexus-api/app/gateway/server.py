@@ -45,6 +45,8 @@ from app.gateway.errors import (
     NODE_CREDENTIAL_ERROR,
     POOL_SATURATED,
     QUOTA_EXCEEDED,
+    STREAM_EMPTY,
+    STREAM_INCOMPLETE,
     STREAM_INTERRUPTED,
     GatewayDataPlaneError,
     invalid_request,
@@ -52,11 +54,13 @@ from app.gateway.errors import (
     key_disabled,
     key_expired,
     key_forbidden,
+    key_quota_exceeded,
     model_not_found,
     no_eligible_node,
     payload_too_large,
     runtime_unavailable,
     unauthorized,
+    upstream_protocol_error,
 )
 from app.gateway.health import probe_success, record_background_probe
 from app.gateway.models import (
@@ -173,6 +177,8 @@ class StreamUsageCollector:
         self._pending = bytearray()
         self.usage: dict[str, Any] | None = None
         self.saw_content = False
+        # 完整结束：``[DONE]`` 或带非空 finish_reason 的帧。只有这一步能证明流没被截断。
+        self.saw_terminal = False
 
     def feed(self, chunk: bytes) -> bool:
         """喂入一块字节。先攒满一行再按 UTF-8 解码，避免多字节字符被拆开后丢内容。"""
@@ -198,7 +204,10 @@ class StreamUsageCollector:
         if not line.startswith("data:"):
             return
         payload = line[len("data:") :].strip()
-        if not payload or payload == "[DONE]":
+        if not payload:
+            return
+        if payload == "[DONE]":
+            self.saw_terminal = True
             return
         try:
             body = json.loads(payload)
@@ -210,6 +219,8 @@ class StreamUsageCollector:
             self.usage = body["usage"]
         if not self.saw_content and _frame_has_content(body):
             self.saw_content = True
+        if not self.saw_terminal and _frame_has_finish(body):
+            self.saw_terminal = True
 
 
 def default_instance_id(configured: str | None) -> str:
@@ -262,6 +273,71 @@ def _frame_has_content(body: Mapping[str, Any]) -> bool:
                     if isinstance(fn, dict) and (fn.get("name") or fn.get("arguments")):
                         return True
     return False
+
+
+def _frame_has_finish(body: Mapping[str, Any]) -> bool:
+    """该帧是否声明生成已结束（OpenAI 兼容的 finish_reason）。"""
+
+    choices = body.get("choices")
+    if not isinstance(choices, list):
+        return False
+    for choice in choices:
+        if isinstance(choice, dict) and choice.get("finish_reason"):
+            return True
+    return False
+
+
+def _is_event_stream(response: httpx.Response) -> bool:
+    content_type = response.headers.get("content-type", "")
+    return content_type.split(";", 1)[0].strip().lower() == "text/event-stream"
+
+
+class StreamModelRewriter:
+    """按行增量改写流式帧的 ``model`` 字段，不缓存整流。
+
+    只处理完整的 ``data:`` 行：JSON 帧替换 ``model``，``[DONE]``、注释与空行原样
+    透传。UTF-8 多字节字符被切在块边界时，因为按行重组，不会丢字节。
+    """
+
+    def __init__(self, model: str) -> None:
+        self.model = model
+        self._pending = bytearray()
+
+    def feed(self, chunk: bytes) -> bytes:
+        self._pending.extend(chunk)
+        out = bytearray()
+        while True:
+            newline = self._pending.find(b"\n")
+            if newline < 0:
+                break
+            raw = bytes(self._pending[: newline + 1])
+            del self._pending[: newline + 1]
+            out.extend(self._rewrite(raw))
+        return bytes(out)
+
+    def flush(self) -> bytes:
+        if not self._pending:
+            return b""
+        raw = bytes(self._pending)
+        self._pending.clear()
+        return self._rewrite(raw)
+
+    def _rewrite(self, raw: bytes) -> bytes:
+        stripped = raw.rstrip(b"\r\n")
+        suffix = raw[len(stripped) :]
+        if not stripped.startswith(b"data:"):
+            return raw
+        payload = stripped[len(b"data:") :].strip()
+        if not payload or payload == b"[DONE]":
+            return raw
+        try:
+            body = json.loads(payload)
+        except ValueError:
+            return raw
+        if not isinstance(body, dict) or "model" not in body:
+            return raw
+        body["model"] = self.model
+        return b"data: " + json.dumps(body, ensure_ascii=False).encode("utf-8") + suffix
 
 
 _REQUEST_COLUMNS = (
@@ -646,6 +722,9 @@ class GatewayDataPlane:
             actual_model = route.target_model if route.target_model else model
             record.actual_model = actual_model
 
+            # Key 小时/日额度在调度之前判定：达限时不取节点租约、不发上游请求。
+            await self._check_key_quota(key)
+
             if not self._runtime_healthy:
                 raise runtime_unavailable()
 
@@ -690,6 +769,12 @@ class GatewayDataPlane:
                         upstream = await self.proxy.send(upstream_request, stream=True)
                         record.ttfb_ms = elapsed_ms(started)
                         record.status_code = upstream.status_code
+                        if 200 <= upstream.status_code < 300 and not _is_event_stream(upstream):
+                            # 2xx 却不是 SSE：不能把普通响应伪装成流成功。
+                            await upstream.aclose()
+                            await self._safe_release(SCOPE_NODE, node.id, node_lease)
+                            await self._record_node_failure(node_scope)
+                            raise upstream_protocol_error()
                         # 流式响应在生成器结束时才释放租约与落日志；长流周期续租。
                         deferred = True
                         return self._streaming_response(
@@ -749,6 +834,24 @@ class GatewayDataPlane:
                 await self._persist(record, finished=True)
 
     # ── 鉴权与路由 ─────────────────────────────────────────────────────
+
+    async def _check_key_quota(self, key: KeyConfig) -> None:
+        limits = {
+            "hour": key.hourly_token_limit,
+            "day": key.daily_token_limit,
+        }
+        if not any(limit and limit > 0 for limit in limits.values()):
+            return
+        buckets = usage_buckets(utcnow(), self._timezone)
+        for period, limit in limits.items():
+            if not limit or limit <= 0:
+                continue
+            try:
+                usage = await self.runtime.usage(SCOPE_KEY, key.id, period, buckets[period])
+            except Exception as exc:  # noqa: BLE001 - 运行态不可用时按 503 拒绝
+                raise runtime_unavailable() from exc
+            if usage.billable_total >= limit:
+                raise key_quota_exceeded(period)
 
     def authenticate(self, authorization: str | None, *, config: GatewayConfig) -> KeyConfig:
         if not authorization or not authorization.lower().startswith("bearer "):
@@ -1096,12 +1199,21 @@ class GatewayDataPlane:
         collector = StreamUsageCollector()
         completed = False
         disconnect_code: str | None = None
+        rewriter = (
+            StreamModelRewriter(record.model)
+            if record.model and record.actual_model and record.actual_model != record.model
+            else None
+        )
         try:
             async for chunk in upstream.aiter_bytes():
                 saw_content = collector.feed(chunk)
                 if record.ttft_ms is None and saw_content:
                     record.ttft_ms = elapsed_ms(record.started_at)
-                yield chunk
+                yield rewriter.feed(chunk) if rewriter else chunk
+            if rewriter:
+                tail = rewriter.flush()
+                if tail:
+                    yield tail
             completed = True
         except httpx.HTTPError:
             disconnect_code = STREAM_INTERRUPTED
@@ -1141,19 +1253,36 @@ class GatewayDataPlane:
         disconnect_code: str | None,
     ) -> None:
         record.duration_ms = elapsed_ms(record.started_at)
+        ok_status = 200 <= upstream.status_code < 300
         if not completed:
             record.stream_interrupted = True
             record.error_code = record.error_code or disconnect_code or CLIENT_DISCONNECTED
             self._counters["errors"] += 1
         elif upstream.status_code < 200 or upstream.status_code >= 400:
             record.error_code = record.error_code or f"UPSTREAM_{upstream.status_code}"
+        elif not collector.saw_content:
+            # 200 + 只有结束标记：不是成功，也不能作为节点健康信号。
+            record.stream_interrupted = True
+            record.error_code = record.error_code or STREAM_EMPTY
+            self._counters["errors"] += 1
+        elif not collector.saw_terminal:
+            # 没有 [DONE]/finish_reason 就 EOF：按意外断流处理。
+            record.stream_interrupted = True
+            record.error_code = record.error_code or STREAM_INCOMPLETE
+            self._counters["errors"] += 1
         await self._cancel_renewals(renewals)
         try:
             await upstream.aclose()
         except Exception:  # noqa: BLE001
             pass
         await self._record_usage(record, collector.usage)
-        if completed and not disconnect_code:
+        if (
+            completed
+            and not disconnect_code
+            and ok_status
+            and collector.saw_content
+            and collector.saw_terminal
+        ):
             await self._record_node_success(node_scope)
         else:
             await self._record_node_failure(node_scope)

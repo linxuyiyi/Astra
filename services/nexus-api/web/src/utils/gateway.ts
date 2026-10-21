@@ -132,6 +132,7 @@ const ERROR_CAUSE: Record<string, string> = {
   KEY_EXPIRED: '密钥已过期',
   KEY_FORBIDDEN: '密钥无权访问该模型',
   KEY_CONCURRENCY_EXCEEDED: '密钥并发已满',
+  KEY_QUOTA_EXCEEDED: '密钥额度已用尽',
   INVALID_REQUEST: '请求不合法',
   PAYLOAD_TOO_LARGE: '请求体过大',
   MODEL_NOT_FOUND: '没有这个模型',
@@ -147,6 +148,8 @@ const ERROR_CAUSE: Record<string, string> = {
   UPSTREAM_ERROR: '节点返回错误',
   CLIENT_DISCONNECTED: '调用方断开',
   STREAM_INTERRUPTED: '流式输出中断',
+  STREAM_EMPTY: '流式响应没有内容',
+  STREAM_INCOMPLETE: '流式响应未正常结束',
 }
 
 export function errorCause(code: string | null | undefined): string {

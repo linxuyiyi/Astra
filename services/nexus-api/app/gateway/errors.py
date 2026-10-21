@@ -17,6 +17,7 @@ KEY_DISABLED = "KEY_DISABLED"
 KEY_EXPIRED = "KEY_EXPIRED"
 KEY_FORBIDDEN = "KEY_FORBIDDEN"
 KEY_CONCURRENCY_EXCEEDED = "KEY_CONCURRENCY_EXCEEDED"
+KEY_QUOTA_EXCEEDED = "KEY_QUOTA_EXCEEDED"
 # 路由 / 调度
 INVALID_REQUEST = "INVALID_REQUEST"
 PAYLOAD_TOO_LARGE = "PAYLOAD_TOO_LARGE"
@@ -35,6 +36,9 @@ UPSTREAM_ERROR = "UPSTREAM_ERROR"
 # 调用终结
 CLIENT_DISCONNECTED = "CLIENT_DISCONNECTED"
 STREAM_INTERRUPTED = "STREAM_INTERRUPTED"
+# 流式语义不完整：只有结束标记、没有实际内容，或没有终止标记就 EOF。
+STREAM_EMPTY = "STREAM_EMPTY"
+STREAM_INCOMPLETE = "STREAM_INCOMPLETE"
 
 AUTHENTICATION_ERROR = "authentication_error"
 PERMISSION_ERROR = "permission_error"
@@ -91,6 +95,13 @@ def key_concurrency_exceeded() -> GatewayDataPlaneError:
     )
 
 
+def key_quota_exceeded(period: str = "hour") -> GatewayDataPlaneError:
+    window = "小时" if period == "hour" else "日"
+    return GatewayDataPlaneError(
+        KEY_QUOTA_EXCEEDED, f"Gateway Key {window}额度已达上限", 429, RATE_LIMIT_ERROR
+    )
+
+
 def invalid_request(message: str) -> GatewayDataPlaneError:
     return GatewayDataPlaneError(INVALID_REQUEST, message, 400, INVALID_REQUEST_ERROR)
 
@@ -113,6 +124,10 @@ def no_eligible_node(reason: str, detail: dict[str, object] | None = None) -> Ga
     return GatewayDataPlaneError(
         reason, "资源池没有可调度的节点", 503, API_ERROR, detail=detail
     )
+
+
+def upstream_protocol_error(message: str = "上游流式响应不符合 SSE 约定") -> GatewayDataPlaneError:
+    return GatewayDataPlaneError(UPSTREAM_PROTOCOL_ERROR, message, 502, API_ERROR)
 
 
 def upstream_error(code: str, message: str, status_code: int) -> GatewayDataPlaneError:

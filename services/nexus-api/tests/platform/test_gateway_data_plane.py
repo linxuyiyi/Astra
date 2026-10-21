@@ -100,6 +100,8 @@ class MockUpstream:
             "completion_tokens": 2,
             "total_tokens": 7,
         }
+        self.stream_content_type = "text/event-stream"
+        self.stream_terminal = True
         # 模拟 httpx 已解压、但响应头仍写着 gzip 的上游。
         self.decoded_gzip = False
 
@@ -108,7 +110,8 @@ class MockUpstream:
         if self.stream_usage is not None:
             tail = {"id": "c", "choices": [{"delta": {}}], "usage": self.stream_usage}
             chunks.append(f"data: {json.dumps(tail)}\n\n".encode())
-        chunks.append(b"data: [DONE]\n\n")
+        if self.stream_terminal:
+            chunks.append(b"data: [DONE]\n\n")
         return chunks
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -125,7 +128,7 @@ class MockUpstream:
             return httpx.Response(
                 self.response_status,
                 content=self._sse(),
-                headers={"content-type": "text/event-stream"},
+                headers={"content-type": self.stream_content_type},
             )
         body: dict[str, Any] = {"choices": [{"message": {"role": "assistant", "content": "hi"}}]}
         if self.include_usage:
@@ -2182,3 +2185,296 @@ def test_transparent_model_routing_a_to_b():
 
     asyncio.run(check_db())
 
+
+
+def test_stream_with_only_the_terminal_marker_is_a_failure(cipher, upstream):
+    upstream.stream_chunks = [b"data: [DONE]\n\n"]
+    upstream.stream_usage = None
+    kv = build_plane(upstream, config=build_config(cipher), cipher=cipher)
+    with TestClient(create_gateway_app(kv.plane)) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": MODEL, "messages": [], "stream": True},
+            headers=auth_headers(),
+        )
+        assert response.status_code == 200
+        assert "[DONE]" in response.text
+
+    latest = asyncio.run(_fetch_logs())[0]
+    assert latest.streaming is True
+    assert latest.error_code == "STREAM_EMPTY"
+    assert latest.stream_interrupted is True
+
+
+def test_stream_without_a_terminal_marker_is_incomplete(cipher, upstream):
+    upstream.stream_chunks = [
+        b'data: {"id":"c","choices":[{"delta":{"content":"he"}}]}\n\n',
+    ]
+    upstream.stream_usage = None
+    upstream.stream_terminal = False
+    kv = build_plane(upstream, config=build_config(cipher), cipher=cipher)
+    with TestClient(create_gateway_app(kv.plane)) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": MODEL, "messages": [], "stream": True},
+            headers=auth_headers(),
+        )
+        assert response.status_code == 200
+
+    latest = asyncio.run(_fetch_logs())[0]
+    assert latest.error_code == "STREAM_INCOMPLETE"
+    assert latest.stream_interrupted is True
+
+
+def test_stream_with_wrong_content_type_is_a_protocol_error(cipher, upstream):
+    upstream.stream_content_type = "application/json"
+    kv = build_plane(upstream, config=build_config(cipher), cipher=cipher)
+    with TestClient(create_gateway_app(kv.plane)) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": MODEL, "messages": [], "stream": True},
+            headers=auth_headers(),
+        )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "UPSTREAM_PROTOCOL_ERROR"
+    assert len(upstream.requests) == 1
+    latest = asyncio.run(_fetch_logs())[0]
+    assert latest.error_code == "UPSTREAM_PROTOCOL_ERROR"
+
+
+def test_stream_model_alias_is_rewritten_across_chunk_boundaries(cipher, upstream):
+    frame = json.dumps(
+        {
+            "id": "c",
+            "model": "real-model",
+            "choices": [{"delta": {"content": "你好"}}],
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    data = b"data: " + frame + b"\n\n"
+    split = data.index("你".encode()) + 1  # 切在多字节字符中间
+    upstream.stream_chunks = [data[:split], data[split:], b"data: [DONE]\n\n"]
+    upstream.stream_usage = {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}
+    config = GatewayConfig.from_snapshot(
+        _snapshot(
+            nodes=[node_dict(NODE_A, host="node-a.test", cipher=cipher, models=("real-model",))],
+            routes=[
+                {
+                    "id": "gr_alias",
+                    "model": MODEL,
+                    "pool_id": POOL_ID,
+                    "enabled": True,
+                    "weight": 1,
+                    "target_model": "real-model",
+                }
+            ],
+            keys=[key_dict()],
+        )
+    )
+    kv = build_plane(upstream, config=config, cipher=cipher)
+    with TestClient(create_gateway_app(kv.plane)) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": MODEL, "messages": [], "stream": True},
+            headers=auth_headers(),
+        )
+        assert response.status_code == 200
+        body = response.text
+
+    frames = [
+        json.loads(line[len("data: ") :])
+        for line in body.splitlines()
+        if line.startswith("data: ") and "[DONE]" not in line
+    ]
+    modelled = [item for item in frames if "model" in item]
+    assert modelled and all(item["model"] == MODEL for item in modelled)
+    assert "real-model" not in body
+    assert "你好" in body
+
+    latest = asyncio.run(_fetch_logs())[0]
+    assert latest.actual_model == "real-model"
+    assert latest.input_tokens == 1 and latest.total_tokens == 3
+    assert latest.error_code is None
+
+
+def test_stream_model_rewriter_is_incremental():
+    from app.gateway.server import StreamModelRewriter
+
+    rewriter = StreamModelRewriter("client-model")
+    frame = b'data: {"model":"upstream","choices":[]}\n'
+    assert rewriter.feed(frame[:10]) == b""
+    rewritten = rewriter.feed(frame[10:])
+    assert json.loads(rewritten[len(b"data: ") :].decode())["model"] == "client-model"
+    assert rewriter.feed(b"data: [DONE]\n") == b"data: [DONE]\n"
+    assert rewriter.feed(b": ping\n") == b": ping\n"
+    rewriter.feed(b"partial")
+    assert rewriter.flush() == b"partial"
+
+
+@pytest.mark.parametrize("period", ["hour", "day"])
+def test_key_quota_blocks_before_any_upstream_request(cipher, upstream, period):
+    limit_field = "hourly_token_limit" if period == "hour" else "daily_token_limit"
+    config = build_config(cipher, key=key_dict(**{limit_field: 10}))
+    kv = build_plane(upstream, config=config, cipher=cipher)
+    buckets = usage_buckets(utcnow(), "Asia/Shanghai")
+    asyncio.run(
+        kv.store.record_usage(
+            SCOPE_KEY, "gk_test", period, buckets[period], total_tokens=10, known=True
+        )
+    )
+    with TestClient(create_gateway_app(kv.plane)) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": MODEL, "messages": []},
+            headers=auth_headers(),
+        )
+
+    assert response.status_code == 429
+    assert response.json()["error"]["code"] == "KEY_QUOTA_EXCEEDED"
+    assert upstream.requests == []
+
+
+def test_alert_and_record_policies_never_change_weight_or_block(cipher, upstream):
+    from app.gateway.runtime import TokenUsage
+    from app.gateway.scheduler import effective_weight, quota_state
+
+    assert quota_state(79, 100, "ALERT") == "OK"
+    assert quota_state(100, 100, "ALERT") == "ALERT"
+    assert quota_state(120, 100, "RECORD") == "RECORD"
+    assert quota_state(100, 100, "STOP") == "STOP"
+
+    node = build_config(
+        cipher,
+        nodes=[node_dict(NODE_A, host="node-a.test", cipher=cipher, quota_policy="ALERT")],
+    ).nodes[NODE_A]
+    base = effective_weight(node, TokenUsage(), TokenUsage(), health_state="HEALTHY")
+    for used in (79, 100, 120):
+        usage = TokenUsage(total_tokens=used)
+        assert effective_weight(node, usage, usage, health_state="HEALTHY") == base
+
+    # ALERT 达限仍可服务，且上游只收到一次请求。
+    kv = build_plane(
+        upstream,
+        config=build_config(
+            cipher,
+            nodes=[
+                node_dict(
+                    NODE_A, host="node-a.test", cipher=cipher, hourly_token_limit=10,
+                    quota_policy="ALERT",
+                )
+            ],
+        ),
+        cipher=cipher,
+    )
+    buckets = usage_buckets(utcnow(), "Asia/Shanghai")
+    asyncio.run(
+        kv.store.record_usage(
+            SCOPE_NODE, NODE_A, "hour", buckets["hour"], total_tokens=12, known=True
+        )
+    )
+    with TestClient(create_gateway_app(kv.plane)) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": MODEL, "messages": []},
+            headers=auth_headers(),
+        )
+    assert response.status_code == 200
+    assert len(upstream.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_body_yields_first_chunk_before_upstream_completes(cipher):
+    """整流缓冲会破坏首字延迟与取消；生成器必须在结束标记前先产出第一块。"""
+
+    import threading
+
+    gate = threading.Event()
+
+    class GatedStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'data: {"id":"c","choices":[{"delta":{"content":"a"}}]}\n\n'
+            await asyncio.to_thread(gate.wait)
+            yield b"data: [DONE]\n\n"
+
+        async def aclose(self) -> None:
+            return None
+
+    config = build_config(cipher)
+    kv = build_plane(
+        upstream=MockUpstream(), config=config, cipher=cipher, seed_snapshot_health=False
+    )
+    record = RequestRecord(
+        id=uuid4().hex,
+        started_at=utcnow(),
+        gateway_instance_id="test-instance",
+        gateway_instance_started_at=utcnow(),
+    )
+    record.streaming = True
+    key = next(iter(config.keys.values()))
+    upstream_response = httpx.Response(
+        200, stream=GatedStream(), headers={"content-type": "text/event-stream"}
+    )
+    record.status_code = 200
+    stream = kv.plane._stream_body(
+        upstream_response,
+        record,
+        key,
+        NODE_A,
+        config.nodes[NODE_A].runtime_scope,
+        None,
+        None,
+        [],
+    )
+    first = await asyncio.wait_for(stream.__anext__(), timeout=2)
+    assert b'"a"' in first
+    gate.set()
+    rest = b"".join([chunk async for chunk in stream])
+    assert b"[DONE]" in rest
+
+
+@pytest.mark.asyncio
+async def test_stream_body_records_an_upstream_error_after_content(cipher):
+    """上游写到一半抛错：日志必须是 STREAM_INTERRUPTED，且节点被动失败。"""
+
+    class BrokenStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'data: {"id":"c","choices":[{"delta":{"content":"a"}}]}\n\n'
+            raise httpx.ReadError("upstream dropped")
+
+        async def aclose(self) -> None:
+            return None
+
+    config = build_config(cipher)
+    kv = build_plane(
+        upstream=MockUpstream(), config=config, cipher=cipher, seed_snapshot_health=False
+    )
+    record = RequestRecord(
+        id=uuid4().hex,
+        started_at=utcnow(),
+        gateway_instance_id="test-instance",
+        gateway_instance_started_at=utcnow(),
+    )
+    record.streaming = True
+    record.status_code = 200
+    key = next(iter(config.keys.values()))
+    upstream_response = httpx.Response(
+        200, stream=BrokenStream(), headers={"content-type": "text/event-stream"}
+    )
+    stream = kv.plane._stream_body(
+        upstream_response,
+        record,
+        key,
+        NODE_A,
+        config.nodes[NODE_A].runtime_scope,
+        None,
+        None,
+        [],
+    )
+    with pytest.raises(httpx.ReadError):
+        async for _ in stream:
+            pass
+
+    latest = (await _fetch_logs())[0]
+    assert latest.error_code == "STREAM_INTERRUPTED"
+    assert latest.stream_interrupted is True

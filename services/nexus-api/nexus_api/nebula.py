@@ -2,11 +2,11 @@
 
 事实源分工：
 
-* 数字员工目录、私聊会话、员工间职责请求在 ``nexus_api`` 的 sqlite 表；
+* 数字员工目录、私聊会话、员工间职责请求由 ``nexus_api`` 查询共享 SQL 数据库；
 * Agent Worker、任务、执行环境、WorkerInstance 在 ``app`` 的 SQLAlchemy 数据层。
 
 这里不复制任何业务状态，也不写业务表。两套访问层按 ID 批量读取后在本模块组装，
-不把 sqlite3 与 SQLAlchemy 拼成一条跨层 JOIN，也不把多次读取包装成事务。
+保持模块查询边界，也不把两次独立连接读取包装成一个一致快照事务。
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import sqlite3
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -22,6 +21,8 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy import text as sql_text
+from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -37,7 +38,7 @@ from app.models import (
 )
 
 from .db import connect
-from .main import data_dir, require_owner
+from .main import require_owner
 
 logger = logging.getLogger("nexus.nebula")
 
@@ -107,9 +108,9 @@ def _day_window(now: datetime) -> tuple[datetime, datetime, str]:
     timezone = ZoneInfo(timezone_name)
     local_today = now.astimezone(timezone).date()
     start = datetime.combine(local_today, datetime.min.time(), tzinfo=timezone).astimezone(UTC)
-    end = datetime.combine(
-        local_today + timedelta(days=1), datetime.min.time(), tzinfo=timezone
-    ).astimezone(UTC)
+    end = datetime.combine(local_today + timedelta(days=1), datetime.min.time(), tzinfo=timezone).astimezone(
+        UTC
+    )
     return start, end, timezone_name
 
 
@@ -132,15 +133,21 @@ def _unique(values: list[str]) -> list[str]:
 # 员工目录与 Worker 事实
 
 
-def _employee_rows(connection: sqlite3.Connection) -> list[dict[str, Any]]:
-    rows = connection.execute(
-        """
-        SELECT id, name, domain, description, avatar, enabled,
-               agentscope_agent_id, created_at, updated_at
-        FROM t_nexus_employees
-        ORDER BY created_at, id
-        """
-    ).fetchall()
+def _employee_rows(connection: Connection) -> list[dict[str, Any]]:
+    rows = (
+        connection.execute(
+            sql_text(
+                """
+                SELECT id, name, domain, description, avatar, enabled,
+                       agentscope_agent_id, created_at, updated_at
+                FROM t_nexus_employees
+                ORDER BY created_at, id
+                """
+            )
+        )
+        .mappings()
+        .fetchall()
+    )
     return [
         {
             "id": row["id"],
@@ -291,9 +298,7 @@ def _worker_dto(
         "taskCount": int(counts.get("running", 0)) + int(counts.get("waiting", 0)),
         "runningTaskCount": int(counts.get("running", 0)),
         "waitingTaskCount": int(counts.get("waiting", 0)),
-        "lastHeartbeatAt": _iso(
-            (instance.last_heartbeat_at if instance else None) or worker.last_heartbeat
-        ),
+        "lastHeartbeatAt": _iso((instance.last_heartbeat_at if instance else None) or worker.last_heartbeat),
     }
 
 
@@ -326,9 +331,7 @@ def _resolve_task_owner(
     return owner, conflicts
 
 
-async def _load_session_statuses(
-    session: AsyncSession, tasks: list[Task]
-) -> dict[str, str]:
+async def _load_session_statuses(session: AsyncSession, tasks: list[Task]) -> dict[str, str]:
     ids = [task.current_session_id for task in tasks if task.current_session_id]
     if not ids:
         return {}
@@ -384,9 +387,7 @@ def _conflict(code: str, entity_type: str, entity_id: str, message: str) -> dict
     return {"code": code, "entityType": entity_type, "entityId": entity_id, "message": message}
 
 
-def _add_conflict(
-    conflicts: list[dict[str, str]], seen: set[tuple[str, str]], item: dict[str, str]
-) -> None:
+def _add_conflict(conflicts: list[dict[str, str]], seen: set[tuple[str, str]], item: dict[str, str]) -> None:
     key = (item["code"], item["entityId"])
     if key in seen or len(conflicts) >= CONFLICT_LIMIT:
         return
@@ -398,27 +399,33 @@ def _add_conflict(
 # 职责请求事实
 
 
-def _scope_reference(
-    connection: sqlite3.Connection, scope: str, owner_id: str | None
-) -> dict[str, Any]:
+def _scope_reference(connection: Connection, scope: str, owner_id: str | None) -> dict[str, Any]:
     if scope.startswith("private:"):
         conversation_id = scope.removeprefix("private:")
-        row = connection.execute(
-            "SELECT owner_id FROM t_nexus_conversations WHERE id = ?", (conversation_id,)
-        ).fetchone()
+        row = (
+            connection.execute(
+                sql_text("SELECT owner_id FROM t_nexus_conversations WHERE id = :p0"), {"p0": conversation_id}
+            )
+            .mappings()
+            .fetchone()
+        )
         if row is not None and owner_id and row["owner_id"] == owner_id:
             return {"kind": "conversation", "id": conversation_id}
         return {"kind": "private", "id": None}
     if scope.startswith("mailbox:"):
         return {"kind": "mailbox", "id": scope.removeprefix("mailbox:")}
-    row = connection.execute("SELECT id FROM t_nexus_channels WHERE id = ?", (scope,)).fetchone()
+    row = (
+        connection.execute(sql_text("SELECT id FROM t_nexus_channels WHERE id = :p0"), {"p0": scope})
+        .mappings()
+        .fetchone()
+    )
     if row is not None:
         return {"kind": "channel", "id": scope}
     return {"kind": "unknown", "id": None}
 
 
 def _load_collaborations(
-    connection: sqlite3.Connection,
+    connection: Connection,
     employee_rows: list[dict[str, Any]],
     *,
     now: datetime,
@@ -436,13 +443,19 @@ def _load_collaborations(
             agent_map[agent_id] = row["id"]
     for agent_id in ambiguous:
         agent_map.pop(agent_id, None)
-    rows = connection.execute(
-        """
-        SELECT id, scope, sender_agent_id, target_agent_id, message_key, created_at
-        FROM t_nexus_peer_deliveries
-        ORDER BY created_at, id
-        """
-    ).fetchall()
+    rows = (
+        connection.execute(
+            sql_text(
+                """
+                SELECT id, scope, sender_agent_id, target_agent_id, message_key, created_at
+                FROM t_nexus_peer_deliveries
+                ORDER BY created_at, id
+                """
+            )
+        )
+        .mappings()
+        .fetchall()
+    )
 
     # 以 (scope, sender, target, message_key) 去重：表里的重复检查是写入时的
     # 契约，聚合层再保证一次，避免历史重复行把协作强度放大。
@@ -550,7 +563,7 @@ def _load_collaborations(
 
 async def _collect_core(
     session: AsyncSession,
-    connection: sqlite3.Connection,
+    connection: Connection,
     *,
     now: datetime,
     owner_id: str | None = None,
@@ -723,9 +736,7 @@ async def _collect_core(
                 else:
                     unassigned_counts["completedToday"] += int(count)
 
-            queued_total = await session.scalar(
-                select(func.count(Task.id)).where(Task.status == PENDING)
-            )
+            queued_total = await session.scalar(select(func.count(Task.id)).where(Task.status == PENDING))
             active_total = await session.scalar(
                 select(func.count(Task.id)).where(Task.status.in_((RUNNING, WAITING)))
             )
@@ -896,9 +907,7 @@ async def _collect_core(
             continue
         attention_by_id[task.id] = dto
 
-    unassigned_tasks = sum(
-        unassigned_counts[field] for field in ("running", "queued", "waiting", "failed")
-    )
+    unassigned_tasks = sum(unassigned_counts[field] for field in ("running", "queued", "waiting", "failed"))
 
     # 同一员工—Worker 的多个任务聚合成一条执行光路；冲突任务不画线。
     edges: dict[tuple[str, str], dict[str, Any]] = {}
@@ -957,12 +966,11 @@ async def _collect_core(
                     "code": "COLLABORATION_UNMAPPED",
                     "message": "部分职责请求无法映射到当前员工目录，未绘制协作线",
                     "count": (
-                        collaboration_warning["unmappedRequests"]
-                        + collaboration_warning["selfRequests"]
+                        collaboration_warning["unmappedRequests"] + collaboration_warning["selfRequests"]
                     ),
                 }
             )
-    except sqlite3.Error:
+    except SQLAlchemyError:
         logger.exception("Nebula 无法读取职责请求事实")
         degraded.append("collaborations")
 
@@ -973,12 +981,10 @@ async def _collect_core(
         "workersOffline": sum(1 for item in worker_dtos if item["health"] in ("offline", "error")),
         "tasksRunning": sum(item["counts"]["running"] for item in employee_dtos)
         + unassigned_counts["running"],
-        "tasksQueued": sum(item["counts"]["queued"] for item in employee_dtos)
-        + unassigned_counts["queued"],
+        "tasksQueued": sum(item["counts"]["queued"] for item in employee_dtos) + unassigned_counts["queued"],
         "tasksWaiting": sum(item["counts"]["waiting"] for item in employee_dtos)
         + unassigned_counts["waiting"],
-        "tasksFailed": sum(item["counts"]["failed"] for item in employee_dtos)
-        + unassigned_counts["failed"],
+        "tasksFailed": sum(item["counts"]["failed"] for item in employee_dtos) + unassigned_counts["failed"],
         "completedToday": sum(item["counts"]["completedToday"] for item in employee_dtos)
         + unassigned_counts["completedToday"],
     }
@@ -1016,8 +1022,7 @@ def _snapshot_version(core: dict[str, Any], watermarks: list[datetime], now: dat
     digest_source = {
         "totals": core["totals"],
         "employees": [
-            (item["id"], item["enabled"], item["counts"], item["workerIds"])
-            for item in core["employees"]
+            (item["id"], item["enabled"], item["counts"], item["workerIds"]) for item in core["employees"]
         ],
         "workers": [
             (item["id"], item["digitalEmployeeId"], item["health"], item["occupancy"])
@@ -1079,7 +1084,7 @@ def _employee_watermarks(employee_rows: list[dict[str, Any]]) -> list[datetime]:
 
 async def collect_snapshot(
     session: AsyncSession,
-    connection: sqlite3.Connection,
+    connection: Connection,
     *,
     now: datetime | None = None,
     owner_id: str | None = None,
@@ -1091,8 +1096,12 @@ async def collect_snapshot(
         watermarks.extend(await _task_watermarks(session))
     except SQLAlchemyError:
         logger.exception("Nebula 无法读取快照水位")
-    peer = connection.execute("SELECT MAX(created_at) FROM t_nexus_peer_deliveries").fetchone()
-    parsed_peer = _parse_iso(peer[0] if peer else None)
+    peer = (
+        connection.execute(sql_text("SELECT MAX(created_at) AS watermark FROM t_nexus_peer_deliveries"))
+        .mappings()
+        .fetchone()
+    )
+    parsed_peer = _parse_iso(peer["watermark"] if peer else None)
     if parsed_peer is not None:
         watermarks.append(parsed_peer)
     return {
@@ -1116,7 +1125,7 @@ async def collect_snapshot(
 
 async def collect_employee_detail(
     session: AsyncSession,
-    connection: sqlite3.Connection,
+    connection: Connection,
     employee_id: str,
     *,
     now: datetime | None = None,
@@ -1150,7 +1159,7 @@ async def collect_employee_detail(
 
 async def collect_task_detail(
     session: AsyncSession,
-    connection: sqlite3.Connection,
+    connection: Connection,
     task_id: str,
     *,
     now: datetime | None = None,
@@ -1164,11 +1173,7 @@ async def collect_task_detail(
     employee_names = {row["id"]: row["name"] for row in employee_rows}
     workers, _instances = await _load_workers(session)
     worker_names = {worker.id: worker.name for worker in workers}
-    worker_owner = {
-        worker.id: worker.digital_employee_id
-        for worker in workers
-        if worker.digital_employee_id
-    }
+    worker_owner = {worker.id: worker.digital_employee_id for worker in workers if worker.digital_employee_id}
     owner, codes = _resolve_task_owner(task, employee_ids, worker_owner, set(worker_names))
     session_statuses = await _load_session_statuses(session, [task])
     return {
@@ -1186,7 +1191,7 @@ async def collect_task_detail(
 
 async def collect_employee_tasks(
     session: AsyncSession,
-    connection: sqlite3.Connection,
+    connection: Connection,
     employee_id: str,
     *,
     task_status: str | None = None,
@@ -1202,11 +1207,7 @@ async def collect_employee_tasks(
         raise ValueError("员工不存在")
     workers, _instances = await _load_workers(session)
     worker_names = {worker.id: worker.name for worker in workers}
-    worker_owner = {
-        worker.id: worker.digital_employee_id
-        for worker in workers
-        if worker.digital_employee_id
-    }
+    worker_owner = {worker.id: worker.digital_employee_id for worker in workers if worker.digital_employee_id}
     employee_names = {row["id"]: row["name"] for row in employee_rows}
     owned_ids = sorted(worker_id for worker_id, owner in worker_owner.items() if owner == employee_id)
 
@@ -1233,9 +1234,7 @@ async def collect_employee_tasks(
     rows = (
         (
             await session.execute(
-                base.order_by(Task.updated_at.desc(), Task.id)
-                .offset((page - 1) * page_size)
-                .limit(page_size)
+                base.order_by(Task.updated_at.desc(), Task.id).offset((page - 1) * page_size).limit(page_size)
             )
         )
         .scalars()
@@ -1274,7 +1273,7 @@ async def collect_employee_tasks(
 
 async def collect_link_tasks(
     session: AsyncSession,
-    connection: sqlite3.Connection,
+    connection: Connection,
     worker_id: str,
     *,
     task_status: str | None = None,
@@ -1290,9 +1289,7 @@ async def collect_link_tasks(
     employee_names = {row["id"]: row["name"] for row in employee_rows}
     workers, _instances = await _load_workers(session)
     worker_names = {item.id: item.name for item in workers}
-    worker_owner = {
-        item.id: item.digital_employee_id for item in workers if item.digital_employee_id
-    }
+    worker_owner = {item.id: item.digital_employee_id for item in workers if item.digital_employee_id}
     status_rows = (
         await session.execute(
             select(Task.status, func.count(Task.id))
@@ -1305,20 +1302,12 @@ async def collect_link_tasks(
     if task_status:
         query = query.where(Task.status == task_status)
     rows = (
-        (
-            await session.execute(
-                query.order_by(Task.updated_at.desc(), Task.id).limit(limit)
-            )
-        )
-        .scalars()
-        .all()
+        (await session.execute(query.order_by(Task.updated_at.desc(), Task.id).limit(limit))).scalars().all()
     )
     session_statuses = await _load_session_statuses(session, list(rows))
     items = []
     for task in rows:
-        owner, codes = _resolve_task_owner(
-            task, employee_ids, worker_owner, set(worker_names)
-        )
+        owner, codes = _resolve_task_owner(task, employee_ids, worker_owner, set(worker_names))
         items.append(
             _task_dto(
                 task,
@@ -1341,7 +1330,7 @@ async def collect_link_tasks(
 
 async def collect_collaborations(
     session: AsyncSession,
-    connection: sqlite3.Connection,
+    connection: Connection,
     *,
     from_employee_id: str | None = None,
     to_employee_id: str | None = None,
@@ -1360,21 +1349,12 @@ async def collect_collaborations(
         items = [
             item
             for item in items
-            if {item["fromEmployeeId"], item["toEmployeeId"]}
-            == {from_employee_id, to_employee_id}
+            if {item["fromEmployeeId"], item["toEmployeeId"]} == {from_employee_id, to_employee_id}
         ]
     elif from_employee_id:
-        items = [
-            item
-            for item in items
-            if from_employee_id in (item["fromEmployeeId"], item["toEmployeeId"])
-        ]
+        items = [item for item in items if from_employee_id in (item["fromEmployeeId"], item["toEmployeeId"])]
     elif to_employee_id:
-        items = [
-            item
-            for item in items
-            if to_employee_id in (item["fromEmployeeId"], item["toEmployeeId"])
-        ]
+        items = [item for item in items if to_employee_id in (item["fromEmployeeId"], item["toEmployeeId"])]
     if since is not None:
         if since.tzinfo is None:
             since = since.replace(tzinfo=UTC)
@@ -1396,7 +1376,7 @@ async def collect_collaborations(
 
 
 def chat_database():
-    connection = connect(data_dir() / "nexus.db")
+    connection = connect()
     try:
         yield connection
     finally:
@@ -1419,9 +1399,7 @@ async def nebula_employee(
     owner_id: str = Depends(require_owner),
 ) -> dict[str, Any]:
     try:
-        return await collect_employee_detail(
-            session, connection, employee_id, owner_id=owner_id
-        )
+        return await collect_employee_detail(session, connection, employee_id, owner_id=owner_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -1491,9 +1469,7 @@ async def nebula_link_tasks(
     }:
         raise HTTPException(status_code=422, detail="未知任务状态")
     try:
-        return await collect_link_tasks(
-            session, connection, worker_id, task_status=task_status, limit=limit
-        )
+        return await collect_link_tasks(session, connection, worker_id, task_status=task_status, limit=limit)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

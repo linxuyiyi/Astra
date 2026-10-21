@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nexus v1.4.7 one-click installer. Idempotent; safe to re-run.
+# Nexus v1.4.8 fresh-database installer. Idempotent; safe to re-run.
 # shellcheck disable=SC1090
 # Usage: ops/deploy/install_nexus.sh [--env-file F] [--preflight-only] [--skip-web-build]
 #        [--with-llm-wiki] [--remote-worker HOST] [--no-systemd] [--yes]
@@ -47,7 +47,7 @@ load_env_file() {
 load_env_file "$SCRIPT_DIR/../env/.env"
 
 : "${NEXUS_REPO_URL:=https://github.com/linxuyiyi/Astra}"
-: "${NEXUS_BRANCH:=codex/nexus-v1.4.7}"
+: "${NEXUS_BRANCH:=v1.4.8}"
 : "${NEXUS_ROOT:=/opt/nexus}"
 : "${NEXUS_STATE_DIR:=/var/lib/nexus}"
 : "${NEXUS_BIND_HOST:=127.0.0.1}"
@@ -71,6 +71,8 @@ preflight() {
   ok()  { printf '  \033[32m✓\033[0m %s\n' "$*"; }
   note(){ printf '  \033[33m!\033[0m %s\n' "$*"; }
   log "预检"
+  [ -n "${ASTRA_DATABASE_URL:-}" ] && ok "Nexus SQL 地址已配置" || bad "缺少 ASTRA_DATABASE_URL（公司 MySQL 8.0.36 的空库）"
+  [ -n "${AGENTSCOPE_SQL_URL:-}" ] && ok "AgentScope SQL 地址已配置" || bad "缺少独立数据库 AGENTSCOPE_SQL_URL"
   [ "$(uname -s)" = Linux ] && ok "OS Linux $(. /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-}")" || bad "仅支持 Linux"
   x="$(uname -m)"; case "$x" in x86_64|aarch64) ok "arch $x";; *) bad "不支持的架构 $x";; esac
   x="$(ldd --version 2>&1 | awk 'NR==1{print $NF}')"; [[ "$x" =~ ^[0-9]+\.[0-9]+$ ]] || x=0
@@ -177,6 +179,11 @@ step_deps() {
 step_secrets() {
   log "密钥（不存在才生成，保存在 $SECRETS，0600）"
   local v
+  # shell-quote URL query parameters and encoded credentials for later sourcing.
+  printf -v v '%q' "$ASTRA_DATABASE_URL"
+  upsert_kv "$SECRETS" ASTRA_DATABASE_URL "$v"
+  printf -v v '%q' "$AGENTSCOPE_SQL_URL"
+  upsert_kv "$SECRETS" AGENTSCOPE_SQL_URL "$v"
   v="${ASTRA_GATEWAY_MASTER_KEY:-$(get_kv "$SECRETS" ASTRA_GATEWAY_MASTER_KEY)}"
   [ -n "$v" ] || v="$("$NEXUS_ROOT/services/nexus-api/.venv/bin/python" -c 'from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())')"
   upsert_kv "$SECRETS" ASTRA_GATEWAY_MASTER_KEY "$v"
@@ -251,8 +258,10 @@ JSON
 }
 
 step_migrate() {
-  log "数据库迁移（alembic upgrade head）"
+  log "Nexus 全新数据库初始化（0001_init）"
   (set -a; . "$RUNENV"; . "$SECRETS"; set +a; cd "$NEXUS_ROOT/services/nexus-api" && .venv/bin/python -m alembic upgrade head >/dev/null)
+  log "AgentScope 官方 SQL 初始化（独立数据库）"
+  (set -a; . "$RUNENV"; . "$SECRETS"; set +a; cd "$NEXUS_ROOT/services/agent-service" && .venv-agentscope/bin/python agentscope_sql.py init)
 }
 
 # ---------- services ----------

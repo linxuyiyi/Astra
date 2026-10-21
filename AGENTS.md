@@ -1,8 +1,8 @@
-# Nexus v1.4.7 开发约定
+# Nexus v1.4.8 开发约定
 
 只放所有代码任务都要遵守的规则。OpenSpec 产物规则在 `openspec/config.yaml`，工具与集成细节见 `docs/architecture/OPENSPEC_SUPERPOWERS.md`；按需查阅，不要每轮加载整套教程。
 
-本分支的产品是 **Nexus v1.4.7**。`services/nexus-api` 是唯一的 Nexus 服务：同一进程提供 `/api/v1`（数字员工、私聊、团队、`contact_employee`）、`/api`（任务、Worker、网关控制面、图书馆）、Worker Gateway WebSocket 和前端静态资源。前端在 `services/nexus-api/web`，聊天岛在 `services/nexus-api/chat-island`；OpenCode 网关数据面、Task MCP、Library MCP 与 AgentScope 仍是独立基础设施进程。
+本分支的产品是 **Nexus v1.4.8**。`services/nexus-api` 是唯一的 Nexus 服务：同一进程提供 `/api/v1`（数字员工、私聊、团队、`contact_employee`）、`/api`（任务、Worker、网关控制面、图书馆）、Worker Gateway WebSocket 和前端静态资源。前端在 `services/nexus-api/web`，聊天岛在 `services/nexus-api/chat-island`；OpenCode 网关数据面、Task MCP、Library MCP 与 AgentScope 仍是独立基础设施进程。
 
 ## 项目范围
 
@@ -74,7 +74,8 @@ Task → Run → Employee → Worker → OpenCode Session
 
 - AgentScope 版本以 `services/agent-service/agentscope.version` 为准，当前为 PyPI / GitHub tag `2.0.10`。接口说明以该 tag 的源码为准，见 `docs/architecture/agentscope-2.0.10.md`。
 - 正式部署是独立的 AgentScope Agent Service + Redis。`create_app` 的 workspace 隔离使用 `IsolationPolicy.PER_SESSION`，这样同一员工的多条对话不会被 `(user, agent, workspace)` 折成一条 Session。
-- 只有一个 `services/nexus-api/data/nexus.db`。所有业务表以 `t_nexus_` 开头；任务/Runtime 表由 Alembic 管理，聊天表由 `nexus_api.db` 初始化。新字段用 Alembic 增加，不长期保留双写和猜测式 fallback。旧库通过 `services/nexus-api/scripts/migrate_legacy_databases.py` 一次性合并。
+- 公司从空 MySQL 8.0.36 部署。全部 Nexus 自有业务表使用同一配置数据库，以 `t_nexus_` 开头，由单个 Alembic `0001_init` 初始化；服务启动只校验 schema。开发 SQLite 必须显式配置同一个数据库 URL。不提供历史库升级、导入或双写。后续新字段另加 Alembic revision，不修改已发布 init。
+- AgentScope 使用官方 `AsyncSQLAlchemyStorage` 和独立数据库，通过 `AGENTSCOPE_SQL_URL` 配置，schema 由官方 2.0.10 维护；RedisMessageBus 保留。Nexus 不接管或修改 AgentScope 的内部迁移。
 
 ## 前端表格（Element Plus）
 

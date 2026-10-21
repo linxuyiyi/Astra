@@ -1,4 +1,4 @@
-# AgentScope 2.0.10 的 RedisStorage 与 RedisMessageBus 使用 Redis。
+# AgentScope 2.0.10 使用官方 SQL 存储；RedisMessageBus 继续使用 Redis。
 # 这里只启动 Redis。Agent Service 由 agent_service.py 调用官方包，不在镜像里 fork。
 services:
   redis:

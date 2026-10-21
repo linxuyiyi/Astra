@@ -1,4 +1,6 @@
 # 与 agentscope.version 同一官方发行版。extras 来自该包的 pyproject，不是分叉。
 # 知识库需要 extras 里的 vdb-qdrant。嵌入模型在创建知识库时指定。
 # sentence-transformers 仍只给冒烟脚本，见 requirements-embedding.txt。
-agentscope[service,storage-redis,model-ollama,vdb-qdrant]==2.0.10
+agentscope[service,storage-redis,storage-sql,model-ollama,vdb-qdrant]==2.0.10
+asyncmy>=0.2.9,<1
+aiosqlite>=0.20,<1

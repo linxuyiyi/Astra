@@ -11,6 +11,7 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text as sql_text
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.groups import HumanEvents, chat_inputs, merge_timeline, messages_since
@@ -336,10 +337,14 @@ def test_channel_edit_keeps_the_cursor_speakers_and_attachments(tmp_path, monkey
         cursors = {
             row["employee_id"]: row["last_delivered_message_id"]
             for row in connection.execute(
-                "SELECT employee_id, last_delivered_message_id "
-                "FROM t_nexus_channel_members WHERE channel_id = ?",
-                (channel["id"],),
-            )
+                sql_text(
+                    """
+                    SELECT employee_id, last_delivered_message_id FROM t_nexus_channel_members
+                    WHERE channel_id = :p0
+                    """
+                ),
+                {"p0": channel["id"]},
+            ).mappings()
         }
         connection.close()
         assert cursors[star["id"]] == asked.json()["message"]["id"]
@@ -825,12 +830,10 @@ def test_channel_message_event_carries_native_message_and_new_sessions(tmp_path,
         client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(
-                transport=httpx.MockTransport(handler), base_url="http://agentscope.test"
-            ),
+            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
         )
-        client.app.state.human_events.publish = (
-            lambda channel_id, sender, payload: published.append(payload) or 0
+        client.app.state.human_events.publish = lambda channel_id, sender, payload: (
+            published.append(payload) or 0
         )
         employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
         channel = client.post(
@@ -852,9 +855,7 @@ def test_channel_message_event_carries_native_message_and_new_sessions(tmp_path,
     event = published[-1]
     assert event["id"] == sent.json()["message"]["id"]
     assert event["speaker"] == "u1"
-    assert event["sessions"] == [
-        {"employee_id": employee["id"], "session_id": f"session-{channel['name']}"}
-    ]
+    assert event["sessions"] == [{"employee_id": employee["id"], "session_id": f"session-{channel['name']}"}]
     assert event["message"]["content"][0] == {"type": "text", "text": "@星河 看图"}
     assert event["message"]["content"][1]["source"]["url"] == f"/api/v1/attachments/{uploaded['id']}"
 
@@ -883,12 +884,10 @@ def test_channel_record_conflict_still_broadcasts_the_human_message(tmp_path, mo
         client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(
-                transport=httpx.MockTransport(handler), base_url="http://agentscope.test"
-            ),
+            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
         )
-        client.app.state.human_events.publish = (
-            lambda channel_id, sender, payload: published.append(payload) or 0
+        client.app.state.human_events.publish = lambda channel_id, sender, payload: (
+            published.append(payload) or 0
         )
         employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
         channel = client.post(

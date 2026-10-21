@@ -3,7 +3,7 @@ import asyncio
 from celery import Celery
 
 from app.config.settings import get_settings
-from app.database import init_database, worker_session
+from app.database import validate_database, worker_session
 from app.runtime.dispatcher import Dispatcher
 from app.runtime.experience_review.coordinator import process_job, scan_jobs
 from app.runtime.heartbeat import heartbeat_active_employees, mark_stale_employees_offline
@@ -101,7 +101,7 @@ def scout() -> list[str]:
         return []
 
     async def execute():
-        await init_database()
+        await validate_database()
         async with worker_session() as session:
             return await TaskScout(session, [NrTestSystemSource(settings)]).poll_once()
 
@@ -111,13 +111,14 @@ def scout() -> list[str]:
 @celery.task(name="nexus.dispatch")
 def dispatch() -> str | None:
     async def execute():
-        await init_database()
+        await validate_database()
         async with worker_session() as session:
             task = await Dispatcher(session).claim_once()
             if not task:
                 return None
             if task.employee_id:
                 from app.models import AgentWorker
+
                 employee = await session.get(AgentWorker, task.employee_id)
                 if employee.auto_execute:
                     await RuntimeService(session).start(task.id)

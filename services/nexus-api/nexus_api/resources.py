@@ -21,9 +21,11 @@ from uuid import uuid4
 
 import yaml
 from cryptography.fernet import Fernet, InvalidToken
+from sqlalchemy import text as sql_text
 
 from .agentscope import AgentScopeClient, AgentScopeError
 from .db import employee_from_row, new_id
+from .sql import upsert_record
 
 SKILL_ID_PREFIX = "nsk_"
 MCP_ID_PREFIX = "nmp_"
@@ -95,21 +97,33 @@ def employee_session_ids(connection, employee: dict[str, Any]) -> list[str]:
             found.append(text)
 
     add(employee.get("mailbox_session_id"))
-    for row in connection.execute(
-        "SELECT agentscope_session_id FROM t_nexus_conversations WHERE employee_id = ?",
-        (employee["id"],),
-    ).fetchall():
+    for row in (
+        connection.execute(
+            sql_text("SELECT agentscope_session_id FROM t_nexus_conversations WHERE employee_id = :p0"),
+            {"p0": employee["id"]},
+        )
+        .mappings()
+        .fetchall()
+    ):
         add(row["agentscope_session_id"])
-    for row in connection.execute(
-        "SELECT agentscope_session_id FROM t_nexus_channel_members WHERE employee_id = ?",
-        (employee["id"],),
-    ).fetchall():
+    for row in (
+        connection.execute(
+            sql_text("SELECT agentscope_session_id FROM t_nexus_channel_members WHERE employee_id = :p0"),
+            {"p0": employee["id"]},
+        )
+        .mappings()
+        .fetchall()
+    ):
         add(row["agentscope_session_id"])
     return found
 
 
 def all_employees(connection) -> list[dict[str, Any]]:
-    rows = connection.execute("SELECT * FROM t_nexus_employees ORDER BY created_at").fetchall()
+    rows = (
+        connection.execute(sql_text("SELECT * FROM t_nexus_employees ORDER BY created_at"))
+        .mappings()
+        .fetchall()
+    )
     return [employee_from_row(row) for row in rows]
 
 
@@ -118,10 +132,7 @@ def employees_for(employees: list[dict[str, Any]], field: str, ref: str) -> list
 
 
 def employee_brief(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [
-        {"id": item["id"], "name": item["name"], "enabled": bool(item.get("enabled"))}
-        for item in items
-    ]
+    return [{"id": item["id"], "name": item["name"], "enabled": bool(item.get("enabled"))} for item in items]
 
 
 # ---------------------------------------------------------------------------
@@ -315,14 +326,16 @@ class ResourceStore:
 
     # -- 设置 -------------------------------------------------------------
     def get_setting(self, connection, key: str) -> str:
-        row = connection.execute("SELECT value FROM t_nexus_settings WHERE key = ?", (key,)).fetchone()
+        row = (
+            connection.execute(sql_text("SELECT value FROM t_nexus_settings WHERE `key` = :p0"), {"p0": key})
+            .mappings()
+            .fetchone()
+        )
         return str(row["value"]) if row is not None else ""
 
     def set_setting(self, connection, key: str, value: str) -> None:
-        connection.execute(
-            "INSERT INTO t_nexus_settings (key, value) VALUES (?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            (key, value),
+        upsert_record(
+            connection, "t_nexus_settings", {"key": key, "value": value}, keys=["key"], update=["value"]
         )
         connection.commit()
 
@@ -333,11 +346,19 @@ class ResourceStore:
 
 
 def skill_row(connection, skill_id: str):
-    return connection.execute("SELECT * FROM t_nexus_skills WHERE id = ?", (skill_id,)).fetchone()
+    return (
+        connection.execute(sql_text("SELECT * FROM t_nexus_skills WHERE id = :p0"), {"p0": skill_id})
+        .mappings()
+        .fetchone()
+    )
 
 
 def mcp_row(connection, mcp_id: str):
-    return connection.execute("SELECT * FROM t_nexus_mcps WHERE id = ?", (mcp_id,)).fetchone()
+    return (
+        connection.execute(sql_text("SELECT * FROM t_nexus_mcps WHERE id = :p0"), {"p0": mcp_id})
+        .mappings()
+        .fetchone()
+    )
 
 
 def local_skill_rows(connection, skill_ids: Iterable[str]) -> dict[str, Any]:
@@ -448,13 +469,20 @@ def _sync_summary(
             details.append(f"{employee['name']}：尚未创建会话")
             continue
         for session_id in sessions:
-            row = connection.execute(
-                """
-                SELECT status, detail, revision, updated_at FROM t_nexus_resource_sync
-                WHERE resource_type = ? AND resource_id = ? AND employee_id = ? AND session_id = ?
-                """,
-                (resource_type, resource_id, employee["id"], session_id),
-            ).fetchone()
+            row = (
+                connection.execute(
+                    sql_text(
+                        """
+                        SELECT status, detail, revision, updated_at FROM t_nexus_resource_sync
+                        WHERE resource_type = :p0 AND resource_id = :p1
+                          AND employee_id = :p2 AND session_id = :p3
+                        """
+                    ),
+                    {"p0": resource_type, "p1": resource_id, "p2": employee["id"], "p3": session_id},
+                )
+                .mappings()
+                .fetchone()
+            )
             if row is None:
                 pending += 1
                 details.append(f"{employee['name']}：待同步")
@@ -681,16 +709,21 @@ def _set_sync(
     detail: str,
     revision: int,
 ) -> None:
-    connection.execute(
-        """
-        INSERT INTO t_nexus_resource_sync (
-            resource_type, resource_id, employee_id, session_id, status, detail, revision, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(resource_type, resource_id, employee_id, session_id)
-        DO UPDATE SET status = excluded.status, detail = excluded.detail,
-                      revision = excluded.revision, updated_at = excluded.updated_at
-        """,
-        (resource_type, resource_id, employee_id, session_id, status, detail, revision, utcnow()),
+    upsert_record(
+        connection,
+        "t_nexus_resource_sync",
+        {
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "employee_id": employee_id,
+            "session_id": session_id,
+            "status": status,
+            "detail": detail,
+            "revision": revision,
+            "updated_at": utcnow(),
+        },
+        keys=["resource_type", "resource_id", "employee_id", "session_id"],
+        update=["status", "detail", "revision", "updated_at"],
     )
 
 
@@ -791,11 +824,14 @@ def register_resource_removals(
 
 def _drop_sync(connection, resource_type: str, resource_id: str, employee_id: str, session_id: str) -> None:
     connection.execute(
-        """
-        DELETE FROM t_nexus_resource_sync
-        WHERE resource_type = ? AND resource_id = ? AND employee_id = ? AND session_id = ?
-        """,
-        (resource_type, resource_id, employee_id, session_id),
+        sql_text(
+            """
+            DELETE FROM t_nexus_resource_sync
+            WHERE resource_type = :p0 AND resource_id = :p1
+                          AND employee_id = :p2 AND session_id = :p3
+            """
+        ),
+        {"p0": resource_type, "p1": resource_id, "p2": employee_id, "p3": session_id},
     )
 
 
@@ -808,9 +844,7 @@ def _matching_skill_names(name: str, installed: set[str]) -> list[str]:
 
     if not name:
         return []
-    return sorted(
-        item for item in installed if item == name or item.startswith(f"{name} (")
-    )
+    return sorted(item for item in installed if item == name or item.startswith(f"{name} ("))
 
 
 def _mark_all(
@@ -998,10 +1032,7 @@ async def _sync_one_session(
         item
         for item in desired_skills
         if item == TASK_SKILL_ID
-        or (
-            item in local_skills
-            and bool(local_skills[item]["enabled"])
-        )
+        or (item in local_skills and bool(local_skills[item]["enabled"]))
         or (
             item not in local_skills
             and not is_nexus_skill(item)
@@ -1031,9 +1062,7 @@ async def _sync_one_session(
             return []
         if is_nexus_skill(ref):
             row = local_skills.get(ref)
-            return (
-                _matching_skill_names(str(row["name"]), installed_skills) if row is not None else []
-            )
+            return _matching_skill_names(str(row["name"]), installed_skills) if row is not None else []
         record = external_skills.get(ref)
         if record is None:
             return []
@@ -1078,25 +1107,27 @@ async def _sync_one_session(
 
     # 之前登记、尚未收回的资源（解绑、改名、运行中推迟）。待办在绑定变更的
     # 同一事务里就已提交，这里只解析真实运行时名并执行收回。
-    pending_removal_rows = connection.execute(
-        """
-        SELECT resource_type, resource_id, detail FROM t_nexus_resource_sync
-        WHERE employee_id = ? AND session_id = ? AND status = 'pending_remove'
-        """,
-        (employee["id"], session_id),
-    ).fetchall()
+    pending_removal_rows = (
+        connection.execute(
+            sql_text(
+                """
+                SELECT resource_type, resource_id, detail FROM t_nexus_resource_sync
+                WHERE employee_id = :p0 AND session_id = :p1 AND status = 'pending_remove'
+                """
+            ),
+            {"p0": employee["id"], "p1": session_id},
+        )
+        .mappings()
+        .fetchall()
+    )
     pending_refs = [
-        str(row["resource_id"])[len(RETIRE_PREFIX):]
+        str(row["resource_id"])[len(RETIRE_PREFIX) :]
         if str(row["resource_id"]).startswith(RETIRE_PREFIX)
         else str(row["resource_id"])
         for row in pending_removal_rows
     ]
-    pending_local_skills = local_skill_rows(
-        connection, [ref for ref in pending_refs if is_nexus_skill(ref)]
-    )
-    pending_local_mcps = local_mcp_rows(
-        connection, [ref for ref in pending_refs if is_nexus_mcp(ref)]
-    )
+    pending_local_skills = local_skill_rows(connection, [ref for ref in pending_refs if is_nexus_skill(ref)])
+    pending_local_mcps = local_mcp_rows(connection, [ref for ref in pending_refs if is_nexus_mcp(ref)])
 
     def current_skill_name(ref: str) -> str:
         row = local_skills.get(ref) or pending_local_skills.get(ref)
@@ -1118,11 +1149,7 @@ async def _sync_one_session(
     for row in pending_removal_rows:
         kind = str(row["resource_type"])
         resource_id = str(row["resource_id"])
-        ref = (
-            resource_id[len(RETIRE_PREFIX):]
-            if resource_id.startswith(RETIRE_PREFIX)
-            else resource_id
-        )
+        ref = resource_id[len(RETIRE_PREFIX) :] if resource_id.startswith(RETIRE_PREFIX) else resource_id
         detail = str(row["detail"] or "")
         current = current_skill_name(ref) if kind == "skill" else current_mcp_name(ref)
         name = detail or current
@@ -1467,13 +1494,20 @@ async def _sync_one_session(
 
 
 def _sync_row_state(connection, resource_type: str, resource_id: str, employee_id: str, session_id: str):
-    return connection.execute(
-        """
-        SELECT status, detail, revision FROM t_nexus_resource_sync
-        WHERE resource_type = ? AND resource_id = ? AND employee_id = ? AND session_id = ?
-        """,
-        (resource_type, resource_id, employee_id, session_id),
-    ).fetchone()
+    return (
+        connection.execute(
+            sql_text(
+                """
+                SELECT status, detail, revision FROM t_nexus_resource_sync
+                WHERE resource_type = :p0 AND resource_id = :p1
+                          AND employee_id = :p2 AND session_id = :p3
+                """
+            ),
+            {"p0": resource_type, "p1": resource_id, "p2": employee_id, "p3": session_id},
+        )
+        .mappings()
+        .fetchone()
+    )
 
 
 def _secret_values(rows: Iterable[Any], store: ResourceStore) -> list[str]:
@@ -1514,21 +1548,27 @@ def _headers_for_row(row, store: ResourceStore) -> dict[str, str]:
     return headers
 
 
-
-
 # ---------------------------------------------------------------------------
 # 资源 CRUD
 # ---------------------------------------------------------------------------
 
 
 def _require_skill_name(connection, name: str, exclude: str | None = None) -> None:
-    row = connection.execute("SELECT id FROM t_nexus_skills WHERE name = ?", (name,)).fetchone()
+    row = (
+        connection.execute(sql_text("SELECT id FROM t_nexus_skills WHERE name = :p0"), {"p0": name})
+        .mappings()
+        .fetchone()
+    )
     if row is not None and row["id"] != exclude:
         raise ResourceError(f"技能名称已存在：{name}", 409)
 
 
 def _require_mcp_name(connection, name: str, exclude: str | None = None) -> None:
-    row = connection.execute("SELECT id FROM t_nexus_mcps WHERE name = ?", (name,)).fetchone()
+    row = (
+        connection.execute(sql_text("SELECT id FROM t_nexus_mcps WHERE name = :p0"), {"p0": name})
+        .mappings()
+        .fetchone()
+    )
     if row is not None and row["id"] != exclude:
         raise ResourceError(f"MCP 名称已存在：{name}", 409)
 
@@ -1551,23 +1591,41 @@ def create_skill(
     store.write_version(skill_id, version, files)
     metadata = file_metadata(files)
     connection.execute(
-        """
-        INSERT INTO t_nexus_skills (
-            id, name, description, version, revision, runtime_name, files_json, enabled,
-            created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
-        """,
-        (
-            skill_id, name, description, version, name,
-            json.dumps(metadata, ensure_ascii=False), int(enabled), now, now,
+        sql_text(
+            """
+            INSERT INTO t_nexus_skills (
+                id, name, description, version, revision, runtime_name, files_json, enabled,
+                created_at, updated_at
+            ) VALUES (:p0, :p1, :p2, :p3, 1, :p4, :p5, :p6, :p7, :p8)
+            """
         ),
+        {
+            "p0": skill_id,
+            "p1": name,
+            "p2": description,
+            "p3": version,
+            "p4": name,
+            "p5": json.dumps(metadata, ensure_ascii=False),
+            "p6": int(enabled),
+            "p7": now,
+            "p8": now,
+        },
     )
     connection.execute(
-        """
-        INSERT INTO t_nexus_skill_versions (id, skill_id, version, note, files_json, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (new_id("skv"), skill_id, version, "初始版本", json.dumps(metadata, ensure_ascii=False), now),
+        sql_text(
+            """
+            INSERT INTO t_nexus_skill_versions (id, skill_id, version, note, files_json, created_at)
+            VALUES (:p0, :p1, :p2, :p3, :p4, :p5)
+            """
+        ),
+        {
+            "p0": new_id("skv"),
+            "p1": skill_id,
+            "p2": version,
+            "p3": "初始版本",
+            "p4": json.dumps(metadata, ensure_ascii=False),
+            "p5": now,
+        },
     )
     connection.commit()
     return skill_id
@@ -1590,8 +1648,13 @@ def update_skill(
     now = utcnow()
     if enabled is not None and bool(enabled) != bool(row["enabled"]):
         connection.execute(
-            "UPDATE t_nexus_skills SET enabled = ?, revision = revision + 1, updated_at = ? WHERE id = ?",
-            (int(enabled), now, skill_id),
+            sql_text(
+                """
+                UPDATE t_nexus_skills SET enabled = :p0, revision = revision + 1, updated_at = :p1 WHERE id =
+                :p2
+                """
+            ),
+            {"p0": int(enabled), "p1": now, "p2": skill_id},
         )
         changed = True
     if files is not None:
@@ -1603,23 +1666,39 @@ def update_skill(
         store.write_version(skill_id, version, files)
         metadata = file_metadata(files)
         connection.execute(
-            """
-            UPDATE t_nexus_skills
-            SET name = ?, description = ?, version = ?, revision = revision + 1,
-                runtime_name = ?, files_json = ?, updated_at = ?
-            WHERE id = ?
-            """,
-            (
-                name, description, version, name,
-                json.dumps(metadata, ensure_ascii=False), now, skill_id,
+            sql_text(
+                """
+                UPDATE t_nexus_skills
+                SET name = :p0, description = :p1, version = :p2, revision = revision + 1,
+                    runtime_name = :p3, files_json = :p4, updated_at = :p5
+                WHERE id = :p6
+                """
             ),
+            {
+                "p0": name,
+                "p1": description,
+                "p2": version,
+                "p3": name,
+                "p4": json.dumps(metadata, ensure_ascii=False),
+                "p5": now,
+                "p6": skill_id,
+            },
         )
         connection.execute(
-            """
-            INSERT INTO t_nexus_skill_versions (id, skill_id, version, note, files_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (new_id("skv"), skill_id, version, note, json.dumps(metadata, ensure_ascii=False), now),
+            sql_text(
+                """
+                INSERT INTO t_nexus_skill_versions (id, skill_id, version, note, files_json, created_at)
+                VALUES (:p0, :p1, :p2, :p3, :p4, :p5)
+                """
+            ),
+            {
+                "p0": new_id("skv"),
+                "p1": skill_id,
+                "p2": version,
+                "p3": note,
+                "p4": json.dumps(metadata, ensure_ascii=False),
+                "p5": now,
+            },
         )
         if str(row["name"]) != name:
             _retire_skill_name(connection, skill_id, str(row["name"]))
@@ -1639,10 +1718,14 @@ def restore_skill_version(
     row = skill_row(connection, skill_id)
     if row is None:
         raise ResourceError("技能不存在", 404)
-    source = connection.execute(
-        "SELECT 1 FROM t_nexus_skill_versions WHERE skill_id = ? AND version = ?",
-        (skill_id, version),
-    ).fetchone()
+    source = (
+        connection.execute(
+            sql_text("SELECT 1 FROM t_nexus_skill_versions WHERE skill_id = :p0 AND version = :p1"),
+            {"p0": skill_id, "p1": version},
+        )
+        .mappings()
+        .fetchone()
+    )
     if source is None:
         raise ResourceError("技能版本不存在", 404)
     files = store.read_version_files(skill_id, version)
@@ -1661,21 +1744,31 @@ def delete_skill(connection, store: ResourceStore, skill_id: str) -> None:
     if row is None:
         raise ResourceError("技能不存在", 404)
     connection.execute(
-        "DELETE FROM t_nexus_resource_sync WHERE resource_type = 'skill' AND resource_id = ?",
-        (skill_id,),
+        sql_text("""
+            DELETE FROM t_nexus_resource_sync WHERE resource_type = 'skill' AND resource_id = :p0
+            """),
+        {"p0": skill_id},
     )
-    connection.execute("DELETE FROM t_nexus_skill_versions WHERE skill_id = ?", (skill_id,))
-    connection.execute("DELETE FROM t_nexus_skills WHERE id = ?", (skill_id,))
+    connection.execute(sql_text("DELETE FROM t_nexus_skill_versions WHERE skill_id = :p0"), {"p0": skill_id})
+    connection.execute(sql_text("DELETE FROM t_nexus_skills WHERE id = :p0"), {"p0": skill_id})
     connection.commit()
     store.delete_skill_files(skill_id)
 
 
 def skill_versions(connection, skill_id: str) -> list[dict[str, Any]]:
-    rows = connection.execute(
-        "SELECT version, note, files_json, created_at FROM t_nexus_skill_versions "
-        "WHERE skill_id = ? ORDER BY version DESC",
-        (skill_id,),
-    ).fetchall()
+    rows = (
+        connection.execute(
+            sql_text(
+                """
+                SELECT version, note, files_json, created_at FROM t_nexus_skill_versions WHERE skill_id = :p0
+                ORDER BY version DESC
+                """
+            ),
+            {"p0": skill_id},
+        )
+        .mappings()
+        .fetchall()
+    )
     return [
         {
             "version": int(row["version"]),
@@ -1722,19 +1815,30 @@ def create_mcp(
     mcp_id = new_id("nmp")
     now = utcnow()
     connection.execute(
-        """
-        INSERT INTO t_nexus_mcps (
-            id, name, description, url, transport, headers_json, auth_type, auth_header,
-            token_ciphertext, timeout, runtime_name, enabled, revision, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-        """,
-        (
-            mcp_id, clean_name, str(description or "").strip(), clean_url,
-            MCP_TRANSPORT_HTTP, json.dumps(clean_headers, ensure_ascii=False),
-            clean_auth, str(auth_header or "Authorization").strip() or "Authorization",
-            store.encrypt_secret(token), timeout_value,
-            mcp_runtime_name(clean_name, mcp_id), int(enabled), now, now,
+        sql_text(
+            """
+            INSERT INTO t_nexus_mcps (
+                id, name, description, url, transport, headers_json, auth_type, auth_header,
+                token_ciphertext, timeout, runtime_name, enabled, revision, created_at, updated_at
+            ) VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8, :p9, :p10, :p11, 1, :p12, :p13)
+            """
         ),
+        {
+            "p0": mcp_id,
+            "p1": clean_name,
+            "p2": str(description or "").strip(),
+            "p3": clean_url,
+            "p4": MCP_TRANSPORT_HTTP,
+            "p5": json.dumps(clean_headers, ensure_ascii=False),
+            "p6": clean_auth,
+            "p7": str(auth_header or "Authorization").strip() or "Authorization",
+            "p8": store.encrypt_secret(token),
+            "p9": timeout_value,
+            "p10": mcp_runtime_name(clean_name, mcp_id),
+            "p11": int(enabled),
+            "p12": now,
+            "p13": now,
+        },
     )
     connection.commit()
     return mcp_id
@@ -1779,27 +1883,29 @@ def update_mcp(
     if not 1 <= timeout_value <= 300:
         raise ResourceError("超时时间必须在 1 到 300 秒之间")
     connection.execute(
-        """
-        UPDATE t_nexus_mcps
-        SET name = ?, description = ?, url = ?, transport = ?, headers_json = ?,
-            auth_type = ?, auth_header = ?, token_ciphertext = ?, timeout = ?,
-            enabled = ?, revision = revision + 1, updated_at = ?
-        WHERE id = ?
-        """,
-        (
-            clean_name,
-            str(description).strip() if description is not None else str(row["description"]),
-            clean_url,
-            transport if transport in {MCP_TRANSPORT_HTTP} else MCP_TRANSPORT_HTTP,
-            json.dumps(clean_headers, ensure_ascii=False),
-            clean_auth,
-            clean_header,
-            token_ciphertext,
-            timeout_value,
-            int(enabled if enabled is not None else bool(row["enabled"])),
-            utcnow(),
-            mcp_id,
+        sql_text(
+            """
+            UPDATE t_nexus_mcps
+            SET name = :p0, description = :p1, url = :p2, transport = :p3, headers_json = :p4,
+                auth_type = :p5, auth_header = :p6, token_ciphertext = :p7, timeout = :p8,
+                enabled = :p9, revision = revision + 1, updated_at = :p10
+            WHERE id = :p11
+            """
         ),
+        {
+            "p0": clean_name,
+            "p1": str(description).strip() if description is not None else str(row["description"]),
+            "p2": clean_url,
+            "p3": transport if transport in {MCP_TRANSPORT_HTTP} else MCP_TRANSPORT_HTTP,
+            "p4": json.dumps(clean_headers, ensure_ascii=False),
+            "p5": clean_auth,
+            "p6": clean_header,
+            "p7": token_ciphertext,
+            "p8": timeout_value,
+            "p9": int(enabled if enabled is not None else bool(row["enabled"])),
+            "p10": utcnow(),
+            "p11": mcp_id,
+        },
     )
     connection.commit()
 
@@ -1809,10 +1915,10 @@ def delete_mcp(connection, mcp_id: str) -> None:
     if row is None:
         raise ResourceError("MCP 不存在", 404)
     connection.execute(
-        "DELETE FROM t_nexus_resource_sync WHERE resource_type = 'mcp' AND resource_id = ?",
-        (mcp_id,),
+        sql_text("DELETE FROM t_nexus_resource_sync WHERE resource_type = 'mcp' AND resource_id = :p0"),
+        {"p0": mcp_id},
     )
-    connection.execute("DELETE FROM t_nexus_mcps WHERE id = ?", (mcp_id,))
+    connection.execute(sql_text("DELETE FROM t_nexus_mcps WHERE id = :p0"), {"p0": mcp_id})
     connection.commit()
 
 
@@ -1825,7 +1931,9 @@ async def skill_catalog(
     status: str = "",
 ) -> dict[str, Any]:
     employees = all_employees(connection)
-    local_rows = connection.execute("SELECT * FROM t_nexus_skills ORDER BY created_at").fetchall()
+    local_rows = (
+        connection.execute(sql_text("SELECT * FROM t_nexus_skills ORDER BY created_at")).mappings().fetchall()
+    )
     local_names = {str(row["name"]) for row in local_rows}
     items: list[dict[str, Any]] = []
     external_available = False
@@ -1834,10 +1942,7 @@ async def skill_catalog(
         try:
             records = await client.list_skill_records()
             external_available = True
-            external_by_name = {
-                _skill_record_name(item, str(item.get("id") or ""))
-                for item in records
-            }
+            external_by_name = {_skill_record_name(item, str(item.get("id") or "")) for item in records}
             for record in records:
                 if _skill_record_name(record, "") in local_names:
                     # 同名自建技能已经由 Nexus 管理，不再重复展示 AgentScope 库记录。
@@ -1872,7 +1977,8 @@ async def skill_catalog(
     needle = q.strip().lower()
     if needle:
         items = [
-            item for item in items
+            item
+            for item in items
             if needle in f"{item['name']} {item['description']} {item['source']}".lower()
         ]
     if status == "enabled":
@@ -1897,7 +2003,9 @@ async def mcp_catalog(
     status: str = "",
 ) -> dict[str, Any]:
     employees = all_employees(connection)
-    local_rows = connection.execute("SELECT * FROM t_nexus_mcps ORDER BY created_at").fetchall()
+    local_rows = (
+        connection.execute(sql_text("SELECT * FROM t_nexus_mcps ORDER BY created_at")).mappings().fetchall()
+    )
     local_runtime_names = {str(row["runtime_name"]) for row in local_rows}
     items: list[dict[str, Any]] = []
     external_available = False
@@ -1923,8 +2031,7 @@ async def mcp_catalog(
     needle = q.strip().lower()
     if needle:
         items = [
-            item for item in items
-            if needle in f"{item['name']} {item['description']} {item['url']}".lower()
+            item for item in items if needle in f"{item['name']} {item['description']} {item['url']}".lower()
         ]
     if status == "enabled":
         items = [item for item in items if item["enabled"]]

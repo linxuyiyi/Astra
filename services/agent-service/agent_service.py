@@ -419,7 +419,7 @@ def main() -> None:
     from agentscope.app.message_bus import MessageBusKeys, RedisMessageBus
     from agentscope.app.rag.blob_store import LocalBlobStore
     from agentscope.app.rag.knowledge_base_manager import CollectionPerKbManager
-    from agentscope.app.storage import RedisStorage
+    from agentscope_sql import create_storage, guard_lifespan
     from agentscope.app.workspace_manager import (
         IsolationPolicy,
         LocalWorkspaceManager,
@@ -456,7 +456,7 @@ def main() -> None:
     workspace_dir = os.environ.get("AGENTSCOPE_WORKSPACE_DIR", "services/agent-service/data/workspaces")
     os.makedirs(workspace_dir, exist_ok=True)
 
-    storage = RedisStorage(host=host, port=port, db=redis_db, password=password)
+    storage = create_storage()
     message_bus = RedisMessageBus(host=host, port=port, db=redis_db, password=password)
     workspace_manager = LocalWorkspaceManager(
         basedir=workspace_dir,
@@ -540,6 +540,7 @@ def main() -> None:
         mcp_hubs=[GitHubMCPHub(api_token=os.environ.get("AGENTSCOPE_GITHUB_TOKEN") or None)],
         skill_hubs=[ClawSkillHub(api_token=os.environ.get("AGENTSCOPE_CLAWHUB_TOKEN") or None)],
     )
+    guard_lifespan(app)
     listen_host = os.environ.get("AGENTSCOPE_HOST", "0.0.0.0")
     listen_port = int(os.environ.get("AGENTSCOPE_PORT", "18000"))
 

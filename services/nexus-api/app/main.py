@@ -15,7 +15,7 @@ from app.api.worker_routes import router as worker_router
 from app.api.workspace_routes import router as workspace_router
 from app.bootstrap import bootstrap_categories, bootstrap_employees, bootstrap_knowledge_spaces
 from app.config.settings import get_settings
-from app.database import SessionLocal, init_database
+from app.database import SessionLocal, validate_database
 from app.gateway.security import CredentialError
 from app.gateway.service import GatewayError
 from app.library_service import LibraryError
@@ -29,7 +29,7 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    await init_database()
+    await validate_database()
     async with SessionLocal() as session:
         await bootstrap_categories(session)
         await bootstrap_knowledge_spaces(session)

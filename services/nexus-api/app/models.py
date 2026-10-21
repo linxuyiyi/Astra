@@ -1,11 +1,25 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.mysql import DATETIME, LONGTEXT
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.runtime.presentation import RuntimeProjection
+
+Text = Text().with_variant(LONGTEXT(), "mysql")
 
 
 def utcnow() -> datetime:
@@ -15,7 +29,7 @@ def utcnow() -> datetime:
 class UTCDateTime(TypeDecorator):
     """Persist UTC without relying on a database-specific timezone column."""
 
-    impl = DateTime
+    impl = DateTime().with_variant(DATETIME(fsp=6), "mysql")
     cache_ok = True
 
     def process_bind_param(self, value, _dialect):
@@ -61,9 +75,7 @@ class AgentWorker(RuntimeProjection, Base):
     __tablename__ = "t_nexus_agent_workers"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    digital_employee_id: Mapped[str | None] = mapped_column(
-        String(64), nullable=True, index=True
-    )
+    digital_employee_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
     role: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text, default="")
@@ -130,8 +142,8 @@ class OpenCodeExecutionEnvironment(Base):
     model_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     workspace_root: Mapped[str] = mapped_column(Text, default="./workspaces")
     branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    skill_refs: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
-    mcp_refs: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, server_default="[]")
+    skill_refs: Mapped[list[str]] = mapped_column(JSON, default=list, server_default=text("('[]')"))
+    mcp_refs: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, server_default=text("('[]')"))
     status: Mapped[str] = mapped_column(String(32), default="UNKNOWN", index=True)
     worker_channel: Mapped[str] = mapped_column(String(16), default="ssh", server_default="ssh")
     status_detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -262,9 +274,7 @@ class RuntimeSession(Base):
     total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     llm_call_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tool_call_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    native_session_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1, server_default="1"
-    )
+    native_session_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     execution_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tool_usage: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     # Token/model consumption bucketed by the real message day and the real
@@ -448,9 +458,7 @@ class KnowledgeItem(Base):
     session_status_at_submission: Mapped[str | None] = mapped_column(String(32), nullable=True)
     verification_session_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     verification_message_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    session_last_message_id_at_verification: Mapped[str | None] = mapped_column(
-        String(160), nullable=True
-    )
+    session_last_message_id_at_verification: Mapped[str | None] = mapped_column(String(160), nullable=True)
     verified_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     source_ref_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     experience_data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -721,9 +729,7 @@ class WorkerMaintenanceOperation(Base):
 
     __tablename__ = "t_nexus_worker_maintenance_operations"
     __table_args__ = (
-        UniqueConstraint(
-            "active_environment_id", name="uq_worker_maintenance_active_environment"
-        ),
+        UniqueConstraint("active_environment_id", name="uq_worker_maintenance_active_environment"),
         Index("ix_worker_maintenance_state_lease", "state", "lease_until"),
     )
 

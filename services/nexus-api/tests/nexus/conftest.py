@@ -6,6 +6,19 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def isolated_sql_database(tmp_path, monkeypatch):
+    from app.config.settings import get_settings
+    from app.sql_storage import create_test_schema
+
+    database = tmp_path / "nexus.db"
+    monkeypatch.setenv("ASTRA_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
+    get_settings.cache_clear()
+    create_test_schema(database)
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def test_model_routes(monkeypatch, request):
     monkeypatch.setenv("NEXUS_GATEWAY_API_KEY", "gw-test-key")
     monkeypatch.setenv("NEXUS_GATEWAY_OPENAI_BASE", "http://127.0.0.1:18110/v1")

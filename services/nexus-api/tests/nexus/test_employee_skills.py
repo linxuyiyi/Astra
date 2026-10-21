@@ -7,6 +7,7 @@ import json
 
 import httpx
 from fastapi.testclient import TestClient
+from sqlalchemy import text as sql_text
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.capability import inspect_employee
@@ -211,8 +212,10 @@ def test_patch_skill_change_resyncs_existing_conversations(tmp_path, monkeypatch
         ).json()
         connection = connect(db_path())
         connection.execute(
-            "UPDATE t_nexus_conversations SET agentscope_session_id = ? WHERE id = ?",
-            ("ses-existing", conversation["id"]),
+            sql_text("""
+                UPDATE t_nexus_conversations SET agentscope_session_id = :p0 WHERE id = :p1
+                """),
+            {"p0": "ses-existing", "p1": conversation["id"]},
         )
         connection.commit()
         connection.close()

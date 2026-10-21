@@ -1,7 +1,7 @@
-# Nexus v1.4.7 完整部署指南
+# Nexus v1.4.8 完整部署指南
 
-> 依据 2026-10-14 ~ 10-20 在部署机（box，Debian 13 x86_64）与 `LLM_WIKI_HOST` 指向的远程主机（CentOS 7.3 x86_64）上的实际部署整理，并按 v1.4.7 的默认端口、迁移 head 与能力更新。
-> 代码：<https://github.com/linxuyiyi/Astra>，分支 `codex/nexus-v1.4.7`（迁移到 `0052_t_nexus_table_prefix`）。
+> 依据 2026-10-14 ~ 10-20 在部署机（box，Debian 13 x86_64）与 `LLM_WIKI_HOST` 指向的远程主机（CentOS 7.3 x86_64）上的实际部署整理，基础设施部署经验保留；v1.4.8 数据库按 MySQL 8.0.36 全新初始化，见 §5.2。
+> 代码：<https://github.com/linxuyiyi/Astra>，分支 `v1.4.8`（Nexus 初始化为 `0001_init`，不支持历史库升级）。
 > 一键脚本：`ops/deploy/install_nexus.sh`（配置模板 `ops/env/.env.example`）。本文每一步都可以手工执行，脚本只是把它们串起来。
 
 ---
@@ -10,7 +10,8 @@
 
 | 组件 | 端口（默认值） | 进程 / 启动方式 | 说明 |
 |---|---|---|---|
-| Redis | 6379 | redis-server 或 `services/agent-service/docker-compose.yml` | AgentScope 存储与消息总线、Nexus Celery/网关吊销表 |
+| MySQL 8.0.36 | 3306 | DBA 维护 | Nexus 与 AgentScope 各使用独立数据库 |
+| Redis | 6379 | redis-server 或 `services/agent-service/docker-compose.yml` | AgentScope 消息总线、Nexus Celery/网关运行态与吊销表 |
 | Agent Service（AgentScope 2.0.10） | 18000 | `services/agent-service/agent_service.py` | 员工会话、私聊/邮箱/团队讨论、知识库。默认绑定 `0.0.0.0`，对外部署建议改 `127.0.0.1` 或加反代 |
 | Nexus API Gateway（API 中转数据面） | 18110 | 同上（`app.gateway.server`） | OpenAI 兼容 `/v1`，远程 Worker 直连内网地址 |
 | Nexus API（统一服务） | 18120 | `uvicorn nexus_api.service:app` | 员工对话 `/api/v1`、任务 `/api`、Worker Gateway WebSocket、前端静态资源。唯一对外 HTTP 服务 |
@@ -104,13 +105,14 @@
 | ASTRA_LLM_WIKI_PROJECT_ID | 同上 | — | llm_wiki 项目 UUID（`.llm-wiki/project.json`） |
 | ASTRA_LLM_WIKI_TIMEOUT | 否 | 10 | 远端仿真时建议 30 |
 | NEXUS_REMOTE_OPENCODE_VERSION / NEXUS_REMOTE_NODE_VERSION / NEXUS_REMOTE_NPM_REGISTRY | 否 | 1.18.35 / 22.23.3 / npmmirror | 远程一键部署 |
-| ASTRA_DATABASE_* | 生产 | dev 用 SQLite | 生产把 `ASTRA_DATABASE_URL` 指到 MySQL |
+| ASTRA_DATABASE_URL | 是 | 无 | Nexus 空 MySQL 库，使用 mysql+asyncmy URL |
 | NEXUS_API_PORT / ASTRA_SERVICE_GATEWAY_PORT | 否 | 18120 / 18110 | 统一 API 与网关数据面端口 |
 
 **Agent Service（`ops/env/.env.example`）**
 
 | 变量 | 必填 | 默认 | 作用 |
 |---|---|---|---|
+| AGENTSCOPE_SQL_URL | 是 | 无 | 独立 AgentScope SQL 库，不能复用 Nexus schema |
 | AGENTSCOPE_HOST / AGENTSCOPE_PORT | 否 | 0.0.0.0 / 18000 | 监听（对外建议 127.0.0.1 + 反代） |
 | AGENTSCOPE_REDIS_HOST / _PORT / _PASSWORD | 否 | localhost / 6379 / 空 | Redis |
 | AGENTSCOPE_WORKSPACE_DIR | 否 | services/agent-service/data/workspaces | 每 Session 工作目录 |
@@ -120,7 +122,7 @@
 
 | 变量 | 必填 | 默认 | 作用 |
 |---|---|---|---|
-| NEXUS_DATA_DIR | 否 | services/nexus-api/data | SQLite `nexus.sqlite3` |
+| NEXUS_DATA_DIR | 否 | services/nexus-api/data | 附件和自建资源文件；MySQL 部署不在此创建业务库 |
 | NEXUS_AGENTSCOPE_BASE_URL / NEXUS_AGENTSCOPE_USER_ID | 是 | http://127.0.0.1:18000 / nexus | Agent Service |
 | NEXUS_TASK_MCP_URL | 是 | — | `http://127.0.0.1:18202/mcp` |
 | NEXUS_CHAT_PROVIDER | 是 | ollama | 设 `openai` |
@@ -162,17 +164,30 @@ bash $R/services/agent-service/redis.sh        # 已有 PONG 则跳过；有 doc
 redis-cli ping                       # PONG
 ```
 
-### 5.2 nexus-api venv 与迁移
+### 5.2 两个空 MySQL 库与初始化
+
+公司版本为 MySQL **8.0.36**。先由 DBA 创建 `nexus` 与 `nexus_agentscope` 两个独立空库，使用 InnoDB、utf8mb4、utf8mb4_bin collation；分别授权给对应服务账号。账号需要建表/索引权限及业务读写权限，不需要全局管理员权限。
+
+在受保护的环境文件中配置 `ASTRA_DATABASE_URL` 与 `AGENTSCOPE_SQL_URL`（模板在 `ops/env/.env.example`）；密码及特殊字符必须 URL 编码。不要把真实 URL 写入工单或命令输出。
+
 ```bash
 cd $R/services/nexus-api
-python3 -m venv .venv && .venv/bin/pip install -U pip && .venv/bin/pip install -e '.[dev]'   # 或 uv pip install -e .[dev]
-.venv/bin/python -m alembic upgrade head        # 到 0052_t_nexus_table_prefix
+python3 -m venv .venv
+.venv/bin/pip install -e '.[dev]'
+.venv/bin/python -m alembic upgrade head       # 单个 0001_init，53 张当前业务表
+
+cd $R/services/agent-service
+python3 -m venv .venv-agentscope
+.venv-agentscope/bin/pip install -r requirements.txt
+.venv-agentscope/bin/python agentscope_sql.py init
+.venv-agentscope/bin/python agentscope_sql.py check
 ```
-`astra_service.py` 在监听前执行 `alembic upgrade head`（`prepare()`）。安装脚本生成的 `nexus-astra` 单元通过 ExecStart 调用 `astra_service.py dev restart`，因此 systemd 重启同样会迁移，效果与原先静态单元的 `ExecStartPre` 相同。仓库不再提交静态 unit 文件。重启前先备份数据库。`0037` 的 downgrade 会删除 `gateway_runtime_events`，已记录的运行事件不可恢复。`0038` 的 downgrade 会删除 `gateway_requests.gateway_instance_id`、`gateway_instance_started_at`、`outcome` 三列，不删除运行事件表。
 
-`0038` 之后，未完成调用按处理实例的心跳代次回收：实例失联时标成 `outcome=lost`（结果未知），不写成 500 或成功。`finished_at` 为空且 `gateway_instance_id` 为空的历史行保持原样，统计单独列为 legacy_open，查询不会按等待时间猜测成败。需要处理时只读列出这些行。保留清理只删除已经写下 `finished_at` 的终态历史。
+以上命令执行前应将受保护环境文件导入当前进程；Agent Service 不自动读取 Nexus 的 Settings 文件。安装器会安全注入两个 URL，并在启动前分别初始化。
 
-0049 给网关路由增加 `target_model`、给调用日志增加 `actual_model`；0050/0051 把 Worker 环境迁到数字员工并重命名 `workers` 表；0052 把所有业务表统一为 `t_nexus_` 前缀。依赖版本以 `pyproject.toml` 和 `requirements.txt` 为准。
+重复初始化不会清空数据。旧版本、已有未标记表或不完整 schema 会明确失败；不允许用 stamp 掩盖，也不提供旧 SQLite 导入工具。服务启动和 Celery 只检查 schema，不偷偷补表/补列。
+
+Nexus 历史迁移链已收敛成 `0001_init`；AgentScope 使用官方 2.0.10 的内部迁移，不复制其迁移链，不修改官方包。针对官方 MySQL 消息时间默认秒精度，初始化额外将 `messages.created_at` 固定为 `DATETIME(6)`，启动检查该精度，保证同秒消息的先后与游标分页。SQLite 仅用于显式配置的开发/回归环境。
 
 ### 5.3 Task API / Celery / OpenCode
 OpenCode：`npm i -g --prefix ~/.local opencode-ai@1.18.35`，`~/.config/opencode/opencode.json` 增加 deepseek provider（apiKey 写 `{env:DEEPSEEK_API_KEY}`，不要写明文）。
@@ -368,7 +383,7 @@ ops/dev/start_nexus_api.sh start      # 18120
 
 **升级**：
 ```bash
-git -C $R fetch origin && git -C $R merge --ff-only origin/codex/nexus-v1.4.7
+git -C $R fetch origin && git -C $R merge --ff-only origin/v1.4.8
 cd $R/services/nexus-api && .venv/bin/pip install -e '.[dev]' && .venv/bin/python -m alembic upgrade head
 cd $R/services/nexus-api && .venv/bin/pip install -r requirements.txt
 cd $R/services/nexus-api/chat-island && npm ci && npm run build
@@ -377,9 +392,9 @@ cd $R/services/nexus-api/web && npm ci && npm run build
 ```
 原地升级重跑安装脚本时，若还留着旧的独立单元 `nexus-task-mcp` 或 `nexus-web`，脚本会 `stop`、`disable`、删除 `/etc/systemd/system` 下对应单元文件并 `daemon-reload`。单元不存在时这一步直接跳过，不报错。Task MCP 与管理台之后只随 `astra_service.py` 启停。
 
-升级前备份：`services/nexus-api/data/nexus.db`（旧版本另有 `services/task-platform/data/nexus.db` 与 `services/nexus-api/data/nexus.sqlite3`）、Redis（AgentScope 数据与凭证）、`/var/lib/llm-wiki`、`secrets.env`/`.gwmaster`/`.mcpkey`。远程 Worker 升级后执行一次 `environment/restart`。
+v1.4.8 数据库版本边界为全新初始化，不支持从此前版本原地升级。不要把旧库 URL 直接用于这个版本；先准备两个新空库。后续同一 init 基线的更新才能追加迁移。
 
-`nexus-astra` 重启会经 `astra_service.py` 执行 `alembic upgrade head`，所以重启也会跑迁移；升级或重启前先备份数据库。从 `0037_gateway_runtime_events` 降级会删除 `gateway_runtime_events` 表。从 `0038_gateway_request_lifecycle` 降级会删除调用日志上的实例代次与 `outcome` 列。`finished_at` 为空且没有 `gateway_instance_id` 的历史未完成行不会被自动改写成失败或成功。
+备份应包含 Nexus MySQL 库、AgentScope MySQL 库、Redis 持久化、AgentScope workspace/blobs/Qdrant、Nexus 附件与资源文件、llm_wiki 数据和受保护的凭据/加密根密钥。恢复必须保持数据库 ID 与文件/密钥一致，不能只备份数据库。正式 Linux 部署和业务恢复需在公司环境独立验收。
 
 ---
 

@@ -1,10 +1,5 @@
 import json
-import os
-import sqlite3
-import subprocess
-import sys
 from functools import partial
-from pathlib import Path
 
 import httpx
 import pytest
@@ -159,9 +154,7 @@ async def publish(sessions, space_id, title="timeout", content="original body"):
             KnowledgeCreate(space_id=space_id, title=title, content_md=content),
             LibraryPrincipal(),
         )
-        await service.publish_knowledge(
-            item.id, KnowledgePublishWrite(space_id=space_id), LibraryPrincipal()
-        )
+        await service.publish_knowledge(item.id, KnowledgePublishWrite(space_id=space_id), LibraryPrincipal())
         return item.id
 
 
@@ -186,9 +179,7 @@ async def test_title_change_updates_same_source_path(wiki_env):
     expected = knowledge_source_path(knowledge_id)
     async with sessions() as session:
         service = KnowledgeService(session)
-        await service.update_knowledge(
-            knowledge_id, KnowledgePatch(title="新标题"), LibraryPrincipal()
-        )
+        await service.update_knowledge(knowledge_id, KnowledgePatch(title="新标题"), LibraryPrincipal())
         item = await session.get(KnowledgeItem, knowledge_id)
         assert item.sync_status == "synced" and item.source_path == expected
     puts = [call for call in state["calls"] if call.method == "PUT"]
@@ -309,9 +300,7 @@ async def test_lifecycle_and_resource_usage_records_runtime_identity(wiki_env):
         ).all()
         assert [event.action for event in events] == ["search_hit", "read", "feedback"]
         assert all(
-            event.employee_id == "E-wiki"
-            and event.task_id == "T-wiki"
-            and event.session_id == "ses_wiki"
+            event.employee_id == "E-wiki" and event.task_id == "T-wiki" and event.session_id == "ses_wiki"
             for event in events
             if event.action in {"search_hit", "read"}
         )
@@ -328,9 +317,7 @@ async def test_lifecycle_and_resource_usage_records_runtime_identity(wiki_env):
         await service.archive_knowledge(candidate.id, LibraryPrincipal())
         assert source not in state["sources"]
         assert (
-            await service.mcp_search(
-                LibrarySearchInput(query="初始化"), runtime_context=runtime_context
-            )
+            await service.mcp_search(LibrarySearchInput(query="初始化"), runtime_context=runtime_context)
             == []
         )
         with pytest.raises(LlmWikiError, match="不存在"):
@@ -372,9 +359,7 @@ async def test_scope_change_withdraws_descendants(wiki_env):
     assert expected in state["sources"]
     async with sessions() as session:
         service = KnowledgeService(session)
-        await service.update_space(
-            space_id, KnowledgeSpacePatch(access_scope="admin"), LibraryPrincipal()
-        )
+        await service.update_space(space_id, KnowledgeSpacePatch(access_scope="admin"), LibraryPrincipal())
     assert expected not in state["sources"]
 
 
@@ -405,9 +390,7 @@ async def test_mcp_expected_errors_are_not_masked_by_sdk(wiki_env, monkeypatch):
     monkeypatch.setattr("app.mcp_server.SessionLocal", sessions)
     runtime_context = state["runtime_context"]
     with pytest.raises(ToolError, match="知识服务暂不可用") as error:
-        await mcp.call_tool(
-            "library_search", {"query": "timeout", "runtime_context": runtime_context}
-        )
+        await mcp.call_tool("library_search", {"query": "timeout", "runtime_context": runtime_context})
     assert type(error.value) is ToolError
     with pytest.raises(ToolError, match="limit") as error:
         await mcp.call_tool(
@@ -422,61 +405,6 @@ async def test_read_rejects_non_wiki_paths(wiki_env, path):
     with pytest.raises(LlmWikiError, match="resource_id"):
         await LlmWikiClient(settings).read(path)
     assert not state["calls"]
-
-
-def test_migration_backfills_usage_and_published_sources(tmp_path):
-    backend = Path(__file__).resolve().parents[2]
-    database = tmp_path / "migration.db"
-    env = {**os.environ, "ASTRA_DATABASE_URL": f"sqlite+aiosqlite:///{database}"}
-
-    def migrate(*args):
-        subprocess.run(
-            [sys.executable, "-m", "alembic", *args],
-            cwd=backend,
-            env=env,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-
-    migrate("upgrade", "0018_merge_runtime_category")
-    with sqlite3.connect(database) as conn:
-        conn.execute(
-            "INSERT INTO knowledge_items "
-            "(id,title,summary,content_md,status,tags,experience_data,created_by,updated_by,"
-            "created_at,updated_at) VALUES "
-            "('KNOW_old','old','','body','published','[]','{}','admin','admin',"
-            "'2026-09-08 00:00:00','2026-09-08 00:00:00')"
-        )
-        conn.execute(
-            "INSERT INTO knowledge_usage (knowledge_id,tool_name,action,result,created_at) "
-            "VALUES ('KNOW_old','library_get','reference','{}','2026-09-08 00:00:00')"
-        )
-        conn.execute(
-            "INSERT INTO knowledge_usage (tool_name,action,result,created_at) "
-            "VALUES ('library_search','search','{\"knowledge_ids\":[\"KNOW_old\"]}',"
-            "'2026-09-08 00:00:00')"
-        )
-    migrate("upgrade", "0019_library_llm_wiki")
-    with sqlite3.connect(database) as conn:
-        assert conn.execute("SELECT resource_id,action FROM knowledge_usage ORDER BY id").fetchall() == [
-            ("astra:KNOW_old", "read"),
-            ("astra:KNOW_old", "search_hit"),
-        ]
-        assert conn.execute("SELECT knowledge_id,status FROM knowledge_sync").fetchone() == (
-            "KNOW_old",
-            "pending",
-        )
-        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
-    migrate("upgrade", "0029_knowledge_sync_state")
-    with sqlite3.connect(database) as conn:
-        assert conn.execute(
-            "SELECT sync_status, source_path FROM knowledge_items WHERE id='KNOW_old'"
-        ).fetchone() == ("pending", "raw/sources/astra/knowledge/KNOW_old.md")
-        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        assert "knowledge_sync" not in tables
-    migrate("downgrade", "0028_usage_breakdowns_and_task_completion")
-    migrate("upgrade", "0029_knowledge_sync_state")
 
 
 def test_llm_wiki_url_allows_remote_and_https():

@@ -9,9 +9,11 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text as sql_text
 
+from app.sql_storage import create_test_schema
 from nexus_api.agentscope import AgentScopeClient
-from nexus_api.db import connect, init_db
+from nexus_api.db import connect
 from nexus_api.im import ImError, accept_inbound, bind_bot, claim_outbox, contact_human
 from nexus_api.main import capture_im_reply, create_app
 
@@ -463,7 +465,7 @@ def test_im_http_waits_for_agentscope_and_web_stays_available(tmp_path, monkeypa
 
 def test_outbox_reclaims_only_an_expired_lease(tmp_path):
     path = tmp_path / "im.sqlite3"
-    init_db(path)
+    create_test_schema(path)
     connection = connect(path)
     first = contact_human(
         connection,
@@ -485,8 +487,8 @@ def test_outbox_reclaims_only_an_expired_lease(tmp_path):
     assert claim_outbox(connection) is None
     past = (datetime.now(UTC) - timedelta(seconds=5)).isoformat()
     connection.execute(
-        "UPDATE t_nexus_im_outbox SET lease_until = ? WHERE delivery_id = ?",
-        (past, first["delivery_id"]),
+        sql_text("UPDATE t_nexus_im_outbox SET lease_until = :p0 WHERE delivery_id = :p1"),
+        {"p0": past, "p1": first["delivery_id"]},
     )
     connection.commit()
     again = claim_outbox(connection)
@@ -496,16 +498,19 @@ def test_outbox_reclaims_only_an_expired_lease(tmp_path):
 
 def test_expired_event_claim_can_be_taken_again(tmp_path):
     path = tmp_path / "im.sqlite3"
-    init_db(path)
+    create_test_schema(path)
     connection = connect(path)
     now = datetime.now(UTC).isoformat()
     connection.execute(
-        """
-        INSERT INTO t_nexus_conversations (
-            id, employee_id, owner_id, kind, name, agentscope_session_id, created_at, updated_at
-        ) VALUES ('c1', 'E1', 'u1', 'private', '私聊', 'ses', ?, ?)
-        """,
-        (now, now),
+        sql_text(
+            """
+            INSERT INTO t_nexus_conversations (
+                id, employee_id, owner_id, kind, name, agentscope_session_id, created_at,
+            updated_at
+            ) VALUES ('c1', 'E1', 'u1', 'private', '私聊', 'ses', :p0, :p1)
+            """
+        ),
+        {"p0": now, "p1": now},
     )
     bind_bot(connection, "E1", "mock", "bot-1")
     calls = {"n": 0}
@@ -515,12 +520,15 @@ def test_expired_event_claim_can_be_taken_again(tmp_path):
 
     past = (datetime.now(UTC) - timedelta(seconds=5)).isoformat()
     connection.execute(
-        """
-        INSERT INTO t_nexus_im_events (
-            provider, event_id, employee_id, session_id, accepted, claim_token, claim_until
-        ) VALUES ('mock', 'evt-crash', 'E1', 'ses', 0, 'stuck', ?)
-        """,
-        (past,),
+        sql_text(
+            """
+            INSERT INTO t_nexus_im_events (
+                provider, event_id, employee_id, session_id, accepted, claim_token,
+            claim_until
+            ) VALUES ('mock', 'evt-crash', 'E1', 'ses', 0, 'stuck', :p0)
+            """
+        ),
+        {"p0": past},
     )
     connection.commit()
     result = asyncio.run(
@@ -540,23 +548,30 @@ def test_expired_event_claim_can_be_taken_again(tmp_path):
 
 def test_stolen_event_claim_does_not_record_the_first_handler(tmp_path):
     path = tmp_path / "im.sqlite3"
-    init_db(path)
+    create_test_schema(path)
     connection = connect(path)
     now = datetime.now(UTC).isoformat()
     connection.execute(
-        """
-        INSERT INTO t_nexus_conversations (
-            id, employee_id, owner_id, kind, name, agentscope_session_id, created_at, updated_at
-        ) VALUES ('c1', 'E1', 'u1', 'private', '私聊', 'ses', ?, ?)
-        """,
-        (now, now),
+        sql_text(
+            """
+            INSERT INTO t_nexus_conversations (
+                id, employee_id, owner_id, kind, name, agentscope_session_id, created_at,
+            updated_at
+            ) VALUES ('c1', 'E1', 'u1', 'private', '私聊', 'ses', :p0, :p1)
+            """
+        ),
+        {"p0": now, "p1": now},
     )
     bind_bot(connection, "E1", "mock", "bot-1")
 
     async def accept(_employee_id, _session_id, _text):
         connection.execute(
-            "UPDATE t_nexus_im_events SET claim_token = 'other' "
-            "WHERE provider = 'mock' AND event_id = 'evt-steal'"
+            sql_text(
+                """
+                UPDATE t_nexus_im_events SET claim_token = 'other' WHERE provider = 'mock' AND
+                event_id = 'evt-steal'
+                """
+            )
         )
         connection.commit()
 
@@ -573,10 +588,18 @@ def test_stolen_event_claim_does_not_record_the_first_handler(tmp_path):
             )
         )
     assert caught.value.status_code == 409
-    row = connection.execute(
-        "SELECT accepted, claim_token FROM t_nexus_im_events "
-        "WHERE provider = 'mock' AND event_id = 'evt-steal'"
-    ).fetchone()
+    row = (
+        connection.execute(
+            sql_text(
+                """
+                SELECT accepted, claim_token FROM t_nexus_im_events WHERE provider = 'mock'
+                AND event_id = 'evt-steal'
+                """
+            )
+        )
+        .mappings()
+        .fetchone()
+    )
     assert row["accepted"] == 0
     assert row["claim_token"] == "other"
 
@@ -592,8 +615,7 @@ class _EmptyStream:
 
     async def aiter_bytes(self):
         yield (
-            b'data: {"type":"REPLY_START","reply_id":"r2"}\n\n'
-            b'data: {"type":"REPLY_END","reply_id":"r2"}\n\n'
+            b'data: {"type":"REPLY_START","reply_id":"r2"}\n\ndata: {"type":"REPLY_END","reply_id":"r2"}\n\n'
         )
 
 
@@ -612,7 +634,7 @@ class _QuietClient:
 
 def test_silent_im_turn_does_not_repeat_the_previous_reply(tmp_path):
     path = tmp_path / "im.sqlite3"
-    init_db(path)
+    create_test_schema(path)
     connection = connect(path)
     asyncio.run(
         capture_im_reply(
@@ -628,7 +650,7 @@ def test_silent_im_turn_does_not_repeat_the_previous_reply(tmp_path):
 
 def test_late_assistant_message_is_still_enqueued(tmp_path):
     path = tmp_path / "im.sqlite3"
-    init_db(path)
+    create_test_schema(path)
     connection = connect(path)
     calls = {"n": 0}
 
@@ -737,5 +759,3 @@ def test_send_private_passes_message_id_to_trigger_chat(tmp_path, monkeypatch):
         history_msgs = get_resp.json()["messages"]
         assert len(history_msgs) == 1
         assert history_msgs[0]["id"] == sent_msg["id"]
-
-

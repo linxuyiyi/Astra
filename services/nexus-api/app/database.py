@@ -86,15 +86,22 @@ async def worker_session() -> AsyncIterator[AsyncSession]:
 
 
 async def init_database() -> None:
-    from app.models import Base
+    from app.sql_storage import INITIAL_REVISION, VERSION, assert_current_schema, metadata
 
     def create_unversioned_schema(connection) -> None:
-        # Alembic owns upgrades for every versioned database. Calling create_all
-        # against an older revision would create future tables before their
-        # migration runs and make the subsequent upgrade fail with "table exists".
-        if inspect(connection).has_table("alembic_version"):
+        if inspect(connection).get_table_names():
+            assert_current_schema(connection, check_columns=False)
             return
-        Base.metadata.create_all(connection)
+        metadata().create_all(connection)
+        VERSION.create(connection)
+        connection.execute(VERSION.insert().values(version_num=INITIAL_REVISION))
 
     async with engine.begin() as connection:
         await connection.run_sync(create_unversioned_schema)
+
+
+async def validate_database() -> None:
+    from app.sql_storage import assert_current_schema
+
+    async with engine.connect() as connection:
+        await connection.run_sync(assert_current_schema)

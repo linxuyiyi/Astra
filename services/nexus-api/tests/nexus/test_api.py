@@ -10,6 +10,7 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text as sql_text
 
 from nexus_api.agentscope import AgentScopeClient, AgentScopeError
 from nexus_api.main import (
@@ -203,7 +204,7 @@ def test_session_transcript_keeps_speaker_and_tool_cards():
                 "role": "assistant",
                 "content": [
                     {"type": "text", "text": "ok"},
-                    {"type": "tool_call", "id": "c1", "name": "read", "input": "{\"path\":\"a\"}"},
+                    {"type": "tool_call", "id": "c1", "name": "read", "input": '{"path":"a"}'},
                     {"type": "tool_result", "id": "c1", "name": "read", "output": "file", "state": "success"},
                 ],
             },
@@ -216,7 +217,7 @@ def test_session_transcript_keeps_speaker_and_tool_cards():
         {
             "id": "c1",
             "name": "read",
-            "input": "{\"path\":\"a\"}",
+            "input": '{"path":"a"}',
             "output": "file",
             "state": "success",
         }
@@ -429,12 +430,22 @@ def test_wake_target_uses_mailbox_and_rejects_foreign_session(client):
     ).json()["employee"]
     connection = connect(db_path())
     connection.execute(
-        "UPDATE t_nexus_employees SET agentscope_agent_id = ?, mailbox_session_id = ? WHERE id = ?",
-        ("agt_1", "ses_mail", employee["id"]),
+        sql_text(
+            """
+            UPDATE t_nexus_employees SET agentscope_agent_id = :p0, mailbox_session_id =
+            :p1 WHERE id = :p2
+            """
+        ),
+        {"p0": "agt_1", "p1": "ses_mail", "p2": employee["id"]},
     )
     connection.execute(
-        "UPDATE t_nexus_employees SET agentscope_agent_id = ?, mailbox_session_id = ? WHERE id = ?",
-        ("agt_2", "ses_other", other["id"]),
+        sql_text(
+            """
+            UPDATE t_nexus_employees SET agentscope_agent_id = :p0, mailbox_session_id =
+            :p1 WHERE id = :p2
+            """
+        ),
+        {"p0": "agt_2", "p1": "ses_other", "p2": other["id"]},
     )
     connection.commit()
     connection.close()
@@ -832,10 +843,13 @@ def test_channel_peer_contact_creates_session_caps_and_keeps_identity(tmp_path, 
         from nexus_api.main import db_path
 
         connection = connect(db_path())
-        stored = connection.execute(
-            "SELECT sender FROM t_nexus_messages WHERE channel_id = ?",
-            (channel["id"],),
-        ).fetchall()
+        stored = (
+            connection.execute(
+                sql_text("SELECT sender FROM t_nexus_messages WHERE channel_id = :p0"), {"p0": channel["id"]}
+            )
+            .mappings()
+            .fetchall()
+        )
         connection.close()
         assert [row["sender"] for row in stored] == ["user"]
 
@@ -987,8 +1001,10 @@ def test_peer_resolver_returns_mailbox_without_a_scripted_answer(tmp_path, monke
 
         connection = connect(db_path())
         connection.execute(
-            "UPDATE t_nexus_conversations SET agentscope_session_id = ? WHERE id = ?",
-            ("session-private", conversation["id"]),
+            sql_text("""
+                UPDATE t_nexus_conversations SET agentscope_session_id = :p0 WHERE id = :p1
+                """),
+            {"p0": "session-private", "p1": conversation["id"]},
         )
         connection.commit()
         connection.close()
@@ -1293,8 +1309,10 @@ def test_private_stream_skips_the_saved_cursor_and_stops(tmp_path, monkeypatch):
 
         connection = connect(tmp_path / "nexus.db")
         connection.execute(
-            "UPDATE t_nexus_conversations SET agentscope_session_id = ? WHERE id = ?",
-            ("session-chat", conversation["id"]),
+            sql_text("""
+                UPDATE t_nexus_conversations SET agentscope_session_id = :p0 WHERE id = :p1
+                """),
+            {"p0": "session-chat", "p1": conversation["id"]},
         )
         connection.commit()
         connection.close()
@@ -1404,17 +1422,23 @@ def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path
 
         connection = connect(tmp_path / "nexus.db")
         connection.execute(
-            "UPDATE t_nexus_conversations SET agentscope_session_id = ? WHERE id = ?",
-            ("session-private", first["id"]),
+            sql_text("""
+                UPDATE t_nexus_conversations SET agentscope_session_id = :p0 WHERE id = :p1
+                """),
+            {"p0": "session-private", "p1": first["id"]},
         )
         now = utcnow()
         connection.execute(
-            """
-            INSERT INTO t_nexus_conversations (
-                id, employee_id, owner_id, kind, name, agentscope_session_id, created_at, updated_at
-            ) VALUES ('conv_other', ?, 'browser-a', 'note', '另一范围', 'session-other', ?, ?)
-            """,
-            (star["id"], now, now),
+            sql_text(
+                """
+                INSERT INTO t_nexus_conversations (
+                    id, employee_id, owner_id, kind, name, agentscope_session_id, created_at,
+                updated_at
+                ) VALUES ('conv_other', :p0, 'browser-a', 'note', '另一范围', 'session-other',
+                :p1, :p2)
+                """
+            ),
+            {"p0": star["id"], "p1": now, "p2": now},
         )
         connection.commit()
         connection.close()
@@ -1444,10 +1468,13 @@ def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path
         stored = test_client.get(f"/api/v1/conversations/{first['id']}", headers=headers).json()
         peer_lines = [item for item in stored["messages"] if item["sender"] == zhi["id"]]
         assert [item["text"] for item in peer_lines] == ["阈值按账号计算"]
-        assert assistant_replies_after(
-            [{"role": "user", "content": [{"type": "text", "text": "方案要点"}]}],
-            "方案要点",
-        ) == []
+        assert (
+            assistant_replies_after(
+                [{"role": "user", "content": [{"type": "text", "text": "方案要点"}]}],
+                "方案要点",
+            )
+            == []
+        )
 
 
 def test_multiline_hint_inside_the_reply_is_returned_once():
@@ -1671,9 +1698,13 @@ def test_disabled_employee_defers_wake(client):
     employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
     connection = connect(db_path())
     connection.execute(
-        "UPDATE t_nexus_employees SET enabled = 0, agentscope_agent_id = ?, "
-        "mailbox_session_id = ? WHERE id = ?",
-        ("agt_1", "ses_mail", employee["id"]),
+        sql_text(
+            """
+            UPDATE t_nexus_employees SET enabled = 0, agentscope_agent_id = :p0,
+            mailbox_session_id = :p1 WHERE id = :p2
+            """
+        ),
+        {"p0": "agt_1", "p1": "ses_mail", "p2": employee["id"]},
     )
     connection.commit()
     connection.close()
@@ -1734,12 +1765,15 @@ def test_task_skill_is_revoked_and_restored_on_existing_sessions(tmp_path, monke
 
         connection = connect(db_path())
         connection.execute(
-            """
-            INSERT INTO t_nexus_conversations (
-                id, employee_id, owner_id, name, agentscope_session_id, created_at, updated_at
-            ) VALUES ('conv_1', ?, 'owner', '对话', 'ses_chat', 't', 't')
-            """,
-            (employee["id"],),
+            sql_text(
+                """
+                INSERT INTO t_nexus_conversations (
+                    id, employee_id, owner_id, name, agentscope_session_id, created_at,
+                updated_at
+                ) VALUES ('conv_1', :p0, 'owner', '对话', 'ses_chat', 't', 't')
+                """
+            ),
+            {"p0": employee["id"]},
         )
         connection.commit()
         connection.close()
@@ -1759,8 +1793,6 @@ def test_task_skill_is_revoked_and_restored_on_existing_sessions(tmp_path, monke
             json=employee_body(skills=["task-management"]),
         )
         assert restored.status_code == 200, restored.text
-        mcp_calls = [
-            item for item in calls if item[0] == "POST" and item[1] == "/workspace/mcp"
-        ]
+        mcp_calls = [item for item in calls if item[0] == "POST" and item[1] == "/workspace/mcp"]
         assert {item[2] for item in mcp_calls} >= {employee["mailbox_session_id"], "ses_chat"}
         assert all(item[3] == "Bearer shared-secret" for item in mcp_calls)

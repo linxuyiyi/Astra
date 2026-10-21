@@ -101,6 +101,7 @@ def astra_table_names() -> set[str]:
     # Mirror alembic/env.py: import every model module so all Astra tables are
     # registered on the shared metadata before the isolation check runs.
     import app.gateway.models  # noqa: F401 - register gateway tables on shared metadata
+    import nexus_api.db_models  # noqa: F401 - register employee/chat tables
     from app.models import Base
 
     return set(Base.metadata.tables)

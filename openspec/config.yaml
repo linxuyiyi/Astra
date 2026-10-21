@@ -1,4 +1,4 @@
-# Nexus v1.4.7 的 OpenSpec 规划约束。
+# Nexus v1.4.8 的 OpenSpec 规划约束。
 #
 # 这里是产物规则的唯一事实源，AGENTS.md 只保留项目级硬规则。
 # 内置 CLI（.opencode/tools/openspec.mjs）只解析 schema / context / rules 三个字段，
@@ -9,7 +9,7 @@ schema: spec-driven
 
 context: |
   使用简体中文编写 proposal、spec、design 和 tasks；技术标识符保留原文。
-  本分支的产品是 Nexus v1.4.7：Vue 3 + Element Plus 前端、Python HTTP API、AgentScope 2.0.10 Agent Service。
+  本分支的产品是 Nexus v1.4.8：Vue 3 + Element Plus 前端、Python HTTP API、AgentScope 2.0.10 Agent Service。
   Agent、Session、Skill、Knowledge 与对话记忆只存在于 AgentScope；Nexus 不平行实现，也不提供模型配置界面。
   一位数字员工是一个独立 Agent。对话绑定 Session。对等同事联系使用自定义工具 contact_employee（inbox + wakeup + MessageBus），不使用 Agent Team（Leader→Worker），也不脚本化多 Agent 回复。
   新代码放在 services/nexus-api：nexus_api/（对话、员工目录）、app/（Task、Run、Employee、Runtime、网关控制面、图书馆）、web/（前端）与 chat-island/（聊天岛）。历史产品文档在 docs/archive，不作为当前实现位置。

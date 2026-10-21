@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import text as sql_text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -23,33 +24,34 @@ from app.models import (
     Task,
     WorkerInstance,
 )
+from app.sql_storage import create_test_schema
 from nexus_api import nebula
-from nexus_api.db import connect, init_db
+from nexus_api.db import connect
 
 
 def _insert_employee(connection, employee_id: str, name: str, agent_id: str | None, enabled: bool = True):
+    from nexus_api.db_models import employees
+
     connection.execute(
-        """
-        INSERT INTO t_nexus_employees (
-            id, name, domain, description, instructions, avatar, enabled,
-            knowledge_json, skills_json, mcp_json, tools_json,
-            agentscope_agent_id, mailbox_session_id, capability_json,
-            model_route_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', '[]', '[]', '[]', ?, ?, '{}', '', ?, ?)
-        """,
-        (
-            employee_id,
-            name,
-            f"{name}领域",
-            f"{name}职责",
-            "直接回答",
-            "✦",
-            1 if enabled else 0,
-            agent_id,
-            f"mb_{employee_id}",
-            "2026-01-01T00:00:00+00:00",
-            "2026-01-01T00:00:00+00:00",
-        ),
+        employees.insert().values(
+            id=employee_id,
+            name=name,
+            domain=f"{name}领域",
+            description=f"{name}职责",
+            instructions="直接回答",
+            avatar="✦",
+            enabled=int(enabled),
+            knowledge_json="[]",
+            skills_json="[]",
+            mcp_json="[]",
+            tools_json="[]",
+            agentscope_agent_id=agent_id,
+            mailbox_session_id=f"mb_{employee_id}",
+            capability_json="{}",
+            model_route_id="",
+            created_at="2026-01-01T00:00:00+00:00",
+            updated_at="2026-01-01T00:00:00+00:00",
+        )
     )
     connection.commit()
 
@@ -61,7 +63,7 @@ async def facts(tmp_path):
         await connection.run_sync(Base.metadata.create_all)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     chat_path = tmp_path / "nexus.db"
-    init_db(chat_path)
+    create_test_schema(chat_path)
     chat = connect(chat_path)
     try:
         yield sessions, chat
@@ -212,10 +214,7 @@ async def test_snapshot_builds_galaxies_edges_and_marks_conflicts(facts):
     assert workers["w2"]["workerInstanceId"] == "wi_w2"
     assert workers["w4"]["health"] == "unknown"
 
-    edges = {
-        (item["digitalEmployeeId"], item["workerId"]): item
-        for item in snapshot["taskEdges"]
-    }
+    edges = {(item["digitalEmployeeId"], item["workerId"]): item for item in snapshot["taskEdges"]}
     assert edges[("e1", "w1")]["running"] == 2
     assert edges[("e1", "w1")]["waiting"] == 1
     assert edges[("e1", "w1")]["unavailable"] == 1
@@ -290,14 +289,14 @@ async def test_collaboration_dedupes_directions_and_hides_unowned_conversations(
     _insert_employee(chat, "e1", "星一", "agent-1")
     _insert_employee(chat, "e2", "星二", "agent-2")
     chat.execute(
-        """
+        sql_text("""
         INSERT INTO t_nexus_conversations (
             id, employee_id, owner_id, kind, name, created_at, updated_at
         ) VALUES (
             'conv-1', 'e1', 'u1', 'private', '对话',
             '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00'
         )
-        """
+        """)
     )
     now = datetime(2026, 1, 2, 12, 0, tzinfo=UTC)
     rows = [
@@ -308,20 +307,14 @@ async def test_collaboration_dedupes_directions_and_hides_unowned_conversations(
         ("d5", "private:conv-1", "agent-1", "ghost", "找不到人", "2026-01-02T11:10:00+00:00"),
         ("d6", "private:conv-1", "agent-1", "agent-1", "自言自语", "2026-01-02T11:20:00+00:00"),
     ]
-    chat.executemany(
-        """
-        INSERT INTO t_nexus_peer_deliveries (
-            id, scope, sender_agent_id, target_agent_id, message_key, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        rows,
-    )
+    from nexus_api.db_models import peer_deliveries
+
+    columns = ["id", "scope", "sender_agent_id", "target_agent_id", "message_key", "created_at"]
+    chat.execute(peer_deliveries.insert(), [dict(zip(columns, row, strict=True)) for row in rows])
     chat.commit()
     async with sessions() as session:
         snapshot = await nebula.collect_snapshot(session, chat, now=now)
-        detail = await nebula.collect_collaborations(
-            session, chat, owner_id="u1", now=now
-        )
+        detail = await nebula.collect_collaborations(session, chat, owner_id="u1", now=now)
 
     edges = snapshot["collaborationEdges"]
     assert len(edges) == 1
@@ -332,9 +325,7 @@ async def test_collaboration_dedupes_directions_and_hides_unowned_conversations(
     assert len(edge["directions"]) == 2
     assert all("references" in item for item in edge["directions"])
     assert not any(
-        reference["kind"] == "conversation"
-        for item in edge["directions"]
-        for reference in item["references"]
+        reference["kind"] == "conversation" for item in edge["directions"] for reference in item["references"]
     )
     assert snapshot["dataWarnings"][0]["code"] == "COLLABORATION_UNMAPPED"
     assert snapshot["dataWarnings"][0]["count"] == 2
@@ -442,10 +433,7 @@ async def test_http_contract_uses_camel_case_and_validates_status(facts):
         assert snapshot.json()["employees"][0]["counts"]["running"] == 1
         assert client.get("/api/v1/nebula/employees/e1/tasks").status_code == 200
         assert (
-            client.get(
-                "/api/v1/nebula/employees/e1/tasks", params={"priority": "HIGH"}
-            ).json()["total"]
-            == 0
+            client.get("/api/v1/nebula/employees/e1/tasks", params={"priority": "HIGH"}).json()["total"] == 0
         )
         bad = client.get("/api/v1/nebula/employees/e1/tasks", params={"status": "BROKEN"})
         assert bad.status_code == 422

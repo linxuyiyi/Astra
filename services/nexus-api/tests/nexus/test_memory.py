@@ -9,6 +9,7 @@ from pathlib import Path
 
 import httpx
 from fastapi.testclient import TestClient
+from sqlalchemy import text as sql_text
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app, session_transcript
@@ -206,8 +207,8 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
 
         connection = connect(tmp_path / "nexus.db")
         connection.execute(
-            "UPDATE t_nexus_conversations SET workspace_id = ? WHERE id = ?",
-            ("ws-conv-reused", first["id"]),
+            sql_text("UPDATE t_nexus_conversations SET workspace_id = :p0 WHERE id = :p1"),
+            {"p0": "ws-conv-reused", "p1": first["id"]},
         )
         connection.commit()
         connection.close()

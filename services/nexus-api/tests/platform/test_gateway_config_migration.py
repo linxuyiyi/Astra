@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from sqlalchemy import MetaData, Table, create_engine, inspect, select
+from sqlalchemy import MetaData, Table, create_engine, inspect, select, text
 
 from app.gateway.models import (
     GatewayAuditEvent,
@@ -88,8 +88,13 @@ def test_0032_drops_history_without_applying_old_snapshot_or_changing_saved_data
     engine = create_engine(f"sqlite:///{database_path.as_posix()}")
     try:
         with engine.begin() as connection:
+            # 0031 的池表还有 weight 列，而当前 ORM 已删除；用历史结构直接写入。
             connection.execute(
-                legacy_table(GatewayPool, connection).insert().values(id="gp_keep", name="保留资源池")
+                text(
+                    "INSERT INTO gateway_pools "
+                    "(id, name, description, weight, enabled, sort_order, created_at, updated_at) "
+                    "VALUES ('gp_keep', '保留资源池', '', 1, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                )
             )
             connection.execute(
                 legacy_table(GatewayNode, connection).insert().values(
@@ -101,8 +106,12 @@ def test_0032_drops_history_without_applying_old_snapshot_or_changing_saved_data
                 )
             )
             connection.execute(
-                legacy_table(GatewayRoute, connection).insert().values(
-                    id="gr_keep", model="saved-model", pool_id="gp_keep"
+                text(
+                    "INSERT INTO gateway_routes "
+                    "(id, model, pool_id, description, enabled, weight, "
+                    "created_at, updated_at) "
+                    "VALUES ('gr_keep', 'saved-model', 'gp_keep', '', 1, 1, "
+                    "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
                 )
             )
             connection.execute(

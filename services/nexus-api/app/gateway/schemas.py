@@ -13,7 +13,6 @@ from app.gateway.models import AUTH_BEARER, CONFIG_DISABLED, SCHEDULING_DRAINING
 class PoolCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     description: str = ""
-    weight: int = Field(default=1, ge=0)
     enabled: bool = True
     sort_order: int = 0
 
@@ -21,7 +20,6 @@ class PoolCreate(BaseModel):
 class PoolPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     description: str | None = None
-    weight: int | None = Field(default=None, ge=0)
     enabled: bool | None = None
     sort_order: int | None = None
 
@@ -32,7 +30,6 @@ class PoolRead(BaseModel):
     id: str
     name: str
     description: str
-    weight: int
     enabled: bool
     sort_order: int
     created_at: datetime
@@ -126,7 +123,6 @@ class RouteCreate(BaseModel):
     target_model: str | None = Field(default=None, max_length=200)
     description: str = ""
     enabled: bool = True
-    weight: int = Field(default=1, ge=0)
 
 
 class RoutePatch(BaseModel):
@@ -135,7 +131,6 @@ class RoutePatch(BaseModel):
     target_model: str | None = Field(default=None, max_length=200)
     description: str | None = None
     enabled: bool | None = None
-    weight: int | None = Field(default=None, ge=0)
 
 
 class RouteRead(BaseModel):
@@ -147,7 +142,6 @@ class RouteRead(BaseModel):
     target_model: str | None = None
     description: str
     enabled: bool
-    weight: int
     created_at: datetime
     updated_at: datetime
 

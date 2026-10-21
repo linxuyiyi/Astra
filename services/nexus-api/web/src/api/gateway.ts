@@ -16,7 +16,6 @@ export interface GatewayPool {
   id: string
   name: string
   description: string
-  weight: number
   enabled: boolean
   sort_order: number
   created_at: string
@@ -26,7 +25,6 @@ export interface GatewayPool {
 export interface GatewayPoolWrite {
   name: string
   description?: string
-  weight?: number
   enabled?: boolean
   sort_order?: number
 }
@@ -90,7 +88,6 @@ export interface GatewayRoute {
   pool_id: string
   description: string
   enabled: boolean
-  weight: number
   created_at: string
   updated_at: string
 }
@@ -101,7 +98,6 @@ export interface GatewayRouteWrite {
   pool_id?: string
   description?: string
   enabled?: boolean
-  weight?: number
 }
 
 export interface GatewayKey {

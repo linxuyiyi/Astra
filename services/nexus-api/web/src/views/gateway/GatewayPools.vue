@@ -54,7 +54,6 @@
           </div>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="权重" prop="weight" width="90" align="center" />
       <ElTableColumn label="排序" prop="sort_order" width="90" align="center" />
       <ElTableColumn label="状态" width="100" align="center">
         <template #default="{ row }">
@@ -116,9 +115,6 @@
         </ElFormItem>
         <ElFormItem label="描述" prop="description">
           <ElInput v-model="poolForm.description" type="textarea" :rows="2" />
-        </ElFormItem>
-        <ElFormItem label="权重" prop="weight">
-          <ElInput v-model="poolForm.weight" type="number" min="0" />
         </ElFormItem>
         <ElFormItem label="排序" prop="sort_order">
           <ElInput v-model="poolForm.sort_order" type="number" />
@@ -183,7 +179,7 @@ const poolDrawerOpen = ref(false)
 const poolFormRef = ref<FormInstance>()
 const poolError = ref('')
 
-const poolForm = reactive({ id: '', name: '', description: '', weight: '1', sort_order: '0', enabled: true })
+const poolForm = reactive({ id: '', name: '', description: '', sort_order: '0', enabled: true })
 const pageSize = ref(20)
 const poolFilters = reactive({ keyword: '', enabled: '' })
 const poolPage = ref(1)
@@ -266,7 +262,7 @@ const poolRules: FormRules = {
 }
 
 function openPoolCreate() {
-  Object.assign(poolForm, { id: '', name: '', description: '', weight: '1', sort_order: '0', enabled: true })
+  Object.assign(poolForm, { id: '', name: '', description: '', sort_order: '0', enabled: true })
   poolError.value = ''
   poolInitial.value = poolSnapshot()
   poolDrawerOpen.value = true
@@ -277,7 +273,7 @@ function openPoolEdit(pool: GatewayPool) {
     id: pool.id,
     name: pool.name,
     description: pool.description,
-    weight: String(pool.weight),
+   
     sort_order: String(pool.sort_order),
     enabled: pool.enabled,
   })
@@ -294,7 +290,6 @@ async function submitPool() {
     const body = {
       name: poolForm.name.trim(),
       description: poolForm.description,
-      weight: Number(poolForm.weight) || 0,
       sort_order: Number(poolForm.sort_order) || 0,
       enabled: poolForm.enabled,
     }

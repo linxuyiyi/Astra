@@ -48,7 +48,7 @@ async def config_database(tmp_path):
 
 async def save_configuration(factory):
     async with factory.begin() as session:
-        session.add(GatewayPool(id=POOL_ID, name="保存的资源池", weight=3))
+        session.add(GatewayPool(id=POOL_ID, name="保存的资源池"))
         session.add(
             GatewayNode(
                 id=NODE_ID,
@@ -92,7 +92,7 @@ async def test_loader_uses_saved_tables_without_any_publication(config_database)
     await save_configuration(factory)
 
     config = await loader.load_current()
-    assert config.pools[POOL_ID].weight == 3
+    assert config.pools[POOL_ID].name == "保存的资源池"
     assert config.nodes[NODE_ID].base_url == "https://saved.example.com"
     assert config.nodes[NODE_ID].max_concurrency == 4
     assert config.routes[MODEL].pool_id == POOL_ID
@@ -120,19 +120,19 @@ async def test_refresh_failure_keeps_entire_old_view_then_recovers(config_databa
 
     async with engine.begin() as connection:
         await connection.execute(
-            text("UPDATE t_nexus_gateway_pools SET weight = 9 WHERE id = :id"), {"id": POOL_ID}
+            text("UPDATE t_nexus_gateway_pools SET name = '改名池' WHERE id = :id"), {"id": POOL_ID}
         )
         await connection.execute(text("ALTER TABLE t_nexus_gateway_nodes RENAME TO unavailable_nodes"))
     await refresher.tick()
     assert state.config is original
-    assert state.config.pools[POOL_ID].weight == 3
+    assert state.config.pools[POOL_ID].name == "保存的资源池"
 
     async with engine.begin() as connection:
         await connection.execute(text("ALTER TABLE unavailable_nodes RENAME TO t_nexus_gateway_nodes"))
     await refresher.tick()
-    assert state.config.pools[POOL_ID].weight == 9
+    assert state.config.pools[POOL_ID].name == "改名池"
     assert state.config.nodes[NODE_ID] == original.nodes[NODE_ID]
-    assert original.pools[POOL_ID].weight == 3
+    assert original.pools[POOL_ID].name == "保存的资源池"
 
 
 async def test_identical_configuration_preserves_view_object(config_database):

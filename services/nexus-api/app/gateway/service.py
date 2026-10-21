@@ -792,7 +792,6 @@ class GatewayControlService:
             "id": pool.id,
             "name": pool.name,
             "description": pool.description,
-            "weight": pool.weight,
             "enabled": pool.enabled,
             "sort_order": pool.sort_order,
         }
@@ -807,7 +806,6 @@ class GatewayControlService:
             "target_model": route.target_model,
             "description": route.description,
             "enabled": route.enabled,
-            "weight": route.weight,
         }
 
 

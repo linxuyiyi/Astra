@@ -60,7 +60,6 @@ def _optional_dt(value: Any) -> datetime | None:
 class PoolConfig:
     id: str
     name: str
-    weight: int
     enabled: bool
 
 
@@ -127,7 +126,6 @@ class RouteConfig:
     model: str
     pool_id: str
     enabled: bool
-    weight: int
     target_model: str | None = None
 
     @classmethod
@@ -137,7 +135,6 @@ class RouteConfig:
             model=_text(item.get("model")),
             pool_id=_text(item.get("pool_id")),
             enabled=bool(item.get("enabled", True)),
-            weight=int(item.get("weight") or 0),
             target_model=item.get("target_model") or None,
         )
 
@@ -193,7 +190,6 @@ class GatewayConfig:
             item["id"]: PoolConfig(
                 id=_text(item.get("id")),
                 name=_text(item.get("name")),
-                weight=int(item.get("weight") or 0),
                 enabled=bool(item.get("enabled", True)),
             )
             for item in data.get("pools", [])

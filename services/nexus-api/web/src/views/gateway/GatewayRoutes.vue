@@ -77,7 +77,6 @@
       <ElTableColumn label="关联资源池" min-width="140" show-overflow-tooltip>
         <template #default="{ row }">{{ poolName(row.pool_id) }}</template>
       </ElTableColumn>
-      <ElTableColumn label="权重" prop="weight" width="90" align="center" />
       <ElTableColumn label="状态" width="100" align="center">
         <template #default="{ row }">
           <ElTag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '禁用' }}</ElTag>
@@ -142,9 +141,6 @@
         </ElFormItem>
         <ElFormItem label="描述" prop="description">
           <ElInput v-model="routeForm.description" type="textarea" :rows="2" placeholder="说明该路由用途或所属团队" />
-        </ElFormItem>
-        <ElFormItem label="权重" prop="weight">
-          <ElInput v-model="routeForm.weight" type="number" min="0" />
         </ElFormItem>
         <ElFormItem label="启用" prop="enabled">
           <ElSwitch v-model="routeForm.enabled" data-testid="gateway-route-enabled" />
@@ -212,7 +208,6 @@ const routeForm = reactive({
   target_model: '',
   pool_id: '',
   description: '',
-  weight: '1',
   enabled: true,
 })
 
@@ -316,8 +311,7 @@ function openRouteCreate() {
     target_model: '',
     pool_id: pools.value[0]?.id ?? '',
     description: '',
-    weight: '1',
-    enabled: true,
+      enabled: true,
   })
   routeError.value = ''
   routeInitial.value = routeSnapshot()
@@ -331,7 +325,7 @@ function openRouteEdit(route: GatewayRoute) {
     target_model: route.target_model ?? '',
     pool_id: route.pool_id,
     description: route.description,
-    weight: String(route.weight),
+   
     enabled: route.enabled,
   })
   routeError.value = ''
@@ -350,7 +344,6 @@ async function submitRoute() {
       target_model: target ? target : null,
       pool_id: routeForm.pool_id,
       description: routeForm.description,
-      weight: Number(routeForm.weight) || 0,
       enabled: routeForm.enabled,
     }
     if (routeForm.id) await gatewayApi.updateRoute(routeForm.id, body)

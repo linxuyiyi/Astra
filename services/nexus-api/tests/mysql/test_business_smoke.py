@@ -112,6 +112,7 @@ def test_mysql_api_restart_and_im_claim(tmp_path):
         assert outcome.returncode == 0, "数据库初始化失败；请单独执行初始化检查"
 
     from sqlalchemy import inspect
+
     from app.sql_storage import metadata
 
     with engine.connect() as connection:
@@ -121,14 +122,11 @@ def test_mysql_api_restart_and_im_claim(tmp_path):
         for name in tables:
             for foreign_key in inspector.get_foreign_keys(name):
                 assert foreign_key["referred_table"] in tables
-        assert (
-            connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND ENGINE!='InnoDB'"
-                )
-            ).scalar()
-            == 0
+        non_innodb = text(
+            "SELECT COUNT(*) FROM information_schema.TABLES "
+            "WHERE TABLE_SCHEMA=DATABASE() AND ENGINE!='InnoDB'"
         )
+        assert connection.execute(non_innodb).scalar() == 0
 
     processes = []
     logs = []

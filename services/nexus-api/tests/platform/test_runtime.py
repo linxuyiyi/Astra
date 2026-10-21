@@ -296,7 +296,7 @@ def test_dispatch_respects_employee_auto_execute(monkeypatch, auto_execute, expe
     async def start(self, task_id, **kwargs):
         started.append(task_id)
 
-    monkeypatch.setattr(celery_app, "init_database", no_init)
+    monkeypatch.setattr(celery_app, "validate_database", no_init)
     monkeypatch.setattr(celery_app, "worker_session", worker_scope)
     monkeypatch.setattr(celery_app.Dispatcher, "claim_once", claim_once)
     monkeypatch.setattr(celery_app.RuntimeService, "start", start)

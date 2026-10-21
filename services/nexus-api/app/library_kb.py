@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
 import httpx
@@ -18,7 +17,13 @@ class KnowledgeMapError(Exception):
 
 
 def embedding_config() -> dict[str, Any] | None:
-    raw = os.environ.get("NEXUS_KB_EMBEDDING_JSON", "").strip()
+    """图书馆同步到 AgentScope 知识库的 embedding 引用。
+
+    由 NEXUS_KB_EMBEDDING_JSON 显式配置，Settings 启动时已校验格式。
+    网关暂未提供 /v1/embeddings，这里只接受 AgentScope 内的 credential 引用。
+    """
+
+    raw = get_settings().kb_embedding_json.strip()
     if not raw:
         return None
     try:

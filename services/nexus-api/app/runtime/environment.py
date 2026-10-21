@@ -139,6 +139,14 @@ class ExecutionEnvironmentRuntime:
         return CheckItem("OpenCode Server", True, f"健康：{port} · {version} · Workspace 匹配")
 
     async def _test_local(self, environment: OpenCodeExecutionEnvironment) -> list[CheckItem]:
+        if self.settings.executor_type == "worker":
+            return [
+                CheckItem(
+                    "执行环境",
+                    False,
+                    "当前部署只支持远程 Worker；请在 Worker 机器上创建 LINUX_REMOTE 环境",
+                )
+            ]
         binary = environment.opencode_path
         resolved = resolve_executable(binary)
         exists = bool(resolved)

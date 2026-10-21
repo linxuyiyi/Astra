@@ -35,6 +35,9 @@ def _settings(*, gateway_enabled: bool = True, **overrides):
         "gateway_master_key": None,
         "redis_url": "redis://127.0.0.1:6379/0",
         "mcp_transport": "stdio",
+        "executor_type": "opencode_server",
+        "database_url": "mysql+asyncmy://nexus@127.0.0.1:3306/nexus",
+        "database_backend": "mysql",
         "resolved_runtime_dir": Path("/tmp/astra-run"),
         "resolved_log_dir": Path("/tmp/astra-logs"),
     }
@@ -207,3 +210,25 @@ def test_validate_start_rejects_invalid_upstream_metadata(
         service.validate_start("dev", _settings())
 
     assert "UPSTREAM.json" in str(excinfo.value)
+
+def test_validate_start_worker_mode_skips_local_opencode_bundle(tmp_path, monkeypatch):
+    # 公司部署只用远程 Worker：没有本地 workspace-ui 产物也必须能启动。
+    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.35", installed=[])
+    monkeypatch.setattr(service, "ROOT", tmp_path)
+    monkeypatch.setattr(service, "FRONTEND", frontend)
+
+    service.validate_start("dev", _settings(executor_type="worker"))
+    service.validate_start(
+        "pro", _settings(executor_type="worker", gateway_enabled=False)
+    )
+
+
+def test_production_rejects_cli_fallback_executor(tmp_path, monkeypatch):
+    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.35", installed=["1.18.35"])
+    monkeypatch.setattr(service, "ROOT", tmp_path)
+    monkeypatch.setattr(service, "FRONTEND", frontend)
+
+    with pytest.raises(RuntimeError, match="opencode_server"):
+        service.validate_start(
+            "pro", _settings(executor_type="opencode_cli_fallback", gateway_enabled=False)
+        )

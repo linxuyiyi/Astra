@@ -57,24 +57,13 @@ bash services/agent-service/healthcheck.sh
 
 ## 聊天模型
 
-Nexus 页面没有模型或密钥字段。模型登记在 Agent Service：
+Nexus 页面没有模型或密钥字段。模型统一经 Nexus API 网关调用，不再由部署脚本向 Agent Service 预登记厂商 credential：
 
-没有付费密钥时用本机 Ollama。有 DeepSeek 密钥的验证机使用 OpenAI 兼容凭证，模型 id 是 `deepseek-flash`：
+- 员工在配置中心选择已启用的网关路由（`model_route_id`）。
+- Nexus 用 `NEXUS_GATEWAY_OPENAI_BASE` 和 `NEXUS_GATEWAY_API_KEY` 在 Agent Service 登记/复用指向网关的 `openai_credential`（见 `nexus_api/model_route.py`）。
+- 创建 Session 时带上该路由的模型名；没有路由会直接报错，不会回退到部署环境里的厂商模型。
 
-```bash
-export NEXUS_CHAT_PROVIDER=openai
-export OPENAI_BASE_URL=https://api.deepseek.com
-export OPENAI_MODEL=deepseek-flash
-export OPENAI_API_KEY="${DEEPSEEK_API_KEY}"
-# 也可以不设 OPENAI_API_KEY，只导出 DEEPSEEK_API_KEY。脚本在前者为空时读取后者。
-services/agent-service/.venv-agentscope/bin/python services/agent-service/bootstrap_chat_model.py
-```
-
-`OPENAI_BASE_URL` 写入 `openai_credential.base_url`。AgentScope 的 `OpenAIChatModel` 会把这个地址传给客户端。打印的 JSON 只有 `type`、`credential_id`、`model` 和空的 `parameters`，不含密钥。同一类型里，只有 `base_url`（Ollama 则是 `host`）一致的凭证才会复用。
-
-本机默认仍是 `NEXUS_CHAT_PROVIDER=ollama`。没有密钥时不要改成 openai，脚本会直接退出，不会登记空凭证。
-
-把打印出的 JSON 设为 `NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG`，再启动 Nexus API。创建 Session 时会带上这份 `chat_model_config`。变量为空时，Session 没有模型，发送消息不会被改成模拟回复。
+因此 `NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG` 和 `bootstrap_chat_model.py` 已移除。需要新增模型时，在网关新增节点与路由，不需要改 Agent Service 的 credential。
 
 ## 本地嵌入冒烟
 

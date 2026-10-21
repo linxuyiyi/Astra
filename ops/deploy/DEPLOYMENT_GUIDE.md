@@ -50,14 +50,15 @@
 ## 2. 外部依赖与配置
 
 ### 2.1 DeepSeek（聊天模型）
-- OpenAI 兼容：`OPENAI_BASE_URL=https://api.deepseek.com`，模型 `deepseek-flash`，密钥 `DEEPSEEK_API_KEY`（脚本把它同时作为 `OPENAI_API_KEY`）。
-- 三处用到：Agent Service 凭证（`bootstrap_chat_model.py` 登记）、Worker 的 OpenCode（provider `deepseek` 或经网关 `nexus-gateway/deepseek-flash`）、llm_wiki 的 LLM 配置（customEndpoint `https://api.deepseek.com/v1`）。
+- 上游 OpenAI 兼容地址只配置在 Nexus 网关节点里（管理台或安装脚本的 `deepseek` 节点），不配置在 Agent Service、Worker 或 llm_wiki 里。
+- 统一入口：`NEXUS_GATEWAY_OPENAI_BASE=http://<控制机内网>:18110/v1` + `NEXUS_GATEWAY_API_KEY`。员工对话、Worker 的 OpenCode（`nexus-gateway/<路由>`）和 llm_wiki 都经这里调用。
 - 上游繁忙时会返回 "Service is too busy"/503 或长时间 `: keep-alive`，见 §7。
-- 检查：`curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $DEEPSEEK_API_KEY" https://api.deepseek.com/models` 应为 200。
+- 检查：`curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $NEXUS_GATEWAY_API_KEY" http://127.0.0.1:18110/v1/models` 应为 200。
 
 ### 2.2 Embedding
 - DeepSeek 没有嵌入模型，**不要**把 deepseek-flash 配成 embedding。
 - AgentScope 知识库：已接 `CollectionPerKbManager`，向量库为本地 Qdrant（`AGENTSCOPE_QDRANT_PATH`，默认 `services/agent-service/data/qdrant`）。创建知识库仍需在 AgentScope 登记可用的 embedding 模型；DeepSeek 聊天凭证不能当 embedding（见 §9）。
+- Nexus 同步图书馆到知识库的 embedding 引用用 `NEXUS_KB_EMBEDDING_JSON` 显式配置（`type`、`credential_id`、`model`、`dimensions`，不含密钥）；留空则不同步。网关暂未代理 `/v1/embeddings`，后续补齐后再切到网关。
 - llm_wiki：未启用 embedding，搜索 `mode=keyword`/`hybrid`（无 vector 命中），可接受。需要向量时可配 OpenAI 兼容 embedding 端点（如本地 Ollama/LM Studio），本机 sentence-transformers `all-MiniLM-L6-v2` 仅做过冒烟（`services/agent-service/embedding_smoke.py`），不能直接接 llm_wiki。
 
 ### 2.3 llm_wiki
@@ -125,9 +126,11 @@
 | NEXUS_DATA_DIR | 否 | services/nexus-api/data | 附件和自建资源文件；MySQL 部署不在此创建业务库 |
 | NEXUS_AGENTSCOPE_BASE_URL / NEXUS_AGENTSCOPE_USER_ID | 是 | http://127.0.0.1:18000 / nexus | Agent Service |
 | NEXUS_TASK_MCP_URL | 是 | — | `http://127.0.0.1:18202/mcp` |
-| NEXUS_CHAT_PROVIDER | 是 | ollama | 设 `openai` |
-| OPENAI_BASE_URL / OPENAI_MODEL / OPENAI_API_KEY | 是 | — | DeepSeek；`OPENAI_API_KEY` 空时读 `DEEPSEEK_API_KEY` |
-| NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG | 是 | — | `bootstrap_chat_model.py` 打印的 JSON（只含 credential_id，不含密钥）；**为空则会话无模型、不出文本** |
+| NEXUS_GATEWAY_OPENAI_BASE | 是 | — | Nexus 网关 `/v1`；员工对话、Worker 与 llm_wiki 的唯一模型入口 |
+| NEXUS_GATEWAY_API_KEY | 是 | — | 调用网关的 Key；不要配置厂商直连 Key |
+| NEXUS_KB_EMBEDDING_JSON | 否 | — | 图书馆 embedding credential 引用；网关暂未代理 embeddings |
+| ASTRA_EXECUTOR_TYPE | 是 | worker | 公司部署用 `worker`（只用远程 Worker，不启动本机 OpenCode）；本地调试用 `opencode_server` |
+| OPENAI_BASE_URL / OPENAI_MODEL / OPENAI_API_KEY | 否 | — | 仅本机 OpenCode/CLI 调试用，正式部署不依赖 |
 
 **llm_wiki Web 容器**：`LLM_WIKI_DATA_DIR=/var/lib/llm-wiki`、`LLM_WIKI_WEB_HOST=127.0.0.1`、`LLM_WIKI_WEB_PORT=18080`、`LLM_WIKI_BACKEND_READY_TIMEOUT=180`（仿真启动慢）。
 
@@ -239,10 +242,9 @@ NEXUS_CHAT_PROVIDER=openai OPENAI_BASE_URL=https://api.deepseek.com OPENAI_MODEL
 ### 5.6 Nexus API
 ```bash
 cd $R/services/nexus-api && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-CFG='<上一步输出的 JSON>'
 NEXUS_DATA_DIR=$R/services/nexus-api/data NEXUS_AGENTSCOPE_BASE_URL=http://127.0.0.1:18000 NEXUS_AGENTSCOPE_USER_ID=nexus \
-NEXUS_TASK_MCP_URL=http://127.0.0.1:18202/mcp NEXUS_CHAT_PROVIDER=openai OPENAI_BASE_URL=https://api.deepseek.com \
-OPENAI_MODEL=deepseek-flash OPENAI_API_KEY="$DEEPSEEK_API_KEY" NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG="$CFG" \
+NEXUS_TASK_MCP_URL=http://127.0.0.1:18202/mcp NEXUS_GATEWAY_OPENAI_BASE=http://127.0.0.1:18110/v1 \
+NEXUS_GATEWAY_API_KEY="$NEXUS_GATEWAY_API_KEY" ASTRA_EXECUTOR_TYPE=worker \
 ops/dev/start_nexus_api.sh start
 ```
 
@@ -299,7 +301,7 @@ curl -X POST $B/nodes/<node>/probe     # 直到 HEALTHY → ACTIVE
 6. 项目（无 GUI，走 Web runtime API）：
    - `POST /api/web/invoke {"command":"create_project","args":{"name":"astra","path":"/var/lib/llm-wiki/projects"}}`
    - `write_file` 写 `.llm-wiki/project.json` = `{"id":"<UUID>","createdAt":<ms>}`
-   - `POST /api/web/store` 逐个 `set` 后 `save`：`lastProject`、`recentProjects`、`projectRegistry`、`apiConfig{enabled,token,mcpEnabled}`、`llmConfig{provider:"custom",customEndpoint:"https://api.deepseek.com/v1",model:"deepseek-flash",apiMode:"chat_completions",apiKey}`、`sourceWatchConfig{enabled:true,autoIngest:true,includeExtensions:["md","txt"],…}`、`embeddingConfig{enabled:false}`
+   - `POST /api/web/store` 逐个 `set` 后 `save`：`lastProject`、`recentProjects`、`projectRegistry`、`apiConfig{enabled,token,mcpEnabled}`、`llmConfig{provider:"custom",customEndpoint:"http://<控制机内网>:18110/v1",model:"deepseek-flash",apiMode:"chat_completions",apiKey:"<NEXUS_GATEWAY_API_KEY>"}`、`sourceWatchConfig{enabled:true,autoIngest:true,includeExtensions:["md","txt"],…}`、`embeddingConfig{enabled:false}`
    - `invoke open_project`；`GET /api/v1/projects` 应显示 `current:true`。
    - 验证 Source API：`PUT /api/v1/projects/<id>/sources/file {"path":"astra/probe.md","content":"…"}` → 200 `action: created`；`DELETE …?path=astra/probe.md` → 200。
 7. Ingest pump（box）：`tools/llm_wiki/llm_wiki_ingest_pump.py` 保持无头 Chrome（`--user-data-dir ~/.llmwiki-chrome --remote-debugging-port=9333`）打开 Web UI，每 30 s 把 `raw/sources/**/*.md` 内容变化的文件 `enqueueBatch`，并在队列被自动暂停（`restoredBacklogWaiting`）时 `resumeProcessing()`。依赖 `websocket-client`。**脚本引用了打包资源的哈希文件名，换版本必须更新**。

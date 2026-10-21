@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nexus API on 18120. Chat model config comes from NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG.
+# Nexus API on 18120. Chat models come from enabled gateway routes (NEXUS_GATEWAY_*).
 # usage: ops/dev/start_nexus_api.sh [start|stop|status]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

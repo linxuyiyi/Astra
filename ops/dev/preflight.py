@@ -313,6 +313,14 @@ async def check_agent(settings) -> CheckResult:
 
 
 async def check_opencode_runtime(settings) -> CheckResult:
+    if settings.executor_type == "worker":
+        return result(
+            "OpenCode Runtime",
+            True,
+            "worker",
+            "远程 Worker 模式：本机不启动、也不校验 OpenCode",
+            "无需处理",
+        )
     if settings.executor_type == "opencode_cli_fallback":
         return result(
             "OpenCode Runtime",

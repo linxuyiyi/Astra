@@ -86,7 +86,7 @@ cd services/nexus-api/web && npm install && npm run dev
 
 停止：`ops/dev/start_astra.sh stop`、`ops/dev/start_nexus_api.sh stop`、`ops/dev/start_agent_service.sh stop`、`ops/dev/start_task_mcp.sh stop`。
 
-`NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG` 由 `services/agent-service/bootstrap_chat_model.py` 生成。页面上没有模型或凭证字段。
+聊天模型不再从部署环境读取：员工选择已启用的网关路由后，Nexus 以 `NEXUS_GATEWAY_OPENAI_BASE` + `NEXUS_GATEWAY_API_KEY` 在 Agent Service 登记指向网关的 credential。页面上没有模型或凭证字段。
 
 ## 任务经验复盘
 

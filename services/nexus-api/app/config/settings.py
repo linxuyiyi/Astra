@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from functools import lru_cache
@@ -209,6 +210,27 @@ class Settings(BaseSettings):
     llm_wiki_project_id: str = ""
     llm_wiki_timeout: float = Field(default=10, gt=0, le=300)
 
+    # 图书馆同步到 AgentScope 知识库时使用的 embedding credential 引用。
+    # 只放 credential_id，不放密钥；网关暂未代理 embeddings，先显式配置。
+    kb_embedding_json: str = Field(default="", validation_alias="NEXUS_KB_EMBEDDING_JSON", repr=False)
+
+    @field_validator("kb_embedding_json")
+    @classmethod
+    def validate_kb_embedding_json(cls, value: str) -> str:
+        raw = value.strip()
+        if not raw:
+            return ""
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            raise ValueError("NEXUS_KB_EMBEDDING_JSON 不是 JSON") from None
+        required = {"type", "credential_id", "model", "dimensions"}
+        if not isinstance(data, dict) or not required.issubset(data):
+            raise ValueError(
+                "NEXUS_KB_EMBEDDING_JSON 必须是包含 type、credential_id、model、dimensions 的对象"
+            )
+        return raw
+
     @field_validator("llm_wiki_api_base_url")
     @classmethod
     def validate_llm_wiki_url(cls, value: str) -> str:
@@ -367,8 +389,10 @@ class Settings(BaseSettings):
     @classmethod
     def validate_executor_type(cls, value: str) -> str:
         normalized = value.strip().lower()
-        if normalized not in {"opencode_server", "opencode_cli_fallback"}:
-            raise ValueError("ASTRA_EXECUTOR_TYPE 只支持 opencode_server 或 opencode_cli_fallback")
+        if normalized not in {"opencode_server", "opencode_cli_fallback", "worker"}:
+            raise ValueError(
+                "ASTRA_EXECUTOR_TYPE 只支持 opencode_server、opencode_cli_fallback 或 worker"
+            )
         return normalized
 
     @field_validator("opencode_server_version")

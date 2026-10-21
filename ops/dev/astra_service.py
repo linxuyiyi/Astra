@@ -202,22 +202,27 @@ def validate_start(mode: str, settings: Any) -> None:
         raise RuntimeError("env file not found; expected ops/env/.env")
     if not (FRONTEND / "node_modules").is_dir():
         raise RuntimeError("web dependencies missing; run: cd services/nexus-api/web && npm ci")
-    missing = missing_workspace_ui_bundles(settings)
-    if missing:
-        detail = "; ".join(str(path) for path in missing)
-        raise RuntimeError(
-            f"workspace-ui bundle missing: {detail}; "
-            "restore the committed bundle from the repository, or rebuild the "
-            "configured upstream version with: node tools/e2e/workspace_ui.mjs build"
-        )
+    # 本地 OpenCode 只是开发/单机调试的执行器；公司正式环境只使用远程 Worker。
+    if settings.executor_type == "opencode_server":
+        missing = missing_workspace_ui_bundles(settings)
+        if missing:
+            detail = "; ".join(str(path) for path in missing)
+            raise RuntimeError(
+                f"workspace-ui bundle missing: {detail}; "
+                "restore the committed bundle from the repository, or rebuild the "
+                "configured upstream version with: node tools/e2e/workspace_ui.mjs build"
+            )
 
     if mode == "pro":
         database_url = (settings.database_url or "").lower()
         sqlite = database_url.startswith("sqlite") if database_url else settings.database_backend == "sqlite"
         if sqlite:
             raise RuntimeError("production mode requires MySQL")
-        if settings.executor_type != "opencode_server":
-            raise RuntimeError("production mode requires ASTRA_EXECUTOR_TYPE=opencode_server")
+        if settings.executor_type not in {"opencode_server", "worker"}:
+            raise RuntimeError(
+                "production mode requires ASTRA_EXECUTOR_TYPE=worker "
+                "(远程 Worker) 或 opencode_server（本机执行）"
+            )
         validate_gateway_production(settings)
 
 

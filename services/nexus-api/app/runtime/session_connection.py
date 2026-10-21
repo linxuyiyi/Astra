@@ -64,6 +64,8 @@ async def _worker_channel(environment) -> str:
 async def connect(environment, *, start: bool = False):
     settings = get_settings()
     if environment.mode == ExecutionMode.LOCAL:
+        if settings.executor_type == "worker":
+            raise RuntimeError("当前部署只支持远程 Worker，不能使用 LOCAL 执行环境")
         if start:
             await LocalOpenCodeServerExecutor(environment, settings).ensure_ready()
         yield OpenCodeServerClient(settings, base_url=f"http://127.0.0.1:{environment.opencode_server_port}")

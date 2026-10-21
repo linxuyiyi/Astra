@@ -155,10 +155,14 @@ step_deps() {
       else redis-server --bind 127.0.0.1 --port 6379 --daemonize yes >/dev/null; fi
     else docker compose -f "$NEXUS_ROOT/services/agent-service/docker-compose.yml" up -d; fi
   fi
-  log "OpenCode CLI"
-  local ocv; ocv="$( (opencode --version || "$HOME/.local/bin/opencode" --version) 2>/dev/null | tail -1 || true)"
-  if [ "$(oc_ver "$ocv")" != "$OPENCODE_VERSION" ]; then npm i -g --prefix "$HOME/.local" "opencode-ai@$OPENCODE_VERSION" >/dev/null; fi
-  export PATH="$HOME/.local/bin:$PATH"
+  if [ "${ASTRA_EXECUTOR_TYPE:-worker}" = "opencode_server" ]; then
+    log "OpenCode CLI（本机执行模式）"
+    local ocv; ocv="$( (opencode --version || "$HOME/.local/bin/opencode" --version) 2>/dev/null | tail -1 || true)"
+    if [ "$(oc_ver "$ocv")" != "$OPENCODE_VERSION" ]; then npm i -g --prefix "$HOME/.local" "opencode-ai@$OPENCODE_VERSION" >/dev/null; fi
+    export PATH="$HOME/.local/bin:$PATH"
+  else
+    log "跳过本机 OpenCode（ASTRA_EXECUTOR_TYPE=${ASTRA_EXECUTOR_TYPE:-worker}，只使用远程 Worker）"
+  fi
   log "Python 虚拟环境（nexus api / agent service）"
   local py=python3
   [ -x "$NEXUS_ROOT/services/nexus-api/.venv/bin/python" ] || $py -m venv "$NEXUS_ROOT/services/nexus-api/.venv"
@@ -244,16 +248,16 @@ ASTRA_LLM_WIKI_API_BASE_URL=http://127.0.0.1:$LLM_WIKI_LOCAL_PORT/api/v1
 ASTRA_LLM_WIKI_TIMEOUT=30
 ENV
   fi; } > "$RUNENV.new"
-  local cfg; cfg="$(get_kv "$RUNENV" NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG)"
-  [ -n "$cfg" ] && printf 'NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG=%s\n' "$cfg" >> "$RUNENV.new"
   mv "$RUNENV.new" "$RUNENV"; chmod 600 "$RUNENV"
-  # OpenCode deepseek provider (key referenced by env, not stored)
-  local oc="$HOME/.config/opencode/opencode.json"
-  if [ ! -f "$oc" ] || ! grep -q '"deepseek"' "$oc"; then
-    mkdir -p "$(dirname "$oc")"; [ -f "$oc" ] && cp "$oc" "$oc.bak.$(date +%s)"
-    cat > "$oc" <<'JSON'
+  if [ "${ASTRA_EXECUTOR_TYPE:-worker}" = "opencode_server" ]; then
+    # 本机 OpenCode 调试专用；正式部署只使用远程 Worker。
+    local oc="$HOME/.config/opencode/opencode.json"
+    if [ ! -f "$oc" ] || ! grep -q '"deepseek"' "$oc"; then
+      mkdir -p "$(dirname "$oc")"; [ -f "$oc" ] && cp "$oc" "$oc.bak.$(date +%s)"
+      cat > "$oc" <<'JSON'
 {"$schema":"https://opencode.ai/config.json","provider":{"deepseek":{"npm":"@ai-sdk/openai-compatible","name":"DeepSeek","options":{"baseURL":"https://api.deepseek.com/v1","apiKey":"{env:DEEPSEEK_API_KEY}"},"models":{"deepseek-flash":{"name":"deepseek-flash"}}}}}
 JSON
+    fi
   fi
 }
 
@@ -346,12 +350,6 @@ step_services() {
   fi
   "$R/services/nexus-api/.venv/bin/python" "$NEXUS_ROOT/ops/dev/service_ctl.py" wait-http http://127.0.0.1:18000/health --timeout 120 --header "X-User-ID: nexus" \
     || die "Agent Service(18000) 未就绪"
-  if [ -z "$(get_kv "$RUNENV" NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG)" ]; then
-    log "登记聊天模型（bootstrap_chat_model.py）"
-    local cfg; cfg="$(set -a; . "$RUNENV"; . "$SECRETS"; set +a; "$R/services/agent-service/.venv-agentscope/bin/python" "$R/services/agent-service/bootstrap_chat_model.py" | grep -E '^\{' | tail -1)"
-    [ -n "$cfg" ] || die "bootstrap_chat_model.py 未输出配置"
-    printf 'NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG=%s\n' "$cfg" >> "$RUNENV"
-  fi
   if [ "$SYSTEMD" = 1 ]; then
     start_service nexus-api simple "cd $R/services/nexus-api && exec .venv/bin/uvicorn nexus_api.service:app --host 127.0.0.1 --port 18120"
   else
@@ -429,13 +427,28 @@ RS
   rm -rf "$tmp"
   wait_http "http://127.0.0.1:$LLM_WIKI_LOCAL_PORT/api/v1/health" "llm_wiki" 60
   log "创建/打开项目并写入配置（Web runtime API，无 GUI）"
-  (set -a; . "$SECRETS"; set +a; LLM_WIKI_LOCAL_PORT="$LLM_WIKI_LOCAL_PORT" python3 - <<'PY'
+  # llm_wiki 的模型调用必须经 Nexus 网关；远程 wiki 需要网关在它可达的内网地址上。
+  local wiki_gateway="${NEXUS_LLM_WIKI_GATEWAY_BASE:-}"
+  if [ -z "$wiki_gateway" ] && [ -n "${LLM_WIKI_HOST:-}" ]; then
+    wiki_gateway="${NEXUS_REMOTE_GATEWAY_LOCAL_URL:-}"
+  fi
+  [ -n "$wiki_gateway" ] || wiki_gateway="http://127.0.0.1:18110"
+  case "$wiki_gateway" in
+    *127.0.0.1*|*localhost*|*\[::1\]*)
+      [ -z "${LLM_WIKI_HOST:-}" ] || die "远程 llm_wiki 需要 NEXUS_LLM_WIKI_GATEWAY_BASE 指向 llm_wiki 可达的 Nexus 网关地址（例如 http://10.0.0.8:18110）"
+      ;;
+  esac
+  (set -a; . "$SECRETS"; set +a; LLM_WIKI_LOCAL_PORT="$LLM_WIKI_LOCAL_PORT" NEXUS_LLM_WIKI_GATEWAY_BASE="$wiki_gateway" python3 - <<'PY'
 import json, os, time, urllib.request
 U = f"http://127.0.0.1:{os.environ['LLM_WIKI_LOCAL_PORT']}"
 def post(path, body):
     r = urllib.request.Request(U + path, json.dumps(body).encode(), {"Content-Type": "application/json"})
     return json.load(urllib.request.urlopen(r, timeout=120))
 inv = lambda c, a: post("/api/web/invoke", {"command": c, "args": a})
+gateway = os.environ["NEXUS_LLM_WIKI_GATEWAY_BASE"].rstrip("/")
+gateway_key = os.environ.get("NEXUS_GATEWAY_API_KEY", "").strip()
+if not gateway_key:
+    raise SystemExit("缺少 NEXUS_GATEWAY_API_KEY；llm_wiki 必须经 Nexus 网关调用模型")
 pid = os.environ["ASTRA_LLM_WIKI_PROJECT_ID"]; root = "/var/lib/llm-wiki/projects"; path = f"{root}/astra"
 try: inv("create_project", {"name": "astra", "path": root})
 except Exception: pass  # already exists
@@ -444,8 +457,8 @@ proj = {"id": pid, "name": "astra", "path": path}
 state = {"lastProject": proj, "recentProjects": [proj],
   "projectRegistry": {pid: {"id": pid, "path": path, "name": "astra", "lastOpened": 0}},
   "apiConfig": {"enabled": True, "allowUnauthenticated": False, "allowLanAccess": False, "mcpEnabled": True, "token": os.environ["ASTRA_LLM_WIKI_API_TOKEN"]},
-  "llmConfig": {"provider": "custom", "apiKey": os.environ["DEEPSEEK_API_KEY"], "model": os.environ.get("OPENAI_MODEL", "deepseek-flash"),
-                "ollamaUrl": "", "customEndpoint": os.environ.get("OPENAI_BASE_URL", "https://api.deepseek.com").rstrip("/") + "/v1",
+  "llmConfig": {"provider": "custom", "apiKey": gateway_key, "model": os.environ.get("OPENAI_MODEL", "deepseek-flash"),
+                "ollamaUrl": "", "customEndpoint": gateway + "/v1",
                 "maxContextSize": 200000, "apiMode": "chat_completions"},
   "embeddingConfig": {"enabled": False, "endpoint": "", "apiKey": "", "model": ""},
   "sourceWatchConfig": {"enabled": True, "autoIngest": True, "persistExtractedMarkdown": False, "parsingConcurrency": 1, "ingestConcurrency": 1,

@@ -292,24 +292,6 @@ def db_path() -> Path:
     return Path(url.database)
 
 
-def load_chat_model_config() -> dict[str, Any] | None:
-    """部署环境里的 Agent Service 模型引用。页面不编辑这项。"""
-    raw = os.environ.get("NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG", "").strip()
-    if not raw:
-        return None
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG 不是 JSON") from exc
-    if not isinstance(parsed, dict):
-        raise RuntimeError("NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG 必须是对象")
-    required = {"type", "credential_id", "model", "parameters"}
-    missing = sorted(required - set(parsed))
-    if missing:
-        raise RuntimeError("NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG 缺少 " + ", ".join(missing))
-    return parsed
-
-
 def human_native_message(message: dict[str, Any]) -> dict[str, Any]:
     """人类消息的原生结构：正文 + 可渲染的附件 DataBlock。
 
@@ -1013,7 +995,6 @@ def create_app() -> FastAPI:
         app.state.agentscope = AgentScopeClient(
             os.environ.get("NEXUS_AGENTSCOPE_BASE_URL") or None,
             os.environ.get("NEXUS_AGENTSCOPE_USER_ID", "nexus"),
-            chat_model_config=load_chat_model_config(),
         )
         app.state.human_events = HumanEvents()
         yield

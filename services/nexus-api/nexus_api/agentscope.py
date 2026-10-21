@@ -46,11 +46,9 @@ class AgentScopeClient:
         base_url: str | None,
         user_id: str,
         http: httpx.AsyncClient | None = None,
-        chat_model_config: dict[str, Any] | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/") if base_url else None
         self.user_id = user_id
-        self.chat_model_config = chat_model_config
         self._http = http
         self._owns_http = http is None
 

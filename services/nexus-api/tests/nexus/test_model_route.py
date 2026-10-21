@@ -157,19 +157,12 @@ def test_empty_route_refuses_a_vendor_session(tmp_path, monkeypatch):
             return httpx.Response(201, json={"agent_id": "agent-1"})
         return httpx.Response(200, json={})
 
-    vendor = {
-        "type": "openai_credential",
-        "credential_id": "cred-vendor",
-        "model": "deepseek-chat",
-        "parameters": {},
-    }
     application = create_app()
     with TestClient(application) as client:
         application.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
             httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
-            chat_model_config=vendor,
         )
         created = client.post(
             "/api/v1/employees",

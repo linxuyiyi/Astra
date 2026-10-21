@@ -19,7 +19,6 @@ from nexus_api.main import (
     create_app,
     data_dir,
     interleave_messages,
-    load_chat_model_config,
     model_input_blocks,
     observe_stream_event,
     package_dir,
@@ -1052,25 +1051,13 @@ def test_stream_cursor_is_the_redis_checkpoint_not_an_event_id():
     assert stream_cursor(None) is None
 
 
-def test_empty_route_does_not_attach_the_deploy_vendor_config(monkeypatch):
-    monkeypatch.delenv("NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG", raising=False)
-    assert load_chat_model_config() is None
-    monkeypatch.setenv("NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG", "{")
-    with pytest.raises(RuntimeError):
-        load_chat_model_config()
-
+def test_empty_route_does_not_attach_a_vendor_config():
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
         return httpx.Response(201, json={"session_id": "session-model"})
 
-    vendor = {
-        "type": "openai_credential",
-        "credential_id": "cred-vendor",
-        "model": "deepseek-chat",
-        "parameters": {},
-    }
     gateway = {
         "type": "openai_credential",
         "credential_id": "cred-gw",
@@ -1083,7 +1070,6 @@ def test_empty_route_does_not_attach_the_deploy_vendor_config(monkeypatch):
         "http://agentscope.test",
         "nexus",
         httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
-        chat_model_config=vendor,
     )
     with pytest.raises(AgentScopeError) as raised:
         asyncio.run(client.create_session("agent-1", "邮箱"))

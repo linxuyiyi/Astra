@@ -6,7 +6,7 @@
       v-if="copyable"
       class="id-display__copy"
       type="button"
-      aria-label="复制 {{ value }}"
+      :aria-label="`复制 ${value}`"
       :title="copied ? '已复制' : '复制'"
       @click.stop="copy"
     >

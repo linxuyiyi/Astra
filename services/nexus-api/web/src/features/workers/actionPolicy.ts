@@ -23,6 +23,13 @@ export function hasOccupancy(health: BlockingHealth): boolean {
   return occupancyBlockers(health).length > 0
 }
 
+/** Task occupancy is decided by the backend, including failed and unreleased canceled tasks. */
+export function occupiedTaskIds(health: BlockingHealth): string[] {
+  return [...new Set((health?.blocking ?? [])
+    .filter(item => item.code === 'occupied_task' && item.task_id)
+    .map(item => item.task_id as string))]
+}
+
 export function isActiveMaintenanceState(state: string | null | undefined): boolean {
   return ACTIVE_MAINTENANCE_STATES.has(String(state ?? ''))
 }

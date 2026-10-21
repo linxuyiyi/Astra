@@ -216,11 +216,10 @@ export function listMaintenanceOperations(
 export function submitMaintenance(
   environmentId: number,
   action: MaintenanceAction,
-  requestedBy = 'console-admin',
 ): Promise<MaintenanceSubmitResult> {
   return request<MaintenanceSubmitResult>(`/api/agent-workers/${environmentId}/maintenance`, {
     method: 'POST',
-    body: JSON.stringify({ action, requested_by: requestedBy }),
+    body: JSON.stringify({ action }),
   })
 }
 

@@ -754,7 +754,9 @@ async def list_operations(
     return [operation_payload(item) for item in rows]
 
 
-async def cancel_operation(session, operation_id: str) -> WorkerMaintenanceOperation:
+async def cancel_operation(
+    session, operation_id: str, *, actor: str | None = None
+) -> WorkerMaintenanceOperation:
     operation = await session.get(WorkerMaintenanceOperation, operation_id)
     if operation is None:
         raise HTTPException(404, "维护操作不存在")
@@ -766,16 +768,20 @@ async def cancel_operation(session, operation_id: str) -> WorkerMaintenanceOpera
                 409,
                 "远端可能仍存在晚到操作，请先调用 reconcile 做只读核对，不能直接取消释放",
             )
-        return await _cancel_queued(session, operation, release=True)
+        return await _cancel_queued(session, operation, release=True, actor=actor)
     if operation.state == MaintenanceState.QUEUED.value:
         if operation.reconcile_required or operation.reconcile_only:
-            return await _cancel_queued(session, operation, release=False)
-        return await _cancel_queued(session, operation, release=True)
-    return await _request_cancel(session, operation)
+            return await _cancel_queued(session, operation, release=False, actor=actor)
+        return await _cancel_queued(session, operation, release=True, actor=actor)
+    return await _request_cancel(session, operation, actor=actor)
 
 
 async def _cancel_queued(
-    session, operation: WorkerMaintenanceOperation, *, release: bool
+    session,
+    operation: WorkerMaintenanceOperation,
+    *,
+    release: bool,
+    actor: str | None = None,
 ) -> WorkerMaintenanceOperation:
     now = datetime.now(UTC)
     state = MaintenanceState.CANCELED.value if release else MaintenanceState.INTERRUPTED.value
@@ -812,7 +818,7 @@ async def _cancel_queued(
             name="已取消" if release else "取消待核对",
             state=state,
             message=message,
-            detail={"reason": error_code},
+            detail={"reason": error_code, **({"requested_by": actor} if actor else {})},
         )
     )
     await session.commit()
@@ -820,7 +826,9 @@ async def _cancel_queued(
     return operation
 
 
-async def _request_cancel(session, operation: WorkerMaintenanceOperation) -> WorkerMaintenanceOperation:
+async def _request_cancel(
+    session, operation: WorkerMaintenanceOperation, *, actor: str | None = None
+) -> WorkerMaintenanceOperation:
     now = datetime.now(UTC)
     result = await session.execute(
         update(WorkerMaintenanceOperation)
@@ -844,7 +852,7 @@ async def _request_cancel(session, operation: WorkerMaintenanceOperation) -> Wor
             name="请求取消",
             state=operation.state,
             message="将在下一个安全检查点取消",
-            detail={},
+            detail={"requested_by": actor} if actor else {},
         )
     )
     await session.commit()
@@ -853,7 +861,11 @@ async def _request_cancel(session, operation: WorkerMaintenanceOperation) -> Wor
 
 
 async def retry_operation(
-    session, operation_id: str, *, reconcile_only: bool = False
+    session,
+    operation_id: str,
+    *,
+    reconcile_only: bool = False,
+    actor: str | None = None,
 ) -> WorkerMaintenanceOperation:
     operation = await session.get(WorkerMaintenanceOperation, operation_id)
     if operation is None:
@@ -970,7 +982,11 @@ async def retry_operation(
             name="只读核对" if reconcile_only else "重试",
             state=MaintenanceState.QUEUED.value,
             message=("只读核对远端是否存在晚到安装或重启" if reconcile_only else "重新预检远端事实后继续"),
-            detail={"previous_state": previous_state, "reconcile_only": reconcile_only},
+            detail={
+                "previous_state": previous_state,
+                "reconcile_only": reconcile_only,
+                **({"requested_by": actor} if actor else {}),
+            },
         )
     )
     try:
@@ -987,8 +1003,12 @@ async def retry_operation(
     return operation
 
 
-async def reconcile_operation(session, operation_id: str) -> WorkerMaintenanceOperation:
-    return await retry_operation(session, operation_id, reconcile_only=True)
+async def reconcile_operation(
+    session, operation_id: str, *, actor: str | None = None
+) -> WorkerMaintenanceOperation:
+    return await retry_operation(
+        session, operation_id, reconcile_only=True, actor=actor
+    )
 
 
 class MaintenanceLeaseLost(RuntimeError):

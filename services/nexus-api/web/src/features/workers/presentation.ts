@@ -7,9 +7,9 @@ import type {
   WorkerHealth,
 } from '@/api/maintenance'
 import { redactMaintenanceText } from '@/api/maintenance'
-import { employeeDisplayName, statusLabel, statusTagType, workerFacingMessage } from '@/utils/format'
-
-export type TagTone = 'primary' | 'success' | 'warning' | 'danger' | 'info'
+import { employeeDisplayName, statusLabel, statusTone, workerFacingMessage } from '@/utils/format'
+import { maintenanceSemanticTone, semanticTone, type SemanticTone } from './semantic'
+import { occupiedTaskIds } from './actionPolicy'
 
 const ACTION_LABELS: Record<string, string> = {
   check: '检查',
@@ -29,17 +29,6 @@ const STATE_LABELS: Record<string, string> = {
   FAILED: '失败',
   CANCELED: '已取消',
   INTERRUPTED: '已中断待核对',
-}
-
-const STATE_TONES: Record<string, TagTone> = {
-  QUEUED: 'info',
-  PREFLIGHT: 'info',
-  RUNNING: 'primary',
-  VERIFYING: 'primary',
-  SUCCEEDED: 'success',
-  FAILED: 'danger',
-  CANCELED: 'info',
-  INTERRUPTED: 'warning',
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -92,8 +81,8 @@ export function maintenanceStateLabel(state: string | null | undefined): string 
   return STATE_LABELS[String(state ?? '')] ?? '无记录'
 }
 
-export function maintenanceStateTone(state: string | null | undefined): TagTone {
-  return STATE_TONES[String(state ?? '')] ?? 'info'
+export function maintenanceStateTone(state: string | null | undefined): SemanticTone {
+  return maintenanceSemanticTone(state)
 }
 
 export function maintenanceStageLabel(stage: string | null | undefined): string {
@@ -110,7 +99,7 @@ export function canCancelMaintenance(operation: MaintenanceOperation | null | un
 }
 
 export function canRetryMaintenance(operation: MaintenanceOperation | null | undefined): boolean {
-  return Boolean(operation && RETRYABLE_STATES.has(operation.state))
+  return Boolean(operation && Object.hasOwn(ACTION_LABELS, operation.action) && RETRYABLE_STATES.has(operation.state))
 }
 
 export function maintenanceCopy(value: string | null | undefined): string {
@@ -124,6 +113,15 @@ export function operationReason(operation: MaintenanceOperation | null | undefin
   return maintenanceCopy(operation.error_message || operation.error_code || '')
 }
 
+const UNRECORDED_REQUESTERS = new Set(['console-admin', 'api'])
+
+/** 旧版本没有接入 UID，历史值保留原样并明确标注，不追填成当前用户。 */
+export function requesterLabel(value: string | null | undefined): string {
+  const text = String(value ?? '').trim()
+  if (!text || UNRECORDED_REQUESTERS.has(text)) return '历史记录，UID 未记录'
+  return text
+}
+
 export function connectionLabel(state: string | null | undefined): string {
   if (state === 'online') return '在线'
   if (state === 'offline') return '离线'
@@ -131,11 +129,10 @@ export function connectionLabel(state: string | null | undefined): string {
   return '未获取'
 }
 
-export function connectionTone(state: string | null | undefined): TagTone {
+export function connectionTone(state: string | null | undefined): SemanticTone {
   if (state === 'online') return 'success'
   if (state === 'offline') return 'danger'
-  if (state === 'local') return 'primary'
-  return 'info'
+  return 'neutral'
 }
 
 export function runtimeHealthLabel(health: WorkerHealth | null): string {
@@ -143,19 +140,22 @@ export function runtimeHealthLabel(health: WorkerHealth | null): string {
   return status ? statusLabel(status) : '未获取'
 }
 
-export function runtimeHealthTone(health: WorkerHealth | null): TagTone {
+export function runtimeHealthTone(health: WorkerHealth | null): SemanticTone {
   const status = health?.runtime_health?.status
-  return status ? (statusTagType(status) as TagTone) : 'info'
+  if (!status) return 'neutral'
+  // 通用 OFFLINE 在员工列表里是中性；运行环境离线在这里是失败事实。
+  if (status === 'OFFLINE') return 'danger'
+  return semanticTone(statusTone(status))
 }
 
 export function schedulableLabel(health: WorkerHealth | null): string {
   if (!health) return '未获取'
-  return health.schedulable ? '可调度' : '不可调度'
+  return health.schedulable ? '可接任务' : '暂不可接任务'
 }
 
-export function schedulableTone(health: WorkerHealth | null): TagTone {
-  if (!health) return 'info'
-  return health.schedulable ? 'success' : 'warning'
+export function schedulableTone(health: WorkerHealth | null): SemanticTone {
+  if (!health) return 'neutral'
+  return health.schedulable ? 'success' : 'attention'
 }
 
 export function serverAddress(environment: ExecutionEnvironment | null | undefined): string {
@@ -222,10 +222,10 @@ export function equipmentStateLabel(value: boolean | null): string {
   return '未核验'
 }
 
-export function equipmentTone(value: boolean | null): TagTone {
+export function equipmentTone(value: boolean | null): SemanticTone {
   if (value === true) return 'success'
   if (value === false) return 'danger'
-  return 'info'
+  return 'neutral'
 }
 
 export function equipmentDiff(item: WorkerEquipmentItem): string {
@@ -274,13 +274,8 @@ export function eventStateLabel(event: MaintenanceEvent): string {
   return labels[state] ?? maintenanceCopy(state || event.type)
 }
 
-export function eventTone(event: MaintenanceEvent): TagTone {
-  const state = String(event.state ?? '')
-  if (state === 'failed' || state === 'FAILED' || event.type === 'interrupted') return 'danger'
-  if (state === 'passed' || state === 'SUCCEEDED') return 'success'
-  if (state === 'running' || state === 'RUNNING' || state === 'PREFLIGHT' || state === 'VERIFYING') return 'primary'
-  if (event.type === 'canceled' || event.type === 'cancel_requested' || state === 'CANCELED' || state === 'INTERRUPTED') return 'warning'
-  return 'info'
+export function eventTone(event: MaintenanceEvent): SemanticTone {
+  return maintenanceSemanticTone(event.state, event.type)
 }
 
 function blockingText(item: WorkerBlocking): string {
@@ -302,6 +297,7 @@ export interface WorkerRow {
   role: string
   server: string
   currentTask?: Task
+  currentTaskId: string | null
   waitingTask?: Task
   health: WorkerHealth | null
   connection: string
@@ -310,17 +306,14 @@ export interface WorkerRow {
   repository: WorkerRepositoryView
 }
 
-const ACTIVE_TASK_STATES = new Set(['PENDING', 'RUNNING', 'WAITING'])
-
 export function toWorkerRow(
   employee: Employee,
   environment: ExecutionEnvironment,
   tasks: Task[],
   health: WorkerHealth | null,
 ): WorkerRow {
-  const workerTasks = tasks.filter(
-    (task) => (task.employee_id === employee.id || task.worker_id === employee.id) && ACTIVE_TASK_STATES.has(task.status),
-  )
+  const currentTaskId = occupiedTaskIds(health)[0] ?? null
+  const currentTask = tasks.find(task => task.id === currentTaskId)
   return {
     id: employee.id,
     employee,
@@ -329,11 +322,9 @@ export function toWorkerRow(
     employeeName: employeeDisplayName(employee.name),
     role: employee.role,
     server: serverAddress(environment),
-    currentTask:
-      workerTasks.find((task) => task.status === 'RUNNING') ??
-      workerTasks.find((task) => task.status === 'WAITING') ??
-      workerTasks.find((task) => task.status === 'PENDING'),
-    waitingTask: workerTasks.find((task) => task.status === 'WAITING'),
+    currentTask,
+    currentTaskId,
+    waitingTask: currentTask?.status === 'WAITING' ? currentTask : undefined,
     health,
     connection: health?.connection.state ?? 'unknown',
     enabled: health?.enabled ?? null,

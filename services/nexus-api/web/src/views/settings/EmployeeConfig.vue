@@ -143,10 +143,9 @@
         </div>
 
         <ElFormItem v-if="!creating">
-          <template #label>运行状态 <FieldHelp label="运行状态" help="由系统状态机维护（空闲 / 执行中 / 等待输入 / 异常），此表单不可直接修改。" /></template>
+          <template #label>手动暂停 <FieldHelp label="手动暂停" help="暂停领取匹配任务；继续接单后仍需通过运行环境检查。" /></template>
           <div class="runtime-row">
-            <ElTag :type="statusTagType(employee?.status ?? 'UNKNOWN')">{{ runtimeLabel }}</ElTag>
-            <p>{{ paused ? '该 Worker 已暂停接单，不会领取新任务。' : '该 Worker 可正常领取匹配任务。' }}</p>
+            <p>{{ paused ? '已手动暂停接单。' : '未手动暂停；是否可接任务以运行检查结果为准。' }}</p>
             <ElButton :disabled="statusChanging || (!paused && currentTaskCount > 0)" @click="toggleRuntime">
               {{ statusChanging ? '处理中…' : paused ? '继续接单' : '暂停接单' }}
             </ElButton>
@@ -279,20 +278,6 @@
       />
     </ElForm>
 
-    <section v-if="!creating && selectedEnvironment" class="config-section config-section--maintenance">
-      <header class="config-section__head">
-        <div>
-          <h3>部署与维护</h3>
-          <p>检查、部署、更新和重启都在这里执行；操作在服务端持续运行，离开页面不会中断。</p>
-        </div>
-      </header>
-      <WorkerMaintenancePanel
-        :controller="maintenance"
-        :disabled-reason="maintenanceBlockedReason"
-        @changed="onMaintenanceChanged"
-      />
-    </section>
-
     <StickyActionBar
       v-if="canSave && !embedded"
       :dirty="canSave"
@@ -331,11 +316,10 @@ import type { Employee, TaskCategory, TaskType } from '@/api/types'
 import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
 import FieldHelp from '@/components/forms/FieldHelp.vue'
 import StickyActionBar from '@/components/astra/StickyActionBar.vue'
-import WorkerMaintenancePanel from '@/components/worker/WorkerMaintenancePanel.vue'
 import { useWorkerMaintenance } from '@/composables/useWorkerMaintenance'
 import { useAstraStore } from '@/stores/astra'
 import { isMaintenanceActive } from '@/features/workers/presentation'
-import { employeeDisplayName, statusTagType } from '@/utils/format'
+import { employeeDisplayName } from '@/utils/format'
 import type { Employee as DigitalEmployee } from '@/types'
 
 type CodingTool = 'opencode' | 'deepseek-harness'
@@ -414,16 +398,6 @@ const repositoryTokenPlaceholder = computed(() =>
     ? '已配置，留空保持不变'
     : '请输入 Codeup Token / 访问令牌',
 )
-
-const EMPLOYEE_RUNTIME_LABEL: Record<string, string> = {
-  IDLE: '空闲',
-  WORKING: '执行中',
-  WAIT_HUMAN: '等待输入',
-  ERROR: '异常',
-  PAUSED: '已暂停接单',
-  OFFLINE: '离线',
-}
-const runtimeLabel = computed(() => EMPLOYEE_RUNTIME_LABEL[props.employee?.status ?? ''] ?? '未知')
 
 const portValidator = (_rule: unknown, value: unknown, callback: (error?: Error) => void) => {
   const numeric = Number(value)
@@ -515,11 +489,7 @@ function snapshot(): string {
 const isDirty = computed(() => snapshot() !== originalSnapshot.value)
 const canSave = computed(() => props.creating || isDirty.value)
 const busy = computed(() => saving.value || maintenanceBusy.value)
-const maintenanceBlockedReason = computed(() => saving.value
-  ? '正在保存配置，暂不能执行维护操作。'
-  : isDirty.value
-    ? '请先保存配置，再执行部署、更新、重启或禁用。'
-    : '')
+const canDeploy = computed(() => form.environment.mode === 'LINUX_REMOTE')
 
 watch([() => props.employee?.id, () => props.creating], () => { fill(props.employee ?? undefined) }, { immediate: true })
 watch(() => enabledCategories.value.map((item) => item.id).join(','), () => {
@@ -625,6 +595,11 @@ async function save(deployRequested = false) {
   if (maintenanceBusy.value) return
   message.value = ''
   messageIsError.value = false
+  if (deployRequested && !canDeploy.value) {
+    message.value = '本地 Worker 不支持远程部署，请保存配置后执行检查。'
+    messageIsError.value = true
+    return
+  }
   const valid = formRef.value ? await formRef.value.validate().catch(() => false) : true
   if (!valid) return
   if (!form.task_types.length) {
@@ -688,13 +663,6 @@ async function toggleRuntime() {
   }
 }
 
-async function onMaintenanceChanged() {
-  await store.refresh()
-  if (isDirty.value) return
-  const fresh = store.employees.find((item) => item.id === props.employee?.id)
-  if (fresh) fill(fresh)
-}
-
 function clearRepository() {
   form.environment.repository_id = null
   form.environment.repository_url = ''
@@ -706,7 +674,7 @@ function reset() {
   fill(props.employee ?? undefined)
 }
 
-defineExpose({ getDirty: () => isDirty.value, dirty: isDirty, canSave, saving: busy, reset, save })
+defineExpose({ getDirty: () => isDirty.value, dirty: isDirty, canSave, canDeploy, saving: busy, reset, save })
 </script>
 
 <style scoped>
@@ -719,7 +687,6 @@ defineExpose({ getDirty: () => isDirty.value, dirty: isDirty, canSave, saving: b
   border-radius: 12px;
   background: var(--astra-bg-panel);
 }
-.config-section--maintenance { margin-top: 14px; }
 .config-section__head h3 { margin: 0; color: var(--astra-text-primary); font-size: var(--astra-font-emphasis); }
 .config-section__head p { margin: 3px 0 0; color: var(--astra-text-muted); font-size: var(--astra-font-helper); line-height: 1.6; }
 .config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }

@@ -232,6 +232,14 @@ def test_me_ignores_query_uid(client):
     assert found.json() == {"uid": "u-9"}
 
 
+def test_me_decodes_browser_uid_cookie(client):
+    from urllib.parse import quote
+
+    uid = "验收用户/team+1"
+    found = client.get("/api/v1/me", headers={"Cookie": f"nexus_uid={quote(uid, safe='')}"})
+    assert found.json() == {"uid": uid}
+
+
 def test_parallel_private_creates_share_one_row(client):
     employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
     barrier = threading.Barrier(8)

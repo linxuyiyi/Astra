@@ -5,6 +5,7 @@ import {
   actionBlockedByPolicy,
   hasOccupancy,
   isOccupancyBlocker,
+  occupiedTaskIds,
 } from '../src/features/workers/actionPolicy.ts'
 
 function blocker(code: string, extra: Record<string, string> = {}) {
@@ -18,6 +19,18 @@ function health(blocking: Array<ReturnType<typeof blocker>>) {
 function policy(activeMaintenance = false, reconcileRequired = false) {
   return { activeMaintenance, reconcileRequired }
 }
+
+test('current tasks follow authoritative occupancy references, including released-state edge cases', () => {
+  assert.deepEqual(occupiedTaskIds(health([
+    blocker('occupied_task', { task_id: 'failed-but-occupied' }),
+    blocker('occupied_task', { task_id: 'canceled-but-unreleased' }),
+    blocker('occupied_task', { task_id: 'failed-but-occupied' }),
+    blocker('active_session', { session_id: 'session-1' }),
+    blocker('equipment_pending'),
+  ])), ['failed-but-occupied', 'canceled-but-unreleased'])
+  assert.deepEqual(occupiedTaskIds(null), [])
+  assert.deepEqual(occupiedTaskIds(health([])), [])
+})
 
 test('initial offline, unknown health and pending equipment do not block deploy', () => {
   const value = health([

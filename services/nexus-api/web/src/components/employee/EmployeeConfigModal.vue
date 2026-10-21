@@ -26,6 +26,7 @@
         <ElTag v-if="configRef?.dirty" type="warning" effect="light">有未保存修改</ElTag>
         <ElButton :disabled="configRef?.saving" @click="requestClose">取消</ElButton>
         <ElButton
+          v-if="configRef?.canDeploy"
           :disabled="!configRef?.canSave || configRef?.saving"
           :loading="configRef?.saving"
           @click="configRef?.save(true)"
@@ -95,7 +96,7 @@ function onSaved(id: string, deployRequested: boolean) {
     emit('close')
     return
   }
-  notify(props.creating ? 'Agent Worker 已创建，请执行检查或部署' : '配置已保存，请执行检查或部署')
+  notify(props.creating ? 'Agent Worker 已创建，请执行检查' : '配置已保存，请执行检查')
   emit('saved', id, false)
   emit('close')
 }

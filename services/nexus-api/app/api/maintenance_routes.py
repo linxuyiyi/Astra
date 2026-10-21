@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
+from app.identity import resolve_uid
 from app.runtime.maintenance import (
     cancel_operation,
     environment_health,
@@ -30,7 +31,16 @@ router = APIRouter()
 
 class MaintenanceSubmit(BaseModel):
     action: Literal["check", "deploy", "update", "restart", "disable", "restore"]
-    requested_by: str = Field(default="console-admin", min_length=1, max_length=120)
+
+
+def maintenance_actor(
+    x_verified_uid: str | None = Header(default=None, alias="X-Verified-UID"),
+    x_owner_id: str | None = Header(default=None, alias="X-Owner-Id"),
+    nexus_uid: str | None = Cookie(default=None, alias="nexus_uid"),
+) -> str:
+    """Resolve the acting UID; the request body never decides who acted."""
+
+    return resolve_uid(x_verified_uid, x_owner_id, nexus_uid)
 
 
 @router.post("/api/agent-workers/{environment_id}/maintenance", status_code=202)
@@ -38,12 +48,13 @@ async def submit_maintenance(
     environment_id: int,
     payload: MaintenanceSubmit,
     session: AsyncSession = Depends(get_session),
+    actor: str = Depends(maintenance_actor),
 ):
     operation = await submit_operation(
         session,
         environment_id,
         payload.action,
-        requested_by=payload.requested_by,
+        requested_by=actor,
     )
     return operation_payload(operation)
 
@@ -134,27 +145,33 @@ async def maintenance_events(
 
 @router.post("/api/maintenance/{operation_id}/cancel")
 async def cancel_maintenance(
-    operation_id: str, session: AsyncSession = Depends(get_session)
+    operation_id: str,
+    session: AsyncSession = Depends(get_session),
+    actor: str = Depends(maintenance_actor),
 ):
-    operation = await cancel_operation(session, operation_id)
+    operation = await cancel_operation(session, operation_id, actor=actor)
     return operation_payload(operation)
 
 
 @router.post("/api/maintenance/{operation_id}/retry")
 async def retry_maintenance(
-    operation_id: str, session: AsyncSession = Depends(get_session)
+    operation_id: str,
+    session: AsyncSession = Depends(get_session),
+    actor: str = Depends(maintenance_actor),
 ):
-    operation = await retry_operation(session, operation_id)
+    operation = await retry_operation(session, operation_id, actor=actor)
     return operation_payload(operation)
 
 
 @router.post("/api/maintenance/{operation_id}/reconcile")
 async def reconcile_maintenance(
-    operation_id: str, session: AsyncSession = Depends(get_session)
+    operation_id: str,
+    session: AsyncSession = Depends(get_session),
+    actor: str = Depends(maintenance_actor),
 ):
     """Read-only check for an INTERRUPTED operation before releasing its lock."""
 
-    operation = await reconcile_operation(session, operation_id)
+    operation = await reconcile_operation(session, operation_id, actor=actor)
     return operation_payload(operation)
 
 

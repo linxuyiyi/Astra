@@ -19,6 +19,12 @@
   --astra-danger: #e45d6a;
   --astra-danger-soft: rgba(255, 111, 125, .11);
   --astra-info: #3d8ff0;
+  /* 中性语义：空闲、已取消、未知、未核验等既不是成功也不是失败的状态。
+     Element Plus 的 info 是蓝色，不能拿它当灰色使用。 */
+  --astra-neutral: #6b7d78;
+  --astra-neutral-text: #455854;
+  --astra-neutral-soft: rgba(107, 125, 120, .12);
+  --astra-neutral-border: rgba(107, 125, 120, .30);
   --astra-text-primary: #102522;
   --astra-text-secondary: #3e5752;
   --astra-text-muted: #617771;

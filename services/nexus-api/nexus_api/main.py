@@ -30,6 +30,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.identity import resolve_uid
+
 from .agentscope import PINNED_VERSION, AgentScopeClient, AgentScopeError
 from .capability import inspect_employee
 from .db import connect, employee_from_row, init_db, message_from_row, new_id, utcnow
@@ -903,10 +905,7 @@ def require_owner(
     """身份来自可信头。`?uid=` 不参与授权。Cookie 只给页面里的图片和下载使用。"""
 
     del uid
-    value = (x_verified_uid or x_owner_id or nexus_uid or "").strip()
-    if not value:
-        raise HTTPException(status_code=401, detail="缺少 X-Verified-UID")
-    return value
+    return resolve_uid(x_verified_uid, x_owner_id, nexus_uid)
 
 
 def create_app() -> FastAPI:

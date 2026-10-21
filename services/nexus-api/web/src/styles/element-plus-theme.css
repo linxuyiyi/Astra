@@ -112,6 +112,14 @@
   padding: 0 9px;
 }
 
+/* 中性语义标签：info 在主题里是蓝色，这里单独提供真正的灰色，
+   供 Worker 列表、详情、维护记录与日志共用（见 features/workers/semantic.ts）。 */
+.el-tag.astra-tag--neutral {
+  --el-tag-text-color: var(--astra-neutral-text);
+  --el-tag-bg-color: var(--astra-neutral-soft);
+  --el-tag-border-color: var(--astra-neutral-border);
+}
+
 /* 描述列表：small 档单元格字号 12px。 */
 .el-descriptions--small .el-descriptions__body .el-descriptions__table .el-descriptions__cell { font-size: var(--el-font-size-base); }
 

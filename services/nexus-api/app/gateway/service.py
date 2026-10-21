@@ -13,12 +13,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.gateway.health import (
+    acquire_probe_capacity,
     apply_probe_outcome,
     build_probe_run,
     probe_complete,
     probe_detail,
     probe_success,
     record_health_transition,
+    record_probe_usage,
     run_is_newer,
 )
 from app.gateway.models import (
@@ -77,6 +79,8 @@ from app.models import utcnow
 RUNTIME_CIRCUIT_OPEN_SECONDS = 30
 # 探测独占租约的兜底 TTL：探测本身受节点请求超时约束，这里防止实例崩溃后永久占锁。
 PROBE_LEASE_SECONDS = 120
+# 节点满载时探测最多等待的秒数；超时只是本轮不开始，不算健康失败。
+PROBE_CAPACITY_WAIT_SECONDS = 5.0
 VALID_CONFIG_STATES = {CONFIG_ENABLED, CONFIG_DISABLED}
 VALID_SCHEDULING_STATES = {SCHEDULING_ACTIVE, SCHEDULING_DRAINING, SCHEDULING_BLOCKED}
 VALID_QUOTA_POLICIES = {"STOP", "ALERT", "RECORD"}
@@ -123,6 +127,8 @@ class GatewayControlService:
         runtime: RuntimeStore | None = None,
         circuit_open_seconds: int = RUNTIME_CIRCUIT_OPEN_SECONDS,
         default_health_path: str = "/health",
+        timezone: str = "Asia/Shanghai",
+        probe_capacity_wait_seconds: float = PROBE_CAPACITY_WAIT_SECONDS,
     ) -> None:
         self._session = session
         self._cipher = cipher
@@ -130,6 +136,8 @@ class GatewayControlService:
         self._runtime = runtime
         self._circuit_open_seconds = circuit_open_seconds
         self._default_health_path = default_health_path or "/health"
+        self._timezone = timezone
+        self._probe_capacity_wait = max(0.0, float(probe_capacity_wait_seconds))
 
     # ── 审计 ───────────────────────────────────────────────────────────
 
@@ -425,12 +433,17 @@ class GatewayControlService:
         api_key = self._cipher.decrypt(node.api_key_encrypted) if node.api_key_encrypted else None
         await self._reconcile_projection(node)
         lease = await self._acquire_probe_lease(node)
+        capacity = await self._acquire_capacity(node)
+        if capacity is None:
+            await self._release_probe_lease(node, lease)
+            raise GatewayConflict("节点并发已满，请稍后再试")
         started_at = utcnow()
         started_clock = time.monotonic()
         try:
             outcomes = await self._probe_client.probe(node, selected, api_key)
         finally:
             await self._release_probe_lease(node, lease)
+            await self._release_capacity(node, capacity)
         duration_ms = int((time.monotonic() - started_clock) * 1000)
         run = build_probe_run(
             node,
@@ -441,6 +454,7 @@ class GatewayControlService:
             strategy=strategy_for_types(selected),
         )
         self._session.add(run)
+        await record_probe_usage(self._runtime, node.id, self._timezone, len(outcomes))
         success = probe_success(outcomes)
         previous_health = node.health_state
         if run_is_newer(node, run) and probe_complete(
@@ -700,14 +714,28 @@ class GatewayControlService:
             await self._runtime.record_probe(
                 scope, success=success, detail=detail, at_ms=at_ms
             )
+            # 探测是诊断：失败不打开业务熔断，成功可以关闭已打开的熔断。
             if success:
                 await self._runtime.set_circuit_closed(scope)
-            else:
-                await self._runtime.set_circuit_open(scope, self._circuit_open_seconds)
             return True
         except Exception:  # noqa: BLE001 - 运行态写入失败不阻断控制面响应
             # 轮次与 DB 投影已提交；标记待补投影，下一次操作只补 Redis，不重复探测。
             return False
+
+    async def _acquire_capacity(self, node: GatewayNode) -> str | None:
+        if self._runtime is None:
+            return ""
+        return await acquire_probe_capacity(
+            self._runtime, node, wait_seconds=self._probe_capacity_wait
+        )
+
+    async def _release_capacity(self, node: GatewayNode, lease: str | None) -> None:
+        if self._runtime is None or not lease:
+            return
+        try:
+            await self._runtime.release(SCOPE_NODE, node.id, lease)
+        except Exception:  # noqa: BLE001 - 租约到期自动回收
+            return
 
     async def _reconcile_projection(self, node: GatewayNode) -> None:
         """把上次投影失败的轮次补写进运行态；只读最新轮次，不发起探测。"""

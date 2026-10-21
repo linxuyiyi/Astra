@@ -1842,7 +1842,8 @@ def test_background_probe_removes_and_restores_node(cipher, upstream):
 
     removed, opened, restored, closed = asyncio.run(scenario())
     assert removed == "UNHEALTHY"
-    assert opened == "OPEN"
+    # 诊断失败不打开业务熔断：熔断只由真实流量失败推进。
+    assert opened == "CLOSED"
     assert restored == "HEALTHY"
     assert closed == "CLOSED"
     # 默认验证策略是一次 SSE；轮次里只有 STREAM 一步。
@@ -2540,3 +2541,99 @@ def test_runtime_flush_requires_a_fresh_verification(cipher, upstream):
     assert after_flush is None
     assert one_round == "UNKNOWN"
     assert recovered == "HEALTHY"
+
+
+def test_background_probe_verifies_a_disabled_node(cipher, upstream):
+    probe = FakeProbe()
+    nodes = [
+        node_dict(
+            NODE_A,
+            host="node-a.test",
+            cipher=cipher,
+            health_state="UNKNOWN",
+            scheduling_state="DRAINING",
+        )
+    ]
+    nodes[0]["config_state"] = "DISABLED"
+    kv = build_plane(
+        upstream,
+        config=build_config(cipher, nodes=nodes),
+        cipher=cipher,
+        probe_client=probe,
+        seed_snapshot_health=False,
+    )
+    node = kv.plane.config_state.config.nodes[NODE_A]
+
+    async def scenario():
+        # 后台调度器不会因为节点未启用就跳过：DISABLED 节点也要能做首次验证。
+        await kv.plane._probe_due_nodes()
+        scheduled_calls = len(probe.calls)
+        for _ in range(2):
+            await kv.plane._probe_node(node)
+        return scheduled_calls, await kv.store.health(node.runtime_scope)
+
+    scheduled_calls, health = asyncio.run(scenario())
+    assert scheduled_calls == 1
+    assert health == "HEALTHY"
+
+
+def test_probe_skips_a_full_node_without_counting_a_failure(cipher, upstream, monkeypatch):
+    from app.gateway import server as server_module
+
+    monkeypatch.setattr(server_module, "PROBE_CAPACITY_WAIT_SECONDS", 0.05)
+    probe = FakeProbe()
+    nodes = [node_dict(NODE_A, host="node-a.test", cipher=cipher, max_concurrency=1)]
+    kv = build_plane(
+        upstream,
+        config=build_config(cipher, nodes=nodes),
+        cipher=cipher,
+        probe_client=probe,
+        seed_snapshot_health=False,
+    )
+    node = kv.plane.config_state.config.nodes[NODE_A]
+    scope = node.runtime_scope
+
+    async def scenario():
+        lease = await kv.store.acquire(SCOPE_NODE, NODE_A, 1, 60)
+        try:
+            await kv.plane._probe_node(node)
+        finally:
+            await kv.store.release(SCOPE_NODE, NODE_A, lease)
+        return list(probe.calls), await kv.store.health(scope)
+
+    calls, health = asyncio.run(scenario())
+    assert calls == []
+    assert health is None
+
+
+def test_probe_requests_count_as_unknown_usage(cipher, upstream):
+    probe = FakeProbe()
+    kv = build_plane(
+        upstream,
+        config=build_config(cipher),
+        cipher=cipher,
+        probe_client=probe,
+        seed_snapshot_health=False,
+    )
+    node = kv.plane.config_state.config.nodes[NODE_A]
+
+    async def scenario():
+        await kv.plane._probe_node(node)
+        buckets = usage_buckets(utcnow(), "Asia/Shanghai")
+        return await kv.store.usage(SCOPE_NODE, NODE_A, "hour", buckets["hour"])
+
+    usage = asyncio.run(scenario())
+    assert usage.requests == 1
+    assert usage.unknown_requests == 1
+    assert usage.total_tokens == 0
+
+
+def test_probe_deadline_uses_an_independent_budget():
+    from types import SimpleNamespace
+
+    from app.gateway.probe import HttpGatewayProbeClient
+
+    client = HttpGatewayProbeClient(5.0)
+    node = SimpleNamespace(request_timeout_seconds=600.0, connect_timeout_seconds=60.0)
+    assert client._deadline(node) == 5.0
+    assert client._deadline(SimpleNamespace(request_timeout_seconds=2.0)) == 2.0

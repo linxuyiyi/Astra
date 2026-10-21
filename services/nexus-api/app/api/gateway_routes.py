@@ -74,6 +74,7 @@ def gateway_probe_client() -> GatewayProbeClient:
     return HttpGatewayProbeClient(
         settings.gateway_probe_timeout_seconds,
         default_health_path=settings.gateway_health_path,
+        timezone=settings.timezone,
     )
 
 
@@ -100,6 +101,7 @@ def gateway_service(
         probe_client=probe_client,
         runtime=runtime,
         default_health_path=settings.gateway_health_path,
+        timezone=settings.timezone,
     )
 
 

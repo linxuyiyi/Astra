@@ -62,9 +62,13 @@ from app.gateway.errors import (
     unauthorized,
     upstream_protocol_error,
 )
-from app.gateway.health import probe_success, record_background_probe
+from app.gateway.health import (
+    acquire_probe_capacity,
+    probe_success,
+    record_background_probe,
+    record_probe_usage,
+)
 from app.gateway.models import (
-    CONFIG_ENABLED,
     GatewayKey,
     GatewayRequest,
     GatewayRuntimeEvent,
@@ -102,6 +106,8 @@ from app.gateway.security import CredentialCipher, CredentialError, gateway_key_
 CHAT_PATH = "/v1/chat/completions"
 # 与控制面一致：探测租约 TTL，实例崩溃后自动过期。
 PROBE_LEASE_SECONDS = 120
+# 节点满载时探测最多等待的秒数；超时只是跳过本轮，不计失败。
+PROBE_CAPACITY_WAIT_SECONDS = 5.0
 MODELS_PATH = "/v1/models"
 
 # 请求体上限：Content-Length 可提前拒绝，但仍按实际流字节强制，避免声明头被绕过。
@@ -548,8 +554,7 @@ class GatewayDataPlane:
     async def _probe_due_nodes(self) -> None:
         now = time.monotonic()
         for node in list(self.config_state.config.nodes.values()):
-            if node.config_state != CONFIG_ENABLED:
-                continue
+            # 不要求节点已启用或健康：DISABLED/DRAINING/UNKNOWN 也要能做首次验证。
             # 按连接作用域节流：连接变化后新作用域立即重新探测，不等旧作用域间隔。
             scope = node.runtime_scope
             interval = float(node.probe_interval_seconds or self._probe_interval)
@@ -574,6 +579,16 @@ class GatewayDataPlane:
             return
         if lease is None:
             return
+        # 探测共享节点并发容量：满载时短暂等待，仍满则不开始本轮，也不记失败。
+        try:
+            capacity = await acquire_probe_capacity(
+                self.runtime, node, wait_seconds=PROBE_CAPACITY_WAIT_SECONDS
+            )
+        except Exception:  # noqa: BLE001 - 运行态不可用时本轮跳过
+            capacity = None
+        if capacity is None:
+            await self._safe_release(SCOPE_PROBE, node.id, lease)
+            return
         # 常规验证收敛为一次 SSE；策略由节点保存值决定，专项验证为一次非流式。
         selected = probe_types_for_strategy(getattr(node, "probe_strategy", "SSE"))
         try:
@@ -582,6 +597,7 @@ class GatewayDataPlane:
             outcomes = []
         finally:
             await self._safe_release(SCOPE_PROBE, node.id, lease)
+            await self._safe_release(SCOPE_NODE, node.id, capacity)
         success = probe_success(outcomes)
         detail = {
             "checked": len(outcomes),
@@ -591,12 +607,12 @@ class GatewayDataPlane:
             await self.runtime.record_probe(
                 scope, success=success, detail=detail, at_ms=int(utcnow().timestamp() * 1000)
             )
+            # 探测是诊断：失败不打开业务熔断，成功可以关闭已打开的熔断。
             if success:
                 await self.runtime.set_circuit_closed(scope)
-            else:
-                await self.runtime.set_circuit_open(scope, self._circuit_open_seconds)
         except Exception:  # noqa: BLE001 - 运行态写入失败由下一轮探测重试
             pass
+        await record_probe_usage(self.runtime, node.id, self._timezone, len(outcomes))
         # 持久化到 gateway_health_checks，并同步节点 DB 健康投影，使管理端与运行态一致。
         # 只有保存连接与本次探测的请求使用的连接一致时才投影，避免旧连接探测判新配置为健康。
         try:

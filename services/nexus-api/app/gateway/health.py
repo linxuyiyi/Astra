@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any
 from uuid import uuid4
 
@@ -33,7 +35,9 @@ from app.gateway.probe import (
 from app.gateway.runtime import (
     PROBE_FAILURE_THRESHOLD,
     PROBE_SUCCESS_THRESHOLD,
+    SCOPE_NODE,
     node_runtime_scope,
+    usage_buckets,
 )
 from app.models import utcnow
 
@@ -52,6 +56,37 @@ def probe_steps(outcomes: list[ProbeOutcome]) -> list[dict[str, Any]]:
         }
         for outcome in outcomes
     ]
+
+
+async def acquire_probe_capacity(
+    runtime: Any, node: GatewayNode, *, wait_seconds: float
+) -> str | None:
+    """探测共享节点并发容量：满载时等待一小段时间，仍满则不开始本轮（不算失败）。"""
+
+    deadline = time.monotonic() + max(0.0, wait_seconds)
+    while True:
+        lease = await runtime.acquire(SCOPE_NODE, node.id, node.max_concurrency, 120)
+        if lease is not None:
+            return lease
+        if time.monotonic() >= deadline:
+            return None
+        await asyncio.sleep(0.2)
+
+
+async def record_probe_usage(runtime: Any, node_id: str, timezone: str, requests: int) -> None:
+    """把探测请求计入节点用量：请求数已知、token 未知，不伪造费用也不进业务成功率。"""
+
+    if requests <= 0:
+        return
+    buckets = usage_buckets(utcnow(), timezone)
+    for period in ("hour", "day"):
+        for _ in range(requests):
+            try:
+                await runtime.record_usage(
+                    SCOPE_NODE, node_id, period, buckets[period], known=False
+                )
+            except Exception:  # noqa: BLE001 - 用量计入失败不影响探测结论
+                return
 
 
 def build_probe_run(
@@ -87,6 +122,14 @@ def build_probe_run(
         finished_at=utcnow(),
         duration_ms=duration_ms,
     )
+
+
+def run_is_newer(node: GatewayNode, run: GatewayProbeRun) -> bool:
+    """轮次是否比已投影的更新；晚到轮次只留证据，不覆盖健康结论。"""
+
+    if node.last_checked_at is None or run.finished_at is None:
+        return True
+    return run.finished_at >= node.last_checked_at
 
 
 def probe_success(outcomes: list[ProbeOutcome]) -> bool:
@@ -190,6 +233,10 @@ async def record_background_probe(
         )
         session.add(run)
         if expected_scope is not None and node_runtime_scope(node) != expected_scope:
+            await session.commit()
+            return
+        if not run_is_newer(node, run):
+            # 只保留轮次证据；健康投影保持较新轮次的结论。
             await session.commit()
             return
         previous_health = node.health_state

@@ -152,8 +152,9 @@ class HttpGatewayProbeClient:
         return outcomes
 
     def _deadline(self, node: Any) -> float:
+        # 探测有独立超时预算：节点请求超时再大也不能让一次诊断无限占用。
         request = getattr(node, "request_timeout_seconds", None) or self._timeout
-        return float(request)
+        return min(float(request), float(self._timeout))
 
     async def _bounded(self, node: Any, probe_type: str, start: float, call):
         try:

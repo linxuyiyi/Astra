@@ -1,0 +1,129 @@
+{
+  "source": "workbzw/ai-office-react",
+  "commit": "72f2ee59ea8e1fa7d94b222c0efc5bb857a2bc96",
+  "width": 256,
+  "height": 320,
+  "baseline": 300,
+  "scale": 0.4266666666666668,
+  "skins": [
+    "misaki",
+    "erikari",
+    "nate",
+    "harri",
+    "luke",
+    "soeren",
+    "mario",
+    "sinisa",
+    "spineboy"
+  ],
+  "characters": [
+    {
+      "index": 0,
+      "skin": "misaki",
+      "facing": "front",
+      "filename": "character-0-front.png",
+      "bounds": [
+        47,
+        60,
+        208,
+        313
+      ]
+    },
+    {
+      "index": 1,
+      "skin": "erikari",
+      "facing": "front",
+      "filename": "character-1-front.png",
+      "bounds": [
+        20,
+        38,
+        236,
+        313
+      ]
+    },
+    {
+      "index": 2,
+      "skin": "nate",
+      "facing": "front",
+      "filename": "character-2-front.png",
+      "bounds": [
+        52,
+        60,
+        203,
+        313
+      ]
+    },
+    {
+      "index": 3,
+      "skin": "harri",
+      "facing": "front",
+      "filename": "character-3-front.png",
+      "bounds": [
+        51,
+        60,
+        209,
+        313
+      ]
+    },
+    {
+      "index": 4,
+      "skin": "luke",
+      "facing": "front",
+      "filename": "character-4-front.png",
+      "bounds": [
+        56,
+        52,
+        199,
+        313
+      ]
+    },
+    {
+      "index": 5,
+      "skin": "soeren",
+      "facing": "front",
+      "filename": "character-5-front.png",
+      "bounds": [
+        51,
+        31,
+        204,
+        313
+      ]
+    },
+    {
+      "index": 6,
+      "skin": "mario",
+      "facing": "front",
+      "filename": "character-6-front.png",
+      "bounds": [
+        52,
+        31,
+        203,
+        313
+      ]
+    },
+    {
+      "index": 7,
+      "skin": "sinisa",
+      "facing": "front",
+      "filename": "character-7-front.png",
+      "bounds": [
+        52,
+        47,
+        203,
+        313
+      ]
+    },
+    {
+      "index": 8,
+      "skin": "spineboy",
+      "facing": "front",
+      "filename": "character-8-front.png",
+      "bounds": [
+        51,
+        24,
+        204,
+        313
+      ]
+    }
+  ]
+}

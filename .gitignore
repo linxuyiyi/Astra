@@ -35,9 +35,9 @@ services/agent-service/.env
 
 services/nexus-api/web/node_modules/
 services/nexus-api/chat-island/node_modules/
-# 聊天岛产物由 npm run build 生成（部署脚本会先构建它）
-services/nexus-api/web/public/nexus-chat/
-services/nexus-api/web/dist/
+# 聊天岛与前端打包产物直接入库：公司部署环境不一定能跑 npm build
+# （public/nexus-chat 是聊天岛产物，dist 是 web 的最终静态资源）
+
 web/workspace-ui/node_modules/
 web/workspace-ui/upstream/**/node_modules/
 

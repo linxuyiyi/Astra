@@ -1,0 +1,1 @@
+import{Nn as e,Pn as t}from"./index-DWT_a0-j.js";var n=(n,r)=>t.lang.round(e.parse(n)[r]);export{n as t};

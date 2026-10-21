@@ -18,8 +18,10 @@
 | `@/components/dialog/WorkingDirectoryDialog` | `src/shims/WorkingDirectoryDialog.tsx` | 工作目录由建 Session 时固定，聊天区不提供修改入口 |
 | `@/lib/browserWebRTCTransport` | `src/shims/browserWebRTCTransport.ts` | 只提供 `RealtimeConnectionState` 类型 |
 
-因为走模块替换而不是改文件，`useMessages.ts`、`ChatContent.tsx`、`TextInput.tsx`、
-`ASMessageBubble.tsx` 都与上游逐字节一致，升级时可以直接比对。
+`TextInput.tsx` 已包含 Nexus 本地 ASR 与输入能力适配，不能再按上游逐字节一致处理。
+2026-10-21 的页面能力审查进一步修正纯附件发送、无回调的实时语音按钮、ASR
+就绪探测、按钮可访问名称，以及按 conversation/channel 隔离的标签会话草稿恢复。
+上游升级时需保留这些适配，并对照 `tests/drafts.test.ts` 与浏览器验收报告。
 
 ## 未搬的部分
 

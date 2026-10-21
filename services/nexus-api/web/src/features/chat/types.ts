@@ -42,5 +42,5 @@ export interface ChatSessionState {
   tasksLoading: boolean;
   taskError: string;
   taskGeneration: number;
-  tab: "tasks" | "materials" | "memory" | "members";
+  tab: "tasks" | "materials" | "members";
 }

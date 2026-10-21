@@ -7,13 +7,14 @@
  */
 import { AssistantMsg, UserMsg, appendEvent } from "@agentscope-ai/agentscope/message";
 import type { ContentBlock, Msg } from "@agentscope-ai/agentscope/message";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { ASMessageBubble } from "@/components/chat/ASMessageBubble";
 import { TextInput } from "@/components/chat/TextInput";
 
 import { attachmentIdFromBlock, uploadAttachment } from "./attachments";
 import { mergeHumans as mergeHumanMessages } from "./merge";
+import { compareTimelineItems } from "./timeline";
 import {
   type GroupChannel,
   type GroupStream,
@@ -48,8 +49,11 @@ export function GroupApp({ channelId }: { channelId: string }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
+  const [interrupting, setInterrupting] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const scroller = useRef<HTMLDivElement | null>(null);
+  const followLatest = useRef(true);
+  const [atBottom, setAtBottom] = useState(true);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -213,20 +217,17 @@ export function GroupApp({ channelId }: { channelId: string }) {
         rows.push({ key: `${session.sessionId}:${message.id}`, label: session.label, msg: message });
       }
     }
-    rows.sort((left, right) => {
-      const byTime = String(left.msg.created_at ?? "").localeCompare(String(right.msg.created_at ?? ""));
-      return byTime !== 0 ? byTime : left.key.localeCompare(right.key);
-    });
+    rows.sort(compareTimelineItems);
     return rows;
   }, [humans, sessions]);
 
   const streamingIds = Object.keys(streaming).filter((key) => streaming[key]);
-  const phase = streamingIds.length ? "streaming" : "idle";
+  const phase = interrupting ? "interrupting" : streamingIds.length ? "streaming" : "idle";
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = scroller.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }, [items.length]);
+    if (node && followLatest.current) node.scrollTop = node.scrollHeight;
+  }, [items]);
 
   async function handleSend(blocks: ContentBlock[]) {
     const text = blocks
@@ -238,6 +239,9 @@ export function GroupApp({ channelId }: { channelId: string }) {
       .map((block) => attachmentIdFromBlock(block as { source?: { url?: string } }))
       .filter((value): value is string => Boolean(value));
     if (!text.trim() && !attachmentIds.length) return;
+    followLatest.current = true;
+    setAtBottom(true);
+    setError("");
     setHumans((previous) => [...previous, UserMsg({ name: "user", content: blocks })]);
     try {
       const result = await sendGroupMessage(channelId, text, attachmentIds);
@@ -250,7 +254,7 @@ export function GroupApp({ channelId }: { channelId: string }) {
             .map((item) => String(item.detail)),
         ),
       ];
-      setNotice(details.join("；"));
+      setNotice(details.join("；") || (!result.triggered.length ? "消息已记录。@ 成员后才会收到回复。" : ""));
       // 首次 @ 某位员工会新建他的 Session，重载一次时间线以订阅新流。
       setReloadToken((value) => value + 1);
     } catch (reason) {
@@ -259,9 +263,11 @@ export function GroupApp({ channelId }: { channelId: string }) {
   }
 
   async function handleInterrupt() {
-    await Promise.all(
-      streamingIds.map((employeeId) => interruptMember(channelId, employeeId).catch(() => undefined)),
-    );
+    setInterrupting(true);
+    const results = await Promise.allSettled(streamingIds.map((employeeId) => interruptMember(channelId, employeeId)));
+    const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+    if (failures.length) setError(failures.map((result) => result.reason instanceof Error ? result.reason.message : "停止失败，请重试").join("；"));
+    setInterrupting(false);
   }
 
   return (
@@ -286,7 +292,13 @@ export function GroupApp({ channelId }: { channelId: string }) {
         </div>
       )}
 
-      <div ref={scroller} className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scroller} className="flex-1 overflow-y-auto px-4 py-4" onScroll={() => {
+        const node = scroller.current;
+        if (!node) return;
+        const following = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+        followLatest.current = following;
+        setAtBottom(following);
+      }}>
         <div className="mx-auto flex max-w-[48rem] flex-col gap-4">
           {loading && <div className="text-sm text-muted-foreground">正在读取群组…</div>}
           {!loading && !items.length && (
@@ -303,6 +315,13 @@ export function GroupApp({ channelId }: { channelId: string }) {
           ))}
         </div>
       </div>
+
+      {!atBottom && <button type="button" className="mx-auto mb-2 rounded-full border px-3 py-1 text-xs" onClick={() => {
+        followLatest.current = true;
+        setAtBottom(true);
+        const node = scroller.current;
+        if (node) node.scrollTop = node.scrollHeight;
+      }}>回到最新消息</button>}
 
       <div className="px-4 pb-4">
         <div className="mx-auto w-full max-w-[48rem]">

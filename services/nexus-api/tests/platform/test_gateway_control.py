@@ -54,6 +54,19 @@ def unique(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex[:10]}"
 
 
+def test_model_routes_can_be_read_with_real_probe_client(gateway_env):
+    # 员工首次建立 Session 会读取路由；使用真实依赖，避免 FakeProbe 掩盖
+    # 客户端构造参数不匹配而令整个路由接口返回 500。
+    override = app.dependency_overrides.pop(gateway_probe_client)
+    try:
+        with TestClient(app) as client:
+            response = client.get("/api/gateway/routes")
+        assert response.status_code == 200, response.text
+        assert isinstance(response.json(), list)
+    finally:
+        app.dependency_overrides[gateway_probe_client] = override
+
+
 @pytest.fixture
 def gateway_env():
     master_key = Fernet.generate_key().decode()

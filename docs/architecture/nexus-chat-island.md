@@ -45,8 +45,8 @@ cd services/nexus-api/chat-island && npm install && npm run build   # 产出 ser
 cd services/nexus-api/web && npm run type-check && npm run build
 ```
 
-产物（315 个文件、12 MB）**不入库**：`services/nexus-api/web/public/nexus-chat/` 在 `.gitignore` 里，
-由 `ops/deploy/install_nexus.sh` 在 `services/nexus-api/web` 之前构建（聊天岛产物必须先进 public，
+当前分支的 `.gitignore` 明确要求聊天岛与前端产物入库，以支持不能执行 npm build 的部署环境。
+`ops/deploy/install_nexus.sh` 在 `services/nexus-api/web` 之前构建聊天岛（产物必须先进 public，
 Vite 才会把它拷进 dist）。本地 `npm run dev` 前要先跑一次 `services/nexus-api/chat-island` 的 build。
 
 聊天岛的改版必须走上面的构建，不要手改 `assets/*` 的哈希文件。

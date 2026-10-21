@@ -13,6 +13,7 @@ import {
 import mime from 'mime';
 import React, {
 	useState,
+	useEffect,
 	useRef,
 	useMemo,
 	useCallback,
@@ -40,6 +41,7 @@ import type { ReplyPhase } from '@/hooks/useMessages';
 import { useTranslation } from '@/i18n/useI18n.ts';
 import type { RealtimeConnectionState } from '@/lib/browserWebRTCTransport';
 import { cn } from '@/lib/utils';
+import { draftKey, readDraft, writeDraft } from '@/nexus/drafts';
 
 /**
  * Represents a file that has been selected and processed (or is being processed).
@@ -172,8 +174,13 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 	) => {
 		const { t } = useTranslation();
 		const defaultPlaceholder = placeholder || t('chat.inputPlaceholder');
-		const [value, setValue] = useState('');
-		const [files, setFiles] = useState<ProcessedFile[]>([]);
+		const [draftStorage] = useState(() => {
+			try { return window.sessionStorage; } catch { return null; }
+		});
+		const [draft] = useState(() => readDraft(draftStorage, draftKey(window.location.search)));
+		const [value, setValue] = useState(draft.text);
+		const [files, setFiles] = useState<ProcessedFile[]>(draft.files);
+		const [asrAvailable, setAsrAvailable] = useState(false);
 		const [isFocused, setIsFocused] = useState(false);
 		const textareaRef = useRef<HTMLTextAreaElement>(null);
 		const fileInputRef = useRef<HTMLInputElement>(null);
@@ -195,6 +202,32 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 
 		// Whether any file is still being processed (block send until all done)
 		const hasProcessing = files.some((f) => f.status === 'processing');
+		const hasContent = Boolean(value.trim()) || files.some((f) => f.status === 'done' && f.block);
+
+		useEffect(() => {
+			writeDraft(draftStorage, draftKey(window.location.search), { text: value, files });
+		}, [draftStorage, value, files]);
+
+		// ASR is a separately deployed service. Only offer recording when its
+		// same-origin endpoint reports a loaded model and the browser can record.
+		useEffect(() => {
+			setAsrAvailable(false);
+			if (!localAsrEnabled || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return;
+			const controller = new AbortController();
+			const timer = window.setTimeout(() => controller.abort(), 3000);
+			void fetch('/api/asr/models', { signal: controller.signal })
+				.then(async (response) => {
+					if (!response.ok) return;
+					const body = await response.json() as { models?: Array<{ loaded?: boolean }> };
+					if (!controller.signal.aborted) setAsrAvailable(body.models?.some((model) => model.loaded === true) ?? false);
+				})
+				.catch(() => undefined)
+				.finally(() => window.clearTimeout(timer));
+			return () => {
+				controller.abort();
+				window.clearTimeout(timer);
+			};
+		}, [localAsrEnabled]);
 
 		// Keep the current draft and insert the transcript at the caret instead
 		// of replacing what the user already typed.
@@ -221,7 +254,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 		}, []);
 
 		const localAsr = useAsrRecorder({
-			enabled: localAsrEnabled && !disabled,
+			enabled: asrAvailable && !disabled,
 			onText: insertText,
 		});
 
@@ -278,7 +311,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 		const handleSend = () => {
 			// ``phase`` is guarded here rather than only on the button, since Enter
 			// calls this directly and would otherwise send during a running reply.
-			if (phase !== 'idle' || !value.trim() || disabled || hasProcessing) return;
+			if (phase !== 'idle' || !hasContent || disabled || hasProcessing) return;
 
 			const blocks: ContentBlock[] = [];
 
@@ -353,11 +386,11 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 					onClick: onInterrupt,
 				};
 			}
-			if (value.trim()) {
+			if (hasContent || !onVoiceToggle) {
 				return {
 					icon: ArrowUp,
 					tooltip: t('textInput.send'),
-					disabled: disabled || hasProcessing,
+					disabled: disabled || hasProcessing || !hasContent,
 					variant: 'default',
 					onClick: handleSend,
 				};
@@ -463,6 +496,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 										</AttachmentContent>
 										<AttachmentActions>
 											<AttachmentAction
+												aria-label={`${t('common.delete')} ${file.name}`}
 												onClick={() =>
 													setFiles(files.filter((_, i) => i !== index))
 												}
@@ -601,7 +635,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							style={{ height: `${COLLAPSED_HEIGHT_PX}px` }}
 						>
 							{/* Local ASR (server-side SenseVoice) */}
-							{localAsrEnabled && (
+							{asrAvailable && (
 								<Tooltip>
 									<TooltipTrigger asChild>
 										<Button
@@ -644,6 +678,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 										variant="ghost"
 										size="icon-lg"
 										onClick={() => fileInputRef.current?.click()}
+										aria-label={t('textInput.attach')}
 										disabled={attachDisabled}
 										className="shrink-0 rounded-full"
 									>
@@ -664,6 +699,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 										type="button"
 										variant={actionButton.variant}
 										onClick={actionButton.onClick}
+										aria-label={actionButton.tooltip}
 										disabled={actionButton.disabled}
 										size="icon-lg"
 										className={cn(

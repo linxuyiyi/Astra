@@ -19,6 +19,11 @@
           >{{ item.label }}</button>
         </div>
         <div class="chat-counts muted">{{ filteredTargets.length }} 个会话</div>
+        <el-empty v-if="!directoryLoading && !directoryError && !filteredTargets.length" description="没有匹配的联系人或群组" :image-size="56" />
+        <div v-if="directoryError" role="alert" style="padding: 12px">
+          <p>{{ directoryError }}</p>
+          <el-button @click="loadDirectory">重试</el-button>
+        </div>
         <button
           v-for="target in filteredTargets"
           :key="target.key"
@@ -52,11 +57,18 @@
         <div v-else class="chat-head"><h2>数字员工</h2></div>
 
         <iframe
+          v-if="islandVisible && activeState?.status === 'ready'"
+          :key="`${selectedKey}:${islandRevision}`"
           class="chat-island"
           :src="islandSrc"
           title="Nexus 对话"
           allow="microphone"
         />
+        <div v-else-if="activeState?.status === 'error'" role="alert" style="padding: 24px">
+          <p>{{ activeState.error }}</p>
+          <el-button @click="selectTarget(selectedKey, { retry: true })">重试</el-button>
+        </div>
+        <div v-else-if="directoryLoading || activeState?.status === 'loading'" class="muted" style="padding: 24px">正在读取会话…</div>
 
       </article>
 
@@ -105,15 +117,10 @@
           </div>
         </div>
 
-        <div v-else-if="activeState.tab === 'memory' && activeTarget?.kind === 'contact'" style="padding: 16px">
-          <div class="section-label">会话</div>
-          <div class="mono">{{ activeState.adapter?.sessionId || "发送后才会创建" }}</div>
-        </div>
-
         <div v-else-if="activeState.tab === 'members' && activeTarget?.kind === 'group'" style="padding: 0 16px 16px">
           <div style="display: flex; justify-content: space-between; align-items: center">
             <b>群组成员</b>
-            <el-button size="small" @click="openGroupDialog(activeTarget.channel)">＋ 调整成员</el-button>
+            <el-button size="small" @click="openGroupDialog(activeTarget.channel)">＋ 添加成员</el-button>
           </div>
           <div class="member"><span class="avatar">👤</span><div><b>你</b><small class="muted">人类成员</small></div></div>
           <div v-for="employee in activeTarget.members || []" :key="employee.id" class="member">
@@ -137,9 +144,14 @@
       <el-form label-position="top">
         <el-form-item label="群组名称" required><el-input v-model="groupForm.name" maxlength="32" /></el-form-item>
         <el-form-item label="群组目标" required><el-input v-model="groupForm.description" type="textarea" :rows="3" /></el-form-item>
-        <el-form-item label="参与的数字员工">
+        <el-form-item v-if="groupEditingId" label="已有成员">
+          <div class="resource-list">
+            <span v-for="employee in employees.filter((item) => groupExistingMemberIds.includes(item.id))" :key="employee.id" class="mini-chip">{{ employee.avatar }} {{ employee.name }}</span>
+          </div>
+        </el-form-item>
+        <el-form-item :label="groupEditingId ? '添加数字员工' : '参与的数字员工'">
           <el-checkbox-group v-model="groupForm.memberIds">
-            <el-checkbox v-for="employee in employees" :key="employee.id" :value="employee.id">
+            <el-checkbox v-for="employee in employees.filter((item) => !groupExistingMemberIds.includes(item.id))" :key="employee.id" :value="employee.id">
               {{ employee.avatar }} {{ employee.name }} · {{ employee.domain }}
             </el-checkbox>
           </el-checkbox-group>
@@ -178,6 +190,9 @@ import { selectionIsCurrent } from "@/features/chat/sessionState";
 const route = useRoute();
 const router = useRouter();
 const employees = ref<Employee[]>([]);
+const directoryLoading = ref(true);
+const directoryError = ref("");
+const islandRevision = ref(0);
 const channels = ref<Channel[]>([]);
 const workers = ref<PlatformWorker[]>([]);
 const search = ref("");
@@ -193,6 +208,7 @@ const asideOpen = ref(true);
 const groupDialogOpen = ref(false);
 const groupEditingId = ref<string | null>(null);
 const groupSaving = ref(false);
+const groupExistingMemberIds = ref<string[]>([]);
 const groupForm = reactive({ name: "", description: "", memberIds: [] as string[] });
 const emptyCatalog = (): ResourceCatalog => ({ available: false, items: [] });
 const catalogs = ref({
@@ -253,8 +269,6 @@ const filteredTargets = computed(() => {
 
 const activeState = computed(() => (selectedKey.value ? sessions[selectedKey.value] : undefined));
 const activeTarget = computed(() => activeState.value?.target ?? null);
-// 阶段 A 的临时开关：?island=1 时中间区换成 Nexus 聊天岛（只读预览）。
-// 默认关闭，旧渲染仍可回退；阶段 D 收敛时删除这个开关和旧渲染分支。
 const islandVisible = computed(() => {
   const target = activeTarget.value;
   if (!target) return false;
@@ -271,7 +285,7 @@ const islandSrc = computed(() => {
 });
 const rightTabs = computed(() => activeTarget.value?.kind === "group"
   ? [{ value: "tasks" as const, label: "任务" }, { value: "members" as const, label: "成员" }, { value: "materials" as const, label: "资料" }]
-  : [{ value: "tasks" as const, label: "任务" }, { value: "materials" as const, label: "资料" }, { value: "memory" as const, label: "记忆" }]);
+  : [{ value: "tasks" as const, label: "任务" }, { value: "materials" as const, label: "资料" }]);
 
 
 
@@ -371,10 +385,10 @@ function updateRoute(target: ChatTarget, replace = false) {
   else void router.push(location);
 }
 
-async function selectTarget(key: string, options: { fromRoute?: boolean } = {}) {
+async function selectTarget(key: string, options: { fromRoute?: boolean; retry?: boolean } = {}) {
   const target = targets.value.find((item) => item.key === key);
   if (!target) return;
-  if (!options.fromRoute && selectedKey.value === key && sessions[key]?.adapter) return;
+  if (!options.retry && !options.fromRoute && selectedKey.value === key && sessions[key]?.adapter) return;
   const generation = ++selectionGeneration;
   selectedKey.value = key;
   localStorage.setItem("nexus_chat_last", key);
@@ -420,6 +434,7 @@ async function applyRouteTarget() {
 
 function openGroupDialog(channel?: Channel) {
   groupEditingId.value = channel?.id ?? null;
+  groupExistingMemberIds.value = channel?.members.map((item) => item.employee_id) ?? [];
   groupForm.name = channel?.name ?? "";
   groupForm.description = channel?.description ?? "";
   groupForm.memberIds = channel
@@ -458,6 +473,7 @@ async function saveGroup() {
       }
       existing.status = "ready";
       existing.error = "";
+      islandRevision.value += 1;
       void loadTasks(existing);
     } else {
       await selectTarget(key);
@@ -475,32 +491,44 @@ watch(() => activeState.value?.tab, (tab) => {
   if (tab === "tasks" && activeState.value) void loadTasks(activeState.value);
 });
 
+async function loadDirectory() {
+  directoryLoading.value = true;
+  directoryError.value = "";
+  try {
+    const [skills, mcps, knowledge, tools, employeeList, channelList, workerList] = await Promise.all([
+      getSkills().catch(() => emptyCatalog()),
+      getMcps().catch(() => emptyCatalog()),
+      getKnowledge().catch(() => emptyCatalog()),
+      getTools().catch(() => emptyCatalog()),
+      listEmployees(),
+      listChannels(),
+      listWorkers().catch(() => []),
+    ]);
+    if (disposed) return;
+    catalogs.value = { skills, mcps, knowledge, tools };
+    employees.value = employeeList;
+    channels.value = channelList;
+    workers.value = workerList;
+    const type = routeType();
+    if (type) filter.value = type;
+    const routeKey = routeTargetKey();
+    const stored = localStorage.getItem("nexus_chat_last") ?? "";
+    const storedTarget = stored && targets.value.some((item) => item.key === stored) ? stored : "";
+    const initial = routeKey
+      || (type ? targets.value.find((item) => item.kind === type)?.key ?? "" : "")
+      || storedTarget
+      || targets.value[0]?.key
+      || "";
+    if (initial) await selectTarget(initial, { fromRoute: Boolean(routeKey || type) });
+  } catch (error) {
+    if (!disposed) directoryError.value = error instanceof Error ? error.message : "会话列表加载失败";
+  } finally {
+    if (!disposed) directoryLoading.value = false;
+  }
+}
+
 onMounted(async () => {
-  const [skills, mcps, knowledge, tools, employeeList, channelList, workerList] = await Promise.all([
-    getSkills().catch(() => emptyCatalog()),
-    getMcps().catch(() => emptyCatalog()),
-    getKnowledge().catch(() => emptyCatalog()),
-    getTools().catch(() => emptyCatalog()),
-    listEmployees(),
-    listChannels(),
-    listWorkers().catch(() => []),
-  ]);
-  if (disposed) return;
-  catalogs.value = { skills, mcps, knowledge, tools };
-  employees.value = employeeList;
-  channels.value = channelList;
-  workers.value = workerList;
-  const type = routeType();
-  if (type) filter.value = type;
-  const routeKey = routeTargetKey();
-  const stored = localStorage.getItem("nexus_chat_last") ?? "";
-  const storedTarget = stored && targets.value.some((item) => item.key === stored) ? stored : "";
-  const initial = routeKey
-    || (type ? targets.value.find((item) => item.kind === type)?.key ?? "" : "")
-    || storedTarget
-    || targets.value[0]?.key
-    || "";
-  if (initial) await selectTarget(initial, { fromRoute: Boolean(routeKey || type) });
+  await loadDirectory();
   if (disposed) return;
   taskTimer = window.setInterval(() => {
     const state = activeState.value;

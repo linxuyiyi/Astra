@@ -710,13 +710,83 @@ def _retire_skill_name(connection, skill_id: str, name: str) -> None:
             _set_sync(
                 connection,
                 "skill",
-                f"{RETIRE_PREFIX}{name}",
+                f"{RETIRE_PREFIX}{skill_id}",
                 employee["id"],
                 session_id,
                 status=PENDING_REMOVE,
                 detail=name,
                 revision=0,
             )
+
+
+def register_resource_removals(
+    connection,
+    employee_id: str,
+    sessions: Iterable[str],
+    *,
+    previous_skills: Iterable[str],
+    desired_skills: Iterable[str],
+    previous_mcps: Iterable[str],
+    desired_mcps: Iterable[str],
+) -> int:
+    """在绑定变更的同一事务里登记待收回资源，返回写入行数。
+
+    只依赖数据库里的本地元数据：外部资源先记 ref，运行时名在恢复同步时再解析。
+    调用方必须在任何外部查询/删除之前提交，否则上游 503 或进程退出会丢掉
+    “这个资源要收回”的事实。
+    """
+
+    session_ids = [str(item) for item in dict.fromkeys(sessions) if item]
+    if not session_ids:
+        return 0
+    desired_skill_refs = {str(item) for item in desired_skills}
+    desired_mcp_refs = {str(item) for item in desired_mcps}
+    removed_skills = [
+        ref
+        for ref in dict.fromkeys(str(item) for item in previous_skills)
+        if ref and ref != TASK_SKILL_ID and ref not in desired_skill_refs
+    ]
+    removed_mcps = [
+        ref
+        for ref in dict.fromkeys(str(item) for item in previous_mcps)
+        if ref and ref not in desired_mcp_refs
+    ]
+    if not removed_skills and not removed_mcps:
+        return 0
+    local_skills = local_skill_rows(connection, removed_skills)
+    local_mcps = local_mcp_rows(connection, removed_mcps)
+    written = 0
+    for ref in removed_skills:
+        row = local_skills.get(ref)
+        detail = str(row["name"]) if row is not None else ""
+        for session_id in session_ids:
+            _set_sync(
+                connection,
+                "skill",
+                f"{RETIRE_PREFIX}{ref}",
+                employee_id,
+                session_id,
+                status=PENDING_REMOVE,
+                detail=detail,
+                revision=0,
+            )
+            written += 1
+    for ref in removed_mcps:
+        row = local_mcps.get(ref)
+        detail = str(row["runtime_name"]) if row is not None else ""
+        for session_id in session_ids:
+            _set_sync(
+                connection,
+                "mcp",
+                f"{RETIRE_PREFIX}{ref}",
+                employee_id,
+                session_id,
+                status=PENDING_REMOVE,
+                detail=detail,
+                revision=0,
+            )
+            written += 1
+    return written
 
 
 def _drop_sync(connection, resource_type: str, resource_id: str, employee_id: str, session_id: str) -> None:
@@ -803,6 +873,17 @@ async def sync_employee_resources(
     agent_id = str(employee.get("agentscope_agent_id") or "")
     if not sessions:
         return {"ok": True, "status": "pending", "detail": "员工还没有可同步的会话", "sessions": 0}
+    # 外部查询/删除之前先把解绑意图落库并提交：上游 503 或进程退出都不能丢。
+    if previous and register_resource_removals(
+        connection,
+        employee["id"],
+        sessions,
+        previous_skills=previous_skills,
+        desired_skills=desired_skills,
+        previous_mcps=previous_mcps,
+        desired_mcps=desired_mcps,
+    ):
+        connection.commit()
     if not client.configured or not agent_id:
         detail = "AgentScope 未连接，配置已保留" if not client.configured else "员工还没有 Agent"
         _mark_all(
@@ -972,17 +1053,11 @@ async def _sync_one_session(
 
     stale_skill_names: list[str] = []
     stale_mcp_names: list[str] = []
-    removed_skill_names: list[str] = []
-    removed_mcp_names: list[str] = []
-    # 解绑的自建技能/MCP：这些名字必须记进同步事实，不能只靠本次请求的 previous。
+    # 解绑的运行时名；持久化的待办在 register_resource_removals 里登记。
     for ref in set(previous_skills) - set(active_skill_refs):
-        names = skill_runtime_names(ref)
-        stale_skill_names.extend(names)
-        removed_skill_names.extend(names)
+        stale_skill_names.extend(skill_runtime_names(ref))
     for ref in set(previous_mcps) - set(active_mcp_refs):
-        names = mcp_runtime_names(ref)
-        stale_mcp_names.extend(names)
-        removed_mcp_names.extend(names)
+        stale_mcp_names.extend(mcp_runtime_names(ref))
     # 绑定仍在但资源被停用：从运行环境收回。
     for ref in desired_skills:
         if ref == TASK_SKILL_ID:
@@ -1001,22 +1076,8 @@ async def _sync_one_session(
         elif not bool(external_mcps.get(ref, {}).get("enabled", True)):
             stale_mcp_names.extend(mcp_runtime_names(ref))
 
-    # 任何收回动作之前先落待办：idle 时删除失败、进程退出、running 推迟都
-    # 不能丢掉“这个运行时名要收回”这个事实。
-    for kind, names in (("skill", removed_skill_names), ("mcp", removed_mcp_names)):
-        for name in names:
-            _set_sync(
-                connection,
-                kind,
-                f"{RETIRE_PREFIX}{name}",
-                employee["id"],
-                session_id,
-                status=PENDING_REMOVE,
-                detail=name,
-                revision=0,
-            )
-
-    # 之前登记、尚未收回的运行时名（解绑、改名、以及运行中推迟的收回）。
+    # 之前登记、尚未收回的资源（解绑、改名、运行中推迟）。待办在绑定变更的
+    # 同一事务里就已提交，这里只解析真实运行时名并执行收回。
     pending_removal_rows = connection.execute(
         """
         SELECT resource_type, resource_id, detail FROM t_nexus_resource_sync
@@ -1024,14 +1085,56 @@ async def _sync_one_session(
         """,
         (employee["id"], session_id),
     ).fetchall()
+    pending_refs = [
+        str(row["resource_id"])[len(RETIRE_PREFIX):]
+        if str(row["resource_id"]).startswith(RETIRE_PREFIX)
+        else str(row["resource_id"])
+        for row in pending_removal_rows
+    ]
+    pending_local_skills = local_skill_rows(
+        connection, [ref for ref in pending_refs if is_nexus_skill(ref)]
+    )
+    pending_local_mcps = local_mcp_rows(
+        connection, [ref for ref in pending_refs if is_nexus_mcp(ref)]
+    )
+
+    def current_skill_name(ref: str) -> str:
+        row = local_skills.get(ref) or pending_local_skills.get(ref)
+        if row is not None:
+            return str(row["name"])
+        record = external_skills.get(ref)
+        return _skill_record_name(record, ref) if record is not None else ""
+
+    def current_mcp_name(ref: str) -> str:
+        row = local_mcps.get(ref) or pending_local_mcps.get(ref)
+        if row is not None:
+            return str(row["runtime_name"])
+        record = external_mcps.get(ref)
+        return str(record.get("name") or ref) if record is not None else ""
+
+    active_skill_set = set(active_skill_refs)
+    active_mcp_set = set(active_mcp_refs)
     pending_removal_targets: list[tuple[str, str, list[str]]] = []
     for row in pending_removal_rows:
         kind = str(row["resource_type"])
         resource_id = str(row["resource_id"])
-        name = str(row["detail"] or "")
+        ref = (
+            resource_id[len(RETIRE_PREFIX):]
+            if resource_id.startswith(RETIRE_PREFIX)
+            else resource_id
+        )
+        detail = str(row["detail"] or "")
+        current = current_skill_name(ref) if kind == "skill" else current_mcp_name(ref)
+        name = detail or current
         if not name:
+            # 外部目录暂时不可用；保留待办，下次同步再解析。
             continue
-        # 技能同名安装会带 “ (2)” 后缀；待办按原始名解析出全部真实运行时名。
+        active = ref in (active_skill_set if kind == "skill" else active_mcp_set)
+        if active and name == current:
+            # 重新绑定且没有改名：取消这条收回待办。
+            _drop_sync(connection, kind, resource_id, employee["id"], session_id)
+            continue
+        # 技能同名安装会带 “ (2)” 后缀；按原始名解析出全部真实运行时名。
         matches = (
             _matching_skill_names(name, installed_skills)
             if kind == "skill"

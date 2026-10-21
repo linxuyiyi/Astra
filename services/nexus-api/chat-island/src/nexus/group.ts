@@ -143,6 +143,7 @@ export async function sendGroupMessage(
 export async function* streamChannelEvents(
   channelId: string,
   signal: AbortSignal,
+  onConnected?: () => Promise<void> | void,
 ): AsyncGenerator<ChannelEvent> {
   let response: Response;
   try {
@@ -151,6 +152,8 @@ export async function* streamChannelEvents(
     return;
   }
   if (!response.ok || !response.body) return;
+  // 订阅已经建立后再补读持久快照：等待重连期间提交的消息不会丢。
+  await onConnected?.();
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";

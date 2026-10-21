@@ -1005,3 +1005,87 @@ async def test_taken_over_job_keeps_the_new_workers_result(monkeypatch):
     assert result.status == coordinator.SUCCEEDED
     assert result.candidate_ids == ["KNOW-b"]
     assert result.lease_owner == "worker-b"
+
+
+async def _supersede_once_after_claim(monkeypatch, job_id: str) -> None:
+    """在 claim 提交之后、起始状态写入之前，用独立 Session 作废作业。"""
+
+    original_claim = coordinator.claim_job
+
+    async def claim_then_supersede(session, target_id, owner):
+        job = await original_claim(session, target_id, owner)
+        if job is not None:
+            await _write_job_fields(
+                job.id,
+                status=coordinator.SUPERSEDED,
+                error_code="new_round",
+                lease_token=None,
+                lease_owner=None,
+                lease_until=None,
+                finished_at=datetime.now(UTC),
+            )
+        return job
+
+    monkeypatch.setattr(coordinator, "claim_job", claim_then_supersede)
+
+
+@pytest.mark.asyncio
+async def test_supersede_between_claim_and_collecting_is_not_overwritten(monkeypatch):
+    """claim 之后写入 COLLECTING 也必须带 token：不能复活已作废的作业。"""
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "experience_review_enabled", True)
+    task_id, event_id = await _task_and_event()
+    async with SessionLocal() as session:
+        task = await session.get(Task, task_id)
+        event = await session.get(Event, event_id)
+        job = await coordinator.enqueue_in_transaction(
+            session, task=task, event=event, snapshot=_review_snapshot(task_id)
+        )
+        await session.commit()
+        job_id = job.id
+
+    await _supersede_once_after_claim(monkeypatch, job_id)
+
+    async def fake_read(_snapshot):
+        return _trace()
+
+    monkeypatch.setattr(coordinator, "read_trace", fake_read)
+
+    result = await coordinator.process_job(job_id, llm=FakeLLM())
+
+    assert result is not None
+    assert result.status == coordinator.SUPERSEDED
+    assert result.error_code == "new_round"
+    assert result.lease_token is None
+    # 作废后不能被扫描器重新领取并继续写候选。
+    assert await coordinator.process_job(job_id, llm=FakeLLM()) is None
+
+
+@pytest.mark.asyncio
+async def test_supersede_between_claim_and_map_is_not_overwritten(monkeypatch):
+    """MAP 起步写 ANALYZING 同样要带 token，否则会覆盖 SUPERSEDED。"""
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "experience_review_enabled", True)
+    task_id, event_id = await _task_and_event()
+    async with SessionLocal() as session:
+        task = await session.get(Task, task_id)
+        event = await session.get(Event, event_id)
+        job = await coordinator.enqueue_in_transaction(
+            session, task=task, event=event, snapshot=_review_snapshot(task_id)
+        )
+        job.status = coordinator.RETRY_WAIT
+        job.phase = "MAP"
+        job.next_retry_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+        job_id = job.id
+
+    await _supersede_once_after_claim(monkeypatch, job_id)
+
+    result = await coordinator.process_job(job_id, llm=FakeLLM())
+
+    assert result is not None
+    assert result.status == coordinator.SUPERSEDED
+    assert result.error_code == "new_round"
+    assert await coordinator.process_job(job_id, llm=FakeLLM()) is None

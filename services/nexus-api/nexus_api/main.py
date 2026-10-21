@@ -71,6 +71,7 @@ from .resources import (
     mcp_row,
     mcp_sync_summary,
     normalize_uploads,
+    register_resource_removals,
     restore_skill_version,
     skill_catalog,
     skill_row,
@@ -2208,6 +2209,17 @@ def create_app() -> FastAPI:
                 employee_id,
             ),
         )
+        # 解绑意图与员工绑定在同一事务里提交：后面即使上游查询/删除失败或
+        # 进程退出，下一次同步仍知道要收回哪些资源。
+        register_resource_removals(
+            connection,
+            employee_id,
+            employee_session_ids(connection, current),
+            previous_skills=lines(current.get("skills") or []),
+            desired_skills=skills,
+            previous_mcps=lines(current.get("mcps") or []),
+            desired_mcps=mcps,
+        )
         connection.commit()
         employee = load_employee(connection, employee_id)
         previous_route = str(current.get("model_route_id") or "")
@@ -3374,7 +3386,11 @@ def create_app() -> FastAPI:
     ) -> StreamingResponse:
         if not client.configured:
             raise HTTPException(status_code=503, detail="AgentScope 未连接，没有生成回复")
-        if after is None:
+        if after is None and not raw:
+            # 旧页面只关心“此刻之后”的事件，用最新 checkpoint 作为起点。
+            # raw 客户端（聊天岛）自己带历史游标；没有游标时（会话还没有落盘
+            # 消息）必须让上游从头回放，不能把起点提升成最新 checkpoint——
+            # 那会整轮跳过刚完成、还不在历史快照里的回复。
             cursor = await client.latest_event_cursor(agent_id, session_id)
             if cursor and STREAM_CURSOR.fullmatch(cursor):
                 after = cursor

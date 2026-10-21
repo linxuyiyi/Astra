@@ -195,10 +195,13 @@ async def _next_segment(session: AsyncSession, job_id: str) -> ExperienceReviewS
     )
 
 
-async def _lease_holds(session: AsyncSession, job_id: str, token: str | None) -> bool:
-    """按作业 ID + 租约 token + 活动状态确认自己仍拥有这次复盘。
+async def _advance(
+    session: AsyncSession, job_id: str, token: str | None, **values: Any
+) -> bool:
+    """按作业 ID + 本次 claim token + 活动状态做条件更新。
 
-    任务新轮次会写入 SUPERSEDED 并清掉租约，旧协程等到模型返回后必须放弃结果。
+    起始阶段推进（COLLECTING/ANALYZING）和终态写入都必须先确认仍有权写：
+    任务新轮次可能刚好在 claim 与这次写入之间写入 SUPERSEDED 并清掉租约。
     这个条件更新同时开启真实写事务：SQLite 下库内的 ``begin_nested()`` 只有落在
     外层事务里才是 SAVEPOINT，否则释放即提交。
     """
@@ -212,12 +215,21 @@ async def _lease_holds(session: AsyncSession, job_id: str, token: str | None) ->
             ExperienceReviewJob.lease_token == token,
             ExperienceReviewJob.status.in_(ACTIVE_STATUSES),
         )
-        .values(
-            lease_until=_now()
-            + timedelta(seconds=get_settings().experience_review_lease_seconds)
-        )
+        .values(**values)
     )
     return result.rowcount == 1
+
+
+async def _lease_holds(session: AsyncSession, job_id: str, token: str | None) -> bool:
+    """确认自己仍拥有这次复盘，并顺带续租。"""
+
+    return await _advance(
+        session,
+        job_id,
+        token,
+        lease_until=_now()
+        + timedelta(seconds=get_settings().experience_review_lease_seconds),
+    )
 
 
 async def _current_job(session: AsyncSession, job_id: str) -> ExperienceReviewJob | None:
@@ -351,8 +363,11 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
             token = job.lease_token
             try:
                 if job.phase in {PENDING, COLLECTING}:
-                    job.status = COLLECTING
-                    job.phase = COLLECTING
+                    # claim 与这次推进之间可能已被新轮次作废：先 CAS 再提交。
+                    if not await _advance(
+                        session, job_id, token, status=COLLECTING, phase=COLLECTING
+                    ):
+                        return await _abandoned(session, job)
                     await session.commit()
                     trace = await read_trace(job.source_snapshot)
                     if not await _lease_holds(session, job.id, token):
@@ -371,7 +386,8 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
                     return await _current_job(session, job_id)
 
                 if job.phase == "MAP":
-                    job.status = ANALYZING
+                    if not await _advance(session, job_id, token, status=ANALYZING):
+                        return await _abandoned(session, job)
                     segment = await _next_segment(session, job.id)
                     if segment is None:
                         job.phase = "REDUCE"

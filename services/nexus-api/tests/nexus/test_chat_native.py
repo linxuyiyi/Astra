@@ -444,3 +444,66 @@ def test_member_interrupt_reaches_the_member_session(tmp_path, monkeypatch):
         assert interrupts[0].url.params["agent_id"] == "agent-1"
     finally:
         client.__exit__(None, None, None)
+
+
+def test_raw_stream_without_cursor_replays_from_the_start(tmp_path, monkeypatch):
+    """空 cursor 的 raw 流不能把起点提升成最新 checkpoint，否则会整轮跳过回复。"""
+
+    sse = 'data: {"type":"REPLY_START","id":"s1","reply_id":"r1"}\n\n'
+    calls: list[httpx.Request] = []
+    client = build_client(
+        tmp_path,
+        monkeypatch,
+        (200, {"messages": [], "event_cursor": "9-0", "is_running": True, "has_more": False}),
+        stream_sse=sse.encode(),
+        calls=calls,
+    )
+    try:
+        conversation_id = create_conversation(client)
+        bind_session(conversation_id, "session-1")
+
+        with client.stream(
+            "GET",
+            f"/api/v1/conversations/{conversation_id}/stream?raw=1",
+            headers=OWNER,
+        ) as response:
+            assert response.status_code == 200
+            assert "REPLY_START" in response.read().decode()
+
+        streamed = [item for item in calls if item.url.path.endswith("/stream")]
+        assert streamed
+        assert "after" not in streamed[0].url.params
+        # 不再为“补一个最新游标”去读一次 messages。
+        assert not [item for item in calls if item.url.path.endswith("/messages")]
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_legacy_stream_still_starts_from_the_latest_checkpoint(tmp_path, monkeypatch):
+    """非 raw 的旧页面保持原行为：从最新 checkpoint 往后订阅。"""
+
+    sse = 'data: {"type":"REPLY_START","id":"s1","reply_id":"r1"}\n\n'
+    calls: list[httpx.Request] = []
+    client = build_client(
+        tmp_path,
+        monkeypatch,
+        (200, {"messages": [], "event_cursor": "9-0", "is_running": False, "has_more": False}),
+        stream_sse=sse.encode(),
+        calls=calls,
+    )
+    try:
+        conversation_id = create_conversation(client)
+        bind_session(conversation_id, "session-1")
+
+        with client.stream(
+            "GET",
+            f"/api/v1/conversations/{conversation_id}/stream",
+            headers=OWNER,
+        ) as response:
+            assert response.status_code == 200
+            response.read()
+
+        streamed = [item for item in calls if item.url.path.endswith("/stream")]
+        assert streamed[0].url.params["after"] == "9-0"
+    finally:
+        client.__exit__(None, None, None)

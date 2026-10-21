@@ -163,13 +163,20 @@ export function GroupApp({ channelId }: { channelId: string }) {
       setLoading(false);
 
       // 人类消息事件：补上其他成员发出的消息，以及刚建出来的成员 Session。
-      // 连接会断：有限退避重连，重连后先从持久时间线补缺口（只重连实时流
-      // 会丢掉断线期间的消息）。
+      // 连接会断：有限退避重连；每次订阅成功后都按 id 补读持久时间线，
+      // 这样等待期间提交的消息不会因为“先补读、后重连”被永久漏掉。
       void (async () => {
         let delay = 1000;
         while (active) {
           try {
-            for await (const event of streamChannelEvents(channelId, controller.signal)) {
+            for await (const event of streamChannelEvents(
+              channelId,
+              controller.signal,
+              // 订阅成功后再补读，闭合“补读结束 → 重连成功”之间的缺口。
+              async () => {
+                if (active) await adopt().catch(() => undefined);
+              },
+            )) {
               if (!active) return;
               delay = 1000;
               if (event.message) appendHuman(event.message);
@@ -181,8 +188,6 @@ export function GroupApp({ channelId }: { channelId: string }) {
           } catch {
             // 断线或流被中断：下面补读并重连。
           }
-          if (!active) return;
-          await adopt().catch(() => undefined);
           if (!active) return;
           await wait(delay);
           delay = Math.min(delay * 2, 10000);

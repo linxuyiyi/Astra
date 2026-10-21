@@ -683,7 +683,6 @@ def test_idle_unbind_failure_keeps_the_removal_intent(tmp_path, monkeypatch, fak
             and request.method == "DELETE"
             and request.url.path.endswith("/workspace/skill/失败收回")
         ):
-            state["fail_skill"] = False
             return httpx.Response(503, json={"detail": "临时不可用"})
         return original(request)
 
@@ -717,6 +716,7 @@ def test_idle_unbind_failure_keeps_the_removal_intent(tmp_path, monkeypatch, fak
         connection.close()
         assert pending == [("失败收回",)]
 
+        state["fail_skill"] = False
         retried = client.patch(
             f"/api/v1/employees/{employee['id']}",
             json=employee_body(skills=[]),
@@ -760,3 +760,110 @@ def test_renaming_a_skill_retires_suffixed_installs(tmp_path, monkeypatch, fake)
         assert renamed.status_code == 200, renamed.text
         assert renamed.json()["sync"]["status"] == "applied"
         assert sorted(item["name"] for item in fake.workspace(agent_id, mailbox)[0]) == ["新名"]
+
+
+def test_unbind_intent_survives_a_workspace_read_failure(tmp_path, monkeypatch, fake):
+    """解绑后第一次同步就读不到工作区：待办必须已经提交，下一次仍能收回。"""
+
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    original = fake.handler
+    state = {"fail_read": False}
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        if (
+            state["fail_read"]
+            and request.method == "GET"
+            and request.url.path == "/workspace/skill"
+        ):
+            return httpx.Response(503, json={"detail": "工作区暂不可用"})
+        return original(request)
+
+    fake.handler = flaky
+    with TestClient(create_app()) as client:
+        attach(client, fake)
+        skill = client.post(
+            "/api/v1/config/skills",
+            json={"content": skill_markdown("读取失败", "第一次读不到工作区")},
+        ).json()["skill"]
+        employee = client.post(
+            "/api/v1/employees",
+            json=employee_body(skills=[skill["id"]]),
+        ).json()["employee"]
+        agent_id = employee["agentscope_agent_id"]
+        mailbox = employee["mailbox_session_id"]
+        assert [item["name"] for item in fake.workspace(agent_id, mailbox)[0]] == ["读取失败"]
+
+        state["fail_read"] = True
+        failed = client.patch(
+            f"/api/v1/employees/{employee['id']}",
+            json=employee_body(skills=[]),
+        )
+        assert failed.status_code == 200, failed.text
+        assert failed.json()["sync"]["status"] == "error"
+        assert [item["name"] for item in fake.workspace(agent_id, mailbox)[0]] == ["读取失败"]
+
+        connection = sqlite3.connect(db_path())
+        pending = connection.execute(
+            "SELECT detail FROM t_nexus_resource_sync WHERE status = 'pending_remove'"
+        ).fetchall()
+        connection.close()
+        assert pending == [("读取失败",)]
+
+        state["fail_read"] = False
+        retried = client.patch(
+            f"/api/v1/employees/{employee['id']}",
+            json=employee_body(skills=[]),
+        )
+        assert retried.status_code == 200, retried.text
+        assert retried.json()["sync"]["status"] == "applied"
+        assert fake.workspace(agent_id, mailbox)[0] == []
+
+
+def test_unbind_intent_survives_a_sync_crash(tmp_path, monkeypatch, fake):
+    """绑定已提交、同步没跑完（相当于进程退出）：待办仍在库里，重试能收回。"""
+
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    with TestClient(create_app()) as client:
+        attach(client, fake)
+        skill = client.post(
+            "/api/v1/config/skills",
+            json={"content": skill_markdown("崩溃收回", "同步中途退出")},
+        ).json()["skill"]
+        employee = client.post(
+            "/api/v1/employees",
+            json=employee_body(skills=[skill["id"]]),
+        ).json()["employee"]
+        agent_id = employee["agentscope_agent_id"]
+        mailbox = employee["mailbox_session_id"]
+
+        async def crash(*_args, **_kwargs):
+            raise RuntimeError("模拟同步中途进程退出")
+
+        with monkeypatch.context() as patch:
+            patch.setattr("nexus_api.main.sync_employee_skills", crash)
+            with pytest.raises(RuntimeError):
+                client.patch(
+                    f"/api/v1/employees/{employee['id']}",
+                    json=employee_body(skills=[]),
+                )
+
+        connection = sqlite3.connect(db_path())
+        stored = json.loads(
+            connection.execute(
+                "SELECT skills_json FROM t_nexus_employees WHERE id = ?", (employee["id"],)
+            ).fetchone()[0]
+        )
+        pending = connection.execute(
+            "SELECT detail FROM t_nexus_resource_sync WHERE status = 'pending_remove'"
+        ).fetchall()
+        connection.close()
+        assert stored == []
+        assert pending == [("崩溃收回",)]
+
+        retried = client.patch(
+            f"/api/v1/employees/{employee['id']}",
+            json=employee_body(skills=[]),
+        )
+        assert retried.status_code == 200, retried.text
+        assert retried.json()["sync"]["status"] == "applied"
+        assert fake.workspace(agent_id, mailbox)[0] == []

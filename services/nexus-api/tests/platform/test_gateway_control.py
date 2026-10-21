@@ -1218,3 +1218,23 @@ def test_failed_projection_is_marked_and_recovered_without_losing_the_run(gatewa
         detail = client.get(f"/api/gateway/nodes/{node['id']}").json()["health_detail"]
         assert not detail.get("projection_pending")
         assert len(gateway_env.probe.calls) == 2
+
+
+def test_node_weight_must_be_positive(gateway_env):
+    with TestClient(app) as client:
+        pool = create_pool(client)
+        invalid = client.post(
+            "/api/gateway/nodes",
+            json={
+                "name": unique("node"),
+                "pool_id": pool["id"],
+                "base_url": "https://proxy.example.com",
+                "models": ["gpt-test"],
+                "weight": 0,
+            },
+        )
+        assert invalid.status_code == 422, invalid.text
+
+        node = create_node(client, pool["id"])
+        patched = client.patch(f"/api/gateway/nodes/{node['id']}", json={"weight": 0})
+        assert patched.status_code == 422, patched.text

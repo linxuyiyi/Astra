@@ -90,7 +90,7 @@
 
       <ElDivider content-position="left">限额与额度</ElDivider>
       <ElFormItem label="权重">
-        <ElInput v-model="form.weight" type="number" min="0" />
+        <ElInput v-model="form.weight" type="number" min="1" />
       </ElFormItem>
       <ElFormItem label="最大并发（0 为不限）">
         <ElInput v-model="form.maxConcurrency" type="number" min="0" />
@@ -390,7 +390,7 @@ function basePayload(): GatewayNodeWrite {
     request_timeout_seconds: floatOrNull(form.requestTimeout),
     probe_interval_seconds: intOrNull(form.probeInterval),
     models: parseNumberList(form.modelsText),
-    weight: Number(form.weight) || 0,
+    weight: Math.max(1, Number(form.weight) || 1),
     max_concurrency: Number(form.maxConcurrency) || 0,
     hourly_token_limit: intOrNull(form.hourly),
     daily_token_limit: intOrNull(form.daily),

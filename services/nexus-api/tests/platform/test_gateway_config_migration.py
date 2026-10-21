@@ -222,3 +222,64 @@ def test_0034_adds_deletion_marker_without_changing_existing_keys(tmp_path):
             assert dict(connection.execute(select(keys)).mappings().one()) == deleted
     finally:
         engine.dispose()
+
+
+def test_0057_normalizes_node_weight_and_adds_default_pool(tmp_path):
+    from sqlalchemy import text
+
+    database_path = tmp_path / "gateway-weight.db"
+    upgrade(database_path, "0056_gateway_probe_strategy")
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO t_nexus_gateway_pools "
+                "(id, name, description, weight, enabled, sort_order, created_at, updated_at) "
+                "VALUES ('gp_keep', '保留池', '', 1, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+        node_sql = (
+            "INSERT INTO t_nexus_gateway_nodes "
+            "(id, name, pool_id, base_url, auth_type, auth_header, health_path, probe_strategy, "
+            "models, weight, max_concurrency, quota_policy, config_state, scheduling_state, "
+            "health_state, success_streak, failure_streak, health_detail, sort_order, "
+            "created_at, updated_at) VALUES (:id, :name, :pool, 'https://a.example.com', 'BEARER', "
+            "'Authorization', '/health', 'SSE', '[]', :weight, 0, 'STOP', 'DISABLED', 'DRAINING', "
+            "'UNKNOWN', 0, 0, '{}', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        )
+        connection.execute(
+            text(node_sql),
+            {"id": "gn_zero", "name": "零权重节点", "pool": "gp_keep", "weight": 0},
+        )
+        connection.execute(
+            text(node_sql),
+            {"id": "gn_three", "name": "权重三节点", "pool": "gp_keep", "weight": 3},
+        )
+        connection.execute(
+            text(node_sql),
+            {"id": "gn_unassigned", "name": "未分配节点", "pool": None, "weight": 1},
+        )
+
+    upgrade(database_path, "head")
+
+    with engine.connect() as connection:
+        nodes = {
+            row.id: (row.weight, row.pool_id)
+            for row in connection.execute(
+                text("SELECT id, weight, pool_id FROM t_nexus_gateway_nodes")
+            )
+        }
+        pools = {
+            row.id: row.name
+            for row in connection.execute(text("SELECT id, name FROM t_nexus_gateway_pools"))
+        }
+
+    # 零值迁移到 1，其余权重不变；节点归属不被改写，未分配节点仍保持 NULL。
+    assert nodes == {
+        "gn_zero": (1, "gp_keep"),
+        "gn_three": (3, "gp_keep"),
+        "gn_unassigned": (1, None),
+    }
+    assert len(nodes) == 3
+    # 只新增一个默认池，原有池保留，行数核对：1 + 1。
+    assert pools == {"gp_keep": "保留池", "gp_default": "默认资源池"}

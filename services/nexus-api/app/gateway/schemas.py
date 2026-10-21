@@ -52,7 +52,7 @@ class NodeCreate(BaseModel):
     probe_strategy: str = Field(default="SSE", max_length=16)
     probe_interval_seconds: int | None = Field(default=None, ge=10, le=86400)
     models: list[str] = Field(default_factory=list)
-    weight: int = Field(default=1, ge=0)
+    weight: int = Field(default=1, ge=1)
     max_concurrency: int = Field(default=0, ge=0)
     hourly_token_limit: int | None = Field(default=None, ge=0)
     daily_token_limit: int | None = Field(default=None, ge=0)
@@ -77,7 +77,7 @@ class NodePatch(BaseModel):
     probe_strategy: str | None = Field(default=None, max_length=16)
     probe_interval_seconds: int | None = Field(default=None, ge=10, le=86400)
     models: list[str] | None = None
-    weight: int | None = Field(default=None, ge=0)
+    weight: int | None = Field(default=None, ge=1)
     max_concurrency: int | None = Field(default=None, ge=0)
     hourly_token_limit: int | None = Field(default=None, ge=0)
     daily_token_limit: int | None = Field(default=None, ge=0)

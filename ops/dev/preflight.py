@@ -266,6 +266,15 @@ async def check_agent(settings) -> CheckResult:
         terminate_process,
     )
 
+    if settings.executor_type == "worker":
+        return result(
+            "默认 Agent 可执行文件",
+            True,
+            "worker",
+            "远程 Worker 模式：本机不安装、也不检查 OpenCode",
+            "无需处理",
+        )
+
     resolved = resolve_executable(settings.opencode_binary)
     if not resolved:
         return result(

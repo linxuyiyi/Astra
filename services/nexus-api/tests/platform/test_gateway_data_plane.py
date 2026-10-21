@@ -35,7 +35,12 @@ from app.gateway.errors import (
     RUNTIME_UNAVAILABLE,
 )
 from app.gateway.health_summary import GatewayOpsService, window_metrics
-from app.gateway.models import GatewayKey, GatewayRequest, GatewayRuntimeEvent, utcnow
+from app.gateway.models import (
+    GatewayKey,
+    GatewayRequest,
+    GatewayRuntimeEvent,
+    utcnow,
+)
 from app.gateway.probe import ProbeOutcome
 from app.gateway.proxy import GatewayProxy
 from app.gateway.request_lifecycle import recover_abandoned_requests
@@ -1841,6 +1846,7 @@ def test_background_probe_removes_and_restores_node(cipher, upstream):
     assert closed == "CLOSED"
     # 探测类型包含网络、服务、真实模型与 SSE 流式。
     assert probe.calls and len(probe.calls[0][1]) == 4
+
 
 
 def test_passive_transport_failure_degrades_node(cipher, upstream):

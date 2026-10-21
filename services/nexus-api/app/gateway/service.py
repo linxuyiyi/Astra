@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
@@ -13,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.gateway.health import (
     apply_probe_outcome,
-    build_health_checks,
+    build_probe_run,
     probe_complete,
     probe_detail,
     probe_success,
@@ -36,6 +37,7 @@ from app.gateway.models import (
     GatewayKey,
     GatewayNode,
     GatewayPool,
+    GatewayProbeRun,
     GatewayRoute,
 )
 from app.gateway.probe import GatewayProbeClient
@@ -383,17 +385,21 @@ class GatewayControlService:
         *,
         actor: str,
         actor_role: str,
-    ) -> tuple[GatewayNode, list[GatewayHealthCheck]]:
+    ) -> tuple[GatewayNode, GatewayProbeRun]:
         node = await self.get_node(node_id)
         selected = probe_types or list(PROBE_TYPES)
         unknown = [item for item in selected if item not in PROBE_TYPES]
         if unknown:
             raise GatewayConflict(f"未知探测类型: {', '.join(unknown)}")
         api_key = self._cipher.decrypt(node.api_key_encrypted) if node.api_key_encrypted else None
+        started_at = utcnow()
+        started_clock = time.monotonic()
         outcomes = await self._probe_client.probe(node, selected, api_key)
-        checks = build_health_checks(node.id, outcomes)
-        for check in checks:
-            self._session.add(check)
+        duration_ms = int((time.monotonic() - started_clock) * 1000)
+        run = build_probe_run(
+            node, outcomes, source="MANUAL", started_at=started_at, duration_ms=duration_ms
+        )
+        self._session.add(run)
         success = probe_success(outcomes)
         previous_health = node.health_state
         if probe_complete(outcomes):
@@ -419,7 +425,7 @@ class GatewayControlService:
             },
         )
         await self._commit()
-        return node, checks
+        return node, run
 
     # ── Route ──────────────────────────────────────────────────────────
 
@@ -781,6 +787,27 @@ class NodeReadDict:
             "has_api_key": node.has_api_key,
             "sort_order": node.sort_order,
         }
+
+
+def probe_checks_from_run(run: GatewayProbeRun) -> list[HealthCheckRead]:
+    """把轮次里的步骤投影成旧的 checks 形状（页面过渡期兼容，不写库）。"""
+
+    checks: list[HealthCheckRead] = []
+    for index, step in enumerate(run.steps or []):
+        checks.append(
+            HealthCheckRead(
+                id=-(index + 1),
+                node_id=run.node_id,
+                probe_type=str(step.get("probe_type") or ""),
+                success=bool(step.get("success")),
+                latency_ms=int(step.get("latency_ms") or 0),
+                status_code=step.get("status_code"),
+                error=step.get("error"),
+                detail=step.get("detail") if isinstance(step.get("detail"), dict) else {},
+                created_at=run.finished_at or run.started_at,
+            )
+        )
+    return checks
 
 
 def health_check_read(check: GatewayHealthCheck) -> HealthCheckRead:

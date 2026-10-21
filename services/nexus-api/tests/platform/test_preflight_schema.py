@@ -79,5 +79,11 @@ async def test_preflight_passes_right_after_empty_database_upgrade(tmp_path):
 
     migration = next(check for check in checks if check.item == "数据库表与迁移")
     assert migration.passed, migration.reason
-    assert "0054_experience_review" in migration.current
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    config = Config(str(preflight.BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(preflight.BACKEND_ROOT / "alembic"))
+    head = ScriptDirectory.from_config(config).get_current_head()
+    assert f"revision={head}" in migration.current
     assert not [check.item for check in checks if not check.passed and check.blocking]

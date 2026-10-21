@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -20,8 +21,8 @@ from app.gateway.models import (
     HEALTH_HEALTHY,
     HEALTH_UNHEALTHY,
     PROBE_TYPES,
-    GatewayHealthCheck,
     GatewayNode,
+    GatewayProbeRun,
     GatewayRuntimeEvent,
 )
 from app.gateway.probe import ProbeOutcome
@@ -33,19 +34,62 @@ from app.gateway.runtime import (
 from app.models import utcnow
 
 
-def build_health_checks(node_id: str, outcomes: list[ProbeOutcome]) -> list[GatewayHealthCheck]:
+def probe_steps(outcomes: list[ProbeOutcome]) -> list[dict[str, Any]]:
+    """轮次内的步骤事实：只保留耗時、状态码、错误分类与元数据。"""
+
     return [
-        GatewayHealthCheck(
-            node_id=node_id,
-            probe_type=outcome.probe_type,
-            success=outcome.success,
-            latency_ms=outcome.latency_ms,
-            status_code=outcome.status_code,
-            error=outcome.error,
-            detail=outcome.detail,
-        )
+        {
+            "probe_type": outcome.probe_type,
+            "success": outcome.success,
+            "latency_ms": outcome.latency_ms,
+            "status_code": outcome.status_code,
+            "error": outcome.error,
+            "detail": outcome.detail,
+        }
         for outcome in outcomes
     ]
+
+
+def build_probe_run(
+    node: GatewayNode,
+    outcomes: list[ProbeOutcome],
+    *,
+    source: str,
+    started_at,
+    duration_ms: int,
+) -> GatewayProbeRun:
+    """一次探测操作 = 一条轮次记录；步骤在 steps 里，不再逐步骤落行。"""
+
+    complete = probe_complete(outcomes)
+    success = probe_success(outcomes)
+    return GatewayProbeRun(
+        id="gpr_" + uuid4().hex,
+        node_id=node.id,
+        source=source,
+        strategy=probe_strategy(outcomes),
+        first_model=(node.models or [None])[0],
+        runtime_scope=node_runtime_scope(node),
+        success=success,
+        complete=complete,
+        status="SUCCESS" if success and complete else "PARTIAL" if complete else "INCOMPLETE",
+        steps=probe_steps(outcomes),
+        usage={"requests": len(outcomes)},
+        error="" if success else "；".join(
+            f"{outcome.probe_type}: {outcome.error}" for outcome in outcomes if not outcome.success
+        )[:2000],
+        started_at=started_at,
+        finished_at=utcnow(),
+        duration_ms=duration_ms,
+    )
+
+
+def probe_strategy(outcomes: list[ProbeOutcome]) -> str:
+    types = {outcome.probe_type for outcome in outcomes}
+    if types == {"STREAM"}:
+        return "SSE"
+    if types == {"MODEL"}:
+        return "NON_STREAM"
+    return "SCOPED"
 
 
 def probe_success(outcomes: list[ProbeOutcome]) -> bool:
@@ -134,8 +178,11 @@ async def record_background_probe(
         node = await session.get(GatewayNode, node_id)
         if node is None:
             return
-        for check in build_health_checks(node_id, outcomes):
-            session.add(check)
+        started_at = utcnow()
+        run = build_probe_run(
+            node, outcomes, source="AUTO", started_at=started_at, duration_ms=0
+        )
+        session.add(run)
         if expected_scope is not None and node_runtime_scope(node) != expected_scope:
             await session.commit()
             return

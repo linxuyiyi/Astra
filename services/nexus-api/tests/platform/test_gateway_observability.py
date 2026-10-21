@@ -17,7 +17,7 @@ import httpx
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.gateway_routes import (
     gateway_cipher,
@@ -29,6 +29,7 @@ from app.gateway.config import GatewayConfig, GatewayConfigState
 from app.gateway.models import (
     GatewayHealthCheck,
     GatewayNode,
+    GatewayProbeRun,
     GatewayRequest,
     utcnow,
 )
@@ -205,6 +206,21 @@ def _health_check_count(node_id: str) -> int:
     return asyncio.run(read())
 
 
+def _probe_run_count(node_id: str) -> int:
+    async def count() -> int:
+        async with SessionLocal() as session:
+            return int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(GatewayProbeRun)
+                    .where(GatewayProbeRun.node_id == node_id)
+                )
+                or 0
+            )
+
+    return asyncio.run(count())
+
+
 def test_background_probe_persists_checks_and_matches_runtime_health():
     node_id = unique("gn_obs")
     _insert_node(node_id)
@@ -236,9 +252,10 @@ def test_background_probe_persists_checks_and_matches_runtime_health():
     removed_runtime, removed_db, restored_runtime, restored_db = asyncio.run(run())
     assert removed_runtime == removed_db == "UNHEALTHY"
     assert restored_runtime == restored_db == "HEALTHY"
-    # 每次探测落 4 类健康记录；启动后台探测循环也会先探一次。
-    checks = _health_check_count(node_id)
-    assert checks >= 20 and checks % 4 == 0
+    # 每次探测落一条轮次（步骤在轮次内）；启动后台探测循环也会先探一次。
+    runs = _probe_run_count(node_id)
+    assert runs >= 5
+    assert _health_check_count(node_id) == 0
 
 
 # ── 调用日志分页 / 过滤 ────────────────────────────────────────────────

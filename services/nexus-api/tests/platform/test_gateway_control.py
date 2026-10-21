@@ -10,7 +10,7 @@ import httpx
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.gateway_routes import (
     gateway_cipher,
@@ -19,15 +19,21 @@ from app.api.gateway_routes import (
 )
 from app.database import SessionLocal
 from app.gateway.config import ConfigLoader, GatewayConfigState
+from app.gateway.health import record_background_probe
 from app.gateway.models import (
     GatewayHealthCheck,
     GatewayKey,
     GatewayNode,
+    GatewayProbeRun,
     GatewayRequest,
 )
 from app.gateway.probe import HttpGatewayProbeClient, ProbeOutcome
 from app.gateway.proxy import GatewayProxy
-from app.gateway.runtime import SCOPE_NODE, InMemoryRuntimeStore, node_runtime_scope
+from app.gateway.runtime import (
+    SCOPE_NODE,
+    InMemoryRuntimeStore,
+    node_runtime_scope,
+)
 from app.gateway.security import CredentialCipher, gateway_key_digest
 from app.gateway.server import GatewayDataPlane, create_gateway_app
 from app.main import app
@@ -928,16 +934,137 @@ def test_node_metadata_save_preserves_health_history(gateway_env):
         for _ in range(2):
             assert client.post(f"/api/gateway/nodes/{node['id']}/probe", json={}).status_code == 200
 
-        async def checks():
+        async def runs():
+            async with SessionLocal() as session:
+                rows = await session.scalars(
+                    select(GatewayProbeRun.id).where(GatewayProbeRun.node_id == node["id"])
+                )
+                return list(rows)
+
+        async def step_rows():
             async with SessionLocal() as session:
                 rows = await session.scalars(
                     select(GatewayHealthCheck.id).where(GatewayHealthCheck.node_id == node["id"])
                 )
                 return list(rows)
 
-        before = asyncio.run(checks())
-        assert len(before) == 8
+        before = asyncio.run(runs())
+        # 两次探测 = 两条轮次；新探测不再逐步骤写 health_checks。
+        assert len(before) == 2
+        assert asyncio.run(step_rows()) == []
         renamed = client.patch(f"/api/gateway/nodes/{node['id']}", json={"name": unique("renamed-node")})
         assert renamed.status_code == 200, renamed.text
         assert renamed.json()["health_state"] == "HEALTHY"
-        assert asyncio.run(checks()) == before
+        assert asyncio.run(runs()) == before
+
+
+def test_manual_probe_records_one_run_with_steps(gateway_env):
+    with TestClient(app) as client:
+        pool = create_pool(client)
+        node = create_node(client, pool["id"])
+
+        response = client.post(f"/api/gateway/nodes/{node['id']}/probe", json={})
+        assert response.status_code == 200, response.text
+        body = response.json()
+
+        run = body["run"]
+        assert run["source"] == "MANUAL"
+        assert run["node_id"] == node["id"]
+        assert run["first_model"] == "gpt-test"
+        assert run["runtime_scope"]
+        assert run["complete"] is True
+        assert run["success"] is True
+        assert run["duration_ms"] >= 0
+        assert [step["probe_type"] for step in run["steps"]] == [
+            "NETWORK",
+            "SERVICE",
+            "MODEL",
+            "STREAM",
+        ]
+        assert run["usage"]["requests"] == 4
+        # 旧的 checks 字段仍是同一次轮次的投影，页面不需要同步改动。
+        assert [check["probe_type"] for check in body["checks"]] == [
+            "NETWORK",
+            "SERVICE",
+            "MODEL",
+            "STREAM",
+        ]
+
+        async def counts():
+            async with SessionLocal() as session:
+                runs = await session.scalar(
+                    select(func.count())
+                    .select_from(GatewayProbeRun)
+                    .where(GatewayProbeRun.node_id == node["id"])
+                )
+                steps = await session.scalar(
+                    select(func.count())
+                    .select_from(GatewayHealthCheck)
+                    .where(GatewayHealthCheck.node_id == node["id"])
+                )
+                return runs, steps
+
+        assert asyncio.run(counts()) == (1, 0)
+
+
+def test_probe_runs_history_separates_legacy_steps(gateway_env):
+    with TestClient(app) as client:
+        pool = create_pool(client)
+        node = create_node(client, pool["id"])
+        assert client.post(f"/api/gateway/nodes/{node['id']}/probe", json={}).status_code == 200
+
+        async def add_legacy():
+            async with SessionLocal() as session:
+                session.add(
+                    GatewayHealthCheck(
+                        node_id=node["id"],
+                        probe_type="MODEL",
+                        success=True,
+                        latency_ms=12,
+                    )
+                )
+                await session.commit()
+
+        asyncio.run(add_legacy())
+
+        history = client.get(f"/api/gateway/nodes/{node['id']}/probe-runs")
+        assert history.status_code == 200, history.text
+        body = history.json()
+        assert len(body["runs"]) == 1
+        assert body["runs"][0]["source"] == "MANUAL"
+        assert [step["probe_type"] for step in body["legacy_steps"]] == ["MODEL"]
+
+        # 旧步骤记录不进入任何轮次，也不被新轮次覆盖。
+        assert body["runs"][0]["steps"]
+        assert all(step.get("legacy") is None for step in body["runs"][0]["steps"])
+
+
+def test_background_probe_records_an_auto_run(gateway_env):
+    with TestClient(app) as client:
+        pool = create_pool(client)
+        node = create_node(client, pool["id"])
+
+    async def scenario():
+        async with SessionLocal() as session:
+            db_node = await session.get(GatewayNode, node["id"])
+            scope = node_runtime_scope(db_node)
+        outcomes = [
+            ProbeOutcome(probe_type, True, 4) for probe_type in ("NETWORK", "SERVICE", "MODEL", "STREAM")
+        ]
+        await record_background_probe(
+            SessionLocal, node["id"], outcomes, expected_scope=scope
+        )
+        async with SessionLocal() as session:
+            rows = await session.scalars(
+                select(GatewayProbeRun)
+                .where(GatewayProbeRun.node_id == node["id"])
+                .order_by(GatewayProbeRun.started_at)
+            )
+            return list(rows)
+
+    runs = asyncio.run(scenario())
+    assert len(runs) == 1
+    assert runs[0].source == "AUTO"
+    assert runs[0].success is True
+    assert runs[0].complete is True
+    assert [step["probe_type"] for step in runs[0].steps] == ["NETWORK", "SERVICE", "MODEL", "STREAM"]

@@ -40,6 +40,8 @@ from app.gateway.schemas import (
     PoolPatch,
     PoolRead,
     ProbeRequest,
+    ProbeRunList,
+    ProbeRunRead,
     RequestLogPage,
     RouteCreate,
     RoutePatch,
@@ -57,6 +59,7 @@ from app.gateway.service import (
     GatewayControlService,
     GatewayNotFound,
     GatewayRuntimeUnavailable,
+    probe_checks_from_run,
 )
 
 router = APIRouter(prefix="/api/gateway", tags=["api-gateway-control"])
@@ -237,10 +240,30 @@ async def probe_node(
     payload: ProbeRequest,
     service: GatewayControlService = Depends(gateway_service),
 ):
-    node, checks = await service.probe_node(
+    node, run = await service.probe_node(
         node_id, payload.probe_types, actor="astra", actor_role="system"
     )
-    return NodeProbeResult(node=NodeRead.model_validate(node), checks=checks)
+    return NodeProbeResult(
+        node=NodeRead.model_validate(node),
+        run=ProbeRunRead.model_validate(run),
+        checks=probe_checks_from_run(run),
+    )
+
+
+@router.get("/nodes/{node_id}/probe-runs", response_model=ProbeRunList)
+async def list_node_probe_runs(
+    node_id: str,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    service: GatewayObservabilityService = Depends(gateway_observability),
+):
+    """按轮次返回探测历史；迁移前的步骤记录以 LEGACY_STEP 单独返回。"""
+
+    runs = await service.list_probe_runs(node_id, limit=limit)
+    legacy = await service.list_legacy_health_checks(node_id, limit=limit)
+    return ProbeRunList(
+        runs=[ProbeRunRead.model_validate(run) for run in runs],
+        legacy_steps=[HealthCheckRead.model_validate(check) for check in legacy],
+    )
 
 
 # ── Route ─────────────────────────────────────────────────────────────

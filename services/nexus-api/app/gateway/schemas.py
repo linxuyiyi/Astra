@@ -211,8 +211,34 @@ class HealthCheckRead(BaseModel):
     created_at: datetime
 
 
+class ProbeRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    node_id: str
+    source: str
+    strategy: str
+    first_model: str | None
+    runtime_scope: str | None
+    success: bool
+    complete: bool
+    status: str
+    steps: list[dict[str, Any]]
+    usage: dict[str, Any]
+    error: str | None
+    started_at: datetime
+    finished_at: datetime | None
+    duration_ms: int
+
+
+class ProbeRunList(BaseModel):
+    runs: list[ProbeRunRead]
+    legacy_steps: list[HealthCheckRead]
+
+
 class NodeProbeResult(BaseModel):
     node: NodeRead
+    run: ProbeRunRead
     checks: list[HealthCheckRead]
 
 

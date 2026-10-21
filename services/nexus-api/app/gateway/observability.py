@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -19,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.gateway.models import (
     GatewayHealthCheck,
     GatewayNode,
+    GatewayProbeRun,
     GatewayRequest,
     GatewayRoute,
 )
@@ -258,14 +260,61 @@ class GatewayObservabilityService:
             gateway_instance_id=row.gateway_instance_id,
         )
 
-    async def list_health_checks(
+    async def list_legacy_health_checks(
         self, node_id: str, *, limit: int = 100
     ) -> list[GatewayHealthCheck]:
+        """迁移前的步骤级记录；新探测只写轮次，不再写这张表。"""
+
         return list(
             await self._session.scalars(
                 select(GatewayHealthCheck)
                 .where(GatewayHealthCheck.node_id == node_id)
                 .order_by(GatewayHealthCheck.created_at.desc(), GatewayHealthCheck.id.desc())
+                .limit(limit)
+            )
+        )
+
+    async def list_health_checks(
+        self, node_id: str, *, limit: int = 100
+    ) -> list[Any]:
+        """旧页面的步骤视图：LEGACY_STEP + 轮次步骤的只读投影（不写库）。
+
+        新写入只发生在轮次表；这里把 steps 投影成旧形状，页面在 3.3 切到
+        ``/probe-runs`` 之前仍能显示探测结果。
+        """
+
+        legacy = await self.list_legacy_health_checks(node_id, limit=limit)
+        runs = await self.list_probe_runs(node_id, limit=limit)
+        projected: list[Any] = []
+        index = 0
+        for run in runs:
+            for step in reversed(run.steps or []):
+                index += 1
+                projected.append(
+                    SimpleNamespace(
+                        id=-index,
+                        node_id=run.node_id,
+                        probe_type=str(step.get("probe_type") or ""),
+                        success=bool(step.get("success")),
+                        latency_ms=int(step.get("latency_ms") or 0),
+                        status_code=step.get("status_code"),
+                        error=step.get("error"),
+                        detail=step.get("detail") if isinstance(step.get("detail"), dict) else {},
+                        created_at=run.finished_at or run.started_at,
+                    )
+                )
+        merged = list(legacy) + projected
+        merged.sort(key=lambda item: item.created_at, reverse=True)
+        return merged[:limit]
+
+    async def list_probe_runs(
+        self, node_id: str, *, limit: int = 50
+    ) -> list[GatewayProbeRun]:
+        return list(
+            await self._session.scalars(
+                select(GatewayProbeRun)
+                .where(GatewayProbeRun.node_id == node_id)
+                .order_by(GatewayProbeRun.started_at.desc(), GatewayProbeRun.id.desc())
                 .limit(limit)
             )
         )

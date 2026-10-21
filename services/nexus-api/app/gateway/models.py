@@ -156,6 +156,36 @@ class GatewayHealthCheck(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
+class GatewayProbeRun(Base):
+    """一次探测操作 = 一条轮次事实。
+
+    步骤存在 ``steps`` 里，不再为每个步骤写一行；迁移前的步骤记录保留在
+    ``t_nexus_gateway_health_checks``，以 LEGACY_STEP 只读展示。
+    """
+
+    __tablename__ = "t_nexus_gateway_probe_runs"
+    __table_args__ = (Index("ix_gateway_probe_runs_node_time", "node_id", "started_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    node_id: Mapped[str] = mapped_column(
+        ForeignKey("t_nexus_gateway_nodes.id", ondelete="CASCADE"), index=True
+    )
+    source: Mapped[str] = mapped_column(String(16))  # MANUAL / AUTO
+    strategy: Mapped[str] = mapped_column(String(16), default="SCOPED")
+    first_model: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    runtime_scope: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    success: Mapped[bool] = mapped_column(Boolean, default=False)
+    complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(16), default="FAILED")
+    steps: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    usage: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
 class GatewayRequest(Base):
     """调用日志：只保留元数据与测量值，不保存 Prompt / Authorization / 响应体。"""
 

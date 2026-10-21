@@ -38,6 +38,7 @@ from app.gateway.models import (
     GatewayHealthCheck,
     GatewayNode,
     GatewayPool,
+    GatewayProbeRun,
     GatewayRequest,
     GatewayRoute,
     GatewayRuntimeEvent,
@@ -963,6 +964,14 @@ class GatewayOpsService:
                 .limit(OPS_EVENT_LIMIT)
             )
         )
+        failed_runs = list(
+            await self._session.scalars(
+                select(GatewayProbeRun)
+                .where(GatewayProbeRun.success.is_(False))
+                .order_by(GatewayProbeRun.started_at.desc(), GatewayProbeRun.id.desc())
+                .limit(OPS_EVENT_LIMIT)
+            )
+        )
         events: list[OpsEventRead] = []
         for row in audits:
             node_id = row.resource_id if row.resource_type == "node" else None
@@ -997,6 +1006,22 @@ class GatewayOpsService:
                     model=row.model,
                     pool_id=row.pool_id,
                     created_at=row.created_at,
+                )
+            )
+        for run in failed_runs:
+            events.append(
+                OpsEventRead(
+                    id=f"probe-run-{run.id}",
+                    source="runtime",
+                    kind="probe_failed",
+                    summary=(
+                        f"探测失败 · {run.source} · {run.first_model or '未配置模型'}"
+                        + (f"：{run.error}" if run.error else "")
+                    ),
+                    resource_type="node",
+                    resource_id=run.node_id,
+                    node_id=run.node_id,
+                    created_at=run.finished_at or run.started_at,
                 )
             )
         for row in probes:

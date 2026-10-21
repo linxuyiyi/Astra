@@ -38,9 +38,17 @@ async def prepare_process_schema():
     """
 
     import app.gateway.models  # noqa: F401 - register gateway tables
-    from app.database import init_database
+    from app.database import engine, init_database
 
     await init_database()
+    # 进程级测试库可能由更早的 Alembic 版本创建，init_database 会跳过 create_all；
+    # 这里补齐本轮新增的表，避免用例执行顺序决定表是否存在。
+    from app.gateway.models import GatewayProbeRun
+
+    async with engine.begin() as connection:
+        await connection.run_sync(
+            lambda sync: GatewayProbeRun.__table__.create(sync, checkfirst=True)
+        )
 
 
 @pytest.fixture(autouse=True)

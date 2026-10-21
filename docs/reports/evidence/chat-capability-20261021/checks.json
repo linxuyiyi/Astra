@@ -1,0 +1,33 @@
+{
+  "baseline": "739d15efa8997dbcfa6e967956b36b7e4ef2c03b",
+  "frontend": {
+    "web": {
+      "type_check": "passed",
+      "build": "passed",
+      "tests_passed": 24
+    },
+    "chat_island": {
+      "type_check": "passed",
+      "build": "passed",
+      "tests_passed": 10
+    }
+  },
+  "gateway_control": {
+    "passed": 54,
+    "skipped": 1,
+    "skip_reason": "本机 DNS 将 .invalid 域名解析为地址"
+  },
+  "ruff_changed_python": "passed",
+  "openspec_strict": "passed",
+  "build_assets_public_dist": "identical",
+  "production": "not_verified",
+  "browser_final": {
+    "new_stream_follows_latest": true,
+    "back_to_latest_visible_at_bottom": false,
+    "copy_contains_latest_marker": true
+  },
+  "diff_check": {
+    "source": "passed",
+    "generated_js": "embedded template trailing-whitespace warnings; generator output preserved"
+  }
+}

@@ -1,0 +1,216 @@
+- banner:
+  - generic: ✦
+  - generic: NEXUS v1.4.8
+  - navigation "页面导航":
+    - link "星云首页":
+      - /url: /
+    - link "数字员工":
+      - /url: /chat
+    - link "任务大厅":
+      - /url: /tasks
+    - link "数字图书馆":
+      - /url: /library
+    - link "API 网关":
+      - /url: /gateway
+    - link "配置中心":
+      - /url: /settings
+  - generic "AgentScope 2.0.10 已连接":
+    - generic: AgentScope 2.0.10 已连接
+- main:
+  - complementary:
+    - textbox "搜索联系人 / 群组"
+    - button "新建群组":
+      - generic: ＋
+    - button "全部"
+    - button "联系人"
+    - button "群组"
+    - generic: 14 个会话
+    - button "🦾 阿亮 群聊验收二":
+      - generic: 🦾
+      - generic: 阿亮
+      - generic: 群聊验收二
+    - button "🤖 阿明 群聊验收一":
+      - generic: 🤖
+      - generic: 阿明
+      - generic: 群聊验收一
+    - button "🌟 星244fc2 产品244fc2":
+      - generic: 🌟
+      - generic: 星244fc2
+      - generic: 产品244fc2
+    - button "🌟 星551612 产品551612":
+      - generic: 🌟
+      - generic: 星551612
+      - generic: 产品551612
+    - button "🌟 星937531 产品937531":
+      - generic: 🌟
+      - generic: 星937531
+      - generic: 产品937531
+    - button "🧪 验收工程师1016 本机功能验收1016":
+      - generic: 🧪
+      - generic: 验收工程师1016
+      - generic: 本机功能验收1016
+    - button "🤖 验收机器人 验收":
+      - generic: 🤖
+      - generic: 验收机器人
+      - generic: 验收
+    - button "☷ 验收群聊 2 位数字员工 群组":
+      - generic: ☷
+      - generic: 验收群聊
+      - generic: 2 位数字员工
+      - generic: 群组
+    - button "☷ 页面功能验收1021已编辑 3 位数字员工 群组":
+      - generic: ☷
+      - generic: 页面功能验收1021已编辑
+      - generic: 3 位数字员工
+      - generic: 群组
+    - button "🌟 知244fc2 运营244fc2":
+      - generic: 🌟
+      - generic: 知244fc2
+      - generic: 运营244fc2
+    - button "🌟 知551612 运营551612":
+      - generic: 🌟
+      - generic: 知551612
+      - generic: 运营551612
+    - button "🌟 知937531 运营937531":
+      - generic: 🌟
+      - generic: 知937531
+      - generic: 运营937531
+    - button "🤖 DeepSeek 验收员工 DeepSeek验收":
+      - generic: 🤖
+      - generic: DeepSeek 验收员工
+      - generic: DeepSeek验收
+    - button "🧪 E2E验收员工 SkillMCP闭环验收":
+      - generic: 🧪
+      - generic: E2E验收员工
+      - generic: SkillMCP闭环验收
+  - article:
+    - heading "页面功能验收1021已编辑" [level=2]
+    - paragraph: 验证私聊、群聊、附件和成员设置。
+    - button "群组设置":
+      - generic: 群组设置
+    - button "收起资料":
+      - generic: 收起资料
+    - iframe [active]:
+      - generic: 页面功能验收1021已编辑 · 验证私聊、群聊、附件和成员设置。
+      - generic: 我
+      - paragraph: "@阿明 @阿亮 页面功能验收：请各自只回复“群聊可用”，不要调用工具或联系同事。"
+      - button "复制":
+      - generic: 阿亮
+      - generic: 系统消息 - 运行状态
+      - paragraph: 群聊可用
+      - generic: 1s
+      - generic: 9.48k
+      - generic: "4"
+      - button "复制":
+      - generic: 我
+      - paragraph: "@阿亮 页面停止功能验收：直接输出一篇至少5000字的说明文字，不要调用工具，不要联系同事。"
+      - button "复制":
+      - generic: 阿亮
+      - generic: 思考 1s
+      - paragraph: 无法执行：5000字说明文字与验收目标无关，且我的职责设定是简洁回复。
+      - paragraph: 停止功能验收建议按以下方式判定：点击停止后，任务状态变为已停止，流式输出立即中断，再次发送可正常开始新任务。
+      - paragraph: 需要我协助做具体验收项，请给出验收点。
+      - generic: 2s
+      - generic: 9.52k
+      - generic: "254"
+      - button "复制":
+      - generic: 我
+      - paragraph: "@阿亮 停止按钮验收：请从1开始连续列出20000个编号，每个编号写一个短句，不要省略，不要调用工具。"
+      - button "复制":
+      - generic: 阿亮
+      - generic: 0s
+      - generic: 我
+      - generic: attachment-check.txt
+      - generic: TXT
+      - generic: 我
+      - paragraph: "@阿明 @阿亮 最后一轮页面验收：请各自只回复“群聊复验通过”，不要调用工具或联系同事。"
+      - button "复制":
+      - generic: 阿亮
+      - generic: 思考中
+      - paragraph: 群聊复验通过
+      - generic: 1s
+      - generic: 9.67k
+      - generic: "163"
+      - button "复制":
+      - generic: 我
+      - paragraph: "@阿明 @阿亮 模型路由修复后复验：请各自只回复“群聊复验通过”，不要调用工具或联系同事。"
+      - button "复制":
+      - generic: 阿亮
+      - generic: 思考中
+      - paragraph: 群聊复验通过
+      - generic: 1s
+      - generic: 9.71k
+      - generic: "21"
+      - button "复制":
+      - generic: 阿明
+      - generic: 系统消息 - 运行状态
+      - generic: 思考中
+      - paragraph: 群聊复验通过
+      - generic: 1s
+      - generic: 9.62k
+      - generic: "85"
+      - button "复制":
+      - generic: 我
+      - paragraph: "@阿亮 滚动跟随验收：请列出8条简短的群聊验收检查项，最后写“滚动跟随通过”。不要调用工具。"
+      - button "复制":
+      - generic: 阿亮
+      - generic: 思考中
+      - list:
+        - listitem: 消息区可正常滚动。
+        - listitem: 新消息到达时自动滚到底部。
+        - listitem: 用户手动上翻后不再强制跟随。
+        - listitem: 回到底部后恢复自动跟随。
+        - listitem: 长消息渲染不卡顿、不跳动。
+        - listitem: 多成员同时发言时顺序正确。
+        - listitem: 附件消息不影响滚动位置。
+        - listitem: 刷新页面后滚动状态正常恢复。
+      - paragraph: 滚动跟随通过
+      - generic: 1s
+      - generic: 9.75k
+      - generic: "116"
+      - button "复制":
+      - generic: 我
+      - paragraph: "@阿亮 最终流式验收：请再给出8条简短检查项，最后写“最终流式通过”，不要调用工具。"
+      - button "复制":
+      - generic: 阿亮
+      - list:
+        - listitem: 流式输出逐字出现，无整段跳变。
+        - listitem: 首字响应时间正常，无明显延迟。
+        - listitem: 长回答输出过程中页面不卡死。
+        - listitem: 输出中滚动跟随保持稳定。
+        - listitem: 流式结束后内容完整、无截断。
+        - listitem: 多成员并行流式互不串扰。
+        - listitem: 中途断网后状态提示明确。
+        - listitem: 重新发起对话可正常接收流式。
+      - paragraph: 最终流式通过
+      - generic: 1s
+      - generic: 9.88k
+      - generic: "104"
+      - button "复制":
+      - generic: 我
+      - paragraph: "@阿亮 最后一次滚动验证，请输出8条各30字的群聊检查项，结尾写“页面滚动复验成功”。不要调用工具。"
+      - button "复制":
+      - generic: 阿亮
+      - generic: 思考中
+      - list:
+        - listitem: 消息列表上下滚动顺畅，无卡顿、无内容截断现象。
+        - listitem: 新消息到达时自动贴底跟随，视图保持最新位置。
+        - listitem: 用户手动上翻阅读后，不再被强制拉回底部。
+        - listitem: 回到底部后自动跟随立即恢复，无需额外操作。
+        - listitem: 长文本与代码块渲染完整，滚动不跳动不闪烁。
+        - listitem: 多成员并发发言时消息顺序正确，滚动位置稳定。
+        - listitem: 图片与附件消息加载后不改变当前滚动位置。
+        - listitem: 切换会话再返回时，滚动状态可正常恢复显示。
+      - paragraph: 页面滚动复验成功
+      - generic: 1s
+      - generic: 10k
+      - generic: "156"
+      - button "复制" [active]:
+      - textbox "输入消息..."
+      - button "添加附件":
+      - button "发送" [disabled]:
+  - complementary:
+    - button "任务"
+    - button "成员"
+    - button "资料"
+    - paragraph: 暂无关联任务

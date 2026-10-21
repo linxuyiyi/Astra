@@ -1,0 +1,10 @@
+../web/public/nexus-chat/assets/wasm-CG6Dc4jp.js                                      622.34 kB │ gzip: 231.16 kB
+../web/public/nexus-chat/assets/cpp-CofmeUqb.js                                       626.08 kB │ gzip:  44.90 kB
+../web/public/nexus-chat/assets/emacs-lisp-C9XAeP06.js                                779.85 kB │ gzip: 196.53 kB
+../web/public/nexus-chat/assets/index-BJIP9MxX.js                                   1,909.16 kB │ gzip: 574.22 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.55s

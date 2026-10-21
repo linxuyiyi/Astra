@@ -1,0 +1,13 @@
+{
+  "private_stop": {
+    "is_running": false,
+    "finished_reason": "interrupted"
+  },
+  "member_bindings_preserved": true,
+  "member_count": 3,
+  "api_health": {
+    "status": "ok",
+    "product": "nexus",
+    "version": "1.4.8"
+  }
+}

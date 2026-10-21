@@ -1,0 +1,25 @@
+[
+  {
+    "employee_id": "",
+    "session_id": "ch_6dc64df73a0f",
+    "replies": []
+  },
+  {
+    "employee_id": "emp_2ad156fd7a51",
+    "session_id": "a0ea7cc310ea4d7884f6a1a9c330310d",
+    "replies": [
+      {
+        "id": "6d243e74c118493f91e7f3a8033a8801",
+        "finished_reason": "completed"
+      },
+      {
+        "id": "ccdc8b91504048faa2f90b709c5b24a7",
+        "finished_reason": "completed"
+      },
+      {
+        "id": "f6984d618bfa4ef38d87854fc1c037f7",
+        "finished_reason": "interrupted"
+      }
+    ]
+  }
+]

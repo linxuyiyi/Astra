@@ -6,6 +6,7 @@
   "description": "Nexus 聊天区：vendored AgentScope v2.0.10 聊天组件 + Nexus 数据适配",
   "scripts": {
     "dev": "vite --port 15176",
+    "test": "node --test tests/*.test.ts",
     "type-check": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json && vite build"
   },

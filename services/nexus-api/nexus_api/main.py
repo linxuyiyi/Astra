@@ -282,6 +282,42 @@ def load_chat_model_config() -> dict[str, Any] | None:
     return parsed
 
 
+def human_native_message(message: dict[str, Any]) -> dict[str, Any]:
+    """人类消息的原生结构：正文 + 可渲染的附件 DataBlock。
+
+    附件只放进 metadata 时，聊天组件只渲染 content，历史重载后附件卡片会消失，
+    纯附件消息变成一个空泡。新发与历史必须共用这一份结构。
+    """
+
+    created_at = str(message.get("created_at") or "")
+    text = str(message.get("text") or "")
+    attachments = [
+        {
+            "type": "data",
+            "id": f"att-{item['id']}",
+            "name": str(item.get("name") or ""),
+            "created_at": created_at,
+            "source": {
+                "type": "url",
+                "url": f"/api/v1/attachments/{item['id']}",
+                "media_type": str(item.get("type") or ""),
+            },
+        }
+        for item in message.get("attachments") or []
+    ]
+    return {
+        "id": message["id"],
+        "role": "user",
+        "name": message.get("speaker") or "user",
+        "created_at": created_at,
+        "content": [{"type": "text", "text": text}, *attachments],
+        "metadata": {
+            "display_text": text,
+            "attachments": message.get("attachments") or [],
+        },
+    }
+
+
 def system_prompt(body: EmployeeBody | dict[str, Any]) -> str:
     if isinstance(body, EmployeeBody):
         name, domain, description, instructions = (
@@ -2879,6 +2915,19 @@ def create_app() -> FastAPI:
             except AgentScopeError as exc:
                 record = {"accepted": False, "detail": exc.detail}
                 if exc.status_code == 409:
+                    # 人类消息已经落库；记录 Session 忙碌也要广播一次，
+                    # 否则其他人类成员看不到这条消息。
+                    request.app.state.human_events.publish(
+                        channel_id,
+                        speaker,
+                        {
+                            "id": message["id"],
+                            "text": message["text"],
+                            "speaker": speaker,
+                            "message": human_native_message(message),
+                            "sessions": [],
+                        },
+                    )
                     return {
                         "message": message,
                         "triggered": [
@@ -2893,11 +2942,6 @@ def create_app() -> FastAPI:
                         ],
                         "record": record,
                     }
-        request.app.state.human_events.publish(
-            channel_id,
-            speaker,
-            {"id": message["id"], "text": message["text"], "speaker": speaker},
-        )
         files = [(item["name"], item["type"], Path(item["path"]).read_bytes()) for item in attachments]
         content = model_input_blocks(body.text, files)
         history = [
@@ -2990,6 +3034,22 @@ def create_app() -> FastAPI:
         ).fetchone()
         if employee_messages["count"]:
             raise HTTPException(status_code=500, detail="团队消息写入了非用户发言")
+        # 其他人类成员据此同步消息与新成员 Session；投递结果不广播。
+        request.app.state.human_events.publish(
+            channel_id,
+            speaker,
+            {
+                "id": message["id"],
+                "text": message["text"],
+                "speaker": speaker,
+                "message": human_native_message(message),
+                "sessions": [
+                    {"employee_id": item["employee_id"], "session_id": item["session_id"]}
+                    for item in triggered
+                    if item["session_id"]
+                ],
+            },
+        )
         return {"message": message, "triggered": triggered, "record": record}
 
     @app.get("/api/v1/channels/{channel_id}/events")
@@ -3025,20 +3085,7 @@ def create_app() -> FastAPI:
                 "session_id": channel["id"],
                 "employee_id": "",
                 "label": "human",
-                "messages": [
-                    {
-                        "id": item["id"],
-                        "role": "user",
-                        "name": item.get("speaker") or "user",
-                        "created_at": item["created_at"],
-                        "content": [{"type": "text", "text": item["text"]}],
-                        "metadata": {
-                            "display_text": item["text"],
-                            "attachments": item.get("attachments") or [],
-                        },
-                    }
-                    for item in local
-                ],
+                "messages": [human_native_message(item) for item in local],
             }
         ]
         seen_sessions = {channel["id"]}

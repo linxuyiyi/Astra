@@ -81,6 +81,13 @@ async def read_trace(snapshot: dict[str, Any]) -> TraceResult:
                             limit=settings.experience_review_page_size,
                             before=before,
                         )
+                    if isinstance(page, dict) and page.get("too_large"):
+                        # Worker 明确报告“单条消息放不进一帧”；以受控终态结束，
+                        # 不把缺口当成“读取完成”。
+                        raise TraceTooLarge(str(page["too_large"]))
+                    if isinstance(page, dict) and page.get("truncated"):
+                        # 仍然出现被裁剪的页说明游标不再覆盖全部消息；不能静默跳过。
+                        raise TraceTooLarge("原生轨迹分页被裁剪，无法保证完整读取")
                     batch = page.get("messages") if isinstance(page, dict) else []
                     if not isinstance(batch, list) or not batch:
                         break

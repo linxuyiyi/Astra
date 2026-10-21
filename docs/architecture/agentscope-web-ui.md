@@ -34,6 +34,7 @@ ops/deploy/build_agentscope_web_ui.sh
 - API：`/agentscope-api/` 代理到 AgentScope 服务（默认 `http://127.0.0.1:18000/`），前缀剥离，保留浏览器 `X-User-ID`。
 - 开发：`services/nexus-api/web/vite.config.ts` 的 `VITE_AGENTSCOPE_PROXY_TARGET`。
 - 生产：`ops/dev/astra_service.py` 把 `NEXUS_AGENTSCOPE_BASE_URL` 传给 Vite preview；`ops/deploy/nginx-nexus.conf` 提供同样的代理。
+- 统一入口：`services/nexus-api/nexus_api/agentscope_proxy.py` 在 18120 上提供同一份代理（前缀剥离、流式透传、保留浏览器 `X-User-ID`），直连统一服务也能打开控制台并调用模型/凭证接口。
 - 用户上下文：`GET /api/v1/runtime` 返回 `agentscope_user_id`；`AgentscopeView` 在 iframe 加载前写入同源 `localStorage.username`。
 
 ## 原生能力

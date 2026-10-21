@@ -139,36 +139,6 @@ def _task_meta(job: ExperienceReviewJob) -> dict[str, Any]:
     return task if isinstance(task, dict) else {}
 
 
-async def _fail_or_retry(
-    session: AsyncSession, job: ExperienceReviewJob, code: str, message: str
-) -> None:
-    settings = get_settings()
-    job.attempts += 1
-    job.error_code = code
-    job.error_message = message[:2000]
-    if job.phase in {WRITING, VALIDATING}:
-        job.phase = "REDUCE"
-    job.lease_owner = None
-    job.lease_token = None
-    job.lease_until = None
-    if job.attempts >= settings.experience_review_max_attempts:
-        job.status = FAILED
-        job.finished_at = _now()
-    else:
-        job.status = RETRY_WAIT
-        delay = RETRY_DELAYS[min(job.attempts - 1, len(RETRY_DELAYS) - 1)]
-        job.next_retry_at = _now() + timedelta(seconds=delay)
-    await session.execute(
-        update(ExperienceReviewSegment)
-        .where(
-            ExperienceReviewSegment.job_id == job.id,
-            ExperienceReviewSegment.status.in_(("PENDING", "RETRY_WAIT", "ANALYZING")),
-        )
-        .values(lease_token=None, lease_until=None)
-    )
-    await session.commit()
-
-
 async def _create_segments(session: AsyncSession, job: ExperienceReviewJob, trace) -> None:
     existing = await session.scalar(
         select(ExperienceReviewSegment.id).where(ExperienceReviewSegment.job_id == job.id).limit(1)
@@ -225,22 +195,144 @@ async def _next_segment(session: AsyncSession, job_id: str) -> ExperienceReviewS
     )
 
 
+async def _lease_holds(session: AsyncSession, job_id: str, token: str | None) -> bool:
+    """按作业 ID + 租约 token + 活动状态确认自己仍拥有这次复盘。
+
+    任务新轮次会写入 SUPERSEDED 并清掉租约，旧协程等到模型返回后必须放弃结果。
+    这个条件更新同时开启真实写事务：SQLite 下库内的 ``begin_nested()`` 只有落在
+    外层事务里才是 SAVEPOINT，否则释放即提交。
+    """
+
+    if not token:
+        return False
+    result = await session.execute(
+        update(ExperienceReviewJob)
+        .where(
+            ExperienceReviewJob.id == job_id,
+            ExperienceReviewJob.lease_token == token,
+            ExperienceReviewJob.status.in_(ACTIVE_STATUSES),
+        )
+        .values(
+            lease_until=_now()
+            + timedelta(seconds=get_settings().experience_review_lease_seconds)
+        )
+    )
+    return result.rowcount == 1
+
+
+async def _current_job(session: AsyncSession, job_id: str) -> ExperienceReviewJob | None:
+    """读回当前行并脱离 Session，避免 close/rollback 把返回对象变成过期状态。"""
+
+    job = await session.get(ExperienceReviewJob, job_id, populate_existing=True)
+    if job is not None:
+        session.expunge(job)
+    return job
+
+
+async def _abandoned(session: AsyncSession, job: ExperienceReviewJob) -> ExperienceReviewJob:
+    """失去所有权：放弃本次结果，返回数据库里的当前状态。"""
+
+    job_id = job.id  # rollback 会让 ORM 实例过期，先取出主键。
+    await session.rollback()
+    current = await _current_job(session, job_id)
+    return current or job
+
+
 async def _finish(
     session: AsyncSession,
-    job: ExperienceReviewJob,
+    job_id: str,
+    token: str | None,
     status: str,
     *,
     zero_reason: str | None = None,
     candidate_ids: list[str] | None = None,
-) -> None:
-    job.status = status
-    job.zero_reason = zero_reason
-    job.candidate_ids = candidate_ids or []
-    job.finished_at = _now()
-    job.lease_owner = None
-    job.lease_token = None
-    job.lease_until = None
+) -> ExperienceReviewJob | None:
+    """按本次 claim 的 token 提交终态；失去所有权时不覆盖别人的结果。"""
+
+    result = await session.execute(
+        update(ExperienceReviewJob)
+        .where(
+            ExperienceReviewJob.id == job_id,
+            ExperienceReviewJob.lease_token == token,
+            ExperienceReviewJob.status.in_(ACTIVE_STATUSES),
+        )
+        .values(
+            status=status,
+            zero_reason=zero_reason,
+            candidate_ids=candidate_ids or [],
+            finished_at=_now(),
+            lease_owner=None,
+            lease_token=None,
+            lease_until=None,
+        )
+    )
+    if result.rowcount != 1:
+        # 作业已被新轮次作废，或被接管的 Worker 写成了终态。
+        await session.rollback()
+        return await _current_job(session, job_id)
     await session.commit()
+    return await _current_job(session, job_id)
+
+
+async def _fail_or_retry(
+    session: AsyncSession, job_id: str, token: str | None, code: str, message: str
+) -> ExperienceReviewJob | None:
+    """失败/重试同样按本次 claim 的 token 做条件更新。
+
+    异常分支会在 rollback 后重读 Job；那里可能已经带着别人的 owner token，
+    不能拿它代替自己 claim 的 token，否则会覆盖已作废或已完成的作业。
+    """
+
+    settings = get_settings()
+    row = (
+        await session.execute(
+            select(ExperienceReviewJob.attempts, ExperienceReviewJob.phase).where(
+                ExperienceReviewJob.id == job_id
+            )
+        )
+    ).first()
+    attempts = int(row.attempts or 0) + 1 if row is not None else 1
+    phase = row.phase if row is not None else None
+    if phase in {WRITING, VALIDATING}:
+        phase = "REDUCE"
+    values: dict[str, Any] = {
+        "attempts": attempts,
+        "error_code": code,
+        "error_message": message[:2000],
+        "phase": phase,
+        "lease_owner": None,
+        "lease_token": None,
+        "lease_until": None,
+    }
+    if attempts >= settings.experience_review_max_attempts:
+        values["status"] = FAILED
+        values["finished_at"] = _now()
+    else:
+        delay = RETRY_DELAYS[min(attempts - 1, len(RETRY_DELAYS) - 1)]
+        values["status"] = RETRY_WAIT
+        values["next_retry_at"] = _now() + timedelta(seconds=delay)
+    result = await session.execute(
+        update(ExperienceReviewJob)
+        .where(
+            ExperienceReviewJob.id == job_id,
+            ExperienceReviewJob.lease_token == token,
+            ExperienceReviewJob.status.in_(ACTIVE_STATUSES),
+        )
+        .values(**values)
+    )
+    if result.rowcount != 1:
+        await session.rollback()
+        return await _current_job(session, job_id)
+    await session.execute(
+        update(ExperienceReviewSegment)
+        .where(
+            ExperienceReviewSegment.job_id == job_id,
+            ExperienceReviewSegment.status.in_(("PENDING", "RETRY_WAIT", "ANALYZING")),
+        )
+        .values(lease_token=None, lease_until=None)
+    )
+    await session.commit()
+    return await _current_job(session, job_id)
 
 
 async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> ExperienceReviewJob | None:
@@ -254,15 +346,21 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
             job = await claim_job(session, job_id, owner)
             if job is None:
                 return None
+            # 本次 claim 的租约 token：所有终态/失败更新都必须带着它做条件更新，
+            # 不能用 rollback 后重读到的别人 token。
+            token = job.lease_token
             try:
                 if job.phase in {PENDING, COLLECTING}:
                     job.status = COLLECTING
                     job.phase = COLLECTING
                     await session.commit()
                     trace = await read_trace(job.source_snapshot)
+                    if not await _lease_holds(session, job.id, token):
+                        return await _abandoned(session, job)
                     if not trace.events:
-                        await _finish(session, job, NO_FINDINGS, zero_reason="empty_trace")
-                        return job
+                        return await _finish(
+                            session, job.id, token, NO_FINDINGS, zero_reason="empty_trace"
+                        )
                     await _create_segments(session, job, trace)
                     job.phase = "MAP"
                     job.status = ANALYZING
@@ -270,7 +368,7 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
                     job.lease_token = None
                     job.lease_until = None
                     await session.commit()
-                    return job
+                    return await _current_job(session, job_id)
 
                 if job.phase == "MAP":
                     job.status = ANALYZING
@@ -281,7 +379,7 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
                         job.lease_token = None
                         job.lease_until = None
                         await session.commit()
-                        return job
+                        return await _current_job(session, job_id)
                     segment.lease_token = uuid4().hex
                     segment.lease_until = _now() + timedelta(
                         seconds=settings.experience_review_lease_seconds
@@ -291,6 +389,8 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
                     mapped = await analyze_segment(
                         client, task_meta=_task_meta(job), segment=_segment_input(segment, trace)
                     )
+                    if not await _lease_holds(session, job.id, token):
+                        return await _abandoned(session, job)
                     segment.analysis_json = mapped.model_dump()
                     segment.status = "DONE"
                     segment.lease_token = None
@@ -300,9 +400,11 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
                     job.lease_token = None
                     job.lease_until = None
                     await session.commit()
-                    return job
+                    return await _current_job(session, job_id)
 
-                if job.phase == "REDUCE":
+                # WRITING/VALIDATING 是写入阶段留下的产物：原子提交后重算即可，
+                # 不能因为没有分支直接判 unknown_phase。
+                if job.phase in {"REDUCE", WRITING, VALIDATING}:
                     trace = await read_trace(job.source_snapshot)
                     rows = (
                         await session.scalars(
@@ -325,54 +427,50 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
                     candidates = await reduce_observations(
                         client, task_meta=_task_meta(job), observations=observations
                     )
+                    if not await _lease_holds(session, job.id, token):
+                        return await _abandoned(session, job)
                     accepted, rejected = validate_candidates(
                         candidates, trace, limit=settings.experience_review_max_candidates
                     )
                     if rejected:
                         logger.info("Experience review %s rejected evidence: %s", job.id, rejected)
                     if not accepted:
-                        await _finish(
+                        return await _finish(
                             session,
-                            job,
+                            job.id,
+                            token,
                             NO_FINDINGS,
                             zero_reason="no_evidence_backed_candidate" if candidates else "no_findings",
                         )
-                        return job
                     if settings.experience_review_shadow_mode:
-                        await _finish(session, job, SUCCEEDED, zero_reason="shadow_mode")
-                        return job
+                        return await _finish(session, job.id, token, SUCCEEDED, zero_reason="shadow_mode")
+                    # 候选、证据与作业结果必须在同一个外层事务里提交：先提交
+                    # WRITING 会把“没有证据的候选”留在库里，崩溃后无法回滚。
+                    if not await _lease_holds(session, job.id, token):
+                        return await _abandoned(session, job)
                     job.status = WRITING
                     job.phase = WRITING
-                    await session.commit()
                     ids = await write_candidates(
                         session, job=job, trace=trace, candidates=accepted
                     )
-                    await _finish(session, job, SUCCEEDED, candidate_ids=ids)
-                    return job
+                    return await _finish(session, job.id, token, SUCCEEDED, candidate_ids=ids)
 
-                await _finish(session, job, FAILED, zero_reason="unknown_phase")
-                return job
+                return await _finish(session, job.id, token, FAILED, zero_reason="unknown_phase")
             except TraceTooLarge as exc:
                 await session.rollback()
-                job = await session.get(ExperienceReviewJob, job_id) or job
-                await _finish(session, job, SKIPPED_TOO_LARGE, zero_reason=str(exc)[:64])
-                return job
+                return await _finish(
+                    session, job_id, token, SKIPPED_TOO_LARGE, zero_reason=str(exc)[:64]
+                )
             except TraceUnavailable as exc:
                 await session.rollback()
-                job = await session.get(ExperienceReviewJob, job_id) or job
-                await _fail_or_retry(session, job, "source_unavailable", str(exc))
-                return job
+                return await _fail_or_retry(session, job_id, token, "source_unavailable", str(exc))
             except ReviewLLMError as exc:
                 await session.rollback()
-                job = await session.get(ExperienceReviewJob, job_id) or job
-                await _fail_or_retry(session, job, exc.code, str(exc))
-                return job
+                return await _fail_or_retry(session, job_id, token, exc.code, str(exc))
             except Exception as exc:  # noqa: BLE001 - worker boundary
                 logger.exception("Experience review job %s failed", job_id)
                 await session.rollback()
-                job = await session.get(ExperienceReviewJob, job_id) or job
-                await _fail_or_retry(session, job, "unexpected_error", str(exc))
-                return job
+                return await _fail_or_retry(session, job_id, token, "unexpected_error", str(exc))
     finally:
         await client.aclose()
 

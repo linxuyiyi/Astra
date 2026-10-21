@@ -29,6 +29,7 @@ from app.library_service import LibraryError
 from app.main import lifespan as platform_lifespan
 from app.worker_gateway.routes import router as worker_gateway_router
 
+from .agentscope_proxy import router as agentscope_proxy_router
 from .main import create_app as create_chat_app
 from .nebula import router as nebula_router
 
@@ -88,6 +89,8 @@ def create_service() -> FastAPI:
 
     app.router.lifespan_context = lifespan
     _include_platform(app)
+    # 必须在兜底静态路由之前注册，否则 /agentscope-api/ 会被当成前端页面。
+    app.include_router(agentscope_proxy_router)
     _mount_frontend(app)
     return app
 

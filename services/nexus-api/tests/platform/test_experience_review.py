@@ -525,3 +525,483 @@ async def test_next_segment_skips_completed_segment():
         nxt = await coordinator._next_segment(session, job.id)
         assert nxt is not None
         assert nxt.segment_index == 1
+
+
+def _paged_server(messages: list[dict]):
+    """按“新到旧”分页的假 OpenCode：尊重 limit 与 before。"""
+
+    import json
+    import urllib.parse
+
+    calls: list[dict] = []
+
+    def urlopen(request, timeout=None):
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(request.full_url).query)
+        limit = int(query["limit"][0])
+        before = (query.get("before") or [None])[0]
+        start = 0
+        if before:
+            start = next(
+                index for index, item in enumerate(messages) if item["info"]["id"] == before
+            ) + 1
+        page = messages[start : start + limit]
+        cursor = page[-1]["info"]["id"] if start + limit < len(messages) else None
+
+        class Response:
+            headers = {"x-next-cursor": cursor} if cursor else {}
+
+            def read(self):
+                return json.dumps(page).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        calls.append({"limit": limit, "before": before})
+        return Response()
+
+    return urlopen, calls
+
+
+def test_worker_trace_pages_are_never_trimmed_off_the_cursor(tmp_path, monkeypatch):
+    """页内放不下时必须缩小原生请求页，不能丢消息却沿用整页游标。"""
+
+    from app.worker_agent import trace_read
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    messages = [
+        {
+            "info": {"id": f"msg_{index:02d}", "role": "assistant"},
+            "parts": [{"id": f"prt_{index}", "type": "text", "text": "x" * 8000}],
+        }
+        for index in range(20, 0, -1)
+    ]
+    urlopen, calls = _paged_server(messages)
+    monkeypatch.setattr(trace_read.urllib.request, "urlopen", urlopen)
+
+    seen: list[str] = []
+    before = None
+    while True:
+        page = trace_read.read_trace_from_payload(
+            "http://127.0.0.1:4096",
+            str(tmp_path),
+            {"session_id": "ses_1", "workspace": str(workspace), "limit": 20, "before": before},
+        )
+        assert page["truncated"] is False
+        seen.extend(item["info"]["id"] for item in page["messages"])
+        if not page["next_before"]:
+            break
+        before = page["next_before"]
+
+    assert seen == [f"msg_{index:02d}" for index in range(20, 0, -1)]
+    assert any(call["limit"] < 20 for call in calls)
+
+
+def test_worker_trace_reports_a_single_oversized_message(tmp_path, monkeypatch):
+    """单条消息超过单帧预算时明确报告，交给协调面按受控终态结束。"""
+
+    from app.worker_agent import trace_read
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    messages = [
+        {
+            "info": {"id": "msg_1", "role": "assistant"},
+            "parts": [
+                {"id": f"prt_{index}", "type": "text", "text": "y" * 8000} for index in range(20)
+            ],
+        }
+    ]
+    urlopen, _calls = _paged_server(messages)
+    monkeypatch.setattr(trace_read.urllib.request, "urlopen", urlopen)
+
+    page = trace_read.read_trace_from_payload(
+        "http://127.0.0.1:4096",
+        str(tmp_path),
+        {"session_id": "ses_1", "workspace": str(workspace), "limit": 20},
+    )
+    assert page["messages"] == []
+    assert page["too_large"]
+
+
+@pytest.mark.asyncio
+async def test_trace_reader_treats_a_trimmed_page_as_too_large(tmp_path, monkeypatch):
+    """协调面不能把被裁剪的空页当成“轨迹读完”。"""
+
+    from app.runtime.experience_review import trace_reader
+
+    async with SessionLocal() as session:
+        session.add(
+            RuntimeSession(
+                id="ses_trim",
+                task_id="tsk_trim",
+                employee_id="wrk_trim",
+                workspace=str(tmp_path),
+                environment={},
+            )
+        )
+        await session.commit()
+
+    class FakeClient:
+        async def read_review_trace(self, *_args, **_kwargs):
+            return {"messages": [], "next_before": None, "truncated": True}
+
+    class FakeConnection:
+        async def __aenter__(self):
+            return FakeClient()
+
+        async def __aexit__(self, *args):
+            return False
+
+    async def fake_resolve(_session, _binding):
+        return object()
+
+    monkeypatch.setattr(trace_reader, "resolve_runtime_session_environment", fake_resolve)
+    monkeypatch.setattr(trace_reader, "connect", lambda *_args, **_kwargs: FakeConnection())
+
+    with pytest.raises(trace_reader.TraceTooLarge):
+        await trace_reader.read_trace(
+            {
+                "root_session_id": "ses_trim",
+                "source_session_ids": ["ses_trim"],
+                "workspace": str(tmp_path),
+            }
+        )
+
+
+def _review_snapshot(task_id: str, session_id: str = "ses_1") -> dict:
+    return {
+        "task_id": task_id,
+        "root_session_id": session_id,
+        "confirmed_at": datetime.now(UTC).isoformat(),
+        "source_session_ids": [session_id],
+        "task": {"id": task_id, "title": "review"},
+    }
+
+
+@pytest.mark.asyncio
+async def test_superseded_review_abandons_late_model_result(monkeypatch):
+    """模型请求等待期间任务开了新轮次：晚到的候选不能再写入或改成成功。"""
+
+    from sqlalchemy import update
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "experience_review_enabled", True)
+    monkeypatch.setattr(settings, "experience_review_shadow_mode", False)
+    task_id, event_id = await _task_and_event()
+    async with SessionLocal() as session:
+        task = await session.get(Task, task_id)
+        event = await session.get(Event, event_id)
+        job = await coordinator.enqueue_in_transaction(
+            session, task=task, event=event, snapshot=_review_snapshot(task_id)
+        )
+        job.status = coordinator.ANALYZING
+        job.phase = "REDUCE"
+        job.lease_owner = None
+        job.lease_token = None
+        job.lease_until = None
+        job.next_retry_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+        job_id = job.id
+
+    async def fake_read(_snapshot):
+        return _trace()
+
+    async def superseding_reduce(_client, *, task_meta, observations):
+        # 独立 Session 模拟任务新轮次的作废写入，发生在模型返回之前。
+        async with SessionLocal() as other:
+            await other.execute(
+                update(ExperienceReviewJob)
+                .where(ExperienceReviewJob.id == job_id)
+                .values(
+                    status=coordinator.SUPERSEDED,
+                    error_code="new_round",
+                    lease_token=None,
+                    lease_owner=None,
+                    lease_until=None,
+                    finished_at=datetime.now(UTC),
+                )
+            )
+            await other.commit()
+        return [_candidate(["trace-000001", "trace-000002"])]
+
+    written: list[str] = []
+
+    async def fake_write(_session, *, job, trace, candidates):
+        written.extend(candidate.title for candidate in candidates)
+        return ["KNOW-late"]
+
+    monkeypatch.setattr(coordinator, "read_trace", fake_read)
+    monkeypatch.setattr(coordinator, "reduce_observations", superseding_reduce)
+    monkeypatch.setattr(coordinator, "write_candidates", fake_write)
+
+    result = await coordinator.process_job(job_id, llm=FakeLLM())
+
+    assert result is not None
+    async with SessionLocal() as session:
+        job = await session.get(ExperienceReviewJob, job_id)
+        assert job.status == coordinator.SUPERSEDED
+        assert job.candidate_ids == []
+        assert job.error_code == "new_round"
+    assert written == []
+
+
+@pytest.mark.asyncio
+async def test_writing_is_atomic_against_a_crash_before_finish(monkeypatch):
+    """候选与证据必须和作业结果一起提交；中途退出不能留下无证据候选。"""
+
+    from uuid import uuid4
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "experience_review_enabled", True)
+    monkeypatch.setattr(settings, "experience_review_shadow_mode", False)
+    suffix = uuid4().hex[:8]
+    async with SessionLocal() as session:
+        employee = AgentWorker(id=f"E-{suffix}", name="reviewer", role="worker")
+        task = Task(id=f"T-{suffix}", title="crash", task_type="ISSUE", employee_id=employee.id)
+        binding = RuntimeSession(
+            id=f"ses_{suffix}",
+            task_id=task.id,
+            employee_id=employee.id,
+            workspace="/tmp/workspace",
+            environment={},
+            status="SUCCEEDED",
+        )
+        event = Event(task_id=task.id, event_type="TASK_COMPLETION_CONFIRMED", phase="review", message="ok")
+        session.add_all([employee, task, binding, event])
+        await session.flush()
+        job = await coordinator.enqueue_in_transaction(
+            session, task=task, event=event, snapshot=_review_snapshot(task.id, binding.id)
+        )
+        job.status = coordinator.WRITING
+        job.phase = coordinator.WRITING
+        await session.commit()
+        job_id = job.id
+
+    async def fake_read(_snapshot):
+        return _trace()
+
+    original_finish = coordinator._finish
+
+    async def crash_on_success(session, job_id, token, status, **kwargs):
+        if status == coordinator.SUCCEEDED:
+            raise SystemExit("模拟进程在 _finish 前退出")
+        return await original_finish(session, job_id, token, status, **kwargs)
+
+    async def fake_reduce(_client, *, task_meta, observations):
+        return [_candidate(["trace-000001", "trace-000002"])]
+
+    monkeypatch.setattr(coordinator, "read_trace", fake_read)
+    monkeypatch.setattr(coordinator, "reduce_observations", fake_reduce)
+    monkeypatch.setattr(coordinator, "_finish", crash_on_success)
+
+    with pytest.raises(SystemExit):
+        await coordinator.process_job(job_id, llm=FakeLLM())
+
+    async with SessionLocal() as session:
+        job = await session.get(ExperienceReviewJob, job_id)
+        assert job.candidate_ids == []
+        assert job.status != coordinator.SUCCEEDED
+        persisted = await session.scalar(
+            select(func.count())
+            .select_from(KnowledgeItem)
+            .where(KnowledgeItem.source_task_id == task.id)
+        )
+        assert persisted == 0
+        evidence = await session.scalar(
+            select(func.count())
+            .select_from(ExperienceEvidence)
+            .where(ExperienceEvidence.task_id == task.id)
+        )
+        assert evidence == 0
+
+
+@pytest.mark.asyncio
+async def test_writing_phase_recovers_instead_of_failing(monkeypatch):
+    """WRITING 遗留作业重领后应重算并完成，而不是 unknown_phase。"""
+
+    from uuid import uuid4
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "experience_review_enabled", True)
+    monkeypatch.setattr(settings, "experience_review_shadow_mode", False)
+    suffix = uuid4().hex[:8]
+    async with SessionLocal() as session:
+        employee = AgentWorker(id=f"E-{suffix}", name="reviewer", role="worker")
+        task = Task(id=f"T-{suffix}", title="resume", task_type="ISSUE", employee_id=employee.id)
+        binding = RuntimeSession(
+            id=f"ses_{suffix}",
+            task_id=task.id,
+            employee_id=employee.id,
+            workspace="/tmp/workspace",
+            environment={},
+            status="SUCCEEDED",
+        )
+        event = Event(task_id=task.id, event_type="TASK_COMPLETION_CONFIRMED", phase="review", message="ok")
+        session.add_all([employee, task, binding, event])
+        await session.flush()
+        job = await coordinator.enqueue_in_transaction(
+            session, task=task, event=event, snapshot=_review_snapshot(task.id, binding.id)
+        )
+        job.status = coordinator.WRITING
+        job.phase = coordinator.WRITING
+        await session.commit()
+        job_id = job.id
+
+    async def fake_read(_snapshot):
+        return _trace()
+
+    async def fake_reduce(_client, *, task_meta, observations):
+        return [_candidate(["trace-000001", "trace-000002"])]
+
+    monkeypatch.setattr(coordinator, "read_trace", fake_read)
+    monkeypatch.setattr(coordinator, "reduce_observations", fake_reduce)
+
+    result = await coordinator.process_job(job_id, llm=FakeLLM())
+
+    assert result is not None
+    async with SessionLocal() as session:
+        job = await session.get(ExperienceReviewJob, job_id)
+        assert job.status == coordinator.SUCCEEDED
+        assert job.error_code is None
+        assert job.candidate_ids
+        item = await session.get(KnowledgeItem, job.candidate_ids[0])
+        assert item is not None
+        evidence = (
+            await session.scalars(
+                select(ExperienceEvidence).where(ExperienceEvidence.knowledge_id == item.id)
+            )
+        ).all()
+        assert evidence
+
+
+async def _reduce_phase_job() -> str:
+    task_id, event_id = await _task_and_event()
+    async with SessionLocal() as session:
+        task = await session.get(Task, task_id)
+        event = await session.get(Event, event_id)
+        job = await coordinator.enqueue_in_transaction(
+            session, task=task, event=event, snapshot=_review_snapshot(task_id)
+        )
+        job.status = coordinator.ANALYZING
+        job.phase = "REDUCE"
+        job.lease_owner = None
+        job.lease_token = None
+        job.lease_until = None
+        job.next_retry_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+        return job.id
+
+
+async def _write_job_fields(job_id: str, **values) -> None:
+    from sqlalchemy import update
+
+    async with SessionLocal() as other:
+        await other.execute(
+            update(ExperienceReviewJob).where(ExperienceReviewJob.id == job_id).values(**values)
+        )
+        await other.commit()
+
+
+@pytest.mark.asyncio
+async def test_superseded_job_is_not_revived_by_a_late_failure(monkeypatch):
+    """模型异常发生在作废之后：不能把 SUPERSEDED 改回 RETRY_WAIT。"""
+
+    from app.runtime.experience_review.llm_client import ReviewLLMError
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "experience_review_enabled", True)
+    job_id = await _reduce_phase_job()
+
+    async def fake_read(_snapshot):
+        return _trace()
+
+    async def failing_reduce(_client, *, task_meta, observations):
+        await _write_job_fields(
+            job_id,
+            status=coordinator.SUPERSEDED,
+            error_code="new_round",
+            lease_token=None,
+            lease_owner=None,
+            lease_until=None,
+            finished_at=datetime.now(UTC),
+        )
+        raise ReviewLLMError("llm_failed", "模型调用失败")
+
+    monkeypatch.setattr(coordinator, "read_trace", fake_read)
+    monkeypatch.setattr(coordinator, "reduce_observations", failing_reduce)
+
+    result = await coordinator.process_job(job_id, llm=FakeLLM())
+
+    assert result is not None
+    assert result.status == coordinator.SUPERSEDED
+    assert result.error_code == "new_round"
+    assert result.attempts == 0
+
+
+@pytest.mark.asyncio
+async def test_superseded_job_is_not_marked_too_large_by_a_late_exception(monkeypatch):
+    """TraceTooLarge 同样按 token CAS：不能覆盖已作废状态。"""
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "experience_review_enabled", True)
+    job_id = await _reduce_phase_job()
+
+    async def superseding_read(_snapshot):
+        await _write_job_fields(
+            job_id,
+            status=coordinator.SUPERSEDED,
+            error_code="new_round",
+            lease_token=None,
+            lease_owner=None,
+            lease_until=None,
+            finished_at=datetime.now(UTC),
+        )
+        raise coordinator.TraceTooLarge("too big")
+
+    monkeypatch.setattr(coordinator, "read_trace", superseding_read)
+
+    result = await coordinator.process_job(job_id, llm=FakeLLM())
+
+    assert result is not None
+    assert result.status == coordinator.SUPERSEDED
+    assert result.error_code == "new_round"
+
+
+@pytest.mark.asyncio
+async def test_taken_over_job_keeps_the_new_workers_result(monkeypatch):
+    """A 的租约被 B 接管并成功写完后，A 的晚到异常不能改回 RETRY_WAIT。"""
+
+    from app.runtime.experience_review.llm_client import ReviewLLMError
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "experience_review_enabled", True)
+    job_id = await _reduce_phase_job()
+
+    async def fake_read(_snapshot):
+        return _trace()
+
+    async def taken_over_reduce(_client, *, task_meta, observations):
+        assert await _write_job_fields(
+            job_id,
+            status=coordinator.SUCCEEDED,
+            lease_token="worker-b-token",
+            lease_owner="worker-b",
+            lease_until=datetime.now(UTC) + timedelta(seconds=60),
+            candidate_ids=["KNOW-b"],
+            finished_at=datetime.now(UTC),
+        ) is None
+        raise ReviewLLMError("llm_failed", "模型调用失败")
+
+    monkeypatch.setattr(coordinator, "read_trace", fake_read)
+    monkeypatch.setattr(coordinator, "reduce_observations", taken_over_reduce)
+
+    result = await coordinator.process_job(job_id, llm=FakeLLM())
+
+    assert result is not None
+    assert result.status == coordinator.SUCCEEDED
+    assert result.candidate_ids == ["KNOW-b"]
+    assert result.lease_owner == "worker-b"

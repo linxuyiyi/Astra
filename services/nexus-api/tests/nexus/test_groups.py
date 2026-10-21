@@ -758,3 +758,154 @@ def test_timeline_dedupes_the_same_message_id_across_sessions():
     ]
     page = merge_timeline(streams)
     assert [item["id"] for item in page["items"]] == ["m1"]
+
+
+def test_channel_native_timeline_renders_human_attachments(tmp_path, monkeypatch):
+    """人类消息的附件必须进 content；只放 metadata 时历史重载后附件会消失。"""
+
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    application = create_app()
+    with TestClient(application) as client:
+        employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
+        channel = client.post(
+            "/api/v1/channels",
+            json={"name": "图片", "description": "看图", "member_ids": [employee["id"]]},
+        ).json()
+        uploaded = client.post(
+            "/api/v1/attachments",
+            headers={"X-Owner-Id": "u1"},
+            files={"file": ("pic.png", b"PNG-BYTES", "image/png")},
+        ).json()
+        sent = client.post(
+            f"/api/v1/channels/{channel['id']}/messages",
+            headers={"X-Owner-Id": "u1"},
+            json={"text": "", "attachment_ids": [uploaded["id"]]},
+        )
+        assert sent.status_code == 200, sent.text
+
+        timeline = client.get(f"/api/v1/channels/{channel['id']}/timeline/native").json()
+
+    human = next(stream for stream in timeline["streams"] if stream["session_id"] == channel["id"])
+    content = human["messages"][0]["content"]
+    assert content[0] == {"type": "text", "text": ""}
+    assert content[1] == {
+        "type": "data",
+        "id": f"att-{uploaded['id']}",
+        "name": "pic.png",
+        "created_at": sent.json()["message"]["created_at"],
+        "source": {
+            "type": "url",
+            "url": f"/api/v1/attachments/{uploaded['id']}",
+            "media_type": "image/png",
+        },
+    }
+
+
+def test_channel_message_event_carries_native_message_and_new_sessions(tmp_path, monkeypatch):
+    """其他人靠事件同步人类消息与刚建出来的成员 Session。"""
+
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    application = create_app()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/agent/":
+            body = json.loads(request.content.decode())
+            return httpx.Response(201, json={"agent_id": f"agent-{body['name']}"})
+        if request.url.path == "/sessions/":
+            body = json.loads(request.content.decode())
+            return httpx.Response(201, json={"session_id": f"session-{body['name']}"})
+        if request.url.path in {"/nexus/record-message", "/chat/"}:
+            return httpx.Response(200, json={"ok": True, "status": "started"})
+        if request.url.path == "/skill":
+            return httpx.Response(200, json=[])
+        return httpx.Response(404)
+
+    published: list[dict] = []
+    with TestClient(application) as client:
+        client.app.state.agentscope = AgentScopeClient(
+            "http://agentscope.test",
+            "nexus",
+            httpx.AsyncClient(
+                transport=httpx.MockTransport(handler), base_url="http://agentscope.test"
+            ),
+        )
+        client.app.state.human_events.publish = (
+            lambda channel_id, sender, payload: published.append(payload) or 0
+        )
+        employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
+        channel = client.post(
+            "/api/v1/channels",
+            json={"name": "同步", "description": "群", "member_ids": [employee["id"]]},
+        ).json()
+        uploaded = client.post(
+            "/api/v1/attachments",
+            headers={"X-Owner-Id": "u1"},
+            files={"file": ("pic.png", b"PNG-BYTES", "image/png")},
+        ).json()
+        sent = client.post(
+            f"/api/v1/channels/{channel['id']}/messages",
+            headers={"X-Owner-Id": "u1"},
+            json={"text": "@星河 看图", "attachment_ids": [uploaded["id"]]},
+        )
+        assert sent.status_code == 200, sent.text
+
+    event = published[-1]
+    assert event["id"] == sent.json()["message"]["id"]
+    assert event["speaker"] == "u1"
+    assert event["sessions"] == [
+        {"employee_id": employee["id"], "session_id": f"session-{channel['name']}"}
+    ]
+    assert event["message"]["content"][0] == {"type": "text", "text": "@星河 看图"}
+    assert event["message"]["content"][1]["source"]["url"] == f"/api/v1/attachments/{uploaded['id']}"
+
+
+def test_channel_record_conflict_still_broadcasts_the_human_message(tmp_path, monkeypatch):
+    """记录 Session 忙碌（409）时人类消息已落库，其他成员仍要收到广播。"""
+
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    application = create_app()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/agent/":
+            body = json.loads(request.content.decode())
+            return httpx.Response(201, json={"agent_id": f"agent-{body['name']}"})
+        if request.url.path == "/sessions/":
+            body = json.loads(request.content.decode())
+            return httpx.Response(201, json={"session_id": f"session-{body['name']}"})
+        if request.url.path == "/nexus/record-message":
+            return httpx.Response(409, json={"detail": "Session is busy"})
+        if request.url.path in {"/chat/", "/skill"}:
+            return httpx.Response(200, json=[])
+        return httpx.Response(404)
+
+    published: list[dict] = []
+    with TestClient(application) as client:
+        client.app.state.agentscope = AgentScopeClient(
+            "http://agentscope.test",
+            "nexus",
+            httpx.AsyncClient(
+                transport=httpx.MockTransport(handler), base_url="http://agentscope.test"
+            ),
+        )
+        client.app.state.human_events.publish = (
+            lambda channel_id, sender, payload: published.append(payload) or 0
+        )
+        employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
+        channel = client.post(
+            "/api/v1/channels",
+            json={"name": "忙碌", "description": "群", "member_ids": [employee["id"]]},
+        ).json()
+        sent = client.post(
+            f"/api/v1/channels/{channel['id']}/messages",
+            headers={"X-Owner-Id": "u1"},
+            json={"text": "@星河 在吗"},
+        )
+        assert sent.status_code == 200, sent.text
+        assert sent.json()["record"]["accepted"] is False
+
+        timeline = client.get(f"/api/v1/channels/{channel['id']}/timeline/native").json()
+
+    assert len(published) == 1
+    assert published[0]["id"] == sent.json()["message"]["id"]
+    human = next(stream for stream in timeline["streams"] if stream["session_id"] == channel["id"])
+    assert human["messages"][0]["content"][0]["text"] == "@星河 在吗"

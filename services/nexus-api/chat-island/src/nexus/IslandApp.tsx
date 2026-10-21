@@ -1,10 +1,10 @@
 import type { ContentBlock, ToolCallBlock } from "@agentscope-ai/agentscope/message";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ChatContent } from "@/components/chat/ChatContent";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMessages } from "@/hooks/useMessages";
-import { onSessionBound } from "@/shims/api";
+import { markFreshlyCreated, onSessionBound } from "@/shims/api";
 
 import { GroupApp } from "./GroupApp";
 import { uploadAttachment } from "./attachments";
@@ -71,15 +71,20 @@ function PrivateChatApp({ conversationId }: { conversationId: string }) {
     };
   }, [conversationId]);
 
-  // Nexus 在首次发送时建 Session；绑定更新后 hook 会重新加载原生历史。
+  // Nexus 在首次发送时建 Session。绑定更新只用来让事件流连上真实 Session；
+  // 此时 POST 可能还没把用户输入落盘，历史可能合法为空，所以标记为“本页新建”，
+  // 让 hook 保留刚发出的乐观气泡而不是按空历史重载。
+  const bindingRef = useRef<ChatBinding | null>(null);
+  useEffect(() => {
+    bindingRef.current = binding;
+  }, [binding]);
   useEffect(
     () =>
       onSessionBound((sessionId) => {
-        setBinding((previous) =>
-          previous && previous.sessionId !== sessionId
-            ? { ...previous, sessionId }
-            : previous,
-        );
+        const previous = bindingRef.current;
+        if (!previous || previous.sessionId === sessionId) return;
+        if (!previous.sessionId) markFreshlyCreated(sessionId);
+        setBinding({ ...previous, sessionId });
       }),
     [],
   );

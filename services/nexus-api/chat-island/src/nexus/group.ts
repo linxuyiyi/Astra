@@ -38,7 +38,32 @@ export interface GroupMessage {
   id: string;
   text: string;
   created_at: string;
+  accepted?: boolean;
   attachments?: Array<{ id: string; name: string; type: string; size: number }>;
+}
+
+/** 一位被 @ 的成员的投递结果；accepted=false 时 detail 是后端给出的原因。 */
+export interface GroupTrigger {
+  employee_id: string;
+  name: string;
+  accepted: boolean;
+  detail?: string;
+  session_id: string | null;
+}
+
+export interface GroupSendResult {
+  message: GroupMessage;
+  triggered: GroupTrigger[];
+  record: { accepted: boolean; detail?: string };
+}
+
+/** 群事件：其他人类成员据此同步消息与刚建出来的成员 Session。 */
+export interface ChannelEvent {
+  id: string;
+  text: string;
+  speaker: string;
+  message?: Msg;
+  sessions?: Array<{ employee_id: string; session_id: string }>;
 }
 
 export async function loadGroupTimeline(channelId: string): Promise<GroupTimeline> {
@@ -95,7 +120,7 @@ export async function sendGroupMessage(
   channelId: string,
   text: string,
   attachmentIds: string[],
-): Promise<GroupMessage> {
+): Promise<GroupSendResult> {
   const response = await nexusFetch(`/api/v1/channels/${channelId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -111,8 +136,46 @@ export async function sendGroupMessage(
     }
     throw new Error(detail);
   }
-  const payload = (await response.json()) as { message: GroupMessage };
-  return payload.message;
+  return (await response.json()) as GroupSendResult;
+}
+
+/** 人类消息事件：只推送消息本身与新建的成员绑定，不推送员工回复。 */
+export async function* streamChannelEvents(
+  channelId: string,
+  signal: AbortSignal,
+): AsyncGenerator<ChannelEvent> {
+  let response: Response;
+  try {
+    response = await nexusFetch(`/api/v1/channels/${channelId}/events`, { signal });
+  } catch {
+    return;
+  }
+  if (!response.ok || !response.body) return;
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
+        if (!dataLine) continue;
+        const raw = dataLine.slice(5).trim();
+        if (!raw) continue;
+        try {
+          yield JSON.parse(raw) as ChannelEvent;
+        } catch {
+          // 坏帧不终止整条流。
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 export async function interruptMember(channelId: string, employeeId: string): Promise<void> {

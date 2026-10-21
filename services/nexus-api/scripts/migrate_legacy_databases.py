@@ -73,16 +73,31 @@ def copy_chat_tables(chat_database: Path, target: Path) -> None:
             if old not in legacy_tables:
                 continue
             old_columns = [row[1] for row in connection.execute(f"PRAGMA legacy.table_info('{old}')")]
-            new_columns = [row[1] for row in connection.execute(f"PRAGMA main.table_info('{new}')")]
+            target_info = [row for row in connection.execute(f"PRAGMA main.table_info('{new}')")]
+            new_columns = [row[1] for row in target_info]
+            primary_key = [row[1] for row in target_info if row[5]]
             columns = [column for column in old_columns if column in new_columns]
             if not columns:
                 continue
             joined = ", ".join(f'"{column}"' for column in columns)
+            source_rows = connection.execute(f'SELECT COUNT(*) FROM legacy."{old}"').fetchone()[0]
+            # 目标库可能已经运行过一段时间：同主键行保留目标值，不用旧库整行覆盖。
+            # 只跳过主键冲突，其他约束问题保持报错，交给操作人员处理。
+            skip_existing = ""
+            if primary_key:
+                matches = " AND ".join(
+                    f'main."{new}"."{column}" = legacy."{old}"."{column}"' for column in primary_key
+                )
+                skip_existing = f' WHERE NOT EXISTS (SELECT 1 FROM main."{new}" WHERE {matches})'
+            before = connection.total_changes
             connection.execute(
-                f'INSERT OR REPLACE INTO main."{new}" ({joined}) '
-                f'SELECT {joined} FROM legacy."{old}"'
+                f'INSERT INTO main."{new}" ({joined}) '
+                f'SELECT {joined} FROM legacy."{old}"{skip_existing}'
             )
-            print(f"[merge] {old} -> {new} ({len(columns)} columns)")
+            merged = connection.total_changes - before
+            skipped = source_rows - merged
+            detail = f"，保留目标已有 {skipped} 行" if skipped else ""
+            print(f"[merge] {old} -> {new} ({len(columns)} columns, 写入 {merged} 行{detail})")
         connection.commit()
         connection.execute("DETACH DATABASE legacy")
 

@@ -11,6 +11,8 @@ from typing import Any
 _TIMEOUT_SECONDS = 60.0
 _MAX_PART_CHARS = 8000
 _SAFE_SESSION = ("ses_", "session_")
+# Worker Gateway 单帧上限。超过就缩小原生请求页，不能丢弃已读到的消息。
+_FRAME_BUDGET = 131072
 
 
 def _text(value: Any, limit: int = _MAX_PART_CHARS) -> str:
@@ -77,23 +79,47 @@ def read_trace_from_payload(
     base = str(opencode_url or "").rstrip("/")
     if not base.startswith(("http://127.0.0.1:", "http://localhost:")):
         raise ValueError("OpenCode 地址必须是 loopback")
-    query: dict[str, Any] = {"limit": limit, "directory": str(workspace)}
-    if before:
-        query["before"] = before
-    url = f"{base}/session/{urllib.parse.quote(session_id, safe='')}/message?" + urllib.parse.urlencode(query)
-    request = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS) as response:
-        raw = response.read()
-        next_before = response.headers.get("x-next-cursor")
-    try:
-        messages = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError("OpenCode 返回不是合法 JSON") from exc
-    if not isinstance(messages, list):
-        raise ValueError("OpenCode 返回不是消息数组")
+
+    def fetch(page_limit: int) -> tuple[list[Any], str | None]:
+        query: dict[str, Any] = {"limit": page_limit, "directory": str(workspace)}
+        if before:
+            query["before"] = before
+        url = (
+            f"{base}/session/{urllib.parse.quote(session_id, safe='')}/message?"
+            + urllib.parse.urlencode(query)
+        )
+        request = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS) as response:
+            raw = response.read()
+            cursor = response.headers.get("x-next-cursor")
+        try:
+            messages = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("OpenCode 返回不是合法 JSON") from exc
+        if not isinstance(messages, list):
+            raise ValueError("OpenCode 返回不是消息数组")
+        return messages, cursor
+
+    requested = limit
+    messages, next_before = fetch(requested)
     trimmed = [_trim_message(item) for item in messages if isinstance(item, dict)]
-    # 保证单帧可被 Worker Gateway 接收；优先保留最新消息。
-    budget = 131072
-    while trimmed and len(json.dumps(trimmed, ensure_ascii=False).encode()) > budget:
-        trimmed.pop(0)
-    return {"messages": trimmed, "next_before": next_before, "truncated": len(trimmed) < len(messages)}
+    # 单帧放不下时缩小原生请求页并重新读取：返回的消息必须与游标范围一致，
+    # 否则被裁掉的（更新）消息会在下一页被永久跳过。
+    while len(json.dumps(trimmed, ensure_ascii=False).encode()) > _FRAME_BUDGET:
+        if requested <= 1:
+            # 单条消息本身超过单帧上限：明确报告，不静默丢消息。
+            return {
+                "messages": [],
+                "next_before": None,
+                "truncated": True,
+                "too_large": "单条原生消息超过单帧预算",
+            }
+        requested = max(1, requested // 2)
+        messages, next_before = fetch(requested)
+        trimmed = [_trim_message(item) for item in messages if isinstance(item, dict)]
+    return {
+        "messages": trimmed,
+        "next_before": next_before,
+        # 页内消息全部返回，游标与内容范围一致。
+        "truncated": False,
+    }

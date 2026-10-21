@@ -56,6 +56,36 @@ interface ContentBlockLike {
 /** 首次发送后 Nexus 才会建 Session；岛入口用它更新绑定并重挂载。 */
 let onBound: ((sessionId: string) => void) | null = null;
 
+/**
+ * 本标签页刚建出来的 Session。POST 返回时用户输入可能还没落盘，此时拉历史会
+ * 拿到空列表并把乐观气泡换掉；hook 据此跳过历史拉取。
+ *
+ * 只记最后一条：岛页面绑定一条 conversation，重新挂载（含 StrictMode 的
+ * 双次 effect）也必须保持同一判断，所以这里不做一次性消费。
+ */
+let freshlyCreated: string | null = null;
+
+/** 标记“这条 Session 是本标签页刚建的”。 */
+export function markFreshlyCreated(sessionId: string): void {
+  freshlyCreated = sessionId || null;
+}
+
+/** 该 Session 是否由本标签页刚建；是则历史可以合法为空。 */
+export function isFreshlyCreated(sessionId: string): boolean {
+  return Boolean(sessionId) && freshlyCreated === sessionId;
+}
+
+/**
+ * 发送时用的是本地临时 id，落库后由后端换成消息 id。历史合并要按这个映射
+ * 对账，否则同一条消息会在“乐观气泡 + 原生历史”里各出现一次。
+ */
+const sentMessageIds = new Map<string, string>();
+
+/** 本地消息 id → 服务端消息 id；没有映射时原样返回。 */
+export function resolveMessageId(localId: string): string {
+  return sentMessageIds.get(localId) ?? localId;
+}
+
 export function onSessionBound(listener: (sessionId: string) => void): () => void {
   onBound = listener;
   return () => {
@@ -174,13 +204,10 @@ export const sessionApi = {
   },
 };
 
-export function takeFreshlyCreated(_sessionId: string): boolean {
-  return false;
-}
-
 export const chatApi = {
   async trigger(body?: unknown): Promise<{ status: string; session_id: string }> {
     const input = (body as { input?: unknown } | undefined)?.input;
+    const localId = (input as { id?: string } | null | undefined)?.id ?? "";
     const payload = toSendBody(input);
     const response = await nexusFetch(`/api/v1/conversations/${conversationId()}/messages`, {
       method: "POST",
@@ -190,10 +217,13 @@ export const chatApi = {
     if (!response.ok) throw new Error(await errorDetail(response));
     const result = (await response.json()) as SendResponse;
     const sessionId = result.agentscope?.session_id ?? "";
+    if (localId && result.message?.id) sentMessageIds.set(localId, result.message.id);
     if (sessionId) onBound?.(sessionId);
-    return {
-      status: result.agentscope?.accepted ? "accepted" : "rejected",
-      session_id: sessionId,
-    };
+    if (result.agentscope && result.agentscope.accepted === false) {
+      // 后端以 200 返回业务结果；不接受时必须让调用方和用户看到原因，
+      // 否则输入框清空、气泡留下，却没有任何失败提示。
+      throw new Error(result.agentscope.detail || "消息未被员工接受");
+    }
+    return { status: "accepted", session_id: sessionId };
   },
 };

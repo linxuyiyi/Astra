@@ -106,6 +106,16 @@ def astra_table_names() -> set[str]:
     return set(Base.metadata.tables)
 
 
+def required_table_names() -> set[str]:
+    """迁移必须建出的表，以当前模型元数据为唯一事实源。
+
+    手写清单会随迁移改名/删表漂移（0052 加 t_nexus_ 前缀、0053 删除总结表），
+    导致升级成功的库仍被预检判为缺表。
+    """
+
+    return astra_table_names()
+
+
 def foreign_table_names(tables: set[str]) -> list[str]:
     return sorted(tables - astra_table_names() - {"alembic_version"})
 
@@ -169,15 +179,7 @@ async def check_database(settings) -> list[CheckResult]:
             config = Config(str(BACKEND_ROOT / "alembic.ini"))
             config.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
             head_revision = ScriptDirectory.from_config(config).get_current_head()
-            required_tables = {
-                "agent_workers",
-                "events",
-                "opencode_execution_environments",
-                "runtime_sessions",
-                "task_categories",
-                "task_summaries",
-                "tasks",
-            }
+            required_tables = required_table_names()
             missing_tables = sorted(required_tables - tables)
             migration_ok = not missing_tables and current_revision == head_revision
             foreign_tables = foreign_table_names(tables)
@@ -204,7 +206,9 @@ async def check_database(settings) -> list[CheckResult]:
                     "表结构与迁移已到最新"
                     if migration_ok
                     else f"缺少表: {missing_tables or '无'}; head={head_revision}",
-                    "无需处理" if migration_ok else "在 backend 目录执行 python -m alembic upgrade head",
+                    "无需处理"
+                    if migration_ok
+                    else "在 services/nexus-api 目录执行 .venv/bin/python -m alembic upgrade head",
                 )
             )
     except Exception as exc:  # noqa: BLE001 - convert driver errors into actionable checks

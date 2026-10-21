@@ -590,3 +590,173 @@ def test_agentscope_unavailable_keeps_config_pending(tmp_path, monkeypatch, fake
         connection.close()
         assert row is not None and row[0] == "pending"
         assert employee["id"]
+
+
+def test_unbind_while_running_is_retried_by_the_next_sync(tmp_path, monkeypatch, fake):
+    """运行中解绑只记 pending 时，下一次同步也必须能收回（不能依赖 previous）。"""
+
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    with TestClient(create_app()) as client:
+        attach(client, fake)
+        skill = client.post(
+            "/api/v1/config/skills",
+            json={"content": skill_markdown("待收回", "运行中解绑")},
+        ).json()["skill"]
+        employee = client.post(
+            "/api/v1/employees",
+            json=employee_body(skills=[skill["id"]]),
+        ).json()["employee"]
+        agent_id = employee["agentscope_agent_id"]
+        mailbox = employee["mailbox_session_id"]
+        assert [item["name"] for item in fake.workspace(agent_id, mailbox)[0]] == ["待收回"]
+
+        fake.statuses[mailbox] = "running"
+        unbound = client.patch(
+            f"/api/v1/employees/{employee['id']}",
+            json=employee_body(skills=[]),
+        )
+        assert unbound.status_code == 200, unbound.text
+        assert unbound.json()["sync"]["status"] == "pending"
+        assert [item["name"] for item in fake.workspace(agent_id, mailbox)[0]] == ["待收回"]
+
+        fake.statuses[mailbox] = "idle"
+        retried = client.patch(
+            f"/api/v1/employees/{employee['id']}",
+            json=employee_body(skills=[]),
+        )
+        assert retried.status_code == 200, retried.text
+        assert retried.json()["sync"]["status"] == "applied"
+        assert fake.workspace(agent_id, mailbox)[0] == []
+
+        connection = sqlite3.connect(db_path())
+        rows = connection.execute(
+            "SELECT resource_id FROM t_nexus_resource_sync WHERE status = 'pending_remove'"
+        ).fetchall()
+        connection.close()
+        assert rows == []
+
+
+def test_renaming_a_skill_retires_the_old_workspace_name(tmp_path, monkeypatch, fake):
+    """改名后旧运行时名必须收回；否则新旧两版会同时留在工作区。"""
+
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    with TestClient(create_app()) as client:
+        attach(client, fake)
+        skill = client.post(
+            "/api/v1/config/skills",
+            json={"content": skill_markdown("旧名字", "第一版")},
+        ).json()["skill"]
+        employee = client.post(
+            "/api/v1/employees",
+            json=employee_body(skills=[skill["id"]]),
+        ).json()["employee"]
+        agent_id = employee["agentscope_agent_id"]
+        mailbox = employee["mailbox_session_id"]
+        assert [item["name"] for item in fake.workspace(agent_id, mailbox)[0]] == ["旧名字"]
+
+        renamed = client.patch(
+            f"/api/v1/config/skills/{skill['id']}",
+            json={"content": skill_markdown("新名字", "第二版")},
+        )
+        assert renamed.status_code == 200, renamed.text
+        assert renamed.json()["sync"]["status"] == "applied"
+        assert [item["name"] for item in fake.workspace(agent_id, mailbox)[0]] == ["新名字"]
+
+        unbound = client.patch(
+            f"/api/v1/employees/{employee['id']}",
+            json=employee_body(skills=[]),
+        )
+        assert unbound.status_code == 200, unbound.text
+        assert fake.workspace(agent_id, mailbox)[0] == []
+
+
+def test_idle_unbind_failure_keeps_the_removal_intent(tmp_path, monkeypatch, fake):
+    """idle 时删除失败也要留下待办；下一次同步不能只显示 applied 却没收回。"""
+
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    original = fake.handler
+    state = {"fail_skill": True}
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        if (
+            state["fail_skill"]
+            and request.method == "DELETE"
+            and request.url.path.endswith("/workspace/skill/失败收回")
+        ):
+            state["fail_skill"] = False
+            return httpx.Response(503, json={"detail": "临时不可用"})
+        return original(request)
+
+    fake.handler = flaky
+    with TestClient(create_app()) as client:
+        attach(client, fake)
+        skill = client.post(
+            "/api/v1/config/skills",
+            json={"content": skill_markdown("失败收回", "删除一次失败")},
+        ).json()["skill"]
+        employee = client.post(
+            "/api/v1/employees",
+            json=employee_body(skills=[skill["id"]]),
+        ).json()["employee"]
+        agent_id = employee["agentscope_agent_id"]
+        mailbox = employee["mailbox_session_id"]
+        assert [item["name"] for item in fake.workspace(agent_id, mailbox)[0]] == ["失败收回"]
+
+        failed = client.patch(
+            f"/api/v1/employees/{employee['id']}",
+            json=employee_body(skills=[]),
+        )
+        assert failed.status_code == 200, failed.text
+        assert failed.json()["sync"]["status"] == "error"
+        assert [item["name"] for item in fake.workspace(agent_id, mailbox)[0]] == ["失败收回"]
+
+        connection = sqlite3.connect(db_path())
+        pending = connection.execute(
+            "SELECT detail FROM t_nexus_resource_sync WHERE status = 'pending_remove'"
+        ).fetchall()
+        connection.close()
+        assert pending == [("失败收回",)]
+
+        retried = client.patch(
+            f"/api/v1/employees/{employee['id']}",
+            json=employee_body(skills=[]),
+        )
+        assert retried.status_code == 200, retried.text
+        assert retried.json()["sync"]["status"] == "applied"
+        assert fake.workspace(agent_id, mailbox)[0] == []
+
+
+def test_renaming_a_skill_retires_suffixed_installs(tmp_path, monkeypatch, fake):
+    """上游实际名带 “ (2)” 后缀时，改名也要按原始名收回全部匹配。"""
+
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    with TestClient(create_app()) as client:
+        attach(client, fake)
+        skill = client.post(
+            "/api/v1/config/skills",
+            json={"content": skill_markdown("旧名", "第一版")},
+        ).json()["skill"]
+        employee = client.post(
+            "/api/v1/employees",
+            json=employee_body(skills=[skill["id"]]),
+        ).json()["employee"]
+        agent_id = employee["agentscope_agent_id"]
+        mailbox = employee["mailbox_session_id"]
+        skills, _ = fake.workspace(agent_id, mailbox)
+        skills.append(
+            {
+                "name": "旧名 (2)",
+                "description": "",
+                "dir": "/workspace/skills/旧名 (2)",
+                "markdown": "# 旧名\n",
+                "updated_at": 1,
+            }
+        )
+
+        renamed = client.patch(
+            f"/api/v1/config/skills/{skill['id']}",
+            json={"content": skill_markdown("新名", "第二版")},
+        )
+        assert renamed.status_code == 200, renamed.text
+        assert renamed.json()["sync"]["status"] == "applied"
+        assert sorted(item["name"] for item in fake.workspace(agent_id, mailbox)[0]) == ["新名"]

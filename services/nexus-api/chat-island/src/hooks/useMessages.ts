@@ -13,7 +13,8 @@ import type { Msg, ContentBlock } from '@agentscope-ai/agentscope/message';
 import type { ToolCallBlock } from '@agentscope-ai/agentscope/message';
 import { useState, useCallback, useRef, useEffect } from 'react';
 
-import { sessionApi, takeFreshlyCreated } from '@/api';
+import { isFreshlyCreated, resolveMessageId, sessionApi } from '@/api';
+import { mergeHistory } from '@/nexus/merge';
 import { chatApi } from '@/api';
 import { useAudioManager } from '@/context/AudioContext';
 
@@ -299,11 +300,19 @@ export function useMessages(
 
 	// ── Lifecycle: fetch history + open SSE stream ──────────────────
 	useEffect(() => {
+		// A session this tab just created can legitimately have no persisted
+		// history yet: the backend returns from POST before the user's input
+		// lands. Keep the optimistic messages (and the send error, if any) so
+		// neither is wiped by the binding update; history is still fetched and
+		// merged by id so a reply that finished first is not lost.
+		const justCreated = Boolean(sessionId) && isFreshlyCreated(sessionId as string);
 		setLoadedKey(null);
-		msgsRef.current = [];
-		currentReplyRef.current = null;
-		setMsgs([]);
-		setError(null);
+		if (!justCreated) {
+			msgsRef.current = [];
+			currentReplyRef.current = null;
+			setMsgs([]);
+			setError(null);
+		}
 		clearInterruptTimer();
 		setPhase('idle');
 		setSubagentHitl([]);
@@ -317,11 +326,11 @@ export function useMessages(
 
 		(async () => {
 			let eventCursor: string | null = null;
-			// 1. Fetch persisted history — unless this tab just created the
-			// session, in which case there is provably none.
-			if (takeFreshlyCreated(sessionId)) {
-				if (!cancelled) setLoadedKey(`${agentId}:${sessionId}`);
-			} else {
+			// 1. Fetch persisted history. A just-created session can return an
+			// empty (or partial) history because the backend has not persisted
+			// the input yet; merging keeps the optimistic bubble and still
+			// picks up a reply that already finished before the stream opened.
+			{
 				try {
 					const { messages, is_running, event_cursor } = await sessionApi.messages(
 						sessionId,
@@ -329,7 +338,9 @@ export function useMessages(
 					);
 					if (cancelled) return;
 					eventCursor = event_cursor;
-					msgsRef.current = messages;
+					msgsRef.current = justCreated
+						? mergeHistory(messages, msgsRef.current, resolveMessageId)
+						: messages;
 					// If a reply is in flight (running on a worker) OR the
 					// tail msg is parked on a pending tool_call (awaiting
 					// user confirmation / external execution), initialise the
@@ -337,7 +348,7 @@ export function useMessages(
 					// available immediately — otherwise a fresh page load
 					// while parked leaves the UI stuck on ``idle`` with no
 					// way to abort.
-					const tail = messages[messages.length - 1];
+					const tail = msgsRef.current[msgsRef.current.length - 1];
 					if (is_running || hasPendingToolCall(tail)) {
 						setPhase('streaming');
 						if (hasPendingToolCall(tail)) {
@@ -404,6 +415,8 @@ export function useMessages(
 		async (content: ContentBlock[]) => {
 			if (!agentId || !sessionId) return;
 
+			// 新的发送清除上一次的投递失败；本次失败会在 catch 里重新设置。
+			setError(null);
 			const userMsg = UserMsg({ name: 'user', content });
 			msgsRef.current = [...msgsRef.current, userMsg];
 			scheduleUpdate();

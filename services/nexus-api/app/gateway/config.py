@@ -86,6 +86,7 @@ class NodeConfig:
     config_state: str
     scheduling_state: str
     health_state: str
+    probe_strategy: str = "SSE"
 
     @property
     def runtime_scope(self) -> str:
@@ -106,6 +107,7 @@ class NodeConfig:
             connect_timeout_seconds=_optional_float(item.get("connect_timeout_seconds")),
             request_timeout_seconds=_optional_float(item.get("request_timeout_seconds")),
             health_path=_text(item.get("health_path")),
+            probe_strategy=_text(item.get("probe_strategy"), "SSE"),
             probe_interval_seconds=_optional_int(item.get("probe_interval_seconds")),
             models=tuple(str(model) for model in (item.get("models") or [])),
             weight=int(item.get("weight") or 0),

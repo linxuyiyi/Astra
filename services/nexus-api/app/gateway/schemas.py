@@ -49,6 +49,7 @@ class NodeCreate(BaseModel):
     connect_timeout_seconds: float | None = Field(default=None, gt=0, le=60)
     request_timeout_seconds: float | None = Field(default=None, gt=0, le=600)
     health_path: str = Field(default="", max_length=256)
+    probe_strategy: str = Field(default="SSE", max_length=16)
     probe_interval_seconds: int | None = Field(default=None, ge=10, le=86400)
     models: list[str] = Field(default_factory=list)
     weight: int = Field(default=1, ge=0)
@@ -73,6 +74,7 @@ class NodePatch(BaseModel):
     connect_timeout_seconds: float | None = Field(default=None, gt=0, le=60)
     request_timeout_seconds: float | None = Field(default=None, gt=0, le=600)
     health_path: str | None = Field(default=None, max_length=256)
+    probe_strategy: str | None = Field(default=None, max_length=16)
     probe_interval_seconds: int | None = Field(default=None, ge=10, le=86400)
     models: list[str] | None = None
     weight: int | None = Field(default=None, ge=0)
@@ -97,6 +99,7 @@ class NodeRead(BaseModel):
     connect_timeout_seconds: float | None
     request_timeout_seconds: float | None
     health_path: str
+    probe_strategy: str
     probe_interval_seconds: int | None
     models: list[str]
     weight: int

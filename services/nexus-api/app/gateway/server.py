@@ -65,13 +65,17 @@ from app.gateway.errors import (
 from app.gateway.health import probe_success, record_background_probe
 from app.gateway.models import (
     CONFIG_ENABLED,
-    PROBE_TYPES,
     GatewayKey,
     GatewayRequest,
     GatewayRuntimeEvent,
     utcnow,
 )
-from app.gateway.probe import GatewayProbeClient, HttpGatewayProbeClient
+from app.gateway.probe import (
+    GatewayProbeClient,
+    HttpGatewayProbeClient,
+    probe_types_for_strategy,
+    strategy_for_types,
+)
 from app.gateway.proxy import GatewayProxy, NotSentDownstream, build_upstream_headers
 from app.gateway.request_lifecycle import recover_abandoned_requests
 from app.gateway.runtime import (
@@ -560,8 +564,10 @@ class GatewayDataPlane:
             api_key = self._decode_node_key(node)
         except GatewayDataPlaneError:
             api_key = None
+        # 常规验证收敛为一次 SSE；策略由节点保存值决定，专项验证为一次非流式。
+        selected = probe_types_for_strategy(getattr(node, "probe_strategy", "SSE"))
         try:
-            outcomes = await self.probe_client.probe(node, list(PROBE_TYPES), api_key)
+            outcomes = await self.probe_client.probe(node, selected, api_key)
         except Exception:  # noqa: BLE001 - 探测本身失败按一次失败计入
             outcomes = []
         success = probe_success(outcomes)
@@ -581,7 +587,11 @@ class GatewayDataPlane:
         # 只有保存连接与本次探测的请求使用的连接一致时才投影，避免旧连接探测判新配置为健康。
         try:
             await record_background_probe(
-                self._session_factory, node.id, outcomes, expected_scope=scope
+                self._session_factory,
+                node.id,
+                outcomes,
+                expected_scope=scope,
+                strategy=strategy_for_types(selected),
             )
         except Exception:  # noqa: BLE001 - 落库失败不影响数据面，下一轮探测重试
             pass

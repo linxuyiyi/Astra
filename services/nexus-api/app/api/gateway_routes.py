@@ -93,8 +93,13 @@ def gateway_service(
     probe_client: Annotated[GatewayProbeClient, Depends(gateway_probe_client)],
     runtime: Annotated[RuntimeStore, Depends(gateway_runtime)],
 ) -> GatewayControlService:
+    settings = get_settings()
     return GatewayControlService(
-        session, cipher=cipher, probe_client=probe_client, runtime=runtime
+        session,
+        cipher=cipher,
+        probe_client=probe_client,
+        runtime=runtime,
+        default_health_path=settings.gateway_health_path,
     )
 
 

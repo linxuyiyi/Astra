@@ -40,7 +40,12 @@ from app.gateway.models import (
     GatewayProbeRun,
     GatewayRoute,
 )
-from app.gateway.probe import GatewayProbeClient
+from app.gateway.probe import (
+    PROBE_STRATEGIES,
+    GatewayProbeClient,
+    probe_types_for_strategy,
+    strategy_for_types,
+)
 from app.gateway.runtime import SCOPE_NODE, RuntimeStore, node_runtime_scope
 from app.gateway.schemas import (
     AuditEventRead,
@@ -70,7 +75,14 @@ VALID_QUOTA_POLICIES = {"STOP", "ALERT", "RECORD"}
 
 # 改变节点可达性或认证的配置字段：任一变化都让旧健康态失效，必须重新完整探测后
 # 才允许被调度，避免旧健康状态继续授权新配置。凭据（api_key）单独判断。
-NODE_CONNECTION_FIELDS = ("base_url", "auth_type", "auth_header", "models", "health_path")
+NODE_CONNECTION_FIELDS = (
+    "base_url",
+    "auth_type",
+    "auth_header",
+    "models",
+    "health_path",
+    "probe_strategy",
+)
 
 
 class GatewayError(Exception):
@@ -102,12 +114,14 @@ class GatewayControlService:
         probe_client: GatewayProbeClient,
         runtime: RuntimeStore | None = None,
         circuit_open_seconds: int = RUNTIME_CIRCUIT_OPEN_SECONDS,
+        default_health_path: str = "/health",
     ) -> None:
         self._session = session
         self._cipher = cipher
         self._probe_client = probe_client
         self._runtime = runtime
         self._circuit_open_seconds = circuit_open_seconds
+        self._default_health_path = default_health_path or "/health"
 
     # ── 审计 ───────────────────────────────────────────────────────────
 
@@ -249,6 +263,7 @@ class GatewayControlService:
         self._validate_node_states(payload.config_state, payload.scheduling_state, payload.quota_policy)
         self._validate_node_auth(payload.auth_type, payload.auth_header)
         self._validate_node_base_url(payload.base_url)
+        self._validate_node_strategy(payload.probe_strategy)
         self._validate_node_health_path(payload.health_path)
         if "scheduling_state" in payload.model_fields_set:
             # 显式要求以 ACTIVE 创建的新节点尚未通过任何探测，直接拒绝。
@@ -259,6 +274,8 @@ class GatewayControlService:
             )
         await self._ensure_pool(payload.pool_id)
         data = payload.model_dump(exclude={"api_key"})
+        # 健康路径显式回填有效部署值，不再依赖探测时的隐式继承。
+        data["health_path"] = (data.get("health_path") or "").strip() or self._default_health_path
         api_key_encrypted = self._cipher.encrypt(payload.api_key) if payload.api_key else None
         node = GatewayNode(id=f"gn_{uuid4().hex[:12]}", api_key_encrypted=api_key_encrypted, **data)
         self._session.add(node)
@@ -292,6 +309,10 @@ class GatewayControlService:
             self._validate_node_base_url(data["base_url"])
         if "health_path" in data:
             self._validate_node_health_path(data["health_path"])
+            if not data["health_path"].strip():
+                data["health_path"] = self._default_health_path
+        if "probe_strategy" in data:
+            self._validate_node_strategy(data["probe_strategy"])
         self._validate_node_states(
             data.get("config_state", node.config_state),
             data.get("scheduling_state", node.scheduling_state),
@@ -311,8 +332,10 @@ class GatewayControlService:
             setattr(node, field, value)
         if critical_change:
             # 新连接必须重新探测；刷新前的请求仍可能使用旧连接，因此保留旧作用域
-            # 的健康/熔断，并按连接指纹隔离新配置。
+            # 的健康/熔断，并按连接指纹隔离新配置。策略变化不改变连接指纹，
+            # 必须显式清掉运行态授权。
             self._reset_node_health(node)
+            await self._reset_runtime_health(node)
         self._audit(
             actor=actor,
             actor_role=actor_role,
@@ -387,7 +410,7 @@ class GatewayControlService:
         actor_role: str,
     ) -> tuple[GatewayNode, GatewayProbeRun]:
         node = await self.get_node(node_id)
-        selected = probe_types or list(PROBE_TYPES)
+        selected = probe_types or probe_types_for_strategy(node.probe_strategy)
         unknown = [item for item in selected if item not in PROBE_TYPES]
         if unknown:
             raise GatewayConflict(f"未知探测类型: {', '.join(unknown)}")
@@ -397,12 +420,17 @@ class GatewayControlService:
         outcomes = await self._probe_client.probe(node, selected, api_key)
         duration_ms = int((time.monotonic() - started_clock) * 1000)
         run = build_probe_run(
-            node, outcomes, source="MANUAL", started_at=started_at, duration_ms=duration_ms
+            node,
+            outcomes,
+            source="MANUAL",
+            started_at=started_at,
+            duration_ms=duration_ms,
+            strategy=strategy_for_types(selected),
         )
         self._session.add(run)
         success = probe_success(outcomes)
         previous_health = node.health_state
-        if probe_complete(outcomes):
+        if probe_complete(outcomes, probe_types_for_strategy(strategy_for_types(selected))):
             apply_probe_outcome(node, success=success)
             record_health_transition(self._session, node, previous_health)
             node.health_detail = probe_detail(node, outcomes)
@@ -749,6 +777,19 @@ class GatewayControlService:
             field in data and data[field] != getattr(node, field)
             for field in NODE_CONNECTION_FIELDS
         )
+
+    async def _reset_runtime_health(self, node: GatewayNode) -> None:
+        if self._runtime is None:
+            return
+        try:
+            await self._runtime.reset_health(node_runtime_scope(node))
+        except Exception:  # noqa: BLE001 - 运行态不可用时由缺失状态兜底为 UNKNOWN
+            return
+
+    @staticmethod
+    def _validate_node_strategy(strategy: str) -> None:
+        if strategy not in PROBE_STRATEGIES:
+            raise GatewayConflict(f"未知探测策略: {strategy}")
 
     @staticmethod
     def _reset_node_health(node: GatewayNode) -> None:

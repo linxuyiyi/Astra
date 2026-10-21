@@ -49,9 +49,22 @@ def upgrade(database_path, revision):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def legacy_table(model, _connection=None):
-    """历史 revision 的表还没有 t_nexus_ 前缀，复用 ORM 列定义但改成裸表名。"""
-    return model.__table__.to_metadata(MetaData(), name=model.__tablename__.removeprefix("t_nexus_"))
+def legacy_table(model, connection=None):
+    """历史 revision 的表还没有 t_nexus_ 前缀。
+
+    复制 ORM 列时保留 Python 默认值（旧表的 NOT NULL 列由默认值填充），
+    但在提供连接时剔除该 revision 之后才新增的列。
+    """
+
+    table = model.__table__.to_metadata(
+        MetaData(), name=model.__tablename__.removeprefix("t_nexus_")
+    )
+    if connection is not None:
+        existing = {column["name"] for column in inspect(connection).get_columns(table.name)}
+        for column in list(table.columns):
+            if column.name not in existing:
+                table._columns.remove(column)
+    return table
 
 
 def legacy_reflected(model, connection):

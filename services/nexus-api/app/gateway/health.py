@@ -25,7 +25,11 @@ from app.gateway.models import (
     GatewayProbeRun,
     GatewayRuntimeEvent,
 )
-from app.gateway.probe import ProbeOutcome
+from app.gateway.probe import (
+    ProbeOutcome,
+    probe_types_for_strategy,
+    strategy_for_outcomes,
+)
 from app.gateway.runtime import (
     PROBE_FAILURE_THRESHOLD,
     PROBE_SUCCESS_THRESHOLD,
@@ -57,16 +61,18 @@ def build_probe_run(
     source: str,
     started_at,
     duration_ms: int,
+    strategy: str | None = None,
 ) -> GatewayProbeRun:
     """一次探测操作 = 一条轮次记录；步骤在 steps 里，不再逐步骤落行。"""
 
-    complete = probe_complete(outcomes)
+    strategy = strategy or strategy_for_outcomes(outcomes)
+    complete = probe_complete(outcomes, probe_types_for_strategy(strategy))
     success = probe_success(outcomes)
     return GatewayProbeRun(
         id="gpr_" + uuid4().hex,
         node_id=node.id,
         source=source,
-        strategy=probe_strategy(outcomes),
+        strategy=strategy,
         first_model=(node.models or [None])[0],
         runtime_scope=node_runtime_scope(node),
         success=success,
@@ -83,29 +89,23 @@ def build_probe_run(
     )
 
 
-def probe_strategy(outcomes: list[ProbeOutcome]) -> str:
-    types = {outcome.probe_type for outcome in outcomes}
-    if types == {"STREAM"}:
-        return "SSE"
-    if types == {"MODEL"}:
-        return "NON_STREAM"
-    return "SCOPED"
-
-
 def probe_success(outcomes: list[ProbeOutcome]) -> bool:
     """一组探测全部成功才算成功；空结果按失败处理。"""
 
     return bool(outcomes) and all(outcome.success for outcome in outcomes)
 
 
-def probe_complete(outcomes: list[ProbeOutcome]) -> bool:
-    """是否覆盖完整探测序列（NETWORK/SERVICE/MODEL/STREAM）。
+def probe_complete(
+    outcomes: list[ProbeOutcome], required: list[str] | None = None
+) -> bool:
+    """是否覆盖该策略要求的完整步骤。
 
-    局部探测即使成功也不足以推进健康：否则只探测 NETWORK 成功就能把 UNKNOWN
-    晋升为 HEALTHY，绕过后端从未验证过的服务、模型与流式能力。
+    常规验证是一次 SSE（STREAM）；专项验证是一次非流式（MODEL）；SCOPED 只用于
+    诊断，要求四类步骤齐全，因此不会用局部成功把 UNKNOWN 晋升为 HEALTHY。
     """
 
-    return set(PROBE_TYPES).issubset({outcome.probe_type for outcome in outcomes})
+    expected = set(required if required is not None else PROBE_TYPES)
+    return bool(outcomes) and expected.issubset({outcome.probe_type for outcome in outcomes})
 
 
 def apply_probe_outcome(node: GatewayNode, *, success: bool) -> None:
@@ -161,6 +161,7 @@ async def record_background_probe(
     outcomes: list[ProbeOutcome],
     *,
     expected_scope: str | None = None,
+    strategy: str | None = None,
 ) -> None:
     """数据面后台探测落库。
 
@@ -180,7 +181,12 @@ async def record_background_probe(
             return
         started_at = utcnow()
         run = build_probe_run(
-            node, outcomes, source="AUTO", started_at=started_at, duration_ms=0
+            node,
+            outcomes,
+            source="AUTO",
+            started_at=started_at,
+            duration_ms=0,
+            strategy=strategy,
         )
         session.add(run)
         if expected_scope is not None and node_runtime_scope(node) != expected_scope:

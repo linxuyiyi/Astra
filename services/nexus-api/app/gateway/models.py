@@ -79,6 +79,9 @@ class GatewayNode(Base):
     connect_timeout_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     request_timeout_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     health_path: Mapped[str] = mapped_column(String(256), default="")
+    probe_strategy: Mapped[str] = mapped_column(
+        String(16), default="SSE", server_default="SSE"
+    )
     probe_interval_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     models: Mapped[list[str]] = mapped_column(JSON, default=list)
     weight: Mapped[int] = mapped_column(Integer, default=1)

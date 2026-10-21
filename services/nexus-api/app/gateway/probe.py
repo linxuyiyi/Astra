@@ -25,9 +25,34 @@ from app.gateway.models import (
     PROBE_NETWORK,
     PROBE_SERVICE,
     PROBE_STREAM,
+    PROBE_TYPES,
 )
 
 PROBE_CHAT_PATH = "/v1/chat/completions"
+
+# 验证策略：常规一次 SSE，专项一次非流式；SCOPED 只用于诊断，不推进健康授权。
+PROBE_STRATEGIES = ("SSE", "NON_STREAM", "SCOPED")
+
+
+def probe_types_for_strategy(strategy: str) -> list[str]:
+    if strategy == "NON_STREAM":
+        return [PROBE_MODEL]
+    if strategy == "SCOPED":
+        return list(PROBE_TYPES)
+    return [PROBE_STREAM]
+
+
+def strategy_for_types(probe_types: list[str]) -> str:
+    types = set(probe_types)
+    if types == {PROBE_STREAM}:
+        return "SSE"
+    if types == {PROBE_MODEL}:
+        return "NON_STREAM"
+    return "SCOPED"
+
+
+def strategy_for_outcomes(outcomes: list[ProbeOutcome]) -> str:
+    return strategy_for_types([outcome.probe_type for outcome in outcomes])
 
 
 @dataclass

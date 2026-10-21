@@ -1844,8 +1844,8 @@ def test_background_probe_removes_and_restores_node(cipher, upstream):
     assert opened == "OPEN"
     assert restored == "HEALTHY"
     assert closed == "CLOSED"
-    # 探测类型包含网络、服务、真实模型与 SSE 流式。
-    assert probe.calls and len(probe.calls[0][1]) == 4
+    # 默认验证策略是一次 SSE；轮次里只有 STREAM 一步。
+    assert probe.calls and probe.calls[0][1] == ("STREAM",)
 
 
 

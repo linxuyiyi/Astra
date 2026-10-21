@@ -975,20 +975,12 @@ def test_manual_probe_records_one_run_with_steps(gateway_env):
         assert run["complete"] is True
         assert run["success"] is True
         assert run["duration_ms"] >= 0
-        assert [step["probe_type"] for step in run["steps"]] == [
-            "NETWORK",
-            "SERVICE",
-            "MODEL",
-            "STREAM",
-        ]
-        assert run["usage"]["requests"] == 4
+        # 常规验证收敛为一次 SSE：默认策略只跑 STREAM 一步。
+        assert run["strategy"] == "SSE"
+        assert [step["probe_type"] for step in run["steps"]] == ["STREAM"]
+        assert run["usage"]["requests"] == 1
         # 旧的 checks 字段仍是同一次轮次的投影，页面不需要同步改动。
-        assert [check["probe_type"] for check in body["checks"]] == [
-            "NETWORK",
-            "SERVICE",
-            "MODEL",
-            "STREAM",
-        ]
+        assert [check["probe_type"] for check in body["checks"]] == ["STREAM"]
 
         async def counts():
             async with SessionLocal() as session:
@@ -1068,3 +1060,64 @@ def test_background_probe_records_an_auto_run(gateway_env):
     assert runs[0].success is True
     assert runs[0].complete is True
     assert [step["probe_type"] for step in runs[0].steps] == ["NETWORK", "SERVICE", "MODEL", "STREAM"]
+
+
+def test_probe_strategy_non_stream_uses_one_model_step(gateway_env):
+    with TestClient(app) as client:
+        pool = create_pool(client)
+        node = create_node(client, pool["id"], probe_strategy="NON_STREAM")
+        response = client.post(f"/api/gateway/nodes/{node['id']}/probe", json={})
+        assert response.status_code == 200, response.text
+        run = response.json()["run"]
+
+    assert run["strategy"] == "NON_STREAM"
+    assert [step["probe_type"] for step in run["steps"]] == ["MODEL"]
+    assert run["complete"] is True
+
+
+def test_node_health_path_is_backfilled_with_the_effective_default(gateway_env):
+    settings = gateway_env_settings()
+    with TestClient(app) as client:
+        pool = create_pool(client)
+        node = create_node(client, pool["id"])
+        # 新建时未提供健康路径：保存的是部署有效值，而不是空串继承。
+        assert node["health_path"] == settings.gateway_health_path
+
+        patched = client.patch(
+            f"/api/gateway/nodes/{node['id']}", json={"health_path": ""}
+        )
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["health_path"] == settings.gateway_health_path
+
+
+def gateway_env_settings():
+    from app.config.settings import get_settings
+
+    return get_settings()
+
+
+def test_changing_verification_inputs_invalidates_previous_health(gateway_env):
+    with TestClient(app) as client:
+        pool = create_pool(client)
+        node = create_node(client, pool["id"])
+        for _ in range(2):
+            assert client.post(f"/api/gateway/nodes/{node['id']}/probe", json={}).status_code == 200
+        healthy = client.get(f"/api/gateway/nodes/{node['id']}").json()
+        assert healthy["health_state"] == "HEALTHY"
+        # 策略变化：连接指纹不变，但旧授权必须失效（DB 与运行态都要回到 UNKNOWN）。
+        switched = client.patch(
+            f"/api/gateway/nodes/{node['id']}", json={"probe_strategy": "NON_STREAM"}
+        )
+        assert switched.status_code == 200, switched.text
+        body = switched.json()
+        assert body["health_state"] == "UNKNOWN"
+        assert body["success_streak"] == 0
+        assert body["failure_streak"] == 0
+
+        async def runtime_health() -> str | None:
+            async with SessionLocal() as session:
+                db_node = await session.get(GatewayNode, node["id"])
+                scope = node_runtime_scope(db_node)
+            return await gateway_env.runtime.health(scope)
+
+        assert asyncio.run(runtime_health()) is None

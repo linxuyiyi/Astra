@@ -444,6 +444,26 @@
 		"clear": "清除选择",
 		"noFallback": "无兜底模型"
 	},
+	"asr": {
+		"start": "语音输入（本地 ASR）",
+		"stop": "停止录音",
+		"transcribing": "正在识别…",
+		"recording": "录音中 {{time}}，再次点击结束",
+		"retry": "重试",
+		"empty": "没有识别到语音",
+		"failed": "识别失败",
+		"failedWithStatus": "识别失败（HTTP {{status}}）",
+		"permission": "麦克风权限被拒绝，请在浏览器设置中允许后重试",
+		"noDevice": "没有找到麦克风设备",
+		"unsupported": "当前浏览器不支持录音",
+		"tooLarge": "录音文件超过大小限制",
+		"tooLong": "录音超过 60 秒",
+		"timeout": "识别超时，请重试",
+		"busy": "服务繁忙，请稍后重试",
+		"rateLimited": "请求太频繁，请稍后再试",
+		"unsupportedFormat": "音频格式无法识别",
+		"notReady": "语音服务尚未就绪"
+	},
 	"realtime": {
 		"selectModel": "语音模型",
 		"parameters": "实时语音参数",

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus ASR Server · 测试台</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand">
+        <span class="mark">N</span>
+        <span class="name">Nexus <em>ASR Server</em></span>
+        <span class="chip">SenseVoice · INT8</span>
+      </div>
+      <div class="pill" id="healthPill" data-state="loading">
+        <span class="dot"></span><span id="healthText">连接中…</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <h1>浏览器录音，<span class="grad">服务端识别</span></h1>
+        <p>FastAPI + sherpa-onnx · SenseVoice-Small INT8 · CPU 推理 · 音频不落盘</p>
+      </section>
+
+      <section class="card recorder">
+        <div class="record-col">
+          <button id="micBtn" class="mic" aria-label="开始录音" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V5.5a3.5 3.5 0 1 0-7 0V11a3.5 3.5 0 0 0 3.5 3.5Z"/>
+              <path d="M5.5 10.5a.9.9 0 0 1 1.8 0 4.7 4.7 0 0 0 9.4 0 .9.9 0 0 1 1.8 0 6.5 6.5 0 0 1-5.6 6.42V20h2.2a.9.9 0 0 1 0 1.8H8.9a.9.9 0 0 1 0-1.8h2.2v-3.08A6.5 6.5 0 0 1 5.5 10.5Z"/>
+            </svg>
+          </button>
+          <div class="timer" id="timer">00:00</div>
+          <div class="hint" id="recordHint">点击麦克风开始</div>
+        </div>
+
+        <div class="transcript-col">
+          <textarea id="transcript" placeholder="识别结果会出现在这里，可以继续编辑；本页不会自动发送。" spellcheck="false"></textarea>
+          <div class="toolbar">
+            <div class="left">
+              <button id="retryBtn" class="ghost" disabled>重新识别</button>
+              <button id="clearBtn" class="ghost">清空</button>
+              <button id="copyBtn" class="ghost">复制</button>
+              <button id="uploadBtn" class="ghost">上传音频</button>
+              <input id="fileInput" type="file" accept="audio/*,.wav,.webm,.m4a,.mp3,.ogg,.flac" hidden />
+            </div>
+            <div class="right">
+              <span class="limit">最长 60 秒</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="stats" id="stats">
+        <div><span class="label">音频时长</span><strong id="statDuration">—</strong></div>
+        <div><span class="label">服务端总计</span><strong id="statTotal">—</strong></div>
+        <div><span class="label">推理耗时</span><strong id="statElapsed">—</strong></div>
+        <div><span class="label">解码/重采样</span><strong id="statDecode">—</strong></div>
+        <div><span class="label">RTF</span><strong id="statRtf">—</strong></div>
+        <div><span class="label">上传大小</span><strong id="statBytes">—</strong></div>
+      </section>
+
+      <section class="grid">
+        <article class="card panel">
+          <div class="panel-head"><h2>服务状态</h2><span class="tag" id="modelTag">—</span></div>
+          <dl class="kv">
+            <div><dt>模型</dt><dd id="mModel">—</dd></div>
+            <div><dt>加载耗时</dt><dd id="mLoad">—</dd></div>
+            <div><dt>推理线程</dt><dd id="mThreads">—</dd></div>
+            <div><dt>运行时长</dt><dd id="mUptime">—</dd></div>
+            <div><dt>累计请求</dt><dd id="mTotal">—</dd></div>
+            <div><dt>当前并发</dt><dd id="mActive">—</dd></div>
+          </dl>
+        </article>
+
+        <article class="card panel">
+          <div class="panel-head"><h2>本次请求</h2><span class="tag" id="reqTag">—</span></div>
+          <dl class="kv">
+            <div><dt>语言</dt><dd id="rLang">—</dd></div>
+            <div><dt>音频格式</dt><dd id="rFormat">—</dd></div>
+            <div><dt>请求 ID</dt><dd id="rId" class="mono">—</dd></div>
+            <div><dt>客户端耗时</dt><dd id="rClient">—</dd></div>
+            <div><dt>识别字数</dt><dd id="rChars">—</dd></div>
+            <div><dt>状态</dt><dd id="rStatus">—</dd></div>
+          </dl>
+        </article>
+      </section>
+
+      <details class="card raw">
+        <summary>原始响应</summary>
+        <pre id="rawJson">{}</pre>
+      </details>
+
+      <div class="error" id="errorBox" hidden></div>
+
+      <footer class="footer">
+        <span>音频只在内存中处理，不写入磁盘，不记录内容</span>
+        <span>·</span>
+        <span>录音结束后识别，不做实时流式字幕</span>
+      </footer>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

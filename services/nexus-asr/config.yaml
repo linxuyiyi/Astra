@@ -1,0 +1,31 @@
+server:
+  host: 127.0.0.1
+  port: 19899
+  log_level: info
+  # Maximum accepted upload (a 60 s WebM/Opus recording is typically < 1 MB).
+  max_upload_mb: 12
+  # Reject audio longer than this after decoding.
+  max_audio_seconds: 60
+  # Number of concurrent inference requests. Each request uses asr.num_threads
+  # ONNX threads, so keep this small on shared machines.
+  max_concurrency: 2
+  queue_timeout_seconds: 5
+  request_timeout_seconds: 30
+  rate_limit_per_minute: 120
+  # Trust X-Forwarded-For from the local Nginx proxy; the service binds to
+  # 127.0.0.1 by default so this cannot be reached directly.
+  trust_proxy_headers: true
+  docs_enabled: true
+
+asr:
+  provider: sherpa-onnx
+  model: sensevoice-small-int8
+  model_dir: ./models/sensevoice-small-int8
+  device: cpu
+  num_threads: 4
+  # auto | zh | en | ja | ko | yue
+  language: auto
+  use_itn: true
+  auto_download: true
+  offline: false
+  languages: [zh, en, ja, ko, yue]

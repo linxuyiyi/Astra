@@ -1,0 +1,47 @@
+[
+  {
+    "id": "zh-5s",
+    "kind": "zh",
+    "text": "帮我把今天的会议纪要整理一下，重点列出三个待办事项。",
+    "speech_seconds": 5.03,
+    "mic_file": "zh-5s-mic-48k.wav",
+    "file_16k": "zh-5s.wav",
+    "rate": 190
+  },
+  {
+    "id": "zh-10s",
+    "kind": "zh",
+    "text": "明天上午十点我们开一个项目评审会，请提前准备好接口文档、性能测试报告，还有下个季度的排期计划。",
+    "speech_seconds": 9.932,
+    "mic_file": "zh-10s-mic-48k.wav",
+    "file_16k": "zh-10s.wav",
+    "rate": 195
+  },
+  {
+    "id": "zh-30s",
+    "kind": "zh",
+    "text": "我们下个季度的重点是把这个语音输入能力接到 Nexus 的聊天窗口里，用户点击麦克风以后就在浏览器本地做识别，不需要把音频上传到服务器。请你先评估 sherpa-onnx 的 WebAssembly 版本在 Mac 上的性能，然后给出 Windows 的兼容性结论，最后整理一份集成方案，包含组件接口、权限处理、缓存策略和降级方案。还要补充中英文混合场景的测试结果。",
+    "speech_seconds": 30.262,
+    "mic_file": "zh-30s-mic-48k.wav",
+    "file_16k": "zh-30s.wav",
+    "rate": 200
+  },
+  {
+    "id": "mixed-1",
+    "kind": "mixed",
+    "text": "这个 Demo 用 sherpa-onnx 的 WebAssembly 版本跑 SenseVoice 模型，在 Chrome 里做本地推理，RTF 大概是多少？",
+    "speech_seconds": 9.659,
+    "mic_file": "mixed-1-mic-48k.wav",
+    "file_16k": "mixed-1.wav",
+    "rate": 185
+  },
+  {
+    "id": "mixed-2",
+    "kind": "mixed",
+    "text": "请把 Nexus 的 Vue3 组件接上麦克风，检查 getUserMedia 权限，然后对比 INT8 和 FP32 的准确率。",
+    "speech_seconds": 10.199,
+    "mic_file": "mixed-2-mic-48k.wav",
+    "file_16k": "mixed-2.wav",
+    "rate": 185
+  }
+]

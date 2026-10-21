@@ -1,6 +1,7 @@
 import type { ContentBlock, TextBlock } from '@agentscope-ai/agentscope/message';
 import {
 	AudioLines,
+	Mic,
 	Paperclip,
 	Loader2,
 	Square,
@@ -14,6 +15,7 @@ import React, {
 	useState,
 	useRef,
 	useMemo,
+	useCallback,
 	useLayoutEffect,
 	type KeyboardEvent,
 	useImperativeHandle,
@@ -33,6 +35,7 @@ import {
 	AttachmentTitle,
 } from '@/components/ui/attachment.tsx';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAsrRecorder } from '@/hooks/useAsrRecorder.ts';
 import type { ReplyPhase } from '@/hooks/useMessages';
 import { useTranslation } from '@/i18n/useI18n.ts';
 import type { RealtimeConnectionState } from '@/lib/browserWebRTCTransport';
@@ -92,6 +95,8 @@ interface TextInputProps {
 	onVoiceToggle?: () => void;
 	/** Prevents voice start when no realtime model is configured. */
 	voiceDisabled?: boolean;
+	/** Enable the server-side ASR microphone button (Nexus ASR Server). */
+	localAsrEnabled?: boolean;
 	/**
 	 * Content rendered directly above the input pill, inside the outer
 	 * wrapper that {@link className} styles (e.g. the working directory
@@ -108,6 +113,16 @@ interface TextInputProps {
 
 export interface TextInputRef {
 	focus: () => void;
+}
+
+/** Server-side ASR can be disabled at build time without changing the UI. */
+const LOCAL_ASR_DEFAULT = import.meta.env.VITE_NEXUS_ASR_ENABLED !== 'false';
+
+function formatClock(totalSeconds: number): string {
+	const seconds = Math.max(0, Math.floor(totalSeconds));
+	return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(
+		seconds % 60,
+	).padStart(2, '0')}`;
 }
 
 /** One line box of textarea text: ``text-sm`` (14px) at a 1.5 line-height. */
@@ -150,6 +165,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 			voiceState = 'idle',
 			onVoiceToggle,
 			voiceDisabled = false,
+			localAsrEnabled = LOCAL_ASR_DEFAULT,
 			headerSlot,
 		},
 		ref,
@@ -161,6 +177,8 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 		const [isFocused, setIsFocused] = useState(false);
 		const textareaRef = useRef<HTMLTextAreaElement>(null);
 		const fileInputRef = useRef<HTMLInputElement>(null);
+		const valueRef = useRef(value);
+		valueRef.current = value;
 		const measureRef = useRef<HTMLSpanElement>(null);
 		/** ``true`` — textarea takes the full width, buttons drop to their own row. */
 		const [isStacked, setIsStacked] = useState(false);
@@ -177,6 +195,35 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 
 		// Whether any file is still being processed (block send until all done)
 		const hasProcessing = files.some((f) => f.status === 'processing');
+
+		// Keep the current draft and insert the transcript at the caret instead
+		// of replacing what the user already typed.
+		const insertText = useCallback((text: string) => {
+			const element = textareaRef.current;
+			const current = valueRef.current;
+			const start = element?.selectionStart ?? current.length;
+			const end = element?.selectionEnd ?? start;
+			const before = current.slice(0, start);
+			const after = current.slice(end);
+			const needsSpace =
+				/[A-Za-z0-9]$/.test(before) && /^[A-Za-z0-9]/.test(text);
+			const inserted = needsSpace ? ` ${text}` : text;
+			const next = before + inserted + after;
+			valueRef.current = next;
+			setValue(next);
+			requestAnimationFrame(() => {
+				const node = textareaRef.current;
+				if (!node) return;
+				node.focus();
+				const caret = start + inserted.length;
+				node.setSelectionRange(caret, caret);
+			});
+		}, []);
+
+		const localAsr = useAsrRecorder({
+			enabled: localAsrEnabled && !disabled,
+			onText: insertText,
+		});
 
 		useImperativeHandle(ref, () => ({
 			focus: () => textareaRef.current?.focus(),
@@ -429,6 +476,35 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 						</AttachmentGroup>
 					)}
 
+					{localAsrEnabled && (localAsr.state !== 'idle' || localAsr.error) && (
+						<div className="flex items-center gap-2 px-3 pt-1 text-xs text-muted-foreground">
+							{localAsr.state === 'recording' && (
+								<span className="flex items-center gap-1 text-red-500">
+									<span className="size-1.5 rounded-full bg-red-500" />
+									{t('asr.recording', { time: formatClock(localAsr.seconds) })}
+								</span>
+							)}
+							{localAsr.state === 'transcribing' && (
+								<span className="flex items-center gap-1">
+									<Loader2 className="size-3 animate-spin" />
+									{t('asr.transcribing')}
+								</span>
+							)}
+							{localAsr.state === 'error' && (
+								<>
+									<span className="text-destructive">{localAsr.error}</span>
+									<button
+										type="button"
+										className="underline underline-offset-2"
+										onClick={localAsr.retry}
+									>
+										{t('asr.retry')}
+									</button>
+								</>
+							)}
+						</div>
+					)}
+
 					{/* ``items-end`` in both layouts: the buttons are then already at the
 					    bottom before stacking moves them there, so nothing jumps. */}
 					<div className="relative flex flex-wrap items-end justify-end">
@@ -458,6 +534,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							{/* Stands in for the button cluster below — keep the count, the
 							    gap and the ``size-9`` footprint in step with it. */}
 							<div className="flex shrink-0 gap-2">
+								{localAsrEnabled && <div className="size-9" />}
 								<div className="size-9" />
 								<div className="size-9" />
 							</div>
@@ -523,6 +600,42 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							className="flex shrink-0 items-center gap-2"
 							style={{ height: `${COLLAPSED_HEIGHT_PX}px` }}
 						>
+							{/* Local ASR (server-side SenseVoice) */}
+							{localAsrEnabled && (
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<Button
+											type="button"
+											variant={localAsr.state === 'recording' ? 'default' : 'ghost'}
+											size="icon-lg"
+											onClick={localAsr.toggle}
+											disabled={disabled || localAsr.state === 'transcribing'}
+											aria-label={
+												localAsr.state === 'recording' ? t('asr.stop') : t('asr.start')
+											}
+											className={cn(
+												'shrink-0 rounded-full',
+												localAsr.state === 'recording' &&
+													'bg-red-500 text-white hover:bg-red-500/90',
+											)}
+										>
+											{localAsr.state === 'transcribing' ? (
+												<Loader2 className="size-4 animate-spin" />
+											) : localAsr.state === 'recording' ? (
+												<Square className="size-4" />
+											) : (
+												<Mic className="size-4" />
+											)}
+										</Button>
+									</TooltipTrigger>
+									<TooltipContent>
+										{localAsr.state === 'recording'
+											? t('asr.recording', { time: formatClock(localAsr.seconds) })
+											: t('asr.start')}
+									</TooltipContent>
+								</Tooltip>
+							)}
+
 							{/* Attachment button */}
 							<Tooltip>
 								<TooltipTrigger asChild>

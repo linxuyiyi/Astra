@@ -444,6 +444,26 @@
 		"clear": "Clear selection",
 		"noFallback": "No fallback"
 	},
+	"asr": {
+		"start": "Voice input (local ASR)",
+		"stop": "Stop recording",
+		"transcribing": "Transcribing…",
+		"recording": "Recording {{time}} — click to stop",
+		"retry": "Retry",
+		"empty": "No speech detected",
+		"failed": "Transcription failed",
+		"failedWithStatus": "Transcription failed (HTTP {{status}})",
+		"permission": "Microphone permission denied. Allow it in the browser and retry.",
+		"noDevice": "No microphone found",
+		"unsupported": "This browser does not support recording",
+		"tooLarge": "Recording exceeds the size limit",
+		"tooLong": "Recording exceeds 60 seconds",
+		"timeout": "Transcription timed out. Try again.",
+		"busy": "The ASR service is busy. Try again shortly.",
+		"rateLimited": "Too many requests. Try again later.",
+		"unsupportedFormat": "Unsupported audio format",
+		"notReady": "The ASR service is not ready"
+	},
 	"realtime": {
 		"selectModel": "Voice model",
 		"parameters": "Realtime voice parameters",

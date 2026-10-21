@@ -55,6 +55,7 @@
           class="chat-island"
           :src="islandSrc"
           title="Nexus 对话"
+          allow="microphone"
         />
 
       </article>

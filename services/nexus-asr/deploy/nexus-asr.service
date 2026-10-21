@@ -1,0 +1,53 @@
+[Unit]
+Description=Nexus ASR Server (sherpa-onnx SenseVoice-Small INT8)
+Documentation=file:/opt/nexus-asr/README.md
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=nexus-asr
+Group=nexus-asr
+WorkingDirectory=/opt/nexus-asr
+EnvironmentFile=-/opt/nexus-asr/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=NEXUS_ASR_CONFIG=/opt/nexus-asr/config.yaml
+
+# Verify/download the model before starting. The download only happens on the
+# very first start; once models/ is populated the service is fully offline.
+ExecStartPre=/opt/nexus-asr/.venv/bin/python -m app.preflight
+ExecStart=/opt/nexus-asr/.venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 --port 19899 --workers 1 \
+    --proxy-headers --forwarded-allow-ips=127.0.0.1
+
+# Fail the unit if /health does not become ready within 60 s.
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 60); do /usr/bin/curl -fsS http://127.0.0.1:19899/health >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1'
+
+Restart=always
+RestartSec=3
+TimeoutStartSec=180
+TimeoutStopSec=30
+KillSignal=SIGTERM
+LimitNOFILE=65536
+
+# Hardening. The service only needs to read the source/config and write the
+# model directory (first-run download); conversations are not persisted.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/nexus-asr/models
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+
+[Install]
+WantedBy=multi-user.target

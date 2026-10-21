@@ -1,0 +1,482 @@
+{
+  "meta": {
+    "base": "http://127.0.0.1:19899",
+    "timestamp": "2026-10-21T00:50:31+0800",
+    "python": "3.12.13",
+    "platform": "darwin",
+    "health": {
+      "status": "ok",
+      "service": "nexus-asr",
+      "version": "1.0.0",
+      "model_loaded": true,
+      "model": "sensevoice-small-int8",
+      "uptime_seconds": 15.7,
+      "active_requests": 0,
+      "total_requests": 0,
+      "rejected_requests": 0
+    },
+    "models": {
+      "models": [
+        {
+          "id": "sensevoice-small-int8",
+          "provider": "sherpa-onnx",
+          "loaded": true,
+          "languages": [
+            "zh",
+            "en",
+            "ja",
+            "ko",
+            "yue"
+          ],
+          "sample_rate": 16000,
+          "num_threads": 4,
+          "load_ms": 425.6
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "zh-5s",
+      "file": "zh-5s.wav",
+      "mime": "audio/wav",
+      "reference": "帮我把今天的会议纪要整理一下，重点列出三个待办事项。",
+      "runs": [
+        {
+          "status": 200,
+          "text": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。",
+          "duration": 5.03,
+          "server_total_ms": 55.92,
+          "inference_ms": 52.51,
+          "decode_ms": 3.16,
+          "rtf": 0.0104,
+          "language": "zh",
+          "client_wall_ms": 57.44554199918639,
+          "cer": 0.041666666666666664
+        },
+        {
+          "status": 200,
+          "text": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。",
+          "duration": 5.03,
+          "server_total_ms": 56.07,
+          "inference_ms": 52.53,
+          "decode_ms": 3.31,
+          "rtf": 0.0104,
+          "language": "zh",
+          "client_wall_ms": 57.29554200661369,
+          "cer": 0.041666666666666664
+        },
+        {
+          "status": 200,
+          "text": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。",
+          "duration": 5.03,
+          "server_total_ms": 56.01,
+          "inference_ms": 52.54,
+          "decode_ms": 3.24,
+          "rtf": 0.0104,
+          "language": "zh",
+          "client_wall_ms": 57.58820900518913,
+          "cer": 0.041666666666666664
+        },
+        {
+          "status": 200,
+          "text": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。",
+          "duration": 5.03,
+          "server_total_ms": 56.88,
+          "inference_ms": 53.44,
+          "decode_ms": 3.21,
+          "rtf": 0.0106,
+          "language": "zh",
+          "client_wall_ms": 58.17074999504257,
+          "cer": 0.041666666666666664
+        },
+        {
+          "status": 200,
+          "text": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。",
+          "duration": 5.03,
+          "server_total_ms": 56.19,
+          "inference_ms": 52.81,
+          "decode_ms": 3.16,
+          "rtf": 0.0105,
+          "language": "zh",
+          "client_wall_ms": 57.413375005126,
+          "cer": 0.041666666666666664
+        }
+      ],
+      "summary": {
+        "count": 5,
+        "server_total_p50_ms": 56.1,
+        "server_total_min_ms": 55.9,
+        "server_total_max_ms": 56.9,
+        "client_wall_p50_ms": 57.4,
+        "inference_p50_ms": 52.5,
+        "decode_p50_ms": 3.2,
+        "rtf_p50": 0.0104,
+        "p95_server_total_ms": 56.9
+      }
+    },
+    {
+      "id": "zh-10s",
+      "file": "zh-10s.wav",
+      "mime": "audio/wav",
+      "reference": "明天上午十点我们开一个项目评审会，请提前准备好接口文档、性能测试报告，还有下个季度的排期计划。",
+      "runs": [
+        {
+          "status": 200,
+          "text": "明天上午10点，我们开一个项目评审会，请提前准备好接口文档、性能测试报告，还有下个季度的排期计划。",
+          "duration": 9.932,
+          "server_total_ms": 100.25,
+          "inference_ms": 96.08,
+          "decode_ms": 3.91,
+          "rtf": 0.0097,
+          "language": "zh",
+          "client_wall_ms": 101.71775000344496,
+          "cer": 0.046511627906976744
+        },
+        {
+          "status": 200,
+          "text": "明天上午10点，我们开一个项目评审会，请提前准备好接口文档、性能测试报告，还有下个季度的排期计划。",
+          "duration": 9.932,
+          "server_total_ms": 99.57,
+          "inference_ms": 95.57,
+          "decode_ms": 3.74,
+          "rtf": 0.0096,
+          "language": "zh",
+          "client_wall_ms": 101.0170839872444,
+          "cer": 0.046511627906976744
+        },
+        {
+          "status": 200,
+          "text": "明天上午10点，我们开一个项目评审会，请提前准备好接口文档、性能测试报告，还有下个季度的排期计划。",
+          "duration": 9.932,
+          "server_total_ms": 101.97,
+          "inference_ms": 97.88,
+          "decode_ms": 3.82,
+          "rtf": 0.0099,
+          "language": "zh",
+          "client_wall_ms": 103.98129199165851,
+          "cer": 0.046511627906976744
+        }
+      ],
+      "summary": {
+        "count": 3,
+        "server_total_p50_ms": 100.2,
+        "server_total_min_ms": 99.6,
+        "server_total_max_ms": 102.0,
+        "client_wall_p50_ms": 101.7,
+        "inference_p50_ms": 96.1,
+        "decode_p50_ms": 3.8,
+        "rtf_p50": 0.0097,
+        "p95_server_total_ms": 102.0
+      }
+    },
+    {
+      "id": "zh-30s",
+      "file": "zh-30s.wav",
+      "mime": "audio/wav",
+      "reference": "我们下个季度的重点是把这个语音输入能力接到 Nexus 的聊天窗口里，用户点击麦克风以后就在浏览器本地做识别，不需要把音频上传到服务器。请你先评估 sherpa-onnx 的 WebAssembly 版本在 Mac 上的性能，然后给出 Windows 的兼容性结论，最后整理一份集成方案，包含组件接口、权限处理、缓存策略和降级方案。还要补充中英文混合场景的测试结果。",
+      "runs": [
+        {
+          "status": 200,
+          "text": "我们下个季度的重点是把这个语音输入能力接到nexus的聊天窗口里，用户点击麦克风以后，就在浏览器本地做识别，不需要把音频上传到服务器，请你先评估 web assembly版本在make上的性能，然后给出windows的兼容性结论，最后整理一份集成方案，包含组件接口，权限处理，缓存策略和降级方案，还要补充中英文混合场景的测试结果。",
+          "duration": 30.262,
+          "server_total_ms": 331.1,
+          "inference_ms": 324.19,
+          "decode_ms": 6.37,
+          "rtf": 0.0107,
+          "language": "zh",
+          "client_wall_ms": 335.88887500809506,
+          "cer": 0.08024691358024691
+        },
+        {
+          "status": 200,
+          "text": "我们下个季度的重点是把这个语音输入能力接到nexus的聊天窗口里，用户点击麦克风以后，就在浏览器本地做识别，不需要把音频上传到服务器，请你先评估 web assembly版本在make上的性能，然后给出windows的兼容性结论，最后整理一份集成方案，包含组件接口，权限处理，缓存策略和降级方案，还要补充中英文混合场景的测试结果。",
+          "duration": 30.262,
+          "server_total_ms": 347.4,
+          "inference_ms": 340.31,
+          "decode_ms": 6.48,
+          "rtf": 0.0112,
+          "language": "zh",
+          "client_wall_ms": 349.9794160015881,
+          "cer": 0.08024691358024691
+        },
+        {
+          "status": 200,
+          "text": "我们下个季度的重点是把这个语音输入能力接到nexus的聊天窗口里，用户点击麦克风以后，就在浏览器本地做识别，不需要把音频上传到服务器，请你先评估 web assembly版本在make上的性能，然后给出windows的兼容性结论，最后整理一份集成方案，包含组件接口，权限处理，缓存策略和降级方案，还要补充中英文混合场景的测试结果。",
+          "duration": 30.262,
+          "server_total_ms": 332.18,
+          "inference_ms": 325.39,
+          "decode_ms": 6.24,
+          "rtf": 0.0108,
+          "language": "zh",
+          "client_wall_ms": 334.46374999766704,
+          "cer": 0.08024691358024691
+        }
+      ],
+      "summary": {
+        "count": 3,
+        "server_total_p50_ms": 332.2,
+        "server_total_min_ms": 331.1,
+        "server_total_max_ms": 347.4,
+        "client_wall_p50_ms": 335.9,
+        "inference_p50_ms": 325.4,
+        "decode_p50_ms": 6.4,
+        "rtf_p50": 0.0108,
+        "p95_server_total_ms": 347.4
+      }
+    },
+    {
+      "id": "mixed-1",
+      "file": "mixed-1.wav",
+      "mime": "audio/wav",
+      "reference": "这个 Demo 用 sherpa-onnx 的 WebAssembly 版本跑 SenseVoice 模型，在 Chrome 里做本地推理，RTF 大概是多少？",
+      "runs": [
+        {
+          "status": 200,
+          "text": "这个de用 un web assembly版本跑ense voice模型在chrome里做本地推理rRTF大概是多少？",
+          "duration": 9.659,
+          "server_total_ms": 104.15,
+          "inference_ms": 100.1,
+          "decode_ms": 3.79,
+          "rtf": 0.0104,
+          "language": "zh",
+          "client_wall_ms": 106.03179100144189,
+          "cer": 0.2153846153846154
+        },
+        {
+          "status": 200,
+          "text": "这个de用 un web assembly版本跑ense voice模型在chrome里做本地推理rRTF大概是多少？",
+          "duration": 9.659,
+          "server_total_ms": 102.01,
+          "inference_ms": 98.07,
+          "decode_ms": 3.71,
+          "rtf": 0.0102,
+          "language": "zh",
+          "client_wall_ms": 103.48687499936204,
+          "cer": 0.2153846153846154
+        }
+      ],
+      "summary": {
+        "count": 2,
+        "server_total_p50_ms": 103.1,
+        "server_total_min_ms": 102.0,
+        "server_total_max_ms": 104.2,
+        "client_wall_p50_ms": 104.8,
+        "inference_p50_ms": 99.1,
+        "decode_p50_ms": 3.8,
+        "rtf_p50": 0.0103,
+        "p95_server_total_ms": 104.2
+      }
+    },
+    {
+      "id": "mixed-2",
+      "file": "mixed-2.wav",
+      "mime": "audio/wav",
+      "reference": "请把 Nexus 的 Vue3 组件接上麦克风，检查 getUserMedia 权限，然后对比 INT8 和 FP32 的准确率。",
+      "runs": [
+        {
+          "status": 200,
+          "text": "请把nexus3组件接上麦克风，检查get user media权限，然后对比int8和FT32的准确率。",
+          "duration": 10.199,
+          "server_total_ms": 102.04,
+          "inference_ms": 98.05,
+          "decode_ms": 3.75,
+          "rtf": 0.0096,
+          "language": "zh",
+          "client_wall_ms": 103.52608299581334,
+          "cer": 0.09615384615384616
+        },
+        {
+          "status": 200,
+          "text": "请把nexus3组件接上麦克风，检查get user media权限，然后对比int8和FT32的准确率。",
+          "duration": 10.199,
+          "server_total_ms": 101.15,
+          "inference_ms": 97.18,
+          "decode_ms": 3.7,
+          "rtf": 0.0095,
+          "language": "zh",
+          "client_wall_ms": 102.64445800567046,
+          "cer": 0.09615384615384616
+        }
+      ],
+      "summary": {
+        "count": 2,
+        "server_total_p50_ms": 101.6,
+        "server_total_min_ms": 101.2,
+        "server_total_max_ms": 102.0,
+        "client_wall_p50_ms": 103.1,
+        "inference_p50_ms": 97.6,
+        "decode_p50_ms": 3.7,
+        "rtf_p50": 0.0095,
+        "p95_server_total_ms": 102.0
+      }
+    },
+    {
+      "id": "official-zh",
+      "file": "zh.wav",
+      "mime": "audio/wav",
+      "reference": "开放时间早上9点至下午5点。",
+      "runs": [
+        {
+          "status": 200,
+          "text": "开放时间早上9点至下午5点。",
+          "duration": 5.592,
+          "server_total_ms": 60.84,
+          "inference_ms": 57.46,
+          "decode_ms": 3.19,
+          "rtf": 0.0103,
+          "language": "zh",
+          "client_wall_ms": 62.306207997608,
+          "cer": 0.0
+        },
+        {
+          "status": 200,
+          "text": "开放时间早上9点至下午5点。",
+          "duration": 5.592,
+          "server_total_ms": 62.51,
+          "inference_ms": 58.52,
+          "decode_ms": 3.76,
+          "rtf": 0.0105,
+          "language": "zh",
+          "client_wall_ms": 63.863167000818066,
+          "cer": 0.0
+        }
+      ],
+      "summary": {
+        "count": 2,
+        "server_total_p50_ms": 61.7,
+        "server_total_min_ms": 60.8,
+        "server_total_max_ms": 62.5,
+        "client_wall_p50_ms": 63.1,
+        "inference_p50_ms": 58.0,
+        "decode_p50_ms": 3.5,
+        "rtf_p50": 0.0104,
+        "p95_server_total_ms": 62.5
+      }
+    },
+    {
+      "id": "official-en",
+      "file": "en.wav",
+      "mime": "audio/wav",
+      "reference": "The tribal chieftain called for the boy and presented him with 50 pieces of code.",
+      "runs": [
+        {
+          "status": 200,
+          "text": "The tribal chieftain called for the boy and presented him with 50 pieces of code.",
+          "duration": 7.152,
+          "server_total_ms": 82.12,
+          "inference_ms": 77.91,
+          "decode_ms": 3.94,
+          "rtf": 0.0109,
+          "language": "en",
+          "client_wall_ms": 83.46141599758994,
+          "cer": 0.0
+        },
+        {
+          "status": 200,
+          "text": "The tribal chieftain called for the boy and presented him with 50 pieces of code.",
+          "duration": 7.152,
+          "server_total_ms": 76.88,
+          "inference_ms": 73.18,
+          "decode_ms": 3.47,
+          "rtf": 0.0102,
+          "language": "en",
+          "client_wall_ms": 78.13745900057256,
+          "cer": 0.0
+        }
+      ],
+      "summary": {
+        "count": 2,
+        "server_total_p50_ms": 79.5,
+        "server_total_min_ms": 76.9,
+        "server_total_max_ms": 82.1,
+        "client_wall_p50_ms": 80.8,
+        "inference_p50_ms": 75.5,
+        "decode_p50_ms": 3.7,
+        "rtf_p50": 0.0106,
+        "p95_server_total_ms": 82.1
+      }
+    },
+    {
+      "id": "zh-5s",
+      "file": "zh-5s.webm",
+      "mime": "audio/webm",
+      "reference": "帮我把今天的会议纪要整理一下，重点列出三个待办事项。",
+      "runs": [
+        {
+          "status": 200,
+          "text": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。",
+          "duration": 5.03,
+          "server_total_ms": 65.26,
+          "inference_ms": 57.34,
+          "decode_ms": 7.74,
+          "rtf": 0.0114,
+          "language": "zh",
+          "client_wall_ms": 66.4343749958789,
+          "cer": 0.041666666666666664
+        },
+        {
+          "status": 200,
+          "text": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。",
+          "duration": 5.03,
+          "server_total_ms": 61.3,
+          "inference_ms": 54.06,
+          "decode_ms": 7.05,
+          "rtf": 0.0107,
+          "language": "zh",
+          "client_wall_ms": 62.53462500171736,
+          "cer": 0.041666666666666664
+        },
+        {
+          "status": 200,
+          "text": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。",
+          "duration": 5.03,
+          "server_total_ms": 64.85,
+          "inference_ms": 57.09,
+          "decode_ms": 7.53,
+          "rtf": 0.0113,
+          "language": "zh",
+          "client_wall_ms": 66.05195799784269,
+          "cer": 0.041666666666666664
+        }
+      ],
+      "summary": {
+        "count": 3,
+        "server_total_p50_ms": 64.8,
+        "server_total_min_ms": 61.3,
+        "server_total_max_ms": 65.3,
+        "client_wall_p50_ms": 66.1,
+        "inference_p50_ms": 57.1,
+        "decode_p50_ms": 7.5,
+        "rtf_p50": 0.0113,
+        "p95_server_total_ms": 65.3
+      }
+    }
+  ],
+  "sequential_20": {
+    "count": 20,
+    "successes": 20,
+    "errors": [],
+    "p50_wall_ms": 61.4,
+    "p95_wall_ms": 63.5,
+    "max_wall_ms": 63.6
+  },
+  "concurrency_8": {
+    "count": 8,
+    "wall_ms": 419.0,
+    "successes": 8,
+    "errors": [],
+    "p50_wall_ms": 259.2,
+    "max_wall_ms": 409.1
+  },
+  "resources": {
+    "pid": 40298,
+    "idle_rss_mb": 796.1,
+    "peak_rss_mb": 800.4,
+    "cpu_seconds": 1.23,
+    "wall_seconds": 0.34,
+    "cpu_percent_one_core": 362.1,
+    "status": 200,
+    "server_total_ms": 336.98
+  }
+}

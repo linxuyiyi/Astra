@@ -103,8 +103,8 @@ def test_mysql_official_storage_round_trip(monkeypatch):
             with patch(
                 "agentscope.app.storage._sql._storage._utcnow",
                 side_effect=[
-                    datetime(2026, 10, 21, 0, 0, 0, 100000),
-                    datetime(2026, 10, 21, 0, 0, 0, 200000),
+                    datetime(2026, 10, 21, 0, 0, 0, 100000),  # noqa: DTZ001 - official _utcnow uses naive UTC
+                    datetime(2026, 10, 21, 0, 0, 0, 200000),  # noqa: DTZ001 - official _utcnow uses naive UTC
                 ],
             ):
                 await storage.upsert_message("mysql-test", session.id, earlier)

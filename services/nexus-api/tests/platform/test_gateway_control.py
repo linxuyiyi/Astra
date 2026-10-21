@@ -31,6 +31,7 @@ from app.gateway.probe import HttpGatewayProbeClient, ProbeOutcome
 from app.gateway.proxy import GatewayProxy
 from app.gateway.runtime import (
     SCOPE_NODE,
+    SCOPE_PROBE,
     InMemoryRuntimeStore,
     node_runtime_scope,
 )
@@ -1121,3 +1122,99 @@ def test_changing_verification_inputs_invalidates_previous_health(gateway_env):
             return await gateway_env.runtime.health(scope)
 
         assert asyncio.run(runtime_health()) is None
+
+
+def test_duplicate_manual_probe_is_rejected_while_a_round_is_running(gateway_env):
+    with TestClient(app) as client:
+        pool = create_pool(client)
+        node = create_node(client, pool["id"])
+
+        async def hold_lease():
+            return await gateway_env.runtime.acquire(SCOPE_PROBE, node["id"], 1, 60)
+
+        lease = asyncio.run(hold_lease())
+        try:
+            blocked = client.post(f"/api/gateway/nodes/{node['id']}/probe", json={})
+            assert blocked.status_code == 409, blocked.text
+            assert "探测" in blocked.json()["detail"]
+        finally:
+            asyncio.run(gateway_env.runtime.release(SCOPE_PROBE, node["id"], lease))
+
+        # 租约释放后可以正常探测，且只新增一条轮次。
+        ok = client.post(f"/api/gateway/nodes/{node['id']}/probe", json={})
+        assert ok.status_code == 200, ok.text
+
+        async def run_count() -> int:
+            async with SessionLocal() as session:
+                return int(
+                    await session.scalar(
+                        select(func.count())
+                        .select_from(GatewayProbeRun)
+                        .where(GatewayProbeRun.node_id == node["id"])
+                    )
+                    or 0
+                )
+
+        assert asyncio.run(run_count()) == 1
+        assert len(gateway_env.probe.calls) == 1
+
+
+def test_late_probe_round_does_not_overwrite_newer_health(gateway_env):
+    from datetime import timedelta
+
+    from app.gateway.models import utcnow as gateway_now
+
+    with TestClient(app) as client:
+        pool = create_pool(client)
+        node = create_node(client, pool["id"])
+        for _ in range(2):
+            assert client.post(f"/api/gateway/nodes/{node['id']}/probe", json={}).status_code == 200
+        assert client.get(f"/api/gateway/nodes/{node['id']}").json()["health_state"] == "HEALTHY"
+
+        async def apply_late_round():
+            async with SessionLocal() as session:
+                db_node = await session.get(GatewayNode, node["id"])
+                # 模拟已投影更新的轮次后再到达一条更旧的失败轮次。
+                db_node.last_checked_at = gateway_now() + timedelta(seconds=60)
+                await session.commit()
+                scope = node_runtime_scope(db_node)
+            await record_background_probe(
+                SessionLocal,
+                node["id"],
+                [ProbeOutcome("STREAM", False, 1)],
+                expected_scope=scope,
+            )
+            async with SessionLocal() as session:
+                return (await session.get(GatewayNode, node["id"])).health_state
+
+        assert asyncio.run(apply_late_round()) == "HEALTHY"
+
+
+def test_failed_projection_is_marked_and_recovered_without_losing_the_run(gateway_env):
+    with TestClient(app) as client:
+        pool = create_pool(client)
+        node = create_node(client, pool["id"])
+        runtime = gateway_env.runtime
+        original = runtime.record_probe
+        state = {"fail": True}
+
+        async def flaky(*args, **kwargs):
+            if state["fail"]:
+                state["fail"] = False
+                raise RuntimeError("redis down")
+            return await original(*args, **kwargs)
+
+        runtime.record_probe = flaky
+
+        # 投影失败不影响轮次与 DB 健康；标记待补投影。
+        first = client.post(f"/api/gateway/nodes/{node['id']}/probe", json={})
+        assert first.status_code == 200, first.text
+        detail = client.get(f"/api/gateway/nodes/{node['id']}").json()["health_detail"]
+        assert detail.get("projection_pending") is True
+
+        # 下一次操作先补投影（不重复上一轮探测），成功后清除标记。
+        second = client.post(f"/api/gateway/nodes/{node['id']}/probe", json={})
+        assert second.status_code == 200, second.text
+        detail = client.get(f"/api/gateway/nodes/{node['id']}").json()["health_detail"]
+        assert not detail.get("projection_pending")
+        assert len(gateway_env.probe.calls) == 2

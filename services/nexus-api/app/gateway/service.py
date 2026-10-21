@@ -19,6 +19,7 @@ from app.gateway.health import (
     probe_detail,
     probe_success,
     record_health_transition,
+    run_is_newer,
 )
 from app.gateway.models import (
     AUTH_NONE,
@@ -46,7 +47,12 @@ from app.gateway.probe import (
     probe_types_for_strategy,
     strategy_for_types,
 )
-from app.gateway.runtime import SCOPE_NODE, RuntimeStore, node_runtime_scope
+from app.gateway.runtime import (
+    SCOPE_NODE,
+    SCOPE_PROBE,
+    RuntimeStore,
+    node_runtime_scope,
+)
 from app.gateway.schemas import (
     AuditEventRead,
     GatewayKeyCreate,
@@ -69,6 +75,8 @@ from app.models import utcnow
 
 # 探测失败时熔断打开窗口：与数据面保持一致（OPEN 30 秒后进入 HALF_OPEN）。
 RUNTIME_CIRCUIT_OPEN_SECONDS = 30
+# 探测独占租约的兜底 TTL：探测本身受节点请求超时约束，这里防止实例崩溃后永久占锁。
+PROBE_LEASE_SECONDS = 120
 VALID_CONFIG_STATES = {CONFIG_ENABLED, CONFIG_DISABLED}
 VALID_SCHEDULING_STATES = {SCHEDULING_ACTIVE, SCHEDULING_DRAINING, SCHEDULING_BLOCKED}
 VALID_QUOTA_POLICIES = {"STOP", "ALERT", "RECORD"}
@@ -415,9 +423,14 @@ class GatewayControlService:
         if unknown:
             raise GatewayConflict(f"未知探测类型: {', '.join(unknown)}")
         api_key = self._cipher.decrypt(node.api_key_encrypted) if node.api_key_encrypted else None
+        await self._reconcile_projection(node)
+        lease = await self._acquire_probe_lease(node)
         started_at = utcnow()
         started_clock = time.monotonic()
-        outcomes = await self._probe_client.probe(node, selected, api_key)
+        try:
+            outcomes = await self._probe_client.probe(node, selected, api_key)
+        finally:
+            await self._release_probe_lease(node, lease)
         duration_ms = int((time.monotonic() - started_clock) * 1000)
         run = build_probe_run(
             node,
@@ -430,11 +443,17 @@ class GatewayControlService:
         self._session.add(run)
         success = probe_success(outcomes)
         previous_health = node.health_state
-        if probe_complete(outcomes, probe_types_for_strategy(strategy_for_types(selected))):
+        if run_is_newer(node, run) and probe_complete(
+            outcomes, probe_types_for_strategy(strategy_for_types(selected))
+        ):
             apply_probe_outcome(node, success=success)
             record_health_transition(self._session, node, previous_health)
             node.health_detail = probe_detail(node, outcomes)
-            await self._record_runtime_probe(node, success, node.health_detail)
+            projected = await self._record_runtime_probe(
+                node, success, node.health_detail, run=run
+            )
+            if not projected:
+                node.health_detail = {**node.health_detail, "projection_pending": True}
         else:
             # 局部探测不推进健康也不写运行态：只有完整 NETWORK/SERVICE/MODEL/STREAM
             # 结果才能让节点脱离 UNKNOWN，避免局部成功被误判为可调度。
@@ -641,9 +660,30 @@ class GatewayControlService:
             key.revoked_at = utcnow()
 
 
+    async def _acquire_probe_lease(self, node: GatewayNode) -> str | None:
+        if self._runtime is None:
+            return None
+        lease = await self._runtime.acquire(SCOPE_PROBE, node.id, 1, PROBE_LEASE_SECONDS)
+        if lease is None:
+            raise GatewayConflict("该节点已有探测正在进行，请等待本次轮次结束")
+        return lease
+
+    async def _release_probe_lease(self, node: GatewayNode, lease: str | None) -> None:
+        if self._runtime is None or lease is None:
+            return
+        try:
+            await self._runtime.release(SCOPE_PROBE, node.id, lease)
+        except Exception:  # noqa: BLE001 - 租约到期自动回收
+            return
+
     async def _record_runtime_probe(
-        self, node: GatewayNode, success: bool, detail: dict[str, Any]
-    ) -> None:
+        self,
+        node: GatewayNode,
+        success: bool,
+        detail: dict[str, Any],
+        *,
+        run: GatewayProbeRun | None = None,
+    ) -> bool:
         """把探测结果写入当前连接指纹作用域，供数据面读取最新健康态。
 
         连接参数变化后，探测结果落在新作用域，刷新前请求所用的旧连接健康与
@@ -651,16 +691,50 @@ class GatewayControlService:
         """
 
         if self._runtime is None:
-            return
+            return True
         scope = node_runtime_scope(node)
+        at_ms = None
+        if run is not None and run.finished_at is not None:
+            at_ms = int(run.finished_at.timestamp() * 1000)
         try:
-            await self._runtime.record_probe(scope, success=success, detail=detail)
+            await self._runtime.record_probe(
+                scope, success=success, detail=detail, at_ms=at_ms
+            )
             if success:
                 await self._runtime.set_circuit_closed(scope)
             else:
                 await self._runtime.set_circuit_open(scope, self._circuit_open_seconds)
+            return True
         except Exception:  # noqa: BLE001 - 运行态写入失败不阻断控制面响应
-            pass
+            # 轮次与 DB 投影已提交；标记待补投影，下一次操作只补 Redis，不重复探测。
+            return False
+
+    async def _reconcile_projection(self, node: GatewayNode) -> None:
+        """把上次投影失败的轮次补写进运行态；只读最新轮次，不发起探测。"""
+
+        if self._runtime is None or not (node.health_detail or {}).get("projection_pending"):
+            return
+        latest = await self._session.scalar(
+            select(GatewayProbeRun)
+            .where(GatewayProbeRun.node_id == node.id)
+            .order_by(GatewayProbeRun.finished_at.desc(), GatewayProbeRun.id.desc())
+            .limit(1)
+        )
+        if latest is None:
+            return
+        projected = await self._record_runtime_probe(
+            node,
+            latest.success,
+            {k: v for k, v in (node.health_detail or {}).items() if k != "projection_pending"},
+            run=latest,
+        )
+        if projected:
+            node.health_detail = {
+                key: value
+                for key, value in (node.health_detail or {}).items()
+                if key != "projection_pending"
+            }
+            await self._commit()
 
 
     # ── 脱敏 / 序列化 ──────────────────────────────────────────────────

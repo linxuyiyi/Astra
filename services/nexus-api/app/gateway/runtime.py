@@ -32,6 +32,8 @@ CIRCUIT_HALF_OPEN = "HALF_OPEN"
 
 SCOPE_NODE = "node"
 SCOPE_KEY = "key"
+# 探测独占租约：手动与自动探测跨实例共用，避免并发重复上游请求。
+SCOPE_PROBE = "probe"
 
 # 节点健康态：与持久化模型保持同一组取值。
 HEALTH_UNKNOWN = "UNKNOWN"
@@ -116,6 +118,12 @@ return count
 
 _RECORD_PROBE_LUA = """
 local success = ARGV[1] == '1'
+local at_ms = tonumber(ARGV[7] or '0')
+local applied_at = tonumber(redis.call('HGET', KEYS[1], 'updated_at_ms') or '0')
+if at_ms > 0 and at_ms < applied_at then
+  -- 晚到的轮次不得覆盖已经投影的更新结果。
+  return redis.call('HGET', KEYS[1], 'state') or 'UNKNOWN'
+end
 local state = redis.call('HGET', KEYS[1], 'state') or 'UNKNOWN'
 local ss = tonumber(redis.call('HGET', KEYS[1], 'success_streak') or '0')
 local fs = tonumber(redis.call('HGET', KEYS[1], 'failure_streak') or '0')
@@ -133,7 +141,8 @@ redis.call('HSET', KEYS[1],
   'success_streak', ss,
   'failure_streak', fs,
   'last_checked_at', ARGV[5],
-  'detail', ARGV[4])
+  'detail', ARGV[4],
+  'updated_at_ms', at_ms)
 redis.call('EXPIRE', KEYS[1], ARGV[6])
 return state
 """
@@ -425,6 +434,7 @@ class RuntimeStore(Protocol):
         *,
         success: bool,
         detail: dict[str, Any] | None = None,
+        at_ms: int | None = None,
     ) -> str: ...
 
     async def health(self, node_id: str) -> str | None: ...
@@ -585,6 +595,7 @@ class RedisRuntimeStore:
         *,
         success: bool,
         detail: dict[str, Any] | None = None,
+        at_ms: int | None = None,
     ) -> str:
         self._connection()
         result = await self._scripts["record_probe"](
@@ -596,6 +607,7 @@ class RedisRuntimeStore:
                 json.dumps(detail or {}, ensure_ascii=False),
                 datetime.now().isoformat(),
                 HEALTH_TTL_SECONDS,
+                int(at_ms or _now_ms()),
             ],
         )
         return str(result)
@@ -876,7 +888,9 @@ class InMemoryRuntimeStore:
         *,
         success: bool,
         detail: dict[str, Any] | None = None,
+        at_ms: int | None = None,
     ) -> str:
+        stamp = int(at_ms or _now_ms())
         entry = self._health.setdefault(
             node_id,
             {
@@ -885,8 +899,11 @@ class InMemoryRuntimeStore:
                 "failure_streak": 0,
                 "last_checked_at": None,
                 "detail": {},
+                "updated_at_ms": 0,
             },
         )
+        if stamp < int(entry.get("updated_at_ms") or 0):
+            return str(entry["state"])
         if success:
             entry["success_streak"] += 1
             entry["failure_streak"] = 0

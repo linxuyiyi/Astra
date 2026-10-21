@@ -82,6 +82,7 @@ from app.gateway.runtime import (
     CIRCUIT_HALF_OPEN,
     SCOPE_KEY,
     SCOPE_NODE,
+    SCOPE_PROBE,
     RedisRuntimeStore,
     RuntimeStore,
     usage_buckets,
@@ -99,6 +100,8 @@ from app.gateway.scheduler import (
 from app.gateway.security import CredentialCipher, CredentialError, gateway_key_digest
 
 CHAT_PATH = "/v1/chat/completions"
+# 与控制面一致：探测租约 TTL，实例崩溃后自动过期。
+PROBE_LEASE_SECONDS = 120
 MODELS_PATH = "/v1/models"
 
 # 请求体上限：Content-Length 可提前拒绝，但仍按实际流字节强制，避免声明头被绕过。
@@ -564,19 +567,30 @@ class GatewayDataPlane:
             api_key = self._decode_node_key(node)
         except GatewayDataPlaneError:
             api_key = None
+        # 手动与自动探测共享同一把跨实例租约：任一实例在探测时，其他实例跳过本轮。
+        try:
+            lease = await self.runtime.acquire(SCOPE_PROBE, node.id, 1, PROBE_LEASE_SECONDS)
+        except Exception:  # noqa: BLE001 - 运行态不可用时本轮跳过，不计失败
+            return
+        if lease is None:
+            return
         # 常规验证收敛为一次 SSE；策略由节点保存值决定，专项验证为一次非流式。
         selected = probe_types_for_strategy(getattr(node, "probe_strategy", "SSE"))
         try:
             outcomes = await self.probe_client.probe(node, selected, api_key)
         except Exception:  # noqa: BLE001 - 探测本身失败按一次失败计入
             outcomes = []
+        finally:
+            await self._safe_release(SCOPE_PROBE, node.id, lease)
         success = probe_success(outcomes)
         detail = {
             "checked": len(outcomes),
             "failed": sum(1 for outcome in outcomes if not outcome.success),
         }
         try:
-            await self.runtime.record_probe(scope, success=success, detail=detail)
+            await self.runtime.record_probe(
+                scope, success=success, detail=detail, at_ms=int(utcnow().timestamp() * 1000)
+            )
             if success:
                 await self.runtime.set_circuit_closed(scope)
             else:

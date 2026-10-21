@@ -48,6 +48,7 @@ from app.gateway.runtime import (
     REVOKED_KEYS_KEY,
     SCOPE_KEY,
     SCOPE_NODE,
+    SCOPE_PROBE,
     CircuitSnapshot,
     InMemoryRuntimeStore,
     RedisRuntimeStore,
@@ -2484,3 +2485,58 @@ async def test_stream_body_records_an_upstream_error_after_content(cipher):
     latest = (await _fetch_logs())[0]
     assert latest.error_code == "STREAM_INTERRUPTED"
     assert latest.stream_interrupted is True
+
+
+def test_background_probe_skips_when_another_instance_holds_the_lease(cipher, upstream):
+    probe = FakeProbe()
+    kv = build_plane(
+        upstream,
+        config=build_config(cipher),
+        cipher=cipher,
+        probe_client=probe,
+        seed_snapshot_health=False,
+    )
+    node = kv.plane.config_state.config.nodes[NODE_A]
+
+    async def scenario():
+        lease = await kv.store.acquire(SCOPE_PROBE, node.id, 1, 60)
+        try:
+            await kv.plane._probe_node(node)
+        finally:
+            await kv.store.release(SCOPE_PROBE, node.id, lease)
+        return list(probe.calls)
+
+    assert asyncio.run(scenario()) == []
+    assert asyncio.run(kv.store.health(node.runtime_scope)) is None
+
+
+def test_runtime_flush_requires_a_fresh_verification(cipher, upstream):
+    probe = FakeProbe()
+    kv = build_plane(
+        upstream,
+        config=build_config(cipher),
+        cipher=cipher,
+        probe_client=probe,
+        seed_snapshot_health=False,
+    )
+    node = kv.plane.config_state.config.nodes[NODE_A]
+    scope = node.runtime_scope
+
+    async def scenario():
+        for _ in range(2):
+            await kv.plane._probe_node(node)
+        healthy = await kv.store.health(scope)
+        await kv.store.reset_health(scope)
+        after_flush = await kv.store.health(scope)
+        # 一次成功探测只到 streak=1，历史轮次不能把它直接判回 HEALTHY。
+        await kv.plane._probe_node(node)
+        one_round = await kv.store.health(scope)
+        await kv.plane._probe_node(node)
+        recovered = await kv.store.health(scope)
+        return healthy, after_flush, one_round, recovered
+
+    healthy, after_flush, one_round, recovered = asyncio.run(scenario())
+    assert healthy == "HEALTHY"
+    assert after_flush is None
+    assert one_round == "UNKNOWN"
+    assert recovered == "HEALTHY"

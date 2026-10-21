@@ -53,11 +53,9 @@ load_env_file "$SCRIPT_DIR/../env/.env"
 : "${NEXUS_BIND_HOST:=127.0.0.1}"
 : "${OPENAI_BASE_URL:=https://api.deepseek.com}"
 : "${OPENAI_MODEL:=deepseek-flash}"
-: "${LLM_WIKI_LOCAL_PORT:=19828}"; : "${LLM_WIKI_REMOTE_PORT:=18080}"
 : "${REMOTE_WORKER_ID:=p2-remote}"; : "${REMOTE_WORKER_USER:=root}"; : "${REMOTE_WORKER_PORT:=22}"
 : "${REMOTE_WORKER_OPENCODE_PORT:=14096}"; : "${REMOTE_WORKER_WORKSPACE:=/root/nexus-remote}"
 PORTS=(6379 18000 18110 18120 18201 18202 14096)
-[ "$WITH_WIKI" = 1 ] && PORTS+=("$LLM_WIKI_LOCAL_PORT")
 
 ver_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -1)" = "$2" ]; }
 oc_ver() { printf '%s' "$1" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
@@ -103,10 +101,7 @@ preflight() {
     [ "$x" = 200 ] && ok "DeepSeek /models 200" || note "DeepSeek /models 返回 $x（上游繁忙时可稍后重试）"
   fi
   if [ "$WITH_WIKI" = 1 ]; then
-    [ -n "${LLM_WIKI_BUNDLE:-}" ] && [ -e "$LLM_WIKI_BUNDLE" ] && ok "llm_wiki bundle 存在" || bad "--with-llm-wiki 需要 LLM_WIKI_BUNDLE（Web Edition zip/目录）"
-    [ -z "${LLM_WIKI_HOST:-}" ] || have ssh || bad "需要 ssh"
-    [ -z "${LLM_WIKI_SSH_PASSWORD:-}" ] || have sshpass || bad "LLM_WIKI_SSH_PASSWORD 需要 sshpass"
-    have google-chrome || have chromium || have chromium-browser || bad "ingest pump 需要 Chrome/Chromium"
+    [ -n "${ASTRA_LLM_WIKI_API_BASE_URL:-}" ] && ok "llm_wiki 地址已配置" || bad "--with-llm-wiki 需要 ASTRA_LLM_WIKI_API_BASE_URL（例如 http://10.0.0.8:19828/api/v1）"
   fi
   if [ -n "$REMOTE_WORKER" ]; then
     [ -n "${REMOTE_WORKER_SSH_PASSWORD:-}" ] && ok "远程 Worker 密码已提供" || bad "--remote-worker 需要 REMOTE_WORKER_SSH_PASSWORD"
@@ -197,9 +192,9 @@ step_secrets() {
   upsert_kv "$SECRETS" DEEPSEEK_API_KEY "$DEEPSEEK_API_KEY"
   upsert_kv "$SECRETS" OPENAI_API_KEY "$DEEPSEEK_API_KEY"
   if [ "$WITH_WIKI" = 1 ]; then
-    v="${LLM_WIKI_API_TOKEN:-$(get_kv "$SECRETS" ASTRA_LLM_WIKI_API_TOKEN)}"; [ -n "$v" ] || v="$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')"
+    v="${ASTRA_LLM_WIKI_API_TOKEN:-$(get_kv "$SECRETS" ASTRA_LLM_WIKI_API_TOKEN)}"; [ -n "$v" ] || v="$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')"
     upsert_kv "$SECRETS" ASTRA_LLM_WIKI_API_TOKEN "$v"
-    v="${LLM_WIKI_PROJECT_ID:-$(get_kv "$SECRETS" ASTRA_LLM_WIKI_PROJECT_ID)}"; [ -n "$v" ] || v="$(python3 -c 'import uuid;print(uuid.uuid4())')"
+    v="${ASTRA_LLM_WIKI_PROJECT_ID:-$(get_kv "$SECRETS" ASTRA_LLM_WIKI_PROJECT_ID)}"; [ -n "$v" ] || v="$(python3 -c 'import uuid;print(uuid.uuid4())')"
     upsert_kv "$SECRETS" ASTRA_LLM_WIKI_PROJECT_ID "$v"
   fi
 }
@@ -244,7 +239,7 @@ NEXUS_EXPERIENCE_REVIEW_MAX_CONCURRENCY=2
 ENV
   if [ "$WITH_WIKI" = 1 ]; then cat <<ENV
 ASTRA_LLM_WIKI_ENABLED=true
-ASTRA_LLM_WIKI_API_BASE_URL=http://127.0.0.1:$LLM_WIKI_LOCAL_PORT/api/v1
+ASTRA_LLM_WIKI_API_BASE_URL=$ASTRA_LLM_WIKI_API_BASE_URL
 ASTRA_LLM_WIKI_TIMEOUT=30
 ENV
   fi; } > "$RUNENV.new"
@@ -377,107 +372,16 @@ PY
   ) || warn "网关路由配置失败，请在管理台「API 中转」手工配置（见指南 §5.8）"
 }
 
-# ---------- llm_wiki (Web Edition) ----------
-wiki_ssh() { if [ -n "${LLM_WIKI_SSH_PASSWORD:-}" ]; then SSHPASS="$LLM_WIKI_SSH_PASSWORD" sshpass -e ssh -o StrictHostKeyChecking=accept-new "root@$LLM_WIKI_HOST" "$@"; else ssh -o StrictHostKeyChecking=accept-new "root@$LLM_WIKI_HOST" "$@"; fi; }
-wiki_scp() { if [ -n "${LLM_WIKI_SSH_PASSWORD:-}" ]; then SSHPASS="$LLM_WIKI_SSH_PASSWORD" sshpass -e scp -q "$1" "root@$LLM_WIKI_HOST:$2"; else scp -q "$1" "root@$LLM_WIKI_HOST:$2"; fi; }
-
+# ---------- llm_wiki（已有服务器版本，按局域网地址接入） ----------
 step_llm_wiki() {
   [ "$WITH_WIKI" = 1 ] || return 0
-  log "llm_wiki Web Edition"
-  local bundle="$LLM_WIKI_BUNDLE" tmp; tmp="$(mktemp -d)"
-  if [ -d "$bundle" ]; then tar czf "$tmp/app.tgz" -C "$(dirname "$bundle")" "$(basename "$bundle")"
-  else (cd "$tmp" && unzip -q "$bundle" && tar xzf ./*.tar.gz && rm -f ./*.tar.gz* && tar czf app.tgz llm-wiki-web-*); fi
-  local arch_b; arch_b="$(basename "$(tar tzf "$tmp/app.tgz" | head -1)" | grep -oE 'aarch64|x86_64' || echo aarch64)"
-  local remote_script; remote_script=$(cat <<RS
-set -e
-mkdir -p /opt/llm-wiki-web-build /var/lib/llm-wiki && chmod 700 /var/lib/llm-wiki
-cd /opt/llm-wiki-web-build && rm -rf app && mkdir app && tar xzf /tmp/llm-wiki-app.tgz -C app && rm -f /tmp/llm-wiki-app.tgz
-APPDIR=\$(ls app | head -1)
-command -v docker >/dev/null || { curl -fsSL -o /tmp/d.tgz https://download.docker.com/linux/static/stable/\$(uname -m)/docker-27.3.1.tgz && tar xzf /tmp/d.tgz -C /tmp && cp /tmp/docker/* /usr/bin/ && printf '[Unit]\nAfter=network-online.target\n[Service]\nExecStart=/usr/bin/dockerd\nRestart=always\nDelegate=yes\nKillMode=process\n[Install]\nWantedBy=multi-user.target\n' > /etc/systemd/system/docker.service && systemctl daemon-reload && systemctl enable --now docker && sleep 5; }
-PLAT=linux/arm64; NODEARCH=arm64; [ "$arch_b" = x86_64 ] && { PLAT=linux/amd64; NODEARCH=x64; }
-QEMU=""
-if [ "$arch_b" = aarch64 ] && [ "\$(uname -m)" = x86_64 ]; then
-  [ -x /usr/bin/qemu-aarch64-static ] || curl -fsSL -o /usr/bin/qemu-aarch64-static https://github.com/multiarch/qemu-user-static/releases/download/v7.2.0-1/qemu-aarch64-static
-  chmod 755 /usr/bin/qemu-aarch64-static; cp /usr/bin/qemu-aarch64-static .
-  mountpoint -q /proc/sys/fs/binfmt_misc || mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc
-  [ -e /proc/sys/fs/binfmt_misc/qemu-aarch64 ] || echo ':qemu-aarch64:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xb7\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/qemu-aarch64-static:' > /proc/sys/fs/binfmt_misc/register
-  QEMU="COPY qemu-aarch64-static /usr/bin/qemu-aarch64-static"
-fi
-[ -f node.tar.xz ] || curl -fsSL -o node.tar.xz https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-\$NODEARCH.tar.xz
-printf 'FROM --platform=%s ubuntu:22.04\n%s\nADD node.tar.xz /opt/\nENV PATH=/opt/node-v20.18.1-linux-%s/bin:\$PATH\nRUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*\nCOPY app/%s/ /opt/llm-wiki-web/\nWORKDIR /opt/llm-wiki-web\nCMD ["./start.sh"]\n' "\$PLAT" "\$QEMU" "\$NODEARCH" "\$APPDIR" > Dockerfile
-docker build -q --platform \$PLAT -t llm-wiki-web:latest . >/dev/null
-docker rm -f llm-wiki-web >/dev/null 2>&1 || true
-docker run -d --name llm-wiki-web --restart=always --network host -e LLM_WIKI_DATA_DIR=/var/lib/llm-wiki -e LLM_WIKI_WEB_HOST=127.0.0.1 -e LLM_WIKI_WEB_PORT=$LLM_WIKI_REMOTE_PORT -e LLM_WIKI_BACKEND_READY_TIMEOUT=180 -v /var/lib/llm-wiki:/var/lib/llm-wiki llm-wiki-web:latest >/dev/null
-for i in \$(seq 1 90); do curl -fsS -m 3 127.0.0.1:$LLM_WIKI_REMOTE_PORT/api/v1/health >/dev/null 2>&1 && exit 0; sleep 2; done; exit 1
-RS
-)
-  if [ -n "${LLM_WIKI_HOST:-}" ]; then
-    wiki_scp "$tmp/app.tgz" /tmp/llm-wiki-app.tgz
-    wiki_ssh "bash -s" <<<"$remote_script" || die "远端 llm_wiki 容器未就绪"
-    log "SSH 隧道 127.0.0.1:$LLM_WIKI_LOCAL_PORT -> $LLM_WIKI_HOST:127.0.0.1:$LLM_WIKI_REMOTE_PORT"
-    local key="$HOME/.ssh/nexus_llmwiki_tunnel"
-    [ -f "$key" ] || ssh-keygen -q -t ed25519 -N "" -C nexus-llmwiki-tunnel -f "$key"
-    wiki_ssh "grep -q nexus-llmwiki-tunnel ~/.ssh/authorized_keys 2>/dev/null || { mkdir -p ~/.ssh; chmod 700 ~/.ssh; echo 'no-pty,no-agent-forwarding,no-X11-forwarding,command=\"/bin/false\",permitopen=\"127.0.0.1:$LLM_WIKI_REMOTE_PORT\" $(cat "$key.pub")' >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys; }"
-    start_service nexus-llm-wiki-tunnel simple "exec ssh -N -i $key -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new -L 127.0.0.1:$LLM_WIKI_LOCAL_PORT:127.0.0.1:$LLM_WIKI_REMOTE_PORT root@$LLM_WIKI_HOST"
-  else
-    have docker || die "本机部署 llm_wiki 需要 docker"
-    cp "$tmp/app.tgz" /tmp/llm-wiki-app.tgz
-    $SUDO bash -s <<<"${remote_script//$LLM_WIKI_REMOTE_PORT/$LLM_WIKI_LOCAL_PORT}" || die "本机 llm_wiki 容器未就绪"
-  fi
-  rm -rf "$tmp"
-  wait_http "http://127.0.0.1:$LLM_WIKI_LOCAL_PORT/api/v1/health" "llm_wiki" 60
-  log "创建/打开项目并写入配置（Web runtime API，无 GUI）"
-  # llm_wiki 的模型调用必须经 Nexus 网关；远程 wiki 需要网关在它可达的内网地址上。
-  local wiki_gateway="${NEXUS_LLM_WIKI_GATEWAY_BASE:-}"
-  if [ -z "$wiki_gateway" ] && [ -n "${LLM_WIKI_HOST:-}" ]; then
-    wiki_gateway="${NEXUS_REMOTE_GATEWAY_LOCAL_URL:-}"
-  fi
-  [ -n "$wiki_gateway" ] || wiki_gateway="http://127.0.0.1:18110"
-  case "$wiki_gateway" in
-    *127.0.0.1*|*localhost*|*\[::1\]*)
-      [ -z "${LLM_WIKI_HOST:-}" ] || die "远程 llm_wiki 需要 NEXUS_LLM_WIKI_GATEWAY_BASE 指向 llm_wiki 可达的 Nexus 网关地址（例如 http://10.0.0.8:18110）"
-      ;;
-  esac
-  (set -a; . "$SECRETS"; set +a; LLM_WIKI_LOCAL_PORT="$LLM_WIKI_LOCAL_PORT" NEXUS_LLM_WIKI_GATEWAY_BASE="$wiki_gateway" python3 - <<'PY'
-import json, os, time, urllib.request
-U = f"http://127.0.0.1:{os.environ['LLM_WIKI_LOCAL_PORT']}"
-def post(path, body):
-    r = urllib.request.Request(U + path, json.dumps(body).encode(), {"Content-Type": "application/json"})
-    return json.load(urllib.request.urlopen(r, timeout=120))
-inv = lambda c, a: post("/api/web/invoke", {"command": c, "args": a})
-gateway = os.environ["NEXUS_LLM_WIKI_GATEWAY_BASE"].rstrip("/")
-gateway_key = os.environ.get("NEXUS_GATEWAY_API_KEY", "").strip()
-if not gateway_key:
-    raise SystemExit("缺少 NEXUS_GATEWAY_API_KEY；llm_wiki 必须经 Nexus 网关调用模型")
-pid = os.environ["ASTRA_LLM_WIKI_PROJECT_ID"]; root = "/var/lib/llm-wiki/projects"; path = f"{root}/astra"
-try: inv("create_project", {"name": "astra", "path": root})
-except Exception: pass  # already exists
-inv("write_file", {"path": f"{path}/.llm-wiki/project.json", "contents": json.dumps({"id": pid, "createdAt": int(time.time()*1000)})})
-proj = {"id": pid, "name": "astra", "path": path}
-state = {"lastProject": proj, "recentProjects": [proj],
-  "projectRegistry": {pid: {"id": pid, "path": path, "name": "astra", "lastOpened": 0}},
-  "apiConfig": {"enabled": True, "allowUnauthenticated": False, "allowLanAccess": False, "mcpEnabled": True, "token": os.environ["ASTRA_LLM_WIKI_API_TOKEN"]},
-  "llmConfig": {"provider": "custom", "apiKey": gateway_key, "model": os.environ.get("OPENAI_MODEL", "deepseek-flash"),
-                "ollamaUrl": "", "customEndpoint": gateway + "/v1",
-                "maxContextSize": 200000, "apiMode": "chat_completions"},
-  "embeddingConfig": {"enabled": False, "endpoint": "", "apiKey": "", "model": ""},
-  "sourceWatchConfig": {"enabled": True, "autoIngest": True, "persistExtractedMarkdown": False, "parsingConcurrency": 1, "ingestConcurrency": 1,
-                        "includeExtensions": ["md", "txt"], "excludeExtensions": [], "excludeDirs": [], "excludeGlobs": [], "maxFileSizeMb": 20},
-  "sourceWatchAllProjects": True, "projectFileSyncEnabled": True}
-for k, v in state.items(): post("/api/web/store", {"name": "app-state.json", "op": "set", "key": k, "value": v})
-post("/api/web/store", {"name": "app-state.json", "op": "save"})
-inv("open_project", {"path": path})
-cur = json.load(urllib.request.urlopen(U + "/api/v1/projects", timeout=30))["currentProject"]
-assert cur and cur["id"] == pid, "project not current"
-print("llm_wiki project ready")
-PY
-  )
-  log "Ingest pump（无头 Chrome 驱动 Web 版 ingest）"
-  local pyws="$NEXUS_ROOT/services/nexus-api/.venv/bin/python"
-  "$pyws" -c 'import websocket' 2>/dev/null || "$NEXUS_ROOT/services/nexus-api/.venv/bin/pip" install -q websocket-client
-  start_service nexus-llm-wiki-pump simple "LLM_WIKI_UI=http://127.0.0.1:$LLM_WIKI_LOCAL_PORT/ exec $pyws $NEXUS_ROOT/tools/llm_wiki/llm_wiki_ingest_pump.py"
-  [ -f "$NEXUS_ROOT/tools/llm_wiki/llm_wiki_ingest_pump.py" ] || warn "仓库缺少 tools/llm_wiki/llm_wiki_ingest_pump.py，请从部署机复制"
-  start_service nexus-astra oneshot "cd $NEXUS_ROOT/services/nexus-api && .venv/bin/python $NEXUS_ROOT/ops/dev/astra_service.py dev restart" "cd $NEXUS_ROOT/services/nexus-api && .venv/bin/python $NEXUS_ROOT/ops/dev/astra_service.py dev stop"
+  local base="${ASTRA_LLM_WIKI_API_BASE_URL:-}"
+  [ -n "$base" ] || die "--with-llm-wiki 需要 ASTRA_LLM_WIKI_API_BASE_URL（例如 http://10.0.0.8:19828/api/v1）"
+  base="${base%/}"
+  log "llm_wiki（接入已有服务器 $base）"
+  wait_http "$base/health" "llm_wiki" 90
+  # 模型端点由 llm_wiki 服务端配置为 Nexus 网关（NEXUS_GATEWAY_OPENAI_BASE + NEXUS_GATEWAY_API_KEY）。
+  log "触发图书馆重新同步"
   curl -fsS -m 30 -X POST http://127.0.0.1:18120/api/library/service/resync >/dev/null || warn "图书馆重新同步请求失败"
 }
 
@@ -520,7 +424,7 @@ step_health() {
   ss -ltn | grep -q ':18202 ' && echo "  ✓ Task MCP 18202" || { echo "  ✗ Task MCP 18202"; fails=$((fails+1)); }
   chk http://127.0.0.1:18120/ "Nexus Web(18120)"
   if [ "$WITH_WIKI" = 1 ]; then
-    chk "http://127.0.0.1:$LLM_WIKI_LOCAL_PORT/api/v1/health" "llm_wiki"
+    chk "${ASTRA_LLM_WIKI_API_BASE_URL%/}/health" "llm_wiki"
     u="$(curl -fsS -m 30 http://127.0.0.1:18120/api/library/service/status || true)"
     case "$u" in *'"healthy":true'*) echo "  ✓ 图书馆知识服务 healthy";; *) echo "  ✗ 图书馆知识服务未 healthy"; fails=$((fails+1));; esac
   fi

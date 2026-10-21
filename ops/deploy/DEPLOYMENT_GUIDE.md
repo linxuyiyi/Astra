@@ -1,6 +1,6 @@
 # Nexus v1.4.8 完整部署指南
 
-> 依据 2026-10-14 ~ 10-20 在部署机（box，Debian 13 x86_64）与 `LLM_WIKI_HOST` 指向的远程主机（CentOS 7.3 x86_64）上的实际部署整理，基础设施部署经验保留；v1.4.8 数据库按 MySQL 8.0.36 全新初始化，见 §5.2。
+> 依据 2026-10-14 ~ 10-20 在部署机（box，Debian 13 x86_64）上的实际部署整理；llm_wiki 使用独立服务器版本，按局域网地址接入；v1.4.8 数据库按 MySQL 8.0.36 全新初始化，见 §5.2。
 > 代码：<https://github.com/linxuyiyi/Astra>，分支 `v1.4.8`（Nexus 初始化为 `0001_init`，不支持历史库升级）。
 > 一键脚本：`ops/deploy/install_nexus.sh`（配置模板 `ops/env/.env.example`）。本文每一步都可以手工执行，脚本只是把它们串起来。
 
@@ -17,10 +17,9 @@
 | Nexus API（统一服务） | 18120 | `uvicorn nexus_api.service:app` | 员工对话 `/api/v1`、任务 `/api`、Worker Gateway WebSocket、前端静态资源。唯一对外 HTTP 服务 |
 | Library MCP | 18201 | 同 astra_service（`nexus-library-mcp`，streamable-http） | 员工/OpenCode 查询数字图书馆 |
 | Task MCP | 18202 | 同 astra_service（`astra-task-mcp`） | 员工会话里的 `nexus_task_*` 工具 |
-| 平台 OpenCode | 14096 | astra_service 拉起 `opencode serve` | 只监听 127.0.0.1。本地 Worker 不要占用它 |
+| 平台 OpenCode（仅本地调试） | 14096 | `ASTRA_EXECUTOR_TYPE=opencode_server` 时由 astra_service 拉起 | 正式部署用 `worker`，不需要本地 OpenCode |
 | 本地 Worker OpenCode | 自定（如 14196） | Nexus runtime 拉起 | 每个 Worker 一个端口 |
-| llm_wiki Web 版（远端） | 18080（网关）/ 19829（内部） | Docker 容器 `llm-wiki-web` | 只绑 127.0.0.1 |
-| llm_wiki 本机隧道 | 19828 | `ssh -L 19828:127.0.0.1:18080` | Nexus 的 `ASTRA_LLM_WIKI_API_BASE_URL` |
+| llm_wiki 服务器 | 自定（如 19828） | 独立部署的服务器版本 | Nexus 通过 `ASTRA_LLM_WIKI_API_BASE_URL` 访问，局域网地址即可 |
 | 远程 Worker OpenCode | 环境端口，默认 14096（远端 127.0.0.1） | 一键部署写入 | Worker 直连内网 Gateway 18110 与图书馆 MCP 18201 |
 
 ---
@@ -39,9 +38,8 @@
 | Node.js / npm | ≥ 20 | `node --version` | box：20.19.2；远程部署默认装 22.23.3 |
 | Redis | 6.x+ 或 Docker | `redis-cli ping` | box：Redis 8.0.2 |
 | git, curl, ss | 必需 | | |
-| Docker | 可选（Redis 容器化、llm_wiki） | `docker --version` | CentOS 7 上用官方静态包 27.3.1 + 自写 systemd unit |
+| Docker | 可选（Redis 容器化） | `docker --version` | CentOS 7 上用官方静态包 27.3.1 + 自写 systemd unit |
 | OpenCode CLI | **1.18.35**（唯一支持版本） | `opencode --version` | `npm i -g --prefix ~/.local opencode-ai@1.18.35` |
-| 浏览器 | 仅 llm_wiki ingest pump 需要 Chrome/Chromium | `google-chrome --version` | 见 §9 限制 |
 
 一键预检：`ops/deploy/install_nexus.sh --preflight-only [--with-llm-wiki] [--remote-worker HOST]`，失败立即退出且不做修改。
 
@@ -62,9 +60,9 @@
 - llm_wiki：未启用 embedding，搜索 `mode=keyword`/`hybrid`（无 vector 命中），可接受。需要向量时可配 OpenAI 兼容 embedding 端点（如本地 Ollama/LM Studio），本机 sentence-transformers `all-MiniLM-L6-v2` 仅做过冒烟（`services/agent-service/embedding_smoke.py`），不能直接接 llm_wiki。
 
 ### 2.3 llm_wiki
-- **必须用 Web Edition（验证版本 0.6.11，aarch64 包）**。桌面版 v0.6.12（含 main）**没有** `PUT/DELETE /projects/{id}/sources/file`，Nexus 同步全部 405。
-- Web 版后端 `bin/llm-wiki-server`（127.0.0.1:19829）+ Node 网关（Web UI、`/api/v1`、`/mcp`），要求 glibc ≥ 2.28、Node ≥ 20。
-- Nexus 只认 `http://127.0.0.1:<port>/api/v1` 形式的地址；远端部署时用 SSH `-L` 隧道。
+- 使用已部署的 llm_wiki 服务器版本（基于开源项目构建），Nexus 只通过 HTTP 调用，不负责安装、容器或 SSH 隧道。
+- `ASTRA_LLM_WIKI_API_BASE_URL` 填 Nexus 能访问到的地址（局域网即可），例如 `http://10.0.0.8:19828/api/v1`；`ASTRA_LLM_WIKI_API_TOKEN` 与服务端一致。
+- 服务端需要开启 Source API（`PUT/DELETE /projects/{id}/sources/file`），并把模型端点配置为 Nexus 网关（`NEXUS_GATEWAY_OPENAI_BASE` + `NEXUS_GATEWAY_API_KEY`），不直连厂商。
 
 ### 2.4 远程 Worker SSH
 - root（或有 sudo 的用户）+ 密码，密码存于 Nexus 数据库（API 只回 `has_ssh_password`）。
@@ -134,7 +132,7 @@
 
 **llm_wiki Web 容器**：`LLM_WIKI_DATA_DIR=/var/lib/llm-wiki`、`LLM_WIKI_WEB_HOST=127.0.0.1`、`LLM_WIKI_WEB_PORT=18080`、`LLM_WIKI_BACKEND_READY_TIMEOUT=180`（仿真启动慢）。
 
-**一键脚本额外变量**：见 `ops/env/.env.example`（`NEXUS_ROOT`、`NEXUS_STATE_DIR`、`LLM_WIKI_HOST/BUNDLE/...`、`REMOTE_WORKER_*`）。
+**一键脚本额外变量**：见 `ops/env/.env.example`（`NEXUS_ROOT`、`NEXUS_STATE_DIR`、`ASTRA_LLM_WIKI_API_BASE_URL`、`REMOTE_WORKER_*`）。
 
 ---
 
@@ -149,7 +147,7 @@ cp /opt/nexus/ops/env/.env.example /opt/nexus/ops/env/.env && chmod 600 /opt/nex
 /opt/nexus/ops/deploy/install_nexus.sh [--with-llm-wiki] [--remote-worker 1.2.3.4] [--skip-web-build] [--no-systemd]
 ```
 脚本幂等：已有 venv/密钥/项目/网关路由/Worker 均复用；有 systemd 时由安装脚本生成 `nexus-*.service`（不读取 `ops/deploy/systemd` 静态文件），否则由 `ops/dev/service_ctl.py` 拉起进程（身份记录在 `$NEXUS_STATE_DIR/service-ctl.json`，日志在 `$NEXUS_STATE_DIR/logs`）。Task MCP 与管理台由 `astra_service.py dev` 拉起，安装脚本不再单独启动它们。
-> 安装脚本在 `ops/deploy/install_nexus.sh`，环境模板在 `ops/env/.env.example`，llm_wiki 工具在 `tools/llm_wiki/`。
+> 安装脚本在 `ops/deploy/install_nexus.sh`，环境模板在 `ops/env/.env.example`。llm_wiki 使用独立服务器版本，Nexus 只配置地址。
 
 ---
 
@@ -266,46 +264,18 @@ curl -X POST $B/nodes/<node>/probe     # 直到 HEALTHY → ACTIVE
 远程 Worker 的模型写 `nexus-gateway/deepseek-flash`，baseURL 为内网 Gateway，例如 `http://10.0.0.8:18110/v1`。
 路由可带 `target_model` 做请求模型 A → 实际模型 B 的透明转发；不填时目标模型等于请求模型。流式响应体不会回写 `model`，调用日志同时记录请求模型和 `actual_model`。
 
-### 5.9 llm_wiki Web 版部署与项目创建
-**主机选择**：首选 aarch64 + glibc ≥ 2.28 的 Linux 直接运行（`LLM_WIKI_DATA_DIR=/var/lib/llm-wiki ./start.sh` 或包内 `llm-wiki-web.service`）。x86_64 主机只能 qemu 仿真（实测可用但慢、吃内存）。CentOS 7 必须容器化。
-
-在 `LLM_WIKI_HOST`（x86_64 CentOS 7）上的实际做法：
-1. Docker：官方静态包 `docker-27.3.1.tgz` → `/usr/bin`，自写 `/etc/systemd/system/docker.service`（`ExecStart=/usr/bin/dockerd`），加 2 GB swap。
-2. qemu：`/usr/bin/qemu-aarch64-static`（multiarch v7.2.0-1），手工注册 binfmt（内核 3.10 不支持 F 标志，因此还要把 qemu 拷进镜像）：
+### 5.9 llm_wiki 服务器接入
+1. 在 llm_wiki 服务器上启动服务，确认 `GET http://<host>:<port>/api/v1/health` 返回 `ok`。
+2. 服务端配置模型端点为 Nexus 网关（`http://<控制机内网>:18110/v1` + `NEXUS_GATEWAY_API_KEY`）。
+3. 在 `ops/env/.env` 设置：
    ```bash
-   echo ':qemu-aarch64:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xb7\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/qemu-aarch64-static:' > /proc/sys/fs/binfmt_misc/register
+   ASTRA_LLM_WIKI_ENABLED=true
+   ASTRA_LLM_WIKI_API_BASE_URL=http://10.0.0.8:19828/api/v1
+   ASTRA_LLM_WIKI_API_TOKEN=<与服务端一致>
+   ASTRA_LLM_WIKI_PROJECT_ID=<项目 UUID>
    ```
-   **重启后失效**，需加入开机脚本。
-3. 镜像（`/opt/llm-wiki-web-build/Dockerfile`）：
-   ```dockerfile
-   FROM --platform=linux/arm64 ubuntu:22.04
-   COPY qemu-aarch64-static /usr/bin/qemu-aarch64-static
-   ADD node.tar.xz /opt/                       # node-v20.18.1-linux-arm64
-   ENV PATH=/opt/node-v20.18.1-linux-arm64/bin:$PATH
-   RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
-   COPY app/llm-wiki-web-0.6.11-linux-aarch64/ /opt/llm-wiki-web/
-   WORKDIR /opt/llm-wiki-web
-   CMD ["./start.sh"]
-   ```
-   先 `sha256sum -c` 校验包内 tar.gz。
-4. 运行：
-   ```bash
-   docker run -d --name llm-wiki-web --restart=always --network host \
-     -e LLM_WIKI_DATA_DIR=/var/lib/llm-wiki -e LLM_WIKI_WEB_HOST=127.0.0.1 -e LLM_WIKI_WEB_PORT=18080 \
-     -e LLM_WIKI_BACKEND_READY_TIMEOUT=180 -v /var/lib/llm-wiki:/var/lib/llm-wiki llm-wiki-web:0.6.11
-   curl 127.0.0.1:18080/api/v1/health    # ok=true status=running mode=web
-   ```
-5. 隧道（box）：远端 `authorized_keys` 写受限公钥（CentOS 7 的 OpenSSH 6.6 **不支持 `restrict`**，用旧语法）：
-   `no-pty,no-agent-forwarding,no-X11-forwarding,command="/bin/false",permitopen="127.0.0.1:18080" ssh-ed25519 … llmwiki-tunnel`
-   然后 `tools/llm_wiki/llm_wiki_tunnel.sh`（`ssh -N -L 127.0.0.1:19828:127.0.0.1:18080` 的重连循环；修改后必须重启循环进程本身）。
-6. 项目（无 GUI，走 Web runtime API）：
-   - `POST /api/web/invoke {"command":"create_project","args":{"name":"astra","path":"/var/lib/llm-wiki/projects"}}`
-   - `write_file` 写 `.llm-wiki/project.json` = `{"id":"<UUID>","createdAt":<ms>}`
-   - `POST /api/web/store` 逐个 `set` 后 `save`：`lastProject`、`recentProjects`、`projectRegistry`、`apiConfig{enabled,token,mcpEnabled}`、`llmConfig{provider:"custom",customEndpoint:"http://<控制机内网>:18110/v1",model:"deepseek-flash",apiMode:"chat_completions",apiKey:"<NEXUS_GATEWAY_API_KEY>"}`、`sourceWatchConfig{enabled:true,autoIngest:true,includeExtensions:["md","txt"],…}`、`embeddingConfig{enabled:false}`
-   - `invoke open_project`；`GET /api/v1/projects` 应显示 `current:true`。
-   - 验证 Source API：`PUT /api/v1/projects/<id>/sources/file {"path":"astra/probe.md","content":"…"}` → 200 `action: created`；`DELETE …?path=astra/probe.md` → 200。
-7. Ingest pump（box）：`tools/llm_wiki/llm_wiki_ingest_pump.py` 保持无头 Chrome（`--user-data-dir ~/.llmwiki-chrome --remote-debugging-port=9333`）打开 Web UI，每 30 s 把 `raw/sources/**/*.md` 内容变化的文件 `enqueueBatch`，并在队列被自动暂停（`restoredBacklogWaiting`）时 `resumeProcessing()`。依赖 `websocket-client`。**脚本引用了打包资源的哈希文件名，换版本必须更新**。
-8. Nexus：在 `start_astra.sh` 加 `ASTRA_LLM_WIKI_*` 后重启，`POST /api/library/service/resync`。
+4. `install_nexus.sh --with-llm-wiki` 只检查健康并触发 `POST /api/library/service/resync`，不再安装容器或建立 SSH 隧道。
+5. 验证：`curl -H "Authorization: Bearer $ASTRA_LLM_WIKI_API_TOKEN" "$ASTRA_LLM_WIKI_API_BASE_URL/health"`，以及 Nexus 图书馆状态 `healthy`。
 
 ### 5.10 远程 Worker
 1. 管理台/`POST /api/employees` 创建员工，`execution_environment`：`mode=LINUX_REMOTE`、`host`、`port=22`、`username=root`、`ssh_password`、`opencode_server_port=14096`、`workspace_root=/root/nexus-remote`、`model_name=nexus-gateway/deepseek-flash`。
@@ -356,15 +326,10 @@ curl -X POST $B/nodes/<node>/probe     # 直到 HEALTHY → ACTIVE
 | 部署 deploy 被拒：stdio MCP | 远程要求 streamable-http | 设 `NEXUS_MCP_TRANSPORT`/`NEXUS_MCP_API_KEY` |
 | 节点凭据无法解密 | 换了/丢了 `ASTRA_GATEWAY_MASTER_KEY` | 固定保存主密钥；丢失只能重建节点 |
 | 图书馆 "知识服务：异常 — 未启用 llm_wiki" | `ASTRA_LLM_WIKI_ENABLED` 未设 | 按 §2.6 设置并重启 |
-| 同步全部 `HTTP 405` | 用了桌面版 llm_wiki（无 Source file API） | 换 Web Edition 0.6.11 |
+| 同步全部 `HTTP 405` | llm_wiki 服务端缺少 Source file API | 升级到支持 `PUT/DELETE /projects/{id}/sources/file` 的服务器版本 |
 | 知识是 candidate、不同步 | 只有 published 才同步 | `POST /api/library/knowledge/<id>/publish {"space_id":…}` |
-| llm_wiki 已同步但搜索 0 命中 | Web 版 ingest 在浏览器端执行，无页面就不加工 | 运行 ingest pump（§5.9-7） |
-| ingest 队列 `paused/restoredBacklogWaiting` | 页面重载时恢复了旧任务 | pump 自动 `resumeProcessing()` |
-| `glibc` 太旧 / AppImage 跑不起来 | CentOS 7 | 容器（Ubuntu 22.04） |
-| `authorized_keys` 里 `restrict` 导致公钥登录失败 | OpenSSH 6.6 不支持 | 用 `no-pty,…,permitopen=` 旧语法 |
-| 修改隧道脚本后不生效 | 循环脚本已被 shell 读入 | kill 循环进程再启动 |
-| 远程主机 SSH 无响应、load 20+ | 1.7 GB 主机同时跑桌面版容器 + 仿真 Web 版 + 两个 opencode | 删除旧容器、停掉无用 `opencode serve`（已停 17302，释放 ~230 MB）；加内存 |
-| `e2e_library.py` 中途 "HTTP 请求超时" | 仿真主机 ingest 时过载 | 提高 `ASTRA_LLM_WIKI_TIMEOUT`、换更大主机 |
+| llm_wiki 已同步但搜索 0 命中 | 服务端 ingest 或索引未完成 | 查看 llm_wiki 服务器日志与项目状态 |
+| `e2e_library.py` 中途 "HTTP 请求超时" | llm_wiki 服务端处理慢 | 提高 `ASTRA_LLM_WIKI_TIMEOUT` |
 | live 测试偶发 Redis TimeoutError | 基础设施抖动 | 重跑 |
 | 任务 `current_progress` 停在旧错误文本 | RUNNING→RUNNING 不刷新（未修） | 以 session 状态为准 |
 | Nexus 员工抽屉读不到知识库 | AgentScope 未登记 embedding 模型，或知识库列表为空 | 在 AgentScope 登记可用的 embedding 模型并创建知识库；DeepSeek 聊天凭证不能当 embedding |
@@ -404,10 +369,9 @@ v1.4.8 数据库版本边界为全新初始化，不支持从此前版本原地�
 
 1. **知识库依赖 embedding 模型**：启动器已传 `CollectionPerKbManager` 和 Qdrant（`vdb-qdrant`）。知识库路由可用，但创建知识库仍需在 AgentScope 登记可用的 embedding 模型；未登记时 `GET /knowledge_bases/` 返回空列表，创建失败。DeepSeek 聊天凭证不能当 embedding。
 2. **私聊 dont_ask**：为避免无审批 UI 时卡在 asking，私聊会话也是 dont_ask，私聊中普通 Bash 会被拒；绑定 MCP 的会话改用 `bypass`，否则 MCP Tool 会被转成 `DENY`。完整方案是给私聊加审批 UI。
-3. **llm_wiki Web 版 ingest 需打开的网页**：加工逻辑在前端 JS，服务端不能推事件；无头 Chrome + pump 是变通方案，依赖打包文件名，不处理删除，进程不随开机自启（一键脚本用 systemd 托管）。
-4. **aarch64 仿真**：x86_64 上靠 qemu-user，慢且内存大；binfmt 重启失效；生产应使用原生 aarch64 主机或 x86_64 构建。
-5. **llm_wiki token 未强制**：Web 模式下 `/api/v1` 无 token 也返回 200，只靠 127.0.0.1 绑定 + SSH 隧道保护；不要开放端口。
-6. 归档/删除来源后共享 Wiki 页面仍可能被检索（`archive_remaining_hits`），`library_related` 返回 unsupported。
-7. Agent Service 的 `X-User-ID` 只是占位身份，对外前须加真实认证/反代。
-8. 远程 Worker 隧道属于 Task API 进程，Task API 重启期间远端无法访问网关/MCP。
-9. **透明路由与流式响应**：非流式响应会保留请求模型；流式 SSE 不会回写响应体的 `model` 字段，调用日志仍记录请求模型和 `actual_model`。
+3. **llm_wiki token 必须由服务端强制**：服务器版本对局域网开放时，必须校验 `ASTRA_LLM_WIKI_API_TOKEN`，并只放行可信网段。
+4. **llm_wiki 版本兼容**：Nexus 依赖 Source file API（`PUT/DELETE /projects/{id}/sources/file`），升级服务器版本时先验证这两个接口。
+5. 归档/删除来源后共享 Wiki 页面仍可能被检索（`archive_remaining_hits`），`library_related` 返回 unsupported。
+6. Agent Service 的 `X-User-ID` 只是占位身份，对外前须加真实认证/反代。
+7. 远程 Worker 隧道属于 Task API 进程，Task API 重启期间远端无法访问网关/MCP。
+8. **透明路由与流式响应**：非流式响应会保留请求模型；流式 SSE 不会回写响应体的 `model` 字段，调用日志仍记录请求模型和 `actual_model`。

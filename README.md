@@ -38,7 +38,6 @@ ops/dev                  本地启动与停止
 ops/deploy               安装脚本与部署说明
 ops/env/.env.example     唯一环境模板
 tools/e2e                验证脚本
-tools/llm_wiki           llm_wiki 隧道与 ingest pump
 docs/product             产品说明与需求资料
 docs/architecture        架构与运行时说明
 docs/deploy              部署说明

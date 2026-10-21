@@ -564,12 +564,14 @@ def repo_root() -> Path:
     raise AssertionError("找不到仓库根目录")
 
 
-def test_remote_port_default_is_14096_and_llm_wiki_tunnel_stays():
+def test_remote_port_default_is_14096_and_llm_wiki_is_a_lan_server():
     root = repo_root()
     script = (root / "ops/deploy/install_nexus.sh").read_text(encoding="utf-8")
     assert "REMOTE_WORKER_OPENCODE_PORT:=14096" in script
     assert "4296" not in script
-    assert "ssh -N -i" in script
+    # llm_wiki 服务器版本按局域网地址接入，不再有 SSH 隧道和主机模式。
+    assert "ASTRA_LLM_WIKI_API_BASE_URL" in script
+    assert "LLM_WIKI_HOST" not in script
     example = (root / "ops/env/.env.example").read_text(encoding="utf-8")
     assert "REMOTE_WORKER_OPENCODE_PORT=14096" in example
     assert "4296" not in example

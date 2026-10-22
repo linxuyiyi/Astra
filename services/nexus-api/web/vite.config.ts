@@ -75,9 +75,9 @@ const proxy = {
   "/api": process.env.VITE_PROXY_TARGET ?? "http://127.0.0.1:18120",
   "/v1": process.env.VITE_GATEWAY_PROXY_TARGET ?? "http://127.0.0.1:18110",
   "/agentscope-api": {
-    target: process.env.VITE_AGENTSCOPE_PROXY_TARGET ?? "http://127.0.0.1:18000",
+    // 统一经过 Nexus，保留日程身份保护；不能直通 Agent Service。
+    target: process.env.VITE_NEXUS_API_PROXY_TARGET ?? "http://127.0.0.1:18120",
     changeOrigin: false,
-    rewrite: (requestPath: string) => requestPath.replace(/^\/agentscope-api/, ""),
   },
 };
 

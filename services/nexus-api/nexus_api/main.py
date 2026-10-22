@@ -81,6 +81,7 @@ from .resources import (
     update_mcp,
     update_skill,
 )
+from .schedule_skill import attach_schedule_mcp
 from .sql import insert_record
 from .task_skill import (
     TASK_SKILL_ID,
@@ -2756,6 +2757,7 @@ def create_app() -> FastAPI:
                     session_id,
                     conversation_id=conversation_id,
                 )
+                await attach_schedule_mcp(client, employee, session_id, conversation_id)
                 files: list[tuple[str, str, bytes]] = []
                 for item in attachments:
                     files.append((item["name"], item["type"], Path(item["path"]).read_bytes()))
@@ -2809,6 +2811,7 @@ def create_app() -> FastAPI:
             {"p0": session_id, "p1": workspace_id, "p2": utcnow(), "p3": conversation_id},
         )
         connection.commit()
+        await attach_schedule_mcp(client, employee, session_id, conversation_id)
         await sync_employee_skills(
             client,
             employee,
@@ -3113,6 +3116,7 @@ def create_app() -> FastAPI:
                     connection,
                     request.app.state.resources,
                 )
+                await attach_schedule_mcp(client, employee, claimed, current["id"])
                 return claimed
 
         prior_reply: dict[str, Any] = {"cursor": None, "known": set()}
@@ -3132,6 +3136,19 @@ def create_app() -> FastAPI:
                 for item in existing
                 if isinstance(item, dict) and item.get("role") == "assistant" and item.get("id")
             }
+            private = (
+                connection.execute(
+                    sql_text(
+                        "SELECT id FROM t_nexus_conversations "
+                        "WHERE agentscope_session_id = :p0 AND kind = 'private'"
+                    ),
+                    {"p0": session_id},
+                )
+                .mappings()
+                .fetchone()
+            )
+            if private is not None:
+                await attach_schedule_mcp(client, employee, session_id, private["id"])
             await client.trigger_chat(
                 agent_id,
                 session_id,
@@ -3219,6 +3236,10 @@ def create_app() -> FastAPI:
         except ImError as exc:
             raise_im(exc)
 
+    from .schedules import internal_schedule_router, schedule_router
+
+    app.include_router(schedule_router(require_owner, model_for))
+    app.include_router(internal_schedule_router(model_for))
     return app
 
 

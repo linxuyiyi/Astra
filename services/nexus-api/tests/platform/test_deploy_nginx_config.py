@@ -49,9 +49,9 @@ def test_voice_transcription_is_proxied_to_the_asr_service():
     assert "client_max_body_size 12m;" in text
 
 
-def test_retired_port_and_infrastructure_upstreams_stay_separate():
+def test_retired_port_and_infrastructure_proxy_boundaries():
     text = CONFIG.read_text(encoding="utf-8")
     assert "18100" not in text
     upstreams = _upstreams(text)
     assert upstreams["/v1/"].startswith("http://127.0.0.1:18110")
-    assert upstreams["/agentscope-api/"].startswith("http://127.0.0.1:18000")
+    assert upstreams["/agentscope-api/"] == "http://127.0.0.1:18120"

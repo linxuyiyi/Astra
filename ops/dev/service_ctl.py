@@ -84,6 +84,17 @@ def task_mcp_command() -> list[str]:
     return [_python(py), "-c", "from app.task_mcp import main; main()"]
 
 
+def schedule_mcp_command() -> list[str]:
+    scripts = "Scripts" if os.name == "nt" else "bin"
+    binary_name = "nexus-schedule-mcp.exe" if os.name == "nt" else "nexus-schedule-mcp"
+    binary = ROOT / "services" / "nexus-api" / ".venv" / scripts / binary_name
+    if binary.is_file():
+        return [str(binary)]
+    py_name = "python.exe" if os.name == "nt" else "python"
+    py = ROOT / "services" / "nexus-api" / ".venv" / scripts / py_name
+    return [_python(py), "-c", "from nexus_api.schedule_mcp import main; main()"]
+
+
 def nexus_api_command() -> list[str]:
     scripts = "Scripts" if os.name == "nt" else "bin"
     binary_name = "uvicorn.exe" if os.name == "nt" else "uvicorn"
@@ -120,6 +131,15 @@ SERVICES: dict[str, dict[str, Any]] = {
         "default_log": "/tmp/nexus-task-mcp.log",
         "command": task_mcp_command,
         "port": lambda: _env_port("NEXUS_TASK_MCP_PORT", 18202),
+        "health": lambda port: f"http://127.0.0.1:{port}/health",
+        "headers": lambda: {},
+    },
+    "schedule-mcp": {
+        "cwd": ROOT / "services" / "nexus-api",
+        "log_env": "SCHEDULE_MCP_LOG",
+        "default_log": "/tmp/nexus-schedule-mcp.log",
+        "command": schedule_mcp_command,
+        "port": lambda: _env_port("NEXUS_SCHEDULE_MCP_PORT", 18203),
         "health": lambda port: f"http://127.0.0.1:{port}/health",
         "headers": lambda: {},
     },

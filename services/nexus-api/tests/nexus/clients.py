@@ -53,5 +53,5 @@ class TestClient(AnonymousClient):
                 session_headers(supplied.get("x-verified-uid") or supplied.get("x-owner-id") or "u1")
             )
         if httpx.URL(str(url)).path.startswith(("/api/v1/internal/", "/api/v1/peers/", "/api/v1/im/")):
-            headers["X-Nexus-Internal-Key"] = os.environ["NEXUS_INTERNAL_KEY"]
+            headers.setdefault("X-Nexus-Internal-Key", os.environ["NEXUS_INTERNAL_KEY"])
         return super().build_request(method, url, headers=headers, **kwargs)

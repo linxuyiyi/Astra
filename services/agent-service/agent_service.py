@@ -131,14 +131,20 @@ def register_task_hint(app, deliver) -> None:
 
 
 NEXUS_TASK_MCP_PREFIX = "mcp__nexus-task__"
+NEXUS_SCHEDULE_MCP_PREFIX = "mcp__nexus-schedule__"
 
 
 def allow_nexus_task_mcp(mcp_tool_class, decision_class, behavior_class) -> None:
+    """任务和日程 MCP 都是平台内置能力，在 dont_ask 下显式放行。"""
+
     original = mcp_tool_class.check_permissions
 
+    allowed = (NEXUS_TASK_MCP_PREFIX, NEXUS_SCHEDULE_MCP_PREFIX)
+
     async def check_permissions(self, *args, **kwargs):
-        if str(getattr(self, "name", "")).startswith(NEXUS_TASK_MCP_PREFIX):
-            return decision_class(behavior=behavior_class.ALLOW, message="允许数字员工使用任务工具")
+        name = str(getattr(self, "name", ""))
+        if name.startswith(allowed):
+            return decision_class(behavior=behavior_class.ALLOW, message="允许数字员工使用平台工具")
         return await original(self, *args, **kwargs)
 
     mcp_tool_class.check_permissions = check_permissions
@@ -420,6 +426,7 @@ def main() -> None:
     from agentscope.app.rag.blob_store import LocalBlobStore
     from agentscope.app.rag.knowledge_base_manager import CollectionPerKbManager
     from agentscope_sql import create_storage, guard_lifespan
+    from schedule_access import ScheduleResourceAccessPolicy
     from agentscope.app.workspace_manager import (
         IsolationPolicy,
         LocalWorkspaceManager,
@@ -536,6 +543,9 @@ def main() -> None:
 
     app = create_app(
         storage=storage,
+        resource_access_policy=ScheduleResourceAccessPolicy(
+            os.environ.get("NEXUS_AGENTSCOPE_USER_ID", "nexus")
+        ),
         message_bus=message_bus,
         workspace_manager=workspace_manager,
         knowledge_base_manager=knowledge_base_manager,

@@ -9,7 +9,7 @@
 | Nexus API + Web | 18120 | `/api/v1` 员工与会话绑定、`/api` Task/Worker/图书馆/网关控制面、Worker WebSocket、前端 |
 | Nexus 网关数据面 | 18110 | `/v1/models`、`/v1/chat/completions`、`/v1/embeddings` |
 | AgentScope 2.0.10 | 18000 | 官方 Agent、Session、消息、凭据、Skill、Knowledge；独立 SQL 数据库 |
-| Library MCP / Task MCP | 18201 / 18202 | 独立基础设施进程 |
+| Library MCP / Task MCP / Schedule MCP | 18201 / 18202 / 18203 | 独立基础设施进程 |
 | Redis | 6379 | AgentScope MessageBus、Celery、网关并发/额度/吊销运行态 |
 | MySQL 8.0.36 | 3306 | Nexus 与 AgentScope 两个独立数据库 |
 | Worker OpenCode | 每个 Worker 独立 | 在 Worker 机器运行，保留固定版本校验 |

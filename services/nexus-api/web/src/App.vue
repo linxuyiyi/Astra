@@ -49,6 +49,7 @@ const route = useRoute();
 const navItems = computed(() => [
   { to: "/", label: "星云首页", active: route.path === "/" },
   { to: "/chat", label: "数字员工", active: route.path === "/chat" || route.path === "/team" },
+  { to: "/schedules", label: "日程安排", active: route.path.startsWith("/schedules") },
   { to: "/tasks", label: "任务大厅", active: route.path.startsWith("/tasks") || route.path.startsWith("/interventions") },
   { to: "/library", label: "数字图书馆", active: route.path.startsWith("/library") },
   { to: "/gateway", label: "API 网关", active: route.path.startsWith("/gateway") },

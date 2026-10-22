@@ -119,3 +119,18 @@ async def test_missing_user_header_falls_back_to_configured_identity(upstream, m
 
     assert response.status_code == 200
     assert upstream[0].headers["x-user-id"] == "nexus"
+
+
+@pytest.mark.parametrize("uppercase", [False, True])
+async def test_console_cannot_impersonate_reserved_schedule_identity(upstream, uppercase):
+    from nexus_api.schedules import schedule_user_id
+
+    async with _client() as client:
+        response = await client.get(
+            "/agentscope-api/schedule/",
+            headers={
+                "X-User-ID": schedule_user_id("alice").upper() if uppercase else schedule_user_id("alice")
+            },
+        )
+    assert response.status_code == 403
+    assert upstream == []

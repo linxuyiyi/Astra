@@ -25,6 +25,7 @@ from nexus_api.main import (
     session_transcript,
     stream_cursor,
 )
+from nexus_api.schedule_skill import reset_schedule_mcp_attachments
 from tests.nexus.clients import TestClient
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -517,6 +518,8 @@ def test_connected_catalog_accepts_only_returned_resources(tmp_path, monkeypatch
 def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("NEXUS_AGENTSCOPE_BASE_URL", "")
+    monkeypatch.setenv("NEXUS_SCHEDULE_MCP_KEY", "mcp-test")
+    reset_schedule_mcp_attachments()
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -529,6 +532,10 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
             return httpx.Response(200, json={"status": "started", "session_id": "session-chat"})
         if request.url.path == "/skill":
             return httpx.Response(200, json=[{"id": "failure-analysis", "name": "失败分析"}])
+        if request.url.path == "/workspace/mcp":
+            if request.method == "POST":
+                return httpx.Response(201, json={"ok": True})
+            return httpx.Response(200, json=[])
         return httpx.Response(404, json={"detail": "missing"})
 
     application = create_app()
@@ -579,6 +586,20 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
         stored = test_client.get(f"/api/v1/conversations/{conversation['id']}", headers=headers).json()
         assert stored["messages"] == []
         assert stored["history_error"]
+        schedule_mcp_calls = [
+            request
+            for request in seen
+            if request.url.path == "/workspace/mcp"
+            and request.method == "POST"
+            and b"nexus-schedule" in request.content
+        ]
+        assert len(schedule_mcp_calls) == 1
+        schedule_payload = json.loads(schedule_mcp_calls[0].content.decode())
+        assert schedule_payload["name"] == "nexus-schedule"
+        headers = schedule_payload["mcp_config"]["headers"]
+        assert headers["X-Nexus-Employee-Id"] == employee["id"]
+        assert headers["X-Nexus-Session-Id"]
+        assert headers["Authorization"] == "Bearer mcp-test"
 
 
 def test_peer_hint_returns_limit_text_without_delivering():
@@ -1307,7 +1328,7 @@ def test_private_chat_uses_dont_ask(tmp_path, monkeypatch):
     assert private[0][1]["permission_mode"] == "dont_ask"
 
 
-def test_dont_ask_allows_only_nexus_task_mcp_tools():
+def test_dont_ask_allows_platform_mcp_tools():
     import asyncio
 
     module = load_agent_service("nexus_agent_service_task_permission")
@@ -1329,8 +1350,10 @@ def test_dont_ask_allows_only_nexus_task_mcp_tools():
 
     module.allow_nexus_task_mcp(Tool, Decision, Behavior)
     allowed = asyncio.run(Tool("mcp__nexus-task__nexus_task_get").check_permissions())
+    scheduled = asyncio.run(Tool("mcp__nexus-schedule__schedule_create").check_permissions())
     other = asyncio.run(Tool("mcp__other__bash").check_permissions())
     assert allowed.behavior == Behavior.ALLOW
+    assert scheduled.behavior == Behavior.ALLOW
     assert other == "original"
 
 

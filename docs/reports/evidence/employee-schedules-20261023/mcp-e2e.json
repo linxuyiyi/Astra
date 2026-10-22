@@ -1,0 +1,85 @@
+{
+  "title": "私聊日程 MCP 端到端验证",
+  "generated_at": "2026-10-23T01:10:00+08:00",
+  "environment": {
+    "nexus": "isolated Nexus API on 127.0.0.1:18331, copied preview SQLite DB",
+    "agent_service": "isolated AgentScope 2.0.10 on 127.0.0.1:18230",
+    "schedule_mcp": "nexus_api.schedule_mcp on 127.0.0.1:18203",
+    "model": "local OpenAI-compatible stub on 127.0.0.1:18232",
+    "human": "schedule-qa-alice",
+    "employee": "schedule-preview-employee"
+  },
+  "steps": {
+    "private_message": {
+      "endpoint": "POST /api/v1/conversations/conv_016d3d388070/messages",
+      "accepted": true,
+      "agentscope_session_id": "1a0400b0e86440e7ab3a871ff63fd311"
+    },
+    "workspace_mcp": {
+      "name": "nexus-schedule",
+      "healthy": true,
+      "tools": [
+        "mcp__nexus-schedule__schedule_create",
+        "mcp__nexus-schedule__schedule_list",
+        "mcp__nexus-schedule__schedule_view"
+      ],
+      "headers": {
+        "X-Nexus-Employee-Id": "schedule-preview-employee",
+        "X-Nexus-Session-Id": "1a0400b0e86440e7ab3a871ff63fd311",
+        "X-Nexus-Conversation-Id": "conv_016d3d388070",
+        "Authorization": "Bearer <test-key>"
+      }
+    },
+    "mcp_create": {
+      "tool": "schedule_create",
+      "arguments": {
+        "name": "E2E 周一晨报",
+        "description": "每周一早上 9 点整理本周重点，输出三条行动项。",
+        "cron_expression": "0 9 * * 1",
+        "timezone": "Asia/Shanghai"
+      },
+      "result": {
+        "ok": true,
+        "schedule_id": "11d18459e9c54636818eed774a6bc99d",
+        "enabled": false
+      }
+    },
+    "page_api": {
+      "alice_total_before_delete": 2,
+      "alice_item": {
+        "id": "11d18459e9c54636818eed774a6bc99d",
+        "name": "E2E 周一晨报",
+        "enabled": false,
+        "source": "USER",
+        "timezone": "Asia/Shanghai"
+      },
+      "bob_total": 0
+    },
+    "mcp_list_and_view": {
+      "list_ok": true,
+      "view_ok": true,
+      "same_record": true
+    },
+    "cleanup": {
+      "delete_schedule_status": 204,
+      "delete_agent_session_status": 204,
+      "alice_total_after_delete": 1
+    }
+  },
+  "checks": {
+    "private_session_gets_schedule_mcp": true,
+    "mcp_server_reports_healthy": true,
+    "mcp_create_persists_official_schedule": true,
+    "created_schedule_defaults_to_disabled": true,
+    "schedule_visible_to_current_human": true,
+    "other_human_cannot_see_schedule": true,
+    "mcp_list_and_view_work": true,
+    "cleanup_succeeds": true
+  },
+  "limitations": [
+    "模型桩只返回文本，没有让模型自行选择 MCP 工具；tools/call 由测试脚本按会话头发起。",
+    "未验证真实供应商模型、墙钟周期触发、生产 MySQL 8.0.36 和生产 Nginx。",
+    "MCP 走官方 REST 创建，source=USER，没有 source=AGENT/source_session_id。",
+    "没有验证日程执行工作区是否继承 Skill/MCP/知识库；本轮只验证创建和页面可见性。"
+  ]
+}

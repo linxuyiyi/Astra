@@ -60,6 +60,9 @@ def _user_id() -> str:
 
 @router.api_route(f"{PREFIX}/{{path:path}}", methods=METHODS, include_in_schema=False)
 async def proxy_agentscope(path: str, request: Request) -> StreamingResponse:
+    # 人类日程身份只能由 Nexus 的 require_owner 派生，控制台不能冒充。
+    if request.headers.get("x-user-id", "").casefold().startswith("nexus-schedule-"):
+        raise HTTPException(403, "日程身份请通过日程安排入口访问")
     query = request.url.query
     url = f"{agentscope_base_url()}/{path}"
     if query:

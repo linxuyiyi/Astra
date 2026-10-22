@@ -41,6 +41,7 @@ FRONTEND_PORT = int(os.getenv("ASTRA_SERVICE_FRONTEND_PORT", "15174"))
 GATEWAY_HOST = os.getenv("ASTRA_SERVICE_GATEWAY_HOST", "127.0.0.1")
 GATEWAY_PORT = int(os.getenv("ASTRA_SERVICE_GATEWAY_PORT", "18110"))
 TASK_MCP_PORT = int(os.getenv("NEXUS_TASK_MCP_PORT", "18202"))
+SCHEDULE_MCP_PORT = int(os.getenv("NEXUS_SCHEDULE_MCP_PORT", "18203"))
 
 
 def parse_args() -> argparse.Namespace:
@@ -352,6 +353,17 @@ def task_mcp_command() -> list[str]:
     return [sys.executable, "-c", "from app.task_mcp import main; main()"]
 
 
+def schedule_mcp_command() -> list[str]:
+    """日程 MCP 入口。优先用服务虚拟环境里的 nexus-schedule-mcp。"""
+
+    scripts = "Scripts" if os.name == "nt" else "bin"
+    name = "nexus-schedule-mcp.exe" if os.name == "nt" else "nexus-schedule-mcp"
+    binary = BACKEND / ".venv" / scripts / name
+    if binary.is_file():
+        return [str(binary)]
+    return [sys.executable, "-c", "from nexus_api.schedule_mcp import main; main()"]
+
+
 def core_services(
     mode: str,
     settings: Any,
@@ -409,6 +421,7 @@ def core_services(
     ]
 
     services.append(("task-mcp", task_mcp_command(), BACKEND, None))
+    services.append(("schedule-mcp", schedule_mcp_command(), BACKEND, None))
 
     if settings.mcp_transport == "streamable-http":
         services.append(("library-mcp", [sys.executable, "-m", "app.mcp_server"], BACKEND, None))
@@ -451,6 +464,8 @@ def start_core(
         wait_http("gateway", f"http://127.0.0.1:{GATEWAY_PORT}/healthz")
     if "task-mcp" in processes:
         wait_http("task-mcp", f"http://127.0.0.1:{TASK_MCP_PORT}/health")
+    if "schedule-mcp" in processes:
+        wait_http("schedule-mcp", f"http://127.0.0.1:{SCHEDULE_MCP_PORT}/health")
     if "frontend" in processes:
         wait_http("frontend", f"http://127.0.0.1:{FRONTEND_PORT}")
 
@@ -560,6 +575,7 @@ def start(
     if settings.gateway_enabled:
         print(f"Gateway : http://localhost:{GATEWAY_PORT}/v1/models")
     print(f"Task MCP: http://127.0.0.1:{TASK_MCP_PORT}/mcp")
+    print(f"Schedule MCP: http://127.0.0.1:{SCHEDULE_MCP_PORT}/mcp")
     print(f"Logs    : {settings.resolved_log_dir}")
     print("=" * 64)
     return status(settings)

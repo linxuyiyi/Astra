@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Task runtime supervisor: gateway 18110, Celery, OpenCode, Task MCP 18202; API/Web 由 nexus-api 进程提供。
+# Task runtime supervisor: gateway 18110, Celery, OpenCode, Task MCP 18202, Schedule MCP 18203; API/Web 由 nexus-api 进程提供。
 # usage: ops/dev/start_astra.sh [start|restart|stop|status]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

@@ -1,0 +1,128 @@
+Browser tab: 1, Title: "Nexus v1.4.8", URL: "http://127.0.0.1:18231/schedules".
+1 AXWebArea Nexus v1.4.8, URL: 127.0.0.1:18231/schedules
+	2 container app
+		3 container
+			4 text ✦ NEXUS  v1.4.8
+			5 container 页面导航
+				6 link Description: 星云首页, Value: 127.0.0.1:18231/
+				7 link Description: 数字员工, Value: 127.0.0.1:18231/chat
+				8 link Description: 日程安排, Value: 127.0.0.1:18231/schedules
+				9 link Description: 任务大厅, Value: 127.0.0.1:18231/tasks
+				10 link Description: 数字图书馆, Value: 127.0.0.1:18231/library
+				11 link Description: API 网关, Value: 127.0.0.1:18231/gateway
+				12 link Description: 配置中心, Value: 127.0.0.1:18231/settings
+			13 text AgentScope 2.0.10 已连接
+		14 container
+			15 heading 日程安排, Value: 2
+				16 text 日程安排
+			17 text 我的安排 · schedule-qa-alice
+			18 button 刷新
+				19 text 刷新
+			20 button 新建日程
+				21 text 新建日程
+			22 container 日程筛选
+				23 container
+					24 combo box (collapsed, settable) Description: 日程员工, ID: el-id-1158-16, Secondary Actions: Expand
+					25 text 员工：全部
+					26 image
+				27 container
+					28 combo box (collapsed, settable) Description: 日程状态, ID: el-id-1158-17, Secondary Actions: Expand
+					29 text 状态：全部
+					30 image
+				31 container
+					32 image
+					33 text field (settable) Description: 搜索日程, ID: el-id-1158-18
+				34 button 搜索
+					35 text 搜索
+				36 button 重置
+					37 text 重置
+			38 container
+				39 table
+					40 row
+						41 cell
+							42 text 日程
+						43 cell
+							44 text 数字员工
+						45 cell
+							46 text 执行时间
+						47 cell
+							48 text 上下文
+						49 cell
+							50 text 状态
+						51 cell
+							52 text 操作
+				53 table
+					54 row
+						55 cell
+							56 button 工作日晨间简报
+							57 text 每个工作日整理当天工作重点，生成简洁的晨间简报，并列出下一步动作。
+						58 cell
+							59 text 日程测试员工
+						60 cell
+							61 text 工作日 09:00
+							62 text Asia/Shanghai
+						63 cell
+							64 text 每次独立
+						65 cell
+							66 text 已启用
+						67 cell
+							68 container
+								69 button 执行记录 工作日晨间简报
+								70 pop up button (collapsed) Description: 更多操作 工作日晨间简报, ID: el-id-1158-21, Secondary Actions: Expand
+			71 container 日程列表分页
+				72 text 共 1 条
+				73 container
+					74 combo box (collapsed, settable) ID: el-id-1158-19, Secondary Actions: Expand
+					75 text 20条/页
+					76 image
+				77 button (disabled) 上一页
+				78 content list
+					79 container 第 1 页
+						80 text 1
+				81 button (disabled) 下一页
+			82 container 执行记录 · 工作日晨间简报
+				83 container
+					84 heading 执行记录 · 工作日晨间简报, Value: 2, ID: el-id-1158-14
+						85 text 执行记录 · 工作日晨间简报
+					86 button 关闭此对话框
+				87 container el-id-1158-15
+					88 text 每个工作日整理当天工作重点，生成简洁的晨间简报，并列出下一步动作。
+					89 button 刷新记录
+						90 text 刷新记录
+					91 container
+						92 table
+							93 row
+								94 cell
+									95 text 会话创建时间（上海）
+								96 cell
+									97 text 执行会话
+								98 cell
+									99 text 内容
+						100 table
+							101 row
+								102 cell
+									103 text 2026/10/23 00:20:05
+								104 cell
+									105 text 3a13f445eeba426b9fda73d7c60116a9
+								106 cell
+									107 button 查看内容
+					108 container 日程执行记录分页
+						109 text 共 1 条
+						110 container
+							111 combo box (collapsed, settable) ID: el-id-1158-31, Secondary Actions: Expand
+							112 text 20条/页
+							113 image
+						114 button (disabled) 上一页
+						115 content list
+							116 container 第 1 页
+								117 text 1
+						118 button (disabled) 下一页
+					119 text 连续上下文会复用同一会话；会话条数不代表执行次数或成功次数。
+					120 heading 执行内容, Value: 3
+						121 text 执行内容
+					122 button 刷新内容
+					123 text 当前未运行
+					124 container
+						125 text 日程测试员工 日程验证完成：已根据安排整理今日工作重点。SCHEDULE_NATIVE_REPLY_OK
+
+The focused UI element is 107 button 查看内容

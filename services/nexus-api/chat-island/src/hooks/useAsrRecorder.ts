@@ -77,8 +77,8 @@ export function useAsrRecorder({
 		chunksRef.current = [];
 	}, [clearTimers, releaseMic]);
 
-	const errorMessage = useCallback(
-		(code: string, status: number): string => {
+	const localizedError = useCallback(
+		(code: string): string => {
 			const map: Record<string, string> = {
 				rate_limited: t('asr.rateLimited'),
 				server_busy: t('asr.busy'),
@@ -89,8 +89,14 @@ export function useAsrRecorder({
 				payload_too_large: t('asr.tooLarge'),
 				model_not_ready: t('asr.notReady'),
 			};
-			return map[code] || (status ? t('asr.failedWithStatus', { status }) : t('asr.failed'));
+			return map[code] || '';
 		},
+		[t],
+	);
+
+	const errorMessage = useCallback(
+		(status: number): string =>
+			status ? t('asr.failedWithStatus', { status }) : t('asr.failed'),
 		[t],
 	);
 
@@ -112,9 +118,12 @@ export function useAsrRecorder({
 				});
 				const body = await response.json().catch(() => ({}));
 				if (!response.ok) {
-					const detail = body?.detail;
+					const detail = body?.detail ?? body?.error;
 					const code = typeof detail === 'object' ? detail?.code : '';
-					throw new Error(errorMessage(code || '', response.status));
+					const message = typeof detail === 'string' ? detail : detail?.message;
+					throw new Error(
+						localizedError(code || '') || message || errorMessage(response.status),
+					);
 				}
 				const text = String(body?.text || '').trim();
 				if (!text) throw new Error(t('asr.empty'));
@@ -136,7 +145,7 @@ export function useAsrRecorder({
 				window.clearTimeout(timeout);
 			}
 		},
-		[errorMessage, setPhase, t],
+		[errorMessage, localizedError, setPhase, t],
 	);
 
 	const start = useCallback(async () => {
@@ -248,9 +257,11 @@ export function useAsrRecorder({
 					? t('asr.permission')
 					: name === 'NotFoundError'
 						? t('asr.noDevice')
-						: err instanceof Error
-							? err.message
-							: t('asr.unsupported'),
+						: name === 'NotSupportedError'
+							? t('asr.unsupported')
+							: err instanceof Error
+								? err.message
+								: t('asr.unsupported'),
 			);
 			setPhase('error');
 		}

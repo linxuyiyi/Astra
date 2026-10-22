@@ -97,8 +97,8 @@ interface TextInputProps {
 	onVoiceToggle?: () => void;
 	/** Prevents voice start when no realtime model is configured. */
 	voiceDisabled?: boolean;
-	/** Enable the server-side ASR microphone button (Nexus ASR Server). */
-	localAsrEnabled?: boolean;
+	/** Enable the server-side ASR microphone button (Nexus Gateway). */
+	asrEnabled?: boolean;
 	/**
 	 * Content rendered directly above the input pill, inside the outer
 	 * wrapper that {@link className} styles (e.g. the working directory
@@ -118,7 +118,7 @@ export interface TextInputRef {
 }
 
 /** Server-side ASR can be disabled at build time without changing the UI. */
-const LOCAL_ASR_DEFAULT = import.meta.env.VITE_NEXUS_ASR_ENABLED !== 'false';
+const ASR_DEFAULT = import.meta.env.VITE_NEXUS_ASR_ENABLED !== 'false';
 
 function formatClock(totalSeconds: number): string {
 	const seconds = Math.max(0, Math.floor(totalSeconds));
@@ -167,7 +167,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 			voiceState = 'idle',
 			onVoiceToggle,
 			voiceDisabled = false,
-			localAsrEnabled = LOCAL_ASR_DEFAULT,
+			asrEnabled = ASR_DEFAULT,
 			headerSlot,
 		},
 		ref,
@@ -231,8 +231,8 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 			});
 		}, []);
 
-		const localAsr = useAsrRecorder({
-			enabled: localAsrEnabled && !disabled,
+		const asr = useAsrRecorder({
+			enabled: asrEnabled && !disabled,
 			onText: insertText,
 		});
 
@@ -488,27 +488,27 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 						</AttachmentGroup>
 					)}
 
-					{localAsrEnabled && (localAsr.state !== 'idle' || localAsr.error) && (
+					{asrEnabled && (asr.state !== 'idle' || asr.error) && (
 						<div className="flex items-center gap-2 px-3 pt-1 text-xs text-muted-foreground">
-							{localAsr.state === 'recording' && (
+							{asr.state === 'recording' && (
 								<span className="flex items-center gap-1 text-red-500">
 									<span className="size-1.5 rounded-full bg-red-500" />
-									{t('asr.recording', { time: formatClock(localAsr.seconds) })}
+									{t('asr.recording', { time: formatClock(asr.seconds) })}
 								</span>
 							)}
-							{localAsr.state === 'transcribing' && (
+							{asr.state === 'transcribing' && (
 								<span className="flex items-center gap-1">
 									<Loader2 className="size-3 animate-spin" />
 									{t('asr.transcribing')}
 								</span>
 							)}
-							{localAsr.state === 'error' && (
+							{asr.state === 'error' && (
 								<>
-									<span className="text-destructive">{localAsr.error}</span>
+									<span className="text-destructive">{asr.error}</span>
 									<button
 										type="button"
 										className="underline underline-offset-2"
-										onClick={localAsr.retry}
+										onClick={asr.retry}
 									>
 										{t('asr.retry')}
 									</button>
@@ -546,7 +546,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							{/* Stands in for the button cluster below — keep the count, the
 							    gap and the ``size-9`` footprint in step with it. */}
 							<div className="flex shrink-0 gap-2">
-								{localAsrEnabled && <div className="size-9" />}
+								{asrEnabled && <div className="size-9" />}
 								<div className="size-9" />
 								<div className="size-9" />
 							</div>
@@ -612,28 +612,28 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							className="flex shrink-0 items-center gap-2"
 							style={{ height: `${COLLAPSED_HEIGHT_PX}px` }}
 						>
-							{/* Local ASR (server-side SenseVoice) */}
-							{localAsrEnabled && (
+							{/* Gateway ASR (server-side transcription) */}
+							{asrEnabled && (
 								<Tooltip>
 									<TooltipTrigger asChild>
 										<Button
 											type="button"
-											variant={localAsr.state === 'recording' ? 'default' : 'ghost'}
+											variant={asr.state === 'recording' ? 'default' : 'ghost'}
 											size="icon-lg"
-											onClick={localAsr.toggle}
-											disabled={disabled || localAsr.state === 'transcribing'}
+											onClick={asr.toggle}
+											disabled={disabled || asr.state === 'transcribing'}
 											aria-label={
-												localAsr.state === 'recording' ? t('asr.stop') : t('asr.start')
+												asr.state === 'recording' ? t('asr.stop') : t('asr.start')
 											}
 											className={cn(
 												'shrink-0 rounded-full',
-												localAsr.state === 'recording' &&
+												asr.state === 'recording' &&
 													'bg-red-500 text-white hover:bg-red-500/90',
 											)}
 										>
-											{localAsr.state === 'transcribing' ? (
+											{asr.state === 'transcribing' ? (
 												<Loader2 className="size-4 animate-spin" />
-											) : localAsr.state === 'recording' ? (
+											) : asr.state === 'recording' ? (
 												<Square className="size-4" />
 											) : (
 												<Mic className="size-4" />
@@ -641,8 +641,8 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 										</Button>
 									</TooltipTrigger>
 									<TooltipContent>
-										{localAsr.state === 'recording'
-											? t('asr.recording', { time: formatClock(localAsr.seconds) })
+										{asr.state === 'recording'
+											? t('asr.recording', { time: formatClock(asr.seconds) })
 											: t('asr.start')}
 									</TooltipContent>
 								</Tooltip>

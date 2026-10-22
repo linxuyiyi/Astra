@@ -29,8 +29,8 @@ export default defineConfig({
   server: {
     port: 15176,
     proxy: {
-      '/api/asr': {
-        target: process.env.VITE_NEXUS_ASR_PROXY_TARGET ?? 'http://127.0.0.1:19899',
+      '/api': {
+        target: process.env.VITE_NEXUS_API_PROXY_TARGET ?? 'http://127.0.0.1:18120',
         changeOrigin: false,
       },
     },

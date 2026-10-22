@@ -68,6 +68,7 @@
           <ElOption value="SSE" label="聊天流式" />
           <ElOption value="NON_STREAM" label="聊天非流式" />
           <ElOption value="EMBEDDING" label="向量嵌入" />
+          <ElOption value="ASR" label="语音识别（ASR）" />
           <ElOption value="SCOPED" label="诊断探测" />
         </ElSelect>
       </ElFormItem>
@@ -380,7 +381,8 @@ watch(
 )
 
 function applyProbeStrategy() {
-  form.probeTypes = form.probeStrategy === 'EMBEDDING' ? ['EMBEDDING']
+  form.probeTypes = form.probeStrategy === 'ASR' ? ['ASR']
+    : form.probeStrategy === 'EMBEDDING' ? ['EMBEDDING']
     : form.probeStrategy === 'NON_STREAM' ? ['MODEL']
     : form.probeStrategy === 'SSE' ? ['STREAM'] : [...probeTypes]
 }

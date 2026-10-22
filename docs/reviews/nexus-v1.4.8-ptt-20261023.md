@@ -142,3 +142,31 @@ PTT 使用已有 `/api/asr/transcribe` → 网关 → SenseVoiceSmall，不新�
 7. **中英混合 ASR 准确率**沿用现有 FunASR 结果（混合术语仍有错误），PTT 不改变模型。
 8. **真实硬件键盘布局**：自动化使用 Chromium fake microphone 与 Playwright 键盘事件；macOS Option+K 的死键行为已在事件层验证不产生 `˚`，但真实外接键盘/输入法切换仍需手动复核。
 9. **本地开发数据库**原本是旧版 SQLite；本次已备份并补跑 `0002_collaborative_groups`，再将版本标记为 `0003_gateway_speech`。生产环境仍应按全新库或已发布迁移链部署，不复制这次本地修补。
+
+## 7. 合并与提交
+
+最终代码位于 `v1.4.8`：
+
+```text
+404f67616 fix(speech): use the v1.4.8 login session for ASR
+1db0863bc merge: bring v1.5.0 ASR and push-to-talk into v1.4.8
+f5ad36218 feat(chat): add push-to-talk voice input shortcut
+```
+
+`v1.4.8` 在合并前已包含 collaborative groups（`0002_collaborative_groups`）与
+employee schedules 提交；本次合并保留了这些改动，并把 ASR 迁移接到群组迁移之后：
+
+```text
+0001_init -> 0002_collaborative_groups -> 0003_gateway_speech
+```
+
+处理点：
+
+- 冲突文件 `ops/dev/service_ctl.py` 同时保留 `schedule-mcp` 与 `gateway` 服务。
+- 冲突文件 `alembic/env.py`、`app/sql_storage.py` 统一使用 `CURRENT_REVISION=0003_gateway_speech`。
+- `0002_gateway_speech.py` 重命名为 `0003_gateway_speech.py`，`down_revision=0002_collaborative_groups`。
+- 冲突的 `web/dist` 与 `public/nexus-chat` 构建产物没有手工合并，而是从合并后的源码重新构建，包含群组、日程和 PTT。
+- v1.4.8 的登录体系生效后，`speech_routes.py` 改用 `nexus_session`；浏览器验收脚本新增 `browser-auth.mjs`，使用真实注册/登录账号。
+- 本地旧 SQLite 已备份（`.astra/backups/nexus-before-v148-merge-20261023-015257.db`），补跑群组迁移后标记为 `0003_gateway_speech`；生产环境按全新库或已发布迁移链部署，不复制此本地修补。
+
+回归：`tests/nexus` 136 passed / 6 skipped；`test_fresh_sql_storage + test_gateway_speech` 27 passed；ASR 26 passed；chat-island 15 passed；web 30 passed；PTT 浏览器 31/31；`verify-deployment.sh` 15/15；ruff 与 `git diff --check` 通过。

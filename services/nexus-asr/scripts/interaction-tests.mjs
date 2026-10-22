@@ -92,6 +92,35 @@ async function probeAsrNode() {
   }
 }
 
+// 1b. Existing draft must be preserved and the transcript inserted, not replace it.
+{
+  const browser = await launch();
+  try {
+    const { context, page, frame, errors } = await openChat(browser, EMP_A);
+    const textarea = frame.locator('textarea');
+    await textarea.fill('已有草稿：');
+    await frame.getByRole('button', { name: '语音输入（转文字）' }).click();
+    await page.waitForTimeout(3800);
+    await frame.getByRole('button', { name: '停止录音' }).click();
+    let value = '';
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      value = await textarea.inputValue();
+      if (value.includes('会议纪要')) break;
+      await page.waitForTimeout(300);
+    }
+    result.existing_draft = {
+      value,
+      starts_with_draft: value.startsWith('已有草稿：'),
+      contains_transcript: value.includes('会议纪要'),
+      page_errors: errors,
+    };
+    await context.close();
+  } finally {
+    await browser.close();
+  }
+}
+
 // 2. Switch conversation while transcribing: no leak into the new input.
 {
   const browser = await launch();

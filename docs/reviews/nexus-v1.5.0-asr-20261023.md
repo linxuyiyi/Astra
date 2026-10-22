@@ -96,6 +96,8 @@
 | 路由禁用/类型改 CHAT | Nexus 立即 422；网关约 10 s 后 404/400；恢复后 200 |
 | 配置中心 | 路由页显示“语音识别”和“数字员工语音输入”；员工模型下拉仅 deepseek-flash / qwen2.5:3b，无 ASR |
 
+配置中心证据：[路由与语音输入](assets/nexus-v1.5.0-asr/gateway-routes.png) / [员工模型下拉过滤](assets/nexus-v1.5.0-asr/employee-model-filter.png)。
+
 ## 4. 性能（真实数据）
 
 完整报告：[`services/nexus-asr/docs/performance-report.md`](../../services/nexus-asr/docs/performance-report.md)，原始 JSON：[`perf-v1.5.0.json`](../../services/nexus-asr/results/perf-v1.5.0.json)。

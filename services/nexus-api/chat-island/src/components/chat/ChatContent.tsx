@@ -288,13 +288,8 @@ const ChatContentComponent: React.FC<ChatContentProps> = ({
 							footerSlot
 						)}
 					</FlipCard>
-					{/* Concentric radii: the pill stays rounded-[28px] on all four
-				    corners and floats on this surface, whose own radius is
-				    28 + the 4px padding. Matching them is what keeps the two
-				    edges parallel — a plain rectangle here would show the
-				    pill's corners cutting into it. */}
 					<TextInput
-						className="min-w-full max-w-full w-full rounded-[32px] bg-muted p-1"
+						className="min-w-full max-w-full w-full"
 						onSend={onSend}
 						disabled={disabled}
 						autoComplete={autoComplete}

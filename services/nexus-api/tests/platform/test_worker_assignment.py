@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.api.routes import create_employee, create_task, patch_task
 from app.domain import TaskStatus
@@ -11,7 +12,7 @@ from app.models import AgentWorker, Task, TaskCategory
 from app.runtime.assignment import worker_assignment_block
 from app.runtime.dispatcher import Dispatcher
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
-from app.schemas import EmployeeCreate, TaskCreate, TaskUpdate
+from app.schemas import EmployeeCreate, EmployeePatch, TaskCreate, TaskUpdate
 from app.task_tools import TaskTools, nexus_employee_id
 from tests.platform.test_task_routing import (
     _employee,
@@ -23,7 +24,7 @@ from tests.platform.test_task_routing import (
 
 @pytest.mark.parametrize("owner,bound,allowed", [
     (None, None, True), (None, "emp-a", True), (None, "emp-b", True),
-    ("emp-a", None, True), ("emp-a", "emp-a", True), ("emp-a", "emp-b", False),
+    ("emp-a", None, False), ("emp-a", "emp-a", True), ("emp-a", "emp-b", False),
 ])
 @pytest.mark.parametrize("kind,supported", [("ISSUE", True), ("REQUIREMENT", False)])
 def test_shared_assignment_matrix(owner, bound, allowed, kind, supported):
@@ -35,7 +36,7 @@ def test_shared_assignment_matrix(owner, bound, allowed, kind, supported):
 
 @pytest.mark.parametrize("owner,bound,allowed", [
     (None, None, True), (None, "emp-b", True),
-    ("emp-a", None, True), ("emp-a", "emp-a", True), ("emp-a", "emp-b", False),
+    ("emp-a", None, False), ("emp-a", "emp-a", True), ("emp-a", "emp-b", False),
 ])
 async def test_dispatch_uses_employee_relation_not_repository_or_category(
     session, tmp_path, owner, bound, allowed,  # noqa: F811
@@ -55,14 +56,16 @@ async def test_dispatch_uses_employee_relation_not_repository_or_category(
         assert claimed.execution_environment_snapshot["repository_id"] == "worker-repository"
 
 
-@pytest.mark.parametrize("owner,kind,error", [
-    ("emp-other", "ISSUE", "责任数字员工"), ("emp-a", "REQUIREMENT", "任务类型"),
+@pytest.mark.parametrize("owner,bound,kind,error", [
+    ("emp-other", "emp-a", "ISSUE", "责任数字员工"),
+    ("emp-a", "emp-a", "REQUIREMENT", "任务类型"),
+    ("emp-a", None, "ISSUE", "责任数字员工"),
 ])
 async def test_manual_start_cannot_bypass_assignment_rules(
-    session, tmp_path, owner, kind, error,  # noqa: F811
+    session, tmp_path, owner, bound, kind, error,  # noqa: F811
 ):
     worker = _employee()
-    worker.digital_employee_id = "emp-a"
+    worker.digital_employee_id = bound
     task = _pending("T-start-invalid", None)
     task.employee_id = worker.id
     task.responsible_employee_id = owner
@@ -121,6 +124,11 @@ async def test_mcp_create_and_assign_share_owner_and_type_rules(session):  # noq
         assert "责任数字员工" in refused["error"]
         other.digital_employee_id = None
         await session.commit()
+        unbound = await tools.assign(task.id, other.id)
+        assert unbound["ok"] is False
+        assert "责任数字员工" in unbound["error"]
+        other.digital_employee_id = "emp-a"
+        await session.commit()
         accepted = await tools.assign(task.id, other.id)
         assert accepted["ok"] is True
         assert accepted["worker_id"] == other.id
@@ -130,14 +138,36 @@ async def test_mcp_create_and_assign_share_owner_and_type_rules(session):  # noq
         nexus_employee_id.reset(token)
 
 
-async def test_public_worker_can_be_created_without_employee_or_category(session):  # noqa: F811
+async def test_worker_without_employee_can_take_only_unowned_tasks(session):  # noqa: F811
     created = await create_employee(
-        EmployeeCreate(id="public-worker", name="公共 Worker", role="build", task_types=["ISSUE"]),
+        EmployeeCreate(id="type-worker", name="按类型接单", role="build", task_types=["ISSUE"]),
         session,
     )
     assert created.digital_employee_id is None
     assert created.category_ids == []
     assert created.task_types == ["ISSUE"]
+    session.add(TaskCategory(id="testing", name="测试"))
+    await session.commit()
+    payload = dict(
+        task_type="ISSUE", category_id="testing", title="按类型领取",
+        description="任务未指定员工", employee_id=created.id,
+    )
+    task = await create_task(TaskCreate(**payload), session)
+    assert task.employee_id == created.id and task.responsible_employee_id is None
+    with pytest.raises(HTTPException):
+        await create_task(TaskCreate(**payload, responsible_employee_id="emp-a"), session)
+    with pytest.raises(HTTPException):
+        await patch_task(task.id, TaskUpdate(responsible_employee_id="emp-a"), session)
+    assert task.responsible_employee_id is None
+
+
+@pytest.mark.parametrize("value", [[], None])
+def test_worker_task_types_cannot_be_cleared(value):
+    with pytest.raises(ValidationError):
+        EmployeeCreate(id="worker", name="worker", role="build", task_types=value)
+    with pytest.raises(ValidationError):
+        EmployeePatch(task_types=value)
+    assert EmployeePatch(name="renamed").model_dump(exclude_unset=True) == {"name": "renamed"}
 
 
 async def test_recovery_skips_incompatible_assignment_without_starving_next(session):  # noqa: F811

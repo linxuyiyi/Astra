@@ -32,7 +32,7 @@
             filterable
             clearable
             :loading="digitalLoading"
-            placeholder="可选，留空作为公共 Worker"
+            placeholder="可选，关联数字员工"
             @change="onDigitalEmployeeChange"
           >
             <ElOption
@@ -51,7 +51,7 @@
             </ElOption>
           </ElSelect>
           <p class="field-hint">
-            关联后按该数字员工接单；不关联则作为公共 Worker，按支持任务类型接单。
+            任务未指定数字员工时按任务类型领取；任务指定数字员工时，Worker 必须关联该员工。
             <span v-if="digitalLoading">正在加载数字员工目录…</span>
             <RouterLink v-else-if="!digitalEmployees.length" class="field-link" to="/settings/employees">先去创建数字员工</RouterLink>
           </p>
@@ -73,7 +73,7 @@
           type="info"
           :closable="false"
           show-icon
-          title="公共 Worker：可处理任意数字员工的受支持任务类型。"
+          title="未关联数字员工：仅可领取未指定数字员工且类型受支持的任务。"
         />
         <ElAlert
           v-else-if="form.digital_employee_id"
@@ -393,7 +393,7 @@ const portValidator = (_rule: unknown, value: unknown, callback: (error?: Error)
 }
 const formRules = computed<FormRules>(() => ({
   worker_name: [{ required: true, message: '请输入 Worker 名称', trigger: 'blur' }],
-  task_types: [{ type: 'array', required: true, message: '至少选择一种任务类型', trigger: 'change' }],
+  task_types: [{ type: 'array', required: true, min: 1, message: '至少选择一种任务类型', trigger: 'change' }],
   'environment.workspace_root': [{ required: true, message: '请输入工作空间', trigger: 'blur' }],
   'environment.opencode_path': [{ required: true, message: '请输入 OpenCode 可执行文件', trigger: 'blur' }],
   'environment.opencode_server_port': [{ required: true, message: '请输入 OpenCode Server 端口', trigger: 'blur' }, { validator: portValidator, trigger: 'blur' }],

@@ -1,0 +1,155 @@
+Browser tab: 4, Title: "Nexus v1.4.8", URL: "http://127.0.0.1:56664/tasks?create=1".
+0 AXWebArea Nexus v1.4.8, URL: 127.0.0.1:56664/tasks?create=1
+	1 container app
+		2 container
+			3 text ✦ NEXUS  v1.4.8
+			4 container 页面导航
+				5 link Description: 星云首页, Value: 127.0.0.1:56664/
+				6 link Description: 数字员工, Value: 127.0.0.1:56664/chat
+				7 link Description: 任务大厅, Value: 127.0.0.1:56664/tasks
+				8 link Description: 数字图书馆, Value: 127.0.0.1:56664/library
+				9 link Description: API 网关, Value: 127.0.0.1:56664/gateway
+				10 link Description: 配置中心, Value: 127.0.0.1:56664/settings
+			11 text AgentScope 2.0.10 未连接
+		12 container
+			13 heading 任务大厅, Value: 2
+				14 text 任务大厅
+			15 Description: 任务大厅视图, ID: el-id-3278-27
+				16 container
+					17 radio button (settable, integer) Description: 任务列表, Value: 1
+					18 text 任务列表
+				19 container
+					20 radio button (settable, integer) Description: 待处理, Value: 0
+					21 text 待处理
+			22 button 刷新
+				23 text 刷新
+			24 button 创建任务
+				25 text 创建任务
+			26 container 任务筛选
+				27 container
+					28 combo box (collapsed, settable) Description: 任务类型, ID: el-id-3278-28, Secondary Actions: Expand
+					29 text 类型：全部
+					30 image
+				31 container
+					32 combo box (collapsed, settable) Description: 任务分类, ID: el-id-3278-29, Secondary Actions: Expand
+					33 text 分类：全部
+					34 image
+				35 container
+					36 combo box (collapsed, settable) Description: 任务状态, ID: el-id-3278-30, Secondary Actions: Expand
+					37 text 状态：全部
+					38 image
+				39 container
+					40 combo box (collapsed, settable) Description: Worker, ID: el-id-3278-31, Secondary Actions: Expand
+					41 text Worker：全部
+					42 image
+				43 container
+					44 combo box (collapsed, settable) Description: 责任数字员工, ID: el-id-3278-32, Secondary Actions: Expand
+					45 text 责任数字员工：全部
+					46 image
+				47 container
+					48 image
+					49 text field (settable) Description: 搜索任务, ID: el-id-3278-33
+				50 button 搜索
+					51 text 搜索
+				52 button 重置
+					53 text 重置
+			54 container
+				55 table
+					56 row
+						57 cell
+							58 text 任务
+						59 cell
+							60 text 进展
+						61 cell
+							62 text 执行 Worker
+						63 cell
+							64 text 操作
+				65 container
+					66 table
+					67 text 暂无任务
+					68 button 创建任务
+						69 text 创建任务
+			70 container 任务列表分页
+				71 text 共 0 条
+				72 container
+					73 combo box (collapsed, settable) ID: el-id-3278-34, Secondary Actions: Expand
+					74 text 20条/页
+					75 image
+				76 button (disabled) 上一页
+				77 content list
+					78 container 第 1 页
+						79 text 1
+				80 button (disabled) 下一页
+			81 container 创建任务
+				83 container
+					84 heading 创建任务, Value: 2, ID: el-id-3278-25
+						85 text 创建任务
+					86 button 关闭此对话框
+				87 container
+					88 container el-id-3278-35
+						147 text *
+						90 text 任务标题
+					91 text field (settable) * 任务标题, ID: el-id-3278-61
+					92 text 任务类型
+					93 Description: 任务类型, ID: el-id-3278-62
+						94 container
+							95 radio button (settable, integer) Description: 问题, Value: 1
+							96 text 问题
+						97 container
+							98 radio button (settable, integer) Description: 需求, Value: 0
+							99 text 需求
+					100 container el-id-3278-38
+						148 text *
+						102 text 任务分类
+					103 container
+						104 combo box (collapsed, settable) * 任务分类, ID: el-id-3278-63, Secondary Actions: Expand
+						105 text 请选择分类
+						106 image
+					107 text 优先级
+					108 container
+						109 combo box (collapsed, settable) 优先级, ID: el-id-3278-64, Secondary Actions: Expand
+						110 text 中：有一定影响或时效要求
+						111 image
+					112 container el-id-3278-48
+						149 text *
+						114 text 任务描述
+					115 text entry area (settable) * 任务描述, ID: el-id-3278-65
+					116 container 附件
+						117 text 附件
+						118 container
+							119 button 上传附件
+								120 button 上传附件
+									121 text 上传附件
+							122 text 可选，支持一次选择多个文件。
+					123 text 验收标准 1
+					124 text field (settable) 验收标准 1, ID: el-id-3278-66
+					125 button (disabled) Description: 验收标准 1 上移, Help: 上移
+					126 button (disabled) Description: 验收标准 1 下移, Help: 下移
+					127 button Description: 删除验收标准 1, Help: 删除
+					128 button 添加验收标准
+						129 text 添加验收标准
+					130 container el-id-3278-52
+						131 text 执行 Worker
+						132 button 执行 Worker说明
+					133 container
+						134 combo box (expanded, settable) 执行 Worker 执行 Worker说明, ID: el-id-3278-67, Secondary Actions: Collapse
+						135 text 请选择
+						136 image
+					137 container el-id-3278-57
+						138 text 责任数字员工
+						139 button 责任数字员工说明
+					140 container
+						141 combo box (collapsed, settable) 责任数字员工 责任数字员工说明, ID: el-id-3278-68, Secondary Actions: Expand
+						142 text 可选，选择要询问进度的数字员工
+						143 image
+				144 container
+					145 button 取消
+					146 button 创建任务
+	150 container 自动分配, ID: el-id-3278-55
+		151 list el-id-3278-54
+			152 (selected) Value: 自动分配, ID: el-id-3278-56
+			153 Value: 员工甲 Worker · 测试执行, ID: el-id-3278-80
+			154 Value: 员工乙 Worker · 测试执行, ID: el-id-3278-81
+			155 Value: 类型 Worker · 测试执行, ID: el-id-3278-82
+
+The focused UI element is 134 combo box (expanded, settable) 执行 Worker 执行 Worker说明, ID: el-id-3278-67, Secondary Actions: Collapse

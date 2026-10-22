@@ -4,8 +4,8 @@
 
 | 维度 | 结果 |
 | --- | --- |
-| 完整性 | 16/16 tasks，12 个 Requirement，19 个 Scenario |
-| 正确性 | 各 Requirement 均有实现与针对性场景验证；部署轮全套 1280 passed / 8 skipped；分配补充轮 Linux 全套 1303 passed / 8 skipped，恢复扫描最终修订另跑 150 passed；语音轮最终 Linux 全套 1322 passed / 8 skipped |
+| 完整性 | 19/19 tasks，12 个 Requirement，21 个 Scenario |
+| 正确性 | 各 Requirement 均有实现与针对性场景验证；部署轮全套 1280 passed / 8 skipped；分配补充轮 Linux 全套 1303 passed / 8 skipped，恢复扫描最终修订另跑 150 passed；语音轮最终 Linux 全套 1322 passed / 8 skipped；用户澄清修正轮 1325 passed / 8 skipped |
 | 一致性 | 沿用维护租约/占用/原生空闲、完整快照 CAS、运行配置事实源、MCP 认证及任务仓库绑定 |
 
 ## Requirement 与证据
@@ -33,11 +33,11 @@
 
 新增 nexus-task-worker-routing，3 个 Requirement、5 个 Scenario 已核对：
 
-- 类型/数字员工及公共池：assignment.py 为后端唯一资格函数；自动分配、API/MCP 和启动共用。test_worker_assignment 覆盖双方配置/未配置、跨员工拒绝、类型拒绝、公共 Worker 创建及恢复队列不阻塞。
+- 类型/数字员工匹配：assignment.py 为后端唯一资格函数；自动分配、API/MCP 和启动共用。test_worker_assignment 覆盖任务有/无员工、Worker 员工绑定、跨员工拒绝、类型拒绝及恢复队列不阻塞；未绑定 Worker 作为通配的旧假设已由补充澄清修正。
 - 仓库与调度分离：Dispatcher 和启动能力门禁删除仓库要求；真实临时 Git 测试保留任务 repository_id 且快照/base commit 来自实际 Worker；启动模拟客户端覆盖任务无仓库与跨仓库。
 - 入口一致与安全：API 编辑责任员工时复检现有 Worker，MCP 身份作用域保留；原有占用/维护/健康/父任务回归通过。前端 31 项测试、类型检查、生产构建及隔离模拟接口页面操作通过。
 
-恢复扫描补强后的最终 Linux 相关回归 150 passed；完整路由轮为该补强前 1303 passed / 8 skipped，证据不混淆。公司 MySQL 并发调度与真实业务任务整链路仍未验收。前端/后端执行边界、公共池含义及截图见 docs/reviews/nexus-v1.4.8-task-worker-routing-20261022.md。
+恢复扫描补强后的最终 Linux 相关回归 150 passed；完整路由轮为该补强前 1303 passed / 8 skipped，证据不混淆。公司 MySQL 并发调度与真实业务任务整链路仍未验收。前端/后端执行边界、任务未指定员工的类型领取语义及截图见 docs/reviews/nexus-v1.4.8-task-worker-routing-20261022.md。
 
 
 ## 补充：语音网关核验
@@ -51,3 +51,12 @@
 语音轮 Linux 最终完整回归 1322 passed / 8 skipped；最后增强迁移场景另跑 Linux 6 passed，本机语音与迁移 23 passed。MySQL 8.0.36 实际空库初始化及已发布 init 升级保留路由成功，未修改 init。两端前端测试和构建、Ruff、diff 与 strict validate 通过。完整记录见 docs/reviews/nexus-v1.4.8-gateway-speech-input-20261022.md。
 
 新增 WARNING：硬件麦克风、完整 AgentScope 私聊/群聊发送、公司 Nginx/跨机和正式托管未验收；本地部署是独立验收服务。既有混合模型池需核对路由类型。CRITICAL 仍为 0；没有降低既有 Requirement，也没有用本地证据替代公司验收。
+
+
+## 补充：用户澄清后的员工匹配修正
+
+旧假设“Worker 未绑定员工即可作为通配”已删除。只有任务未指定员工时才按类型领取；任务指定员工时必须匹配同一绑定。Worker 创建/编辑必须保留至少一种类型。不存在公共 Worker 类型。
+
+新增两项 Scenario：未绑定 Worker 不得承接指定责任员工任务，以及创建/编辑不能清空支持类型。test_worker_assignment 的类型/员工矩阵、API 创建与编辑、MCP 指定和手动启动均验证新规则。前端候选函数同步收紧，页面实际操作确认任务选择责任员工后不兼容 Worker 被清除。
+
+当前 Linux 全套 1325 passed / 8 skipped；本机相关回归 108 passed，任务路由/启动 43 passed；前端 31 passed，type-check/build、Ruff、strict validate 与 diff check 通过。最新源代码重启本地隔离 API 后 ASR 网关转写仍返回 200。无新增迁移，仓库绑定与执行安全门禁保留。历史报告明确标记旧截图和旧假设失效；公司实际并发调度验收缺口不变。

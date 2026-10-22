@@ -12,7 +12,7 @@
         <p>
           <template v-if="digitalEmployee">{{ digitalEmployee.name }} · {{ digitalEmployee.domain }}</template>
           <template v-else-if="employee.digital_employee_id">数字员工 {{ employee.digital_employee_id }}</template>
-          <template v-else>公共 Worker</template>
+          <template v-else>未关联数字员工</template>
         </p>
         <div class="worker-hero__badges">
           <SemanticTag :tone="schedulableTone(health)" :label="schedulableLabel(health)" />

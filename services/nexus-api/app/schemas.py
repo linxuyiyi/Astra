@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.domain import (
     CompletionPolicy,
@@ -150,7 +150,7 @@ class EmployeeCreate(BaseModel):
     default_work_area: Literal[
         "development", "collaboration", "pantry", "integration", "meeting", "special"
     ] = "development"
-    task_types: list[TaskType] = Field(default_factory=lambda: list(TaskType))
+    task_types: list[TaskType] = Field(default_factory=lambda: list(TaskType), min_length=1)
     category_ids: list[str] = Field(default_factory=list)
     enabled: bool = True
     auto_claim: bool = True
@@ -167,11 +167,18 @@ class EmployeePatch(BaseModel):
     default_work_area: (
         Literal["development", "collaboration", "pantry", "integration", "meeting", "special"] | None
     ) = None
-    task_types: list[TaskType] | None = None
+    task_types: list[TaskType] | None = Field(default=None, min_length=1)
     category_ids: list[str] | None = None
     enabled: bool | None = None
     auto_claim: bool | None = None
     auto_execute: bool | None = None
+
+    @field_validator("task_types")
+    @classmethod
+    def require_task_types(cls, value):
+        if value is None:
+            raise ValueError("Worker 至少需要一种支持的任务类型")
+        return value
 
 
 class ChannelHealth(BaseModel):

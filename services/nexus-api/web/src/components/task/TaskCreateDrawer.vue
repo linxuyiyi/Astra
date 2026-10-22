@@ -79,15 +79,15 @@
       <ElDivider content-position="left">谁来执行，问谁</ElDivider>
 
       <ElFormItem prop="employee_id">
-        <template #label>执行 Worker <FieldHelp label="执行 Worker" help="按任务类型和责任数字员工匹配；未指定数字员工或 Worker 未绑定数字员工时可进入公共池。实际分配仍需通过健康、维护和占用检查；仓库和分类不限制接单。" /></template>
+        <template #label>执行 Worker <FieldHelp label="执行 Worker" help="按任务类型匹配；任务未指定数字员工时，所有支持该类型的 Worker 均可领取；指定后仅匹配关联该员工的 Worker。实际分配仍需通过健康、维护和占用检查；仓库和分类不限制接单。" /></template>
         <ElSelect v-model="form.employee_id" :disabled="Boolean(task && task.status !== 'PENDING')">
           <ElOption value="" label="自动分配" />
           <ElOption v-for="item in compatibleEmployees" :key="item.id" :value="item.id" :label="`${item.execution_environment?.name || employeeDisplayName(item.name)} · ${item.role}`" />
         </ElSelect>
       </ElFormItem>
       <ElFormItem>
-        <template #label>责任数字员工 <FieldHelp label="责任数字员工" help="责任数字员工是你在任务中心询问进度的对象；Agent Worker 是实际执行任务的运行实例，一个数字员工可以对应多个 Worker。" /></template>
-        <ElSelect v-model="form.responsible_employee_id" clearable placeholder="可选，选择要询问进度的数字员工">
+        <template #label>责任数字员工 <FieldHelp label="责任数字员工" help="选择后仅匹配关联该数字员工的 Worker；留空则按任务类型领取。责任数字员工也是询问进度的对象，一个数字员工可以对应多个 Worker。" /></template>
+        <ElSelect v-model="form.responsible_employee_id" clearable placeholder="可选，留空按任务类型领取">
           <ElOption v-for="item in owners" :key="item.id" :value="item.id" :label="item.name" />
         </ElSelect>
       </ElFormItem>

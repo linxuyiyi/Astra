@@ -1,15 +1,23 @@
 ## ADDED Requirements
 
 ### Requirement: 按类型与数字员工选择 Worker
-系统 SHALL 按任务类型和数字员工关系选择 Worker。任务未指定责任数字员工时，所有支持该任务类型的 Worker SHALL 可作为候选；Worker 未绑定数字员工时 SHALL 作为公共 Worker 服务任意责任员工。任务与 Worker 均指定数字员工且不一致时 MUST 拒绝分配。任务分类 SHALL 保留为业务属性，不限制 Worker 接单。
+系统 SHALL 按任务类型和数字员工关系选择 Worker。每个 Worker MUST 配置至少一种支持的任务类型。任务未指定责任数字员工时，所有支持该任务类型的 Worker SHALL 可作为候选；任务指定责任数字员工时 MUST 只允许绑定该员工且支持任务类型的 Worker。Worker 未绑定数字员工不得作为跨员工通配条件，系统不提供公共 Worker 类型。任务分类 SHALL 保留为业务属性，不限制 Worker 接单。
 
 #### Scenario: 指定数字员工
 - **WHEN** 任务指定责任数字员工
-- **THEN** 仅绑定同一员工或未绑定员工、且支持该任务类型的 Worker 可作为候选
+- **THEN** 仅绑定同一员工、且支持该任务类型的 Worker 可作为候选
 
 #### Scenario: 未指定数字员工
 - **WHEN** 任务未指定责任数字员工
 - **THEN** 所有支持该任务类型的 Worker 可作为候选，不要求分类或仓库匹配
+
+#### Scenario: 未绑定员工的 Worker 不是通配 Worker
+- **WHEN** 任务指定责任数字员工，而候选 Worker 未绑定数字员工
+- **THEN** 自动分配、手动指定与启动均拒绝该候选
+
+#### Scenario: Worker 必须支持任务类型
+- **WHEN** 创建或编辑 Worker 时将支持任务类型设为空列表或 null
+- **THEN** 拒绝保存，保留已有任务类型配置
 
 ### Requirement: 仓库绑定与调度分离
 系统 SHALL 保留任务与仓库绑定；任务没有仓库、任务与 Worker 的仓库 ID 不一致时 MUST NOT 因此拒绝分配或启动。执行快照、工作区和 base commit SHALL 仍来自实际执行 Worker，不得把任务仓库标记冒充实际执行仓库。

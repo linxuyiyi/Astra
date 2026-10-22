@@ -14,6 +14,6 @@ def worker_assignment_block(
         return "指定 Worker 不支持该任务类型"
     owner = (responsible_employee_id or "").strip()
     bound = (worker.digital_employee_id or "").strip()
-    if owner and bound and owner != bound:
+    if owner and owner != bound:
         return "指定 Worker 不属于该责任数字员工"
     return None

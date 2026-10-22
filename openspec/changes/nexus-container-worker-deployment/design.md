@@ -24,7 +24,7 @@
 
 ## 补充：任务分配
 
-任务的 responsible_employee_id 与 Worker 的 digital_employee_id 表示数字员工关系；任一方未设置时按公共池处理，两边都有值才要求一致。类型必须受 Worker 支持；category_id 与 repository_id 只保留业务/来源语义，不参加接单匹配。统一资格函数供自动分配、手动 API/MCP 与启动复检调用；运行能力和健康门禁继续独立保留。
+任务的 responsible_employee_id 与 Worker 的 digital_employee_id 表示数字员工关系；仅任务未指定员工时忽略 Worker 的员工绑定并按类型领取；任务指定员工时，Worker 必须绑定同一员工。不存在公共 Worker 类型，Worker 未绑定员工不构成通配。每个 Worker 必须配置至少一种支持的任务类型；category_id 与 repository_id 只保留业务/来源语义，不参加接单匹配。统一资格函数供自动分配、手动 API/MCP 与启动复检调用；运行能力和健康门禁继续独立保留。
 
 仓库绑定不迁移、不清空。工作区沿用实际 Worker 的现有 workspace/worktree，执行快照仍记录该 Worker 的仓库与 base commit；本次不按任务仓库隐式 clone、切仓或改写 Worker 配置。
 

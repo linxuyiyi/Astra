@@ -9,7 +9,7 @@
 - 恢复 OpenCode 重启、运行配置就绪等待与网关模型约束。
 - 修复 MySQL 健康写入而不移除并发隔离。
 - 明确 Python 引导和进程配置重载，提供启用分类查询 MCP。
-- 补充任务分配修复：取消任务与 Worker 的仓库 ID 一致约束，按任务类型与数字员工筛选；未配置数字员工时使用公共池，任务分类不限制接单。
+- 补充任务分配修复：取消任务与 Worker 的仓库 ID 一致约束，按任务类型与数字员工筛选；任务未指定数字员工时按支持的任务类型领取，任务分类不限制接单。
 - 语音输入改为绑定网关 ASR 路由；网关增加语音识别类型、音频转写代理与探测，独立本地 ASR 提供兼容接口。
 
 ## Capabilities
@@ -18,7 +18,7 @@
 
 - `nexus-container-worker`：容器 Worker 部署、传输、安全重启与健康观测。
 - `nexus-task-category-discovery`：认证员工读取已启用任务分类。
-- `nexus-task-worker-routing`：任务类型、数字员工与公共 Worker 池的一致分配规则。
+- `nexus-task-worker-routing`：任务类型与任务责任数字员工的一致分配规则。
 - `nexus-gateway-speech-input`：统一网关语音识别模型与聊天语音输入配置。
 
 ### Modified Capabilities

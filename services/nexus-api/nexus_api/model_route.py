@@ -64,7 +64,9 @@ async def fetch_routes(url: str) -> list[dict[str, Any]]:
     return [item for item in payload if isinstance(item, dict)]
 
 
-async def require_enabled_route(route_id: str, *, loader=None) -> dict[str, str]:
+async def require_enabled_route(
+    route_id: str, *, loader=None, model_type: str = "CHAT"
+) -> dict[str, str]:
     """返回已启用路由的 id 和模型名。响应里不带密钥。"""
 
     wanted = route_id.strip()
@@ -77,6 +79,8 @@ async def require_enabled_route(route_id: str, *, loader=None) -> dict[str, str]
         raise ModelRouteError("模型路由不存在")
     if not match.get("enabled"):
         raise ModelRouteError("模型路由未启用")
+    if match.get("model_type", "CHAT") != model_type:
+        raise ModelRouteError(f"必须选择 {model_type} 类型的模型路由")
     model = str(match.get("model") or "").strip()
     if not model:
         raise ModelRouteError("模型路由没有模型名")
@@ -92,8 +96,10 @@ def chat_config(credential_id: str, model: str) -> dict[str, Any]:
     }
 
 
-async def chat_config_for_route(client: AgentScopeClient, route_id: str, *, loader=None) -> dict[str, Any]:
-    route = await require_enabled_route(route_id, loader=loader)
+async def chat_config_for_route(
+    client: AgentScopeClient, route_id: str, *, loader=None, model_type: str = "CHAT"
+) -> dict[str, Any]:
+    route = await require_enabled_route(route_id, loader=loader, model_type=model_type)
     key = gateway_api_key()
     base_url = gateway_base_url()
     try:

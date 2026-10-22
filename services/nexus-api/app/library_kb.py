@@ -173,7 +173,7 @@ async def sync_published_item(item) -> None:
 
     client = AgentScopeClient(settings.agentscope_base_url, settings.agentscope_user_id)
     try:
-        routed = await chat_config_for_route(client, config["model_route_id"])
+        routed = await chat_config_for_route(client, config["model_route_id"], model_type="EMBEDDING")
         routed.pop("parameters", None)
         routed["dimensions"] = config["dimensions"]
         api = AgentScopeKnowledgeApi(settings.agentscope_base_url, settings.agentscope_user_id, routed)

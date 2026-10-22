@@ -28,7 +28,7 @@ def test_health(client: TestClient):
     body = response.json()
     assert body["status"] == "ok"
     assert body["model_loaded"] is True
-    assert body["model"] == "sensevoice-small-int8"
+    assert body["model"] == "sensevoice-small"
     assert body["uptime_seconds"] >= 0
 
 
@@ -38,8 +38,53 @@ def test_models(client: TestClient):
     models = response.json()["models"]
     assert len(models) == 1
     assert models[0]["loaded"] is True
-    assert models[0]["provider"] == "sherpa-onnx"
+    assert models[0]["provider"] == "funasr"
     assert "zh" in models[0]["languages"]
+
+
+def test_openai_models(client: TestClient):
+    response = client.get("/v1/models")
+    assert response.status_code == 200
+    ids = {item["id"] for item in response.json()["data"]}
+    assert "sensevoice-small" in ids
+    assert "sensevoice" in ids
+
+
+def test_openai_transcribe_wav(client: TestClient):
+    files = {"file": ("zh-5s.wav", wav_bytes("testdata/zh-5s.wav"), "audio/wav")}
+    response = client.post(
+        "/v1/audio/transcriptions",
+        data={"model": "sensevoice", "response_format": "json"},
+        files=files,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "会议纪要" in body["text"]
+    assert "<|" not in body["text"]
+    assert set(body) == {"text"}
+    assert response.headers["x-asr-elapsed-ms"]
+    assert response.headers["x-asr-total-ms"]
+    assert response.headers["x-asr-duration"].startswith("5.0")
+
+
+def test_openai_rejects_unknown_model(client: TestClient):
+    files = {"file": ("zh-5s.wav", b"not-audio", "audio/wav")}
+    response = client.post(
+        "/v1/audio/transcriptions",
+        data={"model": "unknown", "response_format": "json"},
+        files=files,
+    )
+    assert response.status_code == 404
+
+
+def test_openai_rejects_verbose_json(client: TestClient):
+    files = {"file": ("zh-5s.wav", b"not-audio", "audio/wav")}
+    response = client.post(
+        "/v1/audio/transcriptions",
+        data={"model": "sensevoice", "response_format": "verbose_json"},
+        files=files,
+    )
+    assert response.status_code == 400
 
 
 def test_transcribe_wav(client: TestClient):

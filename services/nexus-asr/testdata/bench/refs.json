@@ -1,0 +1,17 @@
+{
+  "short-3s": {
+    "text": "你好，查询当前任务情况。",
+    "kind": "zh",
+    "file": "short-3s.wav"
+  },
+  "business-4s": {
+    "text": "自动化测试、任务执行、Worker、MCP。",
+    "kind": "business",
+    "file": "business-4s.wav"
+  },
+  "long-30s": {
+    "text": "我们下个季度的重点是把本地语音输入接到 Nexus 聊天窗口。用户点击麦克风后，浏览器录制整句音频，统一服务完成鉴权并选择语音识别路由，网关把音频转发到 Mac 上的 SenseVoiceSmall，识别文字回填输入框，用户确认后再发送给数字员工。请评估识别速度、内存占用和离线部署方案。",
+    "kind": "zh-long",
+    "file": "long-30s.wav"
+  }
+}

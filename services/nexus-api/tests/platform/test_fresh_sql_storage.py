@@ -13,7 +13,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import create_engine, text
 
-from app.sql_storage import INITIAL_REVISION, metadata
+from app.sql_storage import CURRENT_REVISION, metadata
 
 SERVICE = Path(__file__).resolve().parents[2]
 
@@ -38,7 +38,7 @@ def test_initial_schema_is_complete_and_repeatable(tmp_path):
         with engine.begin() as connection:
             assert (
                 connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-                == INITIAL_REVISION
+                == CURRENT_REVISION
             )
             assert not compare_metadata(MigrationContext.configure(connection), metadata())
             connection.execute(
@@ -61,6 +61,46 @@ def test_initial_schema_is_complete_and_repeatable(tmp_path):
             )
     finally:
         engine.dispose()
+
+
+def test_published_init_upgrades_without_losing_routes(tmp_path):
+    database = tmp_path / "published.db"
+    environment = {**os.environ, "ASTRA_DATABASE_URL": f"sqlite+aiosqlite:///{database}"}
+    first = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "0001_init"],
+        cwd=SERVICE, env=environment, text=True, capture_output=True, timeout=30,
+    )
+    assert first.returncode == 0, first.stderr
+    with sqlite3.connect(database) as connection:
+        connection.execute("""
+            INSERT INTO t_nexus_gateway_routes
+            (id, model, pool_id, description, enabled, created_at, updated_at)
+            VALUES ('route-retained', 'retained-model', 'gp_default', '', 1, datetime('now'), datetime('now'))
+        """)
+    from app.gateway.models import GatewayNode, GatewayPool
+
+    old_engine = create_engine(f"sqlite:///{database}")
+    with old_engine.begin() as connection:
+        connection.execute(GatewayPool.__table__.insert().values(id="embed-pool", name="Embedding"))
+        connection.execute(GatewayNode.__table__.insert().values(
+            id="embed-node", name="Embedding", pool_id="embed-pool",
+            base_url="http://embedding.test", probe_strategy="EMBEDDING",
+        ))
+        connection.execute(text("""
+            INSERT INTO t_nexus_gateway_routes
+            (id, model, pool_id, description, enabled, created_at, updated_at)
+            VALUES ('embed-route', 'embedding', 'embed-pool', '', 1, datetime('now'), datetime('now'))
+        """))
+    old_engine.dispose()
+    result = upgrade(database)
+    assert result.returncode == 0, result.stderr
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT model, model_type FROM t_nexus_gateway_routes WHERE id='route-retained'"
+        ).fetchone() == ("retained-model", "CHAT")
+        assert connection.execute(
+            "SELECT model_type FROM t_nexus_gateway_routes WHERE id='embed-route'"
+        ).fetchone() == ("EMBEDDING",)
 
 
 @pytest.mark.parametrize("version", [None, "0058_drop_pool_route_weight"])

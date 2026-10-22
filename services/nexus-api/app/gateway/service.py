@@ -532,6 +532,9 @@ class GatewayControlService:
         before = self._route_dict(route)
         data = payload.model_dump(exclude_unset=True)
         model = data.get("model", route.model)
+        model_type = data.get("model_type", route.model_type)
+        if model_type not in {"CHAT", "EMBEDDING", "ASR"}:
+            raise GatewayConflict("路由模型类型不能为空")
         pool_id = data.get("pool_id", route.pool_id)
         if not model or not model.strip():
             raise GatewayConflict("路由模型不能为空")
@@ -802,6 +805,7 @@ class GatewayControlService:
         return {
             "id": route.id,
             "model": route.model,
+            "model_type": route.model_type,
             "pool_id": route.pool_id,
             "target_model": route.target_model,
             "description": route.description,

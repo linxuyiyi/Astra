@@ -1,207 +1,158 @@
-# Linux ARM64 离线部署
+# Linux ARM64 部署
 
-> 本机没有 Linux ARM64 实机，也没有可用的 Docker/模拟器；本文的命令、wheel 集合和离线解析已经验证，**但目标服务器上的运行验收仍需执行第 8 节清单**。不要把“离线解析通过”当成“Linux 实机已验证”。
+> 本次验收只在 Mac M4 实机运行 FunASR。Linux ARM64 的脚本、wheel 解析和 systemd 模板已经准备，但**未在 Linux 实机启动模型**；上线前必须按第 7 节清单执行。不要把“wheel 下载成功”当成“Linux 已验收”。
 
 ## 1. 目标环境
 
-| 项 | 要求 | 检查命令 |
+| 项 | 要求 | 检查 |
 |---|---|---|
 | 架构 | aarch64 / arm64 | `uname -m` |
-| glibc | **>= 2.28**（PyAV 19 的 manylinux_2_28 wheel） | `ldd --version` |
-| Python | **3.12**（离线 wheels 为 cp312） | `python3 --version` |
+| glibc | >= 2.28（PyAV） | `ldd --version` |
+| Python | 3.12（venv 独立） | `python3 --version` |
 | 进程管理 | systemd | `systemctl --version` |
-| 反向代理 | Nginx（现有 Nexus 站点） | `nginx -v` |
-| 磁盘 | 源码 + venv + 模型约 1.2 GB | `df -h /opt` |
-| 内存 | 建议 >= 2 GB 空闲；常驻约 800 MB | `free -m` |
+| 内存 | 建议 >= 4 GB 空闲；常驻约 1.1 GB | `free -m` |
+| 磁盘 | 源码 + venv + 模型约 4 GB | `df -h /opt` |
+| 网络 | 安装期可访问 PyPI/ModelScope；运行期可离线 | `curl -I https://www.modelscope.cn` |
 
-- 不依赖 GPU、CUDA、外网。
-- 不安装/替换系统 Python；venv 只在应用目录内。
-- 服务默认只监听 `127.0.0.1:19899`。
+不依赖 GPU/CUDA；不替换系统 Python；服务只监听 `127.0.0.1:19899`，由 Nexus 网关调用。
 
-## 2. 在 Mac 上准备离线包
+## 2. 准备离线包（Mac）
 
 ```bash
 cd services/nexus-asr
 
-# 1) 下载 Linux ARM64 的完整 wheel 集合（20 个，约 66 MB）
+# Linux ARM64 wheels（FunASR、PyTorch、PyAV、FastAPI 等）
 ./scripts/prepare-linux-wheels.sh
 
-# 2) 下载并校验模型（228 MB）
+# 固定模型目录（约 936 MB）
 ./download-model.sh
 
-# 3) 打包（不含 .venv、缓存、测试结果）
-tar czf nexus-asr-offline-linux-arm64.tar.gz \
-  app static models wheels \
-  config.yaml .env.example requirements.txt \
-  start-linux.sh install-offline.sh download-model.sh \
-  deploy docs README.md testdata
+tar czf nexus-asr-funasr-linux-arm64.tar.gz \
+  app static models wheels config.yaml .env.example requirements*.txt \
+  nexus-asr.sh start-linux.sh install-offline.sh download-model.sh \
+  deploy docs README.md testdata scripts
 
-shasum -a 256 nexus-asr-offline-linux-arm64.tar.gz   # Linux: sha256sum
+shasum -a 256 nexus-asr-funasr-linux-arm64.tar.gz
 ```
 
-- `wheels/` 含 `sherpa_onnx-1.13.2-cp312-cp312-manylinux2014_aarch64...whl`、`av-19.0.1-cp312-abi3-manylinux_2_28_aarch64.whl`、numpy、pydantic-core 等。
-- 下载脚本使用两套平台标签（`manylinux_2_28_aarch64` + `manylinux2014_aarch64`），因为不同依赖的 wheel 标签不同。
-- 所有 wheel 已用 `pip install --dry-run --no-index` 做过完整性解析。
-- 模型校验：大小 + SHA256（见 README）。
+注意：
 
-## 3. 上传与解压
+- `prepare-linux-wheels.sh` 会为 `requirements.txt` 下载 aarch64 wheel；PyTorch 的 Linux ARM64 CPU wheel 可能来自 PyPI 或需要 `--extra-index-url`。首次执行请检查日志和 `wheels/` 是否完整。
+- 模型目录 `models/SenseVoiceSmall/` 与 VAD 缓存 `models/modelscope/` 必须一起打包，或目标机联网首次下载。
+- `models/` 已被 `.gitignore` 忽略，不会进入 Git。
+
+## 3. 上传与安装
 
 ```bash
-# 在公司服务器上
 sudo mkdir -p /opt/nexus-asr
-sudo tar xzf nexus-asr-offline-linux-arm64.tar.gz -C /opt/nexus-asr --strip-components=0
+sudo tar xzf nexus-asr-funasr-linux-arm64.tar.gz -C /opt/nexus-asr
 sudo useradd --system --home /opt/nexus-asr --shell /usr/sbin/nologin nexus-asr
 sudo chown -R nexus-asr:nexus-asr /opt/nexus-asr
-```
-
-如果压缩包内还有顶层目录，请按实际结构调整，确保 `/opt/nexus-asr/app/main.py` 存在。
-
-## 4. 离线安装
-
-```bash
 cd /opt/nexus-asr
 sudo -u nexus-asr ./install-offline.sh
 ```
 
-脚本会：
+`install-offline.sh`：
 
-1. 检查 `uname -m` 为 aarch64/arm64；
-2. 检查 Python 3.12、glibc >= 2.28；
-3. 在当前目录创建 `.venv`（不碰系统 Python）；
-4. 用 `pip install --no-index --find-links wheels --only-binary=:all:` 离线安装；
-5. 校验模型大小 + SHA256。
+1. 校验 aarch64、Python 3.12、glibc；
+2. 在 `/opt/nexus-asr/.venv` 创建独立虚拟环境；
+3. `pip install --no-index --find-links wheels`；
+4. 用 `app.preflight` 校验模型文件，不启动服务。
 
-如果失败：
-
-- `Python 3.12 is required`：安装 3.12 到 `/usr/local` 或用户目录，不要覆盖系统 Python；
-- `glibc >= 2.28`：目标系统过旧，需要升级系统或改用兼容的 PyAV 构建；
-- `No matching distribution`：`wheels/` 不完整，回 Mac 重新执行 `prepare-linux-wheels.sh`。
-
-## 5. 配置
+## 4. 配置
 
 ```bash
 cd /opt/nexus-asr
 sudo -u nexus-asr cp .env.example .env
-sudo -u nexus-asr vi .env
+sudo -u nexus-asr vi config.yaml
 ```
 
 生产建议：
+
+```yaml
+server:
+  host: 127.0.0.1
+  port: 19899
+  request_timeout_seconds: 60
+  max_concurrency: 2
+asr:
+  provider: funasr
+  model: sensevoice-small
+  model_dir: /opt/nexus-asr/models/SenseVoiceSmall
+  cache_dir: /opt/nexus-asr/models/modelscope
+  num_threads: 4
+  auto_download: false
+  offline: true
+```
 
 ```dotenv
 NEXUS_ASR_CONFIG=/opt/nexus-asr/config.yaml
 NEXUS_ASR_HOST=127.0.0.1
 NEXUS_ASR_PORT=19899
-NEXUS_ASR_LOG_LEVEL=info
 NEXUS_ASR_OFFLINE=1
+NEXUS_ASR_AUTO_DOWNLOAD=0
 ```
 
-并把 `config.yaml` 的 `asr.auto_download` 改为 `false`，避免运行期任何下载尝试。
-
-## 6. systemd
+## 5. systemd
 
 ```bash
 sudo cp deploy/nexus-asr.service /etc/systemd/system/nexus-asr.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now nexus-asr
 sudo systemctl status nexus-asr
-```
-
-- `ExecStartPre` 会再次校验模型；
-- `ExecStartPost` 轮询 `/health`，60 s 未就绪则单元失败；
-- `Restart=always`，异常退出后 3 s 重启；
-- 日志：`journalctl -u nexus-asr -f`；
-- 服务被 `ProtectSystem=strict` 限制，只有 `models/` 可写；
-- 如果 `/usr/bin/curl` 不存在，请安装 curl 或改用脚本做健康检查。
-
-验证：
-
-```bash
 curl -fsS http://127.0.0.1:19899/health
-curl -fsS http://127.0.0.1:19899/api/asr/models
-curl -X POST -F "file=@testdata/zh-5s.wav" \
-  http://127.0.0.1:19899/api/asr/transcribe
+curl -fsS http://127.0.0.1:19899/v1/models
+curl -X POST -F "file=@testdata/zh-5s.wav" -F "model=sensevoice" \
+  http://127.0.0.1:19899/v1/audio/transcriptions
 ```
 
-## 7. Nginx
+日志：`journalctl -u nexus-asr -f`。服务单元只允许写 `models/`，其余文件系统只读。
 
-把 `deploy/nginx-nexus-asr.conf` 中的：
+## 6. 接入 Nexus 网关（不要暴露公网）
 
-- `limit_req_zone`、`upstream` 放入 `http {}`；
-- `/api/asr/transcribe`、`/api/asr/models` 放入现有 Nexus 的 `server {}`。
+在 Nexus **API 网关 → 上游节点**新增：
 
-要点：
-
-- **保留 Nexus 现有登录鉴权**。如果使用 `auth_request`，必须在两个 `location` 中显式加上，因为精确匹配的 location 不会继承父级 `/api/` 的鉴权配置。
-- `client_max_body_size 12m`；与 `server.max_upload_mb` 保持一致。
-- 按 IP 限流：示例 30 r/min，burst 5；应用内还有 120 r/min 的全局保护。
-- `proxy_read_timeout 70s`，大于应用 `request_timeout_seconds=30s`。
-- 不要暴露 `19899` 到公网；Nginx 只反代 `/api/asr/*`。
-- 不要把 `/health` 添加到公网 location，避免与 Nexus 现有路径冲突；监控直接访问 `127.0.0.1:19899/health`。
-
-示例（节选）：
-
-```nginx
-limit_req_zone $binary_remote_addr zone=nexus_asr:10m rate=30r/m;
-
-upstream nexus_asr {
-    server 127.0.0.1:19899;
-    keepalive 8;
-}
-
-location = /api/asr/transcribe {
-    # auth_request /api/auth/verify;   # 按 Nexus 现有鉴权方式补充
-    limit_req zone=nexus_asr burst=5 nodelay;
-    client_max_body_size 12m;
-    proxy_pass http://nexus_asr;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Request-ID $request_id;
-    proxy_read_timeout 70s;
-    proxy_buffering off;
-}
+```text
+name:          Linux SenseVoiceSmall
+base_url:      http://<linux-host>:19899   # 必须是网关能访问的地址
+auth_type:     NONE
+probe_strategy: ASR
+models:        ["sensevoice-small"]
 ```
+
+如果网关与 ASR 同机，可用 `http://127.0.0.1:19899`；跨机时不要用 `127.0.0.1`。随后创建 ASR 资源池/路由并在「模型路由」页选择「数字员工语音输入」。
+
+- 不要在公网 Nginx 暴露 `/api/asr/*` 直连 ASR；浏览器只访问 Nexus。
+- 跨机时把 ASR 监听地址改为受控内网地址（例如 `0.0.0.0` 或指定网卡），并用防火墙只允许网关 IP。
+- 网关节点探测策略必须是 ASR；探测请求会发送 0.5 s 静音 WAV 并校验 `{"text": ...}`。
+
+## 7. Linux 上线验收清单
+
+- [ ] `uname -m` = aarch64；`ldd --version` >= 2.28；`python3 --version` = 3.12
+- [ ] `install-offline.sh` 成功；`.venv/bin/python -c "import funasr, torch, av"`
+- [ ] `systemctl start nexus-asr`，60 s 内 `/health` 为 `ok`
+- [ ] `/v1/models` 返回 `sensevoice-small`
+- [ ] 2.9 s / 5 s / 10 s / 28.8 s 中文 WAV 识别成功，记录 `total_ms`/RTF
+- [ ] WebM/Opus（浏览器录音）识别成功
+- [ ] 中英混合与业务术语记录 CER
+- [ ] 静音、噪声、空文件、非音频、13 MiB、61 s 均返回预期错误
+- [ ] 连续 10 次热启动，记录 mean/min/max
+- [ ] 通过 Nexus 网关转写成功，记录网关额外耗时
+- [ ] `systemctl restart` 后模型恢复，记录冷启动时间
+- [ ] 进程 RSS/CPU（`systemd-cgtop` 或 `ps`）
+- [ ] 日志无音频、无转写文本、无 Key
+- [ ] 目标机离线启动（`NEXUS_ASR_OFFLINE=1`）
+
+性能脚本：
 
 ```bash
-sudo nginx -t && sudo systemctl reload nginx
+NEXUS_GATEWAY_API_KEY=... .venv/bin/python scripts/benchmark.py \
+  --output results/perf-linux-arm64.json
 ```
 
-## 8. 上线验收清单
+## 8. 已知限制
 
-在目标 Linux ARM64 上执行：
-
-- [ ] `uname -m` = aarch64，`ldd --version` >= 2.28，`python3 --version` = 3.12
-- [ ] `install-offline.sh` 成功，`.venv/bin/python -c "import sherpa_onnx, av"`
-- [ ] `systemctl start nexus-asr`，`/health` 在 60 s 内 `status=ok`
-- [ ] 5 s / 10 s / 30 s 中文 WAV 识别，记录 `total_ms`、`elapsed_ms`、RTF
-- [ ] WebM/Opus（浏览器录音）识别
-- [ ] 中英混合与技术术语
-- [ ] 连续 20 次，全部成功
-- [ ] 8 并发，无 5xx/429（或按预期限流）
-- [ ] `systemctl restart` 后模型加载时间
-- [ ] 断网/`NEXUS_ASR_OFFLINE=1` 后识别
-- [ ] `ps`/`systemd-cgtop` 记录 RSS 与 CPU
-- [ ] Nginx 代理路径 + 登录鉴权 + 失败重试
-- [ ] 日志中无音频、无识别文本
-
-推荐直接运行：
-
-```bash
-.venv/bin/python scripts/perf_test.py --output results/perf-linux-arm64.json
-```
-
-## 9. 升级与回滚
-
-- 新版本解压到 `/opt/nexus-asr-new`，安装并验证后再切换 systemd 的 `WorkingDirectory`；
-- 模型目录可共用，避免重复下载；
-- 保留上一版目录，回滚时改回 unit 并 `daemon-reload`；
-- 模型升级需同时更新 `app/model_store.py` 的 SHA256 和 URL，并清空旧 `models/`（不可混用）。
-
-## 10. 已知限制
-
-- 本次未在 Linux ARM64 实机运行；性能数据来自 Mac M4，目标机需复测。
-- PyAV 的 manylinux_2_28 要求 glibc >= 2.28；老系统不满足。
-- 离线包约 310 MB（模型 241 MB + wheels 66 MB + 源码）。
-- 服务单 worker；systemd 不要配置多实例共享同一端口。
+- 未在 Linux ARM64 实机验证 FunASR/PyTorch 推理；Mac 的 RTF/CPU 数据不能直接外推到目标服务器。
+- FunASR/PyTorch 的 aarch64 wheel 体积较大，离线包约 2–3 GB（不含模型）；实际以 `wheels/` 为准。
+- 服务单 worker；多实例会重复占用约 1.1 GB 内存。
+- 模型固定目录不要与旧 sherpa-onnx `models/sensevoice-small-int8/` 混用；`provider` 与 `model_dir` 必须匹配。

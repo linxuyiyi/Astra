@@ -466,7 +466,7 @@ async function reloadCatalogs() {
 onMounted(async () => {
   await reloadCatalogs();
   try {
-    routes.value = (await gatewayApi.routes()).filter((item) => item.enabled);
+    routes.value = (await gatewayApi.routes()).filter((item) => item.enabled && item.model_type === 'CHAT');
   } catch (error) {
     routeError.value = error instanceof Error ? error.message : "无法读取模型路由";
   }

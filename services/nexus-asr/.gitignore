@@ -8,3 +8,5 @@ models/*/
 wheels/
 testdata/generated/
 *.log
+
+.run/

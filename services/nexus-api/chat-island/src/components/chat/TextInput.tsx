@@ -36,12 +36,20 @@ import {
 	AttachmentTitle,
 } from '@/components/ui/attachment.tsx';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { AsrShortcutSettings } from '@/components/chat/AsrShortcutSettings.tsx';
+import { useAsrHotkey } from '@/hooks/useAsrHotkey.ts';
 import { useAsrRecorder } from '@/hooks/useAsrRecorder.ts';
 import type { ReplyPhase } from '@/hooks/useMessages';
 import { useTranslation } from '@/i18n/useI18n.ts';
 import type { RealtimeConnectionState } from '@/lib/browserWebRTCTransport';
 import { cn } from '@/lib/utils';
 import { draftKey, readDraft, writeDraft } from '@/nexus/drafts';
+import {
+	formatShortcut,
+	loadAsrShortcut,
+	saveAsrShortcut,
+	type AsrShortcut,
+} from '@/lib/asrShortcut.ts';
 
 /**
  * Represents a file that has been selected and processed (or is being processed).
@@ -97,8 +105,8 @@ interface TextInputProps {
 	onVoiceToggle?: () => void;
 	/** Prevents voice start when no realtime model is configured. */
 	voiceDisabled?: boolean;
-	/** Enable the server-side ASR microphone button (Nexus ASR Server). */
-	localAsrEnabled?: boolean;
+	/** Enable the server-side ASR microphone button (Nexus Gateway). */
+	asrEnabled?: boolean;
 	/**
 	 * Content rendered directly above the input pill, inside the outer
 	 * wrapper that {@link className} styles (e.g. the working directory
@@ -118,7 +126,7 @@ export interface TextInputRef {
 }
 
 /** Server-side ASR can be disabled at build time without changing the UI. */
-const LOCAL_ASR_DEFAULT = import.meta.env.VITE_NEXUS_ASR_ENABLED !== 'false';
+const ASR_DEFAULT = import.meta.env.VITE_NEXUS_ASR_ENABLED !== 'false';
 
 function formatClock(totalSeconds: number): string {
 	const seconds = Math.max(0, Math.floor(totalSeconds));
@@ -167,7 +175,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 			voiceState = 'idle',
 			onVoiceToggle,
 			voiceDisabled = false,
-			localAsrEnabled = LOCAL_ASR_DEFAULT,
+			asrEnabled = ASR_DEFAULT,
 			headerSlot,
 		},
 		ref,
@@ -181,6 +189,9 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 		const [value, setValue] = useState(draft.text);
 		const [files, setFiles] = useState<ProcessedFile[]>(draft.files);
 		const [isFocused, setIsFocused] = useState(false);
+		const [shortcut, setShortcut] = useState<AsrShortcut>(() => loadAsrShortcut());
+		const [shortcutOpen, setShortcutOpen] = useState(false);
+		const sessionKey = draftKey(window.location.search) || 'default';
 		const textareaRef = useRef<HTMLTextAreaElement>(null);
 		const fileInputRef = useRef<HTMLInputElement>(null);
 		const valueRef = useRef(value);
@@ -231,10 +242,30 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 			});
 		}, []);
 
-		const localAsr = useAsrRecorder({
-			enabled: localAsrEnabled && !disabled,
+		const asr = useAsrRecorder({
+			enabled: asrEnabled && !disabled,
 			onText: insertText,
+			sessionKey,
 		});
+
+		const hotkeyEnabled = asrEnabled && !disabled && !shortcutOpen;
+		const canStartHotkey = asr.state === 'idle' || asr.state === 'error';
+		const startHotkey = useCallback(() => asr.start('hotkey'), [asr.start]);
+		const stopHotkey = useCallback(() => asr.stop(), [asr.stop]);
+		const cancelHotkey = useCallback(() => asr.cancel(), [asr.cancel]);
+		useAsrHotkey({
+			shortcut,
+			enabled: hotkeyEnabled,
+			canStart: canStartHotkey,
+			recording: asr.state === 'recording',
+			onStart: startHotkey,
+			onStop: stopHotkey,
+			onCancel: cancelHotkey,
+		});
+		const saveShortcut = useCallback((next: AsrShortcut) => {
+			setShortcut(next);
+			saveAsrShortcut(next);
+		}, []);
 
 		useImperativeHandle(ref, () => ({
 			focus: () => textareaRef.current?.focus(),
@@ -488,27 +519,47 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 						</AttachmentGroup>
 					)}
 
-					{localAsrEnabled && (localAsr.state !== 'idle' || localAsr.error) && (
-						<div className="flex items-center gap-2 px-3 pt-1 text-xs text-muted-foreground">
-							{localAsr.state === 'recording' && (
-								<span className="flex items-center gap-1 text-red-500">
-									<span className="size-1.5 rounded-full bg-red-500" />
-									{t('asr.recording', { time: formatClock(localAsr.seconds) })}
+					{asrEnabled && (asr.state !== 'idle' || asr.error || asr.requesting) && (
+						<div
+							className="flex flex-wrap items-center gap-2 px-3 pt-1 text-xs text-muted-foreground"
+							data-testid="asr-status"
+						>
+							{asr.requesting && (
+								<span className="flex items-center gap-1">
+									<Loader2 className="size-3 animate-spin" />
+									{t('asr.pttRequesting')}
 								</span>
 							)}
-							{localAsr.state === 'transcribing' && (
+							{asr.state === 'recording' && (
+								<>
+									<span className="flex items-center gap-1 text-red-500">
+										<span className="size-1.5 rounded-full bg-red-500" />
+										{asr.source === 'hotkey'
+											? t('asr.pttRecording', { time: formatClock(asr.seconds) })
+											: t('asr.recording', { time: formatClock(asr.seconds) })}
+									</span>
+									<button
+										type="button"
+										className="underline underline-offset-2"
+										onClick={asr.cancel}
+									>
+										{t('asr.pttCancel')}
+									</button>
+								</>
+							)}
+							{asr.state === 'transcribing' && (
 								<span className="flex items-center gap-1">
 									<Loader2 className="size-3 animate-spin" />
 									{t('asr.transcribing')}
 								</span>
 							)}
-							{localAsr.state === 'error' && (
+							{asr.state === 'error' && (
 								<>
-									<span className="text-destructive">{localAsr.error}</span>
+									<span className="text-destructive">{asr.error}</span>
 									<button
 										type="button"
 										className="underline underline-offset-2"
-										onClick={localAsr.retry}
+										onClick={asr.retry}
 									>
 										{t('asr.retry')}
 									</button>
@@ -546,7 +597,8 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							{/* Stands in for the button cluster below — keep the count, the
 							    gap and the ``size-9`` footprint in step with it. */}
 							<div className="flex shrink-0 gap-2">
-								{localAsrEnabled && <div className="size-9" />}
+								{asrEnabled && <div className="hidden h-9 w-[96px] shrink-0 sm:block" />}
+								{asrEnabled && <div className="size-9" />}
 								<div className="size-9" />
 								<div className="size-9" />
 							</div>
@@ -612,28 +664,53 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							className="flex shrink-0 items-center gap-2"
 							style={{ height: `${COLLAPSED_HEIGHT_PX}px` }}
 						>
-							{/* Local ASR (server-side SenseVoice) */}
-							{localAsrEnabled && (
+							{/* Push-to-talk hint: the same recorder, a second entry point. */}
+							{asrEnabled && (
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<button
+											type="button"
+											data-testid="asr-shortcut-hint"
+											aria-label={`${t('asr.pttSettings')}: ${formatShortcut(shortcut)}`}
+											onClick={() => {
+												if (asr.state === 'recording' || asr.requesting) return;
+												setShortcutOpen(true);
+											}}
+											className={cn(
+												'mr-1 hidden h-9 shrink-0 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground transition-colors hover:bg-muted sm:inline-flex',
+												asr.state === 'recording' && 'text-red-500',
+											)}
+										>
+											<Kbd className="h-5 px-1.5">{formatShortcut(shortcut)}</Kbd>
+											<span className="whitespace-nowrap">{t('asr.pttHold')}</span>
+										</button>
+									</TooltipTrigger>
+									<TooltipContent>{t('asr.pttSettingsHint')}</TooltipContent>
+								</Tooltip>
+							)}
+
+							{/* Gateway ASR (server-side transcription) */}
+							{asrEnabled && (
 								<Tooltip>
 									<TooltipTrigger asChild>
 										<Button
 											type="button"
-											variant={localAsr.state === 'recording' ? 'default' : 'ghost'}
+											variant={asr.state === 'recording' ? 'default' : 'ghost'}
 											size="icon-lg"
-											onClick={localAsr.toggle}
-											disabled={disabled || localAsr.state === 'transcribing'}
+											onClick={asr.toggle}
+											disabled={disabled || asr.state === 'transcribing'}
 											aria-label={
-												localAsr.state === 'recording' ? t('asr.stop') : t('asr.start')
+												asr.state === 'recording' ? t('asr.stop') : t('asr.start')
 											}
 											className={cn(
 												'shrink-0 rounded-full',
-												localAsr.state === 'recording' &&
+												asr.state === 'recording' &&
 													'bg-red-500 text-white hover:bg-red-500/90',
 											)}
 										>
-											{localAsr.state === 'transcribing' ? (
+											{asr.state === 'transcribing' ? (
 												<Loader2 className="size-4 animate-spin" />
-											) : localAsr.state === 'recording' ? (
+											) : asr.state === 'recording' ? (
 												<Square className="size-4" />
 											) : (
 												<Mic className="size-4" />
@@ -641,8 +718,8 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 										</Button>
 									</TooltipTrigger>
 									<TooltipContent>
-										{localAsr.state === 'recording'
-											? t('asr.recording', { time: formatClock(localAsr.seconds) })
+										{asr.state === 'recording'
+											? t('asr.recording', { time: formatClock(asr.seconds) })
 											: t('asr.start')}
 									</TooltipContent>
 								</Tooltip>
@@ -709,6 +786,12 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 						</div>
 					</div>
 				</div>
+				<AsrShortcutSettings
+					open={shortcutOpen}
+					shortcut={shortcut}
+					onClose={() => setShortcutOpen(false)}
+					onSave={saveShortcut}
+				/>
 			</div>
 		);
 	},

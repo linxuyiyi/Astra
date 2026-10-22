@@ -4,7 +4,7 @@
 启动时加载已保存配置，后台周期刷新，并周期写入实例心跳；
 每个请求只读内存配置，运行态并发、周期额度与熔断全部经 Redis 原子执行。
 
-只支持 OpenAI 兼容入口：``GET /v1/models`` 与 ``POST /v1/chat/completions``。
+提供模型列表、对话、嵌入与音频转写的 OpenAI 兼容入口。
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config.settings import get_settings
 from app.database import SessionLocal
+from app.gateway.audio import AUDIO_PATH, MAX_AUDIO_BODY_BYTES, parse_audio_upload
 from app.gateway.config import (
     ConfigLoader,
     ConfigRefresher,
@@ -723,6 +724,9 @@ class GatewayDataPlane:
     async def handle_embeddings(self, request: Request) -> Response:
         return await self._handle_model_request(request, path="/v1/embeddings")
 
+    async def handle_transcriptions(self, request: Request) -> Response:
+        return await self._handle_model_request(request, path=AUDIO_PATH)
+
     async def _handle_model_request(self, request: Request, *, path: str) -> Response:
         config = self.config_state.config
         started = utcnow()
@@ -747,13 +751,20 @@ class GatewayDataPlane:
             # 不消费请求体、不接触下游。
             await self._check_revocation(key)
 
-            body = await self._read_bounded_body(request)
-            payload = self._parse_body(body)
+            audio = None
+            body = await self._read_bounded_body(
+                request, limit=MAX_AUDIO_BODY_BYTES if path == AUDIO_PATH else MAX_REQUEST_BODY_BYTES
+            )
+            if path == AUDIO_PATH:
+                audio = parse_audio_upload(body, request.headers.get("content-type", ""))
+                payload = audio.fields
+            else:
+                payload = self._parse_body(body)
             model = payload.get("model")
             if not isinstance(model, str) or not model:
                 raise invalid_request("请求体缺少 model")
             record.model = model
-            record.streaming = bool(payload.get("stream"))
+            record.streaming = False if audio else bool(payload.get("stream"))
             if path == "/v1/embeddings":
                 if record.streaming or "input" not in payload:
                     raise invalid_request("嵌入请求需要 input，且不支持 stream")
@@ -764,6 +775,9 @@ class GatewayDataPlane:
             route = config.routes.get(model)
             if route is None or not route.enabled:
                 raise model_not_found(model)
+            expected_type = "ASR" if audio else "EMBEDDING" if path == "/v1/embeddings" else "CHAT"
+            if route.model_type != expected_type:
+                raise invalid_request("模型路由类型与请求接口不匹配")
             pool = config.pools.get(route.pool_id)
             if pool is None or not pool.enabled:
                 raise model_not_found(model)
@@ -800,7 +814,9 @@ class GatewayDataPlane:
                 try:
                     api_key = self._decode_node_key(node)
                     headers = build_upstream_headers(request.headers, node, api_key)
-                    if actual_model != model:
+                    if audio:
+                        upstream_body, headers["content-type"] = audio.encode(actual_model)
+                    elif actual_model != model:
                         upstream_payload = dict(payload)
                         upstream_payload["model"] = actual_model
                         upstream_body = json.dumps(upstream_payload).encode("utf-8")
@@ -832,7 +848,23 @@ class GatewayDataPlane:
                     upstream = await self.proxy.send(upstream_request, stream=False)
                     record.ttfb_ms = elapsed_ms(started)
                     record.status_code = upstream.status_code
-                    await self._complete_non_stream(record, upstream, node_scope)
+                    if audio and upstream.is_success:
+                        try:
+                            valid_text = isinstance(upstream.json().get("text"), str)
+                        except (ValueError, AttributeError):
+                            valid_text = False
+                        if not valid_text:
+                            record.status_code = 502
+                            await self._record_node_failure(node_scope)
+                            raise upstream_protocol_error()
+                    # 语音转写的 4xx 是客户端音频问题，不应让上游节点降级或开熔断；
+                    # 鉴权、限流和 5xx 仍然计入节点失败。
+                    node_failure = not audio or upstream.status_code >= 500 or (
+                        upstream.status_code in {401, 403, 429}
+                    )
+                    await self._complete_non_stream(
+                        record, upstream, node_scope, node_failure=node_failure
+                    )
                     await self._safe_release(SCOPE_NODE, node.id, node_lease)
                     response_content = upstream.content
                     if actual_model != model and 200 <= upstream.status_code < 300:
@@ -917,27 +949,29 @@ class GatewayDataPlane:
             raise key_expired()
         return key
 
-    async def _read_bounded_body(self, request: Request) -> bytes:
+    async def _read_bounded_body(
+        self, request: Request, *, limit: int = MAX_REQUEST_BODY_BYTES
+    ) -> bytes:
         """有界读取请求体：先按 Content-Length 拒绝，再按实际流字节强制上限。
 
         不缓存到 ``request._body``，也不回显请求体；超限时抛结构化 413，交由统一
         异常处理返回 OpenAI 兼容错误体。
         """
-        message = f"请求体超过 {MAX_REQUEST_BODY_BYTES // (1024 * 1024)} MiB 上限"
+        message = f"请求体超过 {limit} 字节上限"
         declared = request.headers.get("content-length")
         if declared is not None:
             try:
                 content_length = int(declared)
             except ValueError:
                 content_length = None
-            if content_length is not None and content_length > MAX_REQUEST_BODY_BYTES:
+            if content_length is not None and content_length > limit:
                 raise payload_too_large(message)
 
         chunks: list[bytes] = []
         total = 0
         async for chunk in request.stream():
             total += len(chunk)
-            if total > MAX_REQUEST_BODY_BYTES:
+            if total > limit:
                 raise payload_too_large(message)
             chunks.append(chunk)
         return b"".join(chunks)
@@ -1043,15 +1077,23 @@ class GatewayDataPlane:
     # ── 转发与计量 ─────────────────────────────────────────────────────
 
     async def _complete_non_stream(
-        self, record: RequestRecord, response: httpx.Response, node_scope: str
+        self,
+        record: RequestRecord,
+        response: httpx.Response,
+        node_scope: str,
+        *,
+        node_failure: bool = True,
     ) -> None:
         usage = self._json_usage(response)
         record.duration_ms = elapsed_ms(record.started_at)
         await self._record_usage(record, usage)
         if 200 <= response.status_code < 400:
             await self._record_node_success(node_scope)
-        else:
+        elif node_failure:
             await self._record_node_failure(node_scope)
+            record.error_code = record.error_code or f"UPSTREAM_{response.status_code}"
+        else:
+            # 客户端输入错误既不奖励也不惩罚节点。
             record.error_code = record.error_code or f"UPSTREAM_{response.status_code}"
 
     def _json_usage(self, response: httpx.Response) -> dict[str, Any] | None:
@@ -1404,6 +1446,10 @@ def create_gateway_app(data_plane: GatewayDataPlane) -> FastAPI:
     @application.post("/v1/embeddings")
     async def embeddings(request: Request) -> Response:
         return await data_plane.handle_embeddings(request)
+
+    @application.post(AUDIO_PATH)
+    async def transcriptions(request: Request) -> Response:
+        return await data_plane.handle_transcriptions(request)
 
     return application
 

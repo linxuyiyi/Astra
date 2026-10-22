@@ -67,18 +67,38 @@ class ServerConfig:
 
 @dataclass
 class AsrConfig:
-    provider: str = "sherpa-onnx"
-    model: str = "sensevoice-small-int8"
-    model_dir: Path = SERVICE_ROOT / "models" / "sensevoice-small-int8"
+    provider: str = "funasr"
+    model: str = "sensevoice-small"
+    model_dir: Path = SERVICE_ROOT / "models" / "SenseVoiceSmall"
     device: str = "cpu"
     num_threads: int = 4
     language: str = "auto"
     use_itn: bool = True
     auto_download: bool = True
     offline: bool = False
+    # sherpa-onnx download locations (only used by that provider).
     model_url: str = ""
     tokens_url: str = ""
+    # FunASR pipeline settings. The model is a local directory so a normal
+    # start never downloads weights; VAD is cached under cache_dir.
+    vad_model: str = "fsmn-vad"
+    vad_max_segment_ms: int = 30000
+    hub: str = "ms"
+    cache_dir: Path = SERVICE_ROOT / "models" / "modelscope"
     languages: list[str] = field(default_factory=lambda: ["zh", "en", "ja", "ko", "yue"])
+
+    @property
+    def model_files(self) -> tuple[str, ...]:
+        if self.provider == "funasr":
+            return (
+                "model.pt",
+                "config.yaml",
+                "tokens.json",
+                "am.mvn",
+                "chn_jpn_yue_eng_ko_spectok.bpe.model",
+                "configuration.json",
+            )
+        return ("model.int8.onnx", "tokens.txt")
 
 
 @dataclass
@@ -150,10 +170,23 @@ def load_settings(config_path: str | os.PathLike[str] | None = None) -> Settings
         docs_enabled=_as_bool(server_raw.get("docs_enabled", True)),
     )
 
-    model_dir_raw = asr_raw.get("model_dir", "./models/sensevoice-small-int8")
+    provider = str(asr_raw.get("provider", "funasr")).strip().lower()
+    if provider not in {"funasr", "sherpa-onnx"}:
+        raise ConfigError(
+            f"unsupported asr.provider: {provider!r} (funasr or sherpa-onnx)"
+        )
+    default_model = "sensevoice-small" if provider == "funasr" else "sensevoice-small-int8"
+    default_dir = "./models/SenseVoiceSmall" if provider == "funasr" else "./models/sensevoice-small-int8"
+
+    model_dir_raw = asr_raw.get("model_dir", default_dir)
     model_dir = Path(str(model_dir_raw)).expanduser()
     if not model_dir.is_absolute():
         model_dir = (path.parent / model_dir).resolve()
+
+    cache_dir_raw = asr_raw.get("cache_dir", "./models/modelscope")
+    cache_dir = Path(str(cache_dir_raw)).expanduser()
+    if not cache_dir.is_absolute():
+        cache_dir = (path.parent / cache_dir).resolve()
 
     language = str(asr_raw.get("language", "auto")).strip().lower()
     if language not in {"auto", "zh", "en", "ja", "ko", "yue"}:
@@ -161,10 +194,6 @@ def load_settings(config_path: str | os.PathLike[str] | None = None) -> Settings
             "asr.language must be one of auto/zh/en/ja/ko/yue, "
             f"got {language!r}"
         )
-
-    provider = str(asr_raw.get("provider", "sherpa-onnx")).strip().lower()
-    if provider != "sherpa-onnx":
-        raise ConfigError(f"unsupported asr.provider: {provider!r}")
 
     device = str(asr_raw.get("device", "cpu")).strip().lower()
     if device != "cpu":
@@ -176,7 +205,7 @@ def load_settings(config_path: str | os.PathLike[str] | None = None) -> Settings
 
     asr = AsrConfig(
         provider=provider,
-        model=str(asr_raw.get("model", "sensevoice-small-int8")),
+        model=str(asr_raw.get("model", default_model)),
         model_dir=model_dir,
         device=device,
         num_threads=_as_int(asr_raw.get("num_threads", 4), "asr.num_threads", 1),
@@ -186,6 +215,12 @@ def load_settings(config_path: str | os.PathLike[str] | None = None) -> Settings
         offline=_as_bool(asr_raw.get("offline", False)),
         model_url=str(asr_raw.get("model_url", "")),
         tokens_url=str(asr_raw.get("tokens_url", "")),
+        vad_model=str(asr_raw.get("vad_model", "fsmn-vad")),
+        vad_max_segment_ms=_as_int(
+            asr_raw.get("vad_max_segment_ms", 30000), "asr.vad_max_segment_ms", 1000
+        ),
+        hub=str(asr_raw.get("hub", "ms")),
+        cache_dir=cache_dir,
         languages=[str(item) for item in languages_raw],
     )
 
@@ -197,8 +232,19 @@ def load_settings(config_path: str | os.PathLike[str] | None = None) -> Settings
         server.port = _as_int(value, "NEXUS_ASR_PORT", 1)
     if value := _env_override("NEXUS_ASR_LOG_LEVEL"):
         server.log_level = value.lower()
+    if value := _env_override("NEXUS_ASR_PROVIDER"):
+        provider = value.strip().lower()
+        if provider not in {"funasr", "sherpa-onnx"}:
+            raise ConfigError(
+                f"unsupported NEXUS_ASR_PROVIDER: {provider!r} (funasr or sherpa-onnx)"
+            )
+        asr.provider = provider
     if value := _env_override("NEXUS_ASR_MODEL_DIR"):
         asr.model_dir = Path(value).expanduser().resolve()
+    if value := _env_override("NEXUS_ASR_CACHE_DIR"):
+        asr.cache_dir = Path(value).expanduser().resolve()
+    if value := _env_override("NEXUS_ASR_VAD_MODEL"):
+        asr.vad_model = value
     if value := _env_override("NEXUS_ASR_NUM_THREADS"):
         asr.num_threads = _as_int(value, "NEXUS_ASR_NUM_THREADS", 1)
     if value := _env_override("NEXUS_ASR_MAX_CONCURRENCY"):

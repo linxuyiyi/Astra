@@ -1,5 +1,5 @@
 [Unit]
-Description=Nexus ASR Server (sherpa-onnx SenseVoice-Small INT8)
+Description=Nexus ASR Server (FunASR SenseVoiceSmall, CPU)
 Documentation=file:/opt/nexus-asr/README.md
 After=network-online.target
 Wants=network-online.target
@@ -15,6 +15,9 @@ EnvironmentFile=-/opt/nexus-asr/.env
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=NEXUS_ASR_CONFIG=/opt/nexus-asr/config.yaml
+Environment=NEXUS_ASR_PROVIDER=funasr
+Environment=NEXUS_ASR_OFFLINE=1
+Environment=NEXUS_ASR_AUTO_DOWNLOAD=0
 
 # Verify/download the model before starting. The download only happens on the
 # very first start; once models/ is populated the service is fully offline.

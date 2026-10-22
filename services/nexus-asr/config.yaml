@@ -6,11 +6,11 @@ server:
   max_upload_mb: 12
   # Reject audio longer than this after decoding.
   max_audio_seconds: 60
-  # Number of concurrent inference requests. Each request uses asr.num_threads
-  # ONNX threads, so keep this small on shared machines.
+  # FunASR inference is serialised per loaded pipeline. Keep the queue small on
+  # a shared laptop; ONNX-only sherpa-onnx can use a higher value.
   max_concurrency: 2
   queue_timeout_seconds: 5
-  request_timeout_seconds: 30
+  request_timeout_seconds: 60
   rate_limit_per_minute: 120
   # Trust X-Forwarded-For from the local Nginx proxy; the service binds to
   # 127.0.0.1 by default so this cannot be reached directly.
@@ -18,9 +18,18 @@ server:
   docs_enabled: true
 
 asr:
-  provider: sherpa-onnx
-  model: sensevoice-small-int8
-  model_dir: ./models/sensevoice-small-int8
+  # funasr (default) or sherpa-onnx.
+  provider: funasr
+  model: sensevoice-small
+  # Fixed model directory from ModelScope iic/SenseVoiceSmall. Never
+  # re-downloaded while these files are intact.
+  model_dir: ./models/SenseVoiceSmall
+  # VAD and FunASR caches live under the repository so a normal start is
+  # offline and repeatable.
+  cache_dir: ./models/modelscope
+  vad_model: fsmn-vad
+  vad_max_segment_ms: 30000
+  hub: ms
   device: cpu
   num_threads: 4
   # auto | zh | en | ja | ko | yue
@@ -29,3 +38,8 @@ asr:
   auto_download: true
   offline: false
   languages: [zh, en, ja, ko, yue]
+
+# Optional low-memory ONNX engine. Set provider: sherpa-onnx and use:
+#   model: sensevoice-small-int8
+#   model_dir: ./models/sensevoice-small-int8
+#   model_url / tokens_url: optional mirrors

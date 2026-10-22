@@ -27,6 +27,10 @@
 对话无关。撤销 ASR 就绪探测导致的入口隐藏，恢复默认麦克风入口及原有错误/重试；
 转写仍插入当前光标位置，不自动发送。
 
+2026-10-23 增加 Push-to-Talk：默认 Alt+K（macOS Option+K）按住录音、松开任一键
+结束，Esc 取消；快捷键提示在麦克风按钮旁，可在本地偏好中修改并持久化。快捷键与
+麦克风按钮共用 `useAsrRecorder`，新增组合键、IME、失焦、权限未完成和会话绑定保护。
+
 ## 未搬的部分
 
 `src/api/**`、`src/pages/**`、`src/components/panel/**`、`src/components/dialog/**`、

@@ -10,7 +10,15 @@ from app.config import load_settings
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_actual_model_verifies():
+def test_funasr_model_verifies():
+    info = model_store.verify_funasr_model(ROOT / "models/SenseVoiceSmall")
+    assert info.provider == "funasr"
+    assert info.model_id == "sensevoice-small"
+    assert info.model_path.name == "model.pt"
+    assert info.tokens_path.name == "tokens.json"
+
+
+def test_actual_sherpa_model_verifies():
     info = model_store.verify_model(ROOT / "models/sensevoice-small-int8")
     assert info.model_bytes == model_store.MODEL_SIZE
     assert info.tokens_bytes == model_store.TOKENS_SIZE
@@ -32,7 +40,7 @@ def test_wrong_size_is_rejected(tmp_path: Path):
 
 def test_config_defaults():
     settings = load_settings()
-    assert settings.asr.provider == "sherpa-onnx"
+    assert settings.asr.provider == "funasr"
     assert settings.asr.device == "cpu"
     assert settings.asr.num_threads >= 1
     assert settings.server.max_audio_seconds == 60

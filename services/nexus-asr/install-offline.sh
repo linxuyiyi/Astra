@@ -41,11 +41,11 @@ fi
 .venv/bin/python -m pip install --no-index --find-links wheels --only-binary=:all: -r requirements.txt
 
 echo "== model check =="
-.venv/bin/python -m app.model_store --check --model-dir "${NEXUS_ASR_MODEL_DIR:-models/sensevoice-small-int8}"
+.venv/bin/python -m app.model_store --check --provider "${NEXUS_ASR_PROVIDER:-funasr}"
 
 echo
 echo "Install OK. Next:"
 echo "  1. cp .env.example .env  (optional; edit host/port/offline)"
 echo "  2. ./start-linux.sh"
-echo "  3. install deploy/nexus-asr.service and deploy/nginx-nexus-asr.conf"
-echo "     (see docs/deployment-linux-arm64.md)"
+echo "  3. install deploy/nexus-asr.service and register the ASR node in Nexus"
+echo "     (see docs/deployment-linux-arm64.md; do not expose 19899 publicly)"

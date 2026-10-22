@@ -1,126 +1,125 @@
-# Nexus 前端集成说明
+# Nexus 语音输入集成
 
-## 1. 现状与落点
-
-Nexus v1.4.8 的聊天输入并不在 Vue 组件里，而是在 **chat-island（React 19）**：
+Nexus v1.5.0 的语音输入链路：
 
 ```text
-services/nexus-api/web/src/views/DigitalEmployeeChatView.vue   (Vue 3 外壳)
-  └── <iframe class="chat-island" src=".../nexus-chat/...">    (同源 iframe)
-        └── services/nexus-api/chat-island/src/components/chat/TextInput.tsx
-              └── 实际的 textarea / 发送 / 语音按钮
+services/nexus-api/chat-island  (React 输入框)
+  └── useAsrRecorder: getUserMedia + MediaRecorder(WebM/Opus)
+        │  POST /api/asr/transcribe          (同源，浏览器不持有网关 Key)
+        ▼
+services/nexus-api  app/api/speech_routes.py
+  ├── 校验用户身份（X-Verified-UID / X-Owner-Id / nexus_uid）
+  ├── 读取配置的语音路由，校验 model_type=ASR + 启用 + 资源池启用
+  ├── 拒绝客户端覆盖 model；限制 12 MiB；只允许单个 file
+  └── 用服务端稳定 Key 调用网关
+        │  POST /v1/audio/transcriptions
+        ▼
+Nexus Gateway（app.gateway.server，18110）
+  ├── Gateway Key 鉴权、模型授权、吊销/额度、并发租约
+  ├── route.model_type == ASR 校验、请求模型 → 目标模型
+  ├── 节点健康/调度、超时、熔断、请求日志
+  └── multipart 解析/重建，有界转发
+        │  POST http://127.0.0.1:19899/v1/audio/transcriptions
+        ▼
+Nexus ASR（FunASR SenseVoiceSmall，127.0.0.1:19899）
+  └── {"text": "..."}；标签清理；不落盘、不记录音频/文本
 ```
 
-因此本次把麦克风做进了实际输入框 `TextInput.tsx`，而不是在 Vue 页面外层再放一个悬浮按钮。Vue 外壳只增加了一行 `allow="microphone"`，让 iframe 内的 `getUserMedia` 获得权限。
+浏览器只认识 Nexus 的同源 `/api/asr/transcribe`；不存在直连 ASR 的 Nginx location 或前端回退。
 
-> 如果后续聊天输入迁到 Vue，本页的接口和状态机可以直接复用；录音与上传逻辑已经集中在 `useAsrRecorder`，不依赖聊天组件的其它状态。
+## 1. 配置中心
 
-## 2. 用户流程
+打开 **API 网关 → 模型路由**：
 
-1. 输入框右侧出现一个新的麦克风按钮（与原有实时语音 `AudioLines` 按钮区分）。
-2. 点击开始录音；按钮变为红色方块，输入框上方显示“录音中 00:05”。
-3. 再次点击结束；按钮变为 spinner，显示“正在识别…”。
-4. 识别结果 **插入到当前光标位置**，保留已有草稿；textarea 获得焦点，光标在插入文字之后。
-5. 用户可以继续编辑，按 Enter 发送（复用原有 `handleSend`），**不会自动提交**。
-6. 失败时显示错误与“重试”链接；重试复用上一段录音。权限被拒绝会提示去浏览器设置。
-7. 停止录音即释放麦克风轨道；空闲时不保持后台录音。
+1. **上游节点**：Base URL 填 ASR 服务根地址（本机 `http://127.0.0.1:19899`），探测策略选 **语音识别（ASR）**，模型必须包含 ASR 实际模型名，例如 `sensevoice-small`。
+2. 探测到 `HEALTHY` 后启用节点并进入调度；首次探测需要达到成功连击阈值，必要时再点一次探测。
+3. **资源池**只放 ASR 节点。
+4. **模型路由**：请求模型 `sensevoice-small`、类型 **语音识别（ASR）**、目标模型 `sensevoice-small`、启用。
+5. 页面顶部 **数字员工语音输入** 选择该路由并保存。私聊/群聊共用。
 
-![聊天输入框集成](screenshot-chat-input.png)
+保存后：
 
-## 3. 服务端调用
+- Nexus 的 `/api/asr/transcribe` 立即读取数据库中的路由，禁用/类型错误会立刻返回 422。
+- 网关配置约 10 s 轮询一次；节点地址、路由类型/启用状态修改后需要一个轮询周期生效。
+- ASR 路由不会进入数字员工/Worker 的 LLM 模型下拉列表（前端按 `model_type === 'CHAT'` 过滤，后端 `require_enabled_route` 同样默认 CHAT）。
+- 地址和凭据只在网关节点维护；语音输入配置只保存 `route_id`。
 
-浏览器统一使用相对路径：
+如果网关不在本机：节点 Base URL 改成网关能访问的 Mac 内网地址，并让 ASR 监听该地址/端口或通过受控反向代理访问；不要使用 `127.0.0.1` 指向另一台机器。前端仍然只调用 Nexus。
 
-```http
-POST /api/asr/transcribe
-Content-Type: multipart/form-data
-file=recording.webm
+## 2. 前端交互
+
+麦克风在 `chat-island/src/components/chat/TextInput.tsx`，录音/上传状态机在 `useAsrRecorder.ts`：
+
+```text
+idle ──点击──> recording ──点击/60 s──> transcribing ──成功──> idle（文字插入光标）
+  ▲                 │                        │
+  └──── 失败/重试 ───┴──────── error <───────┘
 ```
 
-- 请求体上限 12 MB；录音上限 60 s（hook 内自动停止）。
-- 浏览器优先 `audio/webm;codecs=opus`；不支持时退回 `audio/webm` / `audio/mp4`。
-- 响应使用 `text` 回填；`request_id`、`total_ms` 等字段当前不展示在聊天 UI，但保留在响应里，便于排障。
+- 录音中显示“录音中 00:05”，再次点击停止；停止后立即释放麦克风轨道。
+- 录音中/识别中禁用重复提交；`transcribing` 时按钮显示 spinner。
+- 识别成功只把文字插入当前光标位置，**不自动发送**；原有草稿保留。
+- 失败显示中文错误和“重试”；重试复用上一段录音，不覆盖输入框。
+- 单聊和群聊复用同一组件；群聊发送仍走原有 `@` 路由规则。
+- 识别结果发送后走原 `/api/v1/conversations/{id}/messages` 或 `/api/v1/channels/{id}/messages`，AgentScope 只看到普通文本。
+- 麦克风权限被拒绝/没有设备/浏览器不支持分别给出明确提示；权限拒绝时不上传。
+- 需要安全上下文：`https://` 或 `http://localhost` / `http://127.0.0.1`。通过普通 HTTP 访问远程 IP 时浏览器不会提供 `getUserMedia`。
 
-本地开发：
+### Push-to-Talk
 
-- `services/nexus-api/web/vite.config.ts` 增加 `/api/asr` → `http://127.0.0.1:19899`（仅 dev/preview）。
-- `services/nexus-api/chat-island/vite.config.ts` 同样增加，便于单独调试 chat-island。
-- 可用 `VITE_NEXUS_ASR_PROXY_TARGET` 覆盖目标地址。
+麦克风按钮旁显示当前快捷键（默认 `⌥ K 按住说话`），点击可修改：
 
-生产：
+- 按住完整组合键开始录音，松开任意必需键结束；Esc 取消且不上传。
+- 只接受含 Alt/Option、Ctrl 或 Command 的组合；Space/Enter/Esc/Tab 和系统保留组合会被拒绝。
+- 偏好保存在 iframe 源下的 `localStorage`（`nexus:asr:shortcut:v1`），保存后立即生效、刷新保持；没有系统级全局快捷键。
+- 快捷键和麦克风按钮共用同一个 recorder；转写仍插入光标、不自动发送。
+- 录音时绑定 conversation/channel；切换会话不会把结果写入新会话。
 
-- 浏览器只访问 Nexus 的 HTTPS 域名；
-- Nginx 把 `/api/asr/transcribe`、`/api/asr/models` 反代到 `127.0.0.1:19899`；
-- 复用 Nexus 现有登录鉴权（`auth_request` 或等价机制）；
-- 应用内按 IP 限流 30 r/min（示例）+ 服务内 120 r/min 全局保护；
-- ASR 服务本身不对外监听。
+## 3. 错误码
 
-配置见 [`deploy/nginx-nexus-asr.conf`](../deploy/nginx-nexus-asr.conf)。
+ASR 4xx 的标准化 `code` 会由 Nexus 转发给前端，前端优先使用本地化文案：
 
-## 4. 代码结构
-
-| 文件 | 改动 |
+| code | 前端提示 |
 |---|---|
-| `services/nexus-api/chat-island/src/hooks/useAsrRecorder.ts` | 新增：`getUserMedia` / MediaRecorder / 60 s 自动停止 / 上传 / 状态机 / 重试 |
-| `services/nexus-api/chat-island/src/components/chat/TextInput.tsx` | 新增麦克风按钮、录音状态行、按光标插入、重试入口；新增 `localAsrEnabled` prop |
-| `services/nexus-api/chat-island/src/i18n/locales/zh.json` | 新增 `asr.*` 文案 |
-| `services/nexus-api/chat-island/src/i18n/locales/en.json` | 同上 |
-| `services/nexus-api/chat-island/vite.config.ts` | 独立开发时 `/api/asr` 代理 |
-| `services/nexus-api/web/vite.config.ts` | Vue dev/preview 的 `/api/asr` 代理 |
-| `services/nexus-api/web/src/views/DigitalEmployeeChatView.vue` | iframe 增加 `allow="microphone"` |
+| `empty_audio` | 没有识别到语音 |
+| `unsupported_audio` | 音频格式无法识别 |
+| `audio_too_long` | 录音超过 60 秒 |
+| `payload_too_large` | 录音文件超过大小限制 |
+| `recognition_timeout` | 识别超时，请重试 |
+| `model_not_ready` | 语音服务尚未就绪 |
+| `server_busy` / `rate_limited` | 服务繁忙 / 请求太频繁 |
+| `gateway_asr_failed` | 语音识别网关调用失败（5xx/鉴权等，不透出上游细节） |
 
-### 录音状态机
+## 4. 安全
 
-```text
-idle ──点击──> (getUserMedia) ──> recording ──点击/60s──> transcribing ──成功──> idle
-  ▲                                  │                         │
-  └──────────────── 失败/<重试> ─────┴──────── error <──────────┘
-```
-
-- `recording` 时再次点击停止；`transcribing` 时按钮禁用，防止重复请求。
-- 停止时立刻 `track.stop()`，不等上传完成。
-- 上传超时 60 s（AbortController）；错误码映射为中文/英文提示。
-- 记住 `lastBlob` 用于“重试”；新一轮录音会覆盖。
-
-### 插入而非覆盖
-
-```ts
-const start = textarea.selectionStart;
-const end = textarea.selectionEnd;
-const next = value.slice(0, start) + text + value.slice(end);
-```
-
-- 中文直接拼接；英文/数字边界补一个空格；
-- 插入后 `focus()` 并把光标放到插入文本末尾；
-- 不调用 `onSend`，不自动提交。
-
-### 开关
-
-- 构建时设置 `VITE_NEXUS_ASR_ENABLED=false` 可隐藏本地 ASR 麦克风按钮；
-- 默认开启；
-- 关闭后不影响原有实时语音按钮、附件、发送。
+- 浏览器不保存上游 Key；Key 只在 Nexus 网关数据库加密保存。
+- 客户端不能提供上游 URL、节点地址或任意 model；`/api/asr/transcribe` 只接受一个 `file`，其余字段拒绝。
+- 音频不持久化；ASR 只在内存中解码，日志不含音频或转写文本。
+- 上传 12 MiB、音频 60 s、并发 2、请求超时 60 s、进程级限流 120 r/min；网关层另有大小、超时、配额与熔断。
+- ASR 默认仅监听 `127.0.0.1`；公网访问必须经 Nexus 登录鉴权与网关。
+- 远程 HTTP 下麦克风不可用，这是浏览器安全上下文限制，不能靠前端绕过。
 
 ## 5. 验证
 
-已执行：
-
 ```bash
-cd services/nexus-api/chat-island
-npm run type-check     # 通过
-npm run build          # 通过（输出到 services/nexus-api/web/public/nexus-chat）
+cd services/nexus-asr
+./scripts/verify-deployment.sh
+
+# 真实浏览器：私聊
+NEXUS_EMPLOYEE_ID=emp_xxx NEXUS_AUDIO=/tmp/case1-48k.wav \
+  NEXUS_FINAL_TEXT='你好小牛码，介绍一下你自己。' \
+  node scripts/e2e-voice.mjs
+
+# 真实浏览器：群聊
+MODE=group NEXUS_CHANNEL_ID=ch_xxx NEXUS_AUDIO=/tmp/case3-48k.wav \
+  NEXUS_FINAL_TEXT='@阿明，介绍一下你负责的工作。' \
+  node scripts/e2e-voice.mjs
+
+# 快速点击、识别中切会话、权限拒绝、ASR 宕机与重试
+node scripts/interaction-tests.mjs
+
+# Push-to-Talk 全量浏览器验收（组合键、IME、失焦、权限、改键、发送）
+NEXUS_EMPLOYEE_ID=emp_xxx NEXUS_CHANNEL_ID=ch_xxx node scripts/e2e-ptt.mjs
 ```
 
-服务端链路已用独立测试页 + Playwright 验证：Chrome 假麦克风 → MediaRecorder WebM → `/api/asr/transcribe` → 文字回填，5.22 s 录音服务端总耗时约 80–100 ms。
-
-**未执行完整 Nexus UI E2E**：需要完整的 Nexus API / AgentScope / 登录环境；当前只做了 chat-island 的类型检查、生产构建和服务端 API 全链路验证。上线前建议在测试环境补一次：登录 → 打开私聊 → 点击麦克风 → 停止 → 文字插入 → 编辑 → 发送。
-
-## 6. 注意事项
-
-- **鉴权**：Nginx 精确匹配的 `/api/asr/*` 不会自动继承 `/api/` 下的 `auth_request`，必须显式配置，否则会绕过登录。
-- **麦克风权限**：iframe 已加 `allow="microphone"`；如果 Nexus 使用 Permissions-Policy，需允许 `microphone=(self)`。
-- **HTTPS**：生产必须 HTTPS（或 localhost），否则 `getUserMedia` 不可用。
-- **ASR 服务不可用**：按钮仍显示，点击后在状态行提示失败并可重试；不影响打字和发送。
-- **模型首次启动**：ASR 服务启动时加载模型；未就绪时 `/api/asr/transcribe` 返回 503，前端提示“语音服务尚未就绪”。
-- **不自动提交**：识别文字只进入输入框，最终发送仍由用户按 Enter/发送按钮决定。
-- **隐私**：音频只上传到同源 `/api/asr/transcribe`，服务端内存处理、不落盘、不记录文本；DevTools Network 中可见上传请求，但不会被第三方接收。
-- **并发**：ASR 服务 `max_concurrency=2`；Nginx 按 IP 限流。用户连续快速点击会被前端状态机阻止，服务端仍有兜底。
+2026-10-23 在本机实测：私聊/群聊语音识别、手动编辑发送、AgentScope 回复均成功；识别文字从停止录音到回填约 0.5–0.8 s，发送到界面显示回复约 2.2 s。详细记录见 [`docs/reviews/nexus-v1.5.0-asr-20261023.md`](../../../docs/reviews/nexus-v1.5.0-asr-20261023.md)。Push-to-Talk 的 31 项浏览器验收见 [`docs/reviews/nexus-v1.4.8-ptt-20261023.md`](../../../docs/reviews/nexus-v1.4.8-ptt-20261023.md)。

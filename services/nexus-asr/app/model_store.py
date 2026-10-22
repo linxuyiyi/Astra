@@ -22,6 +22,20 @@ MODEL_ID = "sensevoice-small-int8"
 MODEL_FILENAME = "model.int8.onnx"
 TOKENS_FILENAME = "tokens.txt"
 
+# FunASR / ModelScope SenseVoiceSmall checkpoint. Sizes are checked so a
+# truncated download never reaches the inference pipeline; hashing 936 MB on
+# every start would add seconds without protecting a fixed local cache.
+FUNASR_MODEL_ID = "sensevoice-small"
+FUNASR_MODEL_REPO = "iic/SenseVoiceSmall"
+FUNASR_FILES = {
+    "model.pt": 936_291_369,
+    "config.yaml": 1_855,
+    "tokens.json": 352_064,
+    "am.mvn": 11_203,
+    "chn_jpn_yue_eng_ko_spectok.bpe.model": 377_341,
+    "configuration.json": 396,
+}
+
 MODEL_SIZE = 239_233_841
 TOKENS_SIZE = 315_894
 MODEL_SHA256 = "c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51"
@@ -73,6 +87,7 @@ class ModelInfo:
     tokens_path: Path
     model_bytes: int
     tokens_bytes: int
+    provider: str = "sherpa-onnx"
 
 
 def specs(model_url: str = "", tokens_url: str = "") -> tuple[FileSpec, FileSpec]:
@@ -109,6 +124,44 @@ def _check_file(path: Path, spec: FileSpec, verify_hash: bool) -> None:
             )
 
 
+def verify_funasr_model(model_dir: Path) -> ModelInfo:
+    """Validate the local FunASR checkpoint without touching the network.
+
+    Every file must exist and match the known byte size. ``model.pt`` is the
+    only large file; a size check catches interrupted downloads while keeping
+    startup fast. ``config.yaml`` is also the model's own configuration, so it
+    cannot be substituted by the service config.
+    """
+
+    model_dir = Path(model_dir)
+    missing: list[str] = []
+    for name, expected in FUNASR_FILES.items():
+        path = model_dir / name
+        if not path.is_file():
+            missing.append(name)
+            continue
+        size = path.stat().st_size
+        if size != expected:
+            raise ModelIntegrityError(
+                f"{path.name}: size mismatch, expected {expected} bytes, got {size}"
+            )
+    if missing:
+        raise ModelMissingError(
+            f"missing FunASR model files in {model_dir}: {', '.join(missing)}"
+        )
+    model_path = model_dir / "model.pt"
+    tokens_path = model_dir / "tokens.json"
+    return ModelInfo(
+        model_id=FUNASR_MODEL_ID,
+        model_dir=model_dir,
+        model_path=model_path,
+        tokens_path=tokens_path,
+        model_bytes=model_path.stat().st_size,
+        tokens_bytes=tokens_path.stat().st_size,
+        provider="funasr",
+    )
+
+
 def verify_model(
     model_dir: Path,
     *,
@@ -129,6 +182,7 @@ def verify_model(
         tokens_path=tokens_path,
         model_bytes=model_path.stat().st_size,
         tokens_bytes=tokens_path.stat().st_size,
+        provider="sherpa-onnx",
     )
 
 
@@ -239,6 +293,31 @@ def download_model(
     return verify_model(model_dir, model_url=model_url, tokens_url=tokens_url)
 
 
+def download_funasr_model(model_dir: Path, *, cache_dir: Path) -> ModelInfo:
+    """Download the official ModelScope checkpoint into a fixed directory."""
+
+    try:
+        from modelscope import snapshot_download
+    except ImportError as exc:  # pragma: no cover - production installs funasr
+        raise ModelDownloadError(
+            "modelscope is not installed; install requirements.txt or copy the model"
+        ) from exc
+    model_dir = Path(model_dir)
+    cache_dir = Path(cache_dir)
+    model_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("downloading FunASR model %s into %s", FUNASR_MODEL_REPO, model_dir)
+    try:
+        snapshot_download(
+            FUNASR_MODEL_REPO,
+            local_dir=str(model_dir),
+            cache_dir=str(cache_dir),
+        )
+    except Exception as exc:  # noqa: BLE001 - network/library errors are reported uniformly
+        raise ModelDownloadError(f"failed to download {FUNASR_MODEL_REPO}: {exc}") from exc
+    return verify_funasr_model(model_dir)
+
+
 def ensure_model(
     model_dir: Path,
     *,
@@ -246,9 +325,24 @@ def ensure_model(
     offline: bool = False,
     model_url: str = "",
     tokens_url: str = "",
+    provider: str = "sherpa-onnx",
+    cache_dir: Path | None = None,
 ) -> ModelInfo:
-    """Verify the model; download it only when missing and allowed."""
+    """Verify the selected model; download it only when missing and allowed."""
     model_dir = Path(model_dir)
+    if provider == "funasr":
+        try:
+            return verify_funasr_model(model_dir)
+        except ModelMissingError as exc:
+            if offline or not auto_download:
+                raise ModelMissingError(
+                    f"{exc}. Run ./download-model.sh or copy the model files into {model_dir}."
+                ) from exc
+            if cache_dir is None:
+                cache_dir = model_dir.parent / "modelscope"
+            return download_funasr_model(model_dir, cache_dir=cache_dir)
+    if provider != "sherpa-onnx":
+        raise ModelError(f"unsupported provider: {provider}")
     try:
         return verify_model(model_dir, model_url=model_url, tokens_url=tokens_url)
     except ModelMissingError as exc:
@@ -266,7 +360,13 @@ def ensure_model(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Verify or download the Nexus ASR model")
-    parser.add_argument("--model-dir", default="models/sensevoice-small-int8")
+    parser.add_argument(
+        "--provider",
+        default=os.environ.get("NEXUS_ASR_PROVIDER", "funasr"),
+        choices=("funasr", "sherpa-onnx"),
+    )
+    parser.add_argument("--model-dir", default="")
+    parser.add_argument("--cache-dir", default="")
     parser.add_argument("--check", action="store_true", help="verify only (default)")
     parser.add_argument("--download", action="store_true", help="download missing files")
     parser.add_argument("--force", action="store_true", help="replace an invalid file")
@@ -279,9 +379,26 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
     )
-    model_dir = Path(args.model_dir).expanduser().resolve()
+    default_dir = (
+        "models/SenseVoiceSmall" if args.provider == "funasr" else "models/sensevoice-small-int8"
+    )
+    model_dir = Path(args.model_dir or os.environ.get("NEXUS_ASR_MODEL_DIR", default_dir))
+    model_dir = model_dir.expanduser().resolve()
+    cache_dir = Path(
+        args.cache_dir or os.environ.get("NEXUS_ASR_CACHE_DIR", "models/modelscope")
+    ).expanduser().resolve()
     try:
-        if args.download and not args.check:
+        if args.provider == "funasr":
+            if args.download and not args.check:
+                if args.offline:
+                    raise ModelDownloadError("--download cannot be used with --offline")
+                try:
+                    info = verify_funasr_model(model_dir)
+                except ModelMissingError:
+                    info = download_funasr_model(model_dir, cache_dir=cache_dir)
+            else:
+                info = verify_funasr_model(model_dir)
+        elif args.download and not args.check:
             if args.offline:
                 raise ModelDownloadError("--download cannot be used with --offline")
             info = download_model(
@@ -299,12 +416,15 @@ def main(argv: list[str] | None = None) -> int:
     except ModelMissingError as exc:
         if args.download and not args.offline:
             try:
-                info = download_model(
-                    model_dir,
-                    model_url=args.model_url,
-                    tokens_url=args.tokens_url,
-                    force=args.force,
-                )
+                if args.provider == "funasr":
+                    info = download_funasr_model(model_dir, cache_dir=cache_dir)
+                else:
+                    info = download_model(
+                        model_dir,
+                        model_url=args.model_url,
+                        tokens_url=args.tokens_url,
+                        force=args.force,
+                    )
             except ModelError as inner:
                 print(f"ERROR: {inner}", file=sys.stderr)
                 return 1
@@ -315,9 +435,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
+    print(f"provider:   {info.provider}")
     print(f"model:      {info.model_path} ({info.model_bytes} bytes)")
     print(f"tokens:     {info.tokens_path} ({info.tokens_bytes} bytes)")
-    print("verification: OK (size + sha256)")
+    print("verification: OK (size)")
     return 0
 
 

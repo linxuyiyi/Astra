@@ -1,0 +1,165 @@
+{
+  "checks": [
+    {
+      "name": "default hint",
+      "ok": true,
+      "detail": "⌥ K 按住说话"
+    },
+    {
+      "name": "plain key does not trigger",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "focus + hold/release K first",
+      "ok": true,
+      "detail": "\"PTT草稿：你好，小牛马介绍一下。\""
+    },
+    {
+      "name": "no dead-key character",
+      "ok": true,
+      "detail": "\"PTT草稿：你好，小牛马介绍一下。\""
+    },
+    {
+      "name": "repeat keydown does not duplicate upload",
+      "ok": true,
+      "detail": "1 request(s)"
+    },
+    {
+      "name": "transcript not auto-sent",
+      "ok": true,
+      "detail": "messages 32"
+    },
+    {
+      "name": "release Alt first",
+      "ok": true,
+      "detail": "\"释放Alt：你好，小牛马。\""
+    },
+    {
+      "name": "Esc cancels without upload",
+      "ok": true,
+      "detail": "取消草稿："
+    },
+    {
+      "name": "quick press does not get stuck or duplicate",
+      "ok": true,
+      "detail": "0 request(s)"
+    },
+    {
+      "name": "page hidden cancels without upload",
+      "ok": true,
+      "detail": "隐藏草稿："
+    },
+    {
+      "name": "blur cancels without upload",
+      "ok": true,
+      "detail": "失焦草稿："
+    },
+    {
+      "name": "IME composition does not trigger",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "custom shortcut saves immediately",
+      "ok": true,
+      "detail": "⌥ J 按住说话"
+    },
+    {
+      "name": "old shortcut is inactive after change",
+      "ok": true,
+      "detail": "\"旧快捷键：\""
+    },
+    {
+      "name": "new shortcut records",
+      "ok": true,
+      "detail": "\"新快捷键：你好，小牛马。\""
+    },
+    {
+      "name": "shortcut persists after reload",
+      "ok": true,
+      "detail": "⌥ J 按住说话"
+    },
+    {
+      "name": "shortcut reset to default",
+      "ok": true,
+      "detail": "⌥ K 按住说话"
+    },
+    {
+      "name": "microphone button still records",
+      "ok": true,
+      "detail": "\"按钮草稿：你好，小牛马。\""
+    },
+    {
+      "name": "final PTT fills input",
+      "ok": true,
+      "detail": "\"你好，小牛马，介绍一下你自己。\""
+    },
+    {
+      "name": "final PTT does not auto-send",
+      "ok": true,
+      "detail": "messages 32"
+    },
+    {
+      "name": "Enter sends recognized text",
+      "ok": true,
+      "detail": "\"你好，小牛马，介绍一下你自己。\""
+    },
+    {
+      "name": "AgentScope replies",
+      "ok": true,
+      "detail": "收到。我是 DeepSeek 验收员工，负责聊天岛 DeepSeek 验收；这里没有“小牛马”这个身份，也不是小牛码、小牛。\n\n如果你只是想确认我还在线：我在。"
+    },
+    {
+      "name": "reply rendered in UI",
+      "ok": true,
+      "detail": "收到。我是Dee"
+    },
+    {
+      "name": "release before permission does not start later",
+      "ok": true,
+      "detail": "0 request(s)"
+    },
+    {
+      "name": "permission denial is explained",
+      "ok": true,
+      "detail": "0 request(s)"
+    },
+    {
+      "name": "switch conversation does not leak transcript",
+      "ok": true,
+      "detail": "\"\""
+    },
+    {
+      "name": "group PTT fills input",
+      "ok": true,
+      "detail": "\"@阿明，你好，小牛马介绍。\""
+    },
+    {
+      "name": "group PTT does not send",
+      "ok": true,
+      "detail": "messages 27 -> 27"
+    },
+    {
+      "name": "PTT failure preserves draft",
+      "ok": true,
+      "detail": "失败草稿："
+    },
+    {
+      "name": "PTT failure is explained",
+      "ok": true,
+      "detail": "语音识别网关调用失败，请检查路由与节点\n重试"
+    },
+    {
+      "name": "PTT retry works after ASR recovery",
+      "ok": true,
+      "detail": "\"失败草稿：你好，小。\""
+    }
+  ],
+  "final": {
+    "transcript": "你好，小牛马，介绍一下你自己。",
+    "reply": "收到。我是 DeepSeek 验收员工，负责聊天岛 DeepSeek 验收；这里没有“小牛马”这个身份，也不是小牛码、小牛。\n\n如果你只是想确认我还在线：我在。若要推进实际工作，请提供 v1.5.0 验收单的验收项与判定标准、唯一验收 001 的材料，或会议纪要原文——这三件目前都还缺输入。",
+    "screenshot": "/Users/niuniu/程序/Astra/docs/reviews/assets/nexus-v1.4.8-ptt/final.png"
+  },
+  "errors": []
+}

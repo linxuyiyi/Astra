@@ -8,7 +8,8 @@ export type GatewaySchedulingState = 'ACTIVE' | 'DRAINING' | 'BLOCKED'
 export type GatewayHealthState = 'UNKNOWN' | 'CHECKING' | 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY'
 export type GatewayAuthType = 'BEARER' | 'HEADER' | 'NONE'
 export type GatewayQuotaPolicy = 'STOP' | 'ALERT' | 'RECORD'
-export type GatewayProbeType = 'NETWORK' | 'SERVICE' | 'MODEL' | 'STREAM' | 'EMBEDDING'
+export type GatewayProbeType = 'NETWORK' | 'SERVICE' | 'MODEL' | 'STREAM' | 'EMBEDDING' | 'ASR'
+export type GatewayModelType = 'CHAT' | 'EMBEDDING' | 'ASR'
 export type GatewayStatsScope = 'overview' | 'node' | 'pool' | 'model' | 'key'
 export type GatewayStatsWindow = 'hour' | 'today' | '7d' | '30d'
 
@@ -86,6 +87,7 @@ export interface GatewayNodeWrite {
 export interface GatewayRoute {
   id: string
   model: string
+  model_type: GatewayModelType
   target_model: string | null
   pool_id: string
   description: string
@@ -96,6 +98,7 @@ export interface GatewayRoute {
 
 export interface GatewayRouteWrite {
   model?: string
+  model_type?: GatewayModelType
   target_model?: string | null
   pool_id?: string
   description?: string
@@ -436,6 +439,11 @@ async function gatewayRequest<T>(path: string, options: RequestOptions = {}): Pr
 }
 
 export const gatewayApi = {
+  speechInput: () => gatewayRequest<{ route_id: string | null }>('/api/gateway/speech-input'),
+  saveSpeechInput: (route_id: string | null) =>
+    gatewayRequest<{ route_id: string | null }>('/api/gateway/speech-input', {
+      method: 'PUT', body: { route_id },
+    }),
   // Pool
   pools: () => gatewayRequest<GatewayPool[]>('/api/gateway/pools'),
   createPool: (body: GatewayPoolWrite) =>

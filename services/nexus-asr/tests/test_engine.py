@@ -7,19 +7,19 @@ import numpy as np
 import pytest
 import wave
 
-from app.engine import AsrEngine
+from app.engine import FunAsrEngine
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture(scope="module")
-def engine() -> AsrEngine:
-    instance = AsrEngine(
-        model_path=ROOT / "models/sensevoice-small-int8/model.int8.onnx",
-        tokens_path=ROOT / "models/sensevoice-small-int8/tokens.txt",
+def engine() -> FunAsrEngine:
+    instance = FunAsrEngine(
+        model_dir=ROOT / "models/SenseVoiceSmall",
         num_threads=4,
         language="auto",
         use_itn=True,
+        cache_dir=ROOT / "models/modelscope",
     )
     instance.load()
     return instance
@@ -30,7 +30,7 @@ def load_wav() -> np.ndarray:
         return np.frombuffer(handle.readframes(handle.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
 
 
-def test_transcribe(engine: AsrEngine):
+def test_transcribe(engine: FunAsrEngine):
     result = engine.transcribe(load_wav())
     assert "会议纪要" in result.text
     assert result.language == "zh"
@@ -38,7 +38,7 @@ def test_transcribe(engine: AsrEngine):
     assert result.rtf < 1
 
 
-def test_concurrent_transcribe(engine: AsrEngine):
+def test_concurrent_transcribe(engine: FunAsrEngine):
     samples = load_wav()
     with ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(lambda _: engine.transcribe(samples), range(8)))

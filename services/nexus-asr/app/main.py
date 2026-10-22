@@ -19,10 +19,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.formparsers import MultiPartParser
 
 from . import model_store
 from .audio import (
@@ -32,7 +33,7 @@ from .audio import (
     decode_audio,
 )
 from .config import Settings, load_settings
-from .engine import AsrEngine
+from .engine import AsrEngine, FunAsrEngine, build_engine
 from .limiter import RateLimiter
 from .schemas import (
     ErrorDetail,
@@ -75,6 +76,9 @@ def _client_ip(request: Request, trust_proxy: bool) -> str:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
     _configure_logging(settings.server.log_level)
+    # The middleware below bounds the whole request first; accepted uploads
+    # then stay in memory instead of being spooled to a temporary file.
+    MultiPartParser.spool_max_size = settings.server.max_upload_bytes + 64 * 1024
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -109,20 +113,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             offline=settings.asr.offline,
             model_url=settings.asr.model_url,
             tokens_url=settings.asr.tokens_url,
+            provider=settings.asr.provider,
+            cache_dir=settings.asr.cache_dir,
         )
-        engine = AsrEngine(
-            model_path=model_info.model_path,
-            tokens_path=model_info.tokens_path,
-            num_threads=settings.asr.num_threads,
-            language=settings.asr.language,
-            use_itn=settings.asr.use_itn,
-        )
+        engine = build_engine(settings)
         await asyncio.to_thread(engine.load)
 
         app.state.model_info = model_info
         app.state.engine = engine
         logger.info(
-            "ready model=%s load_ms=%.0f threads=%d concurrency=%d max_audio=%.0fs",
+            "ready provider=%s model=%s load_ms=%.0f threads=%d concurrency=%d max_audio=%.0fs",
+            settings.asr.provider,
             settings.asr.model,
             engine.load_ms,
             settings.asr.num_threads,
@@ -137,13 +138,49 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Nexus ASR Server",
-        version="1.0.0",
-        description="Local sherpa-onnx SenseVoice-Small INT8 speech recognition",
+        version="1.1.0",
+        description="Local FunASR SenseVoiceSmall speech recognition",
         docs_url="/docs" if settings.server.docs_enabled else None,
         redoc_url=None,
         lifespan=lifespan,
     )
     app.state.settings = settings
+
+    @app.middleware("http")
+    async def bounded_upload(request: Request, call_next):
+        if request.method == "POST" and request.url.path in {
+            "/api/asr/transcribe", "/v1/audio/transcriptions",
+        }:
+            limit = settings.server.max_upload_bytes + 64 * 1024
+            declared = request.headers.get("content-length")
+            if declared is not None:
+                try:
+                    if int(declared) > limit:
+                        return JSONResponse(
+                            status_code=413,
+                            content={"detail": ErrorDetail(
+                                code="payload_too_large", message="upload exceeds the size limit",
+                            ).model_dump()},
+                        )
+                except ValueError:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"detail": ErrorDetail(
+                            code="invalid_request", message="invalid Content-Length header",
+                        ).model_dump()},
+                    )
+            body = bytearray()
+            async for chunk in request.stream():
+                body.extend(chunk)
+                if len(body) > limit:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": ErrorDetail(
+                            code="payload_too_large", message="upload exceeds the size limit",
+                        ).model_dump()},
+                    )
+            request._body = bytes(body)
+        return await call_next(request)
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):
@@ -154,7 +191,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         elapsed_ms = (time.perf_counter() - started) * 1000
         response.headers["x-request-id"] = request_id
         response.headers["x-process-time-ms"] = f"{elapsed_ms:.1f}"
-        if request.url.path.startswith("/api/asr"):
+        if request.url.path.startswith(("/api/asr", "/v1/audio", "/v1/models")):
             logger.info(
                 "http method=%s path=%s status=%d request_id=%s duration_ms=%.1f",
                 request.method,
@@ -191,7 +228,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     async def health(request: Request):
-        engine: AsrEngine | None = request.app.state.engine
+        engine: AsrEngine | FunAsrEngine | None = request.app.state.engine
         ready = bool(engine and engine.ready)
         payload = HealthResponse(
             status="ok" if ready else "loading",
@@ -209,7 +246,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/asr/models", response_model=ModelsResponse, tags=["asr"])
     async def list_models(request: Request):
-        engine: AsrEngine | None = request.app.state.engine
+        engine: AsrEngine | FunAsrEngine | None = request.app.state.engine
         engine_ready = bool(engine and engine.ready)
         return ModelsResponse(models=[ModelCard(
             id=settings.asr.model,
@@ -226,7 +263,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         file: Annotated[UploadFile, File(description="WAV / WebM / other audio file")],
     ):
         state = request.app.state
-        engine: AsrEngine | None = state.engine
+        engine: AsrEngine | FunAsrEngine | None = state.engine
         request_id = getattr(request.state, "request_id", "")
         if not engine or not engine.ready:
             raise _api_error(503, "model_not_ready", "model is not loaded yet")
@@ -353,6 +390,64 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if acquired:
                 state.active_requests = max(0, state.active_requests - 1)
                 state.semaphore.release()
+
+    @app.post("/v1/audio/transcriptions", tags=["asr"])
+    async def openai_transcribe(
+        request: Request,
+        file: Annotated[UploadFile, File()],
+        model: Annotated[str | None, Form()] = None,
+        response_format: Annotated[str, Form()] = "json",
+        language: Annotated[str | None, Form()] = None,
+    ):
+        allowed = {
+            settings.asr.model,
+            "sensevoice",
+            "sensevoice-small",
+            "sensevoice-small-int8",
+            "whisper-1",
+        }
+        if model and model not in allowed:
+            await file.close()
+            raise _api_error(404, "model_not_found", "unknown speech recognition model")
+        if response_format != "json":
+            await file.close()
+            raise _api_error(
+                400, "unsupported_format", "only json response_format is supported"
+            )
+        if language and language not in {"auto", "zh", "en", "ja", "ko", "yue"}:
+            await file.close()
+            raise _api_error(400, "unsupported_language", "unsupported language hint")
+        result = await transcribe(request, file)
+        # Timing headers are observability for the gateway benchmark; the body
+        # stays the OpenAI-compatible {"text": ...} with no internal metadata.
+        return JSONResponse(
+            {"text": result.text},
+            headers={
+                "x-request-id": result.request_id,
+                "x-asr-elapsed-ms": f"{result.elapsed_ms:.1f}",
+                "x-asr-total-ms": f"{result.total_ms:.1f}",
+                "x-asr-duration": f"{result.duration:.3f}",
+            },
+        )
+
+    @app.get("/v1/models", tags=["asr"])
+    async def openai_models():
+        data = [{
+            "id": settings.asr.model,
+            "object": "model",
+            "owned_by": "nexus-asr",
+            "provider": settings.asr.provider,
+        }]
+        for alias in ("sensevoice", "sensevoice-small-int8", "whisper-1"):
+            if alias == settings.asr.model:
+                continue
+            data.append({
+                "id": alias,
+                "object": "model",
+                "owned_by": "nexus-asr",
+                "provider": settings.asr.provider,
+            })
+        return {"object": "list", "data": data}
 
     @app.get("/", include_in_schema=False)
     async def index():

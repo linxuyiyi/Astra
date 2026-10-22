@@ -1,0 +1,558 @@
+{
+  "started_at": "2026-10-23T00:43:26+0800",
+  "asr_base": "http://127.0.0.1:19899",
+  "gateway_base": "http://127.0.0.1:18110/v1",
+  "gateway_key_configured": true,
+  "hot_runs": 10,
+  "cases": {
+    "short-3s": {
+      "file": "testdata/bench/short-3s.wav",
+      "audio_seconds": 2.921,
+      "reference": "你好，查询当前任务情况。",
+      "transcript": "你好，查询当前任务情况。",
+      "cer": 0.0,
+      "direct": {
+        "wall_ms": {
+          "n": 10,
+          "mean": 453.49,
+          "min": 444.73,
+          "max": 479.26,
+          "p50": 449.24
+        },
+        "asr_total_ms": {
+          "n": 10,
+          "mean": 451.92,
+          "min": 443.23,
+          "max": 477.54,
+          "p50": 447.7
+        },
+        "inference_ms": {
+          "n": 10,
+          "mean": 448.7,
+          "min": 440.06,
+          "max": 474.36,
+          "p50": 444.55
+        },
+        "rtf": 0.1536
+      },
+      "resources": {
+        "cpu_percent_avg": 94.4,
+        "cpu_percent_max": 141.3,
+        "rss_mb_peak": 1067.2
+      },
+      "gateway": {
+        "wall_ms": {
+          "n": 10,
+          "mean": 459.43,
+          "min": 420.81,
+          "max": 502.7,
+          "p50": 456.32
+        },
+        "asr_total_ms": {
+          "n": 10,
+          "mean": 448.7,
+          "min": 411.3,
+          "max": 492.6,
+          "p50": 445.0
+        },
+        "inference_ms": {
+          "n": 10,
+          "mean": 445.39,
+          "min": 407.9,
+          "max": 488.9,
+          "p50": 441.7
+        },
+        "proxy_overhead_ms": {
+          "n": 10,
+          "mean": 10.73,
+          "min": 9.51,
+          "max": 11.71,
+          "p50": 10.77
+        },
+        "wall_overhead_ms": 5.94,
+        "asr_total_overhead_ms": -3.22,
+        "transcript": "你好，查询当前任务情况。"
+      }
+    },
+    "zh-5s": {
+      "file": "testdata/zh-5s.wav",
+      "audio_seconds": 5.03,
+      "reference": "帮我把今天的会议纪要整理一下，重点列出三个待办事项。",
+      "transcript": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。",
+      "cer": 0.0417,
+      "direct": {
+        "wall_ms": {
+          "n": 10,
+          "mean": 538.11,
+          "min": 486.88,
+          "max": 675.47,
+          "p50": 517.64
+        },
+        "asr_total_ms": {
+          "n": 10,
+          "mean": 536.35,
+          "min": 485.19,
+          "max": 673.27,
+          "p50": 515.84
+        },
+        "inference_ms": {
+          "n": 10,
+          "mean": 532.61,
+          "min": 481.53,
+          "max": 669.45,
+          "p50": 512.02
+        },
+        "rtf": 0.1059
+      },
+      "resources": {
+        "cpu_percent_avg": 98.6,
+        "cpu_percent_max": 139.3,
+        "rss_mb_peak": 1076.0
+      },
+      "gateway": {
+        "wall_ms": {
+          "n": 10,
+          "mean": 529.12,
+          "min": 482.1,
+          "max": 602.88,
+          "p50": 521.75
+        },
+        "asr_total_ms": {
+          "n": 10,
+          "mean": 518.38,
+          "min": 472.2,
+          "max": 591.1,
+          "p50": 511.1
+        },
+        "inference_ms": {
+          "n": 10,
+          "mean": 514.62,
+          "min": 468.5,
+          "max": 586.7,
+          "p50": 507.4
+        },
+        "proxy_overhead_ms": {
+          "n": 10,
+          "mean": 10.74,
+          "min": 9.9,
+          "max": 12.12,
+          "p50": 10.67
+        },
+        "wall_overhead_ms": -8.99,
+        "asr_total_overhead_ms": -17.97,
+        "transcript": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。"
+      }
+    },
+    "zh-10s": {
+      "file": "testdata/zh-10s.wav",
+      "audio_seconds": 9.932,
+      "reference": "明天上午十点我们开一个项目评审会，请提前准备好接口文档、性能测试报告，还有下个季度的排期计划。",
+      "transcript": "明天上午10点，我们开一个项目评审会，请提前准备好接口文档、性能测试报告，还有下个季度的排期计划。",
+      "cer": 0.0465,
+      "direct": {
+        "wall_ms": {
+          "n": 3,
+          "mean": 606.73,
+          "min": 583.58,
+          "max": 640.59,
+          "p50": 596.01
+        },
+        "asr_total_ms": {
+          "n": 3,
+          "mean": 604.64,
+          "min": 581.55,
+          "max": 638.64,
+          "p50": 593.72
+        },
+        "inference_ms": {
+          "n": 3,
+          "mean": 599.84,
+          "min": 577.24,
+          "max": 633.81,
+          "p50": 588.47
+        },
+        "rtf": 0.0604
+      },
+      "resources": {
+        "cpu_percent_avg": 109.0,
+        "cpu_percent_max": 144.2,
+        "rss_mb_peak": 1077.0
+      },
+      "gateway": {
+        "wall_ms": {
+          "n": 3,
+          "mean": 624.29,
+          "min": 597.12,
+          "max": 639.06,
+          "p50": 636.69
+        },
+        "asr_total_ms": {
+          "n": 3,
+          "mean": 613.43,
+          "min": 585.6,
+          "max": 628.6,
+          "p50": 626.1
+        },
+        "inference_ms": {
+          "n": 3,
+          "mean": 608.93,
+          "min": 581.4,
+          "max": 623.9,
+          "p50": 621.5
+        },
+        "proxy_overhead_ms": {
+          "n": 3,
+          "mean": 10.85,
+          "min": 10.46,
+          "max": 11.52,
+          "p50": 10.59
+        },
+        "wall_overhead_ms": 17.56,
+        "asr_total_overhead_ms": 8.8,
+        "transcript": "明天上午10点，我们开一个项目评审会，请提前准备好接口文档、性能测试报告，还有下个季度的排期计划。"
+      }
+    },
+    "long-30s": {
+      "file": "testdata/bench/long-30s.wav",
+      "audio_seconds": 28.831,
+      "reference": "我们下个季度的重点是把本地语音输入接到 Nexus 聊天窗口。用户点击麦克风后，浏览器录制整句音频，统一服务完成鉴权并选择语音识别路由，网关把音频转发到 Mac 上的 SenseVoiceSmall，识别文字回填输入框，用户确认后再发送给数字员工。请评估识别速度、内存占用和离线部署方案。",
+      "transcript": "我们下个季度的重点是把本地语音输入接到nexus聊天窗口，用户点击麦克风后，浏览器录制整句音频，统一服务完成健全并选择语音识别路由。网关把音频转发到m上的sense voicemo识别文字回填输入框。用户确认后再发送给数字员工，请评估识别速度，内存占用和离线部署方案。",
+      "cer": 0.0615,
+      "direct": {
+        "wall_ms": {
+          "n": 2,
+          "mean": 1113.02,
+          "min": 1048.79,
+          "max": 1177.26,
+          "p50": 1113.02
+        },
+        "asr_total_ms": {
+          "n": 2,
+          "mean": 1109.74,
+          "min": 1045.8,
+          "max": 1173.69,
+          "p50": 1109.74
+        },
+        "inference_ms": {
+          "n": 2,
+          "mean": 1102.32,
+          "min": 1039.08,
+          "max": 1165.56,
+          "p50": 1102.32
+        },
+        "rtf": 0.0382
+      },
+      "resources": {
+        "cpu_percent_avg": 135.9,
+        "cpu_percent_max": 185.4,
+        "rss_mb_peak": 1142.0
+      },
+      "gateway": {
+        "wall_ms": {
+          "n": 2,
+          "mean": 1130.42,
+          "min": 1127.79,
+          "max": 1133.05,
+          "p50": 1130.42
+        },
+        "asr_total_ms": {
+          "n": 2,
+          "mean": 1117.7,
+          "min": 1116.3,
+          "max": 1119.1,
+          "p50": 1117.7
+        },
+        "inference_ms": {
+          "n": 2,
+          "mean": 1110.55,
+          "min": 1109.0,
+          "max": 1112.1,
+          "p50": 1110.55
+        },
+        "proxy_overhead_ms": {
+          "n": 2,
+          "mean": 12.72,
+          "min": 11.49,
+          "max": 13.95,
+          "p50": 12.72
+        },
+        "wall_overhead_ms": 17.4,
+        "asr_total_overhead_ms": 7.95,
+        "transcript": "我们下个季度的重点是把本地语音输入接到nexus聊天窗口，用户点击麦克风后，浏览器录制整句音频，统一服务完成健全并选择语音识别路由。网关把音频转发到mac上的sense voicemo识别文字回填输入框。用户确认后再发送给数字员工，请评估识别速度，内存占用和离线部署方案。"
+      }
+    },
+    "mixed-1": {
+      "file": "testdata/mixed-1.wav",
+      "audio_seconds": 9.659,
+      "reference": "这个 Demo 用 sherpa-onnx 的 WebAssembly 版本跑 SenseVoice 模型，在 Chrome 里做本地推理，RTF 大概是多少？",
+      "transcript": "这个demo用 web assembly版本跑ense voice模型在chrome里做本地推理RRTF大概是多少？",
+      "cer": 0.2,
+      "direct": {
+        "wall_ms": {
+          "n": 2,
+          "mean": 664.34,
+          "min": 643.81,
+          "max": 684.87,
+          "p50": 664.34
+        },
+        "asr_total_ms": {
+          "n": 2,
+          "mean": 662.16,
+          "min": 641.77,
+          "max": 682.55,
+          "p50": 662.16
+        },
+        "inference_ms": {
+          "n": 2,
+          "mean": 657.71,
+          "min": 637.13,
+          "max": 678.3,
+          "p50": 657.71
+        },
+        "rtf": 0.0681
+      },
+      "resources": {
+        "cpu_percent_avg": 108.1,
+        "cpu_percent_max": 139.8,
+        "rss_mb_peak": 1096.2
+      },
+      "gateway": {
+        "wall_ms": {
+          "n": 2,
+          "mean": 638.48,
+          "min": 632.42,
+          "max": 644.54,
+          "p50": 638.48
+        },
+        "asr_total_ms": {
+          "n": 2,
+          "mean": 627.35,
+          "min": 621.5,
+          "max": 633.2,
+          "p50": 627.35
+        },
+        "inference_ms": {
+          "n": 2,
+          "mean": 622.85,
+          "min": 616.7,
+          "max": 629.0,
+          "p50": 622.85
+        },
+        "proxy_overhead_ms": {
+          "n": 2,
+          "mean": 11.13,
+          "min": 10.92,
+          "max": 11.34,
+          "p50": 11.13
+        },
+        "wall_overhead_ms": -25.86,
+        "asr_total_overhead_ms": -34.81,
+        "transcript": "这个demo用 web assembly版本跑ense voice模型在chrome里做本地推理RRTF大概是多少？"
+      }
+    },
+    "mixed-2": {
+      "file": "testdata/mixed-2.wav",
+      "audio_seconds": 10.199,
+      "reference": "请把 Nexus 的 Vue3 组件接上麦克风，检查 getUserMedia 权限，然后对比 INT8 和 FP32 的准确率。",
+      "transcript": "请把nexus3组件接上麦克风，检查getus media权限，然后对比int8和FT32的准确率。",
+      "cer": 0.1346,
+      "direct": {
+        "wall_ms": {
+          "n": 2,
+          "mean": 661.83,
+          "min": 625.61,
+          "max": 698.06,
+          "p50": 661.83
+        },
+        "asr_total_ms": {
+          "n": 2,
+          "mean": 659.82,
+          "min": 623.66,
+          "max": 695.97,
+          "p50": 659.82
+        },
+        "inference_ms": {
+          "n": 2,
+          "mean": 655.45,
+          "min": 619.19,
+          "max": 691.7,
+          "p50": 655.45
+        },
+        "rtf": 0.0643
+      },
+      "resources": {
+        "cpu_percent_avg": 108.0,
+        "cpu_percent_max": 144.1,
+        "rss_mb_peak": 1096.5
+      },
+      "gateway": {
+        "wall_ms": {
+          "n": 2,
+          "mean": 604.36,
+          "min": 579.96,
+          "max": 628.77,
+          "p50": 604.36
+        },
+        "asr_total_ms": {
+          "n": 2,
+          "mean": 592.7,
+          "min": 567.6,
+          "max": 617.8,
+          "p50": 592.7
+        },
+        "inference_ms": {
+          "n": 2,
+          "mean": 588.25,
+          "min": 563.3,
+          "max": 613.2,
+          "p50": 588.25
+        },
+        "proxy_overhead_ms": {
+          "n": 2,
+          "mean": 11.66,
+          "min": 10.97,
+          "max": 12.36,
+          "p50": 11.66
+        },
+        "wall_overhead_ms": -57.47,
+        "asr_total_overhead_ms": -67.12,
+        "transcript": "请把nexus3组件接上麦克风，检查getus media权限，然后对比int8和FT32的准确率。"
+      }
+    },
+    "business-4s": {
+      "file": "testdata/bench/business-4s.wav",
+      "audio_seconds": 4.962,
+      "reference": "自动化测试、任务执行、Worker、MCP。",
+      "transcript": "自动化测试任务执行worker MCP。",
+      "cer": 0.0,
+      "direct": {
+        "wall_ms": {
+          "n": 3,
+          "mean": 502.43,
+          "min": 484.61,
+          "max": 534.36,
+          "p50": 488.31
+        },
+        "asr_total_ms": {
+          "n": 3,
+          "mean": 500.65,
+          "min": 482.85,
+          "max": 532.71,
+          "p50": 486.4
+        },
+        "inference_ms": {
+          "n": 3,
+          "mean": 497.03,
+          "min": 479.41,
+          "max": 528.93,
+          "p50": 482.74
+        },
+        "rtf": 0.1002
+      },
+      "resources": {
+        "cpu_percent_avg": 96.2,
+        "cpu_percent_max": 128.7,
+        "rss_mb_peak": 1096.9
+      },
+      "gateway": {
+        "wall_ms": {
+          "n": 3,
+          "mean": 489.55,
+          "min": 485.83,
+          "max": 496.84,
+          "p50": 485.98
+        },
+        "asr_total_ms": {
+          "n": 3,
+          "mean": 479.0,
+          "min": 475.1,
+          "max": 486.4,
+          "p50": 475.5
+        },
+        "inference_ms": {
+          "n": 3,
+          "mean": 475.23,
+          "min": 471.7,
+          "max": 482.1,
+          "p50": 471.9
+        },
+        "proxy_overhead_ms": {
+          "n": 3,
+          "mean": 10.55,
+          "min": 10.33,
+          "max": 10.88,
+          "p50": 10.44
+        },
+        "wall_overhead_ms": -12.88,
+        "asr_total_overhead_ms": -21.65,
+        "transcript": "自动化测试任务执行worker MCP。"
+      }
+    }
+  },
+  "abnormal": {
+    "silence": {
+      "direct_status": 200,
+      "direct_body": "{\"text\":\"\"}",
+      "direct_ms": 17.43,
+      "gateway_status": 200,
+      "gateway_body": "{\"text\":\"\"}"
+    },
+    "noise": {
+      "direct_status": 200,
+      "direct_body": "{\"text\":\"\"}",
+      "direct_ms": 16.58,
+      "gateway_status": 200,
+      "gateway_body": "{\"text\":\"\"}"
+    },
+    "empty": {
+      "direct_status": 422,
+      "direct_body": "{\"detail\":{\"code\":\"empty_audio\",\"message\":\"upload is empty\"}}",
+      "direct_ms": 1.19,
+      "gateway_status": 400,
+      "gateway_body": "{\"error\":{\"message\":\"音频表单不合法；仅支持单个 file 和非流式 JSON 转写\",\"type\":\"invalid_request_error\",\"code\":\"INVALID_REQUEST\"}}"
+    },
+    "invalid": {
+      "direct_status": 415,
+      "direct_body": "{\"detail\":{\"code\":\"unsupported_audio\",\"message\":\"cannot decode audio container: [Errno 1094995529] Invalid data found when processing input: '<none>'\"}}",
+      "direct_ms": 1.1,
+      "gateway_status": 415,
+      "gateway_body": "{\"detail\":{\"code\":\"unsupported_audio\",\"message\":\"cannot decode audio container: [Errno 1094995529] Invalid data found when processing input: '<none>'\"}}"
+    },
+    "oversized": {
+      "direct_status": 413,
+      "direct_body": "{\"detail\":{\"code\":\"payload_too_large\",\"message\":\"upload exceeds the size limit\"}}",
+      "direct_ms": 5.4,
+      "gateway_status": 413,
+      "gateway_body": "{\"error\":{\"message\":\"请求体超过 12648448 字节上限\",\"type\":\"invalid_request_error\",\"code\":\"PAYLOAD_TOO_LARGE\"}}"
+    }
+  },
+  "gateway_overhead": {
+    "short-3s": 10.77,
+    "zh-5s": 10.67,
+    "zh-10s": 10.59,
+    "long-30s": 12.72,
+    "mixed-1": 11.13,
+    "mixed-2": 11.66,
+    "business-4s": 10.44
+  },
+  "model": {
+    "id": "sensevoice-small",
+    "provider": "funasr",
+    "loaded": true,
+    "languages": [
+      "zh",
+      "en",
+      "ja",
+      "ko",
+      "yue"
+    ],
+    "sample_rate": 16000,
+    "num_threads": 4,
+    "load_ms": 7068.7
+  },
+  "system": {
+    "total_mb": 16384,
+    "used_mb": 7127,
+    "available_mb": 5149
+  }
+}

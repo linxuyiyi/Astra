@@ -18,10 +18,13 @@ def main() -> int:
             offline=settings.asr.offline,
             model_url=settings.asr.model_url,
             tokens_url=settings.asr.tokens_url,
+            provider=settings.asr.provider,
+            cache_dir=settings.asr.cache_dir,
         )
     except (ConfigError, model_store.ModelError) as exc:
         print(f"preflight failed: {exc}", file=sys.stderr)
         return 1
+    print(f"provider: {info.provider}")
     print(f"model ready: {info.model_path} ({info.model_bytes} bytes)")
     print(f"tokens ready: {info.tokens_path} ({info.tokens_bytes} bytes)")
     return 0

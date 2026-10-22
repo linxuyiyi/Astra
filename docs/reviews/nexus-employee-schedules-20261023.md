@@ -46,16 +46,21 @@
 
 无未实现的本 change Requirement。所有工作项均有对应代码和验证；不修改 Astra 历史 capability。change 保留便于继续评审，未归档。
 
-## 后续分析：对话创建日程
+## 对话创建日程（MCP，已实现）
 
-已补充 [数字员工对话创建日程：可行性与实现分析](../architecture/employee-schedules-conversational.md)。结论是：AgentScope 2.0.10 已自带 `ScheduleCreate/List/View/Delete`，当前被 `agent_service.py` 主动移除；直接放开会把日程写到平台用户 `nexus` 下，人类命名空间看不到，且平台列表会跨人可见。建议只在私聊、非日程执行会话保留官方工具，并按当前人类的 `nexus-schedule-<sha256(uid)>` 重建四个官方工具（或重定向 `_user_id`）；MCP 可行但不是关键，当前不值得为此新增进程。归属与重定向已用官方 SQLite 存储做 21 项检查，见 [spike 证据](../reports/evidence/employee-schedules-20261023/conversational-schedule-spike.json)。
+私聊中的数字员工现在通过内置 `nexus-schedule` MCP 创建、列表、查看当前人类的日程；官方 `ScheduleCreate` 等 Agent 工具仍移除。归属由 Nexus 按 `agentscope_session_id` 解析，MCP 不接收 `user_id`/`employee_id`；非私聊、团队、邮箱不安装。创建默认 `enabled=false`，人类到日程页确认后启用。
 
-该能力属于行为变更，与现有 change 的 Non-Goals（“本次不重新开放员工自主安排”）冲突，实施前需新建 OpenSpec change。开放前还需决定：默认不启用/人类确认、是否开放删除、一次性提醒语义、配额与最小间隔、日程执行工作区是否继承 Skill/MCP/知识库。
+实现与部署见 [数字员工日程 MCP](../architecture/employee-schedules-mcp.md)，取舍分析见 [对话创建日程：可行性与实现分析](../architecture/employee-schedules-conversational.md)。新增 OpenSpec change `nexus-employee-schedules-mcp`。
+
+验证：Nexus `136 passed, 4 skipped`；Agent Service `13 passed, 1 skipped`；隔离 AgentScope + 模型桩完成“私聊创建 Session → MCP 健康并发现三个工具 → 创建 → 页面可见/跨人不可见 → 列表/查看 → 清理”，证据 [mcp-e2e.json](../reports/evidence/employee-schedules-20261023/mcp-e2e.json)。
+
+已知边界：MCP 走官方 REST，`source=USER`、没有 `source_session_id`；首版没有对话编辑/删除；模型桩没有自行选择工具；墙钟触发、生产 MySQL/Nginx、真实供应商、执行工作区 Skill/MCP/知识库继承仍未验收。
 
 ## 风险与未验证
 
 - 尚未上线；真实供应商、生产 MySQL 8.0.36、真实 Nginx 重载、长时间周期运行和多副本单 scheduler owner 未验收。
 - 日程工作区独立于私聊，本次未自动复制额外 Skill/MCP/知识库绑定；依赖这些资源的安排尚未完成能力继承验收。
+- MCP 创建的日程来源为 `USER`，页面无法区分员工经 MCP 创建和人类手动创建；首版只创建/列表/查看，不提供对话编辑或删除。
 - 模型路由更换不会改写既有官方日程的模型快照；禁用/删除员工也不跨安排者自动级联日程。
 - 官方列表目前无分页；Nexus 在服务器读取当前用户记录后筛选、分页，浏览器仅收到一页。大规模上游查询性能未验收。
 - 正式环境需认证代理覆盖身份头、隔离 Agent Service 直连，并发布本次 Agent Service 访问策略与统一代理配置。

@@ -161,6 +161,7 @@ def collect() -> list[tuple[bool, str, str]]:
         "nexus_api": _port_from_url(settings.nexus_api_base),
         "library_mcp": settings.mcp_port,
         "task_mcp": settings.task_mcp_port,
+        "schedule_mcp": 18203,
         "web": service.FRONTEND_PORT,
         "opencode": settings.opencode_server_port,
     }

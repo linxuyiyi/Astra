@@ -21,7 +21,7 @@ python ops/deploy/check_parallel.py
 | 锁目录 | `/tmp/astra-employee-serve` | `/tmp/nexus-employee-serve` |
 | 部署缓存 | `~/.cache/astra-provision` | `~/.cache/nexus-provision` |
 | OpenCode 配置 | 用户全局 `~/.config/opencode/opencode.jsonc` | `/etc/nexus/opencode/{id}/opencode.jsonc`（`OPENCODE_CONFIG`） |
-| 端口 | 8000、8100、8110、8120、8201、8202、5174、4096、4097 | 18000、18110、18120、18201、18202、14096 |
+| 端口 | 8000、8100、8110、8120、8201、8202、5174、4096、4097 | 18000、18110、18120、18201、18202、18203、14096 |
 
 Redis 进程仍监听 6379。`ASTRA_REDIS_URL` 使用库 1。`ASTRA_*` 变量名保持不变。
 

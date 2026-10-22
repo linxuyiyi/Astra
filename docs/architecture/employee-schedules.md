@@ -33,9 +33,11 @@ Agent Service 使用官方 `ResourceAccessPolicyBase` 扩展点，只向该命�
 - 连续上下文的会话数不等于执行次数；页面不推测执行成功、失败或下次运行时间。执行内容从官方消息读取，仅展示文本块，过滤内部 HintBlock/思考块。
 - 上游官方列表尚未提供分页；Nexus 在读取当前用户上游记录后筛选、分页，浏览器只收到一页。当前不承诺大规模上游查询性能。
 
-## 后续：对话创建（未实现）
+## 对话创建（MCP）
 
-当前只支持人类在页面创建。员工在私聊里通过官方 `ScheduleCreate` 自己创建日程是可行的，但必须先解决“聊天 Session 属于平台用户 `nexus`、日程页属于人类 `nexus-schedule-<hash>`”的归属差；直接放开会让记录落在平台名下，页面看不到并可能跨人可见。设计、MCP 方案对比与验证计划见 [数字员工对话创建日程：可行性与实现分析](employee-schedules-conversational.md)。该能力需要新的 OpenSpec change，不能修改本 change 的 Non-Goals 后直接实施。
+私聊中的员工可以通过内置 `nexus-schedule` MCP 创建、列表、查看当前人类的日程；官方 `ScheduleCreate` 等 Agent 工具仍保持移除。MCP 只安装在私聊 Session，归属由 Nexus 按 `agentscope_session_id` 解析，创建默认不启用；团队、邮箱、渠道不提供。实现和部署见 [数字员工日程 MCP](employee-schedules-mcp.md)。
+
+MCP 走官方 REST 创建，官方 `source` 为 `USER`、没有 `source_session_id`；这是与官方工具重定向方案的差异。页面、执行记录和隔离仍沿用原设计。
 
 ## 部署
 

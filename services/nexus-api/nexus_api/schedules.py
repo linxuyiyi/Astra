@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
+import os
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 
@@ -47,6 +49,164 @@ class ScheduleToggle(BaseModel):
     enabled: bool
 
 
+class InternalScheduleCreate(ScheduleFields):
+    """MCP 创建默认不启用；人类确认后再在页面启用。"""
+
+    enabled: bool = False
+
+
+async def agentscope_schedule_request(request, uid, method, path, **kwargs):
+    """统一把官方错误映射成 Nexus 的错误，不把上游细节直接抛给调用方。"""
+
+    try:
+        return await request.app.state.agentscope.request(
+            method, path, headers={"X-User-ID": schedule_user_id(uid)}, **kwargs
+        )
+    except AgentScopeError as exc:
+        status = exc.status_code if exc.status_code in {404, 409, 422} else 502
+        detail = str(exc) if exc.status_code else "AgentScope 日程服务不可达，请稍后重试"
+        raise HTTPException(status, detail) from exc
+
+
+def public_schedule(item: dict[str, Any], employee: dict[str, Any]) -> dict[str, Any]:
+    data = dict(item["data"])
+    data.pop("chat_model_config", None)
+    return {
+        "id": item["id"],
+        "employee_id": employee.get("id"),
+        "employee_name": employee.get("name", "已删除员工"),
+        "created_at": item.get("created_at"),
+        "data": data,
+    }
+
+
+def internal_schedule_router(model_for) -> APIRouter:
+    """给日程 MCP 用的内部接口；调用方由共享密钥和会话头证明身份。"""
+
+    router = APIRouter(
+        prefix="/api/v1/internal/schedules",
+        tags=["internal-schedules"],
+        dependencies=[Depends(require_internal)],
+    )
+
+    def conversation(session_id: str, employee_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        if not session_id or not employee_id:
+            raise HTTPException(401, "缺少日程会话身份")
+        with connect() as db:
+            row = (
+                db.execute(
+                    text(
+                        """
+                        SELECT c.owner_id, c.employee_id, e.*
+                        FROM t_nexus_conversations c
+                        JOIN t_nexus_employees e ON e.id = c.employee_id
+                        WHERE c.agentscope_session_id = :p0 AND c.kind = 'private'
+                        """
+                    ),
+                    {"p0": session_id},
+                )
+                .mappings()
+                .fetchone()
+            )
+        if row is None:
+            raise HTTPException(404, "私聊会话不存在")
+        if row["employee_id"] != employee_id:
+            raise HTTPException(409, "会话与员工不匹配")
+        employee = employee_from_row(row)
+        if not employee["enabled"] or not employee["agentscope_agent_id"]:
+            raise HTTPException(409, "数字员工已禁用或未绑定 Agent")
+        return {"owner_id": row["owner_id"]}, employee
+
+    async def records(request, owner_id: str, employee: dict[str, Any]) -> list[dict[str, Any]]:
+        response = await agentscope_schedule_request(request, owner_id, "GET", "/schedule/")
+        payload = response.json()
+        rows = payload.get("schedules") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            raise HTTPException(502, "AgentScope 日程响应无效")
+        return [
+            item
+            for item in rows
+            if isinstance(item, dict) and item.get("agent_id") == employee["agentscope_agent_id"]
+        ]
+
+    @router.get("")
+    async def listing(
+        request: Request,
+        session_id: str = Header(alias="X-Nexus-Session-Id"),
+        employee_id: str = Header(alias="X-Nexus-Employee-Id"),
+    ) -> dict[str, Any]:
+        owner, employee = conversation(session_id, employee_id)
+        rows = await records(request, owner["owner_id"], employee)
+        rows.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+        return {
+            "items": [public_schedule(item, employee) for item in rows],
+            "total": len(rows),
+        }
+
+    @router.post("", status_code=201)
+    async def create(
+        body: InternalScheduleCreate,
+        request: Request,
+        session_id: str = Header(alias="X-Nexus-Session-Id"),
+        employee_id: str = Header(alias="X-Nexus-Employee-Id"),
+    ) -> dict[str, Any]:
+        owner, employee = conversation(session_id, employee_id)
+        client = request.app.state.agentscope
+        try:
+            config = await model_for(client, employee)
+        except AgentScopeError as exc:
+            raise HTTPException(exc.status_code or 502, str(exc)) from exc
+        if not config:
+            raise HTTPException(502, "AgentScope 未连接")
+        payload = body.model_dump()
+        payload.update(
+            agent_id=employee["agentscope_agent_id"],
+            chat_model_config=config,
+            permission_mode="dont_ask",
+        )
+        response = await agentscope_schedule_request(
+            request, owner["owner_id"], "POST", "/schedule/", json=payload
+        )
+        schedule_id = response.json().get("schedule_id")
+        if not schedule_id:
+            raise HTTPException(502, "AgentScope 没有返回日程标识")
+        return {
+            "id": str(schedule_id),
+            "employee_id": employee["id"],
+            "employee_name": employee["name"],
+            "data": {
+                "name": body.name,
+                "description": body.description,
+                "cron_expression": body.cron_expression,
+                "timezone": body.timezone,
+                "stateful": body.stateful,
+                "enabled": body.enabled,
+            },
+        }
+
+    @router.get("/{schedule_id}")
+    async def view(
+        schedule_id: str,
+        request: Request,
+        session_id: str = Header(alias="X-Nexus-Session-Id"),
+        employee_id: str = Header(alias="X-Nexus-Employee-Id"),
+    ) -> dict[str, Any]:
+        owner, employee = conversation(session_id, employee_id)
+        rows = await records(request, owner["owner_id"], employee)
+        item = next((row for row in rows if row.get("id") == schedule_id), None)
+        if item is None:
+            raise HTTPException(404, "日程不存在")
+        return public_schedule(item, employee)
+
+    return router
+
+
+def require_internal(key: str | None = Header(default=None, alias="X-Nexus-Internal-Key")) -> None:
+    expected = os.environ.get("NEXUS_INTERNAL_KEY", "").strip()
+    if not expected or not key or not hmac.compare_digest(key, expected):
+        raise HTTPException(401, "内部日程接口未授权")
+
+
 def schedule_router(require_owner, model_for) -> APIRouter:
     router = APIRouter(prefix="/api/v1/schedules", tags=["schedules"])
 
@@ -59,14 +219,7 @@ def schedule_router(require_owner, model_for) -> APIRouter:
             }
 
     async def upstream(request, uid, method, path, **kwargs):
-        try:
-            return await request.app.state.agentscope.request(
-                method, path, headers={"X-User-ID": schedule_user_id(uid)}, **kwargs
-            )
-        except AgentScopeError as exc:
-            status = exc.status_code if exc.status_code in {404, 409, 422} else 502
-            detail = str(exc) if exc.status_code else "AgentScope 日程服务不可达，请稍后重试"
-            raise HTTPException(status, detail) from exc
+        return await agentscope_schedule_request(request, uid, method, path, **kwargs)
 
     async def records(request, uid):
         response = await upstream(request, uid, "GET", "/schedule/")

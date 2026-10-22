@@ -188,3 +188,92 @@ def test_validation_failures_and_paging(schedules, monkeypatch):
 
     monkeypatch.setattr(client.app.state.agentscope, "request", unavailable)
     assert client.get("/api/v1/schedules", headers=h).status_code == 502
+
+
+def test_internal_schedule_is_scoped_to_private_session_owner(schedules, monkeypatch):
+    client, employee, store, calls = schedules
+    monkeypatch.setenv("NEXUS_INTERNAL_KEY", "internal-test")
+    with connect() as db:
+        db.execute(
+            text(
+                """
+                INSERT INTO t_nexus_conversations
+                    (id, employee_id, owner_id, kind, name, agentscope_session_id,
+                     workspace_id, created_at, updated_at)
+                VALUES
+                    ('conv-internal', :employee_id, 'alice', 'private', '私聊',
+                     'ses-private', 'ws-internal', '2026-10-23T00:00:00Z',
+                     '2026-10-23T00:00:00Z')
+                """
+            ),
+            {"employee_id": employee["id"]},
+        )
+        db.execute(
+            text(
+                """
+                INSERT INTO t_nexus_conversations
+                    (id, employee_id, owner_id, kind, name, agentscope_session_id,
+                     workspace_id, created_at, updated_at)
+                VALUES
+                    ('conv-team', :employee_id, 'alice', 'team', '团队',
+                     'ses-team', 'ws-team', '2026-10-23T00:00:00Z',
+                     '2026-10-23T00:00:00Z')
+                """
+            ),
+            {"employee_id": employee["id"]},
+        )
+        db.commit()
+
+    headers = {
+        "X-Nexus-Internal-Key": "internal-test",
+        "X-Nexus-Session-Id": "ses-private",
+        "X-Nexus-Employee-Id": employee["id"],
+    }
+    created = client.post(
+        "/api/v1/internal/schedules",
+        headers=headers,
+        json={
+            "name": "早报",
+            "description": "每个工作日整理当天重点",
+            "cron_expression": "0 9 * * 1-5",
+            "timezone": "Asia/Shanghai",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["data"]["enabled"] is False
+    sid = created.json()["id"]
+    assert list(store) == [schedule_user_id("alice")]
+    sent = calls[-1][3]
+    assert calls[-1][0] == schedule_user_id("alice")
+    assert sent["json"]["agent_id"] == "agent-1"
+    assert sent["json"]["chat_model_config"]["credential_id"] == "cred-test"
+    assert sent["json"]["enabled"] is False
+
+    listing = client.get("/api/v1/internal/schedules", headers=headers)
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 1
+    assert listing.json()["items"][0]["id"] == sid
+    view = client.get(f"/api/v1/internal/schedules/{sid}", headers=headers)
+    assert view.status_code == 200
+    assert view.json()["data"]["name"] == "早报"
+
+    missing = dict(headers)
+    del missing["X-Nexus-Internal-Key"]
+    assert client.get("/api/v1/internal/schedules", headers=missing).status_code == 401
+    unknown = dict(headers)
+    unknown["X-Nexus-Session-Id"] = "ses-missing"
+    assert client.get("/api/v1/internal/schedules", headers=unknown).status_code == 404
+    team = dict(headers)
+    team["X-Nexus-Session-Id"] = "ses-team"
+    assert client.get("/api/v1/internal/schedules", headers=team).status_code == 404
+    wrong_employee = dict(headers)
+    wrong_employee["X-Nexus-Employee-Id"] = "other"
+    assert client.get("/api/v1/internal/schedules", headers=wrong_employee).status_code == 409
+
+    with connect() as db:
+        db.execute(
+            text("UPDATE t_nexus_employees SET enabled = 0 WHERE id = :p0"),
+            {"p0": employee["id"]},
+        )
+        db.commit()
+    assert client.get("/api/v1/internal/schedules", headers=headers).status_code == 409

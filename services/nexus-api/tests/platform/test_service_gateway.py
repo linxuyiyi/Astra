@@ -93,8 +93,10 @@ def test_start_core_waits_for_gateway_health(monkeypatch):
 
     assert "gateway" in processes
     assert "task-mcp" in processes
+    assert "schedule-mcp" in processes
     assert f"http://127.0.0.1:{service.GATEWAY_PORT}/healthz" in ready_urls
     assert f"http://127.0.0.1:{service.TASK_MCP_PORT}/health" in ready_urls
+    assert f"http://127.0.0.1:{service.SCHEDULE_MCP_PORT}/health" in ready_urls
 
 
 def test_gateway_startup_has_no_publication_workflow():

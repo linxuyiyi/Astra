@@ -1,13 +1,15 @@
 # 数字员工对话创建日程：可行性与实现分析
 
-日期：2026-10-23。分支 `codex/employee-schedules`，基线 `a3f429e7c`。状态：**分析完成，未实现**。本文回答“能否让数字员工在对话里自己分析并创建日程，是否应该做成 MCP 工具”，并给出最小可行路线与验证计划。
+日期：2026-10-23。分支 `codex/employee-schedules`，基线 `a3f429e7c`。状态：**分析完成；最终按用户选择采用 MCP，已实现**。实现见 [数字员工日程 MCP](employee-schedules-mcp.md)。本文保留方案对比与风险分析；下文“推荐 A / 不推荐先做 MCP”是决策前结论，最终决策已改为 MCP。
+
+本文回答“能否让数字员工在对话里自己分析并创建日程，是否应该做成 MCP 工具”，并给出最小可行路线与验证计划。
 
 ## 结论
 
 1. **能力已经存在。** AgentScope 2.0.10 自带 `ScheduleCreate`、`ScheduleList`、`ScheduleView`、`ScheduleDelete` 四个 Agent 工具；`ScheduleCreate` 会写入 `source=AGENT`、`source_session_id` 和当前会话的模型快照。Nexus 当前是在 `agent_service.py` 里按名字主动移除它们，不是缺少能力。
 2. **直接放开不可行。** Nexus 所有聊天 Session 都跑在平台身份 `nexus` 下，而日程页的命名空间是 `nexus-schedule-<sha256(人类 UID)>`。员工创建的日程会落到 `nexus` 名下：人类页面看不到，`ScheduleList` 还会把平台身份下所有人的日程列给任意员工，破坏现有“按人隔离”。
-3. **推荐路线是重定向官方工具，而不是新建 MCP。** 只在“私聊 + 非日程执行会话”保留官方 `Schedule` 工具，组装工具时按当前会话所属人类的命名空间重新构造四个工具；其他会话继续移除。归属查询失败时 fail closed。如果首版只要“能创建”、不需要区分来源，B 方案（Nexus FunctionTool 调官方 REST）改动更小，但会丢掉 `source=AGENT` 和官方列表/删除工具。
-4. **MCP 可行，但不是关键。** 模型的分析能力来自对话推理和工具描述，不来自 MCP；MCP 只是把创建动作暴露给模型的另一种传输层，仍要解决“会话属于谁、写进哪个命名空间、如何审计、如何限流”这些同一组问题，并额外引入进程、部署、密钥和按会话安装的生命周期。当前只有 AgentScope 一个运行时，优先 FunctionTool 或官方工具重定向；将来 OpenCode 等其他 runtime 也要创建日程时，再把同一 Nexus 能力包成 MCP 才有明显收益。
+3. **最终采用 MCP 方案（用户选择）。** 私聊通过 `nexus-schedule` MCP 创建、列表、查看当前人类的日程；官方 `ScheduleCreate` 等工具继续移除。MCP 只安装在私聊 Session，Nexus 用 `agentscope_session_id` 解析归属，内部接口校验员工和会话；创建默认不启用。实现见 [数字员工日程 MCP](employee-schedules-mcp.md)。分析时曾推荐“重定向官方工具”，因为它保留 `source=AGENT`/`source_session_id` 和官方列表/删除工具；代价是要动官方工具实例或重建工具。MCP 路径的代价是官方 `source=USER`、没有 `source_session_id`。
+4. **MCP 仍是传输层；归属才是关键。** 模型的分析能力来自对话推理和工具描述，不来自 MCP。MCP 只是把创建动作暴露给模型的另一种方式，仍要解决“会话属于谁、写进哪个命名空间、如何审计、如何限流”。本次实现用会话头 + Nexus 内部接口解决归属，没有改变这个判断。
 5. **还有前置缺口。** 官方触发新建的日程工作区不继承员工的 Skill/MCP/知识库；官方工具默认时区是 UTC；没有官方 `ScheduleUpdate` 工具；配额、递归创建和提示注入都未处理。这些必须在开放前定策略。
 
 ## 一、官方 2.0.10 已经提供什么
@@ -71,7 +73,9 @@
 - 重定向有两种实现：用公开的 `SchedulerManager.list_tools()` 按人类命名空间重建工具（推荐），或改官方工具实例的 `_user_id`（最小改动，但碰 2.0.10 私有字段，升级必须重验）。仓库已有改私有字段的先例：`retarget_agent_invites()` 会改 `AgentInvite._storage`（`agent_service.py:195-204`）。
 - 如果产品接受 `source=USER`，B 是更小的 fallback：用一个 FunctionTool 调 Nexus 内部端点，由 Nexus 复用现有 `create` 逻辑走官方 REST。代价是页面无法区分“员工创建/手动创建”，也没有官方 `ScheduleList`/`ScheduleDelete` 工具可复用。
 
-## 五、推荐路线 A 的落地设计
+## 五、备选路线 A（最终未采用）
+
+以下设计保留用于说明 `source=AGENT` 方案的差异，最终实现采用 MCP（见 [数字员工日程 MCP](employee-schedules-mcp.md)）。
 
 ### 5.1 会话归属查询
 
@@ -169,7 +173,7 @@ async def assembled(**kwargs):
 - 如果支持一次性 `started_at`/`ended_at`，页面需要展示时间窗口，不能只显示 cron。
 - 执行记录和执行内容沿用现有读取逻辑；归属已经是人类命名空间，不需要改。
 
-## 六、MCP 专项回答
+## 六、已采用的 MCP 方案
 
 **技术上可以。** 仓库里已有 Task MCP / Library MCP 的服务端实现（`services/nexus-api/app/task_mcp.py`、`app/mcp_server.py`），但它们是独立基础设施进程，不在 `nexus_api` 进程内；Nexus 侧只有 MCP 客户端和 MCP 库管理（`resources.py`、`task_skill.py`）。做日程 MCP 可以复用这套 MCP 服务端技术，但仍要新增或扩展一个 MCP 服务进程、端口和部署，成本比一个 FunctionTool 高。具体做法是：
 
@@ -229,37 +233,40 @@ async def assembled(**kwargs):
 
 ### 已有证据
 
-- 归属与重定向 spike：21 项检查全部通过，覆盖人类命名空间写入、`source=AGENT`、`source_session_id`、模型快照、时区、列表隔离、平台身份直接创建的泄漏、官方 `SchedulerManager.list_tools()` 按人类命名空间重建四个工具，以及私聊/团队/邮箱/日程执行/查询失败五种工具决策。spike 按四个工具验证机制，不代表首版一定开放删除。
-- 现有交接材料的 133+13+30 测试、页面操作、官方触发至回复落盘仍有效；本次分析没有改动产品代码。
+- 归属与重定向 spike：21 项检查全部通过，覆盖人类命名空间写入、`source=AGENT`、`source_session_id`、模型快照、时区、列表隔离、平台身份直接创建的泄漏、官方 `SchedulerManager.list_tools()` 按人类命名空间重建四个工具，以及私聊/团队/邮箱/日程执行/查询失败五种工具决策。该 spike 验证的是备选 A 的机制，最终未采用。
+- MCP 实现：Nexus `136 passed, 4 skipped`；Agent Service `13 passed, 1 skipped`；真实 AgentScope + 隔离 Nexus + 日程 MCP + 模型桩验证了私聊安装、MCP 健康、三个工具发现、创建后页面可见/跨人不可见、列表/查看和清理。证据见 [mcp-e2e.json](../reports/evidence/employee-schedules-20261023/mcp-e2e.json)。
+- 现有交接材料的 133+13+30 测试、页面操作、官方触发至回复落盘仍有效；本次分析文档本身没有改动产品代码。
 
-### 实现后要补的验证
+### MCP 实现后的验证
 
-1. **单元**：`without_team_and_task_tools` 在私聊/团队/邮箱/日程执行/查询失败五种情况下保留或移除四个工具，并断言重建调用收到的人类命名空间（或 `_user_id`）；任务/团队工具仍被移除，`contact_*` 仍保留。
-2. **Nexus 内部接口**：私聊返回命名空间；团队/邮箱 404；`agent_id` 不匹配 409；员工禁用 `can_create=false`；未带内部 key 拒绝。
-3. **集成**：官方 SQL（SQLite 开发库 + MySQL 8.0.36 各一次）创建后记录归属正确、`source=AGENT`、`source_session_id` 正确；另一个人列表看不到。
-4. **页面/API**：员工创建后 `/api/v1/schedules` 对当前人类返回该条，`source` 为 `AGENT`；另一个人返回 0；暂停/启用/删除仍可用。
-5. **端到端**：真实模型工具调用（本地 OpenAI 协议桩）在私聊里说“每周一 9 点…”，员工调用 `ScheduleCreate`，页面出现记录；用官方触发函数跑一次，回复落到执行会话；日程执行会话里再要求创建日程应被拒绝（无工具）。
-6. **回归**：Nexus 133+、Agent Service 13+、前端 30+、type-check/build、Ruff、OpenSpec strict。
-7. **未验证边界**：真实供应商、生产 MySQL 8.0.36、生产 Nginx、墙钟周期、多副本单 scheduler owner、提示注入演练。
+1. **单元**：Nexus 内部接口的私聊/团队/未知会话/员工不匹配/无密钥；MCP 工具参数、默认 `enabled=false`、错误映射；私聊挂接幂等和缺密钥跳过。
+2. **集成**：SQLite 开发库创建后记录归属正确、另一人不可见；MySQL 8.0.36 尚未跑。
+3. **页面/API**：MCP 创建后 `/api/v1/schedules` 对当前人类返回该条，`source` 为 `USER`；另一个人返回 0；暂停/启用/删除仍可用。
+4. **端到端**：隔离 AgentScope + 模型桩完成了“私聊创建 Session → 安装 MCP → tools/call 创建 → 页面出现 → 清理”；模型桩没有自行选择工具，工具调用由测试脚本发起。
+5. **回归**：Nexus 136+、Agent Service 13+、前端 30+、type-check/build、Ruff、OpenSpec strict。
+6. **未验证边界**：真实供应商模型自行选择工具、生产 MySQL 8.0.36、生产 Nginx、墙钟周期、多副本、提示注入演练、日程执行工作区能力继承。
 
-## 十、建议的 OpenSpec 变更
+## 十、已创建的 OpenSpec 变更
 
-这是行为变更，且与现有 change 的 Non-Goals（“本次不重新开放员工自主安排”）冲突，**不能直接改现有 change**。建议新建一个 change，例如 `nexus-employee-schedules-dialogue`：
+这是行为变更，且与现有 change 的 Non-Goals（“本次不重新开放员工自主安排”）冲突，未改现有 change。已新建 `nexus-employee-schedules-mcp`：
 
-- Requirement：员工在私聊中可通过工具创建/查看自己的日程，归属当前人类；非私聊和日程执行会话不提供。
-- Requirement：创建保留官方 `source=AGENT`、`source_session_id` 和模型快照；员工禁用、配额、时区、内容校验失败时明确拒绝。
-- Requirement：页面显示来源；不新增日程表或计时器；执行记录仍按人隔离。
-- 非目标（首版）：MCP server、对话编辑、对话删除、跨人安排、一次性提醒、Skill/MCP/知识库自动继承。
-- 任务：内部归属接口 → 工具条件保留/重定向 → 策略门 → 页面来源 → 测试/端到端/文档。
+- Requirement：员工在私聊中可通过 MCP 创建/查看当前人类的日程；非私聊不提供。
+- Requirement：归属只由会话决定；默认不启用；官方校验失败时明确拒绝。
+- Requirement：不新增日程表或计时器；执行记录仍按人隔离。
+- 非目标（首版）：对话编辑、对话删除、跨人安排、一次性提醒、Skill/MCP/知识库自动继承、`source=AGENT` 审计。
+- 任务：内部归属接口 → MCP 服务 → 私聊挂接/权限 → dev/deploy → 测试/端到端/文档。
 
 ## 十一、开放问题
 
-1. 员工创建的日程，人类是否必须在页面上再确认一次才启用？还是对话里明确说“创建并启用”就可以？
-2. 首版是否开放 `ScheduleDelete`？如果不开放，员工误建后只能让人类去页面删。
+已确定：MCP 创建默认不启用；首版不开放对话删除/编辑；团队、邮箱、渠道不提供；MCP 走官方 REST，接受 `source=USER`。
+
+仍需决定：
+
+1. 每个人类/员工的日程配额和最小间隔是多少？谁来配置？
+2. 日程执行工作区的 Skill/MCP/知识库继承，放在本次 change 还是单独一个 change？
 3. 一次性提醒要不要支持？支持的话页面必须展示 `started_at`/`ended_at`，否则语义会误导。
-4. 每个人类/员工的日程配额和最小间隔是多少？谁来配置？
-5. 日程执行工作区的 Skill/MCP/知识库继承，放在本次 change 还是单独一个 change？
-6. 如果员工在团队讨论里被要求“安排一下”，是否允许归属到发起人？这需要把消息发送者身份传进工具上下文，当前没有。
+4. 如果员工在团队讨论里被要求“安排一下”，是否允许归属到发起人？这需要把消息发送者身份传进工具上下文，当前没有。
+5. 是否要把 MCP 创建记录到 Nexus 自己的审计表，以弥补 `source=USER` 的不可区分？这会新增状态，需要单独评估。
 
 ---
 

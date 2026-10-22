@@ -62,7 +62,7 @@ load_env_file "$SCRIPT_DIR/../env/.env"
 : "${NEXUS_GATEWAY_OPENAI_BASE:=http://127.0.0.1:${ASTRA_SERVICE_GATEWAY_PORT:-18110}/v1}"
 : "${REMOTE_WORKER_ID:=p2-remote}"; : "${REMOTE_WORKER_USER:=root}"; : "${REMOTE_WORKER_PORT:=22}"
 : "${REMOTE_WORKER_OPENCODE_PORT:=14096}"; : "${REMOTE_WORKER_WORKSPACE:=/root/nexus-remote}"
-PORTS=(6379 18000 "${ASTRA_SERVICE_GATEWAY_PORT:-18110}" 18120 18201 18202)
+PORTS=(6379 18000 "${ASTRA_SERVICE_GATEWAY_PORT:-18110}" 18120 18201 18202 18203)
 [ "$ASTRA_EXECUTOR_TYPE" != opencode_server ] || PORTS+=(14096)
 
 ver_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -1)" = "$2" ]; }
@@ -203,6 +203,12 @@ step_secrets() {
   v="${NEXUS_WORKER_GATEWAY_ADMIN_KEY:-$(get_kv "$SECRETS" NEXUS_WORKER_GATEWAY_ADMIN_KEY)}"
   [ -n "$v" ] || v="$(python3 -c 'import secrets;print("wgk_"+secrets.token_urlsafe(32))')"
   upsert_kv "$SECRETS" NEXUS_WORKER_GATEWAY_ADMIN_KEY "$v"
+  v="${NEXUS_SCHEDULE_MCP_KEY:-$(get_kv "$SECRETS" NEXUS_SCHEDULE_MCP_KEY)}"
+  [ -n "$v" ] || v="$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')"
+  upsert_kv "$SECRETS" NEXUS_SCHEDULE_MCP_KEY "$v"
+  v="${NEXUS_INTERNAL_KEY:-$(get_kv "$SECRETS" NEXUS_INTERNAL_KEY)}"
+  [ -n "$v" ] || v="$(python3 -c 'import secrets;print(secrets.token_urlsafe(32))')"
+  upsert_kv "$SECRETS" NEXUS_INTERNAL_KEY "$v"
   v="${NEXUS_GATEWAY_API_KEY:-$(get_kv "$SECRETS" NEXUS_GATEWAY_API_KEY)}"
   [ -n "$v" ] || v="$(python3 -c 'import secrets;print("agw_"+secrets.token_urlsafe(32))')"
   [[ "$v" =~ ^agw_[A-Za-z0-9_-]+$ ]] || die "NEXUS_GATEWAY_API_KEY 需要网关签发的 agw_ 密钥"
@@ -232,6 +238,7 @@ NEXUS_MCP_TRANSPORT=streamable-http
 NEXUS_MCP_HOST=127.0.0.1
 NEXUS_MCP_PORT=18201
 NEXUS_TASK_MCP_PORT=18202
+NEXUS_SCHEDULE_MCP_PORT=18203
 ASTRA_REDIS_URL=redis://127.0.0.1:6379/1
 ASTRA_OUTBOX_INTERVAL=2
 ASTRA_OUTBOX_RETRY_SECONDS=5
@@ -249,6 +256,7 @@ NEXUS_DATA_DIR=$R/services/nexus-api/data
 NEXUS_AGENTSCOPE_BASE_URL=http://127.0.0.1:18000
 NEXUS_AGENTSCOPE_USER_ID=nexus
 NEXUS_TASK_MCP_URL=http://127.0.0.1:18202/mcp
+NEXUS_SCHEDULE_MCP_URL=http://127.0.0.1:18203/mcp
 NEXUS_CHAT_PROVIDER=openai
 # 经验复盘默认关闭；开启后人工确认完成会创建复盘 Job。
 NEXUS_EXPERIENCE_REVIEW_ENABLED=false
@@ -436,6 +444,7 @@ step_health() {
   ss -ltn | grep -q ":${ASTRA_SERVICE_GATEWAY_PORT:-18110} " && echo "  ✓ Gateway 18110" || { echo "  ✗ Gateway 18110"; fails=$((fails+1)); }
   ss -ltn | grep -q ':18201 ' && echo "  ✓ Library MCP 18201" || { echo "  ✗ Library MCP 18201"; fails=$((fails+1)); }
   ss -ltn | grep -q ':18202 ' && echo "  ✓ Task MCP 18202" || { echo "  ✗ Task MCP 18202"; fails=$((fails+1)); }
+  ss -ltn | grep -q ':18203 ' && echo "  ✓ Schedule MCP 18203" || { echo "  ✗ Schedule MCP 18203"; fails=$((fails+1)); }
   chk http://127.0.0.1:18120/ "Nexus Web(18120)"
   if [ "$WITH_WIKI" = 1 ]; then
     chk "${ASTRA_LLM_WIKI_API_BASE_URL%/}/health" "llm_wiki"

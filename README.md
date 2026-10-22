@@ -55,6 +55,7 @@ docs/reports             验证记录与证据
 | Gateway 数据面 | 18110 | `services/nexus-api/app/gateway/server.py` |
 | Library MCP | 18201 | `services/nexus-api/app/mcp_server.py` |
 | Task MCP | 18202 | `services/nexus-api/app/task_mcp.py` |
+| Schedule MCP | 18203 | `services/nexus-api/nexus_api/schedule_mcp.py` |
 | Worker OpenCode | 每个 Worker 独立端口 | 在 Worker 机器运行；控制机默认不安装 |
 | Redis | 6379 | Agent Service 与 Celery |
 
@@ -73,7 +74,7 @@ services/agent-service/.venv-agentscope/bin/python services/agent-service/agents
 # 手工启动须先填好已登记的 NEXUS_GATEWAY_API_KEY；安装器会稳定生成并登记。
 (set -a; . ops/env/.env; set +a; cd services/nexus-api && .venv/bin/python -m app.deployment gateway-key)
 ops/dev/start_agent_service.sh start
-ops/dev/start_astra.sh start      # Celery、Gateway、Task MCP；worker 模式不启动本机 OpenCode
+ops/dev/start_astra.sh start      # Celery、Gateway、Task MCP、Schedule MCP；worker 模式不启动本机 OpenCode
 ops/dev/start_nexus_api.sh start  # 唯一 API + 已构建前端，18120
 ```
 
@@ -86,11 +87,11 @@ cd services/nexus-api/chat-island && npm run build
 cd services/nexus-api/web && npm install && npm run dev
 ```
 
-开发服务器把 `/api` 与 `/api/v1` 都代理到 `18120`，`/v1` 代理到 `18110`，`/agentscope-api` 代理到 `18000`。
+开发服务器把 `/api` 与 `/api/v1` 都代理到 `18120`，`/v1` 代理到 `18110`，`/agentscope-api` 先代理到 `18120` 再由 Nexus 转发 Agent Service。
 
 这些 `.sh` 只加载 `ops/env/.env` 并调用 Python。进程由 `ops/dev/astra_service.py` 和 `ops/dev/service_ctl.py` 拉起：`Popen(start_new_session=True)` 记下 pid、pgid、psutil `create_time` 和 cwd。停止前必须 pid 与 `create_time` 仍一致，然后向进程组发 `SIGTERM`，超时再 `SIGKILL`，并用本机 socket 确认端口已释放。健康检查用 urllib，只接受 HTTP 2xx。停不干净时状态文件保留，进程以非 0 退出。
 
-停止：`ops/dev/start_astra.sh stop`、`ops/dev/start_nexus_api.sh stop`、`ops/dev/start_agent_service.sh stop`、`ops/dev/start_task_mcp.sh stop`。
+停止：`ops/dev/start_astra.sh stop`、`ops/dev/start_nexus_api.sh stop`、`ops/dev/start_agent_service.sh stop`、`ops/dev/start_task_mcp.sh stop`、`ops/dev/start_schedule_mcp.sh stop`。
 
 聊天模型不再从部署环境读取：员工选择已启用的网关路由后，Nexus 以 `NEXUS_GATEWAY_OPENAI_BASE` + `NEXUS_GATEWAY_API_KEY` 在 Agent Service 登记指向网关的 credential。页面上没有模型或凭证字段。
 

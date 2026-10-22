@@ -159,8 +159,12 @@ class Settings(BaseSettings):
     remote_npm_registry: str = Field(
         default="https://registry.npmmirror.com", validation_alias="NEXUS_REMOTE_NPM_REGISTRY"
     )
-    # Empty uses python3 on the remote. The interpreter must already be >= 3.11.
+    # Empty discovers Python >=3.11; source archive is an explicit remote path.
     remote_python: str = Field(default="", validation_alias="NEXUS_REMOTE_PYTHON")
+    remote_python_source_tgz: str = Field(
+        default="", validation_alias="NEXUS_REMOTE_PYTHON_SOURCE_TGZ"
+    )
+    remote_ca_file: str = Field(default="", validation_alias="NEXUS_REMOTE_CA_FILE")
     # Empty keeps pip's default index. A value is passed as pip -i.
     remote_pip_index_url: str = Field(default="", validation_alias="NEXUS_REMOTE_PIP_INDEX_URL")
     remote_deploy_timeout_seconds: int = Field(

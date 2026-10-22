@@ -112,9 +112,10 @@ export function useAsrRecorder({
 				});
 				const body = await response.json().catch(() => ({}));
 				if (!response.ok) {
-					const detail = body?.detail;
+					const detail = body?.detail ?? body?.error;
 					const code = typeof detail === 'object' ? detail?.code : '';
-					throw new Error(errorMessage(code || '', response.status));
+					const message = typeof detail === 'string' ? detail : detail?.message;
+					throw new Error(message || errorMessage(code || '', response.status));
 				}
 				const text = String(body?.text || '').trim();
 				if (!text) throw new Error(t('asr.empty'));

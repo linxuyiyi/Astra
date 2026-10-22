@@ -42,6 +42,7 @@ from app.models import (
     WorkerMaintenanceEvent,
     WorkerMaintenanceOperation,
 )
+from app.runtime.assignment import worker_assignment_block
 from app.runtime.capability import binding_entries, stamp_desired
 from app.runtime.presentation import project_channel_health
 from app.runtime.repository import related_tasks
@@ -249,7 +250,7 @@ async def patch_task_category(
 
 async def validate_category_ids(category_ids: list[str], session: AsyncSession) -> None:
     if not category_ids:
-        raise HTTPException(status_code=422, detail="至少选择一个任务分类")
+        return
     existing = set(
         (
             await session.execute(
@@ -628,12 +629,12 @@ async def create_task(payload: TaskCreate, session: AsyncSession = Depends(get_s
         raise HTTPException(status_code=422, detail="仓库不存在")
     if payload.employee_id:
         employee = await require_employee(payload.employee_id, session)
-        if not employee.enabled:
-            raise HTTPException(status_code=409, detail="指定员工未启用")
-        if payload.task_type.value not in employee.task_types:
-            raise HTTPException(status_code=409, detail="指定员工不支持该任务类型")
-        if payload.category_id not in employee.category_ids:
-            raise HTTPException(status_code=409, detail="指定员工不支持该任务分类")
+        blocked = worker_assignment_block(
+            employee, task_type=payload.task_type.value,
+            responsible_employee_id=payload.responsible_employee_id,
+        )
+        if blocked:
+            raise HTTPException(status_code=409, detail=blocked)
     try:
         return await TaskService(session).create(payload)
     except IntegrityError as exc:
@@ -662,14 +663,20 @@ async def _attach_session_facts(session: AsyncSession, tasks: list[Task]) -> Non
 @router.patch("/tasks/{task_id}", response_model=TaskRead)
 async def patch_task(task_id: str, payload: TaskUpdate, session: AsyncSession = Depends(get_session)):
     task = await require_task(task_id, session)
-    if "employee_id" in payload.model_fields_set and payload.employee_id:
-        employee = await require_employee(payload.employee_id, session)
-        if not employee.enabled:
-            raise HTTPException(status_code=409, detail="指定员工未启用")
-        if task.task_type not in employee.task_types:
-            raise HTTPException(status_code=409, detail="指定员工不支持该任务类型")
-        if (task.category_id or "") not in employee.category_ids:
-            raise HTTPException(status_code=409, detail="指定员工不支持该任务分类")
+    if {"employee_id", "responsible_employee_id"} & payload.model_fields_set:
+        worker_id = payload.employee_id if "employee_id" in payload.model_fields_set else task.employee_id
+        owner = (
+            payload.responsible_employee_id
+            if "responsible_employee_id" in payload.model_fields_set
+            else task.responsible_employee_id
+        )
+        if worker_id:
+            employee = await require_employee(worker_id, session)
+            blocked = worker_assignment_block(
+                employee, task_type=task.task_type, responsible_employee_id=owner
+            )
+            if blocked:
+                raise HTTPException(status_code=409, detail=blocked)
     try:
         return await TaskService(session).update(task, payload)
     except ValueError as exc:

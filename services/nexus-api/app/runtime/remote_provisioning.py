@@ -233,8 +233,12 @@ class RemoteProvisioner:
         self.git_credential_revision: str | None = None
         self.git_repository_id: str | None = None
         self.installer_meta: dict = {}
+        self._systemd: bool | None = None
 
     def _agent_interpreter(self) -> str:
+        actual = self.installer_meta.get("python")
+        if isinstance(actual, str) and actual.startswith("/"):
+            return actual
         configured = (self.settings.remote_python or "").strip()
         return configured or "python3"
 
@@ -342,12 +346,56 @@ class RemoteProvisioner:
         return True
 
     async def _opencode_unit_active(self) -> bool:
+        if not await self._has_systemd():
+            # 未就绪的监听者同样需要保护，不能用健康失败推断进程已停止。
+            script = (
+                "import socket\n"
+                "s=socket.socket();s.settimeout(1)\n"
+                "try:\n"
+                f" s.connect(('127.0.0.1',{int(self.environment.opencode_server_port)}))\n"
+                "except ConnectionRefusedError: print('stopped')\n"
+                "else: print('active')\n"
+                "finally: s.close()\n"
+            )
+            try:
+                return (await self._command(f"python3 -c {shlex.quote(script)}")).strip() != "stopped"
+            except Exception:
+                return True
         unit = f"nexus-opencode-{self.environment.id}.service"
         try:
             state = await self._command(f"systemctl is-active {shlex.quote(unit)} || true")
         except Exception:
             return True
         return state.strip() == "active"
+
+    async def _has_systemd(self) -> bool:
+        if self._systemd is None:
+            result = await self._command(
+                'if test "$(cat /proc/1/comm)" = systemd && test -d /run/systemd/system '
+                '&& command -v systemctl >/dev/null; then printf systemd; else printf process; fi'
+            )
+            self._systemd = result.strip() == "systemd"
+        return self._systemd
+
+    async def _manage_process(self, name: str, *, restart: bool) -> None:
+        root = worker_install_dir(self.environment.id)
+        is_opencode = name == "opencode"
+        env_file = f"{WORKER_SECRET_DIR}/{name}-{self.environment.id}.env"
+        args = [
+            agent_python(self.environment.id), "-m", "app.worker_agent.process_manager",
+            "restart" if restart else "ensure",
+            "--record", f"{root}/{name}-process.json",
+            "--workspace", self.environment.workspace_root,
+            "--log", f"{root}/{name}-process.log",
+            "--env-file", env_file,
+        ]
+        if is_opencode:
+            args += ["--opencode", "--", self.target_binary, "serve", "--hostname",
+                     "127.0.0.1", "--port", str(self.environment.opencode_server_port)]
+        else:
+            args += ["--", agent_python(self.environment.id), "-m", "app.worker_agent"]
+        await self._ensure_safe()
+        await self._command(shlex.join(args))
 
     async def _gateway_key(self, config_path, models):
         content = await self.ssh.read_file(config_path)
@@ -396,7 +444,7 @@ class RemoteProvisioner:
             models = list(
                 await db.scalars(
                     select(GatewayRoute.model)
-                    .where(GatewayRoute.enabled.is_(True))
+                    .where(GatewayRoute.enabled.is_(True), GatewayRoute.model_type == "CHAT")
                     .order_by(GatewayRoute.model)
                 )
             )
@@ -436,6 +484,8 @@ class RemoteProvisioner:
             {
                 "action": "update" if self.action == "update" else "deploy",
                 "environment_id": self.environment.id,
+                "python_source_tgz": self.settings.remote_python_source_tgz,
+                "ca_file": self.settings.remote_ca_file,
                 "opencode_server_port": int(self.environment.opencode_server_port),
                 "repository": {"url": "", "branch": self.environment.branch or "main"},
             }
@@ -581,8 +631,10 @@ class RemoteProvisioner:
             "await new Promise(r=>setTimeout(r,2000));}throw Error('中转 Key 未生效');}"
             "main().catch(e=>{console.error(e.message);process.exit(1)})"
         )
+        ca_file = (self.settings.remote_ca_file or "").strip()
+        ca_env = f"NODE_EXTRA_CA_CERTS={shlex.quote(ca_file)} " if ca_file else ""
         detail = await self._command(
-            f"{shlex.quote(node)} -e {shlex.quote(probe)} {shlex.quote(self.config_path)}",
+            f"{ca_env}{shlex.quote(node)} -e {shlex.quote(probe)} {shlex.quote(self.config_path)}",
             timeout=50,
         )
         await self.step(emit, "模型中转连接", "passed", detail)
@@ -686,6 +738,14 @@ class RemoteProvisioner:
         opencode_dir = str(Path(opencode_config).parent)
         path_value = ":".join([f"{node_root}/bin", npm_bin, "/usr/local/bin", "/usr/bin", "/bin"])
         git_environment = safe_git_environment(self.environment.id)
+        ca_file = (self.settings.remote_ca_file or "").strip()
+        if ca_file:
+            if not ca_file.startswith("/") or any(c in ca_file for c in "\r\n"):
+                raise RuntimeError("远端 CA 必须为绝对文件路径")
+            git_environment.update(
+                SSL_CERT_FILE=ca_file, NODE_EXTRA_CA_CERTS=ca_file, GIT_SSL_CAINFO=ca_file
+            )
+        systemd = await self._has_systemd()
         git_unit_environment = "".join(
             f"Environment={key}={value}\n" for key, value in git_environment.items()
         )
@@ -717,10 +777,11 @@ class RemoteProvisioner:
         marker_path = f"{install_dir}/wheel.sha256"
         await self._command(f"install -d -m 755 {shlex.quote(install_dir)} {shlex.quote(env_root)}")
         await self._command(f"install -d -m 700 {shlex.quote(WORKER_SECRET_DIR)}")
-        await self._command(
-            f"test -d {shlex.quote(SYSTEMD_UNIT_DIR)} "
-            f"|| install -d -m 755 {shlex.quote(SYSTEMD_UNIT_DIR)}"
-        )
+        if systemd:
+            await self._command(
+                f"test -d {shlex.quote(SYSTEMD_UNIT_DIR)} "
+                f"|| install -d -m 755 {shlex.quote(SYSTEMD_UNIT_DIR)}"
+            )
         await self._ensure_safe()
         token_path_git = git_token_path(self.environment.id)
         askpass_git = git_askpass_path(self.environment.id)
@@ -774,6 +835,7 @@ class RemoteProvisioner:
             token, worker_instance_id = enrolled.token, enrolled.worker_instance_id
         self.secrets.append(token)
         env_lines = [
+            f"PATH={path_value}",
             f"NEXUS_WORKER_TOKEN={token}",
             f"NEXUS_WORKER_GATEWAY_URL={agent_gateway}",
             f"NEXUS_WORKER_INSTANCE_ID={worker_instance_id}",
@@ -781,25 +843,44 @@ class RemoteProvisioner:
             f"NEXUS_REMOTE_GATEWAY_URL={gateway_url}",
             f"NEXUS_MCP_RESOURCE_URL={mcp_url}",
             f"NEXUS_WORKER_OPENCODE_URL={opencode_url}",
-            f"NEXUS_WORKER_OPENCODE_UNIT={opencode_unit}",
+            f"NEXUS_WORKER_OPENCODE_UNIT={opencode_unit if systemd else ''}",
             f"NEXUS_WORKER_OPENCODE_BIN={self.target_binary}",
             f"OPENCODE_CONFIG={opencode_config}",
             f"OPENCODE_CONFIG_DIR={opencode_dir}",
             f"NEXUS_WORKER_WORKSPACE_ROOT={self.environment.workspace_root}",
             f"NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS={timeout}",
         ]
+        if not systemd:
+            env_lines.append(
+                f"NEXUS_WORKER_OPENCODE_PROCESS_RECORD={install_dir}/opencode-process.json"
+            )
         env_lines.extend(f"{key}={value}" for key, value in git_environment.items())
         env = "\n".join(env_lines) + "\n"
         await self._ensure_safe()
         env_changed = await self._write_atomic_if_changed(
             token_path, env.encode(), 0o600, backup=True
         )
-        opencode_unit_changed = await self._write_atomic_if_changed(
-            f"{SYSTEMD_UNIT_DIR}/{opencode_unit}", opencode_unit_text.encode(), 0o644, backup=True
-        )
-        worker_unit_changed = await self._write_atomic_if_changed(
-            f"{SYSTEMD_UNIT_DIR}/{worker_unit}", agent_unit_text.encode(), 0o644, backup=True
-        )
+        if systemd:
+            opencode_unit_changed = await self._write_atomic_if_changed(
+                f"{SYSTEMD_UNIT_DIR}/{opencode_unit}", opencode_unit_text.encode(), 0o644, backup=True
+            )
+            worker_unit_changed = await self._write_atomic_if_changed(
+                f"{SYSTEMD_UNIT_DIR}/{worker_unit}", agent_unit_text.encode(), 0o644, backup=True
+            )
+        else:
+            opencode_env = {
+                "PATH": path_value,
+                "OPENCODE_CONFIG": opencode_config,
+                "OPENCODE_CONFIG_DIR": opencode_dir,
+                **git_environment,
+            }
+            opencode_unit_changed = await self._write_atomic_if_changed(
+                f"{WORKER_SECRET_DIR}/opencode-{self.environment.id}.env",
+                ("".join(f"{key}={value}\n" for key, value in opencode_env.items())).encode(),
+                0o600,
+                backup=True,
+            )
+            worker_unit_changed = False
         units_changed = opencode_unit_changed or worker_unit_changed
         await self._ensure_safe()
         readable = await self._native_idle(strict=False)
@@ -819,6 +900,11 @@ class RemoteProvisioner:
         restart_worker = worker_unit_changed or env_changed or wheel_changed
         if self.lease is not None:
             await self.lease.mark_danger()
+        if not systemd:
+            await self._manage_process("opencode", restart=restart_opencode)
+            await self._manage_process("worker", restart=restart_worker)
+            await self.step(emit, "安装 Worker Agent", "passed", worker_instance_id)
+            return
         commands = [
             "systemctl daemon-reload" if (units_changed or wheel_changed) else None,
             f"systemctl enable {shlex.quote(opencode_unit)} {shlex.quote(worker_unit)}",
@@ -920,14 +1006,18 @@ class RemoteProvisioner:
         worker_unit = f"nexus-worker-{self.environment.id}.service"
         if self.lease is not None:
             await self.lease.mark_danger()
-        await self._command(f"systemctl restart {shlex.quote(unit)} {shlex.quote(worker_unit)}")
+        if await self._has_systemd():
+            await self._command(f"systemctl restart {shlex.quote(unit)} {shlex.quote(worker_unit)}")
+        else:
+            await self._manage_process("opencode", restart=True)
+            await self._manage_process("worker", restart=True)
         await self._wait_opencode_ready()
         await self._wait_until_online()
         await self.step(
             emit,
             "重启 OpenCode Serve",
             "passed",
-            "单元重启、OpenCode 健康与 Worker 上线均已确认",
+            "进程重启、OpenCode 健康与 Worker 上线均已确认",
         )
 
     async def _observe_capability(self) -> dict:

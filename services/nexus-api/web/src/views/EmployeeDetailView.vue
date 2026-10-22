@@ -12,7 +12,7 @@
         <p>
           <template v-if="digitalEmployee">{{ digitalEmployee.name }} · {{ digitalEmployee.domain }}</template>
           <template v-else-if="employee.digital_employee_id">数字员工 {{ employee.digital_employee_id }}</template>
-          <template v-else>历史 Worker（未关联数字员工）</template>
+          <template v-else>公共 Worker</template>
         </p>
         <div class="worker-hero__badges">
           <SemanticTag :tone="schedulableTone(health)" :label="schedulableLabel(health)" />
@@ -115,7 +115,6 @@
             <template #header><div class="worker-card__title"><h3>工作范围与派单</h3></div></template>
             <ElDescriptions :column="2" border size="small">
               <ElDescriptionsItem label="任务类型" :span="2">{{ taskTypesLabel }}</ElDescriptionsItem>
-              <ElDescriptionsItem label="任务分类" :span="2">{{ categoryName(employee.category_ids[0] ?? null) }}</ElDescriptionsItem>
               <ElDescriptionsItem label="平台调度">{{ employee.enabled ? '允许' : '已停止' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="自动领取">{{ employee.auto_claim ? '开启' : '关闭' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="自主执行">{{ employee.auto_execute ? '开启' : '关闭' }}</ElDescriptionsItem>
@@ -223,7 +222,6 @@
       :open="editOpen"
       :employee="employee"
       :creating="false"
-      :categories="store.categories"
       :digital-employees="digitalEmployees"
       :digital-loading="digitalLoading"
       @close="editOpen = false"

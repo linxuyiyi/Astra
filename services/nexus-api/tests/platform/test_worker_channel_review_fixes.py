@@ -316,6 +316,7 @@ def test_restart_refuses_a_port_that_is_not_opencode(tmp_path, monkeypatch):
 
 
 def test_systemd_restart_does_not_inherit_the_worker_token(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.worker_agent.channel_switch.has_systemd", lambda: True)
     calls: list[tuple] = []
 
     def run(cmd, **kwargs):

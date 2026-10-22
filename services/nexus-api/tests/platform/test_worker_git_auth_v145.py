@@ -435,6 +435,7 @@ async def test_token_rotation_does_not_restart_unchanged_units(monkeypatch):
         opencode_path="/usr/local/bin/opencode",
     )
     provisioner = RemoteProvisioner(environment, {"id": "op-gitrot", "action": "deploy"})
+    provisioner._systemd = True
     provisioner.home = "/root"
     provisioner.config_path = "/etc/nexus/opencode/77/opencode.jsonc"
     provisioner.target_binary = "/root/.local/share/nexus/workers/77/bin/opencode"
@@ -525,6 +526,7 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(
         opencode_path="/usr/local/bin/opencode",
     )
     provisioner = RemoteProvisioner(environment, {"id": "op-gitwire", "action": "deploy"})
+    provisioner._systemd = True
     provisioner.home = "/root"
     provisioner.config_path = "/etc/nexus/opencode/88/opencode.jsonc"
     provisioner.target_binary = "/root/.local/share/nexus/workers/88/bin/opencode"

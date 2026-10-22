@@ -9,7 +9,7 @@
       <div class="admin-page__filters">
         <ElSelect v-model="digitalEmployee" class="admin-page__select" data-testid="employee-filter-digital" aria-label="数字员工" placeholder="数字员工：全部" clearable filterable>
           <ElOption v-for="item in digitalEmployees" :key="item.id" :value="item.id" :label="`${item.name} · ${item.domain}`" />
-          <ElOption v-if="unlinkedCount" value="__none__" label="未关联数字员工" />
+          <ElOption v-if="unlinkedCount" value="__none__" label="公共 Worker" />
         </ElSelect>
         <ElSelect v-model="connection" class="admin-page__select" data-testid="employee-filter-status" aria-label="连接状态" placeholder="连接：全部" clearable>
           <ElOption v-for="option in connectionOptions" :key="option.value" :value="option.value" :label="option.label" />
@@ -54,7 +54,7 @@
                 <strong>{{ row.name }}</strong>
                 <ElText v-if="row.digital">{{ row.digital.name }} · {{ row.digital.domain }}</ElText>
                 <ElText v-else-if="row.employee.digital_employee_id">数字员工目录未加载</ElText>
-                <ElText v-else>未关联数字员工</ElText>
+                <ElText v-else>公共 Worker</ElText>
                 <ElText class="worker-cell__meta">{{ row.employee.id }} · 环境 #{{ row.environment.id }}</ElText>
               </span>
             </div>
@@ -141,7 +141,6 @@
       :open="modalOpen"
       :employee="modalEmployee"
       :creating="modalCreating"
-      :categories="store.categories"
       :digital-employees="digitalEmployees"
       :digital-loading="digitalLoading"
       @close="closeModal"

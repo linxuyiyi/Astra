@@ -42,6 +42,25 @@ def test_models(client: TestClient):
     assert "zh" in models[0]["languages"]
 
 
+def test_gateway_compatible_transcription(client: TestClient):
+    assert client.get("/v1/models").json()["data"][0]["id"] == "sensevoice-small-int8"
+    response = client.post(
+        "/v1/audio/transcriptions", data={"model": "sensevoice-small-int8"},
+        files={"file": ("zh.wav", wav_bytes("testdata/zh-5s.wav"), "audio/wav")},
+    )
+    assert response.status_code == 200, response.text
+    assert "会议纪要" in response.json()["text"]
+    for data, status in [
+        ({"model": "wrong"}, 404),
+        ({"model": "sensevoice-small-int8", "response_format": "text"}, 400),
+    ]:
+        rejected = client.post(
+            "/v1/audio/transcriptions", data=data,
+            files={"file": ("zh.wav", b"invalid", "audio/wav")},
+        )
+        assert rejected.status_code == status
+
+
 def test_transcribe_wav(client: TestClient):
     files = {"file": ("zh-5s.wav", wav_bytes("testdata/zh-5s.wav"), "audio/wav")}
     response = client.post("/api/asr/transcribe", files=files)

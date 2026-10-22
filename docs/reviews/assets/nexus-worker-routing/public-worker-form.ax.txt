@@ -1,0 +1,246 @@
+Browser tab: 1, Title: "Nexus v1.4.8", URL: "http://127.0.0.1:51260/settings/workers".
+1 AXWebArea Nexus v1.4.8, URL: 127.0.0.1:51260/settings/workers
+	2 container app
+		3 container
+			4 text ✦ NEXUS  v1.4.8
+			5 container 页面导航
+				6 link Description: 星云首页, Value: 127.0.0.1:51260/
+				7 link Description: 数字员工, Value: 127.0.0.1:51260/chat
+				8 link Description: 任务大厅, Value: 127.0.0.1:51260/tasks
+				9 link Description: 数字图书馆, Value: 127.0.0.1:51260/library
+				10 link Description: API 网关, Value: 127.0.0.1:51260/gateway
+				11 link Description: 配置中心, Value: 127.0.0.1:51260/settings
+			12 text AgentScope 2.0.10 未连接
+		13 container
+			14 text 配置中心
+			15 menu bar
+				16 数字员工管理
+					17 image
+					18 text 数字员工管理
+				19 Agent Worker
+					20 image
+					21 text Agent Worker
+				22 技能管理
+					23 image
+					24 text 技能管理
+				25 MCP 管理
+					26 image
+					27 text MCP 管理
+				28 任务分类
+					29 image
+					30 text 任务分类
+				31 AgentScope
+					32 image
+					33 text AgentScope
+			36 text Agent Worker
+			35 container settings-header-actions
+				37 button 刷新
+					38 text 刷新
+				39 button 新建 Agent Worker
+					40 text 新建 Agent Worker
+			41 container
+				42 container Agent Worker 筛选
+					43 container
+						44 combo box (collapsed, settable) Description: 数字员工, ID: el-id-2551-38, Secondary Actions: Expand
+						45 text 数字员工：全部
+						46 image
+					47 container
+						48 combo box (collapsed, settable) Description: 连接状态, ID: el-id-2551-39, Secondary Actions: Expand
+						49 text 连接：全部
+						50 image
+					51 button (collapsed) 更多筛选, Secondary Actions: Expand
+						52 text 更多筛选
+					53 container
+						54 image
+						55 text field (settable) Description: 搜索 Agent Worker, ID: el-id-2551-40
+					56 button 搜索
+						57 text 搜索
+				58 container Agent Worker 列表
+					59 container
+						60 table
+							61 row
+								62 cell
+									63 text Agent Worker
+								64 cell
+									65 text 部署位置
+								66 cell
+									67 text 可接任务
+								68 cell
+									69 text 当前任务
+								70 cell
+									71 text 操作
+						72 table
+							73 container
+								74 row
+									75 cell
+										76 text 员工甲 Worker
+										77 text 数字员工目录未加载 wa · 环境 #1
+									78 cell
+										79 text 本机
+										80 text 本地
+									81 cell
+										82 text 未获取
+									83 cell
+										84 text 尚未获取
+									85 cell
+										86 button 查看
+										87 pop up button (collapsed) 更多, ID: el-id-2551-42, Secondary Actions: Expand
+								88 row
+									89 cell
+										90 text 员工乙 Worker
+										91 text 数字员工目录未加载 wb · 环境 #2
+									92 cell
+										93 text 本机
+										94 text 本地
+									95 cell
+										96 text 未获取
+									97 cell
+										98 text 尚未获取
+									99 cell
+										100 button 查看
+										101 pop up button (collapsed) 更多, ID: el-id-2551-46, Secondary Actions: Expand
+								102 row
+									103 cell
+										104 text 公共 Worker
+										105 text 公共 Worker public · 环境 #3
+									106 cell
+										107 text 本机
+										108 text 本地
+									109 cell
+										110 text 未获取
+									111 cell
+										112 text 尚未获取
+									113 cell
+										114 button 查看
+										115 pop up button (collapsed) 更多, ID: el-id-2551-50, Secondary Actions: Expand
+								116 row
+									117 cell
+										118 text 仅需求 Worker
+										119 text 公共 Worker req · 环境 #4
+									120 cell
+										121 text 本机
+										122 text 本地
+									123 cell
+										124 text 未获取
+									125 cell
+										126 text 尚未获取
+									127 cell
+										128 button 查看
+										129 pop up button (collapsed) 更多, ID: el-id-2551-54, Secondary Actions: Expand
+				130 container Agent Worker 列表分页
+					131 text 共 4 条
+					132 container
+						133 combo box (collapsed, settable) ID: el-id-2551-41, Secondary Actions: Expand
+						134 text 20条/页
+						135 image
+					136 button (disabled) 上一页
+					137 content list
+						138 container 第 1 页
+							139 text 1
+					140 button (disabled) 下一页
+				141 container 新建 Agent Worker
+					142 container
+					143 container
+						144 heading 新建 Agent Worker, Value: 2, ID: el-id-2551-60
+							145 text 新建 Agent Worker
+						146 button 关闭此对话框
+					147 container
+						148 container
+							149 heading 基本信息, Value: 3
+								150 text 基本信息
+							151 text Worker 是执行资源。一个数字员工可以拥有多个 Agent Worker。
+						152 text 数字员工
+						153 container
+							154 container
+								155 combo box (collapsed, settable) 数字员工, ID: el-id-2551-93, Secondary Actions: Expand
+								156 text 可选，留空作为公共 Worker
+								157 image
+							158 text 关联后按该数字员工接单；不关联则作为公共 Worker，按支持任务类型接单。
+						159 container el-id-2551-67
+							245 text * Worker 名称
+						161 text field (settable) *Worker 名称, ID: el-id-2551-94
+						162 text 环境说明
+						163 text field (settable) 环境说明, ID: el-id-2551-95
+						164 container
+							165 heading 工作范围, Value: 3
+								166 text 工作范围
+							167 text 描述这个 Worker 能接什么任务。工作范围跟随 Worker，不影响数字员工本身。
+						168 container el-id-2551-69
+							246 text * 支持任务类型
+						170 container Description: *支持任务类型, ID: el-id-2551-96
+							171 container
+								172 checkbox (settable, integer) Description: 问题 问题说明, Value: 1
+								173 text 问题
+								174 button 问题说明
+							175 container
+								176 checkbox (settable, integer) Description: 需求 需求说明, Value: 1
+								177 text 需求
+								178 button 需求说明
+						179 container
+							180 heading 派单配置, Value: 3
+								181 text 派单配置
+							182 text 控制平台是否向该 Worker 派发新任务，以及领取后的执行方式。
+						183 container el-id-2551-72
+							184 text 允许平台调度
+							185 button 允许平台调度说明
+						186 container
+							187 switch (settable, boolean) Description: 允许平台调度, Value: 1, ID: el-id-2551-97
+						188 container el-id-2551-74
+							189 text 自动领取任务
+							190 button 自动领取任务说明
+						191 container
+							192 switch (settable, boolean) Description: 自动领取任务, Value: 1, ID: el-id-2551-98
+						193 container el-id-2551-76
+							194 text 允许自主执行
+							195 button 允许自主执行说明
+						196 container
+							197 switch (settable, boolean) Description: 允许自主执行, Value: 1, ID: el-id-2551-99
+						198 container
+							199 heading 执行资源环境, Value: 3
+								200 text 执行资源环境
+							201 text 描述 Worker 在哪里运行、工程从哪里来、由哪个编码 Agent 执行。
+						202 text 运行位置
+						203 Description: 运行位置, ID: el-id-2551-100
+							204 container
+								205 radio button (settable, integer) Description: 本地, Value: 1
+								206 image
+								207 text 本地
+							208 container
+								209 radio button (settable, integer) Description: Linux 远程, Value: 0
+								210 image
+								211 text Linux 远程
+						212 heading 工程信息, Value: 4
+							213 text 工程信息
+						214 text 工作空间会在不同任务间复用；仓库凭据只用于下载代码，不会回显。
+						215 container el-id-2551-80
+							247 text * 工作空间
+						217 container
+							218 text field (settable) *工作空间, ID: el-id-2551-101
+							219 text 本地 Worker 可使用盘符、空格和中文目录。
+						220 text 代码仓库地址
+						221 text field (settable) 代码仓库地址, ID: el-id-2551-102
+						222 text 目标分支
+						223 text field (settable) 目标分支, Value: main, ID: el-id-2551-103
+						224 text Codeup 账号 / Token
+						225 container
+							226 text field (settable) Codeup 账号 / Token
+							227 text 新建仓库绑定时必填；已有仓库留空表示沿用已保存凭据。
+						228 heading 编码 Agent, Value: 4
+							229 text 编码 Agent
+						230 text 选择 Worker 上运行的编码工具和模型。模型留空时使用平台默认模型。
+						231 text 编程工具
+						232 container
+							233 container
+								234 combo box (collapsed, settable) 编程工具, ID: el-id-2551-105, Secondary Actions: Expand
+								235 text OpenCode
+								236 image
+							237 text 当前一键部署只安装 OpenCode；DeepSeek Harness 接入后会在这里开放。
+						238 text 编程模型
+						239 text field (settable) 编程模型, ID: el-id-2551-106
+						240 button (collapsed) 高级设置, ID: el-collapse-head-90, Secondary Actions: Expand
+							241 text 高级设置
+					242 container
+						243 button 取消
+						244 button 创建 Agent Worker
+
+The focused UI element is 142 container

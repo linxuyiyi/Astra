@@ -14,7 +14,6 @@
       ref="configRef"
       :employee="employee"
       :creating="creating"
-      :categories="categories"
       :digital-employees="digitalEmployees"
       :digital-loading="digitalLoading"
       embedded
@@ -49,7 +48,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ElButton, ElDrawer, ElSpace, ElTag } from 'element-plus'
-import type { Employee, TaskCategory } from '@/api/types'
+import type { Employee } from '@/api/types'
 import type { Employee as DigitalEmployee } from '@/types'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
@@ -60,7 +59,6 @@ const props = withDefaults(defineProps<{
   open: boolean
   employee: Employee | null
   creating: boolean
-  categories: TaskCategory[]
   digitalEmployees?: DigitalEmployee[]
   digitalLoading?: boolean
 }>(), { digitalEmployees: () => [], digitalLoading: false })

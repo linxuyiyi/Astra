@@ -19,7 +19,7 @@ from uuid import uuid4
 
 from anyio import CancelScope
 from fastapi import HTTPException
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import JSON, and_, cast, func, literal, or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.config.settings import get_settings
@@ -169,6 +169,15 @@ async def require_no_active_maintenance(session, environment_id: int | None) -> 
         raise HTTPException(409, "远程环境正在维护，请等待完成或先取消当前操作")
 
 
+def status_detail_matches(session, value):
+    """MySQL 必须比较 JSON 值；JSON 参数的 SQL 字符串不能隐式当作对象。"""
+
+    expected = literal(value, type_=JSON())
+    if session.get_bind().dialect.name == "mysql":
+        expected = cast(expected, JSON())
+    return OpenCodeExecutionEnvironment.status_detail == expected
+
+
 async def lock_environment_row(session, environment: OpenCodeExecutionEnvironment) -> None:
     """Take the shared environment write lock without consulting maintenance."""
 
@@ -177,7 +186,7 @@ async def lock_environment_row(session, environment: OpenCodeExecutionEnvironmen
         update(OpenCodeExecutionEnvironment)
         .where(
             OpenCodeExecutionEnvironment.id == environment.id,
-            OpenCodeExecutionEnvironment.status_detail == environment.status_detail,
+            status_detail_matches(session, environment.status_detail),
             OpenCodeExecutionEnvironment.status == environment.status,
         )
         .values(updated_at=OpenCodeExecutionEnvironment.updated_at)
@@ -1819,7 +1828,7 @@ async def observe_environment(
         conditions = [
             OpenCodeExecutionEnvironment.id == environment_id,
             OpenCodeExecutionEnvironment.status == previous_status,
-            OpenCodeExecutionEnvironment.status_detail == previous,
+            status_detail_matches(session, previous),
             ~active_maintenance_exists(environment_id),
         ]
         if remote and current_epoch is not None:

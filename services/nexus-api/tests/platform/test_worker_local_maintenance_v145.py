@@ -181,6 +181,7 @@ def test_unreadable_native_status_blocks_restart(tmp_path: Path, monkeypatch):
 
 @pytest.mark.parametrize("body", [{}, {"one": {"type": "idle"}}])
 def test_native_idle_allows_the_systemd_restart(tmp_path: Path, monkeypatch, body):
+    monkeypatch.setattr(channel_switch, "has_systemd", lambda: True)
     workspace = _workspace(tmp_path)
     calls: list[tuple] = []
     waited: list[int] = []
@@ -357,6 +358,7 @@ def test_matching_binding_reaches_the_dangerous_handler(tmp_path: Path, monkeypa
 
 
 def test_gate_failure_after_systemctl_does_not_report_success(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(channel_switch, "has_systemd", lambda: True)
     workspace = _workspace(tmp_path)
     commands: list[tuple] = []
     monkeypatch.setattr(channel_switch, "assert_native_idle", lambda *_args, **_kwargs: False)

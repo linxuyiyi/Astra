@@ -19,10 +19,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.formparsers import MultiPartParser
 
 from . import model_store
 from .audio import (
@@ -75,6 +76,8 @@ def _client_ip(request: Request, trust_proxy: bool) -> str:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
     _configure_logging(settings.server.log_level)
+    # 下方中间件先限制整个请求；允许范围内的上传始终留在内存中。
+    MultiPartParser.spool_max_size = settings.server.max_upload_bytes + 64 * 1024
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -146,6 +149,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
 
     @app.middleware("http")
+    async def bounded_upload(request: Request, call_next):
+        if request.method == "POST" and request.url.path in {
+            "/api/asr/transcribe", "/v1/audio/transcriptions",
+        }:
+            limit = settings.server.max_upload_bytes + 64 * 1024
+            body = bytearray()
+            async for chunk in request.stream():
+                body.extend(chunk)
+                if len(body) > limit:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": {"code": "payload_too_large", "message": "upload exceeds limit"}},
+                    )
+            request._body = bytes(body)
+        return await call_next(request)
+
+    @app.middleware("http")
     async def request_context(request: Request, call_next):
         request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
         request.state.request_id = request_id
@@ -168,7 +188,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
         request_id = getattr(request.state, "request_id", "")
-        logger.info("validation_error request_id=%s errors=%s", request_id, exc.errors())
+        logger.info("validation_error request_id=%s count=%d", request_id, len(exc.errors()))
         return JSONResponse(
             status_code=422,
             content={"detail": ErrorDetail(
@@ -353,6 +373,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if acquired:
                 state.active_requests = max(0, state.active_requests - 1)
                 state.semaphore.release()
+
+    @app.post("/v1/audio/transcriptions", tags=["asr"])
+    async def openai_transcribe(
+        request: Request,
+        file: Annotated[UploadFile, File()],
+        model: Annotated[str, Form()],
+        response_format: Annotated[str, Form()] = "json",
+    ):
+        if model != settings.asr.model:
+            await file.close()
+            raise _api_error(404, "model_not_found", "unknown speech recognition model")
+        if response_format != "json":
+            await file.close()
+            raise _api_error(400, "unsupported_format", "only json response_format is supported")
+        result = await transcribe(request, file)
+        return {"text": result.text}
+
+    @app.get("/v1/models", tags=["asr"])
+    async def openai_models():
+        return {"object": "list", "data": [{
+            "id": settings.asr.model, "object": "model", "owned_by": "nexus-asr",
+        }]}
 
     @app.get("/", include_in_schema=False)
     async def index():

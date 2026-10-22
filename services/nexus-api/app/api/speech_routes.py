@@ -1,0 +1,123 @@
+"""聊天录音只经过服务端网关，浏览器无需持有网关或模型凭据。"""
+
+from __future__ import annotations
+
+import httpx
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_session
+from app.gateway.audio import AUDIO_PATH, MAX_AUDIO_BODY_BYTES, parse_audio_upload
+from app.gateway.errors import GatewayDataPlaneError, payload_too_large
+from app.gateway.models import GatewayAuditEvent, GatewayPool, GatewayRoute, GatewaySpeechInput
+from app.gateway.schemas import SpeechInputConfig
+from app.identity import resolve_uid
+from nexus_api.model_route import ModelRouteError, gateway_api_key, gateway_base_url
+
+router = APIRouter(tags=["speech-input"])
+
+
+def speech_user(
+    verified: str | None = Header(default=None, alias="X-Verified-UID"),
+    owner: str | None = Header(default=None, alias="X-Owner-Id"),
+    cookie: str | None = Cookie(default=None, alias="nexus_uid"),
+) -> str:
+    return resolve_uid(verified, owner, cookie)
+
+
+async def speech_route(session: AsyncSession, route_id: str | None) -> GatewayRoute:
+    route = await session.get(GatewayRoute, route_id) if route_id else None
+    if route is None or route.model_type != "ASR" or not route.enabled:
+        raise HTTPException(422, "请在 API 网关配置已启用的语音识别路由")
+    pool = await session.get(GatewayPool, route.pool_id)
+    if pool is None or not pool.enabled:
+        raise HTTPException(422, "语音识别路由的资源池未启用")
+    return route
+
+
+@router.get("/api/gateway/speech-input", response_model=SpeechInputConfig)
+async def get_speech_input(session: AsyncSession = Depends(get_session)):
+    config = await session.get(GatewaySpeechInput, "default")
+    return SpeechInputConfig(route_id=config.route_id if config else None)
+
+
+@router.put("/api/gateway/speech-input", response_model=SpeechInputConfig)
+async def set_speech_input(
+    body: SpeechInputConfig,
+    user: str = Depends(speech_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if body.route_id:
+        await speech_route(session, body.route_id)
+    config = await session.get(GatewaySpeechInput, "default")
+    before = {"route_id": config.route_id if config else None}
+    if config is None:
+        config = GatewaySpeechInput(id="default")
+        session.add(config)
+    config.route_id = body.route_id
+    session.add(GatewayAuditEvent(
+        actor=user, actor_role="user", action="speech-input.update",
+        resource_type="speech-input", resource_id="default",
+        before=before, after=body.model_dump(),
+    ))
+    await session.commit()
+    return body
+
+
+@router.post("/api/asr/transcribe")
+async def transcribe(
+    request: Request,
+    _user: str = Depends(speech_user),
+    session: AsyncSession = Depends(get_session),
+):
+    config = await session.get(GatewaySpeechInput, "default")
+    route = await speech_route(session, config.route_id if config else None)
+    model = route.model
+    # 远程识别期间不占用数据库连接。
+    await session.rollback()
+    try:
+        base = gateway_base_url()
+        key = gateway_api_key()
+    except ModelRouteError as exc:
+        raise HTTPException(503, "语音输入的服务端网关地址或调用密钥未配置") from exc
+    try:
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > MAX_AUDIO_BODY_BYTES:
+            raise payload_too_large("音频超过 12 MiB 上限")
+        data = bytearray()
+        async for chunk in request.stream():
+            data.extend(chunk)
+            if len(data) > MAX_AUDIO_BODY_BYTES:
+                raise payload_too_large("音频超过 12 MiB 上限")
+        audio = parse_audio_upload(bytes(data), request.headers.get("content-type", ""))
+        # 浏览器不能覆盖服务端配置的模型；音频表单只允许上传文件。
+        if audio.fields:
+            raise HTTPException(400, "语音输入的模型由网关配置选择")
+        body, content_type = audio.encode(model)
+    except GatewayDataPlaneError as exc:
+        return exc.to_response()
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(55, connect=5)) as client:
+            response = await client.post(
+                base + AUDIO_PATH.removeprefix("/v1"),
+                content=body,
+                headers={"Authorization": f"Bearer {key}", "Content-Type": content_type},
+            )
+    except httpx.TimeoutException as exc:
+        raise HTTPException(504, "语音识别网关请求超时，请重试") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(503, "无法连接语音识别网关，请重试") from exc
+    if not response.is_success:
+        # 不回显上游地址、凭据或原始错误正文。
+        return JSONResponse(
+            {"detail": {"code": "gateway_asr_failed", "message": "语音识别网关调用失败，请检查路由与节点"}},
+            status_code=response.status_code,
+        )
+    try:
+        text = response.json()["text"]
+        if not isinstance(text, str):
+            raise ValueError("invalid text")
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(502, "语音识别网关未返回有效文字") from exc
+    return {"text": text}

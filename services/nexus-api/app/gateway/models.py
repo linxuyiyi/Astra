@@ -42,7 +42,8 @@ PROBE_SERVICE = "SERVICE"
 PROBE_MODEL = "MODEL"
 PROBE_STREAM = "STREAM"
 PROBE_EMBEDDING = "EMBEDDING"
-PROBE_TYPES = (PROBE_NETWORK, PROBE_SERVICE, PROBE_MODEL, PROBE_STREAM, PROBE_EMBEDDING)
+PROBE_ASR = "ASR"
+PROBE_TYPES = (PROBE_NETWORK, PROBE_SERVICE, PROBE_MODEL, PROBE_STREAM, PROBE_EMBEDDING, PROBE_ASR)
 
 # 节点下游认证方式：Bearer Token、自定义 Header（值取自加密的 api_key_encrypted）、
 # 无认证。自定义 Header 名称由 auth_header 指定，凭据值绝不单独明文落库。
@@ -110,6 +111,7 @@ class GatewayRoute(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     model: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    model_type: Mapped[str] = mapped_column(String(16), default="CHAT", server_default="CHAT")
     pool_id: Mapped[str] = mapped_column(
         ForeignKey("t_nexus_gateway_pools.id", ondelete="RESTRICT"), index=True
     )
@@ -118,6 +120,17 @@ class GatewayRoute(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+class GatewaySpeechInput(Base):
+    """全平台语音输入仅保存网关路由，不复制节点地址或凭据。"""
+
+    __tablename__ = "t_nexus_gateway_speech_input"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    route_id: Mapped[str | None] = mapped_column(
+        ForeignKey("t_nexus_gateway_routes.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class GatewayKey(Base):

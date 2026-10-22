@@ -1963,6 +1963,7 @@ async def test_install_units_skips_unnecessary_restarts_when_unchanged(monkeypat
         environment = await db.get(OpenCodeExecutionEnvironment, environment_id)
         db.expunge(environment)
     provisioner = RemoteProvisioner(environment, {"id": "op-idem", "action": "deploy"})
+    provisioner._systemd = True
     provisioner.home = "/root"
     provisioner.config_path = f"/etc/nexus/opencode/{environment_id}/opencode.jsonc"
     provisioner.target_binary = (
@@ -2507,6 +2508,7 @@ async def test_offline_restart_waits_for_real_health_before_passed(monkeypatch):
         opencode_path="opencode",
     )
     worker = RemoteProvisioner(environment, {"id": "op-offline-slow", "action": "restart"})
+    worker._systemd = True
     health_outputs = ["NOT_READY:URLError", "NOT_READY:HTTP 401", "READY"]
     calls = {"restart": 0, "health": 0}
 
@@ -2563,6 +2565,7 @@ async def test_offline_restart_failure_never_reports_passed(
         opencode_path="opencode",
     )
     worker = RemoteProvisioner(environment, {"id": "op-offline-fail", "action": "restart"})
+    worker._systemd = True
     calls = {"restart": 0, "health": 0}
 
     async def run_command(command, timeout=30):
@@ -2611,6 +2614,7 @@ async def test_offline_readiness_wait_honors_cancel_or_lease_loss(monkeypatch):
         opencode_path="opencode",
     )
     worker = RemoteProvisioner(environment, {"id": "op-offline-cancel", "action": "restart"})
+    worker._systemd = True
     calls = {"safe": 0, "restart": 0, "health": 0}
 
     async def run_command(command, timeout=30):

@@ -1,4 +1,4 @@
-"""单仓分配记下 base commit。未指定仓库不派单，占用中的 Worker 不被另一条任务领走。"""
+"""按类型/数字员工分配；仓库只保留业务绑定，执行快照取实际 Worker。"""
 
 import subprocess
 from datetime import UTC, datetime
@@ -14,6 +14,7 @@ from app.main import app
 from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, Task
 from app.runtime.capability import binding_revision, observe_bindings, write_capability
 from app.runtime.dispatcher import Dispatcher
+from app.runtime.occupancy import sync_employee_occupancy
 
 
 @pytest.fixture
@@ -92,7 +93,7 @@ def _commit(workspace) -> str:
 
 
 @pytest.mark.asyncio
-async def test_dispatch_stays_on_one_repository_and_records_the_base_commit(session, tmp_path):
+async def test_dispatch_keeps_task_repository_and_records_actual_worker_commit(session, tmp_path):
     workspace = tmp_path / "work"
     workspace.mkdir()
     head = _commit(workspace)
@@ -133,6 +134,17 @@ async def test_dispatch_stays_on_one_repository_and_records_the_base_commit(sess
     assert await Dispatcher(session).claim_once() is None
     waiting = await session.get(Task, "T-next")
     assert waiting.employee_id is None
+
+    for task_id, repository_id in [("T-other", "repo-2"), ("T-none", None), ("T-next", "repo-1")]:
+        claimed.status = TaskStatus.SUCCEEDED
+        await session.flush()
+        await sync_employee_occupancy(session, "E1")
+        await session.commit()
+        claimed = await Dispatcher(session).claim_once()
+        assert claimed.id == task_id
+        assert claimed.repository_id == repository_id
+        assert claimed.execution_environment_snapshot["repository_id"] == "repo-1"
+        assert claimed.base_commit == head
 
 
 def test_related_tasks_keep_one_repository_each_and_summarize_the_dependency(monkeypatch):

@@ -322,6 +322,8 @@ async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, mon
     class SSH:
         async def run_command(self, command):
             commands.append(command)
+            if "/proc/1/comm" in command:
+                return 0, "systemd", ""
             parts = shlex.split(command)
             if parts[:2] == ["cp", "-p"] and parts[2] in files:
                 files[parts[3]] = files[parts[2]]

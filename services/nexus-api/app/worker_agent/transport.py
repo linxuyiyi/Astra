@@ -8,6 +8,15 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
+
+
+def websocket_url(url: str) -> str:
+    parts = urlsplit(url)
+    scheme = {"http": "ws", "https": "wss", "ws": "ws", "wss": "wss"}.get(parts.scheme)
+    if scheme is None or not parts.hostname or parts.username or parts.password or parts.fragment:
+        raise ValueError("Worker Gateway 必须是有效的 HTTP(S) 或 WS(S) 地址")
+    return urlunsplit((scheme, parts.netloc, parts.path, parts.query, ""))
 
 
 class WorkerTransportError(ConnectionError):
@@ -66,7 +75,7 @@ async def connect_websocket(url: str, *, max_size: int) -> WebSocketTransport:
     import websockets
 
     try:
-        socket = await websockets.connect(url, max_size=max_size)
+        socket = await websockets.connect(websocket_url(url), max_size=max_size)
     except Exception as exc:
         raise translate_transport_error(exc) from exc
     return WebSocketTransport(socket)

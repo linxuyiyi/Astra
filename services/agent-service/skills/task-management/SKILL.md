@@ -14,6 +14,8 @@ description: 把需要改代码、跑工程或交付工作区结果的请求做�
 
 ## 创建时要写清
 
+创建前先调用 `nexus_task_categories` 获取当前已启用分类、说明及任务/问题 prompt 模板；按工具返回的 ID 选择，不猜分类 ID。
+
 - `task_type`：缺陷用 `ISSUE`，需求用 `REQUIREMENT`
 - `category_id`：使用任务中心已启用的分类
 - `title`、`description`
@@ -29,7 +31,7 @@ description: 把需要改代码、跑工程或交付工作区结果的请求做�
 
 ## 工具
 
-查询：`nexus_task_get`、`nexus_task_list`、`nexus_task_logs`、`nexus_task_result`、`nexus_task_summary`
+查询：`nexus_task_categories`、`nexus_task_get`、`nexus_task_list`、`nexus_task_logs`、`nexus_task_result`、`nexus_task_summary`
 创建和修改：`nexus_task_create`、`nexus_task_update`、`nexus_task_assign`
 控制：`nexus_task_start`、`nexus_task_pause`、`nexus_task_resume`、`nexus_task_terminate`、`nexus_task_retry`、`nexus_task_intervene`、`nexus_task_confirm`
 

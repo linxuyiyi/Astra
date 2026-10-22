@@ -19,7 +19,10 @@ def gateway_http_base(gateway_url: str) -> str:
     """Origin of the Gateway. The connect path is not part of the data-channel URL."""
 
     parts = urlsplit(gateway_url)
-    scheme = "https" if parts.scheme == "wss" else "http"
+    from app.worker_agent.transport import websocket_url
+
+    websocket_url(gateway_url)  # 同一地址校验规则；不得把 HTTPS 静默降为 HTTP。
+    scheme = "https" if parts.scheme in {"wss", "https"} else "http"
     return f"{scheme}://{parts.netloc}"
 
 

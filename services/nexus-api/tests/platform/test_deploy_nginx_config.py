@@ -41,12 +41,15 @@ def test_control_plane_and_docs_use_unified_service():
         assert upstreams[location].startswith("http://127.0.0.1:18120"), location
 
 
-def test_voice_transcription_is_proxied_to_the_asr_service():
+def test_voice_transcription_uses_unified_service_and_gateway():
     text = CONFIG.read_text(encoding="utf-8")
     upstreams = _upstreams(text)
-    assert upstreams["= /api/asr/transcribe"].startswith("http://127.0.0.1:19899")
-    assert upstreams["= /api/asr/models"].startswith("http://127.0.0.1:19899")
-    assert "client_max_body_size 12m;" in text
+    assert "= /api/asr/transcribe" not in upstreams
+    assert "= /api/asr/models" not in upstreams
+    assert upstreams["/api/"].startswith("http://127.0.0.1:18120")
+    assert upstreams["/v1/"].startswith("http://127.0.0.1:18110")
+    assert "19899" not in text
+    assert "client_max_body_size 13m;" in text
 
 
 def test_retired_port_and_infrastructure_upstreams_stay_separate():
@@ -55,3 +58,13 @@ def test_retired_port_and_infrastructure_upstreams_stay_separate():
     upstreams = _upstreams(text)
     assert upstreams["/v1/"].startswith("http://127.0.0.1:18110")
     assert upstreams["/agentscope-api/"].startswith("http://127.0.0.1:18000")
+
+
+def test_worker_websocket_upgrade_uses_exact_control_route():
+    text = CONFIG.read_text(encoding="utf-8")
+    route = "= /api/worker-gateway/connect"
+    assert _upstreams(text)[route] == "http://127.0.0.1:18120"
+    block = text.split("location " + route + " {", 1)[1].split("\n  }", 1)[0]
+    assert "proxy_http_version 1.1;" in block
+    assert "proxy_set_header Upgrade $http_upgrade;" in block
+    assert 'proxy_set_header Connection "upgrade";' in block

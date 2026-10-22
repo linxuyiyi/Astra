@@ -9,6 +9,17 @@
       <ElButton type="primary" :icon="Plus" data-testid="gateway-route-create" @click="openRouteCreate">新增路由</ElButton>
     </GatewayHeaderActions>
 
+    <ElForm label-position="top" class="admin-page__toolbar" data-testid="speech-input-config">
+      <ElFormItem label="数字员工语音输入">
+        <ElSelect v-model="speechRouteId" clearable filterable placeholder="选择已启用的语音识别路由" style="width: min(400px, 70vw)" :disabled="loading || savingSpeech">
+          <ElOption v-for="route in speechRoutes" :key="route.id" :value="route.id" :label="route.model" />
+        </ElSelect>
+      </ElFormItem>
+      <ElButton type="primary" :disabled="loading" :loading="savingSpeech" @click="saveSpeech">保存语音输入</ElButton>
+      <span>私聊与群聊共用此路由，识别文字回填草稿后手动发送。</span>
+      <ElAlert v-if="speechRouteUnavailable" type="warning" :closable="false" title="已保存的语音路由不可用，请重新选择已启用的 ASR 路由。" />
+    </ElForm>
+
     <div class="admin-page__toolbar" role="search" aria-label="路由筛选" data-testid="gateway-route-filter">
       <div class="admin-page__filters">
         <ElSelect
@@ -74,6 +85,9 @@
           <span v-else class="route-same-muted">与请求一致</span>
         </template>
       </ElTableColumn>
+      <ElTableColumn label="模型类型" width="120">
+        <template #default="{ row }">{{ modelTypeLabel(row.model_type) }}</template>
+      </ElTableColumn>
       <ElTableColumn label="关联资源池" min-width="140" show-overflow-tooltip>
         <template #default="{ row }">{{ poolName(row.pool_id) }}</template>
       </ElTableColumn>
@@ -118,6 +132,13 @@
       :before-close="() => requestRouteClose()"
     >
       <ElForm ref="routeFormRef" :model="routeForm" :rules="routeRules" label-position="top" scroll-to-error :disabled="saving">
+        <ElFormItem label="模型类型" prop="model_type">
+          <ElSelect v-model="routeForm.model_type">
+            <ElOption value="CHAT" label="对话" />
+            <ElOption value="EMBEDDING" label="向量嵌入" />
+            <ElOption value="ASR" label="语音识别（ASR）" />
+          </ElSelect>
+        </ElFormItem>
         <ElFormItem label="请求模型名" prop="model">
           <ElInput v-model="routeForm.model" placeholder="客户端调用的模型名称，如 GLM-5.2 或 gpt-4o" />
         </ElFormItem>
@@ -205,11 +226,37 @@ const routeError = ref('')
 const routeForm = reactive({
   id: '',
   model: '',
+  model_type: 'CHAT' as 'CHAT' | 'EMBEDDING' | 'ASR',
   target_model: '',
   pool_id: '',
   description: '',
   enabled: true,
 })
+
+const speechRouteId = ref<string | undefined>()
+const savingSpeech = ref(false)
+const speechRoutes = computed(() => routes.value.filter((route) =>
+  route.enabled && route.model_type === 'ASR' && pools.value.some((pool) => pool.id === route.pool_id && pool.enabled),
+))
+const speechRouteUnavailable = computed(() =>
+  Boolean(speechRouteId.value && !speechRoutes.value.some((route) => route.id === speechRouteId.value)),
+)
+
+function modelTypeLabel(value: string): string {
+  return ({ CHAT: '对话', EMBEDDING: '向量嵌入', ASR: '语音识别' } as Record<string, string>)[value] ?? value
+}
+
+async function saveSpeech() {
+  savingSpeech.value = true
+  try {
+    await gatewayApi.saveSpeechInput(speechRouteId.value || null)
+    notify('语音输入配置已保存')
+  } catch (reason) {
+    notify(errorMessage(reason, '语音输入配置保存失败'), 'error')
+  } finally {
+    savingSpeech.value = false
+  }
+}
 
 const pageSize = ref(20)
 const routeFilters = reactive({ keyword: '', pool: '', enabled: '' })
@@ -268,12 +315,14 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [poolList, routeList] = await Promise.all([
+    const [poolList, routeList, speech] = await Promise.all([
       gatewayApi.pools(),
       gatewayApi.routes(),
+      gatewayApi.speechInput(),
     ])
     pools.value = poolList
     routes.value = routeList
+    speechRouteId.value = speech.route_id ?? undefined
   } catch (reason) {
     error.value = errorMessage(reason, '路由加载失败')
   } finally {
@@ -308,6 +357,7 @@ function openRouteCreate() {
   Object.assign(routeForm, {
     id: '',
     model: '',
+    model_type: 'CHAT',
     target_model: '',
     pool_id: pools.value[0]?.id ?? '',
     description: '',
@@ -322,6 +372,7 @@ function openRouteEdit(route: GatewayRoute) {
   Object.assign(routeForm, {
     id: route.id,
     model: route.model,
+    model_type: route.model_type,
     target_model: route.target_model ?? '',
     pool_id: route.pool_id,
     description: route.description,
@@ -341,6 +392,7 @@ async function submitRoute() {
     const target = routeForm.target_model.trim()
     const body = {
       model: routeForm.model.trim(),
+      model_type: routeForm.model_type,
       target_model: target ? target : null,
       pool_id: routeForm.pool_id,
       description: routeForm.description,

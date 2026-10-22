@@ -122,51 +122,11 @@ curl -X POST -F "file=@testdata/zh-5s.wav" \
   http://127.0.0.1:19899/api/asr/transcribe
 ```
 
-## 7. Nginx
+## 7. 接入 Nexus API 网关
 
-把 `deploy/nginx-nexus-asr.conf` 中的：
+按 [Nexus 集成说明](nexus-integration.md) 登记 ASR 节点和路由，执行专项探测、启用节点，并保存数字员工语音输入路由。公司跨机部署时，上游地址必须从网关主机可达；同机可使用回环监听。
 
-- `limit_req_zone`、`upstream` 放入 `http {}`；
-- `/api/asr/transcribe`、`/api/asr/models` 放入现有 Nexus 的 `server {}`。
-
-要点：
-
-- **保留 Nexus 现有登录鉴权**。如果使用 `auth_request`，必须在两个 `location` 中显式加上，因为精确匹配的 location 不会继承父级 `/api/` 的鉴权配置。
-- `client_max_body_size 12m`；与 `server.max_upload_mb` 保持一致。
-- 按 IP 限流：示例 30 r/min，burst 5；应用内还有 120 r/min 的全局保护。
-- `proxy_read_timeout 70s`，大于应用 `request_timeout_seconds=30s`。
-- 不要暴露 `19899` 到公网；Nginx 只反代 `/api/asr/*`。
-- 不要把 `/health` 添加到公网 location，避免与 Nexus 现有路径冲突；监控直接访问 `127.0.0.1:19899/health`。
-
-示例（节选）：
-
-```nginx
-limit_req_zone $binary_remote_addr zone=nexus_asr:10m rate=30r/m;
-
-upstream nexus_asr {
-    server 127.0.0.1:19899;
-    keepalive 8;
-}
-
-location = /api/asr/transcribe {
-    # auth_request /api/auth/verify;   # 按 Nexus 现有鉴权方式补充
-    limit_req zone=nexus_asr burst=5 nodelay;
-    client_max_body_size 12m;
-    proxy_pass http://nexus_asr;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Request-ID $request_id;
-    proxy_read_timeout 70s;
-    proxy_buffering off;
-}
-```
-
-```bash
-sudo nginx -t && sudo systemctl reload nginx
-```
+Nginx 使用 `ops/deploy/nginx-nexus.conf` 的统一入口，删除旧的 `/api/asr/*` 直连 ASR 配置。浏览器请求由统一 Nexus 服务验证身份、读取路由，再携服务端 Key 调用网关。不要公开无认证的 ASR 服务。
 
 ## 8. 上线验收清单
 

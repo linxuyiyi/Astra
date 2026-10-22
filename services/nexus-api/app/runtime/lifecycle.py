@@ -544,6 +544,14 @@ class RuntimeService:
         )
         if not employee or not employee.enabled or not employee.execution_environment:
             raise RuntimeStateError("请先分配已配置运行环境的员工")
+        from app.runtime.assignment import worker_assignment_block
+
+        blocked = worker_assignment_block(
+            employee, task_type=task.task_type,
+            responsible_employee_id=task.responsible_employee_id,
+        )
+        if blocked:
+            raise RuntimeStateError(blocked)
         occupied = await self.session.scalar(
             select(Task.id).where(occupying_clause(employee.id), Task.id != task.id).limit(1)
         )
@@ -572,7 +580,7 @@ class RuntimeService:
             raise RuntimeStateError(str(exc.detail)) from exc
         from app.runtime.dispatcher import runtime_assignment_block
 
-        blocked = runtime_assignment_block(environment, task)
+        blocked = runtime_assignment_block(environment)
         if blocked:
             raise RuntimeStateError(blocked)
         new_snapshot = environment_snapshot(environment)

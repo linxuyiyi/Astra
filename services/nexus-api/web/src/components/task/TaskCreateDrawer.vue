@@ -79,7 +79,7 @@
       <ElDivider content-position="left">谁来执行，问谁</ElDivider>
 
       <ElFormItem prop="employee_id">
-        <template #label>执行 Worker <FieldHelp label="执行 Worker" help="自动分配会综合 Worker 启用状态、空闲状态、任务类型和任务分类；指定 Worker 时任务只由该执行资源处理。" /></template>
+        <template #label>执行 Worker <FieldHelp label="执行 Worker" help="按任务类型和责任数字员工匹配；未指定数字员工或 Worker 未绑定数字员工时可进入公共池。实际分配仍需通过健康、维护和占用检查；仓库和分类不限制接单。" /></template>
         <ElSelect v-model="form.employee_id" :disabled="Boolean(task && task.status !== 'PENDING')">
           <ElOption value="" label="自动分配" />
           <ElOption v-for="item in compatibleEmployees" :key="item.id" :value="item.id" :label="`${item.execution_environment?.name || employeeDisplayName(item.name)} · ${item.role}`" />
@@ -128,6 +128,7 @@ import { confirmDialog } from '@/composables/useConfirm'
 import { useAstraStore } from '@/stores/astra'
 import { employeeDisplayName, priorityLabel, safeUUID } from '@/utils/format'
 import { applyDefaultCategory, taskDraftSnapshot, type TaskDraftSnapshot } from '@/components/task/taskDraft'
+import { supportsTask } from '@/components/task/workerCandidates'
 
 const props = defineProps<{ open: boolean; task?: Task | null }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'created', id: string): void; (e: 'saved', id: string): void }>()
@@ -195,8 +196,8 @@ onMounted(async () => {
   owners.value = await listEmployees().catch(() => [])
 })
 
-const compatibleEmployees = computed(() => store.employees.filter((item) => item.enabled && item.task_types.includes(form.task_type) && item.category_ids.includes(form.category_id)))
-watch(() => [form.task_type, form.category_id], () => {
+const compatibleEmployees = computed(() => store.employees.filter((item) => supportsTask(item, form.task_type, form.responsible_employee_id)))
+watch(compatibleEmployees, () => {
   if (form.employee_id && !compatibleEmployees.value.some((item) => item.id === form.employee_id)) form.employee_id = ''
 })
 

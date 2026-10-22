@@ -302,6 +302,23 @@ def test_config_merge_refuses_unmanaged_conflicts_and_invalid_json(tmp_path):
     assert broken.read_text() == "not json"
 
 
+@pytest.mark.skipif(not NODE, reason="Node.js required for config merge")
+def test_managed_models_only_use_gateway_even_if_global_config_disabled_it(tmp_path):
+    config = tmp_path / "opencode.jsonc"
+    config.write_text(json.dumps({
+        "model": "opencode/free", "small_model": "other/model",
+        "enabled_providers": ["opencode", "other"],
+        "disabled_providers": ["nexus-gateway", "custom"],
+    }))
+    payload = _payload(config)
+    result, _ = _run_config(tmp_path, payload)
+    assert result.returncode == 0, result.stderr
+    merged = json.loads(config.read_text())
+    assert merged["model"] == merged["small_model"] == payload["model"]
+    assert merged["enabled_providers"] == ["nexus-gateway"]
+    assert merged["disabled_providers"] == ["custom", "opencode"]
+
+
 def test_native_idle_allows_provably_stopped_server(tmp_path):
     import socket
 

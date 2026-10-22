@@ -289,7 +289,10 @@ async def test_worker_base_commit_comes_from_the_worker(session, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_start_reuses_the_assignment_checks_and_merges_the_snapshot(session, monkeypatch):
+@pytest.mark.parametrize("task_repository", [None, "repo-other"])
+async def test_start_reuses_the_assignment_checks_and_merges_the_snapshot(
+    session, monkeypatch, task_repository
+):
     session.add(_employee())
     session.add(_environment(workspace_root="/tmp/does-not-matter"))
     session.add(
@@ -302,23 +305,15 @@ async def test_start_reuses_the_assignment_checks_and_merges_the_snapshot(sessio
         )
     )
     await session.commit()
-    with pytest.raises(RuntimeStateError, match="任务没有绑定仓库"):
-        await RuntimeService(session).start("T-start")
-
     task = await session.get(Task, "T-start")
-    task.repository_id = "repo-1"
+    task.repository_id = task_repository
     environment = await session.scalar(
         select(OpenCodeExecutionEnvironment).where(OpenCodeExecutionEnvironment.employee_id == "E1")
     )
-    environment.repository_id = "repo-other"
-    await session.commit()
-    with pytest.raises(RuntimeStateError, match="任务仓库与 Worker 不一致"):
-        await RuntimeService(session).start("T-start")
-
-    environment.repository_id = "repo-1"
+    assert runtime_assignment_block(environment) is None
     environment.skill_refs = ["review"]
     await session.commit()
-    blocked = runtime_assignment_block(environment, await session.get(Task, "T-start"))
+    blocked = runtime_assignment_block(environment)
     assert blocked == "Worker 能力绑定尚未应用"
     with pytest.raises(RuntimeStateError, match="装备绑定尚未应用"):
         await RuntimeService(session).start("T-start")
@@ -351,6 +346,7 @@ async def test_start_reuses_the_assignment_checks_and_merges_the_snapshot(sessio
     monkeypatch.setattr("app.runtime.lifecycle.workspace_head_commit", fake_head)
     monkeypatch.setattr(RuntimeService, "deliver_first_submission", fake_deliver)
     started = await RuntimeService(session).start("T-start")
+    assert started.repository_id == task_repository
     assert started.base_commit == "abc123"
     snapshot = started.execution_environment_snapshot
     assert snapshot["kept_marker"] == "stay"

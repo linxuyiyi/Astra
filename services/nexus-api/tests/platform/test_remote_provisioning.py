@@ -452,6 +452,7 @@ def _install_script(*extra, home: Path, payload: Path):
     )
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="完整安装器只支持 Linux")
 def test_install_script_rejects_python_below_3_11(tmp_path):
     payload = tmp_path / "payload.json"
     payload.write_text("{}")
@@ -462,6 +463,7 @@ def test_install_script_rejects_python_below_3_11(tmp_path):
     assert "nodejs.org" not in result.stderr + result.stdout
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="完整安装器只支持 Linux")
 def test_install_script_installs_venv_package_for_the_selected_python(tmp_path):
     bindir = tmp_path / "bin"
     bindir.mkdir()
@@ -539,6 +541,7 @@ def _agent_install_worker(monkeypatch):
         opencode_path="/usr/local/bin/opencode",
     )
     worker = RemoteProvisioner(environment, {"id": "op", "action": "deploy"})
+    worker._systemd = True  # 此组替身专门验证 systemd 路径。
     calls = []
 
     class SSH:
@@ -618,6 +621,73 @@ async def test_enroll_happens_after_the_venv_and_writes_the_token(monkeypatch):
     )
     assert pip_at < enroll_at < token_at
     assert calls[pip_at][0] == 300
+
+
+@pytest.mark.asyncio
+async def test_container_deploy_preserves_token_config_and_processes_on_repeat(monkeypatch):
+    worker, calls = _agent_install_worker(monkeypatch)
+    worker._systemd = False
+
+    class Gateway:
+        async def enroll(self, session, environment_id):
+            return SimpleNamespace(token="wtk_container_canary", worker_instance_id="wrk_container")
+
+    monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda: Gateway())
+
+    async def credentials(_path):
+        return "wtk_container_canary", "wrk_container"
+
+    async def idle(**_kwargs):
+        return True
+
+    files = {}
+
+    async def write(path, data, mode, **_kwargs):
+        changed = files.get(path) != data
+        files[path] = data
+        return changed
+
+    processes = []
+
+    async def manage(name, *, restart):
+        processes.append((name, restart))
+
+    monkeypatch.setattr(worker, "_existing_worker_credentials", credentials)
+    monkeypatch.setattr(worker, "_native_idle", idle)
+    monkeypatch.setattr(worker, "_write_atomic_if_changed", write)
+    monkeypatch.setattr(worker, "_manage_process", manage)
+
+    async def emit(_event):
+        pass
+
+    await worker._install_units(emit)
+    opencode_env = files["/etc/nexus/opencode-7.env"].decode()
+    assert "OPENCODE_CONFIG=/etc/nexus/opencode/7/opencode.jsonc" in opencode_env
+    assert "wtk_container_canary" not in opencode_env
+    assert "NEXUS_WORKER" not in opencode_env
+    assert b"NEXUS_WORKER_OPENCODE_UNIT=\n" in files["/etc/nexus/worker-7.env"]
+    assert b"NEXUS_WORKER_OPENCODE_PROCESS_RECORD=" in files["/etc/nexus/worker-7.env"]
+    assert not any("systemctl" in item[1] for item in calls if isinstance(item, tuple))
+    assert not any("systemd/system" in path for path in files)
+
+    # 第二次 wheel 已安装；配置与 env 内容不变。
+    import hashlib
+
+    from app.runtime.remote_provisioning import agent_wheel
+
+    digest = hashlib.sha256(agent_wheel()[1]).hexdigest()
+
+    async def command(text, timeout=30):
+        if "wheel.sha256" in text:
+            return digest
+        if "test -x" in text:
+            return "yes"
+        return ""
+
+    monkeypatch.setattr(worker, "_command", command)
+    processes.clear()
+    await worker._install_units(emit)
+    assert processes == [("opencode", False), ("worker", False)]
 
 
 @pytest.mark.parametrize("existing_mode", [None, 0o700])

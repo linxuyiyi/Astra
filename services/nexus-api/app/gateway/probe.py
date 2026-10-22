@@ -17,10 +17,12 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.gateway.audio import AUDIO_PATH, probe_audio
 from app.gateway.models import (
     AUTH_BEARER,
     AUTH_NONE,
     DEFAULT_HEALTH_PATH,
+    PROBE_ASR,
     PROBE_EMBEDDING,
     PROBE_MODEL,
     PROBE_NETWORK,
@@ -31,10 +33,12 @@ from app.gateway.models import (
 PROBE_CHAT_PATH = "/v1/chat/completions"
 
 # 验证策略：常规一次 SSE，专项一次非流式；SCOPED 只用于诊断，不推进健康授权。
-PROBE_STRATEGIES = ("SSE", "NON_STREAM", "EMBEDDING", "SCOPED")
+PROBE_STRATEGIES = ("SSE", "NON_STREAM", "EMBEDDING", "ASR", "SCOPED")
 
 
 def probe_types_for_strategy(strategy: str) -> list[str]:
+    if strategy == "ASR":
+        return [PROBE_ASR]
     if strategy == "EMBEDDING":
         return [PROBE_EMBEDDING]
     if strategy == "NON_STREAM":
@@ -46,6 +50,8 @@ def probe_types_for_strategy(strategy: str) -> list[str]:
 
 def strategy_for_types(probe_types: list[str]) -> str:
     types = set(probe_types)
+    if types == {PROBE_ASR}:
+        return "ASR"
     if types == {PROBE_EMBEDDING}:
         return "EMBEDDING"
     if types == {PROBE_STREAM}:
@@ -139,7 +145,9 @@ class HttpGatewayProbeClient:
             for probe_type in http_types:
                 start = time.perf_counter()
                 try:
-                    if probe_type == PROBE_EMBEDDING:
+                    if probe_type == PROBE_ASR:
+                        call = self._probe_asr(client, base, headers, node, start)
+                    elif probe_type == PROBE_EMBEDDING:
                         call = self._probe_embedding(client, base, headers, node, start)
                     elif probe_type == PROBE_STREAM:
                         call = self._probe_stream(client, base, headers, node, start)
@@ -228,6 +236,26 @@ class HttpGatewayProbeClient:
             status_code=response.status_code,
             error=None if success else f"健康检查返回 {response.status_code}",
             detail={"path": path},
+        )
+
+    async def _probe_asr(self, client, base, headers, node, start) -> ProbeOutcome:
+        models = list(getattr(node, "models", []) or [])
+        if not models:
+            return self._failed(PROBE_ASR, start, "节点未配置模型")
+        response = await client.post(
+            f"{base}{AUDIO_PATH}", headers=headers,
+            data={"model": models[0], "response_format": "json"},
+            files={"file": ("probe.wav", probe_audio(), "audio/wav")},
+        )
+        try:
+            payload = response.json()
+            success = response.status_code == 200 and isinstance(payload.get("text"), str)
+        except (ValueError, AttributeError):
+            success = False
+        return ProbeOutcome(
+            PROBE_ASR, success, self._elapsed(start), status_code=response.status_code,
+            error=None if success else "语音识别调用失败或未返回 text",
+            detail={"model": models[0]},
         )
 
     async def _probe_embedding(self, client, base, headers, node, start) -> ProbeOutcome:

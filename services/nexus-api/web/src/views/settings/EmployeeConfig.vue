@@ -32,8 +32,7 @@
             filterable
             clearable
             :loading="digitalLoading"
-            placeholder="选择已创建的数字员工"
-            :disabled="!creating && !form.digital_employee_id"
+            placeholder="可选，留空作为公共 Worker"
             @change="onDigitalEmployeeChange"
           >
             <ElOption
@@ -52,7 +51,7 @@
             </ElOption>
           </ElSelect>
           <p class="field-hint">
-            身份、形象、岗位和职责说明复用数字员工目录，不在这里编辑；同一数字员工可创建多个 Worker。
+            关联后按该数字员工接单；不关联则作为公共 Worker，按支持任务类型接单。
             <span v-if="digitalLoading">正在加载数字员工目录…</span>
             <RouterLink v-else-if="!digitalEmployees.length" class="field-link" to="/settings/employees">先去创建数字员工</RouterLink>
           </p>
@@ -71,10 +70,10 @@
         </div>
         <ElAlert
           v-else-if="!creating && !form.digital_employee_id"
-          type="warning"
+          type="info"
           :closable="false"
           show-icon
-          title="历史 Worker 尚未关联数字员工，可在此补选。"
+          title="公共 Worker：可处理任意数字员工的受支持任务类型。"
         />
         <ElAlert
           v-else-if="form.digital_employee_id"
@@ -109,14 +108,6 @@
           </ElCheckboxGroup>
         </ElFormItem>
 
-        <ElFormItem label="支持任务分类" prop="category_id">
-          <ElSelect v-model="form.category_id" class="worker-config-control" placeholder="选择一个任务分类">
-            <ElOption v-for="category in enabledCategories" :key="category.id" :value="category.id" :label="category.name">
-              {{ category.name }}
-            </ElOption>
-          </ElSelect>
-          <p class="field-hint">一个 Worker 只归属一个任务分类。</p>
-        </ElFormItem>
       </section>
 
       <section class="config-section" data-testid="worker-dispatch-section">
@@ -312,7 +303,7 @@ import {
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { api } from '@/api/client'
-import type { Employee, TaskCategory, TaskType } from '@/api/types'
+import type { Employee, TaskType } from '@/api/types'
 import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
 import FieldHelp from '@/components/forms/FieldHelp.vue'
 import StickyActionBar from '@/components/astra/StickyActionBar.vue'
@@ -327,7 +318,6 @@ type CodingTool = 'opencode' | 'deepseek-harness'
 const props = withDefaults(defineProps<{
   employee: Employee | null
   creating: boolean
-  categories: TaskCategory[]
   digitalEmployees?: DigitalEmployee[]
   digitalLoading?: boolean
   embedded?: boolean
@@ -365,14 +355,12 @@ const form = reactive({
   worker_name: '',
   description: '',
   task_types: ['ISSUE', 'REQUIREMENT'] as TaskType[],
-  category_id: '',
   enabled: true,
   auto_claim: true,
   auto_execute: true,
   environment: emptyEnvironment(),
 })
 
-const enabledCategories = computed(() => props.categories.filter((item) => item.enabled))
 const selectedEnvironment = computed(() => props.employee?.execution_environment ?? null)
 const currentTaskCount = computed(() => props.employee?.current_task_count ?? 0)
 const maintenance = useWorkerMaintenance(computed(() => selectedEnvironment.value?.id ?? null))
@@ -404,10 +392,8 @@ const portValidator = (_rule: unknown, value: unknown, callback: (error?: Error)
   callback(value !== '' && Number.isInteger(numeric) && numeric >= 1 && numeric <= 65535 ? undefined : new Error('端口需在 1-65535 之间'))
 }
 const formRules = computed<FormRules>(() => ({
-  digital_employee_id: props.creating ? [{ required: true, message: '请选择数字员工', trigger: 'change' }] : [],
   worker_name: [{ required: true, message: '请输入 Worker 名称', trigger: 'blur' }],
   task_types: [{ type: 'array', required: true, message: '至少选择一种任务类型', trigger: 'change' }],
-  category_id: [{ required: true, message: '请选择任务分类', trigger: 'change' }],
   'environment.workspace_root': [{ required: true, message: '请输入工作空间', trigger: 'blur' }],
   'environment.opencode_path': [{ required: true, message: '请输入 OpenCode 可执行文件', trigger: 'blur' }],
   'environment.opencode_server_port': [{ required: true, message: '请输入 OpenCode Server 端口', trigger: 'blur' }, { validator: portValidator, trigger: 'blur' }],
@@ -417,19 +403,13 @@ const formRules = computed<FormRules>(() => ({
   'environment.ssh_password': [{ required: props.creating || !props.employee?.execution_environment?.has_ssh_password, message: '请输入 SSH 密码', trigger: 'blur' }],
 }))
 
-function defaultCategoryId() {
-  return enabledCategories.value[0]?.id ?? ''
-}
-
 function fill(employee?: Employee) {
   const environment = employee?.execution_environment
-  const storedCategory = employee?.category_ids?.[0] ?? ''
   Object.assign(form, {
     digital_employee_id: employee?.digital_employee_id ?? '',
     worker_name: environment?.name ?? '',
     description: environment?.description ?? '',
     task_types: [...(employee?.task_types ?? ['ISSUE', 'REQUIREMENT'])],
-    category_id: enabledCategories.value.some((item) => item.id === storedCategory) ? storedCategory : defaultCategoryId(),
     enabled: employee?.enabled ?? true,
     auto_claim: employee?.auto_claim ?? true,
     auto_execute: employee?.auto_execute ?? true,
@@ -464,7 +444,6 @@ function snapshot(): string {
     worker_name: form.worker_name,
     description: form.description,
     task_types: form.task_types,
-    category_id: form.category_id,
     enabled: form.enabled,
     auto_claim: form.auto_claim,
     auto_execute: form.auto_execute,
@@ -492,9 +471,7 @@ const busy = computed(() => saving.value || maintenanceBusy.value)
 const canDeploy = computed(() => form.environment.mode === 'LINUX_REMOTE')
 
 watch([() => props.employee?.id, () => props.creating], () => { fill(props.employee ?? undefined) }, { immediate: true })
-watch(() => enabledCategories.value.map((item) => item.id).join(','), () => {
-  if (!form.category_id && !props.employee) form.category_id = defaultCategoryId()
-})
+
 
 function onDigitalEmployeeChange(id: string) {
   const digital = props.digitalEmployees.find((item) => item.id === id)
@@ -534,7 +511,6 @@ function employeePayload() {
     description: digital?.description ?? fallback?.description ?? '',
     character_id: fallback?.character_id ?? 0,
     task_types: form.task_types,
-    category_ids: form.category_id ? [form.category_id] : [],
     enabled: form.enabled,
     auto_claim: form.auto_claim,
     auto_execute: form.auto_execute,

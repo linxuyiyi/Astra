@@ -1,0 +1,16 @@
+Browser tab: 3, Title: "127.0.0.1:53590/?conversation=speech-qa", URL: "http://127.0.0.1:53590/?conversation=speech-qa".
+1 AXWebArea 127.0.0.1:53590/?conversation=speech-qa
+	2 container
+		3 heading 真实 TextInput / useAsrRecorder 验收, Value: 1
+			4 text 真实 TextInput / useAsrRecorder 验收
+		5 text 录音设备替身输入测试 WAV；成功识别经过真实 Nexus 服务、网关与 ASR。硬件麦克风未测试。
+		6 checkbox (settable, integer) Description: 模拟识别失败, Value: 0
+		7 text 自动发送次数： 0
+		14 container
+			15 text entry area (settable) 私聊原有草稿：帮我把今天的会议纪要整理一下，重点列出三个代办事项。
+			16 button 语音输入（转文字）
+			17 button 添加附件
+			18 button 发送
+		13 text 私聊和群聊分别用 URL conversation/channel 参数隔离草稿。
+
+The focused UI element is 15 text entry area (settable) 私聊原有草稿：帮我把今天的会议纪要整理一下，重点列出三个代办事项。

@@ -1,0 +1,37 @@
+{
+  "api": "http://127.0.0.1:52789",
+  "asr": "http://127.0.0.1:52787",
+  "gateway": "http://127.0.0.1:52788",
+  "probes": [
+    {
+      "success": true,
+      "health": "UNKNOWN"
+    },
+    {
+      "success": true,
+      "health": "HEALTHY"
+    },
+    {
+      "success": true,
+      "health": "HEALTHY"
+    }
+  ],
+  "route_id": "gr_928fd372cb87",
+  "model_type": "ASR",
+  "transcription": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。",
+  "gateway_request": {
+    "id": "6cf9ba1a3df84923906c7f6ded9263d8",
+    "model": "nexus-speech",
+    "actual_model": "sensevoice-small-int8",
+    "node_id": "gn_d1abaae7bb04",
+    "status_code": 200,
+    "duration_ms": 82,
+    "total_tokens": null,
+    "usage_known": false
+  },
+  "api_restart_config_restored": true,
+  "api_restart_transcription_status": 200,
+  "disabled_route_rejected_without_fallback": true,
+  "asr_restarted_current_source": true,
+  "transcript_absent_in_asr_log": true
+}

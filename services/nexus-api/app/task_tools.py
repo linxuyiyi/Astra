@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain import Priority, TaskStatus, TaskType
 from app.executors.errors import OpenCodeExecutionTimeout, OpenCodeServerUnavailable
 from app.models import AgentWorker, Event, Task, TaskCategory
+from app.runtime.assignment import worker_assignment_block
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 from app.schemas import AcceptanceCriterion, TaskCreate
 from app.services import TaskService
@@ -85,6 +86,28 @@ class TaskTools:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def categories(self) -> dict[str, Any]:
+        if not _text(nexus_employee_id.get()):
+            return {"ok": False, "error": "未识别当前责任员工"}
+        rows = await self.session.scalars(
+            select(TaskCategory)
+            .where(TaskCategory.enabled.is_(True))
+            .order_by(TaskCategory.sort_order, TaskCategory.id)
+        )
+        return {
+            "ok": True,
+            "categories": [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "description": item.description,
+                    "task_prompt": item.task_prompt,
+                    "question_prompt": item.question_prompt,
+                }
+                for item in rows
+            ],
+        }
+
     async def create(
         self,
         *,
@@ -122,7 +145,7 @@ class TaskTools:
         key = _text(idempotency_key) or _derived_key(session_id, kind.value, category_id, title, description)
         assignee = _text(worker_id) or None
         if assignee:
-            refusal = await self._worker_refusal(assignee, kind.value, category_id)
+            refusal = await self._worker_refusal(assignee, kind.value, employee)
             if refusal:
                 return {"ok": False, "error": refusal}
         try:
@@ -211,7 +234,7 @@ class TaskTools:
             return task
         if task.status != TaskStatus.PENDING.value:
             return self._refuse(task, "只有待领取任务可以指定 Worker")
-        refusal = await self._worker_refusal(worker_id, task.task_type, task.category_id or "")
+        refusal = await self._worker_refusal(worker_id, task.task_type, task.responsible_employee_id)
         if refusal:
             return self._refuse(task, refusal)
         task.employee_id = worker_id
@@ -374,15 +397,15 @@ class TaskTools:
             return {"ok": False, "error": "任务不存在"}
         return task
 
-    async def _worker_refusal(self, worker_id: str, task_type: str, category_id: str) -> str | None:
+    async def _worker_refusal(
+        self, worker_id: str, task_type: str, responsible_employee_id: str | None
+    ) -> str | None:
         worker = await self.session.get(AgentWorker, worker_id)
         if not worker or not worker.enabled:
             return "指定 Worker 不存在或未启用"
-        if task_type not in (worker.task_types or []):
-            return "指定 Worker 不支持该任务类型"
-        if category_id and category_id not in (worker.category_ids or []):
-            return "指定 Worker 不支持该任务分类"
-        return None
+        return worker_assignment_block(
+            worker, task_type=task_type, responsible_employee_id=responsible_employee_id
+        )
 
     def _ok(self, task: Task) -> dict[str, Any]:
         body = self._brief(task)

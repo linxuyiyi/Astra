@@ -152,7 +152,9 @@ async def test_publishing_uses_gateway_credential_and_embedding_route(monkeypatc
         calls.append(request)
         path = request.url.path
         if path == "/api/gateway/routes":
-            return httpx.Response(200, json=[{"id": "embed-route", "model": "my-embedding", "enabled": True}])
+            return httpx.Response(200, json=[{
+                "id": "embed-route", "model": "my-embedding", "enabled": True, "model_type": "EMBEDDING",
+            }])
         if path == "/credential/" and request.method == "GET":
             return httpx.Response(200, json={"credentials": []})
         if path == "/credential/":

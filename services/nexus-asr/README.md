@@ -45,9 +45,11 @@
   getMediaRecorder / WebM(Opus)
         │  POST /api/asr/transcribe  (multipart)
         ▼
-Nginx（HTTPS、登录鉴权、限流、12 MB 上限）
-        ▼
-FastAPI (127.0.0.1:19899, 1 worker)
+Nginx（HTTPS、公司登录）→ 统一 Nexus API（身份、已保存的语音路由）
+        ▼ POST /v1/audio/transcriptions
+Nexus API 网关（Key 授权、别名、调度、并发、调用元数据）
+        ▼ POST /v1/audio/transcriptions
+独立 ASR FastAPI (1 worker)
   ├─ 上传分块读取 + 大小限制
   ├─ asyncio.Semaphore（并发上限）
   ├─ ThreadPoolExecutor（解码 + 推理，不阻塞事件循环）
@@ -58,7 +60,7 @@ FastAPI (127.0.0.1:19899, 1 worker)
 
 - 模型：SenseVoice-Small INT8（228 MB），Silero VAD 不参与服务端识别（整段音频直接识别）。
 - **不做实时流式字幕**：录音结束后识别。
-- 服务只监听 `127.0.0.1`，由 Nexus 的 Nginx 统一代理并保留登录鉴权。
+- 同机服务默认只监听 `127.0.0.1`；跨机只向网关主机开放内网端口，浏览器不直连。
 
 ## Mac 快速开始
 
@@ -196,10 +198,10 @@ node tests/browser-test.mjs
 - `chat-island/src/hooks/useAsrRecorder.ts`：录音 / 上传 / 状态机 / 重试；
 - `chat-island/src/components/chat/TextInput.tsx`：新增麦克风按钮、状态提示、按光标插入文字；
 - `chat-island/src/i18n/locales/{zh,en}.json`：文案；
-- `chat-island/vite.config.ts` 与 `web/vite.config.ts`：本地开发代理 `/api/asr`；
+- `chat-island/vite.config.ts` 与 `web/vite.config.ts`：开发请求交给统一 Nexus 服务；
 - `web/src/views/DigitalEmployeeChatView.vue`：iframe 增加 `allow="microphone"`。
 
-浏览器统一调用 `/api/asr/transcribe`；生产由 Nginx 代理到 `127.0.0.1:19899`，并保留 Nexus 登录鉴权。
+浏览器统一调用 `/api/asr/transcribe`，由 Nexus 验证身份并通过已保存的 ASR 网关路由调用独立模型 API；生产和开发均不直接代理到固定本机端口。配置步骤见上述集成说明。
 
 ## 目录
 

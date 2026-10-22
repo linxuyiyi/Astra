@@ -30,7 +30,7 @@ trap cleanup EXIT
 
 # >>> nexus-installer-functions
 json_field() {
-  "$python_bin" - "$payload" "$1" <<'PY'
+  "${json_python:-$python_bin}" - "$payload" "$1" <<'PY'
 import json
 import sys
 
@@ -52,6 +52,69 @@ if isinstance(value, bool):
     value = "true" if value else "false"
 sys.stdout.write(str(value))
 PY
+}
+
+bootstrap_python() {
+  local candidate source digest prefix build
+  json_python=""
+  for candidate in python3.8 python3 python3.13 python3.12 python3.11 "$python_bin"; do
+    if "$candidate" -c 'import sys; sys.exit(sys.version_info<(3,8))' >/dev/null 2>&1; then
+      json_python=$candidate
+      break
+    fi
+  done
+  test -n "$json_python" || fail '引导需要系统 Python ≥3.8，尚未执行安装'
+  if "$python_bin" -c 'import sys; sys.exit(sys.version_info<(3,11))' >/dev/null 2>&1; then
+    return
+  fi
+  if test "$python_bin" = python3; then
+    for candidate in python3.13 python3.12 python3.11; do
+      if "$candidate" -c 'import sys; sys.exit(sys.version_info<(3,11))' >/dev/null 2>&1; then
+        python_bin=$candidate
+        return
+      fi
+    done
+  fi
+  source=$(json_field python_source_tgz)
+  test -n "$source" || fail '需要 Python ≥3.11；未配置 NEXUS_REMOTE_PYTHON_SOURCE_TGZ'
+  case "$source" in /*) ;; *) fail 'Python 源码包必须是远端绝对路径' ;; esac
+  test -f "$source" || fail '远端 Python 源码包不存在'
+  command -v flock >/dev/null || fail '缺少 flock，请管理员安装系统依赖'
+  digest=$("$json_python" -c 'import hashlib,sys; h=hashlib.sha256(); f=open(sys.argv[1],"rb"); [h.update(b) for b in iter(lambda:f.read(1048576),b"")]; print(h.hexdigest())' "$source")
+  prefix="$HOME/.local/share/nexus/python/$digest"
+  mkdir -p "$cache"
+  exec 7>"$cache/python-$digest.lock"
+  flock -n 7 || fail '同一 Python 源码包正在构建，请等待后重试'
+  if ! "$prefix/bin/python3" -c 'import sys,ssl,sqlite3,venv; sys.exit(sys.version_info<(3,11))' >/dev/null 2>&1; then
+    command -v make >/dev/null && command -v cc >/dev/null || fail '编译 Python 需要 make、C 编译器及 OpenSSL/SQLite 开发依赖'
+    build=$(mktemp -d "$cache/python-build.XXXXXX")
+    "$json_python" - "$source" "$build" <<'PY'
+import os
+import sys
+import tarfile
+
+with tarfile.open(sys.argv[1], "r:gz") as archive:
+    for entry in archive.getmembers():
+        name = entry.name.split("/")
+        if entry.name.startswith("/") or ".." in name or not (entry.isfile() or entry.isdir()):
+            raise SystemExit("Python 源码包含非法路径或链接")
+    archive.extractall(sys.argv[2])
+roots = os.listdir(sys.argv[2])
+if len(roots) != 1 or not os.path.isfile(os.path.join(sys.argv[2], roots[0], "configure")):
+    raise SystemExit("Python 源码包结构无效")
+os.rename(os.path.join(sys.argv[2], roots[0]), os.path.join(sys.argv[2], "source"))
+PY
+    step '构建 Worker Python' running
+    if ! (cd "$build/source" && ./configure --prefix="$prefix" --with-ensurepip=install && make -j2 && make install) >"$build/build.log" 2>&1; then
+      fail "Python 编译失败；请查看远端私有日志 $build/build.log"
+    fi
+    "$prefix/bin/python3" -c 'import sys,ssl,sqlite3,venv; sys.exit(sys.version_info<(3,11))' || fail '编译安装的 Python 版本或 SSL/SQLite/venv 依赖不合格'
+    rm -rf "$build"
+    step '构建 Worker Python' passed
+  fi
+  python_bin="$prefix/bin/python3"
+  flock -u 7
+  exec 7>&-
 }
 
 assert_native_idle() {
@@ -290,8 +353,12 @@ old_glibc=false
 glibc=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}' || true)
 if test -n "$glibc" && test "$(printf '2.28\n%s\n' "$glibc" | sort -V | head -1)" != 2.28; then old_glibc=true; fi
 if test "$old_glibc" = true && test "$arch" != x64; then fail '旧 glibc 仅支持 x86_64，请升级系统'; fi
-if ! "$python_bin" -c 'import sys; sys.exit(sys.version_info<(3,11))' >/dev/null 2>&1; then
-  fail '需要 Python ≥3.11'
+bootstrap_python
+ca_file=$(json_field ca_file)
+if test -n "$ca_file"; then
+  case "$ca_file" in /*) ;; *) fail '远端 CA 必须为绝对文件路径' ;; esac
+  test -r "$ca_file" || fail '远端 CA 文件不可读'
+  export SSL_CERT_FILE="$ca_file" NODE_EXTRA_CA_CERTS="$ca_file" GIT_SSL_CAINFO="$ca_file"
 fi
 command -v flock >/dev/null || fail '缺少 flock，请管理员安装系统依赖'
 
@@ -608,7 +675,12 @@ for (const item of mcpRefs) {
 }
 config.model = payload.model;
 config.small_model = payload.model;
-if (payload.provider) config.enabled_providers = ['nexus-gateway'];
+if (payload.provider) {
+  config.enabled_providers = ['nexus-gateway'];
+  config.disabled_providers = [...new Set(
+    [...(config.disabled_providers || []).filter(name => name !== 'nexus-gateway'), 'opencode']
+  )];
+}
 const desiredSkills = {};
 let skillsChanged = false;
 if (!fs.existsSync(skillRoot)) fs.mkdirSync(skillRoot, {recursive: true, mode: 0o700});
@@ -724,6 +796,7 @@ with open(repo_path, encoding="utf-8") as handle:
 with open(config_path, encoding="utf-8") as handle:
     configuration = json.load(handle)
 meta = {
+    "python": sys.executable,
     "repository": repository,
     "opencode": {"version": version, "binary": binary},
     "changed": {

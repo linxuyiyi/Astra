@@ -22,6 +22,12 @@ from pathlib import Path
 
 from app.worker_agent.jsonc import loads_jsonc
 from app.worker_agent.process_env import child_environ
+from app.worker_agent.process_manager import (
+    has_systemd,
+    manage_process,
+    managed_running,
+    process_identity,
+)
 
 _GATEWAY_ENV = "NEXUS_REMOTE_GATEWAY_URL"
 _MCP_ENV = "NEXUS_MCP_RESOURCE_URL"
@@ -296,7 +302,7 @@ def restart_local_opencode(
     listener = assert_native_idle(workspace, port, gate=gate)
     env = environ if environ is not None else os.environ
     unit = (env.get("NEXUS_WORKER_OPENCODE_UNIT") or "").strip()
-    if unit:
+    if unit and has_systemd():
         if _UNIT_NAME.fullmatch(unit) is None:
             raise RuntimeError("OpenCode systemd 单元名无效")
         _check_gate(gate)
@@ -311,6 +317,25 @@ def restart_local_opencode(
             raise RuntimeError("systemd 重载 OpenCode 失败")
         _wait_until_healthy(port, gate=gate)
         return
+    record = env.get("NEXUS_WORKER_OPENCODE_PROCESS_RECORD")
+    if record:
+        path = Path(record)
+        if listener and not managed_running(path):
+            raise RuntimeError("监听进程缺少受管记录，未重载 OpenCode")
+        _check_gate(gate)
+        binary = env.get("NEXUS_WORKER_OPENCODE_BIN") or "opencode"
+        manage_process(
+            path,
+            command=[binary, "serve", "--hostname", "127.0.0.1", "--port", str(port)],
+            workspace=workspace,
+            log_path=path.with_suffix(".log"),
+            environ=dict(env),
+            restart=True,
+            opencode=True,
+            gate=gate,
+        )
+        _wait_until_healthy(port, gate=gate)
+        return
     if listener:
         pid = _listener_pid(port)
         if pid is None:
@@ -319,7 +344,12 @@ def restart_local_opencode(
             raise RuntimeError("拒绝结束当前进程")
         if not _opencode_listener(pid):
             raise RuntimeError("端口上的进程不是 OpenCode，未重载")
+        identity = process_identity(pid)
+        if not identity or identity["cwd"] != str(folder.resolve()):
+            raise RuntimeError("OpenCode 进程工作区不一致，未重载")
         _check_gate(gate)
+        if process_identity(pid) != identity:
+            raise RuntimeError("OpenCode 进程身份已变化，未重载")
         os.kill(pid, signal.SIGTERM)
         deadline = time.monotonic() + _EXIT_WAIT_SECONDS
         while time.monotonic() < deadline:
@@ -328,17 +358,17 @@ def restart_local_opencode(
             time.sleep(0.1)
         else:
             raise RuntimeError("OpenCode 没有在时限内退出")
-    else:
-        _check_gate(gate)
-        binary = env.get("NEXUS_WORKER_OPENCODE_BIN") or "opencode"
-        subprocess.Popen(
-            [binary, "serve", "--hostname", "127.0.0.1", "--port", str(port)],
-            cwd=folder,
-            env=child_environ(env),
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+    _check_gate(gate)
+    binary = env.get("NEXUS_WORKER_OPENCODE_BIN") or "opencode"
+    subprocess.Popen(
+        [binary, "serve", "--hostname", "127.0.0.1", "--port", str(port)],
+        cwd=folder,
+        env=child_environ(env),
+        start_new_session=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     _wait_until_healthy(port, gate=gate)
 
 
@@ -423,18 +453,21 @@ def apply_channel_switch(
     path = config_path or global_config_path(environ)
     read_running = read_effective or (lambda: read_effective_config(port, workspace))
 
-    def read_addresses() -> tuple[dict | None, tuple[str, str] | None]:
-        try:
-            effective = read_running()
-        except RuntimeError:
-            return None, None
-        try:
-            return effective, (
-                _address(effective, ("provider", _PROVIDER, "options", "baseURL")),
-                _address(effective, ("mcp", "nexus-library", "url")),
-            )
-        except RuntimeError:
-            return effective, None
+    def read_addresses(*, wait: bool = False) -> tuple[dict | None, tuple[str, str] | None]:
+        deadline = time.monotonic() + (5 if wait else 0)
+        while True:
+            _check_gate(gate)
+            effective = None
+            try:
+                effective = read_running()
+                return effective, (
+                    _address(effective, ("provider", _PROVIDER, "options", "baseURL")),
+                    _address(effective, ("mcp", "nexus-library", "url")),
+                )
+            except RuntimeError:
+                if time.monotonic() >= deadline:
+                    return effective, None
+                time.sleep(0.5)
 
     file_addresses = config_addresses(path)
     _initial_effective, running_addresses = read_addresses()
@@ -461,7 +494,7 @@ def apply_channel_switch(
         _check_gate(gate)
         reload()
     _check_gate(gate)
-    effective, running = read_addresses()
+    effective, running = read_addresses(wait=True)
     verified = running == (gateway_url, mcp_url)
     if effective is None:
         raise RuntimeError("读取生效配置失败")

@@ -1,0 +1,114 @@
+Browser tab: 2, Title: "Nexus v1.4.8", URL: "http://127.0.0.1:52789/gateway/routes".
+0 AXWebArea Nexus v1.4.8, URL: 127.0.0.1:52789/gateway/routes
+	1 container app
+		2 container
+			3 text ✦ NEXUS  v1.4.8
+			4 container 页面导航
+				5 link Description: 星云首页, Value: 127.0.0.1:52789/
+				6 link Description: 数字员工, Value: 127.0.0.1:52789/chat
+				7 link Description: 任务大厅, Value: 127.0.0.1:52789/tasks
+				8 link Description: 数字图书馆, Value: 127.0.0.1:52789/library
+				9 link Description: API 网关, Value: 127.0.0.1:52789/gateway
+				10 link Description: 配置中心, Value: 127.0.0.1:52789/settings
+			11 text AgentScope 2.0.10 未连接
+		12 container
+			13 text API 网关
+			14 menu bar
+				15 text 监控
+				16 content list
+					17 运行总览
+						18 image
+						19 text 运行总览
+					20 调用日志
+						21 image
+						22 text 调用日志
+					23 审计
+						24 image
+						25 text 审计
+				26 text 配置
+				27 content list
+					28 上游节点
+						29 image
+						30 text 上游节点
+					31 资源池
+						32 image
+						33 text 资源池
+					34 模型路由
+						35 image
+						36 text 模型路由
+					37 API Key
+						38 image
+						39 text API Key
+			42 text 模型路由
+			41 container gateway-header-actions
+				43 button 刷新
+					44 text 刷新
+				45 button 新增路由
+					46 text 新增路由
+			47 container
+				48 text 数字员工语音输入
+				49 container
+					50 combo box (collapsed, settable) 数字员工语音输入, ID: el-id-2316-36, Secondary Actions: Expand
+					51 text nexus-speech
+					52 image
+				53 button 保存语音输入
+				54 text 私聊与群聊共用此路由，识别文字回填草稿后手动发送。
+				55 container 路由筛选
+					56 container
+						57 combo box (collapsed, settable) Description: 资源池筛选, ID: el-id-2316-37, Secondary Actions: Expand
+						58 text 资源池：全部
+						59 image
+					60 container
+						61 combo box (collapsed, settable) Description: 路由启用筛选, ID: el-id-2316-38, Secondary Actions: Expand
+						62 text 状态：全部
+						63 image
+					64 container
+						65 image
+						66 text field (settable) Description: 搜索路由, ID: el-id-2316-39
+					67 button 搜索
+						68 text 搜索
+				69 container
+					70 table
+						71 row
+							72 cell
+								73 text 请求模型
+							74 cell
+								75 text 目标实际模型
+							76 cell
+								77 text 模型类型
+							78 cell
+								79 text 关联资源池
+							80 cell
+								81 text 状态
+							82 cell
+								83 text 操作
+					84 table
+						85 row
+							86 cell
+								87 text nexus-speech
+								88 text 本地 SenseVoice-Small，经网关提供数字员工语音输入
+							89 cell
+								90 container
+									91 text →  sensevoice-small-int8
+							92 cell
+								93 text 语音识别
+							94 cell
+								95 text 本地语音识别
+							96 cell
+								97 text 启用
+							98 cell
+								99 button 编辑
+								100 button 删除
+				104 container 路由列表分页
+					105 text 共 1 条
+					106 container
+						107 combo box (collapsed, settable) ID: el-id-2316-40, Secondary Actions: Expand
+						108 text 20条/页
+						109 image
+					110 button (disabled) 上一页
+					111 content list
+						112 container 第 1 页
+							113 text 1
+					114 button (disabled) 下一页
+
+The focused UI element is 0 AXWebArea Nexus v1.4.8, URL: 127.0.0.1:52789/gateway/routes

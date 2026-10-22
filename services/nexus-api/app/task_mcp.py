@@ -71,7 +71,8 @@ def build_mcp_server() -> MCPServer:
         version="1.0.1",
         description="Agent Worker 查询和控制自己负责的工程任务。",
         instructions=(
-            "工程执行才创建任务。收到任务状态提示后先调用 nexus_task_get。"
+            "工程执行才创建任务，创建前调用 nexus_task_categories 选择已启用分类。"
+            "收到任务状态提示后先调用 nexus_task_get。"
             "总结和候选经验只读。非法操作会返回 ok=false，不要改口说已经成功。"
         ),
     )
@@ -79,6 +80,11 @@ def build_mcp_server() -> MCPServer:
     async def _call(name: str, **kwargs):
         async with SessionLocal() as session:
             return await getattr(TaskTools(session), name)(**kwargs)
+
+    @server.tool(name="nexus_task_categories", structured_output=True)
+    async def nexus_task_categories() -> dict[str, Any]:
+        """列出已启用任务分类及任务、提问 prompt 模板，创建任务前先查询。"""
+        return await _call("categories")
 
     @server.tool(name="nexus_task_create", structured_output=True)
     async def nexus_task_create(

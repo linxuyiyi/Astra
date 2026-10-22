@@ -166,7 +166,7 @@ employee schedules 提交；本次合并保留了这些改动，并把 ASR 迁�
 - 冲突文件 `alembic/env.py`、`app/sql_storage.py` 统一使用 `CURRENT_REVISION=0003_gateway_speech`。
 - `0002_gateway_speech.py` 重命名为 `0003_gateway_speech.py`，`down_revision=0002_collaborative_groups`。
 - 冲突的 `web/dist` 与 `public/nexus-chat` 构建产物没有手工合并，而是从合并后的源码重新构建，包含群组、日程和 PTT。
-- v1.4.8 的登录体系生效后，`speech_routes.py` 改用 `nexus_session`；浏览器验收脚本新增 `browser-auth.mjs`，使用真实注册/登录账号。
+- v1.4.8 的登录体系生效后，`speech_routes.py` 改用 `nexus_session`；浏览器验收脚本新增 `browser-auth.mjs`，使用真实注册/登录账号。该 QA 登录助手只允许 `127.0.0.1` / `localhost`，避免误在共享 Nexus 上注册测试账号。
 - 本地旧 SQLite 已备份（`.astra/backups/nexus-before-v148-merge-20261023-015257.db`），补跑群组迁移后标记为 `0003_gateway_speech`；生产环境按全新库或已发布迁移链部署，不复制此本地修补。
 
 回归：`tests/nexus` 136 passed / 6 skipped；`test_fresh_sql_storage + test_gateway_speech` 27 passed；ASR 26 passed；chat-island 15 passed；web 30 passed；PTT 浏览器 31/31；`verify-deployment.sh` 15/15；ruff 与 `git diff --check` 通过。

@@ -7,6 +7,9 @@
  * NEXUS_QA_PASSWORD.
  */
 export async function ensureBrowserLogin(context, { base = 'http://127.0.0.1:18120' } = {}) {
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost)([:/]|$)/.test(base)) {
+    throw new Error('QA login is restricted to localhost; do not run it against a shared Nexus');
+  }
   const username = process.env.NEXUS_QA_USERNAME || 'local-qa';
   const password = process.env.NEXUS_QA_PASSWORD || 'local-qa-password';
   const displayName = process.env.NEXUS_QA_DISPLAY_NAME || 'Local QA';

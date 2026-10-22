@@ -22,6 +22,10 @@ fi
 [ -n "${NEXUS_GATEWAY_API_KEY:-}" ] || { echo "NEXUS_GATEWAY_API_KEY is not configured" >&2; exit 1; }
 [ -f "$SAMPLE" ] || { echo "missing sample: $SAMPLE" >&2; exit 1; }
 
+case "$NEXUS_BASE" in
+  http://127.0.0.1:*|http://localhost:*) ;;
+  *) echo "QA login is restricted to localhost; do not run it against a shared Nexus" >&2; exit 1 ;;
+esac
 COOKIE_JAR="$(mktemp)"
 trap 'rm -f "$COOKIE_JAR"' EXIT
 AUTH_BODY="{\"username\":\"$QA_USERNAME\",\"password\":\"$QA_PASSWORD\",\"display_name\":\"Local QA\"}"

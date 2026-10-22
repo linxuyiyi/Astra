@@ -17,4 +17,4 @@
 
 - [x] 4.1 跑 Nexus 针对性/回归、Agent Service、前端测试、类型检查/构建、Ruff、OpenSpec strict。验证：Nexus 136 passed/4 skipped、Agent 13 passed/1 skipped、前端 30 passed、`vue-tsc`、Ruff、OpenSpec strict。
 - [x] 4.2 用隔离 Agent Service + 模型桩验证“私聊 → MCP 创建 → 页面出现”；模型桩未自行选择工具，tools/call 由测试脚本发起；墙钟触发未验证。证据：`mcp-e2e.json`。
-- [ ] 4.3 更新架构/验收/交接文档，提交并合入 v1.4.8。
+- [x] 4.3 更新架构/验收/交接文档，提交并合入 v1.4.8。验证：feature 分支 `61b01b0dc`；v1.4.8 merge `45e70fefc`。

@@ -1,6 +1,6 @@
 # 日程安排功能与表格整改验收
 
-日期：2026-10-23。分支 `codex/employee-schedules`，基线 `a3f429e7c`，工作树 `/Users/niuniu/.codex/worktrees/employee-schedules/Astra`。原始 `v1.4.8` 工作区及其未跟踪内容未改动，未提交、推送或部署生产。
+日期：2026-10-23。分支 `codex/employee-schedules`，基线 `a3f429e7c`，工作树 `/Users/niuniu/.codex/worktrees/employee-schedules/Astra`。已合入本地 `v1.4.8`（merge `45e70fefc`）；原始 `v1.5.0` 工作区及其未跟踪内容未改动，未推送、未部署生产。
 
 ## 原因与修改
 

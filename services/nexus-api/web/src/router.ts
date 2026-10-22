@@ -6,6 +6,7 @@ import TaskDetailView from "./views/TaskDetailView.vue";
 import EmployeeListView from "./views/EmployeeListView.vue";
 import EmployeeDetailView from "./views/EmployeeDetailView.vue";
 import DigitalLibraryView from "./views/DigitalLibraryView.vue";
+import SchedulesView from "./views/SchedulesView.vue";
 import EmployeesView from "./views/EmployeesView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import AgentscopeView from "./views/settings/AgentscopeView.vue";
@@ -62,6 +63,7 @@ export const router = createRouter({
     { path: "/employees", redirect: keepQuery("/settings/employees") },
     { path: "/chat", name: "chat", component: DigitalEmployeeChatView },
     { path: "/team", redirect: teamRedirect },
+    { path: "/schedules", name: "schedules", component: SchedulesView },
     { path: "/tasks", name: "tasks", component: TaskListView },
     { path: "/tasks/:id", name: "task-detail", component: TaskDetailView },
     { path: "/workers", redirect: keepQuery("/settings/workers") },

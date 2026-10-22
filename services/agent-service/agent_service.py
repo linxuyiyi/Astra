@@ -420,6 +420,7 @@ def main() -> None:
     from agentscope.app.rag.blob_store import LocalBlobStore
     from agentscope.app.rag.knowledge_base_manager import CollectionPerKbManager
     from agentscope_sql import create_storage, guard_lifespan
+    from schedule_access import ScheduleResourceAccessPolicy
     from agentscope.app.workspace_manager import (
         IsolationPolicy,
         LocalWorkspaceManager,
@@ -531,6 +532,9 @@ def main() -> None:
 
     app = create_app(
         storage=storage,
+        resource_access_policy=ScheduleResourceAccessPolicy(
+            os.environ.get("NEXUS_AGENTSCOPE_USER_ID", "nexus")
+        ),
         message_bus=message_bus,
         workspace_manager=workspace_manager,
         knowledge_base_manager=knowledge_base_manager,

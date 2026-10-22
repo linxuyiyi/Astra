@@ -402,3 +402,63 @@ export async function syncMcpResource(id: string): Promise<{ sync: { status: str
     headers: headers(false),
   }));
 }
+
+export interface EmployeeSchedule {
+  id: string;
+  employee_id: string | null;
+  employee_name: string;
+  owner_uid: string;
+  created_at: string;
+  data: ScheduleInput;
+}
+export interface ScheduleInput {
+  name: string;
+  description: string;
+  cron_expression: string;
+  timezone: string;
+  enabled: boolean;
+  stateful: boolean;
+}
+export interface ScheduleSession { id: string; created_at: string }
+export interface ScheduleMessages {
+  messages: { id: string; role: string; name?: string; content: unknown }[];
+  has_more: boolean;
+  is_running: boolean;
+}
+export async function listSchedules(page = 1, pageSize = 20, filters: { employee_id?: string; enabled?: boolean; q?: string } = {}) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (filters.employee_id) params.set('employee_id', filters.employee_id);
+  if (filters.enabled !== undefined) params.set('enabled', String(filters.enabled));
+  if (filters.q) params.set('q', filters.q);
+  return read<{ items: EmployeeSchedule[]; total: number; employee_options: { id: string; name: string }[] }>(await fetch(
+    `/api/v1/schedules?${params}`, { headers: headers(false) },
+  ));
+}
+export async function saveSchedule(body: ScheduleInput & { employee_id?: string }, id?: string) {
+  return read(await fetch(id ? `/api/v1/schedules/${encodeURIComponent(id)}` : '/api/v1/schedules', {
+    method: id ? 'PUT' : 'POST', headers: headers(), body: JSON.stringify(body),
+  }));
+}
+export async function toggleSchedule(id: string, enabled: boolean) {
+  return read(await fetch(`/api/v1/schedules/${encodeURIComponent(id)}`, {
+    method: 'PATCH', headers: headers(), body: JSON.stringify({ enabled }),
+  }));
+}
+export async function deleteSchedule(id: string) {
+  const response = await fetch(`/api/v1/schedules/${encodeURIComponent(id)}`, {
+    method: 'DELETE', headers: headers(false),
+  });
+  if (!response.ok) await read(response);
+}
+export async function scheduleSessions(id: string, page = 1, pageSize = 20) {
+  return read<{ items: ScheduleSession[]; total: number }>(await fetch(
+    `/api/v1/schedules/${encodeURIComponent(id)}/sessions?page=${page}&page_size=${pageSize}`, { headers: headers(false) },
+  ));
+}
+export async function scheduleMessages(id: string, sessionId: string, before = '') {
+  const query = before ? `?before=${encodeURIComponent(before)}` : '';
+  return read<ScheduleMessages>(await fetch(
+    `/api/v1/schedules/${encodeURIComponent(id)}/sessions/${encodeURIComponent(sessionId)}/messages${query}`,
+    { headers: headers(false) },
+  ));
+}

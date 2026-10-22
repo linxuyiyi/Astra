@@ -3908,6 +3908,9 @@ def create_app() -> FastAPI:
         except ImError as exc:
             raise_im(exc)
 
+    from .schedules import schedule_router
+
+    app.include_router(schedule_router(require_owner, model_for))
     return app
 
 

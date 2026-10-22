@@ -1,0 +1,94 @@
+{
+  "title": "对话创建日程：官方工具归属与重定向验证",
+  "generated_at": "2026-10-22T16:47:49.050310+00:00",
+  "environment": {
+    "agentscope": "2.0.10",
+    "storage": "sqlite+aiosqlite (temporary)",
+    "scheduler": "fake manager; official validate_schedule/notify contract",
+    "nexus_services": "not connected"
+  },
+  "identities": {
+    "human_uid": "schedule-qa-alice",
+    "human_namespace": "nexus-schedule-6faec43cdcaf4a23e88acfaef1c5ba75fa8390605ca075e43ea2cc2351cb5554",
+    "other_namespace": "nexus-schedule-baf7bc3f02dacb418a985f8bbe8344a64b32ef9b8e71e955e69e58ed1c23e536",
+    "platform_namespace": "nexus"
+  },
+  "checks": {
+    "create_returns_success": true,
+    "owner_is_human_namespace": true,
+    "agent_is_current_employee": true,
+    "source_is_agent": true,
+    "source_session_recorded": true,
+    "model_snapshot_recorded": true,
+    "timezone_preserved": true,
+    "scheduler_notified": true,
+    "human_list_sees_it": true,
+    "other_human_does_not": true,
+    "naive_platform_owned_is_invisible_to_human": true,
+    "naive_platform_owned_leaks_into_platform_list": true,
+    "official_list_tools_returns_four": true,
+    "rebuilt_owner_is_human": true,
+    "rebuilt_names_match": true,
+    "private_session_keeps_create": true,
+    "team_session_drops_create": true,
+    "mailbox_session_drops_create": true,
+    "schedule_session_drops_create": true,
+    "lookup_failure_fails_closed": true,
+    "retarget_owner_is_human": true
+  },
+  "limitations": [
+    "未经过真实聊天模型工具调用；只验证官方工具、存储归属和字段。",
+    "未经过 Nexus HTTP 适配和页面；页面读取同一人类命名空间。",
+    "未验证定时器墙钟触发、MySQL 8.0.36、生产 Nginx 或多副本。"
+  ],
+  "record": {
+    "id": "39eb5522ad9743b68641f640f0c25e85",
+    "user_id": "nexus-schedule-6faec43cdcaf4a23e88acfaef1c5ba75fa8390605ca075e43ea2cc2351cb5554",
+    "agent_id": "schedule-preview-agent",
+    "name": "工作日晨间简报",
+    "cron": "0 9 * * 1-5",
+    "timezone": "Asia/Shanghai",
+    "source": "AGENT",
+    "source_session_id": "chat-session-alice-1",
+    "model": "test"
+  },
+  "platform_list_after_naive": [
+    {
+      "name": "平台归属日程",
+      "agent_id": "schedule-preview-agent"
+    }
+  ],
+  "tool_decision": {
+    "private_user_session": {
+      "owner": "nexus-schedule-6faec43cdcaf4a23e88acfaef1c5ba75fa8390605ca075e43ea2cc2351cb5554",
+      "schedule_create_kept": true,
+      "schedule_tools": [
+        "ScheduleCreate",
+        "ScheduleList",
+        "ScheduleView",
+        "ScheduleDelete"
+      ]
+    },
+    "team_member_session": {
+      "owner": null,
+      "schedule_create_kept": false,
+      "schedule_tools": []
+    },
+    "mailbox_session": {
+      "owner": null,
+      "schedule_create_kept": false,
+      "schedule_tools": []
+    },
+    "schedule_execution_session": {
+      "owner": null,
+      "schedule_create_kept": false,
+      "schedule_tools": []
+    },
+    "owner_lookup_unavailable": {
+      "owner": null,
+      "schedule_create_kept": false,
+      "schedule_tools": []
+    }
+  },
+  "conclusion": "官方 ScheduleCreate 可以在不改 AgentScope 的前提下写入人类命名空间，并保留 source=AGENT、source_session_id、模型快照和时区；但工具默认沿用会话的 X-User-ID。Nexus 所有聊天都在平台用户 nexus 下，直接放开会把日程写到平台名下：人类页面看不到，平台列表还会跨人可见。拟议的最小路线是只在私有、非日程执行的会话保留官方工具，把四个工具的 _user_id 重定向到当前人类的 nexus-schedule-<sha256(uid)>，查询失败即移除。"
+}

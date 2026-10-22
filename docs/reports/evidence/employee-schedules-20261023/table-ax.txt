@@ -1,0 +1,85 @@
+Browser tab: 1, Title: "Nexus v1.4.8", URL: "http://127.0.0.1:18231/schedules".
+1 AXWebArea Nexus v1.4.8, URL: 127.0.0.1:18231/schedules
+	2 container app
+		3 container
+			4 text ✦ NEXUS  v1.4.8
+			5 container 页面导航
+				6 link Description: 星云首页, Value: 127.0.0.1:18231/
+				7 link Description: 数字员工, Value: 127.0.0.1:18231/chat
+				8 link Description: 日程安排, Value: 127.0.0.1:18231/schedules
+				9 link Description: 任务大厅, Value: 127.0.0.1:18231/tasks
+				10 link Description: 数字图书馆, Value: 127.0.0.1:18231/library
+				11 link Description: API 网关, Value: 127.0.0.1:18231/gateway
+				12 link Description: 配置中心, Value: 127.0.0.1:18231/settings
+			13 text AgentScope 2.0.10 已连接
+		14 container
+			15 heading 日程安排, Value: 2
+				16 text 日程安排
+			17 text 我的安排 · schedule-qa-alice
+			18 button 刷新
+				19 text 刷新
+			20 button 新建日程
+				21 text 新建日程
+			22 container 日程筛选
+				23 container
+					24 combo box (collapsed, settable) Description: 日程员工, ID: el-id-1158-16, Secondary Actions: Expand
+					25 text 员工：全部
+					26 image
+				27 container
+					28 combo box (collapsed, settable) Description: 日程状态, ID: el-id-1158-17, Secondary Actions: Expand
+					29 text 状态：全部
+					30 image
+				31 container
+					32 image
+					33 text field (settable) Description: 搜索日程, ID: el-id-1158-18
+				34 button 搜索
+					35 text 搜索
+				36 button 重置
+					37 text 重置
+			38 container
+				39 table
+					40 row
+						41 cell
+							42 text 日程
+						43 cell
+							44 text 数字员工
+						45 cell
+							46 text 执行时间
+						47 cell
+							48 text 上下文
+						49 cell
+							50 text 状态
+						51 cell
+							52 text 操作
+				82 container
+					83 table
+						84 row
+							85 cell
+								86 button 工作日晨间简报
+								87 text 每个工作日整理当天工作重点，生成简洁的晨间简报，并列出下一步动作。
+							88 cell
+								89 text 日程测试员工
+							90 cell
+								91 text 工作日 09:00
+								92 text Asia/Shanghai
+							93 cell
+								94 text 每次独立
+							95 cell
+								96 text 已启用
+							97 cell
+								98 container
+									99 button 执行记录 工作日晨间简报
+									100 pop up button (collapsed) Description: 更多操作 工作日晨间简报, ID: el-id-1158-21, Secondary Actions: Expand
+			71 container 日程列表分页
+				72 text 共 1 条
+				73 container
+					74 combo box (collapsed, settable) ID: el-id-1158-19, Secondary Actions: Expand
+					75 text 20条/页
+					76 image
+				77 button (disabled) 上一页
+				78 content list
+					79 container 第 1 页
+						80 text 1
+				81 button (disabled) 下一页
+
+The focused UI element is 99 button 执行记录 工作日晨间简报

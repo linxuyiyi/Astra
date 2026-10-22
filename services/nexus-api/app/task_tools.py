@@ -21,6 +21,8 @@ from app.state_machine import InvalidTransition
 nexus_employee_id: ContextVar[str] = ContextVar("nexus_employee_id", default="")
 nexus_session_id: ContextVar[str] = ContextVar("nexus_session_id", default="")
 nexus_conversation_id: ContextVar[str] = ContextVar("nexus_conversation_id", default="")
+nexus_discussion_id: ContextVar[str] = ContextVar("nexus_discussion_id", default="")
+nexus_actor_id: ContextVar[str] = ContextVar("nexus_actor_id", default="")
 nexus_channel_id: ContextVar[str] = ContextVar("nexus_channel_id", default="")
 
 _CONCLUDED = {TaskStatus.SUCCEEDED.value, TaskStatus.FAILED.value, TaskStatus.CANCELED.value}
@@ -101,6 +103,14 @@ class TaskTools:
         source_channel_id: str | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
+        if nexus_channel_id.get() and any(
+            (
+                source_channel_id and source_channel_id != nexus_channel_id.get(),
+                source_session_id and source_session_id != nexus_session_id.get(),
+                source_conversation_id,
+            )
+        ):
+            return {"ok": False, "error": "不能覆盖服务端群调用来源"}
         category = await self.session.get(TaskCategory, category_id)
         if not category or not category.enabled:
             return {"ok": False, "error": "请选择已启用的任务分类"}
@@ -144,6 +154,22 @@ class TaskTools:
         except ValidationError as exc:
             return {"ok": False, "error": str(exc)}
         task = await TaskService(self.session).create(payload)
+        if nexus_actor_id.get():
+            self.session.add(
+                Event(
+                    task_id=task.id,
+                    event_type="group_task_requested",
+                    phase="audit",
+                    message="用户通过数字员工发起任务",
+                    detail={
+                        "initiator_id": nexus_actor_id.get(),
+                        "employee_id": actor,
+                        "source_channel_id": channel_id,
+                        "source_session_id": session_id,
+                    },
+                )
+            )
+            await self.session.commit()
         return self._ok(task)
 
     async def get(self, task_id: str) -> dict[str, Any]:
@@ -170,7 +196,11 @@ class TaskTools:
         query = select(Task).where(Task.responsible_employee_id == actor)
         if _text(worker_id):
             query = query.where(Task.employee_id == _text(worker_id))
-        if _text(source_channel_id):
+        if nexus_channel_id.get():
+            query = query.where(Task.source_channel_id == nexus_channel_id.get())
+        elif nexus_conversation_id.get():
+            query = query.where(Task.source_conversation_id == nexus_conversation_id.get())
+        elif _text(source_channel_id):
             query = query.where(Task.source_channel_id == _text(source_channel_id))
         if status:
             query = query.where(Task.status == status)
@@ -371,6 +401,10 @@ class TaskTools:
             return {"ok": False, "error": "未识别当前责任员工"}
         task = await self.session.get(Task, task_id)
         if task is None or (task.responsible_employee_id or "") != actor:
+            return {"ok": False, "error": "任务不存在"}
+        if nexus_channel_id.get() and task.source_channel_id != nexus_channel_id.get():
+            return {"ok": False, "error": "任务不存在"}
+        if nexus_conversation_id.get() and task.source_conversation_id != nexus_conversation_id.get():
             return {"ok": False, "error": "任务不存在"}
         return task
 

@@ -145,14 +145,12 @@ def test_task_6_1_agent_sessions_sse_and_peer_wakeup():
         )
         disposable_agent = disposable["employee"]["agentscope_agent_id"]
         assert disposable_agent in {
-            item["id"]
-            for item in client.get(f"{AGENTSCOPE}/agent/", headers=AGENT_HEADERS).json()["agents"]
+            item["id"] for item in client.get(f"{AGENTSCOPE}/agent/", headers=AGENT_HEADERS).json()["agents"]
         }
         deleted = client.delete(f"{NEXUS}/api/v1/employees/{disposable['employee']['id']}")
         assert deleted.status_code == 200, deleted.text
         remaining = {
-            item["id"]
-            for item in client.get(f"{AGENTSCOPE}/agent/", headers=AGENT_HEADERS).json()["agents"]
+            item["id"] for item in client.get(f"{AGENTSCOPE}/agent/", headers=AGENT_HEADERS).json()["agents"]
         }
         assert disposable_agent not in remaining
 
@@ -223,11 +221,7 @@ def test_task_6_1_agent_sessions_sse_and_peer_wakeup():
         contact = _send(
             client,
             first["id"],
-            (
-                "请立刻调用 contact_employee。"
-                f"employee_name 为{peer_name}。"
-                "message 为请只回复数字42。"
-            ),
+            (f"请立刻调用 contact_employee。employee_name 为{peer_name}。message 为请只回复数字42。"),
         )
         assert contact["agentscope"]["accepted"] is True, contact
         seen = {item["id"] for item in first_events if isinstance(item.get("id"), str)}
@@ -832,9 +826,7 @@ def test_team_discussion_shows_peer_identities_and_stops_repeat_contact():
             for hidden in hidden_names:
                 assert hidden not in eng_tool_list, eng_tool_list
             if eng["id"] in seen_sessions:
-                eng_member = next(
-                    item for item in transcript["members"] if item["employee_id"] == eng["id"]
-                )
+                eng_member = next(item for item in transcript["members"] if item["employee_id"] == eng["id"])
                 assert eng_member["agentscope_session_id"]
                 assert eng_member["agentscope_session_id"] != eng["mailbox_session_id"]
         finally:

@@ -42,3 +42,11 @@ def test_model_routes(monkeypatch, request):
         }
 
     monkeypatch.setattr("nexus_api.main.chat_config_for_route", config)
+
+
+@pytest.fixture(autouse=True)
+def test_service_auth(monkeypatch):
+    from pathlib import Path
+
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / "agent-service"))
+    monkeypatch.setenv("NEXUS_INTERNAL_KEY", "test-internal-key")

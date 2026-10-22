@@ -8,7 +8,6 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import text as sql_text
 
 from app.sql_storage import create_test_schema
@@ -16,6 +15,7 @@ from nexus_api.agentscope import AgentScopeClient
 from nexus_api.db import connect
 from nexus_api.im import ImError, accept_inbound, bind_bot, claim_outbox, contact_human
 from nexus_api.main import capture_im_reply, create_app
+from tests.nexus.clients import TestClient, session_headers
 
 
 def employee_body(**overrides):
@@ -294,7 +294,11 @@ def test_concurrent_im_event_accepts_once(tmp_path, monkeypatch):
                 httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
             )
             transport = httpx.ASGITransport(app=application)
-            async with httpx.AsyncClient(transport=transport, base_url="http://nexus.test") as client:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://nexus.test",
+                headers={**session_headers(), "X-Nexus-Internal-Key": "test-internal-key"},
+            ) as client:
                 employee = (await client.post("/api/v1/employees", json=employee_body())).json()["employee"]
                 opened = await client.post(
                     f"/api/v1/employees/{employee['id']}/conversations",

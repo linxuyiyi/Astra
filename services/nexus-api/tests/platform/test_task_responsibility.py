@@ -260,3 +260,37 @@ def test_opencode_model_names():
     assert gateway_model("deepseek/deepseek-flash") == "nexus-gateway/deepseek-flash"
     assert direct_model("opencode/glm-5.1", None) == "opencode/glm-5.1"
     assert direct_model(None, "deepseek/deepseek-flash") == "deepseek/deepseek-flash"
+
+
+async def test_group_task_cannot_override_server_side_source(session):
+    from app.task_tools import nexus_channel_id, nexus_session_id
+
+    channel = nexus_channel_id.set("ch_group")
+    session_token = nexus_session_id.set("ses_group")
+    try:
+        for overrides in (
+            {"source_channel_id": "ch_other"},
+            {"source_session_id": "ses_other"},
+            {"source_conversation_id": "conv-other"},
+        ):
+            result = await TaskTools(None).create(
+                task_type="ENGINEERING",
+                category_id="cat",
+                title="标题",
+                description="描述",
+                **overrides,
+            )
+            assert result == {"ok": False, "error": "不能覆盖服务端群调用来源"}
+        allowed = await TaskTools(session).create(
+            task_type="ENGINEERING",
+            category_id="cat",
+            title="标题",
+            description="描述",
+            source_channel_id="ch_group",
+            source_session_id="ses_group",
+        )
+    finally:
+        nexus_session_id.reset(session_token)
+        nexus_channel_id.reset(channel)
+    # 允许的值继续进入分类校验，而不是被来源检查误伤。
+    assert allowed == {"ok": False, "error": "请选择已启用的任务分类"}

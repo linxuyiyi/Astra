@@ -436,6 +436,7 @@ def main() -> None:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(
                 f"{nexus_api}/api/v1/internal/mailbox",
+                headers=service_headers(),
                 params={"agent_id": agent_id},
             )
         if response.status_code == 404:
@@ -444,7 +445,10 @@ def main() -> None:
         session_id = response.json().get("session_id")
         return str(session_id) if session_id else None
 
-    peer_toolkit = without_team_and_task_tools(get_toolkit, mailbox_lookup)
+    from group_security import AgentServiceKeyMiddleware, headers as service_headers, secure_group_toolkit, install_run_context
+    nexus_api = os.environ.get("NEXUS_API_BASE", "http://127.0.0.1:18120").rstrip("/")
+    peer_toolkit = secure_group_toolkit(without_team_and_task_tools(get_toolkit, mailbox_lookup), nexus_api)
+    install_run_context(chat_service.ChatService)
     chat_service.get_toolkit = peer_toolkit
     realtime_service.get_toolkit = peer_toolkit
 
@@ -499,6 +503,7 @@ def main() -> None:
             async with httpx.AsyncClient(timeout=10) as client:
                 response = await client.post(
                     f"{nexus_api}/api/v1/im/contacts",
+                    headers=service_headers(),
                     json={
                         "agent_id": agent_id,
                         "conversation_key": conversation_key,
@@ -540,6 +545,7 @@ def main() -> None:
         mcp_hubs=[GitHubMCPHub(api_token=os.environ.get("AGENTSCOPE_GITHUB_TOKEN") or None)],
         skill_hubs=[ClawSkillHub(api_token=os.environ.get("AGENTSCOPE_CLAWHUB_TOKEN") or None)],
     )
+    app.add_middleware(AgentServiceKeyMiddleware)
     guard_lifespan(app)
     listen_host = os.environ.get("AGENTSCOPE_HOST", "0.0.0.0")
     listen_port = int(os.environ.get("AGENTSCOPE_PORT", "18000"))
@@ -594,7 +600,9 @@ async def deliver_peer_hint(
     async with httpx_module.AsyncClient(timeout=20) as client:
         response = await client.get(
             f"{nexus_api}/api/v1/peers/resolve",
-            params={"session_id": session_id, "name": employee_name, "message": message},
+            headers=__import__("group_security").headers(),
+            params={"session_id": session_id, "name": employee_name, "message": message,
+                    "execution_id": __import__("group_security").execution_id.get()},
         )
     if response.status_code >= 400:
         return json.dumps(
@@ -602,6 +610,8 @@ async def deliver_peer_hint(
             ensure_ascii=False,
         )
     peer = response.json()
+    if peer.get("scheduled"):
+        return json.dumps({"ok": True, "peer": employee_name, "status": "scheduled"}, ensure_ascii=False)
     hint = hint_block(hint=message, source=peer.get("sender_name") or agent_id)
     await deliver_to_inbox(
         message_bus,

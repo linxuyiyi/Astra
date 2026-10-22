@@ -8,11 +8,11 @@ import json
 from pathlib import Path
 
 import httpx
-from fastapi.testclient import TestClient
 from sqlalchemy import text as sql_text
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app, session_transcript
+from tests.nexus.clients import TestClient
 
 ROOT = Path(__file__).resolve().parents[4]
 

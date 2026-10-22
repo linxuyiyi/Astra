@@ -5,6 +5,7 @@ import errno
 import hashlib
 import os
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -27,6 +28,9 @@ from app.worker_agent.files import (
 from app.worker_gateway.protocol import envelope
 from tests.platform.test_worker_gateway import ScriptedTransport
 from tests.platform.test_worker_gateway_faults import _agent_config, _auth_reply
+
+# 这些命令走 Linux openat2/O_PATH；在 Darwin 上调用 syscall 437 会直接触发 SIGSYS。
+pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Worker 文件命令依赖 Linux openat2/O_PATH")
 
 
 def _run(root: Path, workspace: Path, name: str, **payload):

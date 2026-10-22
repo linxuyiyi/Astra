@@ -4,11 +4,11 @@ import asyncio
 import json
 
 import httpx
-from fastapi.testclient import TestClient
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.capability import binding_revision, inspect_employee, missing_bindings
 from nexus_api.main import create_app
+from tests.nexus.clients import TestClient
 
 
 def test_missing_binding_names_the_gap():
@@ -60,30 +60,34 @@ def test_session_toolkit_must_list_the_binding():
         "nexus",
         httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
     )
-    ready = asyncio.run(inspect_employee(
-        client,
-        {
-            "skills": ["review"],
-            "tools": [],
-            "agentscope_agent_id": "agent",
-            "mailbox_session_id": "mail",
-            "capability": {},
-        },
-        "now",
-    ))
+    ready = asyncio.run(
+        inspect_employee(
+            client,
+            {
+                "skills": ["review"],
+                "tools": [],
+                "agentscope_agent_id": "agent",
+                "mailbox_session_id": "mail",
+                "capability": {},
+            },
+            "now",
+        )
+    )
     assert ready["runtime_status"] == "applied"
     assert {"/skill", "/mcp", "/workspace/skill", "/workspace/mcp"} <= set(seen)
-    missed = asyncio.run(inspect_employee(
-        client,
-        {
-            "skills": ["absent"],
-            "tools": [],
-            "agentscope_agent_id": "agent",
-            "mailbox_session_id": "mail",
-            "capability": {"applied_revision": "kept"},
-        },
-        "now",
-    ))
+    missed = asyncio.run(
+        inspect_employee(
+            client,
+            {
+                "skills": ["absent"],
+                "tools": [],
+                "agentscope_agent_id": "agent",
+                "mailbox_session_id": "mail",
+                "capability": {"applied_revision": "kept"},
+            },
+            "now",
+        )
+    )
     assert missed["applied_revision"] == "kept"
     assert missed["runtime_status"] == "error"
     assert json.loads(json.dumps(missed))["error"]

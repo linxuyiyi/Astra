@@ -9,10 +9,10 @@ import sqlite3
 import httpx
 import pytest
 import yaml
-from fastapi.testclient import TestClient
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app, db_path
+from tests.nexus.clients import TestClient
 
 
 def employee_body(**overrides):
@@ -183,9 +183,7 @@ class FakeAgentScope:
                     "error": self.mcp_failure or None,
                 }
             )
-            self.added_mcps.append(
-                {"agent_id": agent_id, "session_id": session_id, "body": body}
-            )
+            self.added_mcps.append({"agent_id": agent_id, "session_id": session_id, "body": body})
             if not any(item["name"] == body["name"] for item in self.mcp_records):
                 self.mcp_records.append(
                     {"id": f"lib-{len(self.mcp_records) + 1}", "name": body["name"], "enabled": True}
@@ -444,9 +442,7 @@ def test_employee_binds_mcp_and_unbind_removes_it(tmp_path, monkeypatch, fake):
         ).json()["employee"]
         agent_id = employee["agentscope_agent_id"]
         mailbox = employee["mailbox_session_id"]
-        assert [item["name"] for item in fake.workspace(agent_id, mailbox)[1]] == [
-            mcp["runtime_name"]
-        ]
+        assert [item["name"] for item in fake.workspace(agent_id, mailbox)[1]] == [mcp["runtime_name"]]
 
         blocked = client.delete(f"/api/v1/config/mcps/{mcp['id']}")
         assert blocked.status_code == 409
@@ -464,9 +460,7 @@ def test_employee_binds_mcp_and_unbind_removes_it(tmp_path, monkeypatch, fake):
         )
         assert sent.status_code == 200, sent.text
         session_id = sent.json()["agentscope"]["session_id"]
-        assert [item["name"] for item in fake.workspace(agent_id, session_id)[1]] == [
-            mcp["runtime_name"]
-        ]
+        assert [item["name"] for item in fake.workspace(agent_id, session_id)[1]] == [mcp["runtime_name"]]
 
         updated = client.patch(
             f"/api/v1/employees/{employee['id']}",
@@ -552,9 +546,7 @@ def test_running_session_is_left_alone_and_retry_reports_pending(tmp_path, monke
         assert edited.status_code == 200, edited.text
         assert edited.json()["sync"]["status"] == "pending"
         item = next(
-            item
-            for item in client.get("/api/v1/config/skills").json()["items"]
-            if item["id"] == skill["id"]
+            item for item in client.get("/api/v1/config/skills").json()["items"] if item["id"] == skill["id"]
         )
         assert item["sync"]["status"] == "pending"
         retry = client.post(f"/api/v1/config/skills/{skill['id']}/sync")
@@ -770,11 +762,7 @@ def test_unbind_intent_survives_a_workspace_read_failure(tmp_path, monkeypatch, 
     state = {"fail_read": False}
 
     def flaky(request: httpx.Request) -> httpx.Response:
-        if (
-            state["fail_read"]
-            and request.method == "GET"
-            and request.url.path == "/workspace/skill"
-        ):
+        if state["fail_read"] and request.method == "GET" and request.url.path == "/workspace/skill":
             return httpx.Response(503, json={"detail": "工作区暂不可用"})
         return original(request)
 

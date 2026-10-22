@@ -8,6 +8,7 @@
             <el-button circle aria-label="新建群组" data-testid="chat-create-group" @click="openGroupDialog()">＋</el-button>
           </el-tooltip>
         </div>
+        <el-button text size="small" @click="joinDialogOpen = true">通过邀请加入群组</el-button>
         <div class="chat-filters">
           <button
             v-for="item in filterOptions"
@@ -50,7 +51,7 @@
             <p v-else-if="!activeTarget.enabled" class="muted" style="margin: 0">该联系人已禁用，历史消息仍可查看</p>
           </div>
           <div class="chat-head__actions">
-            <el-button v-if="activeTarget.kind === 'group'" size="small" @click="openGroupDialog(activeTarget.channel)">群组设置</el-button>
+            <el-button v-if="activeTarget.kind === 'group' && canManage" size="small" @click="openGroupDialog(activeTarget.channel)">群组设置</el-button>
             <el-button @click="asideOpen = !asideOpen">{{ asideOpen ? "收起资料" : "查看资料" }}</el-button>
           </div>
         </div>
@@ -118,15 +119,25 @@
         </div>
 
         <div v-else-if="activeState.tab === 'members' && activeTarget?.kind === 'group'" style="padding: 0 16px 16px">
-          <div style="display: flex; justify-content: space-between; align-items: center">
+          <div class="member-actions">
             <b>群组成员</b>
-            <el-button size="small" @click="openGroupDialog(activeTarget.channel)">＋ 添加成员</el-button>
+            <el-button v-if="canManage" size="small" @click="inviteHuman">邀请人类成员</el-button>
           </div>
-          <div class="member"><span class="avatar">👤</span><div><b>你</b><small class="muted">人类成员</small></div></div>
-          <div v-for="employee in activeTarget.members || []" :key="employee.id" class="member">
-            <span class="avatar" :class="{ off: !employee.enabled }">{{ employee.avatar }}</span>
-            <div><b>{{ employee.name }}</b><small class="muted">{{ employee.domain }} · {{ employee.enabled ? "启用" : "禁用" }}</small></div>
+          <div v-for="person in activeTarget.channel?.members || []" :key="`${person.member_type}:${person.member_id}`" class="member">
+            <span class="avatar">{{ person.avatar }}</span>
+            <div class="member-identity"><b>{{ person.name }}{{ person.member_id === currentUid() ? '（你）' : '' }}</b>
+              <small class="muted">{{ person.member_type === 'employee' ? '数字员工' : `${roleLabels[person.role]} · ${person.online ? '在线' : '离线'}` }}</small>
+            </div>
+            <template v-if="person.member_type === 'human' && person.role !== 'owner' && canManage">
+              <el-select v-if="activeTarget.channel?.my_role === 'owner'" :model-value="person.role" size="small" style="width:88px" @change="(value: unknown) => setRole(person.member_id, String(value))">
+                <el-option label="管理员" value="admin" /><el-option label="成员" value="member" />
+              </el-select>
+              <el-button v-if="person.member_id !== currentUid()" text type="danger" size="small" @click="removeHuman(person.member_id)">移除</el-button>
+              <el-button v-if="activeTarget.channel?.my_role === 'owner'" text size="small" @click="transferOwner(person.member_id)">转让</el-button>
+            </template>
           </div>
+          <el-button v-if="activeTarget.channel?.my_role !== 'owner'" type="danger" plain size="small" @click="leaveGroup">退出群组</el-button>
+
         </div>
 
         <div v-else-if="activeTarget?.kind === 'group'" style="padding: 16px">
@@ -140,6 +151,15 @@
       </aside>
     </div>
 
+    <el-dialog v-model="inviteDialogOpen" title="邀请加入群组" width="520px">
+      <p>发送此链接给要邀请的同事。链接 24 小时内有效，仅能使用一次。</p>
+      <el-input :model-value="inviteLink" readonly aria-label="群邀请链接" />
+      <template #footer><el-button @click="copyInvite">复制链接</el-button></template>
+    </el-dialog>
+    <el-dialog v-model="joinDialogOpen" title="加入群组" width="520px">
+      <el-input v-model="joinToken" placeholder="粘贴邀请链接或邀请码" aria-label="邀请码" />
+      <template #footer><el-button type="primary" @click="joinGroup">加入</el-button></template>
+    </el-dialog>
     <el-dialog v-model="groupDialogOpen" :title="groupEditingId ? '编辑群组' : '创建群组'" width="520px">
       <el-form label-position="top">
         <el-form-item label="群组名称" required><el-input v-model="groupForm.name" maxlength="32" /></el-form-item>
@@ -151,7 +171,7 @@
         </el-form-item>
         <el-form-item :label="groupEditingId ? '添加数字员工' : '参与的数字员工'">
           <el-checkbox-group v-model="groupForm.memberIds">
-            <el-checkbox v-for="employee in employees.filter((item) => !groupExistingMemberIds.includes(item.id))" :key="employee.id" :value="employee.id">
+            <el-checkbox v-for="employee in employees" :key="employee.id" :value="employee.id">
               {{ employee.avatar }} {{ employee.name }} · {{ employee.domain }}
             </el-checkbox>
           </el-checkbox-group>
@@ -173,6 +193,7 @@ import {
   createConversation,
   currentUid,
   getKnowledge,
+  groupAction,
   getMcps,
   getSkills,
   getTools,
@@ -209,6 +230,12 @@ const groupDialogOpen = ref(false);
 const groupEditingId = ref<string | null>(null);
 const groupSaving = ref(false);
 const groupExistingMemberIds = ref<string[]>([]);
+const roleLabels = { owner: "群主", admin: "管理员", member: "成员" };
+const canManage = computed(() => ["owner", "admin"].includes(activeTarget.value?.channel?.my_role || ""));
+const inviteDialogOpen = ref(false);
+const inviteLink = ref("");
+const joinDialogOpen = ref(false);
+const joinToken = ref("");
 const groupForm = reactive({ name: "", description: "", memberIds: [] as string[] });
 const emptyCatalog = (): ResourceCatalog => ({ available: false, items: [] });
 const catalogs = ref({
@@ -247,7 +274,7 @@ const targets = computed<ChatTarget[]>(() => {
       kind: "group",
       id: channel.id,
       name: channel.name,
-      subtitle: `${channel.members.length} 位数字员工`,
+      subtitle: `${channel.members.filter(m => m.member_type === "human").length} 位人类 · ${channel.members.filter(m => m.member_type === "employee").length} 位数字员工`,
       avatar: "☷",
       enabled: true,
       searchText: `${channel.name} ${channel.description} ${members.map((item) => item.name).join(" ")}`.toLowerCase(),
@@ -434,11 +461,11 @@ async function applyRouteTarget() {
 
 function openGroupDialog(channel?: Channel) {
   groupEditingId.value = channel?.id ?? null;
-  groupExistingMemberIds.value = channel?.members.map((item) => item.employee_id) ?? [];
+  groupExistingMemberIds.value = channel?.members.filter(item => item.member_type === "employee").map((item) => item.employee_id) ?? [];
   groupForm.name = channel?.name ?? "";
   groupForm.description = channel?.description ?? "";
   groupForm.memberIds = channel
-    ? channel.members.map((item) => item.employee_id)
+    ? channel.members.filter(item => item.member_type === "employee").map((item) => item.employee_id)
     : employees.value.filter((item) => item.enabled).map((item) => item.id);
   groupDialogOpen.value = true;
 }
@@ -446,10 +473,6 @@ function openGroupDialog(channel?: Channel) {
 async function saveGroup() {
   if (!groupForm.name.trim() || !groupForm.description.trim()) {
     ElMessage.warning("请填写群组名称和目标");
-    return;
-  }
-  if (!groupForm.memberIds.length) {
-    ElMessage.warning("至少选择一名员工");
     return;
   }
   groupSaving.value = true;
@@ -491,6 +514,47 @@ watch(() => activeState.value?.tab, (tab) => {
   if (tab === "tasks" && activeState.value) void loadTasks(activeState.value);
 });
 
+async function refreshGroups() {
+  channels.value = await listChannels();
+}
+async function act(path: string, method = "POST", body?: unknown) {
+  try { await groupAction(path, method, body); await refreshGroups(); }
+  catch (error) { ElMessage.error(error instanceof Error ? error.message : "群组操作失败"); }
+}
+async function inviteHuman() {
+  try {
+    const result = await groupAction<{ token: string }>(`${activeTarget.value!.id}/invitations`);
+    inviteLink.value = `${location.origin}/chat?invite=${encodeURIComponent(result.token)}`;
+    inviteDialogOpen.value = true;
+  } catch (error) { ElMessage.error(String(error)); }
+}
+async function copyInvite() {
+  try { await navigator.clipboard.writeText(inviteLink.value); ElMessage.success("邀请链接已复制"); }
+  catch { ElMessage.info("请选中链接复制"); }
+}
+async function joinGroup() {
+  try {
+    let token = joinToken.value.trim();
+    if (token.includes("?")) token = new URL(token).searchParams.get("invite") || "";
+    const result = await groupAction<Channel>("join", "POST", { token });
+    joinDialogOpen.value = false;
+    await refreshGroups();
+    await selectTarget(`group:${result.id}`);
+    await router.replace({ path: "/chat", query: { type: "group", group: result.id } });
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : "邀请无效"); }
+}
+function setRole(uid: string, role: string) { void act(`${activeTarget.value!.id}/humans/${uid}`, "PATCH", { role }); }
+function removeHuman(uid: string) { void act(`${activeTarget.value!.id}/humans/${uid}`, "DELETE"); }
+async function transferOwner(uid: string) { await act(`${activeTarget.value!.id}/transfer/${uid}`); }
+async function leaveGroup() {
+  await act(`${activeTarget.value!.id}/leave`);
+  await loadDirectory();
+}
+function onGroupMembers(event: MessageEvent) {
+  if (event.origin === location.origin && event.data?.type === "nexus-group-members") void refreshGroups();
+}
+window.addEventListener("message", onGroupMembers);
+
 async function loadDirectory() {
   directoryLoading.value = true;
   directoryError.value = "";
@@ -528,15 +592,18 @@ async function loadDirectory() {
 }
 
 onMounted(async () => {
+  if (typeof route.query.invite === "string") { joinToken.value = route.query.invite; joinDialogOpen.value = true; }
   await loadDirectory();
   if (disposed) return;
   taskTimer = window.setInterval(() => {
     const state = activeState.value;
     if (state?.tab === "tasks") void loadTasks(state);
+    if (activeTarget.value?.kind === "group") void refreshGroups().catch(() => undefined);
   }, 8000);
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener("message", onGroupMembers);
   disposed = true;
   selectionGeneration += 1;
   for (const state of Object.values(sessions)) {
@@ -548,6 +615,9 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.member-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.member { flex-wrap:wrap; }
+.member-identity { flex:1; min-width:0; overflow-wrap:anywhere; }
 .chat-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .chat-island { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; background: var(--astra-bg-panel); }
 .chat-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }

@@ -452,6 +452,7 @@ def _install_script(*extra, home: Path, payload: Path):
     )
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="remote_install.sh 只支持 Linux")
 def test_install_script_rejects_python_below_3_11(tmp_path):
     payload = tmp_path / "payload.json"
     payload.write_text("{}")
@@ -462,6 +463,7 @@ def test_install_script_rejects_python_below_3_11(tmp_path):
     assert "nodejs.org" not in result.stderr + result.stdout
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="remote_install.sh 只支持 Linux")
 def test_install_script_installs_venv_package_for_the_selected_python(tmp_path):
     bindir = tmp_path / "bin"
     bindir.mkdir()

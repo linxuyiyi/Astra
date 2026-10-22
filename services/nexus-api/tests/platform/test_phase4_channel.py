@@ -263,6 +263,7 @@ async def test_online_restart_does_not_require_ssh_password(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(sys.platform != "linux", reason="Worker 文件命令依赖 Linux O_PATH")
 async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, monkeypatch):
     _direct(monkeypatch)
     gateway = gateway_for()

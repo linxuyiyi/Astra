@@ -15,6 +15,7 @@ import pytest
 
 from nexus_api import agentscope_proxy, service
 from nexus_api.agentscope_proxy import router as agentscope_proxy_router
+from tests.nexus.clients import session_headers
 
 
 class _LazyJSONStream(httpx.AsyncByteStream):
@@ -77,7 +78,9 @@ def upstream(monkeypatch):
 
 def _client() -> httpx.AsyncClient:
     return httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=service.app), base_url="http://nexus.test"
+        transport=httpx.ASGITransport(app=service.app),
+        base_url="http://nexus.test",
+        headers=session_headers(),
     )
 
 
@@ -88,7 +91,7 @@ async def test_console_health_is_proxied(upstream):
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
     assert [request.url.path for request in upstream] == ["/health"]
-    assert upstream[0].headers["x-user-id"] == "alice"
+    assert upstream[0].headers["x-user-id"] == "nexus"
     assert str(upstream[0].url).startswith("http://agentscope.test/")
 
 

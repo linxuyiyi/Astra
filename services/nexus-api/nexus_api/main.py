@@ -14,14 +14,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import (
-    Cookie,
     Depends,
     FastAPI,
     File,
     Form,
-    Header,
     HTTPException,
-    Query,
     Request,
     Response,
     UploadFile,
@@ -31,12 +28,11 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text as sql_text
 
-from app.identity import resolve_uid
-
 from .agentscope import PINNED_VERSION, AgentScopeClient, AgentScopeError
+from .auth import install_auth, session_user
 from .capability import inspect_employee
+from .collaboration import Collaboration
 from .db import connect, employee_from_row, init_schema, message_from_row, new_id, utcnow
-from .groups import HumanEvents, chat_inputs, merge_timeline, messages_since
 from .im import (
     ImError,
     accept_inbound,
@@ -85,7 +81,7 @@ from .resources import (
     update_mcp,
     update_skill,
 )
-from .sql import insert_record, upsert_record
+from .sql import insert_record
 from .task_skill import (
     TASK_SKILL_ID,
     attach_task_capability,
@@ -683,10 +679,8 @@ def reserve_peer_delivery(
     duplicate = (
         connection.execute(
             sql_text(
-                """
-                SELECT 1 FROM t_nexus_peer_deliveries
-                WHERE scope = :p0 AND sender_agent_id = :p1 AND target_agent_id = :p2 AND message_key = :p3
-                """
+                """SELECT 1 FROM t_nexus_peer_deliveries WHERE scope = :p0 AND
+                sender_agent_id = :p1 AND target_agent_id = :p2 AND message_key = :p3"""
             ),
             {"p0": scope, "p1": sender_agent_id, "p2": target_agent_id, "p3": key},
         )
@@ -698,10 +692,8 @@ def reserve_peer_delivery(
     sender_count = (
         connection.execute(
             sql_text(
-                """
-                SELECT COUNT(*) AS count FROM t_nexus_peer_deliveries WHERE scope = :p0 AND sender_agent_id =
-                :p1
-                """
+                """SELECT COUNT(*) AS count FROM t_nexus_peer_deliveries WHERE scope =
+                :p0 AND sender_agent_id = :p1"""
             ),
             {"p0": scope, "p1": sender_agent_id},
         )
@@ -935,7 +927,8 @@ def attachment_visible(connection, attachment_id: str, owner_uid: str, requester
     for item in rows:
         member = (
             connection.execute(
-                sql_text("SELECT 1 FROM t_nexus_channel_humans WHERE channel_id = :p0 AND user_uid = :p1"),
+                sql_text("""SELECT 1 FROM t_nexus_channel_members WHERE channel_id = :p0 AND member_type =
+                         'human' AND membership_active=1 AND member_id = :p1"""),
                 {"p0": item["channel_id"], "p1": requester},
             )
             .mappings()
@@ -972,16 +965,8 @@ def claim_private_session(connection, conversation_id: str, session_id: str, wor
     return str(stored or session_id)
 
 
-def require_owner(
-    x_verified_uid: str | None = Header(default=None, alias="X-Verified-UID"),
-    x_owner_id: str | None = Header(default=None, alias="X-Owner-Id"),
-    nexus_uid: str | None = Cookie(default=None, alias="nexus_uid"),
-    uid: str | None = Query(default=None),
-) -> str:
-    """身份来自可信头。`?uid=` 不参与授权。Cookie 只给页面里的图片和下载使用。"""
-
-    del uid
-    return resolve_uid(x_verified_uid, x_owner_id, nexus_uid)
+def require_owner(request: Request) -> str:
+    return session_user(request)["uid"]
 
 
 def create_app() -> FastAPI:
@@ -996,11 +981,17 @@ def create_app() -> FastAPI:
             os.environ.get("NEXUS_AGENTSCOPE_BASE_URL") or None,
             os.environ.get("NEXUS_AGENTSCOPE_USER_ID", "nexus"),
         )
-        app.state.human_events = HumanEvents()
-        yield
-        await app.state.agentscope.aclose()
+        supervisor = asyncio.create_task(app.state.collaboration.supervisor())
+        try:
+            yield
+        finally:
+            supervisor.cancel()
+            await asyncio.gather(supervisor, return_exceptions=True)
+            await app.state.collaboration.close()
+            await app.state.agentscope.aclose()
 
     app = FastAPI(title="Nexus", version="1.4.8", lifespan=lifespan)
+    install_auth(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -2306,14 +2297,10 @@ def create_app() -> FastAPI:
         skills, knowledge, tools, mcps = await chosen_resources(client, body, current, connection)
         connection.execute(
             sql_text(
-                """
-                UPDATE t_nexus_employees
-                SET name = :p0, domain = :p1, description = :p2, instructions = :p3, avatar = :p4, enabled =
-                :p5,
-                    knowledge_json = :p6, skills_json = :p7, mcp_json = :p8, tools_json = :p9,
-                    model_route_id = :p10, updated_at = :p11
-                WHERE id = :p12
-                """
+                """UPDATE t_nexus_employees SET name = :p0, domain = :p1, description =
+                :p2, instructions = :p3, avatar = :p4, enabled = :p5, knowledge_json =
+                :p6, skills_json = :p7, mcp_json = :p8, tools_json = :p9,
+                model_route_id = :p10, updated_at = :p11 WHERE id = :p12"""
             ),
             {
                 "p0": body.name.strip(),
@@ -2852,629 +2839,16 @@ def create_app() -> FastAPI:
             raw=raw,
         )
 
-    def channel_payload(connection, channel_id: str) -> dict[str, Any]:
-        row = (
-            connection.execute(sql_text("SELECT * FROM t_nexus_channels WHERE id = :p0"), {"p0": channel_id})
-            .mappings()
-            .fetchone()
-        )
-        if row is None:
-            raise HTTPException(status_code=404, detail="讨论不存在")
-        members = (
-            connection.execute(
-                sql_text(
-                    """
-                    SELECT employee_id, agentscope_session_id FROM t_nexus_channel_members
-                    WHERE channel_id = :p0
-                    """
-                ),
-                {"p0": channel_id},
-            )
-            .mappings()
-            .fetchall()
-        )
-        return {
-            "id": row["id"],
-            "name": row["name"],
-            "description": row["description"],
-            "members": [
-                {"employee_id": item["employee_id"], "agentscope_session_id": item["agentscope_session_id"]}
-                for item in members
-            ],
-            "created_at": row["created_at"],
-        }
-
-    def ensure_members_exist(connection, member_ids: list[str]) -> list[str]:
-        unique: list[str] = []
-        for member_id in member_ids:
-            if member_id in unique:
-                continue
-            load_employee(connection, member_id)
-            unique.append(member_id)
-        if not unique:
-            raise HTTPException(status_code=422, detail="至少选择一名员工")
-        return unique
-
-    @app.get("/api/v1/channels")
-    def list_channels(connection=Depends(database)) -> dict[str, Any]:
-        rows = (
-            connection.execute(sql_text("SELECT id FROM t_nexus_channels ORDER BY created_at DESC"))
-            .mappings()
-            .fetchall()
-        )
-        return {"items": [channel_payload(connection, row["id"]) for row in rows]}
-
-    @app.post("/api/v1/channels", status_code=201)
-    def create_channel(body: ChannelBody, connection=Depends(database)) -> dict[str, Any]:
-        member_ids = ensure_members_exist(connection, body.member_ids)
-        channel_id = new_id("ch")
-        now = utcnow()
-        connection.execute(
-            sql_text(
-                """
-                INSERT INTO t_nexus_channels (id, name, description, created_at, updated_at) VALUES (:p0, :p1,
-                :p2, :p3, :p4)
-                """
-            ),
-            {"p0": channel_id, "p1": body.name.strip(), "p2": body.description.strip(), "p3": now, "p4": now},
-        )
-        for member_id in member_ids:
-            connection.execute(
-                sql_text(
-                    """
-                    INSERT INTO t_nexus_channel_members (channel_id, employee_id, agentscope_session_id)
-                    VALUES (:p0, :p1, NULL)
-                    """
-                ),
-                {"p0": channel_id, "p1": member_id},
-            )
-        connection.commit()
-        return channel_payload(connection, channel_id)
-
-    @app.patch("/api/v1/channels/{channel_id}")
-    def update_channel(channel_id: str, body: ChannelBody, connection=Depends(database)) -> dict[str, Any]:
-        channel_payload(connection, channel_id)
-        before = (
-            connection.execute(
-                sql_text("SELECT created_at FROM t_nexus_channels WHERE id = :p0"), {"p0": channel_id}
-            )
-            .mappings()
-            .fetchone()
-        )
-        member_ids = ensure_members_exist(connection, body.member_ids)
-        connection.execute(
-            sql_text(
-                """
-                UPDATE t_nexus_channels SET name = :p0, description = :p1, updated_at = :p2 WHERE id = :p3
-                """
-            ),
-            {"p0": body.name.strip(), "p1": body.description.strip(), "p2": utcnow(), "p3": channel_id},
-        )
-        existing = {
-            row["employee_id"]: (row["agentscope_session_id"], row["last_delivered_message_id"])
-            for row in connection.execute(
-                sql_text(
-                    """
-                    SELECT employee_id, agentscope_session_id, last_delivered_message_id
-                    FROM t_nexus_channel_members WHERE channel_id = :p0
-                    """
-                ),
-                {"p0": channel_id},
-            )
-            .mappings()
-            .fetchall()
-        }
-        connection.execute(
-            sql_text("DELETE FROM t_nexus_channel_members WHERE channel_id = :p0"), {"p0": channel_id}
-        )
-        for member_id in member_ids:
-            session_id, cursor = existing.get(member_id, (None, ""))
-            connection.execute(
-                sql_text(
-                    """
-                    INSERT INTO t_nexus_channel_members (
-                        channel_id, employee_id, agentscope_session_id, last_delivered_message_id
-                    ) VALUES (:p0, :p1, :p2, :p3)
-                    """
-                ),
-                {"p0": channel_id, "p1": member_id, "p2": session_id, "p3": cursor or ""},
-            )
-        connection.execute(
-            sql_text("UPDATE t_nexus_channels SET created_at = :p0 WHERE id = :p1"),
-            {"p0": before["created_at"], "p1": channel_id},
-        )
-        connection.commit()
-        return channel_payload(connection, channel_id)
-
-    @app.get("/api/v1/channels/{channel_id}/messages")
-    async def channel_messages(
-        channel_id: str,
-        request: Request,
-        connection=Depends(database),
-        x_owner_id: str | None = Header(default=None),
-        x_verified_uid: str | None = Header(default=None),
-    ):
-        channel = channel_payload(connection, channel_id)
-        viewer = (x_verified_uid or x_owner_id or "").strip()
-        if viewer:
-            upsert_record(
-                connection,
-                "t_nexus_channel_humans",
-                {"channel_id": channel_id, "user_uid": viewer, "display_name": viewer},
-                keys=["channel_id", "user_uid"],
-                update=["display_name"],
-            )
-            connection.commit()
-        local = list_messages(connection, channel_id=channel_id)
-        replies: list[dict[str, Any]] = []
-        errors: list[str] = []
-        client = client_of(request)
-        if client.configured:
-            for member in channel["members"]:
-                session_id = member["agentscope_session_id"]
-                if not session_id:
-                    continue
-                employee = load_employee(connection, member["employee_id"])
-                if not employee["agentscope_agent_id"]:
-                    continue
-                try:
-                    remote = await client.list_session_messages(employee["agentscope_agent_id"], session_id)
-                except AgentScopeError as exc:
-                    errors.append(f"{employee['name']}：{exc.detail}")
-                    continue
-                replies.extend(assistant_messages(remote, employee["id"]))
-        channel["messages"] = interleave_messages(local, replies)
-        channel["history_error"] = " ".join(errors)
-        return channel
-
-    def mentions(text: str, members: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        found: list[dict[str, Any]] = []
-        remaining = text
-        for employee in sorted(members, key=lambda item: len(item["name"]), reverse=True):
-            token = f"@{employee['name']}"
-            if token in remaining:
-                found.append(employee)
-                remaining = remaining.replace(token, "")
-        return found
-
-    async def ensure_record_session(
-        connection,
-        client: AgentScopeClient,
-        channel: dict[str, Any],
-        store: ResourceStore,
-    ) -> tuple[str, str]:
-        row = (
-            connection.execute(
-                sql_text("SELECT record_agent_id, record_session_id FROM t_nexus_channels WHERE id = :p0"),
-                {"p0": channel["id"]},
-            )
-            .mappings()
-            .fetchone()
-        )
-        if row["record_session_id"] and row["record_agent_id"]:
-            return row["record_agent_id"], row["record_session_id"]
-        agent_id = ""
-        for member in channel["members"]:
-            employee = load_employee(connection, member["employee_id"])
-            if employee["agentscope_agent_id"]:
-                agent_id = employee["agentscope_agent_id"]
-                break
-        if not agent_id:
-            return "", ""
-        record_employee = next(
-            (
-                load_employee(connection, member["employee_id"])
-                for member in channel["members"]
-                if load_employee(connection, member["employee_id"])["agentscope_agent_id"] == agent_id
-            ),
-            None,
-        )
-        session_id = await client.create_session(
-            agent_id,
-            f"记录:{channel['name']}",
-            chat_model_config=await model_for(client, record_employee) if record_employee else None,
-            knowledge_base_ids=bound_knowledge(record_employee),
-        )
-        if record_employee is not None:
-            await sync_employee_skills(client, record_employee, [session_id], connection, store)
-        connection.execute(
-            sql_text(
-                """
-                UPDATE t_nexus_channels SET record_agent_id = :p0, record_session_id = :p1, updated_at = :p2
-                WHERE id = :p3
-                """
-            ),
-            {"p0": agent_id, "p1": session_id, "p2": utcnow(), "p3": channel["id"]},
-        )
-        connection.commit()
-        return agent_id, session_id
-
-    @app.post("/api/v1/channels/{channel_id}/messages")
-    async def send_channel(
-        channel_id: str,
-        body: MessageBody,
-        request: Request,
-        connection=Depends(database),
-        x_owner_id: str | None = Header(default=None),
-        x_verified_uid: str | None = Header(default=None),
-    ):
-        channel = channel_payload(connection, channel_id)
-        trusted = (x_verified_uid or x_owner_id or "").strip()
-        speaker = trusted or "user"
-        if trusted:
-            upsert_record(
-                connection,
-                "t_nexus_channel_humans",
-                {"channel_id": channel_id, "user_uid": speaker, "display_name": speaker},
-                keys=["channel_id", "user_uid"],
-                update=["display_name"],
-            )
-            connection.commit()
-        if body.attachment_ids and not trusted:
-            raise HTTPException(status_code=401, detail="缺少 X-Verified-UID")
-        attachments = load_attachments(connection, body.attachment_ids, trusted or None)
-        message = store_user_message(
-            connection,
-            body.text,
-            attachments,
-            speaker_uid=speaker if speaker != "user" else "",
-            conversation_id=None,
-            channel_id=channel_id,
-        )
-        members = [load_employee(connection, item["employee_id"]) for item in channel["members"]]
-        named = mentions(body.text, members)
-        client = client_of(request)
-        record = {"accepted": False, "detail": ""}
-        if client.configured:
-            try:
-                _agent_id, record_session = await ensure_record_session(
-                    connection,
-                    client,
-                    channel,
-                    request.app.state.resources,
-                )
-                if record_session:
-                    await client.record_message(
-                        record_session,
-                        message["id"],
-                        speaker,
-                        message["text"],
-                        {"verified_uid": speaker} if speaker != "user" else {},
-                    )
-                    record = {"accepted": True, "detail": ""}
-            except AgentScopeError as exc:
-                record = {"accepted": False, "detail": exc.detail}
-                if exc.status_code == 409:
-                    # 人类消息已经落库；记录 Session 忙碌也要广播一次，
-                    # 否则其他人类成员看不到这条消息。
-                    request.app.state.human_events.publish(
-                        channel_id,
-                        speaker,
-                        {
-                            "id": message["id"],
-                            "text": message["text"],
-                            "speaker": speaker,
-                            "message": human_native_message(message),
-                            "sessions": [],
-                        },
-                    )
-                    return {
-                        "message": message,
-                        "triggered": [
-                            {
-                                "employee_id": employee["id"],
-                                "name": employee["name"],
-                                "accepted": False,
-                                "detail": exc.detail,
-                                "session_id": None,
-                            }
-                            for employee in named
-                        ],
-                        "record": record,
-                    }
-        files = [(item["name"], item["type"], Path(item["path"]).read_bytes()) for item in attachments]
-        content = model_input_blocks(body.text, files)
-        history = [
-            message_from_row(row)
-            for row in connection.execute(
-                sql_text("SELECT * FROM t_nexus_messages WHERE channel_id = :p0 ORDER BY created_at, id"),
-                {"p0": channel_id},
-            )
-            .mappings()
-            .fetchall()
-        ]
-        for item in history:
-            item["speaker_uid"] = item.get("speaker") or ""
-            item["content"] = model_input_blocks(
-                str(item.get("text") or ""),
-                attachment_bytes(connection, item),
-            )
-        triggered: list[dict[str, Any]] = []
-        for employee in named:
-            result = {
-                "employee_id": employee["id"],
-                "name": employee["name"],
-                "accepted": False,
-                "detail": "",
-                "session_id": None,
-            }
-            if not employee["enabled"]:
-                result["detail"] = f"{employee['name']} 已禁用，没有触发"
-                triggered.append(result)
-                continue
-            if not employee["agentscope_agent_id"]:
-                result["detail"] = "AgentScope 尚未创建该员工，没有生成回复"
-                triggered.append(result)
-                continue
-            binding = (
-                connection.execute(
-                    sql_text(
-                        """
-                        SELECT agentscope_session_id, last_delivered_message_id
-                        FROM t_nexus_channel_members WHERE channel_id = :p0 AND employee_id = :p1
-                        """
-                    ),
-                    {"p0": channel_id, "p1": employee["id"]},
-                )
-                .mappings()
-                .fetchone()
-            )
-            try:
-                session_id = await claim_member_session(
-                    connection,
-                    client,
-                    employee,
-                    channel_id,
-                    channel["name"],
-                    request.app.state.resources,
-                )
-                await sync_employee_skills(
-                    client,
-                    employee,
-                    [session_id],
-                    connection,
-                    request.app.state.resources,
-                )
-                await attach_task_capability(client, employee, session_id, channel_id=channel_id)
-                pending = messages_since(history, binding["last_delivered_message_id"] or "")
-                await client.trigger_inputs(
-                    employee["agentscope_agent_id"],
-                    session_id,
-                    chat_inputs(
-                        pending,
-                        speaker=speaker,
-                        verified_uid=speaker if speaker != "user" else "",
-                        current_content=content,
-                    ),
-                )
-                connection.execute(
-                    sql_text(
-                        """
-                        UPDATE t_nexus_channel_members SET last_delivered_message_id = :p0
-                        WHERE channel_id = :p1 AND employee_id = :p2
-                        """
-                    ),
-                    {"p0": message["id"], "p1": channel_id, "p2": employee["id"]},
-                )
-                connection.commit()
-                result.update(accepted=True, session_id=session_id)
-            except AgentScopeError as exc:
-                result["detail"] = exc.detail
-                result["session_id"] = binding["agentscope_session_id"]
-            triggered.append(result)
-        if any(item["accepted"] for item in triggered):
-            connection.execute(
-                sql_text("UPDATE t_nexus_messages SET accepted = 1 WHERE id = :p0"), {"p0": message["id"]}
-            )
-            connection.commit()
-            message = message_from_row(
-                connection.execute(
-                    sql_text("SELECT * FROM t_nexus_messages WHERE id = :p0"), {"p0": message["id"]}
-                )
-                .mappings()
-                .fetchone()
-            )
-        employee_messages = (
-            connection.execute(
-                sql_text(
-                    """
-                    SELECT COUNT(*) AS count FROM t_nexus_messages WHERE channel_id = :p0 AND sender != 'user'
-                    """
-                ),
-                {"p0": channel_id},
-            )
-            .mappings()
-            .fetchone()
-        )
-        if employee_messages["count"]:
-            raise HTTPException(status_code=500, detail="团队消息写入了非用户发言")
-        # 其他人类成员据此同步消息与新成员 Session；投递结果不广播。
-        request.app.state.human_events.publish(
-            channel_id,
-            speaker,
-            {
-                "id": message["id"],
-                "text": message["text"],
-                "speaker": speaker,
-                "message": human_native_message(message),
-                "sessions": [
-                    {"employee_id": item["employee_id"], "session_id": item["session_id"]}
-                    for item in triggered
-                    if item["session_id"]
-                ],
-            },
-        )
-        return {"message": message, "triggered": triggered, "record": record}
-
-    @app.get("/api/v1/channels/{channel_id}/events")
-    async def channel_events(
-        channel_id: str,
-        request: Request,
-        owner_id: str = Depends(require_owner),
-    ):
-        with connect() as connection:
-            channel_payload(connection, channel_id)
-        queue = request.app.state.human_events.subscribe(channel_id, owner_id)
-
-        async def generate():
-            try:
-                while not await request.is_disconnected():
-                    payload = await queue.get()
-                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-            finally:
-                request.app.state.human_events.unsubscribe(channel_id, queue)
-
-        return StreamingResponse(generate(), media_type="text/event-stream")
-
-    async def channel_native_streams(
-        connection,
-        client: AgentScopeClient,
-        channel: dict[str, Any],
-    ) -> list[dict[str, Any]]:
-        """按来源返回原生消息：人类消息一条流，每位成员与同事各一条 Session 流。"""
-
-        local = list_messages(connection, channel_id=channel["id"])
-        streams: list[dict[str, Any]] = [
-            {
-                "session_id": channel["id"],
-                "employee_id": "",
-                "label": "human",
-                "messages": [human_native_message(item) for item in local],
-            }
-        ]
-        seen_sessions = {channel["id"]}
-        if client.configured:
-            for member in channel["members"]:
-                session_id = member["agentscope_session_id"]
-                if not session_id or session_id in seen_sessions:
-                    continue
-                employee = load_employee(connection, member["employee_id"])
-                if not employee["agentscope_agent_id"]:
-                    continue
-                seen_sessions.add(session_id)
-                try:
-                    remote, event_cursor = await client.read_session(
-                        employee["agentscope_agent_id"], session_id
-                    )
-                except AgentScopeError:
-                    remote, event_cursor = [], ""
-                streams.append(
-                    {
-                        "session_id": session_id,
-                        "employee_id": employee["id"],
-                        "label": employee["name"],
-                        "event_cursor": event_cursor,
-                        "messages": remote,
-                    }
-                )
-                try:
-                    views = await client.list_agent_sessions(employee["agentscope_agent_id"])
-                except AgentScopeError:
-                    views = []
-                for peer_session, peer_label, peer_agent in team_peers(views, session_id):
-                    if peer_session in seen_sessions or not peer_agent:
-                        continue
-                    seen_sessions.add(peer_session)
-                    try:
-                        peer_messages = await client.list_session_messages(peer_agent, peer_session)
-                    except AgentScopeError:
-                        continue
-                    streams.append(
-                        {
-                            "session_id": peer_session,
-                            "employee_id": "",
-                            "label": peer_label,
-                            "messages": peer_messages,
-                        }
-                    )
-        return streams
-
-    @app.get("/api/v1/channels/{channel_id}/timeline")
-    async def channel_timeline(
-        channel_id: str,
-        request: Request,
-        connection=Depends(database),
-        cursor: str = "",
-        limit: int = 50,
-    ):
-        channel = channel_payload(connection, channel_id)
-        streams = await channel_native_streams(connection, client_of(request), channel)
-        bounded = limit if 1 <= limit <= 200 else 50
-        return merge_timeline(streams, cursor=cursor, limit=bounded)
-
-    @app.get("/api/v1/channels/{channel_id}/timeline/native")
-    async def channel_timeline_native(
-        channel_id: str,
-        request: Request,
-        connection=Depends(database),
-    ):
-        """群组原生时间线：保留每位成员 Session 的完整 Msg，人类消息只出现一次。"""
-
-        channel = channel_payload(connection, channel_id)
-        streams = await channel_native_streams(connection, client_of(request), channel)
-        human_ids = {str(item["id"]) for item in streams[0]["messages"]}
-        for stream in streams[1:]:
-            kept: list[dict[str, Any]] = []
-            for message in stream["messages"]:
-                metadata = message.get("metadata")
-                if message.get("role") == "user" and isinstance(metadata, dict):
-                    # 同一条人类消息会被写进多个成员 Session，id 可能是副本 id，
-                    # 原始 id 在 metadata.message_id 上。
-                    if str(metadata.get("message_id") or "") in human_ids:
-                        continue
-                if message.get("role") == "user" and str(message.get("id") or "") in human_ids:
-                    continue
-                kept.append(message)
-            stream["messages"] = kept
-        return {"channel": channel, "streams": streams}
-
-    @app.get("/api/v1/channels/{channel_id}/members/{employee_id}/stream")
-    async def stream_member(
-        channel_id: str,
-        employee_id: str,
-        request: Request,
-        after: str | None = None,
-        raw: bool = False,
-    ):
-        with connect() as connection:
-            channel = channel_payload(connection, channel_id)
-            employee = load_employee(connection, employee_id)
-            binding = next((item for item in channel["members"] if item["employee_id"] == employee_id), None)
-            if binding is None or not binding["agentscope_session_id"] or not employee["agentscope_agent_id"]:
-                raise HTTPException(status_code=409, detail="该成员还没有 AgentScope Session")
-        return await proxy_stream(
-            client_of(request),
-            employee["agentscope_agent_id"],
-            binding["agentscope_session_id"],
-            stream_cursor(after),
-            raw=raw,
-        )
-
-    @app.post("/api/v1/channels/{channel_id}/members/{employee_id}/interrupt")
-    async def interrupt_member(
-        channel_id: str,
-        employee_id: str,
-        request: Request,
-        connection=Depends(database),
-    ):
-        """停止某个成员在群组会话里正在跑的回复。"""
-
-        channel = channel_payload(connection, channel_id)
-        employee = load_employee(connection, employee_id)
-        binding = next(
-            (item for item in channel["members"] if item["employee_id"] == employee_id),
-            None,
-        )
-        if binding is None or not binding["agentscope_session_id"] or not employee["agentscope_agent_id"]:
-            raise HTTPException(status_code=409, detail="该成员还没有 AgentScope Session")
-        try:
-            await client_of(request).interrupt_session(
-                employee["agentscope_agent_id"],
-                binding["agentscope_session_id"],
-            )
-        except AgentScopeError as exc:
-            raise HTTPException(status_code=502, detail=exc.detail) from exc
-        return {"accepted": True}
+    app.state.collaboration = Collaboration(
+        app,
+        load_employee=load_employee,
+        claim_session=claim_member_session,
+        sync_resources=sync_employee_skills,
+        model_for=model_for,
+        load_attachments=load_attachments,
+        model_input_blocks=model_input_blocks,
+    )
+    app.state.collaboration.install()
 
     @app.get("/api/v1/peers/resolve")
     async def resolve_peer(
@@ -3483,6 +2857,7 @@ def create_app() -> FastAPI:
         request: Request,
         connection=Depends(database),
         message: str = "",
+        execution_id: str = "",
     ) -> dict[str, str]:
         target_name = name.strip()
         private = (
@@ -3572,71 +2947,7 @@ def create_app() -> FastAPI:
                 message,
                 target["mailbox_session_id"],
             )
-        sender = load_employee(connection, member["employee_id"])
-        if not sender["agentscope_agent_id"]:
-            raise HTTPException(status_code=404, detail="没有找到可联系的员工")
-        channel = (
-            connection.execute(
-                sql_text("SELECT name FROM t_nexus_channels WHERE id = :p0"), {"p0": member["channel_id"]}
-            )
-            .mappings()
-            .fetchone()
-        )
-        peers = (
-            connection.execute(
-                sql_text("SELECT * FROM t_nexus_channel_members WHERE channel_id = :p0"),
-                {"p0": member["channel_id"]},
-            )
-            .mappings()
-            .fetchall()
-        )
-        client = client_of(request)
-        for peer in peers:
-            employee = load_employee(connection, peer["employee_id"])
-            if employee["name"] != target_name or employee["id"] == sender["id"]:
-                continue
-            if not employee["enabled"]:
-                raise HTTPException(status_code=404, detail="该员工已禁用，不能开始新的运行")
-            if not employee["agentscope_agent_id"]:
-                raise HTTPException(status_code=404, detail="没有找到可联系的员工")
-            peer_session = peer["agentscope_session_id"]
-            if not peer_session:
-                if not client.configured:
-                    raise HTTPException(status_code=503, detail="AgentScope 未连接，没有生成回复")
-                try:
-                    peer_session = await claim_member_session(
-                        connection,
-                        client,
-                        employee,
-                        member["channel_id"],
-                        channel["name"] if channel is not None else employee["name"],
-                        request.app.state.resources,
-                    )
-                except AgentScopeError as exc:
-                    raise HTTPException(status_code=503, detail=exc.detail) from exc
-            await sync_employee_skills(
-                client,
-                employee,
-                [peer_session],
-                connection,
-                request.app.state.resources,
-            )
-            await attach_task_capability(
-                client,
-                employee,
-                peer_session,
-                channel_id=member["channel_id"],
-            )
-            return await hand_off(
-                connection,
-                client,
-                member["channel_id"],
-                sender,
-                employee,
-                message,
-                peer_session,
-            )
-        raise HTTPException(status_code=404, detail="没有找到可联系的员工")
+        return request.app.state.collaboration.request_peer(session_id, target_name, message, execution_id)
 
     async def proxy_stream(
         client: AgentScopeClient,

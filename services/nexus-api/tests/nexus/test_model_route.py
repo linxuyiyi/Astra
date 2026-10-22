@@ -7,11 +7,11 @@ import json
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app
 from nexus_api.model_route import gateway_base_url
+from tests.nexus.clients import TestClient
 
 
 def test_gateway_base_rejects_a_vendor_host(monkeypatch):

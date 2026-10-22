@@ -1,159 +1,68 @@
-/**
- * 群组数据通道：原生时间线、每位成员的 raw 事件流、发送与停止。
- *
- * 群组不是一条 AgentScope Session，而是 Nexus channel + 每位员工各自的 Session。
- * 这里只做数据搬运，渲染由 GroupApp 复用上游消息组件。
- */
 import type { AgentEvent } from "@agentscope-ai/agentscope/event";
 import type { Msg } from "@agentscope-ai/agentscope/message";
-
 import { nexusFetch, nexusGet } from "./http";
 
 export interface GroupMember {
+  member_id: string;
+  member_type: "human" | "employee";
   employee_id: string;
-  agentscope_session_id: string;
+  name: string;
+  avatar: string;
+  role: "owner" | "admin" | "member";
+  online: boolean;
+  agentscope_session_id: string | null;
 }
-
 export interface GroupChannel {
   id: string;
   name: string;
   description: string;
+  viewer_id: string;
   members: GroupMember[];
+  discussion?: { state: string; detail?: string } | null;
 }
-
-export interface GroupStream {
-  session_id: string;
-  employee_id: string;
-  label: string;
-  event_cursor?: string;
-  messages: Msg[];
-}
-
-export interface GroupTimeline {
-  channel: GroupChannel;
-  streams: GroupStream[];
-}
-
-export interface GroupMessage {
+export interface GroupItem {
   id: string;
+  seq: number;
+  sender_type: "human" | "employee" | "system";
+  sender_id: string;
+  sender_name: string;
   text: string;
   created_at: string;
-  accepted?: boolean;
-  attachments?: Array<{ id: string; name: string; type: string; size: number }>;
+  discussion_id: string;
+  message: Msg;
 }
-
-/** 一位被 @ 的成员的投递结果；accepted=false 时 detail 是后端给出的原因。 */
-export interface GroupTrigger {
-  employee_id: string;
-  name: string;
-  accepted: boolean;
-  detail?: string;
-  session_id: string | null;
+export interface GroupTimeline {
+  channel: GroupChannel;
+  items: GroupItem[];
+  before: number;
+  event_cursor: number;
 }
-
-export interface GroupSendResult {
-  message: GroupMessage;
-  triggered: GroupTrigger[];
-  record: { accepted: boolean; detail?: string };
-}
-
-/** 群事件：其他人类成员据此同步消息与刚建出来的成员 Session。 */
 export interface ChannelEvent {
-  id: string;
-  text: string;
-  speaker: string;
-  message?: Msg;
-  sessions?: Array<{ employee_id: string; session_id: string }>;
+  cursor: number;
+  type: "message" | "delta" | "discussion" | "members" | "revoked";
+  item?: GroupItem;
+  message_id?: string;
+  event?: AgentEvent;
+  state?: string;
+  detail?: string;
 }
-
-export async function loadGroupTimeline(channelId: string): Promise<GroupTimeline> {
-  return nexusGet<GroupTimeline>(`/api/v1/channels/${channelId}/timeline/native`);
+export function loadGroupTimeline(channelId: string, before = 0): Promise<GroupTimeline> {
+  return nexusGet(`/api/v1/channels/${channelId}/messages?before=${before}&limit=50`);
 }
-
-/** 单个成员的 raw 事件流：一轮结束后不关闭，便于连续多轮回复。 */
-export async function* streamMember(
-  channelId: string,
-  employeeId: string,
-  signal: AbortSignal,
-  after?: string,
-): AsyncGenerator<AgentEvent> {
-  const query = new URLSearchParams({ raw: "1" });
-  if (after) query.set("after", after);
-  let response: Response;
-  try {
-    response = await nexusFetch(
-      `/api/v1/channels/${channelId}/members/${employeeId}/stream?${query.toString()}`,
-      { signal },
-    );
-  } catch {
-    return;
-  }
-  if (!response.ok || !response.body) return;
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const frames = buffer.split("\n\n");
-      buffer = frames.pop() ?? "";
-      for (const frame of frames) {
-        const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
-        if (!dataLine) continue;
-        const raw = dataLine.slice(5).trim();
-        if (!raw) continue;
-        try {
-          yield JSON.parse(raw) as AgentEvent;
-        } catch {
-          // 坏帧不终止整条流。
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-export async function sendGroupMessage(
-  channelId: string,
-  text: string,
-  attachmentIds: string[],
-): Promise<GroupSendResult> {
+export async function sendGroupMessage(channelId: string, text: string, attachmentIds: string[], clientId: string): Promise<{ message: GroupItem }> {
   const response = await nexusFetch(`/api/v1/channels/${channelId}/messages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, attachment_ids: attachmentIds }),
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, attachment_ids: attachmentIds, client_id: clientId }),
   });
   if (!response.ok) {
-    let detail = response.statusText || "发送失败";
-    try {
-      const payload = (await response.json()) as { detail?: string };
-      if (payload.detail) detail = payload.detail;
-    } catch {
-      // 保留状态文本
-    }
-    throw new Error(detail);
+    const payload = await response.json() as { detail?: string };
+    throw new Error(payload.detail || "发送失败");
   }
-  return (await response.json()) as GroupSendResult;
+  return response.json();
 }
-
-/** 人类消息事件：只推送消息本身与新建的成员绑定，不推送员工回复。 */
-export async function* streamChannelEvents(
-  channelId: string,
-  signal: AbortSignal,
-  onConnected?: () => Promise<void> | void,
-): AsyncGenerator<ChannelEvent> {
-  let response: Response;
-  try {
-    response = await nexusFetch(`/api/v1/channels/${channelId}/events`, { signal });
-  } catch {
-    return;
-  }
-  if (!response.ok || !response.body) return;
-  // 订阅已经建立后再补读持久快照：等待重连期间提交的消息不会丢。
-  await onConnected?.();
+export async function* streamChannelEvents(channelId: string, signal: AbortSignal, after: number): AsyncGenerator<ChannelEvent> {
+  const response = await nexusFetch(`/api/v1/channels/${channelId}/events?after=${after}`, { signal });
+  if (!response.ok || !response.body) throw new Error(response.status === 403 ? "你已不在该群组" : "实时连接失败");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -165,26 +74,16 @@ export async function* streamChannelEvents(
       const frames = buffer.split("\n\n");
       buffer = frames.pop() ?? "";
       for (const frame of frames) {
-        const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
-        if (!dataLine) continue;
-        const raw = dataLine.slice(5).trim();
-        if (!raw) continue;
-        try {
-          yield JSON.parse(raw) as ChannelEvent;
-        } catch {
-          // 坏帧不终止整条流。
-        }
+        const lines = frame.split("\n");
+        const data = lines.find(line => line.startsWith("data:"));
+        if (!data) continue;
+        const cursor = Number(lines.find(line => line.startsWith("id:"))?.slice(3) || after);
+        yield { ...JSON.parse(data.slice(5)), cursor } as ChannelEvent;
       }
     }
-  } finally {
-    reader.releaseLock();
-  }
+  } finally { reader.releaseLock(); }
 }
-
-export async function interruptMember(channelId: string, employeeId: string): Promise<void> {
-  const response = await nexusFetch(
-    `/api/v1/channels/${channelId}/members/${employeeId}/interrupt`,
-    { method: "POST" },
-  );
-  if (!response.ok) throw new Error(response.statusText || "停止失败");
+export async function interruptGroup(channelId: string): Promise<void> {
+  const response = await nexusFetch(`/api/v1/channels/${channelId}/interrupt`, { method: "POST" });
+  if (!response.ok) throw new Error("停止失败，请重试");
 }

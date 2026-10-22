@@ -445,7 +445,7 @@
 		"noFallback": "无兜底模型"
 	},
 	"asr": {
-		"start": "语音输入（本地 ASR）",
+		"start": "语音输入（转文字）",
 		"stop": "停止录音",
 		"transcribing": "正在识别…",
 		"recording": "录音中 {{time}}，再次点击结束",

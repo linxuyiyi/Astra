@@ -445,7 +445,7 @@
 		"noFallback": "No fallback"
 	},
 	"asr": {
-		"start": "Voice input (local ASR)",
+		"start": "Voice input (speech to text)",
 		"stop": "Stop recording",
 		"transcribing": "Transcribing…",
 		"recording": "Recording {{time}} — click to stop",

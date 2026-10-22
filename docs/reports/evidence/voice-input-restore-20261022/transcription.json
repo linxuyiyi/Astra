@@ -1,0 +1,11 @@
+{
+  "text": "帮我把今天的会议纪要整理一下，重点列出三个代办事项。",
+  "duration": 5.03,
+  "elapsed_ms": 71.31,
+  "decode_ms": 28.89,
+  "total_ms": 100.5,
+  "rtf": 0.0142,
+  "model": "sensevoice-small-int8",
+  "language": "zh",
+  "request_id": "7503c1fb30904156"
+}

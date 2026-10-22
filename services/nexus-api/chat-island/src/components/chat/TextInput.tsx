@@ -180,7 +180,6 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 		const [draft] = useState(() => readDraft(draftStorage, draftKey(window.location.search)));
 		const [value, setValue] = useState(draft.text);
 		const [files, setFiles] = useState<ProcessedFile[]>(draft.files);
-		const [asrAvailable, setAsrAvailable] = useState(false);
 		const [isFocused, setIsFocused] = useState(false);
 		const textareaRef = useRef<HTMLTextAreaElement>(null);
 		const fileInputRef = useRef<HTMLInputElement>(null);
@@ -208,27 +207,6 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 			writeDraft(draftStorage, draftKey(window.location.search), { text: value, files });
 		}, [draftStorage, value, files]);
 
-		// ASR is a separately deployed service. Only offer recording when its
-		// same-origin endpoint reports a loaded model and the browser can record.
-		useEffect(() => {
-			setAsrAvailable(false);
-			if (!localAsrEnabled || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return;
-			const controller = new AbortController();
-			const timer = window.setTimeout(() => controller.abort(), 3000);
-			void fetch('/api/asr/models', { signal: controller.signal })
-				.then(async (response) => {
-					if (!response.ok) return;
-					const body = await response.json() as { models?: Array<{ loaded?: boolean }> };
-					if (!controller.signal.aborted) setAsrAvailable(body.models?.some((model) => model.loaded === true) ?? false);
-				})
-				.catch(() => undefined)
-				.finally(() => window.clearTimeout(timer));
-			return () => {
-				controller.abort();
-				window.clearTimeout(timer);
-			};
-		}, [localAsrEnabled]);
-
 		// Keep the current draft and insert the transcript at the caret instead
 		// of replacing what the user already typed.
 		const insertText = useCallback((text: string) => {
@@ -254,7 +232,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 		}, []);
 
 		const localAsr = useAsrRecorder({
-			enabled: asrAvailable && !disabled,
+			enabled: localAsrEnabled && !disabled,
 			onText: insertText,
 		});
 
@@ -635,7 +613,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							style={{ height: `${COLLAPSED_HEIGHT_PX}px` }}
 						>
 							{/* Local ASR (server-side SenseVoice) */}
-							{asrAvailable && (
+							{localAsrEnabled && (
 								<Tooltip>
 									<TooltipTrigger asChild>
 										<Button

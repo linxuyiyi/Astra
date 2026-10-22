@@ -11,7 +11,8 @@ REPO="$(cd "$ROOT/../.." && pwd)"
 ASR_BASE="${NEXUS_ASR_BASE:-http://127.0.0.1:19899}"
 GATEWAY_BASE="${NEXUS_GATEWAY_BASE:-http://127.0.0.1:18110/v1}"
 NEXUS_BASE="${NEXUS_BASE:-http://127.0.0.1:18120}"
-UID_VALUE="${NEXUS_TEST_UID:-local-qa}"
+QA_USERNAME="${NEXUS_QA_USERNAME:-local-qa}"
+QA_PASSWORD="${NEXUS_QA_PASSWORD:-local-qa-password}"
 SAMPLE="${NEXUS_SAMPLE:-$ROOT/testdata/zh-5s.wav}"
 EXPECT="${NEXUS_EXPECT:-会议纪要}"
 
@@ -20,6 +21,18 @@ if [ -z "${NEXUS_GATEWAY_API_KEY:-}" ] && [ -f "$REPO/ops/env/.env" ]; then
 fi
 [ -n "${NEXUS_GATEWAY_API_KEY:-}" ] || { echo "NEXUS_GATEWAY_API_KEY is not configured" >&2; exit 1; }
 [ -f "$SAMPLE" ] || { echo "missing sample: $SAMPLE" >&2; exit 1; }
+
+COOKIE_JAR="$(mktemp)"
+trap 'rm -f "$COOKIE_JAR"' EXIT
+AUTH_BODY="{\"username\":\"$QA_USERNAME\",\"password\":\"$QA_PASSWORD\",\"display_name\":\"Local QA\"}"
+auth_status="$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE_JAR" -m 10 \
+  -X POST -H 'Content-Type: application/json' -d "$AUTH_BODY" \
+  "$NEXUS_BASE/api/v1/auth/register" 2>/dev/null || true)"
+if [ "$auth_status" = "409" ]; then
+  auth_status="$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE_JAR" -m 10 \
+    -X POST -H 'Content-Type: application/json' -d "$AUTH_BODY" \
+    "$NEXUS_BASE/api/v1/auth/login" 2>/dev/null || true)"
+fi
 
 pass=0
 fail=0
@@ -42,6 +55,7 @@ models="$(curl -fsS -m 5 "$ASR_BASE/v1/models" 2>/dev/null || true)"
 check "ASR /v1/models" "$(echo "$models" | grep -q 'sensevoice-small' && echo 1 || echo 0)"
 check "gateway /healthz" "$(curl -fsS -m 5 "${GATEWAY_BASE%/v1}/healthz" >/dev/null 2>&1 && echo 1 || echo 0)"
 check "Nexus /api/health" "$(curl -fsS -m 5 "$NEXUS_BASE/api/health" >/dev/null 2>&1 && echo 1 || echo 0)"
+check "Nexus QA login" "$([ "$auth_status" = "201" ] || [ "$auth_status" = "200" ] && echo 1 || echo 0)" "HTTP $auth_status"
 
 echo "== direct ASR =="
 direct="$(curl -fsS -m 60 -X POST -F "file=@$SAMPLE" -F "model=sensevoice" "$ASR_BASE/v1/audio/transcriptions" 2>/dev/null || true)"
@@ -53,12 +67,12 @@ gateway="$(curl -fsS -m 60 -X POST -H "Authorization: Bearer $NEXUS_GATEWAY_API_
 check "gateway text" "$(echo "$gateway" | grep -q "$EXPECT" && echo 1 || echo 0)" "$(echo "$gateway" | head -c 120)"
 
 echo "== Nexus speech route =="
-speech="$(curl -fsS -m 60 -X POST -H "X-Verified-UID: $UID_VALUE" \
+speech="$(curl -fsS -m 60 -b "$COOKIE_JAR" -X POST \
   -F "file=@$SAMPLE" "$NEXUS_BASE/api/asr/transcribe" 2>/dev/null || true)"
 check "Nexus speech text" "$(echo "$speech" | grep -q "$EXPECT" && echo 1 || echo 0)" "$(echo "$speech" | head -c 120)"
-config="$(curl -fsS -m 5 -H "X-Verified-UID: $UID_VALUE" "$NEXUS_BASE/api/gateway/speech-input" 2>/dev/null || true)"
+config="$(curl -fsS -m 5 -b "$COOKIE_JAR" "$NEXUS_BASE/api/gateway/speech-input" 2>/dev/null || true)"
 route_id="$(echo "$config" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("route_id") or "")' 2>/dev/null || true)"
-routes="$(curl -fsS -m 5 "$NEXUS_BASE/api/gateway/routes" 2>/dev/null || true)"
+routes="$(curl -fsS -m 5 -b "$COOKIE_JAR" "$NEXUS_BASE/api/gateway/routes" 2>/dev/null || true)"
 route_ok="$(echo "$routes" | ROUTE_ID="$route_id" python3 -c 'import json,os,sys; routes=json.load(sys.stdin); print(1 if any(r["id"]==os.environ["ROUTE_ID"] and r["model_type"]=="ASR" and r["enabled"] for r in routes) else 0)' 2>/dev/null || echo 0)"
 check "speech-input points to an enabled ASR route" "$route_ok" "route_id=$route_id"
 

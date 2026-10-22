@@ -20,6 +20,8 @@
 const playwrightPath = process.env.PLAYWRIGHT_PATH
   || new URL('../../../frontend/node_modules/playwright/index.mjs', import.meta.url).href;
 const { chromium } = await import(playwrightPath);
+import { ensureBrowserLogin } from './browser-auth.mjs';
+let apiCookie = '';
 
 const BASE = process.env.NEXUS_BASE || 'http://127.0.0.1:18120';
 const UID = process.env.NEXUS_UID || 'local-qa';
@@ -36,12 +38,11 @@ if (MODE === 'group' && !CHANNEL) throw new Error('NEXUS_CHANNEL_ID is required 
 const CHAT_URL = MODE === 'group'
   ? `${BASE}/chat?type=group&group=${encodeURIComponent(CHANNEL)}`
   : `${BASE}/chat?type=contact&employee=${encodeURIComponent(EMP)}`;
-const API_HEADERS = { 'X-Owner-Id': UID };
 
 async function api(path, init = {}) {
   const response = await fetch(`${BASE}${path}`, {
     ...init,
-    headers: { ...API_HEADERS, ...(init.headers || {}) },
+    headers: { Cookie: apiCookie, ...(init.headers || {}) },
   });
   if (!response.ok) throw new Error(`${path} -> ${response.status} ${await response.text()}`);
   return response.json();
@@ -61,10 +62,12 @@ async function waitReply(conversationId, beforeMessageId) {
   const deadline = Date.now() + 90000;
   while (Date.now() < deadline) {
     const payload = await api(path);
-    const messages = payload.messages || [];
+    const messages = payload.messages || payload.items || [];
     const start = beforeMessageId ? messages.findIndex((item) => item.id === beforeMessageId) : -1;
-    const reply = messages.slice(start + 1)
-      .find((item) => item.sender !== 'user' && item.text && !item.text.startsWith('<'));
+    const reply = messages.slice(start + 1).find((item) => {
+      const fromUser = item.sender === 'user' || item.sender_type === 'human';
+      return !fromUser && item.text && !item.text.startsWith('<');
+    });
     if (reply) return reply;
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
@@ -85,6 +88,8 @@ try {
     permissions: ['microphone'],
     viewport: { width: 1440, height: 960 },
   });
+  const auth = await ensureBrowserLogin(context, { base: BASE });
+  apiCookie = auth.cookie;
   await context.addCookies([{ name: 'nexus_uid', value: UID, domain: '127.0.0.1', path: '/' }]);
   await context.addInitScript((uid) => localStorage.setItem('nexus_owner_id', uid), UID);
   const page = await context.newPage();

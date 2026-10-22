@@ -28,7 +28,7 @@
     {
       "name": "transcript not auto-sent",
       "ok": true,
-      "detail": "messages 32"
+      "detail": "messages 4"
     },
     {
       "name": "release Alt first",
@@ -98,7 +98,7 @@
     {
       "name": "final PTT does not auto-send",
       "ok": true,
-      "detail": "messages 32"
+      "detail": "messages 4"
     },
     {
       "name": "Enter sends recognized text",
@@ -108,12 +108,12 @@
     {
       "name": "AgentScope replies",
       "ok": true,
-      "detail": "收到。我是 DeepSeek 验收员工，负责聊天岛 DeepSeek 验收；这里没有“小牛马”这个身份，也不是小牛码、小牛。\n\n如果你只是想确认我还在线：我在。"
+      "detail": "收到。\n\n职责：聊天岛 DeepSeek 验收。有事派活给我，我就开始处理。"
     },
     {
       "name": "reply rendered in UI",
       "ok": true,
-      "detail": "收到。我是Dee"
+      "detail": "收到。职责：聊天"
     },
     {
       "name": "release before permission does not start later",
@@ -138,7 +138,7 @@
     {
       "name": "group PTT does not send",
       "ok": true,
-      "detail": "messages 27 -> 27"
+      "detail": "messages 1 -> 1"
     },
     {
       "name": "PTT failure preserves draft",
@@ -158,7 +158,7 @@
   ],
   "final": {
     "transcript": "你好，小牛马，介绍一下你自己。",
-    "reply": "收到。我是 DeepSeek 验收员工，负责聊天岛 DeepSeek 验收；这里没有“小牛马”这个身份，也不是小牛码、小牛。\n\n如果你只是想确认我还在线：我在。若要推进实际工作，请提供 v1.5.0 验收单的验收项与判定标准、唯一验收 001 的材料，或会议纪要原文——这三件目前都还缺输入。",
+    "reply": "收到。\n\n职责：聊天岛 DeepSeek 验收。有事派活给我，我就开始处理。",
     "screenshot": "/Users/niuniu/程序/Astra/docs/reviews/assets/nexus-v1.4.8-ptt/final.png"
   },
   "errors": []

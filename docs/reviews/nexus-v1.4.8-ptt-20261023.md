@@ -1,6 +1,6 @@
 # Nexus v1.4.8 Push-to-Talk 语音输入验收记录
 
-- 目标分支：`v1.4.8`（从 `v1.5.0` 的 ASR 提交合入，再提交 PTT 改动）
+- 目标分支：`v1.4.8`（已合入 `v1.5.0` 的 ASR/PTT 提交，并保留 collaborative groups 与 employee schedules 改动）
 - 日期：2026-10-23
 - 环境：Apple M4 / 16 GB / macOS 26.5.2 / Chromium（Playwright）
 - 范围：数字员工对话输入框的按住说话快捷键。ASR 服务、Nexus 网关、SenseVoiceSmall 与 AgentScope 链路不变。
@@ -60,6 +60,8 @@
 | `chat-island/src/components/chat/TextInput.tsx` | 快捷键提示、录音/取消/加载状态、设置入口、快捷键接入 |
 | `chat-island/src/i18n/locales/{zh,en}.json` | PTT 与设置文案 |
 | `services/nexus-asr/scripts/e2e-ptt.mjs` | 真实浏览器 + ASR + AgentScope 验收脚本 |
+| `services/nexus-asr/scripts/browser-auth.mjs` | v1.4.8 真实 QA 账号注册/登录，供浏览器验收复用 |
+| `services/nexus-api/app/api/speech_routes.py` | 转写路由改用服务端 `nexus_session`，与 v1.4.8 登录体系一致 |
 | `docs/reviews/assets/nexus-v1.4.8-ptt/` | 截图与 `acceptance.json` |
 
 ## 4. 真实验证
@@ -74,6 +76,8 @@ node scripts/e2e-ptt.mjs
 ```
 
 结果：**31 项检查全部通过，0 errors**。原始结果：[acceptance.json](assets/nexus-v1.4.8-ptt/acceptance.json)。
+
+> v1.4.8 合入 collaborative groups 后，Nexus 使用真实 `nexus_session` 登录会话。浏览器验收通过 `/api/v1/auth/register|login` 建立 QA 账号（`NEXUS_QA_USERNAME` / `NEXUS_QA_PASSWORD`），不再使用 `X-Owner-Id`；语音路由也改为读取同一服务端会话。
 
 | 验收项 | 结果 |
 |---|---|
@@ -113,13 +117,19 @@ node scripts/e2e-ptt.mjs
 ## 5. 回归
 
 ```text
+PTT 浏览器验收:                       31 passed / 0 errors
 chat-island npm test:                 15 passed
+web npm test:                         30 passed
 chat-island type-check/build:         通过
 web type-check/build:                 通过
-ASR pytest（链路未改）:               26 passed（此前基线）
+Nexus tests/nexus（groups/schedules）: 136 passed, 6 skipped
+新 schema + gateway speech:           27 passed
+ASR pytest:                           26 passed
+verify-deployment.sh:                 15 passed
+ruff / git diff --check:              通过
 ```
 
-PTT 使用已有 `/api/asr/transcribe` → 网关 → SenseVoiceSmall，不新增 ASR 服务，不绕过网关。
+PTT 使用已有 `/api/asr/transcribe` → 网关 → SenseVoiceSmall，不新增 ASR 服务，不绕过网关。合并时把网关语音迁移接在 `0002_collaborative_groups` 之后，重命名为 `0003_gateway_speech`，并重建了包含群组/日程与 PTT 的聊天岛产物。
 
 ## 6. 未解决/限制
 
@@ -130,3 +140,5 @@ PTT 使用已有 `/api/asr/transcribe` → 网关 → SenseVoiceSmall，不新�
 5. **未做快捷键的服务端同步**：当前按需求使用轻量本地偏好；清理浏览器 localStorage 后会恢复默认。
 6. **麦克风权限弹窗期间的按键行为依赖浏览器**：已在 Web API 层用延迟 promise 验证“权限未完成即松开不会延迟起录”；真实系统权限弹窗的焦点行为仍需真机确认。
 7. **中英混合 ASR 准确率**沿用现有 FunASR 结果（混合术语仍有错误），PTT 不改变模型。
+8. **真实硬件键盘布局**：自动化使用 Chromium fake microphone 与 Playwright 键盘事件；macOS Option+K 的死键行为已在事件层验证不产生 `˚`，但真实外接键盘/输入法切换仍需手动复核。
+9. **本地开发数据库**原本是旧版 SQLite；本次已备份并补跑 `0002_collaborative_groups`，再将版本标记为 `0003_gateway_speech`。生产环境仍应按全新库或已发布迁移链部署，不复制这次本地修补。

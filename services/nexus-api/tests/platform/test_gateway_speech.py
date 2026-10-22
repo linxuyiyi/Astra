@@ -174,6 +174,17 @@ async def test_asr_probe_is_real_audio_protocol():
 
 
 def test_persisted_speech_config_and_gateway_bridge(monkeypatch):
+    from fastapi import HTTPException
+
+    from app.api import speech_routes as speech_routes_module
+
+    def fake_session_user(request):
+        uid = request.headers.get("X-Verified-UID")
+        if not uid:
+            raise HTTPException(401, "请先登录")
+        return {"uid": uid}
+
+    monkeypatch.setattr(speech_routes_module, "session_user", fake_session_user)
     app = FastAPI()
     app.include_router(router)
     from app.api.gateway_routes import router as gateway_router

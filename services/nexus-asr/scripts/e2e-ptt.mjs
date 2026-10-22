@@ -18,17 +18,20 @@ import { fileURLToPath } from 'node:url';
 const playwrightPath = process.env.PLAYWRIGHT_PATH
   || new URL('../../../frontend/node_modules/playwright/index.mjs', import.meta.url).href;
 const { chromium } = await import(playwrightPath);
+import { ensureBrowserLogin } from './browser-auth.mjs';
 
 const BASE = process.env.NEXUS_BASE || 'http://127.0.0.1:18120';
 const UID = process.env.NEXUS_UID || 'local-qa';
 const EMP = process.env.NEXUS_EMPLOYEE_ID || 'emp_815a4c618515';
-const CHANNEL = process.env.NEXUS_CHANNEL_ID || 'ch_8236da560e51';
+const CHANNEL = process.env.NEXUS_CHANNEL_ID || '';
+const GROUP_EMP = process.env.NEXUS_GROUP_EMPLOYEE_ID || 'emp_cc1620f70577';
 const AUDIO = process.env.NEXUS_AUDIO || '/tmp/case1-48k-padded.wav';
 const SCREENSHOT = process.env.NEXUS_SCREENSHOT || '/tmp/nexus-ptt.png';
 const REPORT = process.env.NEXUS_REPORT || '';
 const ASR_DIR = process.env.NEXUS_ASR_DIR || fileURLToPath(new URL('..', import.meta.url));
 
 const results = { checks: [], errors: [] };
+let apiCookie = '';
 const check = (name, ok, detail = '') => {
   results.checks.push({ name, ok: Boolean(ok), detail });
   if (!ok) results.errors.push(`${name}: ${detail}`);
@@ -49,6 +52,8 @@ async function newPage(browser, { permissions = ['microphone'], initScripts = []
   await context.addCookies([{ name: 'nexus_uid', value: UID, domain: '127.0.0.1', path: '/' }]);
   await context.addInitScript((uid) => localStorage.setItem('nexus_owner_id', uid), UID);
   for (const script of initScripts) await context.addInitScript(script);
+  const auth = await ensureBrowserLogin(context, { base: BASE });
+  apiCookie = auth.cookie;
   const page = await context.newPage();
   const requests = [];
   const errors = [];
@@ -116,6 +121,8 @@ async function hold(page, frame, ms, { repeat = false, release = 'primary-first'
 }
 
 async function fetchJson(url, init = {}, attempts = 3) {
+  const headers = { ...(init.headers || {}), Cookie: apiCookie };
+  init = { ...init, headers };
   let lastError;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
@@ -131,7 +138,15 @@ async function fetchJson(url, init = {}, attempts = 3) {
 }
 
 async function api(path) {
-  return fetchJson(`${BASE}${path}`, { headers: { 'X-Owner-Id': UID } });
+  return fetchJson(`${BASE}${path}`);
+}
+
+async function apiJson(method, path, body) {
+  return fetchJson(`${BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
 async function conversationId(page) {
@@ -437,14 +452,19 @@ async function main() {
   // ── Group chat PTT ──────────────────────────────────────────────────
   const groupBrowser = await launch();
   const group = await newPage(groupBrowser);
-  const groupChat = await openChat(group.page, `type=group&group=${CHANNEL}`);
-  const groupBefore = (await api(`/api/v1/channels/${CHANNEL}/messages`)).messages.length;
+  const channelId = CHANNEL || (await apiJson('POST', '/api/v1/channels', {
+    name: 'PTT验收群',
+    description: 'Push-to-talk 验收群',
+    member_ids: [GROUP_EMP],
+  })).id;
+  const groupChat = await openChat(group.page, `type=group&group=${channelId}`);
+  const groupBefore = (await api(`/api/v1/channels/${channelId}/messages`)).items.length;
   await groupChat.textarea.fill('@阿明，');
   await groupChat.textarea.focus();
   await hold(group.page, groupChat.frame, 1800);
   const groupValue = await waitAdded(groupChat.textarea, '@阿明，');
   await group.page.screenshot({ path: SCREENSHOT.replace(/\.png$/, '-group.png'), fullPage: true });
-  const groupAfter = (await api(`/api/v1/channels/${CHANNEL}/messages`)).messages.length;
+  const groupAfter = (await api(`/api/v1/channels/${channelId}/messages`)).items.length;
   check('group PTT fills input', groupValue.length > '@阿明，'.length, JSON.stringify(groupValue));
   check('group PTT does not send', groupAfter === groupBefore, `messages ${groupBefore} -> ${groupAfter}`);
   await group.context.close();

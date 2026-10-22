@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 const playwrightPath = process.env.PLAYWRIGHT_PATH
   || new URL('../../../frontend/node_modules/playwright/index.mjs', import.meta.url).href;
 const { chromium } = await import(playwrightPath);
+import { ensureBrowserLogin } from './browser-auth.mjs';
+let apiCookie = '';
 
 const BASE = process.env.NEXUS_BASE || 'http://127.0.0.1:18120';
 const UID = process.env.NEXUS_UID || 'local-qa';
@@ -37,6 +39,8 @@ function launch(fakeUi = true) {
 
 async function openChat(browser, employee, { permissions = ['microphone'] } = {}) {
   const context = await browser.newContext({ permissions, viewport: { width: 1440, height: 960 } });
+  const auth = await ensureBrowserLogin(context, { base: BASE });
+  apiCookie = auth.cookie;
   await context.addCookies([{ name: 'nexus_uid', value: UID, domain: '127.0.0.1', path: '/' }]);
   await context.addInitScript((uid) => localStorage.setItem('nexus_owner_id', uid), UID);
   const page = await context.newPage();
@@ -56,13 +60,14 @@ async function openChat(browser, employee, { permissions = ['microphone'] } = {}
 }
 
 async function probeAsrNode() {
-  const nodes = await fetch(`${BASE}/api/gateway/nodes`).then((response) => response.json());
+  const nodes = await fetch(`${BASE}/api/gateway/nodes`, { headers: { Cookie: apiCookie } })
+    .then((response) => response.json());
   const node = nodes.find((item) => item.name === 'Mac SenseVoiceSmall');
   if (!node) return;
   for (let index = 0; index < 2; index += 1) {
     await fetch(`${BASE}/api/gateway/nodes/${node.id}/probe`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Cookie: apiCookie },
       body: JSON.stringify({ probe_types: ['ASR'] }),
     });
   }
@@ -160,6 +165,8 @@ async function probeAsrNode() {
     const context = await browser.newContext({ permissions: [], viewport: { width: 1440, height: 960 } });
     await context.addCookies([{ name: 'nexus_uid', value: UID, domain: '127.0.0.1', path: '/' }]);
     await context.addInitScript((uid) => localStorage.setItem('nexus_owner_id', uid), UID);
+    const auth = await ensureBrowserLogin(context, { base: BASE });
+    apiCookie = auth.cookie;
     const page = await context.newPage();
     const client = await context.newCDPSession(page);
     await client.send('Browser.setPermission', {
@@ -196,6 +203,8 @@ async function probeAsrNode() {
         value: () => Promise.reject(new DOMException('Permission denied', 'NotAllowedError')),
       });
     });
+    const auth = await ensureBrowserLogin(context, { base: BASE });
+    apiCookie = auth.cookie;
     const page = await context.newPage();
     const requests = [];
     page.on('request', (request) => {

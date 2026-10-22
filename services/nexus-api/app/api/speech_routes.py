@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,18 +12,16 @@ from app.gateway.audio import AUDIO_PATH, MAX_AUDIO_BODY_BYTES, parse_audio_uplo
 from app.gateway.errors import GatewayDataPlaneError, payload_too_large
 from app.gateway.models import GatewayAuditEvent, GatewayPool, GatewayRoute, GatewaySpeechInput
 from app.gateway.schemas import SpeechInputConfig
-from app.identity import resolve_uid
+from nexus_api.auth import session_user
 from nexus_api.model_route import ModelRouteError, gateway_api_key, gateway_base_url
 
 router = APIRouter(tags=["speech-input"])
 
 
-def speech_user(
-    verified: str | None = Header(default=None, alias="X-Verified-UID"),
-    owner: str | None = Header(default=None, alias="X-Owner-Id"),
-    cookie: str | None = Cookie(default=None, alias="nexus_uid"),
-) -> str:
-    return resolve_uid(verified, owner, cookie)
+def speech_user(request: Request) -> str:
+    """Use the same server-side session as every other Nexus route."""
+
+    return str(session_user(request)["uid"])
 
 
 async def speech_route(session: AsyncSession, route_id: str | None) -> GatewayRoute:

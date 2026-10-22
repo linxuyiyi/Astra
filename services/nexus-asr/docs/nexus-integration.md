@@ -119,6 +119,8 @@ MODE=group NEXUS_CHANNEL_ID=ch_xxx NEXUS_AUDIO=/tmp/case3-48k.wav \
 node scripts/interaction-tests.mjs
 
 # Push-to-Talk 全量浏览器验收（组合键、IME、失焦、权限、改键、发送）
+# v1.4.8 会通过 scripts/browser-auth.mjs 注册/登录本地 QA 账号；可用
+# NEXUS_QA_USERNAME / NEXUS_QA_PASSWORD 覆盖。
 NEXUS_EMPLOYEE_ID=emp_xxx NEXUS_CHANNEL_ID=ch_xxx node scripts/e2e-ptt.mjs
 ```
 

@@ -10,7 +10,7 @@ from sqlalchemy.engine import URL, Connection, Engine, make_url
 
 from app.config.settings import get_settings
 
-INITIAL_REVISION = "0001_init"
+INITIAL_REVISION = "0002_collaborative_groups"
 VERSION = Table("alembic_version", MetaData(), Column("version_num", String(32), primary_key=True))
 NEW_DATABASE_MESSAGE = (
     "数据库不是当前全新部署 schema；请使用新的空数据库执行 alembic upgrade head，不支持旧库升级"

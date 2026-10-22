@@ -146,11 +146,20 @@ export interface Conversation {
 }
 
 export interface ChannelMember {
+  member_id: string;
+  member_type: "human" | "employee";
+  name: string;
+  avatar: string;
+  role: "owner" | "admin" | "member";
+  online: boolean;
+  read_seq: number;
   employee_id: string;
   agentscope_session_id: string | null;
 }
 
 export interface Channel {
+  my_role: "owner" | "admin" | "member";
+  viewer_id: string;
   id: string;
   name: string;
   description: string;

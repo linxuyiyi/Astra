@@ -68,7 +68,8 @@ class AgentScopeClient:
         return self._http
 
     def _headers(self) -> dict[str, str]:
-        return {"X-User-ID": self.user_id}
+        from .auth import internal_headers
+        return {"X-User-ID": self.user_id, **internal_headers()}
 
     async def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         client = self._client()

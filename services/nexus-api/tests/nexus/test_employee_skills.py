@@ -6,13 +6,13 @@ import asyncio
 import json
 
 import httpx
-from fastapi.testclient import TestClient
 from sqlalchemy import text as sql_text
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.capability import inspect_employee
 from nexus_api.db import connect
 from nexus_api.main import create_app, db_path
+from tests.nexus.clients import TestClient
 
 SKILL_ID = "failure-analysis"
 SKILL_NAME = "失败分析"
@@ -188,10 +188,19 @@ def test_group_session_installs_employee_skills(tmp_path, monkeypatch):
         fake.from_library.clear()
         sent = test_client.post(
             f"/api/v1/channels/{channel['id']}/messages",
-            json={"text": "@星河 看一下失败日志"},
+            json={"text": "@星河 看一下失败日志", "client_id": "skill-test-0001"},
         )
         assert sent.status_code == 200, sent.text
-        session_id = sent.json()["triggered"][0]["session_id"]
+        import time
+
+        deadline = time.monotonic() + 3
+        session_id = None
+        while not session_id and time.monotonic() < deadline:
+            members = test_client.get(f"/api/v1/channels/{channel['id']}/members").json()["members"]
+            session_id = next(
+                (m["agentscope_session_id"] for m in members if m["member_type"] == "employee"), None
+            )
+            time.sleep(0.03)
         assert session_id
         group = [item for item in fake.from_library if item["session_id"] == session_id]
         assert group, fake.from_library

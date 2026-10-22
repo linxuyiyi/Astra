@@ -60,8 +60,16 @@ messages = Table(
     Column("text", CONTENT, nullable=False),
     Column("attachments_json", CONTENT, nullable=False),
     Column("accepted", Integer, nullable=False, server_default=text("0")),
+    Column("seq", Integer, nullable=True),
+    Column("sender_type", identifier(16), nullable=False, server_default=text("'human'")),
+    Column("sender_name", identifier(255), nullable=False, server_default=text("''")),
+    Column("native_json", CONTENT, nullable=False, server_default=text("('{}')")),
+    Column("discussion_id", identifier(64), nullable=False, server_default=text("''")),
+    Column("client_id", identifier(64), nullable=True),
     Column("speaker_uid", identifier(160), nullable=False, server_default=text("''")),
     Column("created_at", identifier(40), nullable=False),
+    UniqueConstraint("channel_id", "seq", name="uq_group_seq"),
+    UniqueConstraint("channel_id", "speaker_uid", "client_id", name="uq_group_client"),
 )
 
 channels = Table(
@@ -70,6 +78,10 @@ channels = Table(
     Column("id", identifier(64), primary_key=True),
     Column("name", identifier(255), nullable=False),
     Column("description", CONTENT, nullable=False),
+    Column("next_seq", Integer, nullable=False, server_default=text("0")),
+    Column("generation", Integer, nullable=False, server_default=text("0")),
+    Column("lease_token", identifier(64), nullable=False, server_default=text("''")),
+    Column("lease_until", identifier(40), nullable=False, server_default=text("''")),
     Column("record_agent_id", identifier(255), nullable=False, server_default=text("''")),
     Column("record_session_id", identifier(255), nullable=False, server_default=text("''")),
     Column("created_at", identifier(40), nullable=False),
@@ -80,17 +92,15 @@ channel_members = Table(
     "t_nexus_channel_members",
     Base.metadata,
     Column("channel_id", identifier(64), primary_key=True),
-    Column("employee_id", identifier(64), primary_key=True),
+    Column("employee_id", identifier(64), nullable=False, server_default=text("''")),
+    Column("member_type", identifier(16), primary_key=True),
+    Column("member_id", identifier(160), primary_key=True),
+    Column("role", identifier(16), nullable=False, server_default=text("'member'")),
+    Column("membership_active", Integer, nullable=False, server_default=text("1")),
+    Column("read_seq", Integer, nullable=False, server_default=text("0")),
+    Column("last_seen", identifier(40), nullable=False, server_default=text("''")),
     Column("agentscope_session_id", identifier(255), nullable=True),
     Column("last_delivered_message_id", identifier(64), nullable=False, server_default=text("''")),
-)
-
-channel_humans = Table(
-    "t_nexus_channel_humans",
-    Base.metadata,
-    Column("channel_id", identifier(64), primary_key=True),
-    Column("user_uid", identifier(160), primary_key=True),
-    Column("display_name", identifier(255), nullable=False, server_default=text("''")),
 )
 
 attachments = Table(
@@ -236,4 +246,66 @@ settings = Table(
     Base.metadata,
     Column("key", identifier(255), primary_key=True),
     Column("value", CONTENT, nullable=False),
+)
+
+users = Table(
+    "t_nexus_users",
+    Base.metadata,
+    Column("id", identifier(64), primary_key=True),
+    Column("username", identifier(64), nullable=False, unique=True),
+    Column("display_name", identifier(64), nullable=False),
+    Column("password_hash", identifier(255), nullable=False),
+    Column("permissions_json", CONTENT, nullable=False),
+    Column("enabled", Integer, nullable=False, server_default=text("1")),
+    Column("created_at", identifier(40), nullable=False),
+)
+auth_sessions = Table(
+    "t_nexus_auth_sessions",
+    Base.metadata,
+    Column("token_hash", identifier(64), primary_key=True),
+    Column("user_id", identifier(64), nullable=False),
+    Column("expires_at", identifier(40), nullable=False),
+)
+group_invites = Table(
+    "t_nexus_group_invites",
+    Base.metadata,
+    Column("token_hash", identifier(64), primary_key=True),
+    Column("channel_id", identifier(64), nullable=False),
+    Column("created_by", identifier(64), nullable=False),
+    Column("expires_at", identifier(40), nullable=False),
+    Column("used_by", identifier(64), nullable=False, server_default=text("''")),
+)
+discussions = Table(
+    "t_nexus_discussions",
+    Base.metadata,
+    Column("id", identifier(64), primary_key=True),
+    Column("channel_id", identifier(64), nullable=False, index=True),
+    Column("message_id", identifier(64), nullable=False, unique=True),
+    Column("initiator_id", identifier(64), nullable=False),
+    Column("generation", Integer, nullable=False),
+    Column("state", identifier(32), nullable=False),
+    Column("participants_json", CONTENT, nullable=False),
+    Column("turns", Integer, nullable=False, server_default=text("0")),
+    Column("tokens", Integer, nullable=False, server_default=text("0")),
+    Column("active_employee_id", identifier(64), nullable=False, server_default=text("''")),
+    Column("detail", CONTENT, nullable=False, server_default=text("('')")),
+    Column("created_at", identifier(40), nullable=False),
+)
+group_events = Table(
+    "t_nexus_group_events",
+    Base.metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("channel_id", identifier(64), nullable=False, index=True),
+    Column("payload_json", CONTENT, nullable=False),
+    Column("created_at", identifier(40), nullable=False),
+)
+group_audit = Table(
+    "t_nexus_group_audit",
+    Base.metadata,
+    Column("id", identifier(64), primary_key=True),
+    Column("channel_id", identifier(64), nullable=False),
+    Column("actor_id", identifier(64), nullable=False),
+    Column("action", identifier(64), nullable=False),
+    Column("target_id", identifier(160), nullable=False),
+    Column("created_at", identifier(40), nullable=False),
 )

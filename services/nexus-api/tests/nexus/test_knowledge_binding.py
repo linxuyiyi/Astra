@@ -3,10 +3,10 @@
 import json
 
 import httpx
-from fastapi.testclient import TestClient
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app
+from tests.nexus.clients import TestClient
 
 
 def employee_body(name: str, domain: str, knowledge: list[str]) -> dict:

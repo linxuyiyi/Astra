@@ -1,0 +1,12 @@
+.group-message { display:flex; align-items:flex-start; gap:10px; min-width:0; }
+.group-message[data-self=true] { flex-direction:row-reverse; }
+.group-message-avatar { width:32px; height:32px; flex-shrink:0; display:grid; place-items:center; border-radius:50%; background:var(--muted); font-size:22px; }
+.group-message-body { min-width:0; max-width:calc(100% - 42px); flex:1; }
+.group-message-label { display:flex; gap:10px; align-items:center; color:var(--muted-foreground); font-size:12px; padding:0 0 6px; }
+.group-message[data-self=true] .group-message-label { justify-content:flex-end; }
+.group-message-label time { flex-shrink:0; font-size:11px; }
+.group-message[data-self=false] [data-slot=message] { flex-direction:row; }
+.group-message[data-self=false] [data-slot=message-content] > * { align-self:flex-start; }
+.group-message[data-self=false] [data-slot=message-footer] { justify-content:flex-start; }
+.group-message-body pre { max-width:100%; overflow-x:auto; }
+.group-message-body [data-slot=bubble] { overflow-wrap:anywhere; max-width:100%; }

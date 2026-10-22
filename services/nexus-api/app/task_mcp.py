@@ -13,8 +13,10 @@ from app.config.settings import Settings, get_settings
 from app.database import SessionLocal
 from app.task_tools import (
     TaskTools,
+    nexus_actor_id,
     nexus_channel_id,
     nexus_conversation_id,
+    nexus_discussion_id,
     nexus_employee_id,
     nexus_session_id,
 )
@@ -48,7 +50,20 @@ class NexusIdentityMiddleware(BaseHTTPMiddleware):
             employee = authenticate_mcp(request.headers, get_settings())
         except PermissionError:
             return JSONResponse({"ok": False, "error": "未授权"}, status_code=401)
+        from nexus_api.group_task_auth import authorize_group_task
+
+        try:
+            actor = authorize_group_task(
+                request.headers.get("x-nexus-session-id", ""),
+                employee,
+                request.headers.get("x-nexus-channel-id", ""),
+                request.headers.get("x-nexus-discussion-id", ""),
+            )
+        except PermissionError:
+            return JSONResponse({"ok": False, "error": "群调用未授权"}, status_code=403)
         tokens = [
+            (nexus_discussion_id, nexus_discussion_id.set(request.headers.get("x-nexus-discussion-id", ""))),
+            (nexus_actor_id, nexus_actor_id.set(actor)),
             (nexus_employee_id, nexus_employee_id.set(employee)),
             (nexus_session_id, nexus_session_id.set(request.headers.get("x-nexus-session-id", ""))),
             (
@@ -77,6 +92,18 @@ def build_mcp_server() -> MCPServer:
     )
 
     async def _call(name: str, **kwargs):
+        if nexus_session_id.get():
+            from nexus_api.group_task_auth import authorize_group_task
+
+            try:
+                authorize_group_task(
+                    nexus_session_id.get(),
+                    nexus_employee_id.get(),
+                    nexus_channel_id.get(),
+                    nexus_discussion_id.get(),
+                )
+            except PermissionError:
+                return {"ok": False, "error": "群调用未授权"}
         async with SessionLocal() as session:
             return await getattr(TaskTools(session), name)(**kwargs)
 

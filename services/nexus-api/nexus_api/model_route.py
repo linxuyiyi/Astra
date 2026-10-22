@@ -51,7 +51,9 @@ def redact_secret(text: str, secret: str) -> str:
 async def fetch_routes(url: str) -> list[dict[str, Any]]:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(f"{url}/api/gateway/routes")
+            from .auth import internal_headers
+
+            response = await client.get(f"{url}/api/gateway/routes", headers=internal_headers())
     except httpx.HTTPError as exc:
         raise ModelRouteError("无法读取已启用的模型路由", 503) from exc
     if response.status_code >= 400:

@@ -33,12 +33,14 @@ def task_mcp_headers(
     *,
     conversation_id: str = "",
     channel_id: str = "",
+    discussion_id: str = "",
 ) -> dict[str, str]:
     headers = {
         "X-Nexus-Employee-Id": employee_id,
         "X-Nexus-Session-Id": session_id,
         "X-Nexus-Conversation-Id": conversation_id,
         "X-Nexus-Channel-Id": channel_id,
+        "X-Nexus-Discussion-Id": discussion_id,
     }
     key = os.environ.get("NEXUS_TASK_MCP_KEY", "").strip()
     if key:
@@ -55,6 +57,7 @@ async def attach_task_capability(
     *,
     conversation_id: str = "",
     channel_id: str = "",
+    discussion_id: str = "",
 ) -> None:
     if TASK_SKILL_ID not in (employee.get("skills") or []):
         return
@@ -72,6 +75,7 @@ async def attach_task_capability(
                 session_id,
                 conversation_id=conversation_id,
                 channel_id=channel_id,
+                discussion_id=discussion_id,
             ),
         )
     except AgentScopeError as exc:

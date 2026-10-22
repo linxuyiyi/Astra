@@ -70,7 +70,9 @@ async def proxy_agentscope(path: str, request: Request) -> StreamingResponse:
         for key, value in request.headers.items()
         if key.lower() not in _DROP_REQUEST_HEADERS
     }
-    headers.setdefault("x-user-id", _user_id())
+    from .auth import internal_headers
+    headers["x-user-id"] = _user_id()
+    headers.update(internal_headers())
 
     body = await request.body()
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=120, pool=30))

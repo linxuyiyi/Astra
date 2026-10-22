@@ -10,7 +10,7 @@ import nexus_api.db_models  # noqa: E402,F401
 from alembic import context
 from app.config.settings import get_settings
 from app.models import Base
-from app.sql_storage import assert_current_schema
+from app.sql_storage import INITIAL_REVISION, assert_current_schema
 
 config = context.config
 if config.config_file_name:
@@ -35,9 +35,9 @@ def do_run_migrations(connection) -> None:
     tables = set(inspect(connection).get_table_names())
     if "alembic_version" in tables:
         versions = connection.execute(text("SELECT version_num FROM alembic_version")).scalars().all()
-        if versions and versions != ["0001_init"]:
+        if versions and versions[0] not in {"0001_init", INITIAL_REVISION}:
             raise RuntimeError("不支持历史数据库升级；请使用新的空数据库执行初始化")
-        if versions == ["0001_init"]:
+        if versions == [INITIAL_REVISION]:
             assert_current_schema(connection)
         if not versions and tables - {"alembic_version"}:
             raise RuntimeError("数据库已有未标记的表；请使用新的空数据库执行初始化")

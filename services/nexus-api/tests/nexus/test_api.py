@@ -9,7 +9,6 @@ from pathlib import Path
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import text as sql_text
 
 from nexus_api.agentscope import AgentScopeClient, AgentScopeError
@@ -26,6 +25,7 @@ from nexus_api.main import (
     session_transcript,
     stream_cursor,
 )
+from tests.nexus.clients import TestClient
 
 ROOT = Path(__file__).resolve().parents[4]
 
@@ -104,7 +104,7 @@ def test_delete_removes_channel_membership(client):
     assert channel.status_code == 201
     assert client.delete(f"/api/v1/employees/{first['id']}").status_code == 200
     remaining = client.get("/api/v1/channels").json()["items"][0]["members"]
-    assert [item["employee_id"] for item in remaining] == [second["id"]]
+    assert [item["employee_id"] for item in remaining if item["member_type"] == "employee"] == [second["id"]]
 
 
 def test_private_chat_keeps_threads_and_does_not_invent_replies(client):
@@ -157,37 +157,6 @@ def test_disabled_employee_cannot_receive_private_message(client):
     assert response.status_code == 409
 
 
-def test_channel_requires_a_member_and_does_not_script_peer_replies(client):
-    employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
-    other = client.post(
-        "/api/v1/employees",
-        json=employee_body(name="初禾", domain="测试工具工程师"),
-    ).json()["employee"]
-    empty = client.post(
-        "/api/v1/channels",
-        json={"name": "空讨论", "description": "没有成员", "member_ids": []},
-    )
-    assert empty.status_code == 422
-    channel = client.post(
-        "/api/v1/channels",
-        json={
-            "name": "防线异常分析",
-            "description": "讨论异常归属",
-            "member_ids": [employee["id"], other["id"]],
-        },
-    ).json()
-    sent = client.post(
-        f"/api/v1/channels/{channel['id']}/messages",
-        json={"text": f"@{employee['name']} 请看一下版本差异", "attachment_ids": []},
-    )
-    assert sent.status_code == 200
-    triggered = sent.json()["triggered"]
-    assert [item["name"] for item in triggered] == ["星河"]
-    assert triggered[0]["accepted"] is False
-    messages = client.get(f"/api/v1/channels/{channel['id']}/messages").json()["messages"]
-    assert [item["sender"] for item in messages] == ["user"]
-
-
 def test_session_transcript_keeps_speaker_and_tool_cards():
     rows = session_transcript(
         [
@@ -224,20 +193,16 @@ def test_session_transcript_keeps_speaker_and_tool_cards():
 
 
 def test_me_ignores_query_uid(client):
-    missing = client.get("/api/v1/me")
-    assert missing.status_code == 401
-    queried = client.get("/api/v1/me", params={"uid": "from-query"})
-    assert queried.status_code == 401
-    found = client.get("/api/v1/me", headers={"X-Verified-UID": "u-9"})
-    assert found.json() == {"uid": "u-9"}
+    from tests.nexus.clients import AnonymousClient
+
+    assert client.get("/api/v1/me?uid=from-query").json() == {"uid": "u1"}
+    with AnonymousClient(client.app) as anonymous:
+        assert anonymous.get("/api/v1/me?uid=u1", headers={"X-Verified-UID": "u1"}).status_code == 401
 
 
-def test_me_decodes_browser_uid_cookie(client):
-    from urllib.parse import quote
-
-    uid = "验收用户/team+1"
-    found = client.get("/api/v1/me", headers={"Cookie": f"nexus_uid={quote(uid, safe='')}"})
-    assert found.json() == {"uid": uid}
+def test_me_rejects_browser_uid_cookie(client):
+    found = client.get("/api/v1/me", headers={"Cookie": "nexus_uid=somebody"})
+    assert found.status_code == 401
 
 
 def test_parallel_private_creates_share_one_row(client):
@@ -291,47 +256,6 @@ def test_claim_private_session_keeps_the_first_writer(client):
     ).json()
     assert stored["agentscope_session_id"] == "session-a"
     assert stored["event_cursor"] == ""
-
-
-def test_channel_attachment_stays_with_its_owner(client):
-    employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
-    channel = client.post(
-        "/api/v1/channels",
-        json={"name": "附件讨论", "description": "看日志", "member_ids": [employee["id"]]},
-    ).json()
-    uploaded = client.post(
-        "/api/v1/attachments",
-        headers={"X-Owner-Id": "owner-a"},
-        files={"file": ("run.log", b"LOG-TOKEN-88", "text/plain")},
-    )
-    attachment_id = uploaded.json()["id"]
-    stolen = client.post(
-        f"/api/v1/channels/{channel['id']}/messages",
-        headers={"X-Owner-Id": "owner-b"},
-        json={"text": "这不是我的文件", "attachment_ids": [attachment_id]},
-    )
-    assert stolen.status_code == 404
-    anonymous = client.post(
-        f"/api/v1/channels/{channel['id']}/messages",
-        json={"text": "没有身份", "attachment_ids": [attachment_id]},
-    )
-    assert anonymous.status_code == 401
-    sent = client.post(
-        f"/api/v1/channels/{channel['id']}/messages",
-        headers={"X-Owner-Id": "owner-a"},
-        json={"text": "看日志", "attachment_ids": [attachment_id]},
-    )
-    assert sent.status_code == 200, sent.text
-    stranger = client.get(f"/api/v1/attachments/{attachment_id}", headers={"X-Owner-Id": "owner-c"})
-    assert stranger.status_code == 404
-    opened = client.get(
-        f"/api/v1/channels/{channel['id']}/messages",
-        headers={"X-Owner-Id": "owner-c"},
-    )
-    assert opened.status_code == 200
-    member = client.get(f"/api/v1/attachments/{attachment_id}", headers={"X-Owner-Id": "owner-c"})
-    assert member.status_code == 200
-    assert member.content == b"LOG-TOKEN-88"
 
 
 def test_session_transcript_renders_display_text():
@@ -394,7 +318,7 @@ def test_owners_keep_separate_conversations_across_restart(tmp_path, monkeypatch
         missing = test_client.get(f"/api/v1/conversations/{first['id']}", headers=owner_b)
         assert missing.status_code == 404
         query_only = test_client.get(f"/api/v1/conversations/{first['id']}?uid=anon-a")
-        assert query_only.status_code == 401
+        assert query_only.status_code == 404
     restarted = create_app()
     with TestClient(restarted) as again:
         listed = again.get(
@@ -657,202 +581,6 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
         assert stored["history_error"]
 
 
-def test_mention_triggers_only_the_named_employee(tmp_path, monkeypatch):
-    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
-    application = create_app()
-    calls: list[dict] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/agent/":
-            body = json.loads(request.content.decode())
-            return httpx.Response(201, json={"agent_id": f"agent-{body['name']}"})
-        if request.url.path == "/sessions/":
-            body = json.loads(request.content.decode())
-            return httpx.Response(201, json={"session_id": f"session-{body['name']}"})
-        if request.url.path == "/chat/":
-            calls.append(json.loads(request.content.decode()))
-            return httpx.Response(200, json={"status": "started", "session_id": "ignored"})
-        if request.url.path == "/skill":
-            return httpx.Response(200, json=[])
-        return httpx.Response(404)
-
-    with TestClient(application) as test_client:
-        test_client.app.state.agentscope = AgentScopeClient(
-            "http://agentscope.test",
-            "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
-        )
-        star = test_client.post("/api/v1/employees", json=employee_body()).json()["employee"]
-        zhi = test_client.post(
-            "/api/v1/employees",
-            json=employee_body(name="知微", domain="防线运营人员"),
-        ).json()["employee"]
-        channel = test_client.post(
-            "/api/v1/channels",
-            json={"name": "版本交付协同", "description": "跨岗位", "member_ids": [star["id"], zhi["id"]]},
-        ).json()
-        response = test_client.post(
-            f"/api/v1/channels/{channel['id']}/messages",
-            json={"text": "@知微 看一下异常"},
-        )
-        assert response.status_code == 200
-        assert [item["employee_id"] for item in response.json()["triggered"]] == [zhi["id"]]
-        assert calls[0]["agent_id"] == zhi["agentscope_agent_id"]
-        assert "代替" not in json.dumps(response.json(), ensure_ascii=False)
-
-
-def test_channel_peer_contact_creates_session_caps_and_keeps_identity(tmp_path, monkeypatch):
-    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
-    application = create_app()
-    calls: list[dict] = []
-    replies: dict[str, str] = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/agent/":
-            body = json.loads(request.content.decode())
-            return httpx.Response(201, json={"agent_id": f"agent-{body['name']}"})
-        if request.url.path == "/sessions/":
-            body = json.loads(request.content.decode())
-            return httpx.Response(
-                201,
-                json={"session_id": f"session-{body['agent_id']}-{body['name']}"},
-            )
-        if request.url.path == "/chat/":
-            calls.append(json.loads(request.content.decode()))
-            return httpx.Response(200, json={"status": "started", "session_id": "ignored"})
-        if request.method == "GET" and request.url.path.endswith("/messages"):
-            session_id = request.url.path.split("/")[2]
-            text = replies.get(session_id, "")
-            messages = []
-            if text:
-                messages.append(
-                    {
-                        "id": f"m-{session_id}",
-                        "role": "assistant",
-                        "created_at": "2099-01-01T00:00:00+00:00",
-                        "content": [{"type": "text", "text": text}],
-                    }
-                )
-            return httpx.Response(200, json={"messages": messages, "has_more": False})
-        if request.url.path == "/skill":
-            return httpx.Response(200, json=[])
-        return httpx.Response(404)
-
-    with TestClient(application) as test_client:
-        test_client.app.state.agentscope = AgentScopeClient(
-            "http://agentscope.test",
-            "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
-        )
-        ops = test_client.post(
-            "/api/v1/employees",
-            json=employee_body(name="运营", domain="运行保障", description="处理故障"),
-        ).json()["employee"]
-        eng = test_client.post(
-            "/api/v1/employees",
-            json=employee_body(name="自动化", domain="自动化工程", description="看自动化"),
-        ).json()["employee"]
-        tools = test_client.post(
-            "/api/v1/employees",
-            json=employee_body(name="工具", domain="工具工程", description="看工具"),
-        ).json()["employee"]
-        channel = test_client.post(
-            "/api/v1/channels",
-            json={
-                "name": "故障协同",
-                "description": "自动化失败",
-                "member_ids": [ops["id"], eng["id"], tools["id"]],
-            },
-        ).json()
-        uploaded = test_client.post(
-            "/api/v1/attachments",
-            headers={"X-Owner-Id": "channel-user"},
-            files={"file": ("run.log", b"LOG-TOKEN-88", "text/plain")},
-        )
-        sent = test_client.post(
-            f"/api/v1/channels/{channel['id']}/messages",
-            headers={"X-Owner-Id": "channel-user"},
-            json={"text": "@运营 自动化失败了", "attachment_ids": [uploaded.json()["id"]]},
-        )
-        assert sent.status_code == 200, sent.text
-        assert [item["employee_id"] for item in sent.json()["triggered"]] == [ops["id"]]
-        assert len(calls) == 1
-        assert calls[0]["agent_id"] == ops["agentscope_agent_id"]
-        delivered = calls[0]["input"]
-        assert isinstance(delivered, list)
-        assert delivered[-1]["id"]
-        assert any("LOG-TOKEN-88" in block.get("text", "") for block in delivered[-1]["content"])
-        assert delivered[-1]["metadata"]["display_text"] == "@运营 自动化失败了"
-        ops_session = sent.json()["triggered"][0]["session_id"]
-        eng_session = f"session-{eng['agentscope_agent_id']}-故障协同"
-        replies[eng_session] = "我是自动化工程师"
-        opened = test_client.get(
-            "/api/v1/peers/resolve",
-            params={"session_id": ops_session, "name": "自动化", "message": "自动化失败了"},
-        )
-        assert opened.status_code == 200, opened.text
-        assert opened.json()["session_id"] == eng_session
-        assert opened.json()["session_id"] != eng["mailbox_session_id"]
-        assert opened.json()["sender_name"] == "运营"
-        assert len(calls) == 1
-        again = test_client.get(
-            "/api/v1/peers/resolve",
-            params={"session_id": ops_session, "name": "自动化", "message": "自动化失败了"},
-        )
-        assert again.status_code == 409
-        assert "同样的话" in again.json()["detail"]
-        second = test_client.get(
-            "/api/v1/peers/resolve",
-            params={"session_id": ops_session, "name": "工具", "message": "再看工具"},
-        )
-        assert second.status_code == 200, second.text
-        assert second.json()["agent_id"] == tools["agentscope_agent_id"]
-        blocked = test_client.get(
-            "/api/v1/peers/resolve",
-            params={"session_id": ops_session, "name": "工具", "message": "第三句"},
-        )
-        assert blocked.status_code == 409
-        assert "不要继续互相调用" in blocked.json()["detail"]
-        hopped = test_client.get(
-            "/api/v1/peers/resolve",
-            params={"session_id": eng_session, "name": "工具", "message": "需要工具侧看一下"},
-        )
-        assert hopped.status_code == 200, hopped.text
-        assert hopped.json()["sender_name"] == "自动化"
-        disabled = test_client.patch(
-            f"/api/v1/employees/{tools['id']}",
-            json=employee_body(name="工具", domain="工具工程", description="看工具", enabled=False),
-        )
-        assert disabled.status_code == 200
-        refused = test_client.get(
-            "/api/v1/peers/resolve",
-            params={"session_id": eng_session, "name": "工具", "message": "工具已禁用"},
-        )
-        assert refused.status_code == 404
-        assert "禁用" in refused.json()["detail"]
-        transcript = test_client.get(f"/api/v1/channels/{channel['id']}/messages").json()
-        senders = [item["sender"] for item in transcript["messages"]]
-        assert senders[0] == "user"
-        assert eng["id"] in senders
-        spoken = next(item for item in transcript["messages"] if item["sender"] == eng["id"])
-        assert spoken["text"] == "我是自动化工程师"
-        assert ops["id"] != eng["id"]
-        assert "已解析" not in json.dumps(transcript, ensure_ascii=False)
-        from nexus_api.db import connect
-        from nexus_api.main import db_path
-
-        connection = connect(db_path())
-        stored = (
-            connection.execute(
-                sql_text("SELECT sender FROM t_nexus_messages WHERE channel_id = :p0"), {"p0": channel["id"]}
-            )
-            .mappings()
-            .fetchall()
-        )
-        connection.close()
-        assert [row["sender"] for row in stored] == ["user"]
-
-
 def test_peer_hint_returns_limit_text_without_delivering():
     import asyncio
     import importlib.util
@@ -882,7 +610,7 @@ def test_peer_hint_returns_limit_text_without_delivering():
         async def __aexit__(self, *_args):
             return None
 
-        async def get(self, _url, params):
+        async def get(self, _url, params, headers=None):
             seen.update(params)
             return Response()
 

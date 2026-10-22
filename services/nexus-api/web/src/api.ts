@@ -14,58 +14,26 @@ import type {
   SkillVersion,
 } from "./types";
 
-const OWNER_KEY = "nexus_owner_id";
-
 let resolvedUid = "";
-let proxyVerified = false;
-
-export function storedOwnerId(): string {
-  const value = localStorage.getItem(OWNER_KEY) ?? "";
-  return value.startsWith("browser_") ? "" : value;
-}
-
-export function currentUid(): string {
-  return resolvedUid || storedOwnerId();
-}
-
-function rememberCookie(uid: string) {
-  document.cookie = `nexus_uid=${encodeURIComponent(uid)}; Path=/; SameSite=Lax`;
-}
-
-export function saveOwnerId(uid: string) {
-  const value = uid.trim();
-  if (!value) return;
-  localStorage.setItem(OWNER_KEY, value);
-  resolvedUid = value;
-  proxyVerified = false;
-  rememberCookie(value);
-}
-
+export function currentUid(): string { return resolvedUid; }
+export function storedOwnerId(): string { return resolvedUid; }
 export async function resolveOwner(): Promise<string> {
-  const response = await fetch("/api/v1/me", { credentials: "omit" });
-  if (response.ok) {
-    const payload = (await response.json()) as { uid?: string };
-    if (payload.uid) {
-      resolvedUid = payload.uid;
-      proxyVerified = true;
-      rememberCookie(payload.uid);
-      return payload.uid;
-    }
-  }
-  const stored = storedOwnerId();
-  if (!stored) throw new Error("需要输入 UID");
-  resolvedUid = stored;
-  proxyVerified = false;
-  rememberCookie(stored);
-  return stored;
+  const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
+  if (!response.ok) throw new Error("请先登录");
+  const user = await response.json() as { uid: string };
+  resolvedUid = user.uid;
+  return resolvedUid;
 }
-
-function headers(json = true): HeadersInit {
-  const uid = resolvedUid || storedOwnerId();
-  return {
-    ...(json ? { "Content-Type": "application/json" } : {}),
-    ...(!proxyVerified && uid ? { "X-Owner-Id": uid } : {}),
-  };
+export async function signIn(mode: "login" | "register", username: string, password: string, displayName: string) {
+  const response = await fetch(`/api/v1/auth/${mode}`, { method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password, display_name: displayName }) });
+  const user = await read<{ uid: string; display_name: string }>(response);
+  resolvedUid = user.uid;
+  return user;
+}
+function headers(json = true): HeadersInit { return json ? { "Content-Type": "application/json" } : {}; }
+export async function groupAction<T>(path: string, method = "POST", body?: unknown): Promise<T> {
+  return read(await fetch(`/api/v1/channels/${path}`, { method, headers: headers(), ...(body ? { body: JSON.stringify(body) } : {}) }));
 }
 
 async function read<T>(response: Response): Promise<T> {

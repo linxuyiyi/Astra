@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.models import TaskWakeOutbox
+from nexus_api.auth import internal_headers
 
 
 class WakeRetry(Exception):
@@ -42,7 +43,10 @@ class HttpWakeSender:
             try:
                 response = await client.post(
                     f"{settings.agentscope_base_url.rstrip('/')}/nexus/task-hint",
-                    headers={"X-Nexus-Event-Id": str(row.event_id)},
+                    headers={
+                        "X-Nexus-Event-Id": str(row.event_id),
+                        **internal_headers(),
+                    },
                     json={
                         "session_id": body["session_id"],
                         "agent_id": body["agent_id"],

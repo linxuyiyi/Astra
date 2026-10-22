@@ -147,6 +147,7 @@ speech_input: route_id=<route id>
 - 模型配置保存后网关约 10 秒（配置轮询周期）生效；Nexus 的语音路由选择对禁用/类型变化立即生效。
 - ASR 路由不会进入数字员工/Worker 的 LLM 模型下拉列表。
 - 浏览器只调用 Nexus 的 `/api/asr/transcribe`，不存在直连 ASR 的回退。
+- 聊天输入框支持 **Push-to-Talk**：默认 `Option + K`（Windows/Linux `Alt + K`）按住说话，松开任一键识别，Esc 取消；点击麦克风旁的快捷键提示可修改并持久化。快捷键只在聊天页面生效，不使用系统级全局绑定。
 
 ## 错误与隐私
 
@@ -198,6 +199,9 @@ NEXUS_GATEWAY_API_KEY=... .venv/bin/python scripts/benchmark.py \
 # 浏览器录音 → Nexus → 网关 → ASR → AgentScope 完整 E2E
 NEXUS_EMPLOYEE_ID=emp_xxx NEXUS_AUDIO=/tmp/case1-48k.wav \
   node scripts/e2e-voice.mjs
+
+# Push-to-Talk 键盘、IME、权限、改键与发送验收
+NEXUS_EMPLOYEE_ID=emp_xxx NEXUS_CHANNEL_ID=ch_xxx node scripts/e2e-ptt.mjs
 ```
 
 完整交互脚本见 [`scripts/interaction-tests.mjs`](scripts/interaction-tests.mjs)。脚本默认使用仓库 `frontend/node_modules/playwright`，也可用 `PLAYWRIGHT_PATH` 覆盖。

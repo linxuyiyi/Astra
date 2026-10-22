@@ -65,6 +65,16 @@ idle ──点击──> recording ──点击/60 s──> transcribing ──�
 - 麦克风权限被拒绝/没有设备/浏览器不支持分别给出明确提示；权限拒绝时不上传。
 - 需要安全上下文：`https://` 或 `http://localhost` / `http://127.0.0.1`。通过普通 HTTP 访问远程 IP 时浏览器不会提供 `getUserMedia`。
 
+### Push-to-Talk
+
+麦克风按钮旁显示当前快捷键（默认 `⌥ K 按住说话`），点击可修改：
+
+- 按住完整组合键开始录音，松开任意必需键结束；Esc 取消且不上传。
+- 只接受含 Alt/Option、Ctrl 或 Command 的组合；Space/Enter/Esc/Tab 和系统保留组合会被拒绝。
+- 偏好保存在 iframe 源下的 `localStorage`（`nexus:asr:shortcut:v1`），保存后立即生效、刷新保持；没有系统级全局快捷键。
+- 快捷键和麦克风按钮共用同一个 recorder；转写仍插入光标、不自动发送。
+- 录音时绑定 conversation/channel；切换会话不会把结果写入新会话。
+
 ## 3. 错误码
 
 ASR 4xx 的标准化 `code` 会由 Nexus 转发给前端，前端优先使用本地化文案：
@@ -107,6 +117,9 @@ MODE=group NEXUS_CHANNEL_ID=ch_xxx NEXUS_AUDIO=/tmp/case3-48k.wav \
 
 # 快速点击、识别中切会话、权限拒绝、ASR 宕机与重试
 node scripts/interaction-tests.mjs
+
+# Push-to-Talk 全量浏览器验收（组合键、IME、失焦、权限、改键、发送）
+NEXUS_EMPLOYEE_ID=emp_xxx NEXUS_CHANNEL_ID=ch_xxx node scripts/e2e-ptt.mjs
 ```
 
-2026-10-23 在本机实测：私聊/群聊语音识别、手动编辑发送、AgentScope 回复均成功；识别文字从停止录音到回填约 0.5–0.8 s，发送到界面显示回复约 2.2 s。详细记录见 [`docs/reviews/nexus-v1.5.0-asr-20261023.md`](../../../docs/reviews/nexus-v1.5.0-asr-20261023.md)。
+2026-10-23 在本机实测：私聊/群聊语音识别、手动编辑发送、AgentScope 回复均成功；识别文字从停止录音到回填约 0.5–0.8 s，发送到界面显示回复约 2.2 s。详细记录见 [`docs/reviews/nexus-v1.5.0-asr-20261023.md`](../../../docs/reviews/nexus-v1.5.0-asr-20261023.md)。Push-to-Talk 的 31 项浏览器验收见 [`docs/reviews/nexus-v1.4.8-ptt-20261023.md`](../../../docs/reviews/nexus-v1.4.8-ptt-20261023.md)。

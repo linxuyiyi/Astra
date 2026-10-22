@@ -36,12 +36,20 @@ import {
 	AttachmentTitle,
 } from '@/components/ui/attachment.tsx';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { AsrShortcutSettings } from '@/components/chat/AsrShortcutSettings.tsx';
+import { useAsrHotkey } from '@/hooks/useAsrHotkey.ts';
 import { useAsrRecorder } from '@/hooks/useAsrRecorder.ts';
 import type { ReplyPhase } from '@/hooks/useMessages';
 import { useTranslation } from '@/i18n/useI18n.ts';
 import type { RealtimeConnectionState } from '@/lib/browserWebRTCTransport';
 import { cn } from '@/lib/utils';
 import { draftKey, readDraft, writeDraft } from '@/nexus/drafts';
+import {
+	formatShortcut,
+	loadAsrShortcut,
+	saveAsrShortcut,
+	type AsrShortcut,
+} from '@/lib/asrShortcut.ts';
 
 /**
  * Represents a file that has been selected and processed (or is being processed).
@@ -181,6 +189,9 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 		const [value, setValue] = useState(draft.text);
 		const [files, setFiles] = useState<ProcessedFile[]>(draft.files);
 		const [isFocused, setIsFocused] = useState(false);
+		const [shortcut, setShortcut] = useState<AsrShortcut>(() => loadAsrShortcut());
+		const [shortcutOpen, setShortcutOpen] = useState(false);
+		const sessionKey = draftKey(window.location.search) || 'default';
 		const textareaRef = useRef<HTMLTextAreaElement>(null);
 		const fileInputRef = useRef<HTMLInputElement>(null);
 		const valueRef = useRef(value);
@@ -234,7 +245,27 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 		const asr = useAsrRecorder({
 			enabled: asrEnabled && !disabled,
 			onText: insertText,
+			sessionKey,
 		});
+
+		const hotkeyEnabled = asrEnabled && !disabled && !shortcutOpen;
+		const canStartHotkey = asr.state === 'idle' || asr.state === 'error';
+		const startHotkey = useCallback(() => asr.start('hotkey'), [asr.start]);
+		const stopHotkey = useCallback(() => asr.stop(), [asr.stop]);
+		const cancelHotkey = useCallback(() => asr.cancel(), [asr.cancel]);
+		useAsrHotkey({
+			shortcut,
+			enabled: hotkeyEnabled,
+			canStart: canStartHotkey,
+			recording: asr.state === 'recording',
+			onStart: startHotkey,
+			onStop: stopHotkey,
+			onCancel: cancelHotkey,
+		});
+		const saveShortcut = useCallback((next: AsrShortcut) => {
+			setShortcut(next);
+			saveAsrShortcut(next);
+		}, []);
 
 		useImperativeHandle(ref, () => ({
 			focus: () => textareaRef.current?.focus(),
@@ -488,13 +519,33 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 						</AttachmentGroup>
 					)}
 
-					{asrEnabled && (asr.state !== 'idle' || asr.error) && (
-						<div className="flex items-center gap-2 px-3 pt-1 text-xs text-muted-foreground">
-							{asr.state === 'recording' && (
-								<span className="flex items-center gap-1 text-red-500">
-									<span className="size-1.5 rounded-full bg-red-500" />
-									{t('asr.recording', { time: formatClock(asr.seconds) })}
+					{asrEnabled && (asr.state !== 'idle' || asr.error || asr.requesting) && (
+						<div
+							className="flex flex-wrap items-center gap-2 px-3 pt-1 text-xs text-muted-foreground"
+							data-testid="asr-status"
+						>
+							{asr.requesting && (
+								<span className="flex items-center gap-1">
+									<Loader2 className="size-3 animate-spin" />
+									{t('asr.pttRequesting')}
 								</span>
+							)}
+							{asr.state === 'recording' && (
+								<>
+									<span className="flex items-center gap-1 text-red-500">
+										<span className="size-1.5 rounded-full bg-red-500" />
+										{asr.source === 'hotkey'
+											? t('asr.pttRecording', { time: formatClock(asr.seconds) })
+											: t('asr.recording', { time: formatClock(asr.seconds) })}
+									</span>
+									<button
+										type="button"
+										className="underline underline-offset-2"
+										onClick={asr.cancel}
+									>
+										{t('asr.pttCancel')}
+									</button>
+								</>
 							)}
 							{asr.state === 'transcribing' && (
 								<span className="flex items-center gap-1">
@@ -546,6 +597,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							{/* Stands in for the button cluster below — keep the count, the
 							    gap and the ``size-9`` footprint in step with it. */}
 							<div className="flex shrink-0 gap-2">
+								{asrEnabled && <div className="hidden h-9 w-[96px] shrink-0 sm:block" />}
 								{asrEnabled && <div className="size-9" />}
 								<div className="size-9" />
 								<div className="size-9" />
@@ -612,6 +664,31 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							className="flex shrink-0 items-center gap-2"
 							style={{ height: `${COLLAPSED_HEIGHT_PX}px` }}
 						>
+							{/* Push-to-talk hint: the same recorder, a second entry point. */}
+							{asrEnabled && (
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<button
+											type="button"
+											data-testid="asr-shortcut-hint"
+											aria-label={`${t('asr.pttSettings')}: ${formatShortcut(shortcut)}`}
+											onClick={() => {
+												if (asr.state === 'recording' || asr.requesting) return;
+												setShortcutOpen(true);
+											}}
+											className={cn(
+												'mr-1 hidden h-9 shrink-0 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground transition-colors hover:bg-muted sm:inline-flex',
+												asr.state === 'recording' && 'text-red-500',
+											)}
+										>
+											<Kbd className="h-5 px-1.5">{formatShortcut(shortcut)}</Kbd>
+											<span className="whitespace-nowrap">{t('asr.pttHold')}</span>
+										</button>
+									</TooltipTrigger>
+									<TooltipContent>{t('asr.pttSettingsHint')}</TooltipContent>
+								</Tooltip>
+							)}
+
 							{/* Gateway ASR (server-side transcription) */}
 							{asrEnabled && (
 								<Tooltip>
@@ -709,6 +786,12 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 						</div>
 					</div>
 				</div>
+				<AsrShortcutSettings
+					open={shortcutOpen}
+					shortcut={shortcut}
+					onClose={() => setShortcutOpen(false)}
+					onSave={saveShortcut}
+				/>
 			</div>
 		);
 	},

@@ -10,10 +10,10 @@ from sqlalchemy.engine import URL, Connection, Engine, make_url
 
 from app.config.settings import get_settings
 
-INITIAL_REVISION = "0001_init"
+CURRENT_REVISION = "0002_gateway_speech"
 VERSION = Table("alembic_version", MetaData(), Column("version_num", String(32), primary_key=True))
 NEW_DATABASE_MESSAGE = (
-    "数据库不是当前全新部署 schema；请使用新的空数据库执行 alembic upgrade head，不支持旧库升级"
+    "数据库 schema 未就绪；请执行 alembic upgrade head。早期历史库请使用新的空数据库，不支持导入"
 )
 
 
@@ -75,7 +75,7 @@ def assert_current_schema(connection: Connection, *, check_columns: bool = True)
     if "alembic_version" not in tables:
         raise RuntimeError(NEW_DATABASE_MESSAGE)
     versions = connection.execute(select(VERSION.c.version_num)).scalars().all()
-    if versions != [INITIAL_REVISION]:
+    if versions != [CURRENT_REVISION]:
         raise RuntimeError(NEW_DATABASE_MESSAGE)
     for table in metadata().tables.values():
         if table.name not in tables:
@@ -101,4 +101,4 @@ def create_test_schema(url: str | URL | Path) -> None:
             return
         metadata().create_all(connection)
         VERSION.create(connection)
-        connection.execute(VERSION.insert().values(version_num=INITIAL_REVISION))
+        connection.execute(VERSION.insert().values(version_num=CURRENT_REVISION))

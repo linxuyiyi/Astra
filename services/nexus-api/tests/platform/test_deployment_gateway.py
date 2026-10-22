@@ -26,6 +26,9 @@ def installer(tmp_path, body, *, extra=None):
     env = {
         "PATH": os.environ["PATH"],
         "HOME": str(tmp_path),
+        # Explicit env wins over the checkout's local ops/env/.env; this test
+        # verifies installer persistence, not this developer's run mode.
+        "ASTRA_EXECUTOR_TYPE": "worker",
         "LC_ALL": "C",
         "NEXUS_ROOT": str(tmp_path),
         "NEXUS_STATE_DIR": str(tmp_path),

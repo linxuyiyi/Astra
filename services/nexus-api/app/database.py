@@ -86,7 +86,7 @@ async def worker_session() -> AsyncIterator[AsyncSession]:
 
 
 async def init_database() -> None:
-    from app.sql_storage import INITIAL_REVISION, VERSION, assert_current_schema, metadata
+    from app.sql_storage import CURRENT_REVISION, VERSION, assert_current_schema, metadata
 
     def create_unversioned_schema(connection) -> None:
         if inspect(connection).get_table_names():
@@ -94,7 +94,7 @@ async def init_database() -> None:
             return
         metadata().create_all(connection)
         VERSION.create(connection)
-        connection.execute(VERSION.insert().values(version_num=INITIAL_REVISION))
+        connection.execute(VERSION.insert().values(version_num=CURRENT_REVISION))
 
     async with engine.begin() as connection:
         await connection.run_sync(create_unversioned_schema)

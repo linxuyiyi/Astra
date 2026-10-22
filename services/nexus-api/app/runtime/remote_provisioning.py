@@ -396,7 +396,7 @@ class RemoteProvisioner:
             models = list(
                 await db.scalars(
                     select(GatewayRoute.model)
-                    .where(GatewayRoute.enabled.is_(True))
+                    .where(GatewayRoute.enabled.is_(True), GatewayRoute.model_type == "CHAT")
                     .order_by(GatewayRoute.model)
                 )
             )

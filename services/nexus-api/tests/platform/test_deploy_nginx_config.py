@@ -41,12 +41,17 @@ def test_control_plane_and_docs_use_unified_service():
         assert upstreams[location].startswith("http://127.0.0.1:18120"), location
 
 
-def test_voice_transcription_is_proxied_to_the_asr_service():
+def test_voice_transcription_goes_through_the_unified_service():
     text = CONFIG.read_text(encoding="utf-8")
     upstreams = _upstreams(text)
-    assert upstreams["= /api/asr/transcribe"].startswith("http://127.0.0.1:19899")
-    assert upstreams["= /api/asr/models"].startswith("http://127.0.0.1:19899")
-    assert "client_max_body_size 12m;" in text
+    # 浏览器只访问统一服务；ASR 由服务端经网关调用，不配置直连 location。
+    assert "= /api/asr/transcribe" not in upstreams
+    assert "= /api/asr/models" not in upstreams
+    assert all("19899" not in target for target in upstreams.values())
+    assert upstreams["/api/"].startswith("http://127.0.0.1:18120")
+    assert upstreams["/v1/"].startswith("http://127.0.0.1:18110")
+    assert "client_max_body_size 13m;" in text
+    assert "client_max_body_size 20m;" in text
 
 
 def test_retired_port_and_infrastructure_upstreams_stay_separate():

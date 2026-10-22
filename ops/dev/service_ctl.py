@@ -74,11 +74,9 @@ def agent_command() -> list[str]:
 
 
 def task_mcp_command() -> list[str]:
+    # 用 -m/-c 启动，确保 cwd（services/nexus-api）进入 sys.path；安装的
+    # console script 只把脚本目录放进 sys.path，直接执行会找不到 app 包。
     scripts = "Scripts" if os.name == "nt" else "bin"
-    binary_name = "astra-task-mcp.exe" if os.name == "nt" else "astra-task-mcp"
-    binary = ROOT / "services" / "nexus-api" / ".venv" / scripts / binary_name
-    if binary.is_file():
-        return [str(binary)]
     py_name = "python.exe" if os.name == "nt" else "python"
     py = ROOT / "services" / "nexus-api" / ".venv" / scripts / py_name
     return [_python(py), "-c", "from app.task_mcp import main; main()"]
@@ -97,6 +95,23 @@ def nexus_api_command() -> list[str]:
         "127.0.0.1",
         "--port",
         os.environ.get("NEXUS_API_PORT", "18120"),
+    ]
+
+
+def gateway_command() -> list[str]:
+    scripts = "Scripts" if os.name == "nt" else "bin"
+    binary_name = "uvicorn.exe" if os.name == "nt" else "uvicorn"
+    uvicorn = ROOT / "services" / "nexus-api" / ".venv" / scripts / binary_name
+    return [
+        _python(uvicorn),
+        "app.gateway.server:app",
+        "--app-dir",
+        str(ROOT / "services" / "nexus-api"),
+        "--host",
+        "127.0.0.1",
+        "--port",
+        os.environ.get("ASTRA_SERVICE_GATEWAY_PORT", "18110"),
+        "--no-access-log",
     ]
 
 
@@ -121,6 +136,15 @@ SERVICES: dict[str, dict[str, Any]] = {
         "command": task_mcp_command,
         "port": lambda: _env_port("NEXUS_TASK_MCP_PORT", 18202),
         "health": lambda port: f"http://127.0.0.1:{port}/health",
+        "headers": lambda: {},
+    },
+    "gateway": {
+        "cwd": ROOT / "services" / "nexus-api",
+        "log_env": "NEXUS_GATEWAY_LOG",
+        "default_log": "/tmp/nexus-gateway.log",
+        "command": gateway_command,
+        "port": lambda: _env_port("ASTRA_SERVICE_GATEWAY_PORT", 18110),
+        "health": lambda port: f"http://127.0.0.1:{port}/healthz",
         "headers": lambda: {},
     },
     "nexus-api": {

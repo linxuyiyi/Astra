@@ -54,7 +54,7 @@ def plane(upstream, *, key=None):
             node_dict(NODE_A, host="embed.test", cipher=cipher, models=("vendor-embed",)),
         ],
     )
-    config.routes[MODEL] = replace(config.routes[MODEL], target_model="vendor-embed")
+    config.routes[MODEL] = replace(config.routes[MODEL], target_model="vendor-embed", model_type="EMBEDDING")
     return build_plane(upstream, config=config, cipher=cipher)
 
 

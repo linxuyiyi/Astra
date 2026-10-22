@@ -127,6 +127,7 @@ class RouteConfig:
     pool_id: str
     enabled: bool
     target_model: str | None = None
+    model_type: str = "CHAT"
 
     @classmethod
     def from_snapshot(cls, item: Mapping[str, Any]) -> RouteConfig:
@@ -136,6 +137,7 @@ class RouteConfig:
             pool_id=_text(item.get("pool_id")),
             enabled=bool(item.get("enabled", True)),
             target_model=item.get("target_model") or None,
+            model_type=_text(item.get("model_type"), "CHAT"),
         )
 
 

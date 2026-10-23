@@ -1,0 +1,58 @@
+[
+  {
+    "task_id": "T-20261023-36B2C6",
+    "label": "A",
+    "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+    "file": "decision-A.txt",
+    "expected": "ALPHA",
+    "exists": true,
+    "actual": "ALPHA\n",
+    "matches": true,
+    "git_changes": "?? decision-A.txt\n",
+    "cross_task_files": [
+      "decision-A.txt"
+    ]
+  },
+  {
+    "task_id": "T-20261023-32FE23",
+    "label": "B",
+    "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+    "file": "decision-B.txt",
+    "expected": "DELTA",
+    "exists": true,
+    "actual": "DELTA\n",
+    "matches": true,
+    "git_changes": "?? decision-B.txt\n",
+    "cross_task_files": [
+      "decision-B.txt"
+    ]
+  },
+  {
+    "task_id": "T-20261023-243DF2",
+    "label": "C",
+    "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+    "file": "proof-C.txt",
+    "expected": "CONCURRENT-C-DONE",
+    "exists": true,
+    "actual": "CONCURRENT-C-DONE",
+    "matches": true,
+    "git_changes": "?? proof-C.txt\n",
+    "cross_task_files": [
+      "proof-C.txt"
+    ]
+  },
+  {
+    "task_id": "T-20261023-7D1053",
+    "label": "D",
+    "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-7D1053-env-5",
+    "file": "proof-D.txt",
+    "expected": "CONCURRENT-D-DONE",
+    "exists": true,
+    "actual": "CONCURRENT-D-DONE",
+    "matches": true,
+    "git_changes": "?? proof-D.txt\n",
+    "cross_task_files": [
+      "proof-D.txt"
+    ]
+  }
+]

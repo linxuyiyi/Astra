@@ -1,0 +1,34 @@
+{
+  "checks": {
+    "same_responsible_and_source": true,
+    "three_unfinished_session_lifetimes_overlap": true,
+    "silent_ge_120s": true,
+    "no_native_answer_after_silence": true,
+    "same_three_wakes_after_silence": true,
+    "workers_occupied_while_waiting": true,
+    "answer_B_did_not_answer_A": true,
+    "native_answers_keep_sessions": true,
+    "cross_task_answer_denied": true,
+    "D_pending_until_A_confirmed": true,
+    "all_files_match": true,
+    "all_confirmed_workers_released": true,
+    "ten_wakes_delivered": true,
+    "one_session_per_task": true,
+    "four_zero_candidate_reviews": true,
+    "busy_input_explicitly_rejected_draft_retained": true
+  },
+  "silent_seconds": 132.69,
+  "overlap_starts": [
+    "2026-10-23 06:22:55.689863",
+    "2026-10-23 06:22:58.533930",
+    "2026-10-23 06:23:01.529887"
+  ],
+  "initial_waits": [
+    "2026-10-23 06:22:59.183317",
+    "2026-10-23 06:23:01.735206",
+    "2026-10-23 06:23:11.380732",
+    "2026-10-23 06:28:10.379260",
+    "2026-10-23 06:28:46.073490"
+  ],
+  "all_pass": true
+}

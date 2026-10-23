@@ -1,0 +1,170 @@
+{
+  "sdk_errors": [
+    {
+      "id": "f773a51c85e34db6a285203c2d445e01",
+      "created_at": "2026-10-23T14:31:14.465407",
+      "finished_at": "2026-10-23T14:31:14.712556",
+      "finished_reason": "error",
+      "error": {
+        "type": "invalid_request",
+        "message": "The request to the model was rejected as invalid."
+      }
+    },
+    {
+      "id": "6f08649e1f9a4f688cdfad377bd19987",
+      "created_at": "2026-10-23T14:31:31.693824",
+      "finished_at": "2026-10-23T14:31:40.276594",
+      "finished_reason": "error",
+      "error": {
+        "type": "upstream",
+        "message": "The upstream model service returned an error."
+      }
+    }
+  ],
+  "logs": [
+    "2026-10-23 14:31:14,712 | WARNING | _agent:_call_model:3388 - Model deepseek-flash exhausted all 1 attempt(s) for agent A.",
+    "2026-10-23 14:31:14,713 | ERROR   | _chat:_close_failed_reply:485 - Reply failed for session '1b6aa4388c4e446597e0fe79e6a68845'; reported to the client as invalid_request.",
+    "openai.BadRequestError: Error code: 400 - {'error': {'message': 'The `reasoning_content` in the thinking mode must be passed back to the API. (request_id: af1b2d45-8603-43bf-b1b0-359a4157ece0)', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_request_error'}}",
+    "2026-10-23 14:31:33,042 | WARNING | _base:__call__:231 - Attempt 1 failed for model deepseek-flash: Error code: 503 - {'error': {'message': '资源池没有可调度的节点', 'type': 'api_error', 'code': 'NO_ELIGIBLE_NODE', 'detail': {'CIRCUIT_OPEN': 1}}}. Retrying in 1.0s...",
+    "2026-10-23 14:31:35,548 | WARNING | _base:__call__:231 - Attempt 2 failed for model deepseek-flash: Error code: 503 - {'error': {'message': '资源池没有可调度的节点', 'type': 'api_error', 'code': 'NO_ELIGIBLE_NODE', 'detail': {'CIRCUIT_OPEN': 1}}}. Retrying in 1.0s...",
+    "2026-10-23 14:31:37,786 | WARNING | _base:__call__:231 - Attempt 3 failed for model deepseek-flash: Error code: 503 - {'error': {'message': '资源池没有可调度的节点', 'type': 'api_error', 'code': 'NO_ELIGIBLE_NODE', 'detail': {'CIRCUIT_OPEN': 1}}}. Retrying in 1.0s...",
+    "2026-10-23 14:31:40,276 | WARNING | _agent:_call_model:3388 - Model deepseek-flash exhausted all 1 attempt(s) for agent A.",
+    "2026-10-23 14:31:40,277 | ERROR   | _chat:_close_failed_reply:485 - Reply failed for session '1b6aa4388c4e446597e0fe79e6a68845'; reported to the client as upstream."
+  ],
+  "historical_gateway_requests": [
+    {
+      "id": "1833ce1bf1134c8ea28b64524dd14e17",
+      "status_code": 200,
+      "error_code": null,
+      "started_at": "2026-10-23 06:31:05.054420",
+      "finished_at": "2026-10-23 06:31:06.868212"
+    },
+    {
+      "id": "ac17b0f9bd774b1789dab22df9d16891",
+      "status_code": 200,
+      "error_code": null,
+      "started_at": "2026-10-23 06:31:07.106660",
+      "finished_at": "2026-10-23 06:31:08.740029"
+    },
+    {
+      "id": "0987f90ceab946c7af099a7e666f5fff",
+      "status_code": 200,
+      "error_code": null,
+      "started_at": "2026-10-23 06:31:08.969762",
+      "finished_at": "2026-10-23 06:31:14.335796"
+    },
+    {
+      "id": "9da7500a00a4405a8bf70ecb0c4579eb",
+      "status_code": 400,
+      "error_code": "UPSTREAM_400",
+      "started_at": "2026-10-23 06:31:14.525985",
+      "finished_at": "2026-10-23 06:31:14.705917"
+    },
+    {
+      "id": "a33c02012beb4d2cadecdada27788845",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:31.753796",
+      "finished_at": "2026-10-23 06:31:31.766100"
+    },
+    {
+      "id": "6c73ab8eb23a476787910a44603ea02d",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:32.231641",
+      "finished_at": "2026-10-23 06:31:32.241912"
+    },
+    {
+      "id": "9a2da5ad673d430ca77e639f90d40616",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:33.025061",
+      "finished_at": "2026-10-23 06:31:33.035909"
+    },
+    {
+      "id": "cfb0c175d8c944c7878dcd41d4a17101",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:34.077013",
+      "finished_at": "2026-10-23 06:31:34.087432"
+    },
+    {
+      "id": "b0089acbde4944dda7532a2078d55294",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:34.551504",
+      "finished_at": "2026-10-23 06:31:34.561829"
+    },
+    {
+      "id": "38c3a4f0c009493ebeba3d36eb464318",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:35.531824",
+      "finished_at": "2026-10-23 06:31:35.541962"
+    },
+    {
+      "id": "bc50b97be18b43e184a9b6ba24d20735",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:36.569973",
+      "finished_at": "2026-10-23 06:31:36.577449"
+    },
+    {
+      "id": "19331c6df05d442a93514b445e40037a",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:36.967492",
+      "finished_at": "2026-10-23 06:31:36.978823"
+    },
+    {
+      "id": "71be5914a64543e0be0297ecefeab1bd",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:37.769369",
+      "finished_at": "2026-10-23 06:31:37.779389"
+    },
+    {
+      "id": "7b44687c9a034d70ae68b535ca07934b",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:38.834895",
+      "finished_at": "2026-10-23 06:31:38.846216"
+    },
+    {
+      "id": "8fddd11ff30941c1bfffdcac3905f1a2",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:39.277984",
+      "finished_at": "2026-10-23 06:31:39.287901"
+    },
+    {
+      "id": "1f97c9336c1649958cabb89c03987a08",
+      "status_code": 503,
+      "error_code": "NO_ELIGIBLE_NODE",
+      "started_at": "2026-10-23 06:31:40.247755",
+      "finished_at": "2026-10-23 06:31:40.268248"
+    }
+  ],
+  "gateway_18310": {
+    "pid": 74898,
+    "create_time": 1792702755.932008,
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+    "database": "/tmp/nexus-it-20261023/nexus.db"
+  },
+  "employee_credential_base_url": "http://127.0.0.1:18310/v1",
+  "retry": {
+    "timed_out": false,
+    "elapsed_s": 13.63,
+    "reply_ids": [
+      "ca192a8458ff4da9a13f955d44b657cd"
+    ]
+  },
+  "ui": {
+    "errors": 2,
+    "visible_error_texts": [
+      "回复失败发往模型的请求被判定为非法。",
+      "回复失败上游模型服务返回了错误。"
+    ]
+  },
+  "root_cause_status": "Upstream request rejection observed; exact reasoning serialization cause not established. Historical gateway circuit side-effect observed; not re-executed on 18511."
+}

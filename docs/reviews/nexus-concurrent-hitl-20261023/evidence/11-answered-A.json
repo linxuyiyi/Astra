@@ -1,0 +1,113 @@
+{
+  "label": "A",
+  "id": "T-20261023-36B2C6",
+  "choice": "ALPHA",
+  "status": 200,
+  "url": "http://127.0.0.1:18520/api/tasks/T-20261023-36B2C6/opencode/ses_e9892c044ffe9Tk1lV7fWfuNC0/question/que_1676d4b55001zqiVLewgs9kPUA/reply",
+  "request": {
+    "answers": [
+      [
+        "ALPHA"
+      ]
+    ]
+  },
+  "reply": true,
+  "task": {
+    "runtime_state": "WAITING",
+    "runtime_status_label": "等待人工或外部条件",
+    "runtime_detail": "执行结束，待确认",
+    "failure": null,
+    "execution_released": false,
+    "id": "T-20261023-36B2C6",
+    "source": "nexus-employee",
+    "external_task_id": null,
+    "task_type": "REQUIREMENT",
+    "category_id": "CAT-5CAA990C",
+    "title": "QA-CONCURRENT-A-20261023",
+    "description": "这是延迟人工输入的并发测试。\n\n步骤：\n1. 先使用 OpenCode 原生 question 工具发问：header=并发A，question=CONCURRENT-A：请选择本任务写入的业务标记，两个选项 ALPHA 和 OMEGA，不要设置默认答案。\n2. 必须等真实人工回答，不能自行决定；等待期间不要写文件。\n3. 收到答案后，仅在当前隔离任务工作区创建 decision-A.txt，写入选择的标记。\n4. 运行 Python 读取校验。\n5. 报告结果并等待人确认完成。\n\n约束：不访问其他工作区，不 push。",
+    "acceptance_criteria": [
+      {
+        "id": "AC-01",
+        "content": "通过原生 question 工具向人工发问，header=并发A，提供 ALPHA 与 OMEGA 两个选项且不设默认答案，等待期间未写文件"
+      },
+      {
+        "id": "AC-02",
+        "content": "仅在当前隔离任务工作区创建 decision-A.txt，内容为人工实际选择的标记"
+      },
+      {
+        "id": "AC-03",
+        "content": "用 Python 读取 decision-A.txt 并校验内容与所选标记一致，报告执行结果"
+      },
+      {
+        "id": "AC-04",
+        "content": "不访问其他工作区，未 push；结束后等待人工确认，不自行结束任务"
+      }
+    ],
+    "attachments": [],
+    "priority": "MEDIUM",
+    "completion_policy": "MANUAL_CONFIRM",
+    "status": "WAITING",
+    "employee_id": "qa-worker-experience-20261023",
+    "worker_id": "qa-worker-experience-20261023",
+    "responsible_employee_id": "emp_90d1baf5766d",
+    "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+    "source_conversation_id": "conv_d16484f610bc",
+    "source_channel_id": null,
+    "idempotency_key": "1b6aa4388c4e446597e0fe79e6a68845:1b442b611838234de8f6e1a6a8e2fbef",
+    "repository_id": "841c140c7aeb477bb9e6c926fe4d664e",
+    "related_task_id": null,
+    "base_commit": "da575de5173bc531ed9a45de484564908512481d",
+    "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+    "session_status": "SUCCEEDED",
+    "session_terminal_reason": "completed",
+    "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+    "runtime_connection": "CONNECTED",
+    "pending_message_id": null,
+    "runtime_error": null,
+    "current_progress": "执行结束，待确认",
+    "suspension": null,
+    "execution_error": null,
+    "inactivity_alert": false,
+    "inactivity_alert_since": null,
+    "last_activity_at": "2026-10-23T06:28:46.072790Z",
+    "submitted_at": null,
+    "confirmed_at": null,
+    "failure_reason": null,
+    "human_required_reason": "执行结束，待确认",
+    "waiting_reason": "EXECUTION_RESULT_REVIEW",
+    "human_intervention": null,
+    "execution_environment_snapshot": {
+      "environment_id": 5,
+      "mode": "LINUX_REMOTE",
+      "name": "Linux QA 真实执行",
+      "host": "127.0.0.1",
+      "port": 18522,
+      "username": "nexusqa1023",
+      "has_ssh_password": true,
+      "opencode_server_port": 18596,
+      "opencode_path": "/root/.local/share/nexus/workers/5/bin/opencode",
+      "model_name": "nexus-gateway/deepseek-flash",
+      "workspace_root": "/tmp/nexus-worker-experience-20261023/workspace",
+      "repository_id": "841c140c7aeb477bb9e6c926fe4d664e",
+      "labels": [],
+      "capability_revision": "d3a444c796db30fe",
+      "base_commit": "da575de5173bc531ed9a45de484564908512481d",
+      "opencode_version": "1.18.35"
+    },
+    "claimed_at": "2026-10-23T06:22:54.987181Z",
+    "started_at": "2026-10-23T06:22:55.689120Z",
+    "finished_at": null,
+    "created_at": "2026-10-23T06:22:52.957108Z",
+    "updated_at": "2026-10-23T06:28:46.073291Z"
+  },
+  "frames": [
+    {
+      "url": "http://127.0.0.1:18520/tasks/T-20261023-36B2C6",
+      "text": "✦\nNEXUS v1.4.8\n星云首页\n数字员工\n日程安排\n任务大厅\n数字图书馆\nAPI 网关\n配置中心\nAgentScope 2.0.10 已连接\n返回任务列表\n\n任务目标\n\n这是延迟人工输入的并发测试。 步骤： 1. 先使用 OpenCode 原生 question 工具发问：header=并发A，question=CONCURRENT-A：请选择本任务写入的业务标记，两个选项 ALPHA 和 OMEGA，不要设置默认答案。 2. 必须等真实人工回答，不能自行决定；等待期间不要写文件。 3. 收到答案后，仅在当前隔离任务工作区创建 decision-A.txt，写入选择的标记。 4. 运行 Python 读取校验。 5. 报告结果并等待人确认完成。 约束：不访问其他工作区，不 push。\n等待人工或外部条件\nQA-CONCURRENT-A-20261023 · T-20261023-36B2C6\n\n下一步：执行结束，待确认\n\n本轮已完成，待确认\norigin / detached · da575de5 · 累计 1 个文件 / 0 次提交 · 未提交 1\n会话 #1 · 当前\n确认完成\n更多"
+    },
+    {
+      "url": "http://127.0.0.1:18520/opencode-workspace/1.18.35/index.html?task=T-20261023-36B2C6&session=ses_e9892c044ffe9Tk1lV7fWfuNC0#/server/aHR0cDovLzEyNy4wLjAuMToxODUyMC9hcGkvdGFza3MvVC0yMDI2MTAyMy0zNkIyQzYvb3BlbmNvZGUvc2VzX2U5ODkyYzA0NGZmZTlUazFsVjdmV2Z1TkMw/session/ses_e9892c044ffe9Tk1lV7fWfuNC0",
+      "text": "T\nQA-CONCURRENT-A-20261023\nQA-CONCURRENT-A-20261023\n当前任务：\nT-20261023-36B2C6\n\n任务来源：\nnexus-employee\n\n任务类型：\n需求\n\n任务分类：\nWorker真实执行闭环20261023\n\n任务目标：\nQA-CONCURRENT-A-20261023\n\n任务描述：\n这是延迟人工输入的并发测试。\n\n步骤：\n1. 先使用 OpenCode 原生 question 工具发问：header=并发A，question=CONCURRENT-A：请选择本任务写入的业务标记，两个选项 ALPHA 和 OMEGA，不要设置默认答案。\n2. 必须等真实人工回答，不能自行决定；等待期间不要写文件。\n3. 收到答案后，仅在当前隔离任务工作区创建 decision-A.txt，写入选择的标记。\n4. 运行 Python 读取校验。\n5. 报告结果并等待人确认完成。\n\n约束：不访问其他工作区，不 push。\n\n员工工作空间：\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5\n\n验收标准：\nAC-01. 通过原生 question 工具向人工发问，header=并发A，提供 ALPHA 与 OMEGA 两个选项且不设默认答案，等待期间未写文件\nAC-02. 仅在当前隔离任务工作区创建 decision-A.txt，内容为人工实际选择的标记\nAC-03. 用 Python 读取 decision-A.txt 并校验内容与所选标记一致，报告执行结果\nAC-04. 不访问其他工作区，未 push；结束后等待人工确认，不自行结束任务\n\n请在该工作空间内自主决定完成方式。Nexus 不规定你使用的 Agent、Skill、Tool、命令、\n检查方式或内部步骤。分类执行要求用于补充该业务分类的处理规范，不替代当前任务目标、\n任务描述或验收标准。Nexus 会直接依据 OpenCode Session、Workspace 和最终回复获取执行事实，\n不要输出 Nexus 专用 JSON 协议，也不要自行决定任务的系统状态。\n\n当任务必须询问使用者、等待业务答案或需要操作授权时，必须使用 OpenCode 原生 question Tool\n或 Permission；收到回答或授权后继续当前 Session。\n不要用文本标记、自定义 JSON 或约定字符串伪装成人工阻塞状态。\n\n完成任务后，请在最终回复中简洁说明：\n1. 完成了什么；\n2. 关键修改是什么；\n3. 已完成哪些验证。\n每轮回复后仍可在当前 Session 继续交流。只有使用者明确结束任务，Nexus 才关闭业务任务。\n你只负责执行任务，不生成或提交经验，不调用任务复盘 Skill；\n任务总结和经验沉淀由人工确认完成后的后台复盘统一处理。\n无法完成或无法实测时如实说明；仅在需要使用者回答或授权才能继续时提出原生问题。\n\n已保留的当前进展：\n已分配给 真实Worker经验闭环QA，等待启动\n\nBuild · deepseek-flash\n · \n2:22 PM\nQuestions\nQuestions\n1 answered\nCONCURRENT-A：请选择本任务写入的业务标记，两个选项 ALPHA 和 OMEGA，不要设置默认答案。\nALPHA\nWrite\nWrite\ndecision-A.txt\n/\nShell\nShell\npython3 -c \"c=open('decision-A.txt',encoding='utf-8').read().strip(); print('read:',repr(c)); assert c=='ALPHA', 'mismatch'; print('validation: OK')\"\n完成了什么：通过原生 question 获取人工选择（ALPHA），在当前隔离工作区创建 decision-A.txt。\n关键修改：仅新增 decision-A.txt，内容为 ALPHA。\n验证：Python 读取内容为 'ALPHA'，校验通过；未访问其他工作区，未 push。\n\n等待您确认完成。\n\nBuild · deepseek-flash · 5m 48s\n1 Changed file\n+1\n-0\ndecision-A.txt\n+1\n-0\nAsk anything, / for commands, @ for context...\ndeepseek-flash"
+    }
+  ]
+}

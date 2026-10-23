@@ -1,0 +1,14 @@
+{
+  "tc_time": "2026-10-23T14:31:31+0800",
+  "user": "it11",
+  "uid": "usr_18b6ad196291",
+  "employee_id": "emp_90d1baf5766d",
+  "employee_name": "A",
+  "conversation_id": "conv_d16484f610bc",
+  "agentscope_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+  "user_message_id": "msg_5a7b11fec4c0",
+  "user_text": "请只读查询本轮 QA-CONCURRENT-A/B/C/D 四个任务现在的实际状态并分别报告。哪些已经人工确认？Worker有没有仍被占用？无法从现有工具核实的请说明，不要改任何任务。",
+  "assistant": [],
+  "elapsed_s": 180.12,
+  "timed_out": true
+}

@@ -1,0 +1,3409 @@
+[
+  {
+    "file": "02-created.json",
+    "at": 1792736608.90623,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d4b55001zqiVLewgs9kPUA",
+              "sessionID": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+              "questions": [
+                {
+                  "question": "CONCURRENT-A：请选择本任务写入的业务标记，两个选项 ALPHA 和 OMEGA，不要设置默认答案。",
+                  "header": "并发A",
+                  "options": [
+                    {
+                      "label": "ALPHA",
+                      "description": "写入业务标记 ALPHA"
+                    },
+                    {
+                      "label": "OMEGA",
+                      "description": "写入业务标记 OMEGA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d42b3001tOEByk2p3agHIP",
+                "callID": "call_00_ET_jUqsfJVvjxZAZl7KS6rQ4386"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892c044ffe9Tk1lV7fWfuNC0": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d55be001dZx0Q3T8d9AEvH",
+              "sessionID": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+              "questions": [
+                {
+                  "question": "CONCURRENT-B：请选择本任务写入的业务标记",
+                  "header": "并发B",
+                  "options": [
+                    {
+                      "label": "BETA",
+                      "description": "写入业务标记 BETA"
+                    },
+                    {
+                      "label": "DELTA",
+                      "description": "写入业务标记 DELTA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d4d850017Blmgofw4lzRXK",
+                "callID": "call_00_ET_2Ga3nLSJZcV7fxHV07Dw8900"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892b4e3ffeqk9g70UZXnIrfS": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  },
+  {
+    "file": "03-pending-initial.json",
+    "at": 1792736613.048419,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d4b55001zqiVLewgs9kPUA",
+              "sessionID": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+              "questions": [
+                {
+                  "question": "CONCURRENT-A：请选择本任务写入的业务标记，两个选项 ALPHA 和 OMEGA，不要设置默认答案。",
+                  "header": "并发A",
+                  "options": [
+                    {
+                      "label": "ALPHA",
+                      "description": "写入业务标记 ALPHA"
+                    },
+                    {
+                      "label": "OMEGA",
+                      "description": "写入业务标记 OMEGA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d42b3001tOEByk2p3agHIP",
+                "callID": "call_00_ET_jUqsfJVvjxZAZl7KS6rQ4386"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892c044ffe9Tk1lV7fWfuNC0": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d55be001dZx0Q3T8d9AEvH",
+              "sessionID": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+              "questions": [
+                {
+                  "question": "CONCURRENT-B：请选择本任务写入的业务标记",
+                  "header": "并发B",
+                  "options": [
+                    {
+                      "label": "BETA",
+                      "description": "写入业务标记 BETA"
+                    },
+                    {
+                      "label": "DELTA",
+                      "description": "写入业务标记 DELTA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d4d850017Blmgofw4lzRXK",
+                "callID": "call_00_ET_2Ga3nLSJZcV7fxHV07Dw8900"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892b4e3ffeqk9g70UZXnIrfS": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  },
+  {
+    "file": "05-after-human-silence.json",
+    "at": 1792736741.5949178,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d4b55001zqiVLewgs9kPUA",
+              "sessionID": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+              "questions": [
+                {
+                  "question": "CONCURRENT-A：请选择本任务写入的业务标记，两个选项 ALPHA 和 OMEGA，不要设置默认答案。",
+                  "header": "并发A",
+                  "options": [
+                    {
+                      "label": "ALPHA",
+                      "description": "写入业务标记 ALPHA"
+                    },
+                    {
+                      "label": "OMEGA",
+                      "description": "写入业务标记 OMEGA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d42b3001tOEByk2p3agHIP",
+                "callID": "call_00_ET_jUqsfJVvjxZAZl7KS6rQ4386"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892c044ffe9Tk1lV7fWfuNC0": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d55be001dZx0Q3T8d9AEvH",
+              "sessionID": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+              "questions": [
+                {
+                  "question": "CONCURRENT-B：请选择本任务写入的业务标记",
+                  "header": "并发B",
+                  "options": [
+                    {
+                      "label": "BETA",
+                      "description": "写入业务标记 BETA"
+                    },
+                    {
+                      "label": "DELTA",
+                      "description": "写入业务标记 DELTA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d4d850017Blmgofw4lzRXK",
+                "callID": "call_00_ET_2Ga3nLSJZcV7fxHV07Dw8900"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892b4e3ffeqk9g70UZXnIrfS": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  },
+  {
+    "file": "07-ambiguous-continue-state.json",
+    "at": 1792736778.670861,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d4b55001zqiVLewgs9kPUA",
+              "sessionID": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+              "questions": [
+                {
+                  "question": "CONCURRENT-A：请选择本任务写入的业务标记，两个选项 ALPHA 和 OMEGA，不要设置默认答案。",
+                  "header": "并发A",
+                  "options": [
+                    {
+                      "label": "ALPHA",
+                      "description": "写入业务标记 ALPHA"
+                    },
+                    {
+                      "label": "OMEGA",
+                      "description": "写入业务标记 OMEGA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d42b3001tOEByk2p3agHIP",
+                "callID": "call_00_ET_jUqsfJVvjxZAZl7KS6rQ4386"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892c044ffe9Tk1lV7fWfuNC0": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d55be001dZx0Q3T8d9AEvH",
+              "sessionID": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+              "questions": [
+                {
+                  "question": "CONCURRENT-B：请选择本任务写入的业务标记",
+                  "header": "并发B",
+                  "options": [
+                    {
+                      "label": "BETA",
+                      "description": "写入业务标记 BETA"
+                    },
+                    {
+                      "label": "DELTA",
+                      "description": "写入业务标记 DELTA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d4d850017Blmgofw4lzRXK",
+                "callID": "call_00_ET_2Ga3nLSJZcV7fxHV07Dw8900"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892b4e3ffeqk9g70UZXnIrfS": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  },
+  {
+    "file": "08-explicit-answer-in-chat-state.json",
+    "at": 1792736806.089804,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d4b55001zqiVLewgs9kPUA",
+              "sessionID": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+              "questions": [
+                {
+                  "question": "CONCURRENT-A：请选择本任务写入的业务标记，两个选项 ALPHA 和 OMEGA，不要设置默认答案。",
+                  "header": "并发A",
+                  "options": [
+                    {
+                      "label": "ALPHA",
+                      "description": "写入业务标记 ALPHA"
+                    },
+                    {
+                      "label": "OMEGA",
+                      "description": "写入业务标记 OMEGA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d42b3001tOEByk2p3agHIP",
+                "callID": "call_00_ET_jUqsfJVvjxZAZl7KS6rQ4386"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892c044ffe9Tk1lV7fWfuNC0": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d55be001dZx0Q3T8d9AEvH",
+              "sessionID": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+              "questions": [
+                {
+                  "question": "CONCURRENT-B：请选择本任务写入的业务标记",
+                  "header": "并发B",
+                  "options": [
+                    {
+                      "label": "BETA",
+                      "description": "写入业务标记 BETA"
+                    },
+                    {
+                      "label": "DELTA",
+                      "description": "写入业务标记 DELTA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d4d850017Blmgofw4lzRXK",
+                "callID": "call_00_ET_2Ga3nLSJZcV7fxHV07Dw8900"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892b4e3ffeqk9g70UZXnIrfS": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  },
+  {
+    "file": "09-create-queued-D-state.json",
+    "at": 1792736847.977231,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-7D1053",
+        "title": "QA-CONCURRENT-D-20261023",
+        "status": "PENDING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": null,
+        "workspace": null,
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "等待领取",
+        "confirmed_at": null
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d4b55001zqiVLewgs9kPUA",
+              "sessionID": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+              "questions": [
+                {
+                  "question": "CONCURRENT-A：请选择本任务写入的业务标记，两个选项 ALPHA 和 OMEGA，不要设置默认答案。",
+                  "header": "并发A",
+                  "options": [
+                    {
+                      "label": "ALPHA",
+                      "description": "写入业务标记 ALPHA"
+                    },
+                    {
+                      "label": "OMEGA",
+                      "description": "写入业务标记 OMEGA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d42b3001tOEByk2p3agHIP",
+                "callID": "call_00_ET_jUqsfJVvjxZAZl7KS6rQ4386"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892c044ffe9Tk1lV7fWfuNC0": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d55be001dZx0Q3T8d9AEvH",
+              "sessionID": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+              "questions": [
+                {
+                  "question": "CONCURRENT-B：请选择本任务写入的业务标记",
+                  "header": "并发B",
+                  "options": [
+                    {
+                      "label": "BETA",
+                      "description": "写入业务标记 BETA"
+                    },
+                    {
+                      "label": "DELTA",
+                      "description": "写入业务标记 DELTA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d4d850017Blmgofw4lzRXK",
+                "callID": "call_00_ET_2Ga3nLSJZcV7fxHV07Dw8900"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892b4e3ffeqk9g70UZXnIrfS": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  },
+  {
+    "file": "12-after-answer-B.json",
+    "at": 1792736906.733571,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": "请在 Workspace 回答问题或权限请求",
+        "human_intervention": null,
+        "current_progress": "请在 Workspace 回答问题或权限请求",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-7D1053",
+        "title": "QA-CONCURRENT-D-20261023",
+        "status": "PENDING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": null,
+        "workspace": null,
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "等待领取",
+        "confirmed_at": null
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": [
+            {
+              "id": "que_1676d4b55001zqiVLewgs9kPUA",
+              "sessionID": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+              "questions": [
+                {
+                  "question": "CONCURRENT-A：请选择本任务写入的业务标记，两个选项 ALPHA 和 OMEGA，不要设置默认答案。",
+                  "header": "并发A",
+                  "options": [
+                    {
+                      "label": "ALPHA",
+                      "description": "写入业务标记 ALPHA"
+                    },
+                    {
+                      "label": "OMEGA",
+                      "description": "写入业务标记 OMEGA"
+                    }
+                  ]
+                }
+              ],
+              "tool": {
+                "messageID": "msg_1676d42b3001tOEByk2p3agHIP",
+                "callID": "call_00_ET_jUqsfJVvjxZAZl7KS6rQ4386"
+              }
+            }
+          ]
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {
+            "ses_e9892c044ffe9Tk1lV7fWfuNC0": {
+              "type": "busy"
+            }
+          }
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      },
+      {
+        "id": 17,
+        "event_id": 121,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 121）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:28:41.243367",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:10.379574",
+        "updated_at": "2026-10-23 06:28:11.243367"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  },
+  {
+    "file": "14-both-answered-D-still-pending.json",
+    "at": 1792736952.5069911,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-7D1053",
+        "title": "QA-CONCURRENT-D-20261023",
+        "status": "PENDING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": null,
+        "workspace": null,
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "等待领取",
+        "confirmed_at": null
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      },
+      {
+        "id": 17,
+        "event_id": 121,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 121）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:28:41.243367",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:10.379574",
+        "updated_at": "2026-10-23 06:28:11.243367"
+      },
+      {
+        "id": 18,
+        "event_id": 123,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 123）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:29:17.244661",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:46.073784",
+        "updated_at": "2026-10-23 06:28:47.244661"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  },
+  {
+    "file": "15-confirm-A-only-state.json",
+    "at": 1792736984.144448,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:29:30.861317"
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-7D1053",
+        "title": "QA-CONCURRENT-D-20261023",
+        "status": "RUNNING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e988caa6cffeEdgUJp8T3HMity",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-7D1053-env-5",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "执行中",
+        "confirmed_at": null
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-7D1053": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      },
+      {
+        "id": 17,
+        "event_id": 121,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 121）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:28:41.243367",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:10.379574",
+        "updated_at": "2026-10-23 06:28:11.243367"
+      },
+      {
+        "id": 18,
+        "event_id": 123,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 123）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:29:17.244661",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:46.073784",
+        "updated_at": "2026-10-23 06:28:47.244661"
+      },
+      {
+        "id": 19,
+        "event_id": 125,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 SUCCEEDED（事件 125）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:30:01.251718",
+        "last_error": null,
+        "created_at": "2026-10-23 06:29:30.907328",
+        "updated_at": "2026-10-23 06:29:31.251718"
+      },
+      {
+        "id": 20,
+        "event_id": 128,
+        "task_id": "T-20261023-7D1053",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "pending",
+        "hint": "任务 T-20261023-7D1053 状态变为 WAITING（事件 128）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:29:43.887487",
+        "last_error": null,
+        "created_at": "2026-10-23 06:29:43.887487",
+        "updated_at": "2026-10-23 06:29:43.887487"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  },
+  {
+    "file": "17-D-finished-before-confirm.json",
+    "at": 1792737031.808335,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:29:30.861317"
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      },
+      {
+        "id": "T-20261023-7D1053",
+        "title": "QA-CONCURRENT-D-20261023",
+        "status": "WAITING",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e988caa6cffeEdgUJp8T3HMity",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-7D1053-env-5",
+        "human_required_reason": "执行结束，待确认",
+        "human_intervention": null,
+        "current_progress": "执行结束，待确认",
+        "confirmed_at": null
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-7D1053": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      },
+      {
+        "id": 17,
+        "event_id": 121,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 121）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:28:41.243367",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:10.379574",
+        "updated_at": "2026-10-23 06:28:11.243367"
+      },
+      {
+        "id": 18,
+        "event_id": 123,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 123）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:29:17.244661",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:46.073784",
+        "updated_at": "2026-10-23 06:28:47.244661"
+      },
+      {
+        "id": 19,
+        "event_id": 125,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 SUCCEEDED（事件 125）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:30:01.251718",
+        "last_error": null,
+        "created_at": "2026-10-23 06:29:30.907328",
+        "updated_at": "2026-10-23 06:29:31.251718"
+      },
+      {
+        "id": 20,
+        "event_id": 128,
+        "task_id": "T-20261023-7D1053",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-7D1053 状态变为 WAITING（事件 128）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:30:23.997559",
+        "last_error": null,
+        "created_at": "2026-10-23 06:29:43.887487",
+        "updated_at": "2026-10-23 06:29:53.997559"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "WAIT_HUMAN",
+        "current_task_count": 1,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": true,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  },
+  {
+    "file": "19-all-confirmed.json",
+    "at": 1792737072.856456,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:29:30.861317"
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:30:43.435871"
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:30:49.533364"
+      },
+      {
+        "id": "T-20261023-7D1053",
+        "title": "QA-CONCURRENT-D-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e988caa6cffeEdgUJp8T3HMity",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-7D1053-env-5",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:30:56.459271"
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-7D1053": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      },
+      {
+        "id": 17,
+        "event_id": 121,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 121）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:28:41.243367",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:10.379574",
+        "updated_at": "2026-10-23 06:28:11.243367"
+      },
+      {
+        "id": 18,
+        "event_id": 123,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 123）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:29:17.244661",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:46.073784",
+        "updated_at": "2026-10-23 06:28:47.244661"
+      },
+      {
+        "id": 19,
+        "event_id": 125,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 SUCCEEDED（事件 125）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:30:01.251718",
+        "last_error": null,
+        "created_at": "2026-10-23 06:29:30.907328",
+        "updated_at": "2026-10-23 06:29:31.251718"
+      },
+      {
+        "id": 20,
+        "event_id": 128,
+        "task_id": "T-20261023-7D1053",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-7D1053 状态变为 WAITING（事件 128）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:30:23.997559",
+        "last_error": null,
+        "created_at": "2026-10-23 06:29:43.887487",
+        "updated_at": "2026-10-23 06:29:53.997559"
+      },
+      {
+        "id": 21,
+        "event_id": 130,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 SUCCEEDED（事件 130）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:31:15.251099",
+        "last_error": null,
+        "created_at": "2026-10-23 06:30:43.438653",
+        "updated_at": "2026-10-23 06:30:45.251099"
+      },
+      {
+        "id": 22,
+        "event_id": 132,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 SUCCEEDED（事件 132）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:31:34.924541",
+        "last_error": null,
+        "created_at": "2026-10-23 06:30:49.535671",
+        "updated_at": "2026-10-23 06:31:04.924541"
+      },
+      {
+        "id": 23,
+        "event_id": 134,
+        "task_id": "T-20261023-7D1053",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-7D1053 状态变为 SUCCEEDED（事件 134）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:31:34.924541",
+        "last_error": null,
+        "created_at": "2026-10-23 06:30:56.465423",
+        "updated_at": "2026-10-23 06:31:04.924541"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "IDLE",
+        "current_task_count": 0,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": false,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "IDLE",
+        "current_task_count": 0,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": false,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "IDLE",
+        "current_task_count": 0,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": false,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": true
+  },
+  {
+    "file": "20-final-status-chat-state.json",
+    "at": 1792737275.708529,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:29:30.861317"
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:30:43.435871"
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:30:49.533364"
+      },
+      {
+        "id": "T-20261023-7D1053",
+        "title": "QA-CONCURRENT-D-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e988caa6cffeEdgUJp8T3HMity",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-7D1053-env-5",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:30:56.459271"
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-7D1053": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      },
+      {
+        "id": 17,
+        "event_id": 121,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 121）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:28:41.243367",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:10.379574",
+        "updated_at": "2026-10-23 06:28:11.243367"
+      },
+      {
+        "id": 18,
+        "event_id": 123,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 123）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:29:17.244661",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:46.073784",
+        "updated_at": "2026-10-23 06:28:47.244661"
+      },
+      {
+        "id": 19,
+        "event_id": 125,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 SUCCEEDED（事件 125）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:30:01.251718",
+        "last_error": null,
+        "created_at": "2026-10-23 06:29:30.907328",
+        "updated_at": "2026-10-23 06:29:31.251718"
+      },
+      {
+        "id": 20,
+        "event_id": 128,
+        "task_id": "T-20261023-7D1053",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-7D1053 状态变为 WAITING（事件 128）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:30:23.997559",
+        "last_error": null,
+        "created_at": "2026-10-23 06:29:43.887487",
+        "updated_at": "2026-10-23 06:29:53.997559"
+      },
+      {
+        "id": 21,
+        "event_id": 130,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 SUCCEEDED（事件 130）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:31:15.251099",
+        "last_error": null,
+        "created_at": "2026-10-23 06:30:43.438653",
+        "updated_at": "2026-10-23 06:30:45.251099"
+      },
+      {
+        "id": 22,
+        "event_id": 132,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 SUCCEEDED（事件 132）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:31:34.924541",
+        "last_error": null,
+        "created_at": "2026-10-23 06:30:49.535671",
+        "updated_at": "2026-10-23 06:31:04.924541"
+      },
+      {
+        "id": 23,
+        "event_id": 134,
+        "task_id": "T-20261023-7D1053",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-7D1053 状态变为 SUCCEEDED（事件 134）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:31:34.924541",
+        "last_error": null,
+        "created_at": "2026-10-23 06:30:56.465423",
+        "updated_at": "2026-10-23 06:31:04.924541"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "IDLE",
+        "current_task_count": 0,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": false,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "IDLE",
+        "current_task_count": 0,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": false,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "IDLE",
+        "current_task_count": 0,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": false,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  },
+  {
+    "file": "21-post-error-retry-state.json",
+    "at": 1792737393.1429949,
+    "tasks": [
+      {
+        "id": "T-20261023-36B2C6",
+        "title": "QA-CONCURRENT-A-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:29:30.861317"
+      },
+      {
+        "id": "T-20261023-32FE23",
+        "title": "QA-CONCURRENT-B-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-concurrent-2-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:30:43.435871"
+      },
+      {
+        "id": "T-20261023-243DF2",
+        "title": "QA-CONCURRENT-C-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-concurrent-3-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+        "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:30:49.533364"
+      },
+      {
+        "id": "T-20261023-7D1053",
+        "title": "QA-CONCURRENT-D-20261023",
+        "status": "SUCCEEDED",
+        "employee_id": "qa-worker-experience-20261023",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "source_conversation_id": "conv_d16484f610bc",
+        "current_session_id": "ses_e988caa6cffeEdgUJp8T3HMity",
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-7D1053-env-5",
+        "human_required_reason": null,
+        "human_intervention": null,
+        "current_progress": "任务已人工确认完成",
+        "confirmed_at": "2026-10-23 06:30:56.459271"
+      }
+    ],
+    "native": {
+      "T-20261023-36B2C6": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-32FE23": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-243DF2": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      },
+      "T-20261023-7D1053": {
+        "/question": {
+          "http_status": 200,
+          "data": []
+        },
+        "/permission": {
+          "http_status": 200,
+          "data": []
+        },
+        "/session/status": {
+          "http_status": 200,
+          "data": {}
+        }
+      }
+    },
+    "wakes": [
+      {
+        "id": 14,
+        "event_id": 112,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 112）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:29.225366",
+        "last_error": null,
+        "created_at": "2026-10-23 06:22:59.185075",
+        "updated_at": "2026-10-23 06:22:59.225366"
+      },
+      {
+        "id": 15,
+        "event_id": 115,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 115）。原因：请在 Workspace 回答问题或权限请求。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:33.226065",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:01.735389",
+        "updated_at": "2026-10-23 06:23:03.226065"
+      },
+      {
+        "id": 16,
+        "event_id": 116,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 WAITING（事件 116）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:23:43.225467",
+        "last_error": null,
+        "created_at": "2026-10-23 06:23:11.381244",
+        "updated_at": "2026-10-23 06:23:13.225467"
+      },
+      {
+        "id": 17,
+        "event_id": 121,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 WAITING（事件 121）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:28:41.243367",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:10.379574",
+        "updated_at": "2026-10-23 06:28:11.243367"
+      },
+      {
+        "id": 18,
+        "event_id": 123,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 WAITING（事件 123）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:29:17.244661",
+        "last_error": null,
+        "created_at": "2026-10-23 06:28:46.073784",
+        "updated_at": "2026-10-23 06:28:47.244661"
+      },
+      {
+        "id": 19,
+        "event_id": 125,
+        "task_id": "T-20261023-36B2C6",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-36B2C6 状态变为 SUCCEEDED（事件 125）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:30:01.251718",
+        "last_error": null,
+        "created_at": "2026-10-23 06:29:30.907328",
+        "updated_at": "2026-10-23 06:29:31.251718"
+      },
+      {
+        "id": 20,
+        "event_id": 128,
+        "task_id": "T-20261023-7D1053",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-7D1053 状态变为 WAITING（事件 128）。原因：执行结束，待确认。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:30:23.997559",
+        "last_error": null,
+        "created_at": "2026-10-23 06:29:43.887487",
+        "updated_at": "2026-10-23 06:29:53.997559"
+      },
+      {
+        "id": 21,
+        "event_id": 130,
+        "task_id": "T-20261023-32FE23",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-32FE23 状态变为 SUCCEEDED（事件 130）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:31:15.251099",
+        "last_error": null,
+        "created_at": "2026-10-23 06:30:43.438653",
+        "updated_at": "2026-10-23 06:30:45.251099"
+      },
+      {
+        "id": 22,
+        "event_id": 132,
+        "task_id": "T-20261023-243DF2",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-243DF2 状态变为 SUCCEEDED（事件 132）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:31:34.924541",
+        "last_error": null,
+        "created_at": "2026-10-23 06:30:49.535671",
+        "updated_at": "2026-10-23 06:31:04.924541"
+      },
+      {
+        "id": 23,
+        "event_id": 134,
+        "task_id": "T-20261023-7D1053",
+        "responsible_employee_id": "emp_90d1baf5766d",
+        "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+        "status": "delivered",
+        "hint": "任务 T-20261023-7D1053 状态变为 SUCCEEDED（事件 134）。请先调用 nexus_task_get 查询最新状态，再决定是否处理。不要根据这条提示直接改任务状态。",
+        "attempts": 0,
+        "next_retry_at": "2026-10-23 06:31:34.924541",
+        "last_error": null,
+        "created_at": "2026-10-23 06:30:56.465423",
+        "updated_at": "2026-10-23 06:31:04.924541"
+      }
+    ],
+    "workers": [
+      {
+        "id": "qa-worker-concurrent-2-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "IDLE",
+        "current_task_count": 0,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": false,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-concurrent-3-20261023",
+        "digital_employee_id": "emp_90d1baf5766d",
+        "status": "IDLE",
+        "current_task_count": 0,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": false,
+          "availability": "AVAILABLE"
+        }
+      },
+      {
+        "id": "qa-worker-experience-20261023",
+        "digital_employee_id": null,
+        "status": "IDLE",
+        "current_task_count": 0,
+        "channel_health": {
+          "worker_online": true,
+          "opencode_reachable": true,
+          "repository_bound": true,
+          "executing": false,
+          "waiting_human": false,
+          "availability": "AVAILABLE"
+        }
+      }
+    ],
+    "agent_running": false
+  }
+]

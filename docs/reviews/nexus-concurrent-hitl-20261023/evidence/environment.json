@@ -1,0 +1,79 @@
+{
+  "baseline": "6b84b1727978638b57b0b2069faefba3a9a686ab",
+  "worktree": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra",
+  "agent_version": "agentscope==2.0.10",
+  "opencode_version": "1.18.35",
+  "executor": "worker",
+  "nexus_database": "isolated SQLite",
+  "agentscope_database": "isolated official SQLAlchemy SQLite",
+  "ports": {
+    "api": 18520,
+    "agentscope": 18500,
+    "worker_and_review_gateway": 18511,
+    "employee_historical_gateway": 18310,
+    "task_mcp": 18502,
+    "redis": 18579
+  },
+  "gateway_boundary": "Employee credential retained 18310/v1 in copied AgentScope database; Worker and review use 18511/v1. 18310 was not restarted or reconfigured.",
+  "new_workers": [
+    {
+      "worker_id": "qa-worker-concurrent-2-20261023",
+      "environment_id": 6,
+      "port": 18597,
+      "deploy_id": "op_b5384b8390244e84800b1c853a24a0ac"
+    },
+    {
+      "worker_id": "qa-worker-concurrent-3-20261023",
+      "environment_id": 7,
+      "port": 18598,
+      "deploy_id": "op_eec7305d338e41f78ad82af08324d0b5"
+    }
+  ],
+  "processes": {
+    "redis": {
+      "pid": 93080,
+      "create_time": 1792716550.916329,
+      "cwd": "/private/tmp/nexus-worker-experience-20261023/redis"
+    },
+    "api": {
+      "pid": 61993,
+      "create_time": 1792734795.276824,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api"
+    },
+    "taskmcp": {
+      "pid": 52052,
+      "create_time": 1792731301.270341,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api"
+    },
+    "agent": {
+      "pid": 93083,
+      "create_time": 1792716550.921804,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/agent-service"
+    },
+    "tunnel": {
+      "pid": 93966,
+      "create_time": 1792717367.144581,
+      "cwd": "/private/tmp/nexus-worker-experience-20261023"
+    },
+    "librarymcp": {
+      "pid": 52598,
+      "create_time": 1792731768.698456,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api"
+    },
+    "gateway": {
+      "pid": 93965,
+      "create_time": 1792717367.142531,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api"
+    },
+    "celery": {
+      "pid": 64334,
+      "create_time": 1792735137.436103,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api"
+    },
+    "beat": {
+      "pid": 94194,
+      "create_time": 1792717524.00689,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api"
+    }
+  }
+}

@@ -1,0 +1,402 @@
+{
+  "tasks": [
+    {
+      "id": "T-20261023-36B2C6",
+      "title": "QA-CONCURRENT-A-20261023",
+      "status": "SUCCEEDED",
+      "responsible_employee_id": "emp_90d1baf5766d",
+      "employee_id": "qa-worker-experience-20261023",
+      "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+      "current_session_id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+      "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5",
+      "created_at": "2026-10-23 06:22:52.957108",
+      "claimed_at": "2026-10-23 06:22:54.987181",
+      "confirmed_at": "2026-10-23 06:29:30.861317"
+    },
+    {
+      "id": "T-20261023-32FE23",
+      "title": "QA-CONCURRENT-B-20261023",
+      "status": "SUCCEEDED",
+      "responsible_employee_id": "emp_90d1baf5766d",
+      "employee_id": "qa-worker-concurrent-2-20261023",
+      "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+      "current_session_id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+      "workspace": "/tmp/nexus-concurrent-20261023/worker-2/.astra-tasks/qa-worker-concurrent-2-20261023/T-20261023-32FE23-env-6",
+      "created_at": "2026-10-23 06:22:53.032012",
+      "claimed_at": "2026-10-23 06:22:57.955940",
+      "confirmed_at": "2026-10-23 06:30:43.435871"
+    },
+    {
+      "id": "T-20261023-243DF2",
+      "title": "QA-CONCURRENT-C-20261023",
+      "status": "SUCCEEDED",
+      "responsible_employee_id": "emp_90d1baf5766d",
+      "employee_id": "qa-worker-concurrent-3-20261023",
+      "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+      "current_session_id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+      "workspace": "/tmp/nexus-concurrent-20261023/worker-3/.astra-tasks/qa-worker-concurrent-3-20261023/T-20261023-243DF2-env-7",
+      "created_at": "2026-10-23 06:22:53.101197",
+      "claimed_at": "2026-10-23 06:23:00.929140",
+      "confirmed_at": "2026-10-23 06:30:49.533364"
+    },
+    {
+      "id": "T-20261023-7D1053",
+      "title": "QA-CONCURRENT-D-20261023",
+      "status": "SUCCEEDED",
+      "responsible_employee_id": "emp_90d1baf5766d",
+      "employee_id": "qa-worker-experience-20261023",
+      "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845",
+      "current_session_id": "ses_e988caa6cffeEdgUJp8T3HMity",
+      "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-7D1053-env-5",
+      "created_at": "2026-10-23 06:27:18.618297",
+      "claimed_at": "2026-10-23 06:29:33.933011",
+      "confirmed_at": "2026-10-23 06:30:56.459271"
+    }
+  ],
+  "events": [
+    {
+      "id": 99,
+      "task_id": "T-20261023-36B2C6",
+      "event_type": "TASK_CREATED",
+      "message": "任务已创建",
+      "created_at": "2026-10-23 06:22:52.957579"
+    },
+    {
+      "id": 100,
+      "task_id": "T-20261023-36B2C6",
+      "event_type": "TASK_PENDING",
+      "message": "任务已进入待领取队列",
+      "created_at": "2026-10-23 06:22:52.958251"
+    },
+    {
+      "id": 101,
+      "task_id": "T-20261023-36B2C6",
+      "event_type": "group_task_requested",
+      "message": "用户通过数字员工发起任务",
+      "created_at": "2026-10-23 06:22:52.959187"
+    },
+    {
+      "id": 102,
+      "task_id": "T-20261023-32FE23",
+      "event_type": "TASK_CREATED",
+      "message": "任务已创建",
+      "created_at": "2026-10-23 06:22:53.032233"
+    },
+    {
+      "id": 103,
+      "task_id": "T-20261023-32FE23",
+      "event_type": "TASK_PENDING",
+      "message": "任务已进入待领取队列",
+      "created_at": "2026-10-23 06:22:53.032637"
+    },
+    {
+      "id": 104,
+      "task_id": "T-20261023-32FE23",
+      "event_type": "group_task_requested",
+      "message": "用户通过数字员工发起任务",
+      "created_at": "2026-10-23 06:22:53.033549"
+    },
+    {
+      "id": 105,
+      "task_id": "T-20261023-243DF2",
+      "event_type": "TASK_CREATED",
+      "message": "任务已创建",
+      "created_at": "2026-10-23 06:22:53.101397"
+    },
+    {
+      "id": 106,
+      "task_id": "T-20261023-243DF2",
+      "event_type": "TASK_PENDING",
+      "message": "任务已进入待领取队列",
+      "created_at": "2026-10-23 06:22:53.101862"
+    },
+    {
+      "id": 107,
+      "task_id": "T-20261023-243DF2",
+      "event_type": "group_task_requested",
+      "message": "用户通过数字员工发起任务",
+      "created_at": "2026-10-23 06:22:53.102694"
+    },
+    {
+      "id": 108,
+      "task_id": "T-20261023-36B2C6",
+      "event_type": "TASK_ASSIGNED",
+      "message": "任务已分配给 真实Worker经验闭环QA",
+      "created_at": "2026-10-23 06:22:54.990682"
+    },
+    {
+      "id": 109,
+      "task_id": "T-20261023-36B2C6",
+      "event_type": "TASK_RUNNING",
+      "message": "任务状态从 PENDING 变更为 RUNNING",
+      "created_at": "2026-10-23 06:22:55.689863"
+    },
+    {
+      "id": 110,
+      "task_id": "T-20261023-32FE23",
+      "event_type": "TASK_ASSIGNED",
+      "message": "任务已分配给 多任务并发QA-2",
+      "created_at": "2026-10-23 06:22:57.956424"
+    },
+    {
+      "id": 111,
+      "task_id": "T-20261023-32FE23",
+      "event_type": "TASK_RUNNING",
+      "message": "任务状态从 PENDING 变更为 RUNNING",
+      "created_at": "2026-10-23 06:22:58.533930"
+    },
+    {
+      "id": 112,
+      "task_id": "T-20261023-36B2C6",
+      "event_type": "TASK_WAITING",
+      "message": "任务状态从 RUNNING 变更为 WAITING",
+      "created_at": "2026-10-23 06:22:59.183317"
+    },
+    {
+      "id": 113,
+      "task_id": "T-20261023-243DF2",
+      "event_type": "TASK_ASSIGNED",
+      "message": "任务已分配给 多任务并发QA-3",
+      "created_at": "2026-10-23 06:23:00.929636"
+    },
+    {
+      "id": 114,
+      "task_id": "T-20261023-243DF2",
+      "event_type": "TASK_RUNNING",
+      "message": "任务状态从 PENDING 变更为 RUNNING",
+      "created_at": "2026-10-23 06:23:01.529887"
+    },
+    {
+      "id": 115,
+      "task_id": "T-20261023-32FE23",
+      "event_type": "TASK_WAITING",
+      "message": "任务状态从 RUNNING 变更为 WAITING",
+      "created_at": "2026-10-23 06:23:01.735206"
+    },
+    {
+      "id": 116,
+      "task_id": "T-20261023-243DF2",
+      "event_type": "TASK_WAITING",
+      "message": "任务状态从 RUNNING 变更为 WAITING",
+      "created_at": "2026-10-23 06:23:11.380732"
+    },
+    {
+      "id": 117,
+      "task_id": "T-20261023-7D1053",
+      "event_type": "TASK_CREATED",
+      "message": "任务已创建",
+      "created_at": "2026-10-23 06:27:18.618593"
+    },
+    {
+      "id": 118,
+      "task_id": "T-20261023-7D1053",
+      "event_type": "TASK_PENDING",
+      "message": "任务已进入待领取队列",
+      "created_at": "2026-10-23 06:27:18.619217"
+    },
+    {
+      "id": 119,
+      "task_id": "T-20261023-7D1053",
+      "event_type": "group_task_requested",
+      "message": "用户通过数字员工发起任务",
+      "created_at": "2026-10-23 06:27:18.619935"
+    },
+    {
+      "id": 120,
+      "task_id": "T-20261023-32FE23",
+      "event_type": "TASK_RUNNING",
+      "message": "任务状态从 WAITING 变更为 RUNNING",
+      "created_at": "2026-10-23 06:28:02.898516"
+    },
+    {
+      "id": 121,
+      "task_id": "T-20261023-32FE23",
+      "event_type": "TASK_WAITING",
+      "message": "任务状态从 RUNNING 变更为 WAITING",
+      "created_at": "2026-10-23 06:28:10.379260"
+    },
+    {
+      "id": 122,
+      "task_id": "T-20261023-36B2C6",
+      "event_type": "TASK_RUNNING",
+      "message": "任务状态从 WAITING 变更为 RUNNING",
+      "created_at": "2026-10-23 06:28:40.378512"
+    },
+    {
+      "id": 123,
+      "task_id": "T-20261023-36B2C6",
+      "event_type": "TASK_WAITING",
+      "message": "任务状态从 RUNNING 变更为 WAITING",
+      "created_at": "2026-10-23 06:28:46.073490"
+    },
+    {
+      "id": 124,
+      "task_id": "T-20261023-36B2C6",
+      "event_type": "TASK_COMPLETION_CONFIRMED",
+      "message": "人工确认完成，待经验复盘",
+      "created_at": "2026-10-23 06:29:30.903466"
+    },
+    {
+      "id": 125,
+      "task_id": "T-20261023-36B2C6",
+      "event_type": "TASK_SUCCEEDED",
+      "message": "任务状态从 WAITING 变更为 SUCCEEDED",
+      "created_at": "2026-10-23 06:29:30.907183"
+    },
+    {
+      "id": 126,
+      "task_id": "T-20261023-7D1053",
+      "event_type": "TASK_ASSIGNED",
+      "message": "任务已分配给 真实Worker经验闭环QA",
+      "created_at": "2026-10-23 06:29:33.933538"
+    },
+    {
+      "id": 127,
+      "task_id": "T-20261023-7D1053",
+      "event_type": "TASK_RUNNING",
+      "message": "任务状态从 PENDING 变更为 RUNNING",
+      "created_at": "2026-10-23 06:29:34.420370"
+    },
+    {
+      "id": 128,
+      "task_id": "T-20261023-7D1053",
+      "event_type": "TASK_WAITING",
+      "message": "任务状态从 RUNNING 变更为 WAITING",
+      "created_at": "2026-10-23 06:29:43.887228"
+    },
+    {
+      "id": 129,
+      "task_id": "T-20261023-32FE23",
+      "event_type": "TASK_COMPLETION_CONFIRMED",
+      "message": "人工确认完成，待经验复盘",
+      "created_at": "2026-10-23 06:30:43.436813"
+    },
+    {
+      "id": 130,
+      "task_id": "T-20261023-32FE23",
+      "event_type": "TASK_SUCCEEDED",
+      "message": "任务状态从 WAITING 变更为 SUCCEEDED",
+      "created_at": "2026-10-23 06:30:43.438522"
+    },
+    {
+      "id": 131,
+      "task_id": "T-20261023-243DF2",
+      "event_type": "TASK_COMPLETION_CONFIRMED",
+      "message": "人工确认完成，待经验复盘",
+      "created_at": "2026-10-23 06:30:49.534132"
+    },
+    {
+      "id": 132,
+      "task_id": "T-20261023-243DF2",
+      "event_type": "TASK_SUCCEEDED",
+      "message": "任务状态从 WAITING 变更为 SUCCEEDED",
+      "created_at": "2026-10-23 06:30:49.535555"
+    },
+    {
+      "id": 133,
+      "task_id": "T-20261023-7D1053",
+      "event_type": "TASK_COMPLETION_CONFIRMED",
+      "message": "人工确认完成，待经验复盘",
+      "created_at": "2026-10-23 06:30:56.460551"
+    },
+    {
+      "id": 134,
+      "task_id": "T-20261023-7D1053",
+      "event_type": "TASK_SUCCEEDED",
+      "message": "任务状态从 WAITING 变更为 SUCCEEDED",
+      "created_at": "2026-10-23 06:30:56.464947"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "ses_e9892a94dffeYqzKIwZO01U1wx",
+      "task_id": "T-20261023-243DF2",
+      "employee_id": "qa-worker-concurrent-3-20261023",
+      "status": "SUCCEEDED",
+      "terminal_reason": "completed",
+      "started_at": "2026-10-23 06:23:01.312162",
+      "finished_at": "2026-10-23 06:23:08.595000",
+      "superseded_by": null
+    },
+    {
+      "id": "ses_e9892b4e3ffeqk9g70UZXnIrfS",
+      "task_id": "T-20261023-32FE23",
+      "employee_id": "qa-worker-concurrent-2-20261023",
+      "status": "SUCCEEDED",
+      "terminal_reason": "completed",
+      "started_at": "2026-10-23 06:22:58.350508",
+      "finished_at": "2026-10-23 06:28:07.771000",
+      "superseded_by": null
+    },
+    {
+      "id": "ses_e9892c044ffe9Tk1lV7fWfuNC0",
+      "task_id": "T-20261023-36B2C6",
+      "employee_id": "qa-worker-experience-20261023",
+      "status": "SUCCEEDED",
+      "terminal_reason": "completed",
+      "started_at": "2026-10-23 06:22:55.456296",
+      "finished_at": "2026-10-23 06:28:43.828000",
+      "superseded_by": null
+    },
+    {
+      "id": "ses_e988caa6cffeEdgUJp8T3HMity",
+      "task_id": "T-20261023-7D1053",
+      "employee_id": "qa-worker-experience-20261023",
+      "status": "SUCCEEDED",
+      "terminal_reason": "completed",
+      "started_at": "2026-10-23 06:29:34.231535",
+      "finished_at": "2026-10-23 06:29:40.188000",
+      "superseded_by": null
+    }
+  ],
+  "jobs": [
+    {
+      "id": "xrj_6b70900c9f0740fc849821de288074cc",
+      "task_id_snapshot": "T-20261023-243DF2",
+      "status": "NO_FINDINGS",
+      "attempts": 0,
+      "prompt_version": "2",
+      "candidate_ids": "[]",
+      "zero_reason": "no_findings",
+      "error_code": null,
+      "created_at": "2026-10-23 06:30:49.535107",
+      "finished_at": "2026-10-23 06:31:42.549071"
+    },
+    {
+      "id": "xrj_f82a2c627f494442b627e7fb11bd5b61",
+      "task_id_snapshot": "T-20261023-32FE23",
+      "status": "NO_FINDINGS",
+      "attempts": 0,
+      "prompt_version": "2",
+      "candidate_ids": "[]",
+      "zero_reason": "no_findings",
+      "error_code": null,
+      "created_at": "2026-10-23 06:30:43.437963",
+      "finished_at": "2026-10-23 06:31:25.046965"
+    },
+    {
+      "id": "xrj_b3441cd54a88456b8bd695c307964441",
+      "task_id_snapshot": "T-20261023-36B2C6",
+      "status": "NO_FINDINGS",
+      "attempts": 0,
+      "prompt_version": "2",
+      "candidate_ids": "[]",
+      "zero_reason": "no_findings",
+      "error_code": null,
+      "created_at": "2026-10-23 06:29:30.905698",
+      "finished_at": "2026-10-23 06:29:58.143767"
+    },
+    {
+      "id": "xrj_30b1dea332b640a490b7e9dc5a9738a4",
+      "task_id_snapshot": "T-20261023-7D1053",
+      "status": "NO_FINDINGS",
+      "attempts": 0,
+      "prompt_version": "2",
+      "candidate_ids": "[]",
+      "zero_reason": "no_findings",
+      "error_code": null,
+      "created_at": "2026-10-23 06:30:56.463224",
+      "finished_at": "2026-10-23 06:31:47.145252"
+    }
+  ]
+}

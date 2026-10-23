@@ -157,12 +157,17 @@ class Settings(BaseSettings):
     remote_opencode_version: str = Field(default="1.18.35", validation_alias="NEXUS_REMOTE_OPENCODE_VERSION")
     remote_node_version: str = Field(default="22.23.3", validation_alias="NEXUS_REMOTE_NODE_VERSION")
     remote_npm_registry: str = Field(
-        default="https://registry.npmmirror.com", validation_alias="NEXUS_REMOTE_NPM_REGISTRY"
+        default="https://repo.huaweicloud.com/repository/npm/", validation_alias="NEXUS_REMOTE_NPM_REGISTRY"
     )
-    # Empty uses python3 on the remote. The interpreter must already be >= 3.11.
+    remote_download_base_url: str = Field(
+        default="https://repo.huaweicloud.com", validation_alias="NEXUS_REMOTE_DOWNLOAD_BASE_URL"
+    )
+    # Empty prepares a private, pinned Python without replacing the system Python.
     remote_python: str = Field(default="", validation_alias="NEXUS_REMOTE_PYTHON")
-    # Empty keeps pip's default index. A value is passed as pip -i.
-    remote_pip_index_url: str = Field(default="", validation_alias="NEXUS_REMOTE_PIP_INDEX_URL")
+    remote_pip_index_url: str = Field(
+        default="https://repo.huaweicloud.com/repository/pypi/simple",
+        validation_alias="NEXUS_REMOTE_PIP_INDEX_URL",
+    )
     remote_deploy_timeout_seconds: int = Field(
         default=1200, ge=60, le=3600, validation_alias="NEXUS_REMOTE_DEPLOY_TIMEOUT_SECONDS"
     )

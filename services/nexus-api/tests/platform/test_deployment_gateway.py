@@ -86,6 +86,24 @@ def test_existing_wiki_never_invents_credentials(tmp_path):
     assert "ASTRA_LLM_WIKI_API_TOKEN=" not in (tmp_path / "secrets.env").read_text()
 
 
+def test_remote_bootstrap_settings_survive_clean_process(tmp_path):
+    expected = {
+        "NEXUS_REMOTE_DOWNLOAD_BASE_URL": "https://mirror.company.test",
+        "NEXUS_REMOTE_NPM_REGISTRY": "https://mirror.company.test/repository/npm/",
+        "NEXUS_REMOTE_PIP_INDEX_URL": "https://mirror.company.test/repository/pypi/simple",
+        "NEXUS_REMOTE_PYTHON": "/opt/company/python3.11",
+        "NEXUS_REMOTE_DEPLOY_TIMEOUT_SECONDS": "2400",
+    }
+    read = "import json,os; print(json.dumps({k:os.getenv(k) for k in " + repr(list(expected)) + "}))"
+    body = "step_runenv\n" + (
+        'env -i PATH="$PATH" bash -c \'set -a; . "$1"; set +a; exec "$2" -c "$3"\' '
+        f'-- "$RUNENV" {shlex.quote(sys.executable)} {shlex.quote(read)}'
+    )
+    result = installer(tmp_path, body, extra=expected)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout.splitlines()[-1]) == expected
+
+
 def test_systemd_reads_the_same_shell_environment(tmp_path):
     result = installer(
         tmp_path,

@@ -464,7 +464,7 @@ def test_install_script_rejects_python_below_3_11(tmp_path):
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="remote_install.sh 只支持 Linux")
-def test_install_script_installs_venv_package_for_the_selected_python(tmp_path):
+def test_install_script_rejects_incomplete_selected_python_without_installing_packages(tmp_path):
     bindir = tmp_path / "bin"
     bindir.mkdir()
     python = bindir / "python3.12"
@@ -520,12 +520,9 @@ def test_install_script_installs_venv_package_for_the_selected_python(tmp_path):
         timeout=20,
     )
     assert result.returncode != 0
-    assert "需要安装 python3.12-venv" in result.stderr
+    assert "选定的 Python 缺少 SSL、venv 或 ensurepip" in result.stderr
     assert "nodejs.org" not in result.stderr + result.stdout
-    if os.geteuid() == 0:
-        assert "python3.12-venv" in apt_log.read_text()
-    else:
-        assert not apt_log.exists()
+    assert not apt_log.exists()
 
 
 def _agent_install_worker(monkeypatch):

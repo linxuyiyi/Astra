@@ -387,9 +387,9 @@ def _git_tail(operation: str, data: dict[str, Any]) -> list[str]:
     if operation == "inside_work_tree":
         return ["rev-parse", "--is-inside-work-tree"]
     if operation == "git_common_dir":
-        return ["rev-parse", "--path-format=absolute", "--git-common-dir"]
+        return ["rev-parse", "--git-common-dir"]
     if operation == "branch":
-        return ["branch", "--show-current"]
+        return ["symbolic-ref", "--quiet", "--short", "HEAD"]
     if operation == "status_porcelain":
         return ["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all"]
     if operation == "origin_url":

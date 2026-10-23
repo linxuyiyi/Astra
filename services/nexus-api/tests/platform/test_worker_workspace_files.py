@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import inspect
+import subprocess
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -22,6 +23,46 @@ from app.worker_gateway.bus import MemoryRouteBus
 from app.worker_gateway.data_channel import request_key
 
 
+@pytest.mark.parametrize("detached", [False, True])
+async def test_repo_metadata_with_git_218_commands_and_relative_common_dir(tmp_path, monkeypatch, detached):
+    import app.api.workspace_routes as routes
+
+    repo = tmp_path / "company-project"
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "symbolic-ref", "HEAD", "refs/heads/company"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+         "commit", "--allow-empty", "-m", "initial"], check=True, capture_output=True,
+    )
+    if detached:
+        subprocess.run(["git", "-C", str(repo), "checkout", "--detach"], check=True, capture_output=True)
+
+    async def task(*_args):
+        return SimpleNamespace(workspace=str(repo))
+
+    async def environment(*_args):
+        return SimpleNamespace(mode=ExecutionMode.LOCAL, id=None)
+
+    async def validate(*_args):
+        return "."
+
+    async def changes(*_args):
+        return []
+
+    class Session:
+        async def commit(self):
+            pass
+
+    monkeypatch.setattr(routes, "require_task", task)
+    monkeypatch.setattr(routes, "resolve_environment", environment)
+    monkeypatch.setattr(routes, "validate_path", validate)
+    monkeypatch.setattr(routes, "collect_workspace_changes", changes)
+    result = await task_repo("task", Session())
+    assert result["name"] == "company-project"
+    assert result["branch"] == ("" if detached else "company")
+    assert result["dirty"] is False
+
+
 class _SecretEnv:
     id = 1
     mode = ExecutionMode.LINUX_REMOTE
@@ -35,10 +76,10 @@ class _SecretEnv:
 def test_git_operations_match_the_existing_invocations():
     assert git_command_payload(("rev-parse", "HEAD")) == {"operation": "head"}
     assert git_command_payload(("rev-parse", "--is-inside-work-tree")) == {"operation": "inside_work_tree"}
-    assert git_command_payload(("rev-parse", "--path-format=absolute", "--git-common-dir")) == {
+    assert git_command_payload(("rev-parse", "--git-common-dir")) == {
         "operation": "git_common_dir"
     }
-    assert git_command_payload(("branch", "--show-current")) == {"operation": "branch"}
+    assert git_command_payload(("symbolic-ref", "--quiet", "--short", "HEAD")) == {"operation": "branch"}
     assert git_command_payload(
         ("status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all")
     ) == {"operation": "status_porcelain"}
@@ -314,7 +355,7 @@ async def test_file_api_still_validates_before_opencode_and_repo_overflow_is_dir
             raise WorkerFileError("too_large", "文件不能超过 20 MB")
         if args == ("rev-parse", "HEAD"):
             return 0, "abc123\n"
-        if args[0] == "branch":
+        if args[0] == "symbolic-ref":
             return 0, "main\n"
         if args[0] == "config":
             return 1, ""

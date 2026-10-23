@@ -60,9 +60,9 @@ def git_command_payload(args: tuple[str, ...]) -> dict[str, Any]:
         return {"operation": "head"}
     if args == ("rev-parse", "--is-inside-work-tree"):
         return {"operation": "inside_work_tree"}
-    if args == ("rev-parse", "--path-format=absolute", "--git-common-dir"):
+    if args == ("rev-parse", "--git-common-dir"):
         return {"operation": "git_common_dir"}
-    if args == ("branch", "--show-current"):
+    if args == ("symbolic-ref", "--quiet", "--short", "HEAD"):
         return {"operation": "branch"}
     if args == ("status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all"):
         return {"operation": "status_porcelain"}

@@ -1207,10 +1207,12 @@ async def task_repo(task_id: str, session=Depends(get_session)):
             raise RuntimeError("远程环境尚未安装 Worker")
 
         commit = await git("rev-parse", "HEAD")
-        branch = await git("branch", "--show-current")
+        branch = await git("symbolic-ref", "--quiet", "--short", "HEAD")
         changes = await git("status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all")
         origin = await git("config", "--get", "remote.origin.url")
-        common_dir = await git("rev-parse", "--path-format=absolute", "--git-common-dir")
+        common_dir = await git("rev-parse", "--git-common-dir")
+        if common_dir and not Path(common_dir).is_absolute():
+            common_dir = str(Path(task.workspace) / common_dir)
         name = (
             origin.rstrip("/").split("/")[-1].removesuffix(".git")
             if origin

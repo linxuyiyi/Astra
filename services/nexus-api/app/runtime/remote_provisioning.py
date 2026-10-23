@@ -42,6 +42,7 @@ from app.runtime.capability import (
 from app.runtime.direct_urls import require_direct_url
 from app.runtime.environment import ExecutionEnvironmentRuntime
 from app.runtime.opencode_model import route_model_id
+from app.runtime.remote_bootstrap import download_base, managed_python, prepare_python
 from app.runtime.repository import cipher, collect_skill_files
 
 PROVIDER_ID = "nexus-gateway"
@@ -236,7 +237,10 @@ class RemoteProvisioner:
 
     def _agent_interpreter(self) -> str:
         configured = (self.settings.remote_python or "").strip()
-        return configured or "python3"
+        return configured or managed_python(self.environment.id)
+
+    def _probe_interpreter(self) -> str:
+        return agent_python(self.environment.id) if self.action == "restart" else self._agent_interpreter()
 
     def _gateway_service(self, db, runtime=None):
         return GatewayControlService(
@@ -299,7 +303,7 @@ class RemoteProvisioner:
             if item["type"] in {"busy", "retry"}:
                 raise RuntimeError("OpenCode 存在正在执行的 Session，请先停止执行再维护环境")
 
-    async def _native_idle(self, *, strict: bool = False):
+    async def _native_idle(self, *, strict: bool = False, interpreter: str | None = None):
         port = int(self.environment.opencode_server_port)
         query = urlencode({"directory": self.environment.workspace_root})
         url = f"http://127.0.0.1:{port}/session/status?{query}"
@@ -324,7 +328,11 @@ class RemoteProvisioner:
             "except Exception:\n"
             "    print('NEXUS_UNKNOWN')\n"
         )
-        out = (await self._command(f"python3 -c {shlex.quote(script)}")).strip()
+        out = (
+            await self._command(
+                f"{shlex.quote(interpreter or self._probe_interpreter())} -c {shlex.quote(script)}"
+            )
+        ).strip()
         if out == "NEXUS_STOPPED":
             # Only an explicit refused connection proves the service is stopped.
             return False
@@ -340,6 +348,34 @@ class RemoteProvisioner:
             return False
         self._assert_native_idle(states)
         return True
+
+    async def _bootstrap_idle(self, *, interpreter_ready: bool):
+        if interpreter_ready:
+            await self._native_idle(strict=True)
+            return
+        installed = agent_python(self.environment.id)
+        if await self._command(f"test -x {shlex.quote(installed)} && printf yes || true") == "yes":
+            await self._native_idle(strict=True, interpreter=installed)
+            return
+        # Before Python exists, only absence of a kernel TCP listener permits
+        # bootstrap. A listener cannot be treated as idle without native facts.
+        probe = r'''
+files=(/proc/net/tcp)
+if test -e /proc/net/tcp6; then files+=(/proc/net/tcp6); fi
+for file in "${files[@]}"; do
+  test -r "$file" || { echo '无法确认 OpenCode 监听状态，停止环境引导' >&2; exit 1; }
+done
+if awk -v port="$1" '$4 == "0A" && $2 ~ ":" port "$" { found=1 }
+  END { exit found ? 1 : 0 }' "${files[@]}"; then
+  printf CLEAR
+else
+  printf BLOCKED
+fi
+'''
+        port = f"{int(self.environment.opencode_server_port):04X}"
+        state = await self._command("bash -c " + shlex.quote(probe) + " -- " + shlex.quote(port))
+        if state != "CLEAR":
+            raise RuntimeError("OpenCode 端口已有监听且尚无可用解释器确认原生状态，停止环境引导")
 
     async def _opencode_unit_active(self) -> bool:
         unit = f"nexus-opencode-{self.environment.id}.service"
@@ -478,6 +514,7 @@ class RemoteProvisioner:
             self._agent_interpreter(),
             jsonc_file,
             token_file,
+            download_base(self.settings),
         ]
         command = (
             f"timeout -k 10 {self.settings.remote_deploy_timeout_seconds} bash {shlex.quote(stem + '.sh')} "
@@ -892,7 +929,9 @@ class RemoteProvisioner:
             "except Exception as exc:\n"
             "    print('NOT_READY:%s' % exc.__class__.__name__)\n"
         )
-        out = (await self._command(f"python3 -c {shlex.quote(script)}")).strip()
+        out = (
+            await self._command(f"{shlex.quote(self._probe_interpreter())} -c {shlex.quote(script)}")
+        ).strip()
         return out == "READY", out
 
     async def _wait_opencode_ready(self) -> None:
@@ -1197,6 +1236,8 @@ class RemoteProvisioner:
                 else:
                     await self.step(emit, "SSH 连接与执行检查", "running")
                     self.ssh = await self.runtime.open_session(self.environment)
+                    if self.action in {"deploy", "update"}:
+                        await prepare_python(self, emit)
                     readable = await self._native_idle(strict=self.action == "restart")
                     if (
                         not readable

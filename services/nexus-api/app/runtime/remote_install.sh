@@ -12,6 +12,7 @@ operation=$7
 python_bin=${8:-python3}
 jsonc_py=${9:-}
 token_file=${10:-}
+download_base=${11:-https://repo.huaweicloud.com}
 cache="$HOME/.cache/nexus-provision"
 mkdir -p "$cache"
 config_info=""
@@ -281,6 +282,14 @@ repository_stage() {
     git_fail '工程仓库没有提交，请先创建初始提交'
   fi
 }
+assert_git_version() {
+  local git_version
+  git_version=$(git version | awk '{print $3}')
+  if test "$(printf '2.18.0\n%s\n' "$git_version" | sort -V | head -1)" != 2.18.0; then
+    fail 'Git 版本低于 2.18，请管理员升级；不会自动覆盖系统 Git'
+  fi
+}
+
 # <<< nexus-installer-functions
 
 test "$(uname -s)" = Linux || fail '只支持 Linux'
@@ -348,49 +357,17 @@ step '运行状态检查' running
 assert_native_idle "$opencode_port"
 step '运行状态检查' passed
 
-step '系统依赖' running
-py_mm=$("$python_bin" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
-venv_pkg="python${py_mm}-venv"
-install_venv=false
-if ! "$python_bin" -c 'import ensurepip' >/dev/null 2>&1; then install_venv=true; fi
-if test "$(id -u)" = 0; then
-  if command -v apt-get >/dev/null; then
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -qq
-    apt-get install -y -qq ca-certificates curl tar xz-utils unzip git build-essential libcurl4-openssl-dev libssl-dev libexpat1-dev zlib1g-dev gettext
-    if test "$install_venv" = true; then apt-get install -y -qq "$venv_pkg" || apt-get install -y -qq python3-venv; fi
-  elif command -v yum >/dev/null; then
-    yum_args=()
-    if test "${ID:-}" = centos && test "${VERSION_ID%%.*}" = 7; then
-      mkdir -p "$cache/repos"
-      cat >"$cache/repos/centos-vault.repo" <<'REPO'
-[nexus-vault-base]
-name=CentOS 7 archive base
-baseurl=https://vault.centos.org/7.9.2009/os/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
-enabled=1
-[nexus-vault-updates]
-name=CentOS 7 archive updates
-baseurl=https://vault.centos.org/7.9.2009/updates/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
-enabled=1
-REPO
-      yum_args=(--setopt="reposdir=$cache/repos")
-    fi
-    yum "${yum_args[@]}" -y -q install ca-certificates curl tar xz unzip git gcc gcc-c++ make libcurl-devel openssl-devel expat-devel zlib-devel gettext-devel perl-ExtUtils-MakeMaker
-  else fail '不支持的系统包管理器，需要 Debian/Ubuntu 或 RHEL 系列'; fi
-else
-  for tool in curl tar xz git flock sha256sum; do command -v "$tool" >/dev/null || fail "缺少 $tool，请管理员安装系统依赖"; done
-fi
-if ! "$python_bin" -c 'import ensurepip' >/dev/null 2>&1; then fail "需要安装 $venv_pkg"; fi
-step '系统依赖' passed
+# System packages and Python are prepared by the Nexus-side SSH bootstrap.
+for tool in curl tar xz git flock sha256sum; do command -v "$tool" >/dev/null || fail "缺少 $tool，请管理员安装系统依赖"; done
+"$python_bin" -c 'import ssl,venv,ensurepip' || fail '选定的 Python 缺少 SSL、venv 或 ensurepip'
+step 'Git 工作树' running
+assert_git_version
+git version
+step 'Git 工作树' passed
 
-step 'Node.js 与 npm' running
 node_dist=linux-$arch
-node_source=https://nodejs.org/dist
-if test "$old_glibc" = true; then node_dist=linux-x64-glibc-217; node_source=https://unofficial-builds.nodejs.org/download/release; fi
+node_source="$download_base/nodejs"
+if test "$old_glibc" = true; then node_dist=linux-x64-musl; fi
 env_root="$HOME/.local/share/nexus/workers/$environment_id"
 node_root="$env_root/node-v$node_version"
 npm_prefix="$env_root/npm"
@@ -399,6 +376,43 @@ npm_binary="$npm_prefix/bin/opencode"
 npm_package="$npm_prefix/lib/node_modules/opencode-ai/package.json"
 downloads="$env_root/downloads"
 mkdir -p "$env_root" "$downloads"
+step 'musl 运行库' running
+if test "$old_glibc" = true; then
+  test "$(id -u)" = 0 || fail '旧 glibc 需要管理员安装 musl 运行库'
+  exec 7>"$cache/musl-runtime.lock"
+  flock -n 7 || fail '另一 Worker 正在维护共享 musl 运行库，请等待后重试'
+  musl_root="$HOME/.local/share/nexus/musl-runtime"
+  if ! test -x "$musl_root/sbin/apk"; then
+    alpine_archive=alpine-minirootfs-3.22.6-x86_64.tar.gz
+    alpine_url="$download_base/alpine/v3.22/releases/x86_64"
+    download "$alpine_url/$alpine_archive" "$downloads/$alpine_archive"
+    download "$alpine_url/$alpine_archive.sha256" "$downloads/alpine-sha256.txt"
+    (cd "$downloads"; sha256sum -c alpine-sha256.txt)
+    mkdir -p "$musl_root"
+    tar -xzf "$downloads/$alpine_archive" -C "$musl_root"
+    rm -f "$downloads/$alpine_archive" "$downloads/alpine-sha256.txt"
+  fi
+  # Keep apk's repositories on the same mirror, including an existing rootfs.
+  printf '%s\n' "$download_base/alpine/v3.22/main" "$download_base/alpine/v3.22/community" >"$musl_root/etc/apk/repositories"
+  # Only populate the shared runtime when its libraries are missing; an active
+  # worker must not be mutated by another worker's maintenance.
+  if ! test -e "$musl_root/usr/lib/libstdc++.so.6"; then
+    SSL_CERT_FILE=/etc/pki/tls/certs/ca-bundle.crt "$musl_root/lib/ld-musl-x86_64.so.1" \
+      --library-path "$musl_root/lib:$musl_root/usr/lib" "$musl_root/sbin/apk" \
+      --root "$musl_root" --keys-dir "$musl_root/etc/apk/keys" \
+      --repositories-file "$musl_root/etc/apk/repositories" --no-scripts add libgcc libstdc++
+  fi
+  if ! test -e /lib/ld-musl-x86_64.so.1; then ln -s "$musl_root/lib/ld-musl-x86_64.so.1" /lib/ld-musl-x86_64.so.1; fi
+  # Only musl's loader reads this file; glibc/Node/Git paths stay untouched.
+  musl_paths=/etc/ld-musl-x86_64.path
+  if ! grep -Fq "$musl_root/usr/lib" "$musl_paths" 2>/dev/null; then
+    test -e "$musl_paths" || printf '%s\n' /lib:/usr/local/lib:/usr/lib >"$musl_paths"
+    printf '\n%s\n' "$musl_root/lib:$musl_root/usr/lib" >>"$musl_paths"
+  fi
+fi
+step 'musl 运行库' passed
+
+step 'Node.js 与 npm' running
 node_ready=false
 if test -x "$node_root/bin/node"; then
   actual_node=$("$node_root/bin/node" --version 2>/dev/null || true)
@@ -426,57 +440,7 @@ hash -r
 test "$(node --version)" = "v$node_version" || fail '选中的 Node.js 版本与目标版本不符'
 step 'Node.js 与 npm' passed
 
-step 'Git 工作树' running
-git_version=$(git version | awk '{print $3}')
-if test "$(printf '2.20.0\n%s\n' "$git_version" | sort -V | head -1)" != 2.20.0; then
-  test "$(id -u)" = 0 || fail 'Git 版本低于 2.20，请管理员升级'
-  # The maintained 2.43 line supports CentOS 7's libcurl/OpenSSL headers.
-  git_release=2.43.7
-  archive="git-$git_release.tar.xz"
-  download "https://www.kernel.org/pub/software/scm/git/$archive" "$downloads/$archive"
-  download 'https://www.kernel.org/pub/software/scm/git/sha256sums.asc' "$downloads/git-sha256.txt"
-  (cd "$downloads"; awk -v file="$archive" '$2 == file { print; found=1 } END { if (!found) exit 1 }' git-sha256.txt | sha256sum -c -)
-  tar -xJf "$downloads/$archive" -C "$downloads"
-  git_flags=()
-  if test "$old_glibc" = true; then git_flags=(CSPRNG_METHOD=openssl); fi
-  make -s -C "$downloads/git-$git_release" -j2 prefix=/usr/local NO_TCLTK=YesPlease NO_GETTEXT=YesPlease "${git_flags[@]}" all install
-  rm -f "$downloads/$archive" "$downloads/git-sha256.txt"
-fi
-git version
-step 'Git 工作树' passed
-
 step 'OpenCode 安装' running
-if test "$old_glibc" = true; then
-  test "$(id -u)" = 0 || fail '旧 glibc 需要管理员安装 musl 运行库'
-  exec 7>"$cache/musl-runtime.lock"
-  flock -n 7 || fail '另一 Worker 正在维护共享 musl 运行库，请等待后重试'
-  musl_root="$HOME/.local/share/nexus/musl-runtime"
-  if ! test -x "$musl_root/sbin/apk"; then
-    alpine_archive=alpine-minirootfs-3.22.6-x86_64.tar.gz
-    alpine_url=https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/x86_64
-    download "$alpine_url/$alpine_archive" "$downloads/$alpine_archive"
-    download "$alpine_url/$alpine_archive.sha256" "$downloads/alpine-sha256.txt"
-    (cd "$downloads"; sha256sum -c alpine-sha256.txt)
-    mkdir -p "$musl_root"
-    tar -xzf "$downloads/$alpine_archive" -C "$musl_root"
-    rm -f "$downloads/$alpine_archive" "$downloads/alpine-sha256.txt"
-  fi
-  # Only populate the shared runtime when its libraries are missing; an active
-  # worker must not be mutated by another worker's maintenance.
-  if ! test -e "$musl_root/usr/lib/libstdc++.so.6"; then
-    SSL_CERT_FILE=/etc/pki/tls/certs/ca-bundle.crt "$musl_root/lib/ld-musl-x86_64.so.1" \
-      --library-path "$musl_root/lib:$musl_root/usr/lib" "$musl_root/sbin/apk" \
-      --root "$musl_root" --keys-dir "$musl_root/etc/apk/keys" \
-      --repositories-file "$musl_root/etc/apk/repositories" --no-scripts add libgcc libstdc++
-  fi
-  if ! test -e /lib/ld-musl-x86_64.so.1; then ln -s "$musl_root/lib/ld-musl-x86_64.so.1" /lib/ld-musl-x86_64.so.1; fi
-  # Only musl's loader reads this file; glibc/Node/Git paths stay untouched.
-  musl_paths=/etc/ld-musl-x86_64.path
-  if ! grep -Fq "$musl_root/usr/lib" "$musl_paths" 2>/dev/null; then
-    test -e "$musl_paths" || printf '%s\n' /lib:/usr/local/lib:/usr/lib >"$musl_paths"
-    printf '\n%s\n' "$musl_root/lib:$musl_root/usr/lib" >>"$musl_paths"
-  fi
-fi
 # npm is installed under the Worker-specific prefix, never into a shared global path.
 installed_version=$(node -e 'try { const p=require(process.argv[1]); process.stdout.write(p.version || "") } catch {}' "$npm_package" 2>/dev/null || true)
 if test "$installed_version" != "$opencode_version" || ! test -x "$npm_binary" || test "$("$npm_binary" --version 2>/dev/null || true)" != "$opencode_version"; then

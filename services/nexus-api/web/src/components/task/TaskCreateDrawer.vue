@@ -45,7 +45,7 @@
       <ElDivider content-position="left">任务内容</ElDivider>
 
       <ElFormItem label="任务描述" prop="description">
-        <ElInput v-model.trim="form.description" type="textarea" :rows="4" placeholder="说明背景、当前情况、需要实现的能力和必要限制" />
+        <ElInput v-model.trim="form.description" type="textarea" :rows="4" placeholder="任务描述" />
       </ElFormItem>
       <ElFormItem v-if="task?.attachments.length" label="已有附件">
         <ElText v-for="(item, index) in task.attachments" :key="index" type="info">{{ attachmentName(item) }}</ElText>

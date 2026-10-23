@@ -246,7 +246,6 @@
             </ElDescriptionsItem>
             <ElDescriptionsItem label="未知用量请求（今日）">{{ dayTokens?.unknown_usage_requests ?? '—' }}</ElDescriptionsItem>
           </ElDescriptions>
-          <p class="gateway-node-note">额度按已完成请求计入，并发时可能略微超出限额。</p>
         </ElCard>
       </div>
     </section>

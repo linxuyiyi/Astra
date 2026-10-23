@@ -1,0 +1,11 @@
+{
+  "baseline": "b28dd5ebd",
+  "mode": "真实节点详情页面，固定 API 数据，未访问真实上游",
+  "checks": {
+    "quotaVisible": true,
+    "hourlyLimit": 100000,
+    "dailyLimit": 1000000,
+    "duplicateExplanatoryNoteAbsent": true
+  },
+  "pageErrors": []
+}

@@ -25,7 +25,7 @@
       </div>
     </div>
 
-    <ElTable v-loading="loading" :data="paged" row-key="id" aria-label="MCP 列表" element-loading-text="正在加载 MCP 列表" data-testid="mcps-table">
+    <ElTable v-loading="loading" :data="paged" row-key="id" :max-height="TABLE_MAX_HEIGHT" aria-label="MCP 列表" element-loading-text="正在加载 MCP 列表" data-testid="mcps-table">
       <ElTableColumn label="名称" min-width="170">
         <template #default="{ row }">
           <div class="name-cell">
@@ -67,7 +67,7 @@
           <span v-if="row.sync.pending" class="sync-count">待 {{ row.sync.pending }}</span>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="操作" width="240" align="center">
+      <ElTableColumn label="操作" width="240" align="center" fixed="right">
         <template #default="{ row }">
           <div class="admin-actions">
             <ElButton link type="primary" @click="openDetail(row as McpResource)">查看</ElButton>
@@ -191,7 +191,7 @@
           <ElDescriptionsItem label="状态">{{ viewing.enabled ? "已启用" : "已停用" }}</ElDescriptionsItem>
           <ElDescriptionsItem label="鉴权">{{ authLabel(viewing.auth_type) }}</ElDescriptionsItem>
           <ElDescriptionsItem label="凭据">{{ viewing.has_token ? "已保存（不回显）" : "未保存" }}</ElDescriptionsItem>
-          <ElDescriptionsItem label="说明" :span="2">{{ viewing.description || "—" }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="说明" :span="2"><span class="detail-desc">{{ viewing.description || "—" }}</span></ElDescriptionsItem>
           <ElDescriptionsItem label="同步" :span="2">
             <ElTag size="small" :type="syncTagType(viewing.sync.status)">{{ syncLabel(viewing.sync.status) }}</ElTag>
             <span class="detail-sync">{{ viewing.sync.detail || "—" }}</span>
@@ -257,6 +257,7 @@ import {
 import type { McpResource, McpTestResult } from "../../types";
 import { confirmDialog } from "../../composables/useConfirm";
 import { notify } from "../../composables/useToast";
+import { TABLE_MAX_HEIGHT } from "../../utils/table";
 import SettingsHeaderActions from "./SettingsHeaderActions.vue";
 
 const items = ref<McpResource[]>([]);
@@ -561,6 +562,7 @@ onMounted(load);
 .tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .tool-tag { font-family: var(--astra-font-mono, ui-monospace, monospace); }
 .drawer-footer { display: flex; justify-content: flex-end; gap: 8px; }
+.detail-desc { white-space: pre-wrap; word-break: break-word; }
 .detail { display: flex; flex-direction: column; gap: 12px; }
 .detail h4 { margin: 0 0 6px; color: var(--astra-text-secondary); font-size: 13px; }
 .detail-sync { margin-left: 8px; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }

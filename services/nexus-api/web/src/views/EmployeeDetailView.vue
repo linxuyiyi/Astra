@@ -81,7 +81,7 @@
 
           <ElCard shadow="never" class="worker-card worker-card--wide">
             <template #header><div class="worker-card__title"><h3>任务记录</h3><ElText>{{ employeeTasks.length }} 项</ElText></div></template>
-            <ElTable v-loading="store.loading" :data="pagedTasks" size="small" @row-click="openTask">
+            <ElTable v-loading="store.loading" :data="pagedTasks" size="small" max-height="360" @row-click="openTask">
               <ElTableColumn label="任务" min-width="220" show-overflow-tooltip>
                 <template #default="{ row }"><div class="task-cell"><strong>{{ row.title }}</strong><small>{{ row.id }}</small></div></template>
               </ElTableColumn>
@@ -175,7 +175,7 @@
                 <SemanticTag :tone="runtimeHealthTone(health)" :label="`OpenCode ${runtimeHealthLabel(health)}`" />
                 <ElText>最近检查 {{ formatTime(health?.runtime_health.last_checked_at) }}</ElText>
               </div>
-            <ElTable v-if="equipment.length" :data="equipment" size="small">
+            <ElTable v-if="equipment.length" :data="equipment" size="small" max-height="360">
               <ElTableColumn type="expand" width="40">
                 <template #default="{ row }">
                   <ElDescriptions :column="2" border size="small" class="equipment-detail">

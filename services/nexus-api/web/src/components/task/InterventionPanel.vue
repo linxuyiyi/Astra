@@ -15,7 +15,7 @@
       </div>
     </div>
 
-    <ElTable v-loading="store.loading" :data="paged" row-key="id" data-testid="intervention-table">
+    <ElTable v-loading="store.loading" :data="paged" row-key="id" :max-height="TABLE_MAX_HEIGHT" data-testid="intervention-table">
       <ElTableColumn label="任务" min-width="260">
         <template #default="{ row }">
           <div class="intervention-task">
@@ -71,6 +71,7 @@ import type { Task } from '@/api/types'
 import { notify } from '@/composables/useToast'
 import RuntimeStatusBadge from '@/components/runtime/RuntimeStatusBadge.vue'
 import { runtimeStatusLabel } from '@/features/runtime/status'
+import { TABLE_MAX_HEIGHT } from '@/utils/table'
 import { useAstraStore } from '@/stores/astra'
 
 const store = useAstraStore()

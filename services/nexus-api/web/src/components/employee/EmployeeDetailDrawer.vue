@@ -47,7 +47,7 @@
           <ElDescriptionsItem label="岗位">{{ model.employee.role }}</ElDescriptionsItem>
           <ElDescriptionsItem label="所在区域">{{ model.areaName }}</ElDescriptionsItem>
           <ElDescriptionsItem label="启用状态"><ElTag size="small" :type="model.employee.enabled ? 'success' : 'info'" :effect="model.employee.enabled ? 'light' : 'plain'">{{ model.employee.enabled ? '已启用' : '已停用' }}</ElTag></ElDescriptionsItem>
-          <ElDescriptionsItem label="职责" :span="2">{{ model.employee.description || model.employee.role }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="职责" :span="2"><span class="employee-detail-drawer__desc">{{ model.employee.description || model.employee.role }}</span></ElDescriptionsItem>
         </ElDescriptions>
       </ElCard>
 
@@ -69,7 +69,7 @@
             <RouterLink class="employee-detail-drawer__link" :to="`/workers/${model.employee.id}#tasks`">查看全部任务 <ArrowUpRight :size="14" /></RouterLink>
           </div>
         </template>
-        <ElTable v-if="recentTasks.length" :data="recentTasks" size="small">
+        <ElTable v-if="recentTasks.length" :data="recentTasks" size="small" max-height="240">
           <ElTableColumn label="任务" min-width="200">
             <template #default="{ row }"><RouterLink class="employee-detail-drawer__link" :to="`/tasks/${row.id}`">{{ row.title }}</RouterLink></template>
           </ElTableColumn>
@@ -127,6 +127,7 @@ function onEdit() { if (cachedEmployee.value) emit('edit', cachedEmployee.value)
 .employee-detail-drawer__card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .employee-detail-drawer__card-header h3, .employee-detail-drawer :deep(.el-card__header > h3) { margin: 0; font-size: var(--astra-font-label); line-height: normal; }
 .employee-detail-drawer__link, .employee-detail-drawer__link:hover { color: var(--astra-primary); font-size: var(--astra-font-label); }
+.employee-detail-drawer__desc { white-space: pre-wrap; word-break: break-word; }
 .employee-detail-drawer__current-task > strong { display: block; }
 .employee-detail-drawer__current-task > span { margin: 4px 0 12px; }
 .employee-detail-drawer__current-task :deep(.el-descriptions) { margin-top: 12px; }

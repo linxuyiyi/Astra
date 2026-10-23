@@ -245,7 +245,7 @@ const review = reactive({ space_id: '', title: '', summary: '', tags: '', conten
 let reviewSnapshot = ''
 let lastDetailId: string | null | undefined
 let copyTimer = 0
-marked.setOptions({ gfm: true, breaks: false })
+marked.setOptions({ gfm: true, breaks: true })
 
 const editFields = () => JSON.stringify([review.space_id, review.title, review.summary, review.tags, review.content_md, review.verification_status])
 const reviewDirty = computed(() => reviewEditing.value && Boolean(props.detail) && editFields() !== reviewSnapshot)

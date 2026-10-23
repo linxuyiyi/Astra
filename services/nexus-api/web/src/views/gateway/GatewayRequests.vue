@@ -46,6 +46,7 @@
       v-loading="loading"
       :data="page.items"
       row-key="id"
+      :max-height="TABLE_MAX_HEIGHT"
       element-loading-text="正在加载调用日志"
       data-testid="gateway-requests-table"
     >
@@ -166,6 +167,7 @@ import {
 } from '@/api/gateway'
 import GatewayHeaderActions from '@/views/gateway/GatewayHeaderActions.vue'
 import { errorCause, errorMessage, formatDateTime } from '@/utils/gateway'
+import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
 const route = useRoute()
 const page = ref<GatewayRequestPage>({ items: [], total: 0, page: 1, page_size: 20 })

@@ -43,6 +43,7 @@
       v-loading="loading"
       :data="pagedPools"
       row-key="id"
+      :max-height="TABLE_MAX_HEIGHT"
       element-loading-text="正在加载资源池"
       data-testid="gateway-pool-table"
     >
@@ -60,7 +61,7 @@
           <ElTag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '禁用' }}</ElTag>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="操作" width="140" align="center">
+      <ElTableColumn label="操作" width="140" align="center" fixed="right">
         <template #default="{ row }">
           <div class="admin-actions">
             <ElButton link type="primary" :disabled="busy" @click="openPoolEdit(row as GatewayPool)">编辑</ElButton>
@@ -167,6 +168,7 @@ import GatewayHeaderActions from '@/views/gateway/GatewayHeaderActions.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
 import { errorMessage } from '@/utils/gateway'
+import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
 const pools = ref<GatewayPool[]>([])
 const nodes = ref<GatewayNode[]>([])

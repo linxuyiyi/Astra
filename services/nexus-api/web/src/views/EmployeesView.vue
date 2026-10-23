@@ -42,6 +42,7 @@
       v-loading="loading"
       :data="paged"
       row-key="id"
+      :max-height="TABLE_MAX_HEIGHT"
       element-loading-text="正在加载员工列表"
       data-testid="employees-table"
     >
@@ -120,7 +121,7 @@
         </template>
       </ElTableColumn>
 
-      <ElTableColumn label="操作" width="228" align="center">
+      <ElTableColumn label="操作" width="228" align="center" fixed="right">
         <template #default="{ row }">
           <div class="admin-actions">
             <ElButton link type="primary" @click="openView(row as Employee)">查看</ElButton>
@@ -283,6 +284,7 @@ import SettingsHeaderActions from "./settings/SettingsHeaderActions.vue";
 import { deleteEmployee, getKnowledge, getMcps, getSkills, getTools, listEmployees, saveEmployee } from "../api";
 import { gatewayApi, type GatewayRoute } from "../api/gateway";
 import type { Employee, ResourceCatalog } from "../types";
+import { TABLE_MAX_HEIGHT } from "../utils/table";
 import { formatToolLabel, isMcpTool } from "../utils/tools";
 
 const router = useRouter();
@@ -493,7 +495,7 @@ onMounted(async () => {
 .view-hero-text p { margin: 0 0 6px; }
 .view-section { display: flex; flex-direction: column; gap: 6px; }
 .view-label { font-size: 12px; font-weight: var(--astra-weight-bold); color: var(--astra-text-secondary); }
-.view-desc { margin: 0; color: var(--astra-text-primary); line-height: 1.5; font-size: var(--astra-font-helper); }
+.view-desc { margin: 0; color: var(--astra-text-primary); line-height: 1.5; font-size: var(--astra-font-helper); white-space: pre-wrap; word-break: break-word; }
 .view-instructions { margin: 0; padding: 10px 12px; background: var(--astra-bg-elevated); border-radius: 8px; font-family: inherit; font-size: 12px; line-height: 1.6; white-space: pre-wrap; color: var(--astra-text-primary); }
 .mono-box { font-family: var(--astra-font-mono, monospace); font-size: 12px; color: var(--astra-text-muted); background: var(--astra-bg-elevated); padding: 6px 10px; border-radius: 6px; }
 .view-footer { display: flex; justify-content: flex-end; gap: 8px; }

@@ -5,6 +5,7 @@
     element-loading-text="正在加载节点"
     :data="nodes"
     row-key="id"
+    :max-height="TABLE_MAX_HEIGHT"
     data-testid="gateway-node-table"
   >
     <ElTableColumn label="节点名称 / 地址" min-width="200">
@@ -52,7 +53,7 @@
         </ElTag>
       </template>
     </ElTableColumn>
-    <ElTableColumn label="操作" width="200" align="center">
+    <ElTableColumn label="操作" width="200" align="center" fixed="right">
       <template #default="{ row }">
         <div class="admin-actions">
           <ElButton link type="primary" :disabled="busyId === row.id" @click="$emit('detail', row as GatewayNode)">详情</ElButton>
@@ -83,6 +84,7 @@
 import { RouterLink } from 'vue-router'
 import { ElButton, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus'
 import type { GatewayNode, GatewayPool } from '@/api/gateway'
+import { TABLE_MAX_HEIGHT } from '@/utils/table'
 import {
   configStateLabel,
   healthStateLabel,

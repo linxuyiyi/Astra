@@ -132,7 +132,7 @@ const rules: FormRules = {
   content_md: [{ required: true, message: '请输入 Markdown 正文', trigger: 'blur' }],
 }
 
-marked.setOptions({ gfm: true, breaks: false })
+marked.setOptions({ gfm: true, breaks: true })
 const safeMarkdown = computed(() => DOMPurify.sanitize(marked.parse(form.content_md || '', { async: false }) as string, { USE_PROFILES: { html: true } }))
 
 watch(() => props.open, (open) => {

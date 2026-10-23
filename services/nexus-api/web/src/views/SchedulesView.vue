@@ -30,7 +30,7 @@
           <ElButton :icon="RotateCcw" @click="resetFilters">重置</ElButton>
         </div>
       </div>
-      <ElTable v-loading="loading" :data="rows" row-key="id" element-loading-text="正在加载日程列表" data-testid="schedules-table">
+      <ElTable v-loading="loading" :data="rows" row-key="id" :max-height="TABLE_MAX_HEIGHT" element-loading-text="正在加载日程列表" data-testid="schedules-table">
         <ElTableColumn label="日程" min-width="220">
           <template #default="{ row }">
             <ElButton class="schedule-title" link type="primary" :title="row.data.name" @click="openHistory(row as EmployeeSchedule)">{{ row.data.name }}</ElButton>
@@ -47,7 +47,7 @@
         <ElTableColumn label="状态" width="100" align="center">
           <template #default="{ row }"><SemanticTag :tone="row.data.enabled ? 'success' : 'neutral'" :label="row.data.enabled ? '已启用' : '已暂停'" /></template>
         </ElTableColumn>
-        <ElTableColumn label="操作" width="168" align="center">
+        <ElTableColumn label="操作" width="168" align="center" fixed="right">
           <template #default="{ row }"><div class="admin-actions">
             <RowMenu primary="执行记录" :aria-label="row.data.name" :disabled="busy === row.id" :items="rowActions(row as EmployeeSchedule)" @primary="openHistory(row as EmployeeSchedule)" @command="command => rowCommand(row as EmployeeSchedule, command)" />
           </div></template>
@@ -99,7 +99,7 @@
       <div class="admin-page">
       <div class="admin-page__toolbar"><ElText type="info">{{ selected?.data.description }}</ElText><div class="admin-page__search"><ElButton :icon="RefreshCw" :loading="historyLoading" @click="loadHistory">刷新记录</ElButton></div></div>
       <ElAlert v-if="historyError" type="error" :title="historyError" :closable="false" />
-      <ElTable v-loading="historyLoading" :data="sessions" row-key="id" element-loading-text="正在加载执行记录">
+      <ElTable v-loading="historyLoading" :data="sessions" row-key="id" max-height="360" element-loading-text="正在加载执行记录">
         <ElTableColumn label="会话创建时间（上海）" min-width="190"><template #default="{ row }">{{ displayTime(row.created_at) }}</template></ElTableColumn>
         <ElTableColumn prop="id" label="执行会话" min-width="150" show-overflow-tooltip />
         <ElTableColumn label="内容" width="100" align="center"><template #default="{ row }"><ElButton link type="primary" @click="showMessages(row.id)">查看内容</ElButton></template></ElTableColumn>
@@ -130,6 +130,7 @@ import type { Employee } from '@/types';
 import RowMenu from '@/components/astra/RowMenu.vue';
 import SemanticTag from '@/components/astra/SemanticTag.vue';
 import { confirmDialog } from '@/composables/useConfirm';
+import { TABLE_MAX_HEIGHT } from '@/utils/table';
 
 const rows = ref<EmployeeSchedule[]>([]), choices = ref<Employee[]>([]);
 const loading = ref(false), error = ref(''), page = ref(1), pageSize = ref(20), total = ref(0), busy = ref('');

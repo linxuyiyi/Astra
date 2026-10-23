@@ -48,7 +48,7 @@
         </div>
       </div>
 
-      <ElTable v-loading="store.loading" :data="paged" row-key="id" data-testid="task-table" @row-click="(row: Task) => openTask(row.id)">
+      <ElTable v-loading="store.loading" :data="paged" row-key="id" :max-height="TABLE_MAX_HEIGHT" data-testid="task-table" @row-click="(row: Task) => openTask(row.id)">
         <ElTableColumn label="任务" min-width="280">
           <template #default="{ row }">
             <div class="task-title-cell">
@@ -72,7 +72,7 @@
             </div>
           </template>
         </ElTableColumn>
-        <ElTableColumn label="操作" width="132">
+        <ElTableColumn label="操作" width="132" fixed="right">
           <template #default="{ row }">
             <RowMenu :aria-label="(row as Task).title" :primary="primaryFor(row as Task).label" :items="moreFor(row as Task)" @primary="runPrimary(row as Task)" @command="(command) => runCommand(row as Task, command)" />
           </template>
@@ -147,6 +147,7 @@ import {
 } from '@/features/runtime/status'
 import { useAstraStore } from '@/stores/astra'
 import { employeeDisplayName, platformCopy, priorityLabel, taskTypeLabel } from '@/utils/format'
+import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
 const store = useAstraStore()
 const route = useRoute()

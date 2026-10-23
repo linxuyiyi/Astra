@@ -293,6 +293,7 @@
           v-loading="logsLoading"
           :data="requests.items"
           row-key="id"
+          max-height="360"
           element-loading-text="正在加载调用日志"
           data-testid="gateway-node-logs-table"
         >

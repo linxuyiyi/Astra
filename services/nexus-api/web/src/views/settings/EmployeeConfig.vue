@@ -692,7 +692,7 @@ defineExpose({ getDirty: () => isDirty.value, dirty: isDirty, canSave, canDeploy
 .digital-summary__avatar { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; flex: none; border-radius: 12px; background: var(--astra-bg-panel); font-size: 24px; }
 .digital-summary__copy { display: grid; gap: 4px; min-width: 0; flex: 1; }
 .digital-summary__line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.digital-summary__copy p { max-height: 4.8em; overflow-y: auto; overflow-wrap: anywhere; margin: 0; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); line-height: 1.6; }
+.digital-summary__copy p { max-height: 4.8em; overflow-y: auto; overflow-wrap: anywhere; margin: 0; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); line-height: 1.6; white-space: pre-wrap; }
 .digital-summary__alert { grid-column: 1 / -1; width: 100%; }
 .dispatch-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 18px; }
 .runtime-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }

@@ -40,6 +40,7 @@
       v-loading="loading"
       :data="pagedRows"
       row-key="id"
+      :max-height="TABLE_MAX_HEIGHT"
       data-testid="gateway-audits-table"
       @row-click="openLogs"
     >
@@ -83,6 +84,7 @@ import { useRouter } from 'vue-router'
 import { ElAlert, ElButton, ElEmpty, ElInput, ElOption, ElPagination, ElSelect, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus'
 import { gatewayApi, type GatewayAuditEvent } from '@/api/gateway'
 import { errorMessage, formatDateTime } from '@/utils/gateway'
+import { TABLE_MAX_HEIGHT } from '@/utils/table'
 import GatewayHeaderActions from '@/views/gateway/GatewayHeaderActions.vue'
 
 const KNOWN_RESOURCE_TYPES = ['node', 'pool', 'key', 'route']

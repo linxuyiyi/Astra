@@ -58,7 +58,7 @@
           </div>
         </template>
         <ElAlert v-if="nodesError" type="warning" show-icon :closable="false" :title="nodesError" />
-        <ElTable v-if="!nodesError" :data="visibleRows" row-key="node_id" :empty-text="tableEmpty">
+        <ElTable v-if="!nodesError" :data="visibleRows" row-key="node_id" max-height="316" :empty-text="tableEmpty">
           <ElTableColumn label="节点" min-width="160">
             <template #default="{ row }">
               <RouterLink class="gateway-overview__node" :to="`/gateway/nodes/${row.node_id}`">{{ row.name }}</RouterLink>

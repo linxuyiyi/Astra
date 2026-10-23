@@ -84,6 +84,7 @@
         element-loading-text="正在加载知识"
         :data="page.items"
         row-key="id"
+        :max-height="TABLE_MAX_HEIGHT_DENSE"
         @row-click="onRowClick"
         @selection-change="onSelectionChange"
       >
@@ -102,7 +103,7 @@
         <ElTableColumn label="验证" width="110">
           <template #default="{ row }"><ElTag :type="verificationTag(row.verification_status)" effect="plain">{{ verificationLabel(row.verification_status) }}</ElTag></template>
         </ElTableColumn>
-        <ElTableColumn label="操作" width="176" align="center">
+        <ElTableColumn label="操作" width="176" align="center" fixed="right">
           <template #default="{ row }">
             <div class="admin-actions">
               <ElButton link type="primary" @click.stop="openRow(row)">查看</ElButton>
@@ -155,6 +156,7 @@ import { ElButton, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElInput,
 import type { TableInstance } from 'element-plus'
 import type { KnowledgeListItem, KnowledgePage, KnowledgeStatus, VerificationStatus } from '@/api/types'
 import type { RowMenuItem } from '@/components/astra/RowMenu.vue'
+import { TABLE_MAX_HEIGHT_DENSE } from '@/utils/table'
 
 // 只保留最常用的查询条件：类型、状态、排序与关键词。
 // 来源与标签筛选随「更多筛选」一并取消，filters 里也不再保留这两个维度。

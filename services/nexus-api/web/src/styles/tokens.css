@@ -69,6 +69,8 @@
   --astra-control-height: 32px;
   --astra-content-gap: 16px;
   --astra-shadow-panel: 0 10px 30px rgba(28, 58, 49, .075);
+  --nexus-table-max-height: calc(100vh - 280px);
+  --nexus-table-max-height-dense: calc(100vh - 340px);
 }
 
 /* Element Plus theme mapped onto Astra brand tokens.

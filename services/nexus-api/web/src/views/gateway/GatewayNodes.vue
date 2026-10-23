@@ -76,7 +76,7 @@
         </div>
       </template>
       <ElAlert v-if="instanceError" type="warning" show-icon :closable="false" :title="instanceError" />
-      <ElTable v-else :data="instances" empty-text="暂无实例心跳。">
+      <ElTable v-else :data="instances" :max-height="TABLE_MAX_HEIGHT" empty-text="暂无实例心跳。">
         <ElTableColumn label="实例" prop="instance_id" min-width="150" show-overflow-tooltip />
         <ElTableColumn label="状态" width="90">
           <template #default="{ row }"><ElTag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? '在线' : '已过期' }}</ElTag></template>
@@ -123,6 +123,7 @@ import {
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
 import { errorMessage, formatBytes, formatRelativeTime, formatSeconds, healthStateLabel, schedulingStateLabel } from '@/utils/gateway'
+import { TABLE_MAX_HEIGHT } from '@/utils/table'
 import GatewayHeaderActions from '@/views/gateway/GatewayHeaderActions.vue'
 import GatewayNodeDrawer from '@/views/gateway/GatewayNodeDrawer.vue'
 import GatewayNodeTable from '@/views/gateway/GatewayNodeTable.vue'

@@ -37,6 +37,7 @@
       v-loading="loading"
       :data="pagedKeys"
       row-key="id"
+      :max-height="TABLE_MAX_HEIGHT"
       element-loading-text="正在加载 Key"
       data-testid="gateway-keys-table"
     >
@@ -60,7 +61,7 @@
       <ElTableColumn label="额度与并发" min-width="180" show-overflow-tooltip>
         <template #default="{ row }">并发 {{ row.max_concurrency || '不限' }} · 时/日 {{ tokenLimitText(row.hourly_token_limit) }}/{{ tokenLimitText(row.daily_token_limit) }}</template>
       </ElTableColumn>
-      <ElTableColumn label="操作" width="190" align="center">
+      <ElTableColumn label="操作" width="190" align="center" fixed="right">
         <template #default="{ row }">
           <div class="admin-actions">
             <ElButton link type="primary" :disabled="busy" @click="openEdit(row as GatewayKey)">编辑</ElButton>
@@ -209,6 +210,7 @@ import {
   parseNumberList,
   tokenLimitText,
 } from '@/utils/gateway'
+import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
 const keys = ref<GatewayKey[]>([])
 const loading = ref(false)

@@ -149,6 +149,7 @@
    右侧只有一张 ElCard 作为工作台，子页的分区卡片去掉重复边框，
    用标题分隔线和表格组织内容。 */
 .content-shell {
+  --admin-page-bg: var(--astra-bg-base);
   flex: 1 1 auto;
   min-height: 0;
   border-radius: 12px;
@@ -202,6 +203,7 @@
    与刷新 / 新建按钮），配置中心与 API 网关的子页复用父级 .content-shell
    的标题栏，子页只负责工具栏、表格与分页。 */
 .admin-card {
+  --admin-page-bg: var(--astra-bg-panel);
   --el-card-padding: 16px;
   display: flex;
   flex-direction: column;
@@ -235,7 +237,17 @@
 .admin-page > * { flex: none; }
 
 /* 左侧业务筛选、右侧关键词与搜索按钮；窄屏时搜索组整体换行。 */
-.admin-page__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.admin-page__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--admin-page-bg, var(--astra-bg-panel));
+  padding-bottom: 2px;
+}
 
 .admin-page__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 
@@ -245,7 +257,15 @@
 
 .admin-page__keyword { flex: none; width: 240px; }
 
-.admin-page__footer { display: flex; justify-content: flex-end; }
+.admin-page__footer {
+  display: flex;
+  justify-content: flex-end;
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  background: var(--admin-page-bg, var(--astra-bg-panel));
+  padding-top: 4px;
+}
 
 /* 操作列按钮：统一 8px 间距。Element Plus 会给相邻 .el-button 加 12px 左外边距，
    和 flex gap 叠加后疏密不一（下拉按钮前只有 gap、文字按钮前是 12px + gap），这里一并归零。 */

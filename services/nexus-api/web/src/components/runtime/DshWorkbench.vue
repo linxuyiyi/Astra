@@ -37,7 +37,7 @@
             <pre class="dsh-file-content">{{ fileContent }}</pre>
           </ElTabPane>
           <ElTabPane label="验证与结果" name="result">
-            <ElAlert title="每轮回复结束后仍需在任务顶部人工确认完成。验证结论以真实执行输出与文件 Diff 为依据。" type="info" :closable="false" />
+            <ElAlert :title="readonly ? '验证结论以真实执行输出与文件 Diff 为依据。' : '每轮回复结束后仍需在任务顶部人工确认完成。验证结论以真实执行输出与文件 Diff 为依据。'" type="info" :closable="false" />
             <pre class="dsh-file-content">{{ lastReply || '当前轮尚无持久化的最终回复。' }}</pre>
           </ElTabPane>
         </ElTabs>
@@ -83,7 +83,7 @@ const displayRecords = computed(() => {
   return records.value.map(item => item.kind === 'tool/call' && results.has(item.tool_call_id) ? { ...item, status: results.get(item.tool_call_id) || item.status } : item)
 })
 const canSend = computed(() => !props.readonly && !sending.value && !error.value && ['prepared', 'succeeded', 'stopped', 'interrupted'].includes(snapshot.value?.state || '') && !permissions.value.length)
-const stateLabel = computed(() => error.value ? '连接异常，状态待确认' : permissions.value.length ? '等待工具审批' : ({ prepared: '等待输入', running: '执行中', succeeded: props.readonly ? '当前轮已结束' : '当前轮已结束，等待验收', interrupted: '当前轮已中断', stopped: '已停止，可继续', unknown: '状态未知' }[snapshot.value?.state || 'unknown']))
+const stateLabel = computed(() => error.value ? '连接异常，状态待确认' : permissions.value.length ? '等待工具审批' : ({ prepared: '等待输入', running: '执行中', succeeded: props.readonly ? '当前轮已结束' : '当前轮已结束，等待验收', interrupted: '当前轮已中断', stopped: props.readonly ? '已停止' : '已停止，可继续', unknown: '状态未知' }[snapshot.value?.state || 'unknown']))
 const lastReply = computed(() => [...records.value].reverse().find(item => item.kind === 'assistant/message')?.text)
 const base = `/api/tasks/${encodeURIComponent(props.taskId)}/workbench/${encodeURIComponent(props.bindingId)}`
 const query = `native_session_id=${encodeURIComponent(props.nativeSessionId)}`

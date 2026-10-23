@@ -23,7 +23,7 @@
         <ElInput v-model="form.name" placeholder="例如 主 Proxy 节点" />
       </ElFormItem>
       <ElFormItem prop="baseUrl">
-        <template #label>上游 Base URL（节点根地址） <FieldHelp label="上游 Base URL" help="填节点根地址，不要带 /v1；Gateway 会追加聊天或 embedding 接口路径。" /></template>
+        <template #label>上游 Base URL（节点根地址）</template>
         <ElInput v-model="form.baseUrl" placeholder="https://proxy.example.com" />
       </ElFormItem>
       <ElFormItem label="认证方式">
@@ -37,7 +37,7 @@
         <ElInput v-model="form.authHeader" :disabled="busy || form.authType === 'NONE'" placeholder="Authorization" />
       </ElFormItem>
       <ElFormItem v-if="form.authType !== 'NONE'">
-        <template #label>上游凭据 <FieldHelp label="上游凭据" help="凭据加密入库，任何响应与日志都不会回显明文；保存后输入框自动清空。" /></template>
+        <template #label>上游凭据</template>
         <ElInput
           v-model="form.apiKey"
           type="password"
@@ -73,7 +73,7 @@
         </ElSelect>
       </ElFormItem>
       <ElFormItem v-if="form.probeStrategy === 'SCOPED'">
-        <template #label>探测项目 <FieldHelp label="探测项目" help="诊断探测仅用于定位问题，不推进节点健康授权。需要启用调度时，请选择聊天或向量嵌入策略完成验证。" /></template>
+        <template #label>探测项目</template>
         <ElCheckboxGroup v-model="form.probeTypes">
           <ElCheckbox v-for="type in probeTypes" :key="type" :value="type">{{ probeTypeLabel(type) }}</ElCheckbox>
         </ElCheckboxGroup>
@@ -105,7 +105,7 @@
         <ElInput v-model="form.maxConcurrency" type="number" min="0" />
       </ElFormItem>
       <ElFormItem>
-        <template #label>每小时 Token 限额 <FieldHelp label="Token 额度" help="额度按自然小时 / 自然日统计已完成请求的实际 usage，未知用量记为 unknown，不估算为零。" /></template>
+        <template #label>每小时 Token 限额</template>
         <ElInput v-model="form.hourly" type="number" min="0" placeholder="不限" />
       </ElFormItem>
       <ElFormItem label="每日 Token 限额">
@@ -130,7 +130,7 @@
         <ElInput v-model="form.sortOrder" type="number" />
       </ElFormItem>
       <ElFormItem>
-        <template #label>调度状态 <FieldHelp label="调度状态" help="保存后节点先处于禁用与安全下线；完成所选策略的探测并达标后才能启用并进入「调度中」。" /></template>
+        <template #label>调度状态</template>
         <ElSelect v-model="form.scheduling">
           <ElOption value="ACTIVE" :disabled="activeOptionDisabled" label="调度中" />
           <ElOption value="DRAINING" label="安全下线" />
@@ -191,7 +191,6 @@ import {
   type GatewaySchedulingState,
   type GatewayAuthType,
 } from '@/api/gateway'
-import FieldHelp from '@/components/forms/FieldHelp.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import {
   authenticationLabel,

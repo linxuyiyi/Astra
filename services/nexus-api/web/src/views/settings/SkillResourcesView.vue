@@ -119,7 +119,7 @@
       </template>
     </ElTable>
     <div class="admin-page__footer">
-      <span class="sync-hint">AgentScope {{ agentscopeAvailable ? '已连接' : '不可用' }}；列表合并 Nexus 自建与 AgentScope 已安装技能。</span>
+      <span class="sync-hint">AgentScope {{ agentscopeAvailable ? '已连接' : '不可用' }}</span>
       <ElPagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
@@ -133,9 +133,6 @@
 
     <ElDrawer v-model="editorOpen" :title="editing ? '编辑技能' : '新增技能'" size="720px" :close-on-click-modal="false">
       <ElForm label-position="top" @submit.prevent="submitSkill">
-        <ElAlert type="info" :closable="false" show-icon class="form-note">
-          SKILL.md 必须包含 YAML frontmatter，其中 <code>name</code> 与 <code>description</code> 必填；资源文件按相对路径保存并随技能一起装入 AgentScope 工作区。
-        </ElAlert>
         <ElFormItem label="SKILL.md" required>
           <ElInput v-model="skillMarkdown" type="textarea" :rows="16" class="code-editor" spellcheck="false" />
         </ElFormItem>
@@ -143,7 +140,7 @@
           <span>资源文件</span>
           <ElButton size="small" :icon="Plus" @click="addResourceFile">添加文件</ElButton>
         </div>
-        <div v-if="!resourceFiles.length" class="muted file-empty">没有额外资源文件。技能只包含 SKILL.md。</div>
+        <div v-if="!resourceFiles.length" class="muted file-empty">暂无资源文件</div>
         <div v-for="(file, index) in resourceFiles" :key="index" class="resource-file">
           <div class="resource-file__head">
             <ElInput v-model="file.path" placeholder="相对路径，例如 references/check.md" />
@@ -263,12 +260,11 @@ import SettingsHeaderActions from "./SettingsHeaderActions.vue";
 
 const DEFAULT_MARKDOWN = `---
 name: 新技能
-description: 说明这个技能解决什么问题
+description: ""
 ---
 
 # 新技能
 
-在这里写清适用场景、步骤和验收方式。
 `;
 
 const items = ref<SkillResource[]>([]);
@@ -555,7 +551,6 @@ onMounted(load);
 .muted { color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .sync-count { margin-left: 6px; color: var(--astra-text-muted); font-size: 11px; }
 .sync-hint { color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
-.form-note { margin-bottom: 14px; }
 .code-editor :deep(textarea) { font-family: var(--astra-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12px; line-height: 1.6; }
 .file-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 8px; font-weight: var(--astra-weight-bold); color: var(--astra-text-secondary); }
 .file-empty { margin-bottom: 12px; }
@@ -566,7 +561,7 @@ onMounted(load);
 .detail h4 { margin: 6px 0 0; color: var(--astra-text-secondary); font-size: 13px; }
 .detail-sync { margin-left: 8px; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .gap-tag { margin-right: 4px; }
-.markdown-preview { margin: 0; padding: 12px; border-radius: 8px; background: var(--astra-bg-elevated); color: var(--astra-text-primary); font-family: var(--astra-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12px; line-height: 1.6; white-space: pre-wrap; max-height: 360px; overflow: auto; }
+.markdown-preview { margin: 0; padding: 12px; border-radius: 8px; background: var(--astra-bg-elevated); color: var(--astra-text-primary); font-family: var(--astra-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; }
 .detail-file { display: flex; flex-direction: column; gap: 4px; }
 .version-list { display: flex; flex-direction: column; gap: 8px; }
 .version-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid var(--astra-border); border-radius: 8px; }

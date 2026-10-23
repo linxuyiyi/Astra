@@ -97,7 +97,6 @@
     </ElTable>
 
     <div class="admin-page__footer">
-      <span class="sync-hint">只展示 Tool 名称与说明；Token 只保存在服务端，前端不显示明文。</span>
       <ElPagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
@@ -122,11 +121,10 @@
           </ElFormItem>
         </div>
         <ElFormItem label="说明">
-          <ElInput v-model="form.description" type="textarea" :rows="2" placeholder="说明这个 MCP 提供什么能力" />
+          <ElInput v-model="form.description" type="textarea" :rows="2" placeholder="例如：发布与回滚" />
         </ElFormItem>
         <ElFormItem label="连接地址" required>
           <ElInput v-model="form.url" placeholder="http://10.0.0.8:9000/mcp 或 https://mcp.example.com/mcp" />
-          <div class="hint">支持内网 IP、域名和端口，不使用 localhost 假设。地址中不能内嵌账号密码。</div>
         </ElFormItem>
         <ElFormItem label="请求头">
           <div class="headers">
@@ -136,7 +134,6 @@
               <ElButton link type="danger" @click="form.headers.splice(index, 1)">移除</ElButton>
             </div>
             <ElButton size="small" :icon="Plus" @click="form.headers.push({ key: '', value: '' })">添加请求头</ElButton>
-            <div class="hint">敏感凭据请放在下方鉴权配置，服务端加密保存且不回显。</div>
           </div>
         </ElFormItem>
         <div class="pair">
@@ -554,7 +551,6 @@ onMounted(load);
 .muted { color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .mono { font-family: var(--astra-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12px; }
 .sync-count { margin-left: 6px; color: var(--astra-text-muted); font-size: 11px; }
-.sync-hint { color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .headers { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .header-row { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 8px; }

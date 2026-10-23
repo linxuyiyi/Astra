@@ -16,15 +16,15 @@
         </el-select>
       </el-form-item>
       <el-form-item required>
-        <template #label>职责说明 <FieldHelp label="职责说明" help="职责是这个人负责什么。同事和任务会按这段话找到他。" /></template>
+        <template #label>职责说明</template>
         <el-input v-model="form.description" type="textarea" :rows="3" placeholder="例如：负责测试平台的问题定位和需求澄清，不直接改生产配置。" />
       </el-form-item>
       <el-form-item required>
-        <template #label>工作指令 <FieldHelp label="工作指令" help="工作指令是他收到消息后怎么做。职责说范围，指令说步骤。" /></template>
+        <template #label>工作指令</template>
         <el-input v-model="form.instructions" type="textarea" :rows="5" placeholder="例如：先确认现象和影响范围，信息不足时追问，需要同事时再联系对方。" />
       </el-form-item>
       <el-form-item>
-        <template #label>模型路由 <FieldHelp label="模型路由" help="只列出已启用的网关路由。密钥不会出现在这里。" /></template>
+        <template #label>模型路由</template>
         <el-select v-model="form.model_route_id" clearable filterable placeholder="选择已启用的路由" style="width: 100%">
           <el-option v-for="item in routes" :key="item.id" :label="item.model" :value="item.id" />
         </el-select>
@@ -33,7 +33,7 @@
       </el-form-item>
       <div class="form-cap">知识与工具</div>
       <el-form-item>
-        <template #label>知识 <FieldHelp label="知识" help="知识库当前读不到时不能新选。已保存的选择会保留，恢复目录后再改。" /></template>
+        <template #label>知识</template>
         <el-select
           v-model="form.knowledge"
           multiple
@@ -47,7 +47,7 @@
         <el-button v-if="!catalogs.knowledge.available" style="margin-top: 8px" @click="emit('reload-catalogs')">重新读取知识库</el-button>
       </el-form-item>
       <el-form-item>
-        <template #label>技能 <FieldHelp label="技能" help="技能来自配置中心的统一资源目录，包含 Nexus 自建、AgentScope 已安装和内置任务技能。正文在配置中心维护。" /></template>
+        <template #label>技能</template>
         <el-select
           v-model="form.skills"
           multiple
@@ -60,7 +60,7 @@
         </el-select>
       </el-form-item>
       <el-form-item>
-        <template #label>MCP <FieldHelp label="MCP" help="MCP 来自配置中心的统一资源目录。保存后会把连接和 Tool 装入该员工的邮箱、私聊和团队会话。" /></template>
+        <template #label>MCP</template>
         <el-select
           v-model="form.mcps"
           multiple
@@ -73,7 +73,7 @@
         </el-select>
       </el-form-item>
       <el-form-item>
-        <template #label>工具 <FieldHelp label="工具" help="包含内置工作区工具（终端执行、文件读写等）与联系其他员工。MCP 工具可通过 AgentScope 配置接入。" /></template>
+        <template #label>工具</template>
         <el-select
           v-model="form.tools"
           multiple
@@ -100,7 +100,6 @@
 
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from "vue";
-import FieldHelp from "./forms/FieldHelp.vue";
 import type { Employee, ResourceCatalog } from "../types";
 import type { GatewayRoute } from "../api/gateway";
 import { formatToolLabel } from "../utils/tools";

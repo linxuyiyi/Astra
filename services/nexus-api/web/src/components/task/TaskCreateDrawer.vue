@@ -22,7 +22,7 @@
       <ElDivider content-position="left">基本信息</ElDivider>
 
       <ElFormItem label="任务标题" prop="title">
-        <ElInput v-model.trim="form.title" placeholder="例如：修复用户登录接口偶发 500 问题" />
+        <ElInput v-model.trim="form.title" maxlength="240" placeholder="例如：修复用户登录接口偶发 500 问题" />
       </ElFormItem>
       <ElFormItem label="任务类型" prop="task_type">
         <ElRadioGroup v-model="form.task_type">
@@ -37,7 +37,7 @@
       </ElFormItem>
       <ElFormItem label="优先级" prop="priority">
         <ElSelect v-model="form.priority">
-          <ElOption v-for="item in priorities" :key="item" :value="item" :label="`${priorityLabel(item)}：${priorityHint(item)}`" />
+          <ElOption v-for="item in priorities" :key="item" :value="item" :label="priorityLabel(item)" />
         </ElSelect>
       </ElFormItem>
 
@@ -53,7 +53,6 @@
       <ElFormItem v-if="!task" label="附件">
         <ElUpload v-model:file-list="fileList" multiple :auto-upload="false" :on-change="onFileChange">
           <ElButton :icon="Paperclip" plain>上传附件</ElButton>
-          <template #tip><div class="el-upload__tip">可选，支持一次选择多个文件。</div></template>
         </ElUpload>
       </ElFormItem>
 
@@ -66,7 +65,7 @@
         :prop="`criteria.${index}.content`"
       >
         <div class="criterion-row">
-          <ElInput v-model.trim="item.content" :placeholder="`验收标准 ${index + 1}`" />
+          <ElInput v-model.trim="item.content" maxlength="500" :placeholder="`验收标准 ${index + 1}`" />
           <ElButton text bg :icon="ArrowUp" title="上移" :disabled="index === 0" :aria-label="`验收标准 ${index + 1} 上移`" @click="moveCriterion(index, -1)" />
           <ElButton text bg :icon="ArrowDown" title="下移" :disabled="index === form.criteria.length - 1" :aria-label="`验收标准 ${index + 1} 下移`" @click="moveCriterion(index, 1)" />
           <ElButton text bg type="danger" :icon="Trash2" title="删除" :aria-label="`删除验收标准 ${index + 1}`" @click="removeCriterion(index)" />
@@ -79,14 +78,14 @@
       <ElDivider content-position="left">谁来执行，问谁</ElDivider>
 
       <ElFormItem prop="employee_id">
-        <template #label>执行 Worker <FieldHelp label="执行 Worker" help="自动分配会综合 Worker 启用状态、空闲状态、任务类型和任务分类；指定 Worker 时任务只由该执行资源处理。" /></template>
+        <template #label>执行 Worker</template>
         <ElSelect v-model="form.employee_id" :disabled="Boolean(task && task.status !== 'PENDING')">
           <ElOption value="" label="自动分配" />
           <ElOption v-for="item in compatibleEmployees" :key="item.id" :value="item.id" :label="`${item.execution_environment?.name || employeeDisplayName(item.name)} · ${item.role}`" />
         </ElSelect>
       </ElFormItem>
       <ElFormItem>
-        <template #label>责任数字员工 <FieldHelp label="责任数字员工" help="责任数字员工是你在任务中心询问进度的对象；Agent Worker 是实际执行任务的运行实例，一个数字员工可以对应多个 Worker。" /></template>
+        <template #label>责任数字员工</template>
         <ElSelect v-model="form.responsible_employee_id" clearable placeholder="可选，选择要询问进度的数字员工">
           <ElOption v-for="item in owners" :key="item.id" :value="item.id" :label="item.name" />
         </ElSelect>
@@ -121,7 +120,6 @@ import { ElAlert, ElButton, ElDivider, ElDrawer, ElForm, ElFormItem, ElInput, El
 import type { FormInstance, FormRules, UploadFile, UploadFiles, UploadUserFile } from 'element-plus'
 import { api } from '@/api/client'
 import type { Task, TaskPriority, TaskType } from '@/api/types'
-import FieldHelp from '@/components/forms/FieldHelp.vue'
 import { listEmployees } from '../../api'
 import type { Employee as NexusEmployee } from '../../types'
 import { confirmDialog } from '@/composables/useConfirm'
@@ -140,7 +138,6 @@ const createError = ref('')
 const fileList = ref<UploadUserFile[]>([])
 
 const priorities: TaskPriority[] = ['VERY_HIGH', 'HIGH', 'MEDIUM', 'LOW']
-const priorityHint = (value: TaskPriority) => ({ VERY_HIGH: '重要且紧急', HIGH: '重要但可以计划处理', MEDIUM: '有一定影响或时效要求', LOW: '一般优化或可延期事项' }[value])
 function criteriaFrom(task?: Task | null) {
   const source = task?.acceptance_criteria.length ? task.acceptance_criteria : [{ id: safeUUID(), content: '' }]
   return source.map((item) => ({ key: item.id || safeUUID(), content: item.content }))

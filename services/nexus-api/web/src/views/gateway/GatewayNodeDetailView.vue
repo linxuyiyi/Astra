@@ -233,7 +233,7 @@
         <ElCard shadow="never" data-testid="gateway-node-quota">
           <template #header>
             <div class="gateway-node-card-head">
-              <div><h4>Token 额度 <FieldHelp label="Token 额度" help="额度按已完成请求计入，并发时可能略微超出限额。" /></h4></div>
+              <div><h4>Token 额度</h4></div>
             </div>
           </template>
           <ElDescriptions :column="1">
@@ -433,7 +433,6 @@ import {
   type GatewayScopeStats,
   type GatewayStatsWindow,
 } from '@/api/gateway'
-import FieldHelp from '@/components/forms/FieldHelp.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
 import { formatTokens } from '@/utils/format'

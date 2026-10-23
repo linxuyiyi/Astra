@@ -23,11 +23,11 @@
       </ElFormItem>
 
       <ElFormItem label="描述" prop="description">
-        <ElInput v-model.trim="form.description" type="textarea" :rows="2" placeholder="说明这个分类覆盖的业务范围" />
+        <ElInput v-model.trim="form.description" type="textarea" :rows="2" placeholder="例如：支付与结算" />
       </ElFormItem>
 
       <ElFormItem prop="sort_order">
-        <template #label>排序 <FieldHelp label="排序" help="数字越小越靠前，任务与 Worker 配置按此顺序展示。" /></template>
+        <template #label>排序</template>
         <ElInputNumber v-model="form.sort_order" class="category-editor-form__sort" :min="0" :step="10" :precision="0" controls-position="right" />
       </ElFormItem>
 
@@ -43,7 +43,7 @@
           :rows="8"
           resize="vertical"
           aria-label="任务 Prompt"
-          placeholder="任务开始时给 Worker 的提示词，可用 {{input}} 等占位符"
+          placeholder="任务 Prompt"
         />
       </ElFormItem>
 
@@ -55,7 +55,7 @@
           :rows="8"
           resize="vertical"
           aria-label="问题 Prompt"
-          placeholder="任务为「问题」类型时给 Worker 的提示词"
+          placeholder="问题 Prompt"
         />
       </ElFormItem>
 
@@ -86,7 +86,6 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElDrawer, ElForm, ElFormItem, ElInput, ElInputNumber, ElSpace, ElSwitch, ElTag } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import FieldHelp from '@/components/forms/FieldHelp.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import type { TaskCategory, TaskCategoryWrite } from '@/api/types'
 

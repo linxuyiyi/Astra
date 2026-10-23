@@ -143,7 +143,7 @@
           <ElInput v-model="routeForm.model" placeholder="客户端调用的模型名称，如 GLM-5.2 或 gpt-4o" />
         </ElFormItem>
         <ElFormItem prop="target_model">
-          <template #label>目标模型（可选） <FieldHelp label="目标模型" help="当请求模型与上游实际服务模型不同时配置，网关将透明重写并转发。" /></template>
+          <template #label>目标模型（可选）</template>
           <ElInput
             v-model="routeForm.target_model"
             placeholder="留空表示与请求模型一致（如上游实际为 GLM-5.3）"
@@ -161,7 +161,7 @@
           </ElSelect>
         </ElFormItem>
         <ElFormItem label="描述" prop="description">
-          <ElInput v-model="routeForm.description" type="textarea" :rows="2" placeholder="说明该路由用途或所属团队" />
+          <ElInput v-model="routeForm.description" type="textarea" :rows="2" placeholder="例如：研发团队" />
         </ElFormItem>
         <ElFormItem label="启用" prop="enabled">
           <ElSwitch v-model="routeForm.enabled" data-testid="gateway-route-enabled" />
@@ -207,7 +207,6 @@ import {
   type GatewayRoute,
 } from '@/api/gateway'
 import GatewayHeaderActions from '@/views/gateway/GatewayHeaderActions.vue'
-import FieldHelp from '@/components/forms/FieldHelp.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
 import { errorMessage } from '@/utils/gateway'

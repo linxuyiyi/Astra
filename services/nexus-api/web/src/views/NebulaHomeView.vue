@@ -23,8 +23,6 @@
             {{ store.connection === "live" ? "LIVE" : store.connection === "stale" ? "RECONNECTING" : "CONNECTING" }}
           </span>
         </div>
-        <h1>每个数字员工，都是一座运行中的星系</h1>
-        <p>员工是意识核心 · 专属 Worker 沿轨运行 · 任务在光路中流转</p>
       </div>
 
       <NebulaSummary
@@ -50,7 +48,7 @@
           :aria-pressed="cruise"
           :class="{ pressed: cruise }"
           :disabled="reduceMotion"
-          :title="reduceMotion ? '减少动效已开启' : '环绕当前视野缓慢巡航'"
+          :title="reduceMotion ? '减少动效已开启' : undefined"
           @click="cruise = !cruise"
         >{{ cruise ? "◼ 停止巡航" : "◉ 镜头巡航" }}</button>
         <button type="button" @click="showCollaborations = !showCollaborations">
@@ -98,7 +96,7 @@
       </div>
       <div v-else-if="store.snapshot && !store.snapshot.employees.length" class="stage-state">
         <div class="state-orbit">✦</div>
-        <p>当前还没有数字员工。先去配置中心创建员工，星系会按目录自动生成。</p>
+        <p>暂无数字员工</p>
         <RouterLink class="state-link" to="/settings/employees">打开员工配置</RouterLink>
       </div>
       <div v-if="store.snapshot && store.error" class="stage-notice">
@@ -107,10 +105,6 @@
       </div>
 
       <div class="guide">
-        <div class="guide-title">
-          读法
-          <small>点击员工、Worker、任务卫星、执行光路或协作线，查看提示并跳转既有业务页。</small>
-        </div>
         <div class="legend">
           <span style="--c: #58ebbb">执行光路</span>
           <span style="--c: #f5bd69">排队任务</span>
@@ -118,9 +112,6 @@
           <span style="--c: #7faccf">跨星系职责请求</span>
           <span style="--c: #fb6484">执行异常</span>
         </div>
-      </div>
-      <div class="tip">
-        拖动环视 · 滚轮远近 · Shift+拖动平移 · 方向键旋转 · 0 重置视角
       </div>
     </div>
   </section>
@@ -437,8 +428,6 @@ onBeforeUnmount(() => {
 .live-indicator[data-state="stale"] { border-color: #a27a37; color: #ffd39a; background: #4a3512; }
 .live-indicator[data-state="offline"] { border-color: #a4545e; color: #ffb0bb; background: #4b1b22; }
 .live-indicator[data-state="connecting"] { color: #9dbab0; border-color: #3d6459; background: #123b33; }
-.visual-top h1 { margin: 7px 0 6px; font-size: 23px; font-weight: 740; letter-spacing: .2px; color: #e6fff2; text-shadow: 0 0 14px #0e574760; }
-.visual-top p { margin: 0; font-size: 11px; color: #85afa1; }
 .top-right {
   position: absolute; right: 22px; top: 20px; display: flex; align-items: center; gap: 6px;
   flex-wrap: wrap; justify-content: flex-end; z-index: 8; max-width: calc(100% - 40px);
@@ -464,14 +453,11 @@ onBeforeUnmount(() => {
   border-radius: 13px; background: #052920d9; backdrop-filter: blur(12px);
   max-width: calc(100% - 420px); box-shadow: 0 14px 30px #001a1a44; z-index: 3;
 }
-.guide-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 10px; color: #c6f9df; font-weight: 750; }
-.guide-title small { font-size: 9px; color: #8bc0aa; font-weight: 450; line-height: 1.5; }
 .legend { display: flex; align-items: center; flex-wrap: wrap; gap: 13px; margin-top: 9px; color: #91baa9; font-size: 9px; }
 .legend span::before {
   content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
   background: var(--c); margin-right: 5px; vertical-align: 1px;
 }
-.tip { position: absolute; right: 22px; bottom: 18px; color: #88bba8; font-size: 9px; text-align: right; pointer-events: none; z-index: 3; max-width: 360px; line-height: 1.6; }
 .stage-state {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   z-index: 15; text-align: center; color: #b7e2d3; font-size: 12px; line-height: 1.8;
@@ -491,21 +477,18 @@ onBeforeUnmount(() => {
 .stage-notice button { border: 0; background: #79531d; color: #fff0d2; border-radius: 5px; font-size: 9px; padding: 3px 7px; cursor: pointer; }
 @media (max-width: 1500px) {
   .visual-top { max-width: calc(100% - 560px); }
-  .visual-top h1 { font-size: 20px; }
   .guide { max-width: calc(100% - 390px); }
 }
 @media (max-width: 1180px) {
   .visual-top { display: none; }
   .top-right { max-width: 620px; }
   .guide { max-width: calc(100% - 360px); }
-  .tip { display: none; }
 }
 @media (max-width: 900px) {
   .nebula-home { position: fixed; inset: 0; }
   .top-right { right: 12px; top: 12px; max-width: calc(100% - 24px); }
   .search { right: 12px; top: 58px; }
   .guide { left: 12px; bottom: 12px; max-width: calc(100% - 24px); }
-  .guide-title small { display: none; }
   .legend { gap: 9px; }
 }
 </style>

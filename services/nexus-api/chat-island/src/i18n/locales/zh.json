@@ -140,6 +140,7 @@
 		"copy": "复制"
 	},
 	"chat": {
+		"inputTooLong": "消息不能超过 {{limit}} 字。",
 		"inputPlaceholder": "输入消息...",
 		"confirmToolCall": "允许此操作？",
 		"subagentConfirmTitle": "{{name}} 请求确认",

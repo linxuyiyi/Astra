@@ -21,7 +21,7 @@
       <ElText class="editor-hint" type="info">{{ editorHint }}</ElText>
 
       <ElFormItem label="知识标题" prop="title">
-        <ElInput v-model.trim="form.title" maxlength="240" show-word-limit placeholder="请输入清晰、可检索的知识标题" />
+        <ElInput v-model.trim="form.title" maxlength="240" show-word-limit placeholder="例如：支付超时排查" />
       </ElFormItem>
 
       <ElFormItem label="所属目录" prop="space_id">
@@ -49,7 +49,7 @@
       </ElFormItem>
 
       <ElFormItem label="摘要" prop="summary">
-        <ElInput v-model.trim="form.summary" type="textarea" :rows="2" maxlength="4000" show-word-limit placeholder="用于列表与搜索结果的简短说明" />
+        <ElInput v-model.trim="form.summary" type="textarea" :rows="2" maxlength="4000" show-word-limit placeholder="摘要" />
       </ElFormItem>
 
       <ElFormItem label="Markdown 正文" prop="content_md">

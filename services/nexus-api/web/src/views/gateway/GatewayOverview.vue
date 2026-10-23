@@ -38,7 +38,7 @@
         shadow="never"
         class="gateway-overview__metric"
         :class="{ 'gateway-overview__metric--empty': metric.empty }"
-        :title="metric.hint"
+        :title="metric.hint || undefined"
         :data-testid="`gateway-metric-${metric.id}`"
       >
         <p class="gateway-overview__metric-label" :title="metric.label">{{ metric.label }}</p>
@@ -53,7 +53,6 @@
           <div class="gateway-overview__card-header">
             <div class="gateway-overview__card-title">
               <h4>节点与资源池</h4>
-              <p class="gateway-overview__card-sub">按可服务性排序，异常节点置顶</p>
             </div>
             <ElCheckbox v-model="abnormalOnly" data-testid="gateway-abnormal-only">只看异常</ElCheckbox>
           </div>
@@ -91,7 +90,6 @@
           <div class="gateway-overview__card-header">
             <div class="gateway-overview__card-title">
               <h4>最近事件</h4>
-              <p class="gateway-overview__card-sub">配置变更与运行异常</p>
             </div>
             <span v-if="events.length" class="gateway-overview__event-count">{{ events.length }} 条</span>
           </div>
@@ -141,7 +139,7 @@
       <ElEmpty v-else-if="!trendError" :image-size="52" description="暂无数据" />
     </ElCard>
     <details class="gateway-overview__details" data-testid="gateway-overview-details">
-      <summary>辅助指标 <span>近 5 分钟与实时 · 连接、TTFB 为所选窗口平均</span></summary>
+      <summary>辅助指标</summary>
       <div class="gateway-overview__detail-grid">
         <div v-for="item in detailItems" :key="item.id" class="gateway-overview__detail">
           <span>{{ item.label }}</span>
@@ -256,7 +254,6 @@ const primaryCards = computed(() => {
   const terminal = current ? current.success + current.errors : 0
   const failureRate = current && terminal > 0 ? current.errors / terminal : null
   const p95 = current?.ttft_ms.p95
-  const avgTtft = current?.ttft_ms.avg
   return [
     {
       id: 'requests',
@@ -268,7 +265,7 @@ const primaryCards = computed(() => {
         ? (statsPermission.value ? '当前账号无权查看统计' : '统计接口加载失败')
         : statsPending
           ? '正在读取统计窗口'
-          : `${windowLabel}内已落库调用`,
+          : '',
       empty: Boolean(statsFailure) || current == null,
     },
     {
@@ -296,7 +293,7 @@ const primaryCards = computed(() => {
         ? (statsPermission.value ? '当前账号无权查看统计' : '统计接口加载失败')
         : statsPending
           ? '正在读取统计窗口'
-          : `${windowLabel}内请求数 ÷ 窗口秒数`,
+          : '',
       empty: Boolean(statsFailure) || current == null,
     },
     {
@@ -309,9 +306,7 @@ const primaryCards = computed(() => {
         ? (statsPermission.value ? '当前账号无权查看统计' : '统计接口加载失败')
         : statsPending
           ? '正在读取统计窗口'
-          : avgTtft == null
-            ? '所选窗口内没有流式成功样本'
-            : `所选窗口内流式成功请求 P95；平均 ${Math.round(avgTtft)} ms`,
+          : p95 == null ? '无采样' : '',
       empty: Boolean(statsFailure) || p95 == null,
     },
     {
@@ -324,7 +319,7 @@ const primaryCards = computed(() => {
         ? (statsPermission.value ? '当前账号无权查看统计' : '统计接口加载失败')
         : statsPending
           ? '正在读取统计窗口'
-          : '所选窗口内流式成功请求的输出速度平均',
+          : '',
       empty: Boolean(statsFailure) || current?.output_tps.avg == null,
     },
     {
@@ -335,7 +330,7 @@ const primaryCards = computed(() => {
       window: '实时',
       hint: statsFailure
         ? (statsPermission.value ? '当前账号无权查看统计' : '统计接口加载失败')
-        : '实时运行态，不受统计窗口影响',
+        : '',
       empty: Boolean(statsFailure) || current == null,
     },
   ]
@@ -674,7 +669,6 @@ onBeforeUnmount(() => {
 .gateway-overview__details summary::-webkit-details-marker { display: none; }
 .gateway-overview__details summary::before { content: '▸'; color: var(--astra-text-muted); }
 .gateway-overview__details[open] summary::before { transform: rotate(90deg); }
-.gateway-overview__details summary span { color: var(--astra-text-muted); font-size: var(--astra-font-helper); font-weight: 400; }
 .gateway-overview__detail-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; padding: 0 16px 16px; }
 .gateway-overview__detail { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--astra-border); border-radius: 8px; background: var(--astra-bg-elevated); }
 .gateway-overview__detail span { color: var(--astra-text-muted); font-size: 11px; }

@@ -21,7 +21,6 @@
         <header class="config-section__head">
           <div>
             <h3>基本信息</h3>
-            <p>Worker 是执行资源。一个数字员工可以拥有多个 Agent Worker。</p>
           </div>
         </header>
 
@@ -51,8 +50,7 @@
               </span>
             </ElOption>
           </ElSelect>
-          <p class="field-hint">
-            身份、形象、岗位和职责说明复用数字员工目录，不在这里编辑；同一数字员工可创建多个 Worker。
+          <p v-if="digitalLoading || !digitalEmployees.length" class="field-hint">
             <span v-if="digitalLoading">正在加载数字员工目录…</span>
             <RouterLink v-else-if="!digitalEmployees.length" class="field-link" to="/settings/employees">先去创建数字员工</RouterLink>
           </p>
@@ -86,7 +84,7 @@
 
         <div class="config-grid">
           <ElFormItem label="Worker 名称" prop="worker_name">
-            <ElInput v-model.trim="form.worker_name" placeholder="例如：星河 · 测试机 01" />
+            <ElInput v-model.trim="form.worker_name" maxlength="120" placeholder="例如：星河 · 测试机 01" />
           </ElFormItem>
           <ElFormItem label="环境说明">
             <ElInput v-model="form.description" placeholder="例如：测试平台远程开发环境" />
@@ -98,14 +96,13 @@
         <header class="config-section__head">
           <div>
             <h3>工作范围</h3>
-            <p>描述这个 Worker 能接什么任务。工作范围跟随 Worker，不影响数字员工本身。</p>
           </div>
         </header>
 
         <ElFormItem label="支持任务类型" prop="task_types">
           <ElCheckboxGroup v-model="form.task_types">
-            <ElCheckbox value="ISSUE">问题 <FieldHelp label="问题" help="缺陷、故障、异常或已有能力失效" /></ElCheckbox>
-            <ElCheckbox value="REQUIREMENT">需求 <FieldHelp label="需求" help="新功能、能力增强、改造、优化或重构" /></ElCheckbox>
+            <ElCheckbox value="ISSUE">问题</ElCheckbox>
+            <ElCheckbox value="REQUIREMENT">需求</ElCheckbox>
           </ElCheckboxGroup>
         </ElFormItem>
 
@@ -115,7 +112,6 @@
               {{ category.name }}
             </ElOption>
           </ElSelect>
-          <p class="field-hint">一个 Worker 只归属一个任务分类。</p>
         </ElFormItem>
       </section>
 
@@ -123,29 +119,28 @@
         <header class="config-section__head">
           <div>
             <h3>派单配置</h3>
-            <p>控制平台是否向该 Worker 派发新任务，以及领取后的执行方式。</p>
           </div>
         </header>
 
         <div class="dispatch-grid">
           <ElFormItem>
-            <template #label>允许平台调度 <FieldHelp label="允许平台调度" help="关闭后不再向该 Worker 派发新任务；环境、仓库与维护记录不会删除。" /></template>
+            <template #label>允许平台调度</template>
             <ElSwitch v-model="form.enabled" aria-label="允许平台调度" />
           </ElFormItem>
           <ElFormItem>
-            <template #label>自动领取任务 <FieldHelp label="自动领取任务" help="空闲时可以领取匹配的新任务。每个 Worker 同时只处理一项任务。" /></template>
+            <template #label>自动领取任务</template>
             <ElSwitch v-model="form.auto_claim" aria-label="自动领取任务" />
           </ElFormItem>
           <ElFormItem>
-            <template #label>允许自主执行 <FieldHelp label="允许自主执行" help="领取后自动启动任务独立执行会话。" /></template>
+            <template #label>允许自主执行</template>
             <ElSwitch v-model="form.auto_execute" aria-label="允许自主执行" />
           </ElFormItem>
         </div>
 
         <ElFormItem v-if="!creating">
-          <template #label>手动暂停 <FieldHelp label="手动暂停" help="暂停领取匹配任务；继续接单后仍需通过运行环境检查。" /></template>
+          <template #label>手动暂停</template>
           <div class="runtime-row">
-            <p>{{ paused ? '已手动暂停接单。' : '未手动暂停；是否可接任务以运行检查结果为准。' }}</p>
+            <p>{{ paused ? '已暂停接单' : '未暂停' }}</p>
             <ElButton :disabled="statusChanging || (!paused && currentTaskCount > 0)" @click="toggleRuntime">
               {{ statusChanging ? '处理中…' : paused ? '继续接单' : '暂停接单' }}
             </ElButton>
@@ -157,7 +152,6 @@
         <header class="config-section__head">
           <div>
             <h3>执行资源环境</h3>
-            <p>描述 Worker 在哪里运行、工程从哪里来、由哪个编码 Agent 执行。</p>
           </div>
         </header>
 
@@ -171,22 +165,22 @@
         <div v-if="form.environment.mode === 'LINUX_REMOTE'" class="environment-block" data-testid="worker-login-section">
           <div class="environment-block__head">
             <h4>登录信息</h4>
-            <p>用于首次安装、升级和 Worker 离线时的 SSH 维护。</p>
           </div>
           <div class="config-grid config-grid--three">
             <ElFormItem label="服务器" prop="environment.host">
-              <ElInput v-model.trim="form.environment.host" placeholder="10.0.0.12 或 worker.example.com" />
+              <ElInput v-model.trim="form.environment.host" maxlength="255" placeholder="10.0.0.12 或 worker.example.com" />
             </ElFormItem>
             <ElFormItem label="服务器端口" prop="environment.port">
               <ElInput v-model.number="form.environment.port" type="number" min="1" max="65535" />
             </ElFormItem>
             <ElFormItem label="用户名" prop="environment.username">
-              <ElInput v-model.trim="form.environment.username" placeholder="nexus" />
+              <ElInput v-model.trim="form.environment.username" maxlength="120" placeholder="nexus" />
             </ElFormItem>
           </div>
           <ElFormItem label="密码" prop="environment.ssh_password">
             <ElInput
               v-model="form.environment.ssh_password"
+              maxlength="1024"
               type="password"
               show-password
               autocomplete="new-password"
@@ -198,21 +192,19 @@
         <div class="environment-block" data-testid="worker-engineering-section">
           <div class="environment-block__head">
             <h4>工程信息</h4>
-            <p>工作空间会在不同任务间复用；仓库凭据只用于下载代码，不会回显。</p>
           </div>
           <ElFormItem label="工作空间" prop="environment.workspace_root">
             <ElInput
               v-model.trim="form.environment.workspace_root"
               :placeholder="form.environment.mode === 'LOCAL' ? 'D:\\code\\project 或 ./workspaces/worker-01' : '/home/nexus/project'"
             />
-            <p class="field-hint">{{ form.environment.mode === 'LOCAL' ? '本地 Worker 可使用盘符、空格和中文目录。' : 'Linux 远程必须使用绝对路径。' }}</p>
           </ElFormItem>
           <div class="config-grid">
             <ElFormItem label="代码仓库地址">
               <ElInput v-model.trim="form.environment.repository_url" placeholder="https://codeup.aliyun.com/group/project.git" />
             </ElFormItem>
             <ElFormItem label="目标分支">
-              <ElInput v-model.trim="form.environment.repository_branch" placeholder="main" />
+              <ElInput v-model.trim="form.environment.repository_branch" maxlength="255" placeholder="main" />
             </ElFormItem>
           </div>
           <ElFormItem label="Codeup 账号 / Token">
@@ -223,7 +215,6 @@
               autocomplete="new-password"
               :placeholder="repositoryTokenPlaceholder"
             />
-            <p class="field-hint">新建仓库绑定时必填；已有仓库留空表示沿用已保存凭据。</p>
           </ElFormItem>
           <div v-if="form.environment.repository_id" class="repository-bound">
             <ElTag size="small" type="success" effect="plain">已绑定仓库</ElTag>
@@ -235,7 +226,6 @@
         <div class="environment-block" data-testid="worker-coding-section">
           <div class="environment-block__head">
             <h4>编码 Agent</h4>
-            <p>选择 Worker 上运行的编码工具和模型。模型留空时使用平台默认模型。</p>
           </div>
           <div class="config-grid">
             <ElFormItem label="编程工具">
@@ -243,10 +233,9 @@
                 <ElOption value="opencode" label="OpenCode" />
                 <ElOption value="deepseek-harness" label="DeepSeek Harness（未接入）" disabled />
               </ElSelect>
-              <p class="field-hint">当前一键部署只安装 OpenCode；DeepSeek Harness 接入后会在这里开放。</p>
             </ElFormItem>
             <ElFormItem label="编程模型">
-              <ElInput v-model.trim="form.environment.model_name" placeholder="例如：nexus-gateway/deepseek-v4" />
+              <ElInput v-model.trim="form.environment.model_name" maxlength="255" placeholder="例如：nexus-gateway/deepseek-v4" />
             </ElFormItem>
           </div>
         </div>
@@ -261,7 +250,6 @@
                 <ElInput v-model.number="form.environment.opencode_server_port" type="number" min="1" max="65535" />
               </ElFormItem>
             </div>
-            <p class="field-hint">仅监听 127.0.0.1；同一主机的多个 Worker 必须使用不同端口，远程通过 SSH 隧道访问。</p>
           </ElCollapseItem>
         </ElCollapse>
       </section>
@@ -314,7 +302,6 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { api } from '@/api/client'
 import type { Employee, TaskCategory, TaskType } from '@/api/types'
 import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
-import FieldHelp from '@/components/forms/FieldHelp.vue'
 import StickyActionBar from '@/components/astra/StickyActionBar.vue'
 import { useWorkerMaintenance } from '@/composables/useWorkerMaintenance'
 import { useAstraStore } from '@/stores/astra'
@@ -705,7 +692,7 @@ defineExpose({ getDirty: () => isDirty.value, dirty: isDirty, canSave, canDeploy
 .digital-summary__avatar { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; flex: none; border-radius: 12px; background: var(--astra-bg-panel); font-size: 24px; }
 .digital-summary__copy { display: grid; gap: 4px; min-width: 0; flex: 1; }
 .digital-summary__line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.digital-summary__copy p { margin: 0; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); line-height: 1.6; }
+.digital-summary__copy p { max-height: 4.8em; overflow-y: auto; overflow-wrap: anywhere; margin: 0; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); line-height: 1.6; }
 .digital-summary__alert { grid-column: 1 / -1; width: 100%; }
 .dispatch-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 18px; }
 .runtime-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }

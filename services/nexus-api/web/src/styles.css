@@ -75,10 +75,10 @@ button, input, textarea { font: inherit; }
 .role-desc { max-width: 310px; line-height: 1.7; color: #617f70; }
 .tag { display: inline-flex; border-radius: 7px; background: #eef8f2; color: #2a8c69; padding: 4px 8px; font-size: 10px; }
 .tag.ash { background: #f1f5f2; color: #82988b; }
-.mini-chip { border: 1px solid #dfede4; background: #f8fcf9; border-radius: 7px; font-size: 10px; padding: 5px 7px; color: #527d65; }
+.mini-chip { min-width: 0; max-width: 100%; overflow-wrap: anywhere; white-space: normal; border: 1px solid #dfede4; background: #f8fcf9; border-radius: 7px; font-size: 10px; padding: 5px 7px; color: #527d65; }
 .chips, .resource-list { display: flex; gap: 6px; flex-wrap: wrap; }
 .profile-hero { padding: 19px; border-radius: 16px; background: linear-gradient(135deg, #f1fbf6, #f7fcfc); border: 1px solid #e3f2e9; margin-top: 14px; }
-.detail-excerpt { color: #547264; font-size: 11px; line-height: 1.9; white-space: pre-wrap; }
+.detail-excerpt { color: #547264; font-size: 11px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
 .section-label { font-size: 11px; font-weight: 800; color: #537264; margin: 16px 0 9px; }
 .muted { color: var(--muted); }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
@@ -89,7 +89,7 @@ button, input, textarea { font: inherit; }
 .rail-item { display: flex; gap: 10px; align-items: center; padding: 11px 9px; border-radius: 13px; cursor: pointer; margin-bottom: 5px; }
 .rail-item.active, .rail-item:hover { background: #eaf6ee; }
 .chat { display: flex; flex-direction: column; overflow: hidden; min-height: 0; box-sizing: border-box; }
-.chat-head { padding: 16px 19px; display: flex; justify-content: space-between; gap: 13px; border-bottom: 1px solid #edf2ee; }
+.chat-head { min-width: 0; flex-wrap: wrap; padding: 16px 19px; display: flex; justify-content: space-between; gap: 13px; border-bottom: 1px solid #edf2ee; }
 .msg { display: flex; gap: 10px; max-width: 94%; }
 .msg.user { align-self: flex-end; flex-direction: row-reverse; }
 .msg.system { align-self: center; max-width: 100%; }
@@ -128,3 +128,7 @@ button, input, textarea { font: inherit; }
   .app { height: auto; min-height: 100dvh; overflow: visible; }
   .page { overflow: visible; }
 }
+
+.chat-head__copy { flex: 1 1 140px; min-width: 0; }
+.chat-head__copy h2 { margin: 0 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-head__copy p { margin: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }

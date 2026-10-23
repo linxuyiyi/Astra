@@ -144,6 +144,8 @@ const COLLAPSED_HEIGHT_PX = 52;
  * height would leave dead space under the caret instead of centring the line.
  */
 const TEXTAREA_PADDING_Y_PX = (COLLAPSED_HEIGHT_PX - LINE_HEIGHT_PX) / 2;
+// Match the group message API limit; private chat uses the same composer.
+const MAX_MESSAGE_LENGTH = 64000;
 /** Growth stops after six lines of text; the textarea scrolls beyond that. */
 const MAX_HEIGHT_PX = LINE_HEIGHT_PX * 6 + TEXTAREA_PADDING_Y_PX * 2;
 /** Horizontal padding of the textarea, mirrored by the overlay and the ghost. */
@@ -187,6 +189,8 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 		});
 		const [draft] = useState(() => readDraft(draftStorage, draftKey(window.location.search)));
 		const [value, setValue] = useState(draft.text);
+		const [pasteTooLong, setPasteTooLong] = useState(false);
+		const messageTooLong = value.length > MAX_MESSAGE_LENGTH;
 		const [files, setFiles] = useState<ProcessedFile[]>(draft.files);
 		const [isFocused, setIsFocused] = useState(false);
 		const [shortcut, setShortcut] = useState<AsrShortcut>(() => loadAsrShortcut());
@@ -321,7 +325,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 		const handleSend = async () => {
 			// ``phase`` is guarded here rather than only on the button, since Enter
 			// calls this directly and would otherwise send during a running reply.
-			if (submitting.current || phase !== 'idle' || !hasContent || disabled || hasProcessing) return;
+			if (submitting.current || phase !== 'idle' || !hasContent || disabled || hasProcessing || messageTooLong) return;
 
 			const blocks: ContentBlock[] = [];
 
@@ -407,7 +411,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 				return {
 					icon: ArrowUp,
 					tooltip: t('textInput.send'),
-					disabled: disabled || hasProcessing || !hasContent,
+					disabled: disabled || hasProcessing || !hasContent || messageTooLong,
 					variant: 'default',
 					onClick: handleSend,
 				};
@@ -527,6 +531,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 						</AttachmentGroup>
 					)}
 
+					{(messageTooLong || pasteTooLong) && <p role="alert" className="text-xs text-destructive">{t('chat.inputTooLong', { limit: MAX_MESSAGE_LENGTH })}</p>}
 					{asrEnabled && (asr.state !== 'idle' || asr.error || asr.requesting) && (
 						<div
 							className="flex flex-wrap items-center gap-2 px-3 pt-1 text-xs text-muted-foreground"
@@ -622,7 +627,14 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							<textarea
 								ref={textareaRef}
 								value={value}
-								onChange={(e) => setValue(e.target.value)}
+								maxLength={MAX_MESSAGE_LENGTH}
+								onChange={(e) => { setValue(e.target.value); setPasteTooLong(false); }}
+								onPaste={(e) => {
+									const node = e.currentTarget;
+									const length = value.length - (node.selectionEnd - node.selectionStart) + e.clipboardData.getData('text').length;
+									if (length > MAX_MESSAGE_LENGTH) { e.preventDefault(); setPasteTooLong(true); }
+								}}
+								aria-invalid={messageTooLong || pasteTooLong}
 								onKeyDown={handleKeyDown}
 								onFocus={() => setIsFocused(true)}
 								onBlur={() => setIsFocused(false)}

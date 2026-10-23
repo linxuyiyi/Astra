@@ -132,3 +132,7 @@
 
 /* 按钮组统一走 ElSpace 的 gap，主题里的相邻按钮外边距会让间距翻倍，这里只清掉重复的那一份。 */
 .el-space .el-button + .el-button { margin-left: 0; }
+
+/* 长文本在编辑区内滚动，手动拖动也不撑出抽屉；不截断正文或提示词。 */
+.el-textarea__inner { max-height: max(320px, 46vh); overflow-y: auto; overflow-wrap: anywhere; }
+.el-form-item__content { min-width: 0; }

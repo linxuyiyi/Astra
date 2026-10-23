@@ -42,8 +42,8 @@
         </ElTag>
         <ElText v-if="reviewJob.segment_count" type="info">轨迹片段 {{ reviewJob.completed_segment_count }}/{{ reviewJob.segment_count }}</ElText>
         <ElText v-if="reviewJob.candidate_ids.length" type="success">{{ reviewJob.candidate_ids.length }} 条候选经验</ElText>
-        <ElText v-else-if="reviewJob.zero_reason && reviewJob.zero_reason !== 'no_findings'" type="info">{{ reviewJob.zero_reason }}</ElText>
-        <ElText v-if="reviewJob.error_message" type="danger">{{ reviewJob.error_message }}</ElText>
+        <ElText v-else-if="reviewJob.zero_reason && reviewJob.zero_reason !== 'no_findings'" class="review-strip__reason" :title="reviewJob.zero_reason" type="info">{{ reviewJob.zero_reason }}</ElText>
+        <ElText v-if="reviewJob.error_message" class="review-strip__reason" :title="reviewJob.error_message" type="danger">{{ reviewJob.error_message }}</ElText>
         <RouterLink v-if="reviewJob.candidate_ids.length" :to="{ path: '/library', query: { status: 'candidate' } }">查看候选</RouterLink>
         <ElButton
           v-if="['FAILED', 'NO_FINDINGS', 'SKIPPED_SOURCE_MISSING'].includes(reviewJob.status)"
@@ -59,7 +59,7 @@
         :type="error || task?.runtime_error ? 'error' : 'warning'"
         show-icon
         :closable="false"
-        :title="error || task?.runtime_error || '正在核对 Session 输入；启动中断时可先停止后重新开始。'"
+        :title="error || task?.runtime_error || '正在核对 Session 输入…'"
       >
         <div class="workspace-alert__body">
           <span>最后已知状态：{{ task?.runtime_status_label }}</span>
@@ -70,7 +70,7 @@
       </ElAlert>
       <ElAlert v-if="workspaceUiError" class="workspace-alert" type="warning" show-icon :closable="false" :title="workspaceUiError" />
       <iframe v-else-if="frameUrl" :key="frameKey" :src="frameUrl" title="OpenCode Task Workspace" class="task-detail__frame" allow="clipboard-read; clipboard-write" />
-      <ElEmpty v-else-if="binding" :image-size="80" :description="task?.current_session_id ? 'Session 绑定异常，请重连检查；系统不会自动创建新 Session。' : '任务尚未创建 Session，请先启动任务。'" />
+      <ElEmpty v-else-if="binding" :image-size="80" :description="task?.current_session_id ? 'Session 绑定异常，请重连检查' : '任务尚未创建 Session，请先启动任务。'" />
     </ElMain>
 
     <ElDrawer v-model="showChanges" title="代码变更" size="min(800px, 100%)">
@@ -428,6 +428,7 @@ onBeforeUnmount(() => { clearInterval(timer); diffRequest?.abort(); closeEvents(
 .task-detail__main{--el-main-padding:0;display:flex;flex-direction:column;min-height:0;overflow:hidden;background:var(--astra-bg-base)}
 .review-strip{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--astra-border);background:var(--astra-bg-panel);font-size:13px}
 .review-strip a{color:var(--astra-primary)}
+.review-strip__reason{min-width:0;max-width:480px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .workspace-alert{flex:none;border-radius:0}
 .workspace-alert__body{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:6px}
 .task-detail__frame{flex:1;width:100%;min-height:0;border:0;background:#fff}

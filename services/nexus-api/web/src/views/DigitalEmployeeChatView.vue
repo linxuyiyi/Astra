@@ -45,10 +45,10 @@
 
       <article class="panel chat">
         <div v-if="activeTarget" class="chat-head">
-          <div>
-            <h2 style="margin: 0 0 4px">{{ activeTarget.name }}</h2>
-            <p v-if="activeTarget.kind === 'group'" class="muted" style="margin: 0">{{ activeTarget.channel?.description }}</p>
-            <p v-else-if="!activeTarget.enabled" class="muted" style="margin: 0">该联系人已禁用，历史消息仍可查看</p>
+          <div class="chat-head__copy">
+            <h2 :title="activeTarget.name">{{ activeTarget.name }}</h2>
+            <p v-if="activeTarget.kind === 'group'" class="muted">{{ activeTarget.channel?.description }}</p>
+            <p v-else-if="!activeTarget.enabled" class="muted">已禁用</p>
           </div>
           <div class="chat-head__actions">
             <el-button v-if="activeTarget.kind === 'group' && canManage" size="small" @click="openGroupDialog(activeTarget.channel)">群组设置</el-button>
@@ -152,7 +152,7 @@
     </div>
 
     <el-dialog v-model="inviteDialogOpen" title="邀请加入群组" width="520px">
-      <p>发送此链接给要邀请的同事。链接 24 小时内有效，仅能使用一次。</p>
+      <p>24 小时有效 · 仅限一次</p>
       <el-input :model-value="inviteLink" readonly aria-label="群邀请链接" />
       <template #footer><el-button @click="copyInvite">复制链接</el-button></template>
     </el-dialog>
@@ -163,7 +163,7 @@
     <el-dialog v-model="groupDialogOpen" :title="groupEditingId ? '编辑群组' : '创建群组'" width="520px">
       <el-form label-position="top">
         <el-form-item label="群组名称" required><el-input v-model="groupForm.name" maxlength="32" /></el-form-item>
-        <el-form-item label="群组目标" required><el-input v-model="groupForm.description" type="textarea" :rows="3" /></el-form-item>
+        <el-form-item label="群组目标" required><el-input v-model="groupForm.description" type="textarea" :rows="3" maxlength="2000" show-word-limit /></el-form-item>
         <el-form-item v-if="groupEditingId" label="已有成员">
           <div class="resource-list">
             <span v-for="employee in employees.filter((item) => groupExistingMemberIds.includes(item.id))" :key="employee.id" class="mini-chip">{{ employee.avatar }} {{ employee.name }}</span>
@@ -627,6 +627,6 @@ onBeforeUnmount(() => {
 .chat-target { width: 100%; border: 0; background: transparent; text-align: left; }
 .chat-target__meta { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .chat-target__meta b, .chat-target__meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-head__actions { display: flex; gap: 8px; align-items: center; }
+.chat-head__actions { display: flex; flex: none; flex-wrap: wrap; gap: 8px; align-items: center; }
 .chip.sel { background: #e5f6ed; border-color: #aad8c2; color: #187956; }
 </style>

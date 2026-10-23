@@ -54,9 +54,6 @@
         </template>
       </ElTableColumn>
       <ElTableColumn label="提示词" min-width="220" show-overflow-tooltip>
-        <template #header>
-          <span>提示词 <ElTooltip content="任务提示词用于需求，问题提示词用于问题。没配的时候 Worker 只知道分类名称，不知道该怎么做。"><button type="button" class="category-help">说明</button></ElTooltip></span>
-        </template>
         <template #default="{ row }">{{ promptSummary(row as TaskCategory) }}</template>
       </ElTableColumn>
       <ElTableColumn label="操作" width="150" align="center">
@@ -122,7 +119,6 @@ import {
   ElTableColumn,
   ElTag,
   ElText,
-  ElTooltip,
   vLoading,
 } from 'element-plus'
 import { api } from '@/api/client'
@@ -274,5 +270,4 @@ onMounted(load)
 /* 页面骨架、标题栏操作、查询工具栏、表格与分页统一走 styles/page-layout.css，
    这里只保留表格单元格内部的排版。 */
 .category-num { font-size: var(--astra-font-helper); font-variant-numeric: tabular-nums; }
-.category-help { padding: 0; border: 0; background: transparent; color: var(--astra-primary); cursor: pointer; }
 </style>

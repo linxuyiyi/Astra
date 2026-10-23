@@ -1,0 +1,126 @@
+{
+  "base": "7aa91848da99f10969798015ac480c1497404326",
+  "server": "http://127.0.0.1:15184",
+  "mode": "真实 Vue/React 页面与组件，API fixture，不调用真实模型与 Worker",
+  "results": [
+    {
+      "name": "chat-header-1440",
+      "width": 812,
+      "scrollWidth": 812,
+      "height": 100,
+      "scrollHeight": 100
+    },
+    {
+      "name": "chat-header-1280",
+      "width": 652,
+      "scrollWidth": 652,
+      "height": 100,
+      "scrollHeight": 100
+    },
+    {
+      "name": "chat-header-768",
+      "width": 710,
+      "scrollWidth": 710,
+      "height": 100,
+      "scrollHeight": 100
+    },
+    {
+      "name": "chat-materials",
+      "overflow": false
+    },
+    {
+      "name": "nebula-hint",
+      "width": 298,
+      "scrollWidth": 298,
+      "height": 68,
+      "scrollHeight": 2108
+    },
+    {
+      "name": "employee-textarea",
+      "contentLength": 63200,
+      "bounded": true
+    },
+    {
+      "name": "category-prompt",
+      "width": 520,
+      "scrollWidth": 520,
+      "height": 176,
+      "scrollHeight": 19933
+    },
+    {
+      "name": "task-create",
+      "titleLimit": 240,
+      "criterionLimit": 500,
+      "descriptionRetained": true
+    },
+    {
+      "name": "worker-summary",
+      "width": 526,
+      "scrollWidth": 526,
+      "height": 62,
+      "scrollHeight": 1893
+    },
+    {
+      "name": "skill-editor",
+      "width": 680,
+      "scrollWidth": 680,
+      "height": 317,
+      "scrollHeight": 13345
+    },
+    {
+      "name": "mcp-editor",
+      "width": 640,
+      "scrollWidth": 640,
+      "height": 49,
+      "scrollHeight": 15045
+    },
+    {
+      "name": "task-review-strip",
+      "width": 1384,
+      "scrollWidth": 1384,
+      "height": 48,
+      "scrollHeight": 48
+    },
+    {
+      "name": "knowledge-review",
+      "summaryLimit": 4000,
+      "markdownRetained": true,
+      "width": 940,
+      "scrollWidth": 940,
+      "height": 357,
+      "scrollHeight": 10724
+    },
+    {
+      "name": "composer-oversized-paste",
+      "originalDraftPreserved": true,
+      "rejectedCharacters": 1000000
+    },
+    {
+      "name": "composer-at-limit",
+      "width": 750,
+      "scrollWidth": 750,
+      "height": 157,
+      "scrollHeight": 13093
+    },
+    {
+      "name": "composer-restored-over-limit",
+      "draftRetained": true,
+      "sendBlocked": true
+    },
+    {
+      "name": "avatar-assets",
+      "decoded": 9,
+      "size": [
+        256,
+        320
+      ]
+    }
+  ],
+  "errors": [],
+  "mutations": [
+    {
+      "path": "/api/v1/employees/e1/conversations",
+      "method": "POST"
+    }
+  ]
+}

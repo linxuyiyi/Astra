@@ -210,9 +210,7 @@
                 </template>
               </ElTableColumn>
             </ElTable>
-            <ElAlert v-else show-icon :closable="false" title="尚未完成装备检查">
-              执行“检查”后，这里会显示组件的验证结果与原因；配置与版本明细在组件行展开。
-            </ElAlert>
+            <ElAlert v-else show-icon :closable="false" title="尚未完成装备检查" />
             </ElCollapseItem>
           </ElCollapse>
         </section>

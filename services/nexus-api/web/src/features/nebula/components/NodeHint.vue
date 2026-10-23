@@ -14,7 +14,7 @@
         <span class="hint-avatar">{{ avatar }}</span>
         <div class="hint-title">
           <h3>{{ title }}</h3>
-          <small>{{ subtitle }}</small>
+          <small v-if="subtitle">{{ subtitle }}</small>
         </div>
         <span v-if="badge" class="hint-badge" :data-tone="tone">{{ badge }}</span>
       </div>
@@ -71,7 +71,6 @@
           {{ employeeName(direction.fromEmployeeId) }} → {{ employeeName(direction.toEmployeeId) }}
           <span>{{ direction.count }} 次</span>
         </div>
-        <small>职责请求只表示已发起联系，不代表对方已执行或完成。</small>
       </div>
 
       <div class="hint-actions">
@@ -188,9 +187,9 @@ const subtitle = computed(() => {
   if (props.kind === "worker") {
     return `${props.worker?.role || "执行节点"} · ${props.worker?.environmentMode || "环境未知"}`;
   }
-  if (props.kind === "execution") return "员工与 Worker 之间的真实任务执行绑定";
+  if (props.kind === "execution") return "";
   if (props.kind === "task") return `${props.task?.id ?? ""} · ${props.task?.priority ?? ""}`;
-  return "来自员工间真实职责请求记录";
+  return "";
 });
 
 const description = computed(() => {
@@ -311,14 +310,14 @@ function occupancyText(occupancy: string): string {
 .hint-badge[data-tone="warn"] { background: #5a3415; border-color: #a36b2e; color: #ffd5a0; }
 .hint-badge[data-tone="wait"] { background: #5d2f1c; border-color: #b66a3f; color: #ffc49e; }
 .hint-badge[data-tone="muted"] { background: #1b3d38; border-color: #44685e; color: #a9c3b9; }
-.hint-desc { margin: 9px 0 0; color: #a4cabb; font-size: 10px; line-height: 1.7; }
+.hint-desc { max-height: 6.8em; overflow-y: auto; overflow-wrap: anywhere; white-space: pre-wrap; margin: 9px 0 0; color: #a4cabb; font-size: 10px; line-height: 1.7; }
 .hint-metrics { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; color: #8dbdab; font-size: 9px; }
 .hint-metrics b { color: #e6fff4; font-size: 14px; margin-right: 3px; }
 .hint-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin: 10px 0 0; }
 .hint-facts div { min-width: 0; }
 .hint-facts dt { color: #82ad9e; font-size: 9px; }
 .hint-facts dd { margin: 2px 0 0; color: #d7f4e8; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hint-reason { margin: 8px 0 0; font-size: 10px; line-height: 1.6; }
+.hint-reason { overflow-wrap: anywhere; margin: 8px 0 0; font-size: 10px; line-height: 1.6; }
 .hint-reason.wait { color: #ffc89e; }
 .hint-reason.fail { color: #ff9eaf; }
 .hint-collab { margin-top: 9px; border-top: 1px dashed #3e7365; padding-top: 7px; }
@@ -327,8 +326,7 @@ function occupancyText(occupancy: string): string {
 .hint-collab .live { color: #6ff0bf; }
 .hint-direction { display: flex; justify-content: space-between; gap: 8px; color: #bfe8d9; font-size: 10px; padding: 2px 0; }
 .hint-direction span { color: #81b09f; }
-.hint-collab small { display: block; margin-top: 6px; color: #7fa294; font-size: 9px; line-height: 1.6; }
-.hint-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 11px; }
+.hint-actions { overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 11px; }
 .hint-primary, .hint-link {
   display: inline-flex; align-items: center; min-height: 27px; padding: 0 9px;
   border-radius: 7px; font-size: 10px; text-decoration: none; white-space: nowrap;

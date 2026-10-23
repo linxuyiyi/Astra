@@ -140,6 +140,7 @@
 		"copy": "Copy"
 	},
 	"chat": {
+		"inputTooLong": "Messages cannot exceed {{limit}} characters.",
 		"inputPlaceholder": "Type a message...",
 		"confirmToolCall": "Allow this action?",
 		"subagentConfirmTitle": "{{name}} requests confirmation",

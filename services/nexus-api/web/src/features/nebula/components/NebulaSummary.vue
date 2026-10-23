@@ -53,7 +53,7 @@ const tiles = computed(() => {
     {
       label: "待人工",
       value: totals?.tasksWaiting ?? 0,
-      note: "仍需占用资源",
+      note: "",
       tone: totals?.tasksWaiting ? "warn" : "",
     },
     {
@@ -62,7 +62,7 @@ const tiles = computed(() => {
       note: "FAILED",
       tone: totals?.tasksFailed ? "danger" : "",
     },
-    { label: "今日完成", value: totals?.completedToday ?? 0, note: "按完成时间", tone: "ok" },
+    { label: "今日完成", value: totals?.completedToday ?? 0, note: "", tone: "ok" },
   ];
 });
 

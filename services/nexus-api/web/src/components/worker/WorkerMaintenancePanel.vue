@@ -2,58 +2,46 @@
   <section class="worker-maintenance" data-testid="worker-maintenance-panel">
     <div class="worker-maintenance__toolbar">
       <ElSpace wrap :size="8">
-        <ElTooltip content="只读取现状，不写配置、不安装、不重启" placement="top">
-          <ElButton
-            data-testid="check-environment"
-            :icon="Stethoscope"
-            :loading="busyAction === 'check'"
-            :disabled="actionDisabled('check')"
-            @click="runAction('check')"
-          >检查</ElButton>
-        </ElTooltip>
-        <ElTooltip v-if="mode === 'LINUX_REMOTE'" content="安装或校验运行依赖并写入配置，不主动更新已有仓库代码" placement="top">
-          <ElButton
-            data-testid="deploy-environment"
-            type="primary"
-            :loading="busyAction === 'deploy'"
-            :disabled="actionDisabled('deploy')"
-            @click="runAction('deploy')"
-          >一键部署</ElButton>
-        </ElTooltip>
-        <ElTooltip v-if="mode === 'LINUX_REMOTE'" content="获取目标分支并更新仓库代码；工作区有未提交修改时会停止" placement="top">
-          <ElButton
-            data-testid="update-environment"
-            :loading="busyAction === 'update'"
-            :disabled="actionDisabled('update')"
-            @click="runAction('update')"
-          >更新</ElButton>
-        </ElTooltip>
-        <ElTooltip v-if="mode === 'LINUX_REMOTE'" content="重启 OpenCode 服务；需要任务与未结束会话均已清空" placement="top">
-          <ElButton
-            data-testid="restart-environment"
-            :loading="busyAction === 'restart'"
-            :disabled="actionDisabled('restart')"
-            @click="runAction('restart')"
-          >重启</ElButton>
-        </ElTooltip>
-        <ElTooltip v-if="workerDisabled || needsReconcile" content="先只读核对远端状态，无法确认时不释放维护锁" placement="top">
-          <ElButton
-            data-testid="restore-environment"
-            :loading="busyAction === 'restore'"
-            :disabled="actionDisabled('restore')"
-            @click="runAction('restore')"
-          >恢复</ElButton>
-        </ElTooltip>
-        <ElTooltip v-else-if="health?.enabled === true" content="只停止新调度，不停止进程、不释放当前任务" placement="top">
-          <ElButton
-            data-testid="disable-environment"
-            type="danger"
-            plain
-            :loading="busyAction === 'disable'"
-            :disabled="actionDisabled('disable')"
-            @click="runAction('disable')"
-          >禁用</ElButton>
-        </ElTooltip>
+        <ElButton
+          data-testid="check-environment"
+          :icon="Stethoscope"
+          :loading="busyAction === 'check'"
+          :disabled="actionDisabled('check')"
+          @click="runAction('check')"
+        >检查</ElButton>
+        <ElButton v-if="mode === 'LINUX_REMOTE'"
+          data-testid="deploy-environment"
+          type="primary"
+          :loading="busyAction === 'deploy'"
+          :disabled="actionDisabled('deploy')"
+          @click="runAction('deploy')"
+        >一键部署</ElButton>
+        <ElButton v-if="mode === 'LINUX_REMOTE'"
+          data-testid="update-environment"
+          :loading="busyAction === 'update'"
+          :disabled="actionDisabled('update')"
+          @click="runAction('update')"
+        >更新</ElButton>
+        <ElButton v-if="mode === 'LINUX_REMOTE'"
+          data-testid="restart-environment"
+          :loading="busyAction === 'restart'"
+          :disabled="actionDisabled('restart')"
+          @click="runAction('restart')"
+        >重启</ElButton>
+        <ElButton v-if="workerDisabled || needsReconcile"
+          data-testid="restore-environment"
+          :loading="busyAction === 'restore'"
+          :disabled="actionDisabled('restore')"
+          @click="runAction('restore')"
+        >恢复</ElButton>
+        <ElButton v-else-if="health?.enabled === true"
+          data-testid="disable-environment"
+          type="danger"
+          plain
+          :loading="busyAction === 'disable'"
+          :disabled="actionDisabled('disable')"
+          @click="runAction('disable')"
+        >禁用</ElButton>
       </ElSpace>
       <ElButton data-testid="refresh-worker-maintenance" :icon="RefreshCw" :loading="loading" @click="controller.load">刷新</ElButton>
     </div>
@@ -209,7 +197,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElDescriptions, ElDescriptionsItem, ElDrawer, ElEmpty, ElSpace, ElTable, ElTableColumn, ElText, ElTooltip, vLoading } from 'element-plus'
+import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElDescriptions, ElDescriptionsItem, ElDrawer, ElEmpty, ElSpace, ElTable, ElTableColumn, ElText, vLoading } from 'element-plus'
 import { RefreshCw, Stethoscope } from 'lucide-vue-next'
 import type { MaintenanceAction, MaintenanceEvent, MaintenanceOperation } from '@/api/maintenance'
 import { actionBlockedByPolicy, hasOccupancy, isActiveMaintenanceState, isInterruptedMaintenanceState } from '@/features/workers/actionPolicy'

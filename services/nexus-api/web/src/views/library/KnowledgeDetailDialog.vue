@@ -45,7 +45,7 @@
         </ElDescriptions>
 
         <section v-if="detail.status === 'candidate'" class="detail-section" aria-label="候选经验来源与证据">
-          <h3>来源证据 <FieldHelp label="来源证据" help="用于判断这条候选经验是否可信；仅展示实际存在的执行信息。" /></h3>
+          <h3>来源证据</h3>
           <ElAlert v-if="detail.review_note" class="candidate-review-note" type="warning" show-icon :closable="false">
             <template #title>审核意见</template>
             <p class="candidate-review-note__body">{{ detail.review_note }}</p>
@@ -80,7 +80,7 @@
               </template>
             </ElTableColumn>
           </ElTable>
-          <ElText v-else class="detail-loading-text" type="info">暂无额外证据，审核时请重点核对来源 Task 与 Session。</ElText>
+          <ElText v-else class="detail-loading-text" type="info">暂无额外证据</ElText>
         </section>
 
         <section class="detail-section">
@@ -90,7 +90,7 @@
           </div>
           <ElForm v-if="reviewEditing" class="review-form" :model="review" label-position="top">
             <ElFormItem required>
-              <template #label>目标目录 <FieldHelp label="目标目录" help="确认目标目录、标题、标签和 Markdown 后发布；发布成功后才进入员工检索范围。" /></template>
+              <template #label>目标目录</template>
               <ElSelect v-model="review.space_id" placeholder="请选择">
                 <ElOption v-for="dir in directories" :key="dir.id" :value="dir.id" :label="dir.name" />
               </ElSelect>
@@ -109,7 +109,7 @@
               <ElInput v-model="review.tags" placeholder="用逗号分隔" />
             </ElFormItem>
             <ElFormItem label="摘要">
-              <ElInput v-model="review.summary" type="textarea" :rows="2" />
+              <ElInput v-model="review.summary" type="textarea" :rows="2" maxlength="4000" show-word-limit />
             </ElFormItem>
             <ElFormItem label="Markdown 正文" required>
               <ElInput v-model="review.content_md" class="review-form__content" type="textarea" :rows="16" resize="vertical" />
@@ -121,9 +121,8 @@
         <section v-if="reviewActionMode && detail.status === 'candidate'" ref="reviewRequestPanel" class="review-request-panel">
           <div>
             <strong>{{ reviewActionMode === 'supplement' ? '退回补充' : '驳回候选经验' }}</strong>
-            <p>{{ reviewActionMode === 'supplement' ? '明确指出需要补充的内容或证据，避免无目标地重写整条经验。' : '请说明驳回原因，便于后续生成质量分析。' }}</p>
           </div>
-          <ElInput ref="reviewReasonInput" v-model.trim="review.reason" type="textarea" :rows="3" :disabled="working" :placeholder="reviewActionMode === 'supplement' ? '例如：请补充异常场景下的验证证据，并明确适用边界。' : '请输入驳回原因'" />
+          <ElInput ref="reviewReasonInput" v-model.trim="review.reason" type="textarea" :rows="3" :disabled="working" :placeholder="reviewActionMode === 'supplement' ? '补充要求' : '请输入驳回原因'" />
           <ElSpace class="review-request-panel__actions" :size="8">
             <ElButton :disabled="working" @click="reviewActionMode = null">取消</ElButton>
             <ElButton :type="reviewActionMode === 'reject' ? 'danger' : 'primary'" :loading="working" :disabled="review.reason.length < 2" @click="confirmReviewAction">
@@ -175,7 +174,7 @@
         <section v-if="relatedOpen" class="detail-section">
           <div class="detail-section__head">
             <div>
-              <h3>关联任务 <FieldHelp label="关联任务" help="来源任务及实际引用过该知识的任务。" /></h3>
+              <h3>关联任务</h3>
             </div>
             <ElButton text :icon="X" aria-label="关闭关联任务" @click="relatedOpen = false" />
           </div>
@@ -230,7 +229,6 @@ import { useRouter } from 'vue-router'
 import { ElAlert, ElButton, ElDescriptions, ElDescriptionsItem, ElDrawer, ElForm, ElFormItem, ElInput, ElLink, ElOption, ElSelect, ElSkeleton, ElSpace, ElTable, ElTableColumn, ElTag, ElText } from 'element-plus'
 import type { InputInstance } from 'element-plus'
 import type { KnowledgeDetail, KnowledgeUsageRecord, RelatedTask } from '@/api/types'
-import FieldHelp from '@/components/forms/FieldHelp.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 
 const props = defineProps<{ open: boolean; detail: KnowledgeDetail | null; directories: Array<{ id: string; name: string; level: number }>; canReview: boolean; canManage: boolean; working: boolean; error: string; relatedTasks: RelatedTask[]; relatedLoading: boolean; usages: KnowledgeUsageRecord[]; usagesLoading: boolean }>()

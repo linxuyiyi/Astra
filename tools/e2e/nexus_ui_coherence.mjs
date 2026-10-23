@@ -1,0 +1,98 @@
+import { createRequire } from 'node:module';
+import path from 'node:path';
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || path.resolve('frontend/node_modules/playwright'));
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const out=path.resolve(process.env.UI_EVIDENCE_DIR || 'docs/reviews/nexus-ui-coherence-20261023');
+await fs.mkdir(out,{recursive:true});
+const baseUrl=process.env.UI_BASE_URL || 'http://127.0.0.1:15184';
+const browser=await chromium.launch({headless:true});
+try {
+const context=await browser.newContext({viewport:{width:1440,height:900}});
+const page=await context.newPage(); page.setDefaultTimeout(8000); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
+const long='https://example.com/'+ 'LongToken'.repeat(700);
+const emp={id:'e1',name:'星河',domain:'质量工程',description:long,instructions:long,avatar:'🤖',enabled:true,knowledge:['k'.repeat(400)],skills:['s'.repeat(400)],mcps:['m'.repeat(400)],tools:[],agentscope_agent_id:'a1',mailbox_session_id:'s1'};
+const group={id:'g1',name:'UnbrokenGroupName'.repeat(30),description:long,my_role:'owner',viewer_id:'qa',members:[{member_id:'qa',member_type:'human',role:'owner',name:'QA'},{member_id:'e1',member_type:'employee',employee_id:'e1',name:'星河',role:'member'}]};
+const category={id:'c1',name:'质量',enabled:true,sort_order:0,description:'',task_prompt:'',question_prompt:''};
+const ne={...emp,counts:{running:0,queued:0,waiting:0,failed:0,completedToday:0},workerIds:[],createdAt:'2026-10-23T10:00:00Z',interactionStatus:'available'};
+const snap={snapshotVersion:'1',generatedAt:'2026-10-23T14:00:00Z',timezone:'Asia/Shanghai',degradedSources:[],totals:{employees:1,workers:0,workersOnline:0,workersOffline:0,tasksRunning:0,tasksQueued:0,tasksWaiting:0,tasksFailed:0,completedToday:0},employees:[ne],workers:[],taskEdges:[],collaborationEdges:[],queuedTasks:[],attentionTasks:[],unassignedTasks:[],unassigned:{workerCount:0,taskCount:0,counts:ne.counts},dataConflicts:[],dataWarnings:[]};
+const mutations=[];
+await context.route('**/api/**',async r=>{
+ const u=new URL(r.request().url()),p=u.pathname; if(!p.startsWith('/api/'))return r.continue(); let body={};
+ if(r.request().method()!=='GET')mutations.push({path:p,method:r.request().method()});
+ if(p.endsWith('/events')||p.includes('/events/stream'))return r.fulfill({contentType:'text/event-stream',body:': connected\n\n'});
+ if(p==='/api/v1/auth/session')body={uid:'qa',display_name:'QA'};
+ else if(p==='/api/v1/runtime')body={reachable:true,agentscope_version:'2.0.10'};
+ else if(p==='/api/v1/nebula/snapshot')body=snap;
+ else if(p==='/api/v1/employees')body={items:[emp]};
+ else if(p==='/api/v1/channels')body={items:[group]};
+ else if(p==='/api/v1/channels/g1/messages')body={channel:group,items:[],before:0,event_cursor:0};
+ else if(p==='/api/v1/employees/e1/conversations')body={id:'conv1',employee_id:'e1',messages:[]};
+ else if(p==='/api/v1/conversations/conv1')body={id:'conv1',employee_id:'e1',messages:[],event_cursor:'0'};
+ else if(['/api/v1/skills','/api/v1/mcps','/api/v1/knowledge','/api/v1/tools'].includes(p))body={available:true,items:[]};
+ else if(p==='/api/tasks/t1')body={id:'t1',title:'复盘测试',description:'任务目标',status:'FAILED',priority:'MEDIUM',task_type:'ISSUE',runtime_state:'FAILED',runtime_status_label:'执行失败',runtime_detail:'',acceptance_criteria:[],attachments:[],current_session_id:null,pending_message_id:null};
+ else if(p==='/api/tasks/t1/workspace')body={sessions:[],runtime:{}};
+ else if(p==='/api/library/review-jobs')body=[{id:'r1',status:'FAILED',segment_count:0,candidate_ids:[],error_message:long,zero_reason:long}];
+ else if(p==='/api/library/permissions')body={can_review:true,can_manage:true};
+ else if(p==='/api/library/stats')body={knowledge_pages:1,visible_knowledge_total:1,knowledge_spaces:1,weekly_references:0,published_experiences:0,candidate_experiences:1};
+ else if(p==='/api/library/spaces')body=[{id:'space1',name:'经验',children:[],knowledge_count:1,subtree_knowledge_count:1}];
+ else if(p==='/api/library/usage/summary')body={days:7,total_references:0,used_resources:0,feedback_count:0,top_knowledge:[],trend:[]};
+ else if(p==='/api/library/knowledge')body={items:[],total:0,page:1,page_size:20,pages:0};
+ else if(p==='/api/library/knowledge/k1')body={id:'k1',space_id:'space1',title:'候选经验',summary:'摘要',type:'experience',status:'candidate',verification_status:'unverified',tags:[],reference_count:0,helpful_count:0,updated_at:'2026-10-23T14:00:00Z',content_md:'正文',experience_data:{},sources:[],evidence:[]};
+ else if(p==='/api/library/knowledge/k1/usages')body=[];
+ else if(p==='/api/task-categories')body=[category];
+ else if(['/api/agent-workers','/api/workers','/api/tasks','/api/events','/api/gateway/routes'].includes(p))body=[];
+ else if(p.includes('/config/skills'))body={items:[],agentscope_available:true};
+ else if(p.includes('/config/mcps'))body={items:[]};
+ return r.fulfill({contentType:'application/json',body:JSON.stringify(body)});
+});
+const results=[];
+const check=(name,data)=>{results.push({name,...data});console.log(name,JSON.stringify(data));};
+const go=async path=>{await page.goto(baseUrl+path);};
+const noOverflow=async loc=>loc.evaluate(e=>({width:e.clientWidth,scrollWidth:e.scrollWidth,height:e.clientHeight,scrollHeight:e.scrollHeight}));
+await go('/chat?group=g1'); await page.locator('.chat-head__copy h2').waitFor().catch(async e=>{console.log('DEBUG',await page.locator('body').innerText(),errors);await page.screenshot({path:out+'/failure.png'});await browser.close();throw e;});
+if(await page.getByRole('button',{name:'查看资料',exact:true}).count())await page.getByRole('button',{name:'查看资料',exact:true}).click();
+await page.getByRole('button',{name:'资料',exact:true}).click();
+for(const size of [{width:1440,height:900},{width:1280,height:800},{width:768,height:900}]){
+ await page.setViewportSize(size);
+ const header=await noOverflow(page.locator('.chat-head')); assert.ok(header.scrollWidth<=header.width+1);
+ const actions=await page.locator('.chat-head__actions').boundingBox();const head=await page.locator('.chat-head').boundingBox();assert.ok(actions.x>=head.x&&actions.x+actions.width<=head.x+head.width+1);
+ check('chat-header-'+size.width,header);await page.screenshot({path:out+'/chat-'+size.width+'.png'});
+}
+await page.setViewportSize({width:1440,height:900});
+await page.getByRole('button',{name:'群组设置',exact:true}).click();
+assert.equal(await page.locator('.el-dialog textarea').getAttribute('maxlength'),'2000');
+await page.locator('.el-dialog textarea').fill('目标'.repeat(1000));
+await page.screenshot({path:out+'/group-form.png'});await page.getByRole('button',{name:'取消',exact:true}).click();
+await go('/chat?employee=e1'); await page.locator('.chat-head__copy h2').waitFor();
+await page.getByRole('button',{name:'资料',exact:true}).click();
+for(const loc of await page.locator('.detail-excerpt,.mini-chip').all()) { const v=await noOverflow(loc);assert.ok(v.scrollWidth<=v.width+1,JSON.stringify(v)); }
+check('chat-materials',{overflow:false});await page.screenshot({path:out+'/chat-materials.png'});
+await go('/');await page.locator('#nebula-employee-focus').selectOption('e1');await page.locator('.hint-desc').waitFor();
+const hint=await noOverflow(page.locator('.hint-desc'));assert.ok(hint.scrollWidth<=hint.width+1);assert.ok(hint.height<=70&&hint.scrollHeight>hint.height);check('nebula-hint',hint);
+assert.equal(await page.getByText('每个数字员工，都是一座运行中的星系').count(),0);await page.screenshot({path:out+'/nebula-hint.png'});
+await go('/settings/employees');await page.getByRole('button',{name:'新建数字员工',exact:true}).click();
+const textareas=page.locator('.el-drawer textarea');await textareas.first().fill(long.repeat(10));await textareas.nth(1).fill(long.repeat(10));
+for(const loc of await textareas.all()){const v=await noOverflow(loc);assert.ok(v.height<=414&&v.scrollHeight>v.height);}
+check('employee-textarea',{contentLength:long.length*10,bounded:true});await page.screenshot({path:out+'/employee-form.png'});
+await go('/settings/categories');await page.getByRole('button',{name:'新增分类',exact:true}).click();const prompt=page.getByRole('textbox',{name:'任务 Prompt',exact:true});await prompt.fill(long.repeat(10));const ph=await noOverflow(prompt);assert.ok(ph.height<=414);check('category-prompt',ph);
+await page.screenshot({path:out+'/category-form.png'});
+await go('/tasks');await page.getByTestId('task-create').click();
+assert.equal(await page.locator('.task-create-form input[maxlength="240"]').count(),1);assert.equal(await page.locator('.criterion-row input').first().getAttribute('maxlength'),'500');
+await page.locator('.task-create-form textarea').fill(long.repeat(10));check('task-create',{titleLimit:240,criterionLimit:500,descriptionRetained:true});await page.screenshot({path:out+'/task-form.png'});
+await go('/settings/workers');await page.getByTestId('employee-create').click();
+await page.locator('[data-testid=employee-config-form] .el-select').first().click();await page.getByRole('option').filter({hasText:'星河'}).click();
+const summary=await noOverflow(page.locator('.digital-summary__copy p'));assert.ok(summary.height<70&&summary.scrollHeight>summary.height);check('worker-summary',summary);await page.screenshot({path:out+'/worker-form.png'});
+await go('/settings/skills');await page.getByTestId('skills-create').click();await page.locator('.code-editor textarea').first().fill(long.repeat(10));const skill=await noOverflow(page.locator('.code-editor textarea').first());assert.ok(skill.height<=414);check('skill-editor',skill);await page.screenshot({path:out+'/skill-form.png'});
+await go('/settings/mcps');await page.getByTestId('mcps-create').click();await page.locator('.el-drawer textarea').fill(long.repeat(10));const mcp=await noOverflow(page.locator('.el-drawer textarea'));assert.ok(mcp.height<=414);check('mcp-editor',mcp);await page.screenshot({path:out+'/mcp-form.png'});
+await go('/tasks/t1');await page.locator('.review-strip__reason').first().waitFor();const strip=await noOverflow(page.locator('.review-strip'));assert.ok(strip.height<100&&strip.width>=strip.scrollWidth);for(const r of await page.locator('.review-strip__reason').all())assert.equal(await r.getAttribute('title'),long);check('task-review-strip',strip);await page.screenshot({path:out+'/task-review.png'});
+await go('/library?knowledge=k1');await page.getByTestId('knowledge-detail-review-edit').click();const summaryInput=page.locator('.review-form textarea').first();assert.equal(await summaryInput.getAttribute('maxlength'),'4000');await summaryInput.fill('摘'.repeat(4000));const md=page.locator('.review-form__content textarea');await md.fill(long.repeat(10));const kh=await noOverflow(md);assert.ok(kh.height<=414);check('knowledge-review',{summaryLimit:4000,markdownRetained:true,...kh});await page.screenshot({path:out+'/knowledge-review.png'});
+await go('/chat?group=g1');const frame=page.frameLocator('iframe[title]');const input=frame.locator('textarea');await input.waitFor();assert.equal(await input.getAttribute('maxlength'),'64000');await input.fill('原草稿');
+await input.evaluate(e=>{e.focus();e.setSelectionRange(e.value.length,e.value.length);const dt=new DataTransfer();dt.setData('text','x'.repeat(1000000));e.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true}));});
+assert.equal(await input.inputValue(),'原草稿');await frame.getByRole('alert').waitFor();check('composer-oversized-paste',{originalDraftPreserved:true,rejectedCharacters:1000000});
+await input.fill('x'.repeat(64000));const ch=await noOverflow(input);assert.ok(ch.height<160);check('composer-at-limit',ch);await page.screenshot({path:out+'/composer-limit.png'});
+await input.evaluate(e=>sessionStorage.setItem('nexus:chat-draft:channel:g1',JSON.stringify({text:'x'.repeat(64001),files:[]})));await page.reload();const over=page.frameLocator('iframe[title]').locator('textarea');await over.waitFor();assert.equal((await over.inputValue()).length,64001);const sentBefore=mutations.filter(m=>m.path==='/api/v1/channels/g1/messages').length;await over.press('Enter');assert.equal(mutations.filter(m=>m.path==='/api/v1/channels/g1/messages').length,sentBefore);check('composer-restored-over-limit',{draftRetained:true,sendBlocked:true});
+const images=await page.evaluate(async()=>{const results=[];for(let i=0;i<9;i++){const img=new Image();img.src='/assets/office/characters/character-'+i+'-front.png';await img.decode();results.push([img.naturalWidth,img.naturalHeight]);}return results;});assert.ok(images.every(v=>v[0]===256&&v[1]===320));check('avatar-assets',{decoded:9,size:[256,320]});assert.deepEqual(errors,[]);await fs.writeFile(out+'/browser-results.json',JSON.stringify({base:'7aa91848da99f10969798015ac480c1497404326',server:baseUrl,mode:'真实 Vue/React 页面与组件，API fixture，不调用真实模型与 Worker',results,errors,mutations},null,2));await browser.close();
+
+} finally { await browser.close(); }

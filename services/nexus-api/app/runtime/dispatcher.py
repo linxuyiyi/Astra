@@ -24,6 +24,22 @@ def runtime_assignment_block(environment, task) -> str | None:
         return "任务没有绑定仓库"
     if environment.repository_id != task.repository_id:
         return "任务仓库与 Worker 不一致"
+    if environment.runtime_engine == "dsh":
+        if not environment.model_name:
+            return "DSH 必须明确选择已登记的 Gateway 模型别名"
+        if environment.worker_channel != "worker":
+            return "DSH 必须使用 Worker Gateway"
+        health = (environment.status_detail or {}).get("dsh", {})
+        if not health.get("healthy"):
+            return "请先通过 DSH 固定版本与装配检查"
+        if environment.model_name not in health.get("models", []):
+            return "DSH 模型未通过 Gateway 目录检查"
+        if set(environment.skill_refs or []) != set(health.get("skill_hashes", {})):
+            return "DSH Skill 白名单与 Worker 装配不一致"
+        expected = {str(item.get("name")) for item in environment.mcp_refs or []}
+        if expected != set(health.get("mcp_names", [])):
+            return "DSH MCP 白名单与 Worker 装配不一致"
+        return None
     names = binding_names(environment.skill_refs, environment.mcp_refs)
     if not dispatch_allowed(environment.status_detail, bindings=names):
         return "Worker 能力绑定尚未应用"

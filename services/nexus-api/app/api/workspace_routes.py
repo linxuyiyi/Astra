@@ -610,6 +610,8 @@ def workspace_ui_for(snapshot: dict | None) -> tuple[str, str | None, str | None
     Missing or unreadable versions stay unknown. A recorded version is never
     replaced with the current release; a retired bundle is reported as such.
     """
+    if (snapshot or {}).get("runtime_engine") == "dsh":
+        return "", None, None
     raw = (snapshot or {}).get("opencode_version")
     if raw is None or not str(raw).strip():
         return "unknown", None, RETIRED_WORKSPACE_UI
@@ -651,7 +653,7 @@ def error_response(exc):
         return HTTPException(409, str(exc))
     if isinstance(exc, FileNotFoundError):
         return HTTPException(409, f"Workspace 不存在：{exc}")
-    return HTTPException(503, f"当前 OpenCode Runtime 不可连接：{exc}")
+    return HTTPException(503, f"当前执行 Runtime 不可连接：{exc}")
 
 
 @router.post("/start", response_model=TaskRead)
@@ -760,6 +762,9 @@ async def task_workspace(task_id: str, session_id: str | None = None, session=De
         version, workspace_ui, workspace_ui_error = workspace_ui_for(item.environment)
         return {
             "id": item.id,
+            "runtime_engine": item.runtime_engine,
+            "native_session_id": item.native_session_id,
+            "engine_metadata": item.engine_metadata,
             "workspace": item.workspace,
             "created_at": item.created_at,
             "status": item.status,
@@ -775,6 +780,10 @@ async def task_workspace(task_id: str, session_id: str | None = None, session=De
         "task_id": task.id,
         "task_status": task.status,
         "runtime": {
+            "runtime_engine": (selected.runtime_engine if selected
+                               else (selected_snapshot or {}).get("runtime_engine", "opencode")),
+            "native_session_id": selected.native_session_id if selected else None,
+            "engine_metadata": selected.engine_metadata if selected else None,
             "server": f"/api/tasks/{task.id}/opencode",
             "session_id": selected.id if selected else None,
             "workspace": selected.workspace if selected else task.workspace,
@@ -902,6 +911,8 @@ async def native_proxy(
     binding = await session.get(RuntimeSession, session_id)
     if not binding or binding.task_id != task.id:
         raise HTTPException(404, "Session 不属于此任务")
+    if binding.runtime_engine != "opencode":
+        raise HTTPException(409, "此 Session 使用 DSH，请使用通用工作台")
     # Environment and directory are bound in the DB, never selected by browser-supplied paths.
     from app.models import OpenCodeExecutionEnvironment
     from app.runtime.environment import environment_from_snapshot

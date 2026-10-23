@@ -26,6 +26,7 @@ export interface TaskCategory {
 export type TaskCategoryWrite = Pick<TaskCategory, 'name' | 'description' | 'enabled' | 'sort_order' | 'task_prompt' | 'question_prompt'>
 
 export interface ExecutionEnvironment {
+  runtime_engine?: 'opencode' | 'dsh'
   id: number
   employee_id: string
   mode: 'LOCAL' | 'LINUX_REMOTE'
@@ -512,6 +513,9 @@ export interface TaskWorkspaceBinding {
   task_id: string
   task_status: TaskStatus
   runtime: {
+    runtime_engine?: 'opencode' | 'dsh'
+    native_session_id?: string | null
+    engine_metadata?: Record<string, string> | null
     server: string
     session_id: string | null
     workspace: string | null
@@ -522,6 +526,9 @@ export interface TaskWorkspaceBinding {
     workspace_ui_error: string | null
   }
   sessions: Array<{
+    runtime_engine?: 'opencode' | 'dsh'
+    native_session_id?: string | null
+    engine_metadata?: Record<string, string> | null
     id: string
     workspace: string
     created_at: string

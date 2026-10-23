@@ -11,6 +11,7 @@ from app.api.library_routes import router as library_router
 from app.api.maintenance_routes import router as maintenance_router
 from app.api.repository_routes import router as repository_router
 from app.api.routes import router
+from app.api.workbench_routes import router as workbench_router
 from app.api.worker_routes import router as worker_router
 from app.api.workspace_routes import router as workspace_router
 from app.bootstrap import bootstrap_categories, bootstrap_employees, bootstrap_knowledge_spaces
@@ -81,6 +82,7 @@ app.include_router(worker_router)
 app.include_router(worker_gateway_router)
 app.include_router(maintenance_router)
 app.include_router(workspace_router)
+app.include_router(workbench_router)
 app.include_router(library_router)
 app.include_router(gateway_router)
 app.add_exception_handler(LibraryError, library_error_handler)

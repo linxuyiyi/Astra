@@ -13,14 +13,14 @@ from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import create_engine, text
 
-from app.sql_storage import INITIAL_REVISION, metadata
+from app.sql_storage import SCHEMA_REVISION, metadata
 
 SERVICE = Path(__file__).resolve().parents[2]
 
 
-def upgrade(path: Path):
+def upgrade(path: Path, revision: str = "head"):
     return subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        [sys.executable, "-m", "alembic", "upgrade", revision],
         cwd=SERVICE,
         env={**os.environ, "ASTRA_DATABASE_URL": f"sqlite+aiosqlite:///{path}"},
         text=True,
@@ -38,7 +38,7 @@ def test_initial_schema_is_complete_and_repeatable(tmp_path):
         with engine.begin() as connection:
             assert (
                 connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-                == INITIAL_REVISION
+                == SCHEMA_REVISION
             )
             assert not compare_metadata(MigrationContext.configure(connection), metadata())
             connection.execute(
@@ -61,6 +61,40 @@ def test_initial_schema_is_complete_and_repeatable(tmp_path):
             )
     finally:
         engine.dispose()
+
+
+def test_released_init_upgrade_preserves_opencode_binding(tmp_path):
+    database = tmp_path / "released.db"
+    initial = upgrade(database, "0001_init")
+    assert initial.returncode == 0, initial.stderr
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO t_nexus_opencode_execution_environments "
+            "(id,employee_id,mode,name,description,port,opencode_server_port,opencode_path,"
+            "workspace_root,status,status_detail,labels,created_at,updated_at) "
+            "VALUES (1,'worker','LINUX_REMOTE','原环境','',22,4096,'opencode',"
+            "'/agentwork','READY','{}','{}','2026-10-23','2026-10-23')"
+        )
+        connection.execute(
+            "INSERT INTO t_nexus_runtime_sessions "
+            "(id,task_id,employee_id,workspace,environment,status,tool_usage,usage_by_day,"
+            "model_usage,created_at,total_tokens) VALUES "
+            "('ses_original','task','worker','/agentwork/task','{}','SUCCEEDED','{}','{}',"
+            "'{}','2026-10-23',123)"
+        )
+    outcome = upgrade(database)
+    assert outcome.returncode == 0, outcome.stderr
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT runtime_engine FROM t_nexus_opencode_execution_environments WHERE id=1"
+        ).fetchone() == ("opencode",)
+        assert connection.execute(
+            "SELECT id,native_session_id,runtime_engine,fencing_token,status,total_tokens,workspace "
+            "FROM t_nexus_runtime_sessions"
+        ).fetchone() == (
+            "ses_original", "ses_original", "opencode", 0, "SUCCEEDED", 123, "/agentwork/task"
+        )
+    assert upgrade(database).returncode == 0
 
 
 @pytest.mark.parametrize("version", [None, "0058_drop_pool_route_weight"])
@@ -102,4 +136,4 @@ def test_incomplete_current_schema_is_not_silently_accepted(tmp_path):
         connection.execute("DROP TABLE t_nexus_settings")
     outcome = upgrade(database)
     assert outcome.returncode != 0
-    assert "新的空数据库" in outcome.stderr
+    assert "schema" in outcome.stderr

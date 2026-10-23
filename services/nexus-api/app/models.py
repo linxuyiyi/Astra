@@ -130,6 +130,7 @@ class OpenCodeExecutionEnvironment(Base):
     repository_id: Mapped[str | None] = mapped_column(
         ForeignKey("t_nexus_code_repositories.id"), nullable=True, index=True
     )
+    runtime_engine: Mapped[str] = mapped_column(String(16), default="opencode", server_default="opencode")
     mode: Mapped[str] = mapped_column(String(32), default="LOCAL", index=True)
     name: Mapped[str] = mapped_column(String(120), default="本地 Agent 工作环境")
     description: Mapped[str] = mapped_column(Text, default="")
@@ -250,10 +251,14 @@ class Task(RuntimeProjection, Base):
 
 
 class RuntimeSession(Base):
-    """Binding and result index; OpenCode owns all messages and execution details."""
+    """Binding and result index; the selected engine owns execution details."""
 
     __tablename__ = "t_nexus_runtime_sessions"
     id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    runtime_engine: Mapped[str] = mapped_column(String(16), default="opencode", server_default="opencode")
+    native_session_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    engine_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    fencing_token: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     task_id: Mapped[str] = mapped_column(ForeignKey("t_nexus_tasks.id"), index=True)
     employee_id: Mapped[str] = mapped_column(ForeignKey("t_nexus_agent_workers.id"))
     workspace: Mapped[str] = mapped_column(Text)

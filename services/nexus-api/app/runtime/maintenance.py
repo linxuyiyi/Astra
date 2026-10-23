@@ -197,6 +197,8 @@ def _validate_action(environment: OpenCodeExecutionEnvironment, action: str) -> 
         MaintenanceAction.UPDATE.value,
         MaintenanceAction.RESTART.value,
     }
+    if environment.runtime_engine == "dsh" and action in remote_actions:
+        raise HTTPException(409, "DSH 使用独立固定安装，暂不支持 OpenCode 安装、更新和重启")
     if action in remote_actions and environment.mode != ExecutionMode.LINUX_REMOTE:
         raise HTTPException(409, "仅 Linux 远程员工支持部署、更新和重启")
     if action in remote_actions and not environment.workspace_root.startswith("/"):
@@ -1639,7 +1641,9 @@ async def _run_reconcile(lease: OperationLease, operation: WorkerMaintenanceOper
 
 def _deployed_from_desired(desired: dict[str, Any]) -> dict[str, Any]:
     return {
-        "opencode": {"version": (desired.get("opencode") or {}).get("version")},
+        **({"runtime_engine": "dsh", "dsh": desired.get("dsh")}
+           if desired.get("runtime_engine") == "dsh" else
+           {"opencode": {"version": (desired.get("opencode") or {}).get("version")}}),
         "worker_agent": {"version": (desired.get("worker_agent") or {}).get("version")},
         "model": {"name": (desired.get("model") or {}).get("name")},
         "mcp": {"revision": (desired.get("mcp") or {}).get("revision")},
@@ -1722,6 +1726,9 @@ async def observe_environment(
         status = EnvironmentStatus.UNKNOWN
         stale = True
 
+    if environment.runtime_engine == "dsh" and status == EnvironmentStatus.AVAILABLE:
+        # DSH 固定装配在 Worker 本地登记；真实协议/哈希/仓库核验就是应用凭据。
+        deployed_snapshot = _deployed_from_desired(desired)
     if mark_deployed and not isinstance(deployed_snapshot, dict):
         deployed_snapshot = _deployed_from_desired(desired)
     deployed = deployed_snapshot if isinstance(deployed_snapshot, dict) else previous.get("deployed")
@@ -1731,7 +1738,9 @@ async def observe_environment(
     desired_revision = str(desired.get("revision") or "")
     previous_applied = str(capability.get("applied_revision") or "")
     applied = (
-        desired_revision if apply_desired and status == EnvironmentStatus.AVAILABLE else previous_applied
+        desired_revision
+        if status == EnvironmentStatus.AVAILABLE and (apply_desired or environment.runtime_engine == "dsh")
+        else previous_applied
     )
     pending = bool(desired_revision) and applied != desired_revision
     capability.update(
@@ -1761,6 +1770,8 @@ async def observe_environment(
             "capability": capability,
         }
     )
+    if environment.runtime_engine == "dsh":
+        detail["dsh"] = observation.get("dsh", {})
     if isinstance(deployed_snapshot, dict):
         detail["deployed"] = deployed_snapshot
     values = {
@@ -2013,7 +2024,7 @@ async def _run_check(lease: OperationLease, operation: WorkerMaintenanceOperatio
         stage="checking",
         name="只读检查",
         state="running",
-        message="正在真实探测 OpenCode、模型、MCP、Skill 与 Git",
+        message="正在核对执行引擎、模型装配与 Git",
     )
     probe = await observe_environment(operation.environment_id, persist=False)
     for row in probe["equipment"]:

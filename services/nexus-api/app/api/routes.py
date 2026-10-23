@@ -137,6 +137,7 @@ async def employee_read(employee: AgentWorker, session: AsyncSession) -> Employe
         employee_status=employee.status,
         task_statuses=[row.status for row in rows],
         runtime_connections=[row.runtime_connection for row in rows],
+        runtime_engine=environment.runtime_engine if environment is not None else "opencode",
     )
     return EmployeeRead.model_validate(
         {

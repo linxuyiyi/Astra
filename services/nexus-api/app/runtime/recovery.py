@@ -65,6 +65,14 @@ async def watch_session(task_id):
                 session_id, workspace = task.current_session_id, task.workspace
                 await session.commit()
 
+            if environment.runtime_engine == "dsh":
+                # ACP 由 Worker 持有；复用既有 Task watcher 的有界对账周期。
+                current = await _refresh_with_client(task_id, None)
+                if not current or current.status in {"SUCCEEDED", "FAILED", "CANCELED"}:
+                    return
+                delay = 1
+                await asyncio.sleep(settings.opencode_reconcile_interval_seconds)
+                continue
             async with connect(environment, start=True) as client:
                 directory = Path(workspace)
                 if getattr(client, "records_fetch", False):

@@ -241,17 +241,17 @@
             <ElFormItem label="编程工具">
               <ElSelect v-model="form.environment.coding_tool" class="worker-config-control">
                 <ElOption value="opencode" label="OpenCode" />
-                <ElOption value="deepseek-harness" label="DeepSeek Harness（未接入）" disabled />
+                <ElOption value="dsh" label="DSH ACP（试用）" :disabled="form.environment.mode !== 'LINUX_REMOTE'" />
               </ElSelect>
-              <p class="field-hint">当前一键部署只安装 OpenCode；DeepSeek Harness 接入后会在这里开放。</p>
+              <p class="field-hint">DSH 需先在 Worker 独立安装固定版本并登记模型与 MCP 白名单，通过检查后可派单。</p>
             </ElFormItem>
             <ElFormItem label="编程模型">
-              <ElInput v-model.trim="form.environment.model_name" placeholder="例如：nexus-gateway/deepseek-v4" />
+              <ElInput v-model.trim="form.environment.model_name" placeholder="与 Gateway 登记一致的模型别名" />
             </ElFormItem>
           </div>
         </div>
 
-        <ElCollapse v-model="advancedOpen" class="advanced-settings">
+        <ElCollapse v-if="form.environment.coding_tool === 'opencode'" v-model="advancedOpen" class="advanced-settings">
           <ElCollapseItem title="高级设置" name="advanced">
             <div class="config-grid">
               <ElFormItem label="OpenCode 可执行文件" prop="environment.opencode_path">
@@ -322,7 +322,7 @@ import { isMaintenanceActive } from '@/features/workers/presentation'
 import { employeeDisplayName } from '@/utils/format'
 import type { Employee as DigitalEmployee } from '@/types'
 
-type CodingTool = 'opencode' | 'deepseek-harness'
+type CodingTool = 'opencode' | 'dsh'
 
 const props = withDefaults(defineProps<{
   employee: Employee | null
@@ -409,12 +409,13 @@ const formRules = computed<FormRules>(() => ({
   task_types: [{ type: 'array', required: true, message: '至少选择一种任务类型', trigger: 'change' }],
   category_id: [{ required: true, message: '请选择任务分类', trigger: 'change' }],
   'environment.workspace_root': [{ required: true, message: '请输入工作空间', trigger: 'blur' }],
+  'environment.model_name': [{ required: form.environment.coding_tool === 'dsh', message: '请选择 Gateway 已登记的模型别名', trigger: 'blur' }],
   'environment.opencode_path': [{ required: true, message: '请输入 OpenCode 可执行文件', trigger: 'blur' }],
   'environment.opencode_server_port': [{ required: true, message: '请输入 OpenCode Server 端口', trigger: 'blur' }, { validator: portValidator, trigger: 'blur' }],
   'environment.host': [{ required: true, message: '请输入服务器地址', trigger: 'blur' }],
   'environment.port': [{ required: true, message: '请输入服务器端口', trigger: 'blur' }, { validator: portValidator, trigger: 'blur' }],
   'environment.username': [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  'environment.ssh_password': [{ required: props.creating || !props.employee?.execution_environment?.has_ssh_password, message: '请输入 SSH 密码', trigger: 'blur' }],
+  'environment.ssh_password': [{ required: form.environment.coding_tool !== 'dsh' && (props.creating || !props.employee?.execution_environment?.has_ssh_password), message: '请输入 SSH 密码', trigger: 'blur' }],
 }))
 
 function defaultCategoryId() {
@@ -448,7 +449,7 @@ function fill(employee?: Employee) {
           repository_url: environment.repository_url ?? '',
           repository_branch: environment.repository_branch ?? environment.branch ?? 'main',
           repository_token: '',
-          coding_tool: 'opencode',
+          coding_tool: (environment.runtime_engine || 'opencode') as CodingTool,
         }
       : emptyEnvironment(),
   })
@@ -508,6 +509,7 @@ function environmentPayload(repositoryId: string | null) {
   const remote = form.environment.mode === 'LINUX_REMOTE'
   return {
     mode: form.environment.mode,
+    runtime_engine: form.environment.coding_tool,
     name: form.worker_name.trim(),
     description: form.description,
     host: remote ? form.environment.host.trim() || null : null,
@@ -545,6 +547,7 @@ function normalizedEnvironment(value: Record<string, unknown> | ReturnType<typeo
   const data = value as Record<string, unknown>
   return {
     mode: data.mode,
+    runtime_engine: data.runtime_engine ?? data.coding_tool ?? 'opencode',
     name: data.name ?? '',
     description: data.description ?? '',
     host: data.host ?? null,

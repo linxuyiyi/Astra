@@ -53,6 +53,9 @@ async def read_trace(snapshot: dict[str, Any]) -> TraceResult:
             raise TraceUnavailable(f"无法解析复盘执行环境: {exc}") from exc
         workspace = str(snapshot.get("workspace") or binding.workspace or "")
 
+    if binding.runtime_engine == "dsh":
+        from .dsh_trace import read_dsh_trace
+        return await read_dsh_trace(binding, environment, snapshot)
     directory = Path(workspace)
     events = []
     total_messages = 0

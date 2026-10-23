@@ -376,6 +376,7 @@ async def test_online_worker_uses_inspect_runtime_even_when_channel_is_ssh(monke
 
     monkeypatch.setattr("app.runtime.worker_health.WorkerOpenCodeClient", FakeClient)
     environment = SimpleNamespace(
+        runtime_engine="opencode",
         id=7,
         worker_channel="ssh",
         host="worker.test",
@@ -434,6 +435,7 @@ async def test_offline_ssh_probe_is_read_only_and_redacts_canary(monkeypatch):
 
     monkeypatch.setattr("app.runtime.worker_health.ExecutionEnvironmentRuntime", FakeRuntime)
     environment = SimpleNamespace(
+        runtime_engine="opencode",
         id=9,
         host="worker.test",
         username="root",
@@ -485,6 +487,7 @@ async def test_missing_per_environment_artifact_is_explicitly_not_deployed(monke
 
     monkeypatch.setattr("app.runtime.worker_health.ExecutionEnvironmentRuntime", FakeRuntime)
     environment = SimpleNamespace(
+        runtime_engine="opencode",
         id=3,
         host="worker.test",
         username="root",

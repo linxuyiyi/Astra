@@ -11,7 +11,7 @@
             @click="runAction('check')"
           >检查</ElButton>
         </ElTooltip>
-        <ElTooltip v-if="mode === 'LINUX_REMOTE'" content="安装或校验运行依赖并写入配置，不主动更新已有仓库代码" placement="top">
+        <ElTooltip v-if="mode === 'LINUX_REMOTE' && runtimeEngine !== 'dsh'" content="安装或校验运行依赖并写入配置，不主动更新已有仓库代码" placement="top">
           <ElButton
             data-testid="deploy-environment"
             type="primary"
@@ -20,7 +20,7 @@
             @click="runAction('deploy')"
           >一键部署</ElButton>
         </ElTooltip>
-        <ElTooltip v-if="mode === 'LINUX_REMOTE'" content="获取目标分支并更新仓库代码；工作区有未提交修改时会停止" placement="top">
+        <ElTooltip v-if="mode === 'LINUX_REMOTE' && runtimeEngine !== 'dsh'" content="获取目标分支并更新仓库代码；工作区有未提交修改时会停止" placement="top">
           <ElButton
             data-testid="update-environment"
             :loading="busyAction === 'update'"
@@ -28,7 +28,7 @@
             @click="runAction('update')"
           >更新</ElButton>
         </ElTooltip>
-        <ElTooltip v-if="mode === 'LINUX_REMOTE'" content="重启 OpenCode 服务；需要任务与未结束会话均已清空" placement="top">
+        <ElTooltip v-if="mode === 'LINUX_REMOTE' && runtimeEngine !== 'dsh'" content="重启 OpenCode 服务；需要任务与未结束会话均已清空" placement="top">
           <ElButton
             data-testid="restart-environment"
             :loading="busyAction === 'restart'"
@@ -241,10 +241,12 @@ import { formatTime } from '@/utils/format'
 const props = withDefaults(defineProps<{
   controller: WorkerMaintenanceController
   mode: 'LOCAL' | 'LINUX_REMOTE' | null
+  runtimeEngine?: 'opencode' | 'dsh'
   disabledReason?: string
   showHistory?: boolean
 }>(), {
   disabledReason: '',
+  runtimeEngine: 'opencode',
   showHistory: true,
 })
 

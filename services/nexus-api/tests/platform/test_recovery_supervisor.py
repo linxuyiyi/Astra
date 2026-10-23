@@ -22,7 +22,9 @@ async def session_factory():
 
 
 async def _fake_resolve_environment(session, task):
-    return SimpleNamespace(mode="LOCAL", opencode_server_port=1, workspace_root="/tmp")
+    return SimpleNamespace(
+        runtime_engine="opencode", mode="LOCAL", opencode_server_port=1, workspace_root="/tmp",
+    )
 
 
 async def _fake_session_tree(client, directory, session_id):

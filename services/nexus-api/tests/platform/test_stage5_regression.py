@@ -5,6 +5,7 @@ import inspect
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -147,7 +148,7 @@ async def test_network_timeout_and_process_restart_keep_the_same_session(monkeyp
     await _seed(factory, str(tmp_path))
 
     async def _resolve(_session, _task):
-        return None
+        return SimpleNamespace(runtime_engine="opencode")
 
     @asynccontextmanager
     async def _connect(*_args, **_kwargs):

@@ -1,8 +1,10 @@
 ## 1. P0：真实兼容性与固定基线
 
-- [ ] 1.1 实现可复跑的固定版本/平台/配置完整性预检、官方 ACP 客户端真实探针和脱敏证据输出；失败返回非零，未测项不可计为通过。
+- [x] 1.1 实现可复跑的固定版本/平台/配置完整性预检、官方 ACP 客户端真实探针和脱敏证据输出；失败返回非零，未测项不可计为通过。
 - [ ] 1.2 在 Mac 与 Linux agentwork 实测 init、新建/恢复/取消/授权、双轮、MCP、原生持久轨迹、断线和长 Session，记录平台与版本。
 - [ ] 1.3 经已配置 Nexus Gateway 实测 DeepSeek/GLM/Qwen 路由流式、工具、reasoning、token 与限流；公司 ARM64/glibc 2.28 及 Windows x64 加载检查独立留证。
+
+本轮 P0 证据见 `verification.md`。Linux QA 的短程协议与故障探针已通过，但目标 agentwork SSH 认证失败；最终同源码 Mac 模型复测遇到网关 503，Qwen 节点不健康，GLM 未配置，长 Session、限流及目标平台未验证。1.2/1.3 保持未完成；不得以 1.1 的工具开发完成表示 P0 整体通过。
 
 ## 2. P1：Worker DSH 引擎
 

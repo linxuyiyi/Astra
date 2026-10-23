@@ -1,0 +1,24 @@
+{
+  "task_id": "T-20261023-4D7D03",
+  "observed_at": 1792778771.224134,
+  "bindings": [
+    {
+      "id": "dsh_70dae022c43d43e8bd4401c8747bcf0e",
+      "native_session_id": "8533b3df-0c50-4c02-af71-7bf9f60ed3f4",
+      "status": "INTERRUPTED",
+      "runtime_engine": "dsh",
+      "superseded_by": "dsh_7e92ebbf923b4600acde39db47e1126c",
+      "fencing_token": 3
+    },
+    {
+      "id": "dsh_7e92ebbf923b4600acde39db47e1126c",
+      "native_session_id": "c650151c-9d82-4636-b6bd-4135e030049e",
+      "status": "INTERRUPTED",
+      "runtime_engine": "dsh",
+      "superseded_by": null,
+      "fencing_token": 2
+    }
+  ],
+  "cleanup_stop_http": 200,
+  "final_task_status": "CANCELED"
+}

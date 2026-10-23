@@ -1,0 +1,46 @@
+{
+  "tasks": [
+    {
+      "id": "dsh_81a62b3e9ade48158e5c94b94c855aff",
+      "task_id": "dsh-qa-task-1",
+      "native_session_id": "fb7dae5a-c7d3-4f1d-b74f-c8c9b1d3b445",
+      "snapshot": {
+        "state": "succeeded",
+        "stop_confirmed": false,
+        "fence": 7,
+        "submission_id": "sub_08cc04a48e6c4e70a23781f6cd743803"
+      },
+      "projected_events": 36,
+      "same_session_continue_marker": true,
+      "foreign_acceptance_marker": false
+    },
+    {
+      "id": "dsh_f0d33dd1872d454aa6ca5f0ba507336d",
+      "task_id": "dsh-qa-task-2",
+      "native_session_id": "0b355ae3-3047-4628-aa17-4038f45fa8f3",
+      "snapshot": {
+        "state": "succeeded",
+        "stop_confirmed": true,
+        "fence": 2,
+        "submission_id": "msg_169a93152000ed1842b4962929"
+      },
+      "projected_events": 9,
+      "same_session_continue_marker": false,
+      "foreign_acceptance_marker": false
+    }
+  ],
+  "scope_guards": [
+    {
+      "check": "cross_task",
+      "http": 404
+    },
+    {
+      "check": "cross_native",
+      "http": 404
+    },
+    {
+      "check": "file_escape",
+      "http": 403
+    }
+  ]
+}

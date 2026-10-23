@@ -1,0 +1,640 @@
+{
+  "usage": [
+    {
+      "id": 19,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md"
+    },
+    {
+      "id": 20,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "wiki/concepts/按业务键保序去重.md"
+    },
+    {
+      "id": 21,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "wiki/index.md"
+    },
+    {
+      "id": 22,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "wiki/log.md"
+    },
+    {
+      "id": 23,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "wiki/concepts/去重后聚合.md"
+    },
+    {
+      "id": 24,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "wiki/concepts/低信息量测试记录.md"
+    },
+    {
+      "id": 25,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "wiki/concepts/无结论测试记录.md"
+    },
+    {
+      "id": 26,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "wiki/concepts/流水线-50004-e2e-测试批次.md"
+    },
+    {
+      "id": 27,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "wiki/concepts/平铺空间响应与知识详情的隔离性.md"
+    },
+    {
+      "id": 28,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "wiki/sources/5-astra--9-knowledge--24-know09b47e81df9f4399b5ec--jmdvkm.md"
+    },
+    {
+      "id": 29,
+      "knowledge_id": "KNOW_53022A1009074C6E95B4",
+      "action": "read",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md"
+    },
+    {
+      "id": 30,
+      "knowledge_id": "KNOW_EA03BC68011B4EBCBF9F",
+      "action": "experience_submitted",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "astra:KNOW_EA03BC68011B4EBCBF9F"
+    },
+    {
+      "id": 31,
+      "knowledge_id": "KNOW_70CE9E7AB38C437B8DF2",
+      "action": "experience_submitted",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "astra:KNOW_70CE9E7AB38C437B8DF2"
+    },
+    {
+      "id": 32,
+      "knowledge_id": "KNOW_BC83ED654FE246618BBA",
+      "action": "experience_submitted",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-A0C02E",
+      "session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "resource_id": "astra:KNOW_BC83ED654FE246618BBA"
+    },
+    {
+      "id": 4,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md"
+    },
+    {
+      "id": 5,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/concepts/按业务键保序去重.md"
+    },
+    {
+      "id": 6,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/index.md"
+    },
+    {
+      "id": 7,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/log.md"
+    },
+    {
+      "id": 8,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/concepts/去重后聚合.md"
+    },
+    {
+      "id": 9,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/concepts/低信息量测试记录.md"
+    },
+    {
+      "id": 10,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/concepts/无结论测试记录.md"
+    },
+    {
+      "id": 11,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/concepts/流水线-50004-e2e-测试批次.md"
+    },
+    {
+      "id": 12,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/concepts/平铺空间响应与知识详情的隔离性.md"
+    },
+    {
+      "id": 13,
+      "knowledge_id": null,
+      "action": "search_hit",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/sources/5-astra--9-knowledge--24-know09b47e81df9f4399b5ec--jmdvkm.md"
+    },
+    {
+      "id": 14,
+      "knowledge_id": null,
+      "action": "read",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md"
+    },
+    {
+      "id": 15,
+      "knowledge_id": "KNOW_53022A1009074C6E95B4",
+      "action": "read",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md"
+    },
+    {
+      "id": 16,
+      "knowledge_id": "KNOW_AC3F9F870D7049BA9D96",
+      "action": "experience_submitted",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "astra:KNOW_AC3F9F870D7049BA9D96"
+    },
+    {
+      "id": 17,
+      "knowledge_id": "KNOW_6C9A40F5662B40F3BA7E",
+      "action": "experience_submitted",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "astra:KNOW_6C9A40F5662B40F3BA7E"
+    },
+    {
+      "id": 18,
+      "knowledge_id": "KNOW_E051F409843141AC876B",
+      "action": "experience_submitted",
+      "employee_id": "qa-worker-experience-20261023",
+      "task_id": "T-20261023-CD86DB",
+      "session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "resource_id": "astra:KNOW_E051F409843141AC876B"
+    }
+  ],
+  "wake": [
+    {
+      "task_id": "T-20261023-2863C9",
+      "event_id": 38,
+      "status": "failed",
+      "attempts": 1,
+      "last_error": "{\"detail\":\"服务间认证失败\"}"
+    },
+    {
+      "task_id": "T-20261023-2863C9",
+      "event_id": 41,
+      "status": "failed",
+      "attempts": 1,
+      "last_error": "{\"detail\":\"服务间认证失败\"}"
+    },
+    {
+      "task_id": "T-20261023-2863C9",
+      "event_id": 43,
+      "status": "failed",
+      "attempts": 1,
+      "last_error": "{\"detail\":\"服务间认证失败\"}"
+    },
+    {
+      "task_id": "T-20261023-A0C02E",
+      "event_id": 82,
+      "status": "delivered",
+      "attempts": 0,
+      "last_error": null
+    },
+    {
+      "task_id": "T-20261023-A0C02E",
+      "event_id": 84,
+      "status": "delivered",
+      "attempts": 0,
+      "last_error": null
+    },
+    {
+      "task_id": "T-20261023-CD86DB",
+      "event_id": 64,
+      "status": "delivered",
+      "attempts": 0,
+      "last_error": null
+    },
+    {
+      "task_id": "T-20261023-CD86DB",
+      "event_id": 66,
+      "status": "delivered",
+      "attempts": 0,
+      "last_error": null
+    },
+    {
+      "task_id": "T-20261023-CD86DB",
+      "event_id": 69,
+      "status": "delivered",
+      "attempts": 0,
+      "last_error": null
+    }
+  ],
+  "evidence": [
+    {
+      "knowledge_id": "KNOW_53022A1009074C6E95B4",
+      "task_id": "T-20261023-2863C9",
+      "review_job_id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+      "source_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "native_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "message_id": "msg_1664e91ec001p66cWYGKpCerl2",
+      "part_id": "prt_1664e94370010LwdoMFyJLqBso",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_53022A1009074C6E95B4",
+      "task_id": "T-20261023-2863C9",
+      "review_job_id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+      "source_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "native_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "message_id": "msg_1664e80b7001ZHVE7mEey2h7z5",
+      "part_id": "prt_1664e84b7001KcC6H5kUxSoHKm",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_53022A1009074C6E95B4",
+      "task_id": "T-20261023-2863C9",
+      "review_job_id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+      "source_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "native_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "message_id": "msg_1664ea2b1001Y7MF7HhqgEmpfO",
+      "part_id": "prt_1664ea690001icnmUiLBrkXhGw",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_4331BDF91B074D369702",
+      "task_id": "T-20261023-2863C9",
+      "review_job_id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+      "source_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "native_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "message_id": "msg_1664e91ec001p66cWYGKpCerl2",
+      "part_id": "prt_1664e94370010LwdoMFyJLqBso",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_4331BDF91B074D369702",
+      "task_id": "T-20261023-2863C9",
+      "review_job_id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+      "source_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "native_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "message_id": "msg_1664e9b110013i3uTGCUd5AfSr",
+      "part_id": "prt_1664e9ecb001WNqpebWuTTI50L",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_1F13B474BAB444B09F98",
+      "task_id": "T-20261023-2863C9",
+      "review_job_id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+      "source_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "native_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "message_id": "msg_1664e91ec001p66cWYGKpCerl2",
+      "part_id": "prt_1664e94370010LwdoMFyJLqBso",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_1F13B474BAB444B09F98",
+      "task_id": "T-20261023-2863C9",
+      "review_job_id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+      "source_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "native_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "message_id": "msg_1664e9b110013i3uTGCUd5AfSr",
+      "part_id": "prt_1664e9ecb001WNqpebWuTTI50L",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_1F13B474BAB444B09F98",
+      "task_id": "T-20261023-2863C9",
+      "review_job_id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+      "source_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "native_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+      "message_id": "msg_1664e80b7001ZHVE7mEey2h7z5",
+      "part_id": "prt_1664e84b7001KcC6H5kUxSoHKm",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_EA03BC68011B4EBCBF9F",
+      "task_id": "T-20261023-A0C02E",
+      "review_job_id": "xrj_1425c93e8c744faa9e07db44872079c8",
+      "source_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "native_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "message_id": "msg_1672cfd54001Lvqy4kdRU84dK1",
+      "part_id": "prt_1672d0061001Qdic6oi0x3BDow",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_EA03BC68011B4EBCBF9F",
+      "task_id": "T-20261023-A0C02E",
+      "review_job_id": "xrj_1425c93e8c744faa9e07db44872079c8",
+      "source_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "native_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "message_id": "msg_1672ce2d90012ylisxIukU6K53",
+      "part_id": "prt_1672ce7f7001R4HrA8R6biYhF3",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_EA03BC68011B4EBCBF9F",
+      "task_id": "T-20261023-A0C02E",
+      "review_job_id": "xrj_1425c93e8c744faa9e07db44872079c8",
+      "source_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "native_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "message_id": "msg_1672d0a08001hOYXaqhgTVk2Hg",
+      "part_id": "prt_1672d0c6a001iL5msYU1MlcskC",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_EA03BC68011B4EBCBF9F",
+      "task_id": "T-20261023-A0C02E",
+      "review_job_id": "xrj_1425c93e8c744faa9e07db44872079c8",
+      "source_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "native_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "message_id": "msg_1672d05ee001bL5kDBPS18Bm02",
+      "part_id": "prt_1672d096e001Fqz5XcV0UKzWLy",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_70CE9E7AB38C437B8DF2",
+      "task_id": "T-20261023-A0C02E",
+      "review_job_id": "xrj_1425c93e8c744faa9e07db44872079c8",
+      "source_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "native_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "message_id": "msg_1672cd9c6001lHu71hCuMmnY49",
+      "part_id": "prt_1672ce111001iw0pNZH457VqmR",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_70CE9E7AB38C437B8DF2",
+      "task_id": "T-20261023-A0C02E",
+      "review_job_id": "xrj_1425c93e8c744faa9e07db44872079c8",
+      "source_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "native_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "message_id": "msg_1672ce2d90012ylisxIukU6K53",
+      "part_id": "prt_1672ce6e40017koXlRxd5cd7KQ",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_70CE9E7AB38C437B8DF2",
+      "task_id": "T-20261023-A0C02E",
+      "review_job_id": "xrj_1425c93e8c744faa9e07db44872079c8",
+      "source_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "native_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "message_id": "msg_1672d1205001qulW1MGDrwdyRl",
+      "part_id": "prt_1672d190e001lYCYONOLrg2csh",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_BC83ED654FE246618BBA",
+      "task_id": "T-20261023-A0C02E",
+      "review_job_id": "xrj_1425c93e8c744faa9e07db44872079c8",
+      "source_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "native_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "message_id": "msg_1672d0a08001hOYXaqhgTVk2Hg",
+      "part_id": "prt_1672d0c6a001iL5msYU1MlcskC",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_BC83ED654FE246618BBA",
+      "task_id": "T-20261023-A0C02E",
+      "review_job_id": "xrj_1425c93e8c744faa9e07db44872079c8",
+      "source_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "native_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+      "message_id": "msg_1672d0d400018InvvfNx6x7WND",
+      "part_id": "prt_1672d113a001obBehaLon2nPz6",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_AC3F9F870D7049BA9D96",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_167210519001ZHmIukhUN4651l",
+      "part_id": "prt_167210a8c001YrbUkavVF3L1RB",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_AC3F9F870D7049BA9D96",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_1671e6a930017MJOIefVs9lY3E",
+      "part_id": "prt_1671e6e4b001x7oX4JVbDQiwq6",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_AC3F9F870D7049BA9D96",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_1671e65930015iQpSXsEP5dU3Q",
+      "part_id": "prt_1671e68c0001MeLM54qT0AyqB1",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_6C9A40F5662B40F3BA7E",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_1671e49e30013NVUBR78OdvJWz",
+      "part_id": "prt_1671e5068001rEdKAJMAEsQmlK",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_6C9A40F5662B40F3BA7E",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_1671e512e00131OJiqst0nvJTH",
+      "part_id": "prt_1671e54b5001PYXoefNPQCg32W",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_6C9A40F5662B40F3BA7E",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_167210519001ZHmIukhUN4651l",
+      "part_id": "prt_167210a8c001YrbUkavVF3L1RB",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_6C9A40F5662B40F3BA7E",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_167210353000a8234fb2f427ee",
+      "part_id": "prt_1672104f90011Ko0SUeQ9RYX1n",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_E051F409843141AC876B",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_1671e5792001aw1gt0q0Z6JVyB",
+      "part_id": "prt_1671e5d2a001FHijMHO2OBdmqb",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_E051F409843141AC876B",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_1671e62570014hej1FgVXc6hkx",
+      "part_id": "prt_1671e64fe001MGUgJr3LHBhlUz",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_E051F409843141AC876B",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_1671e5792001aw1gt0q0Z6JVyB",
+      "part_id": "prt_1671e5e0e001q5P1AMQoBt4rrG",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_E051F409843141AC876B",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_1671e6a930017MJOIefVs9lY3E",
+      "part_id": "prt_1671e6e4b001x7oX4JVbDQiwq6",
+      "validation_status": "validated"
+    },
+    {
+      "knowledge_id": "KNOW_E051F409843141AC876B",
+      "task_id": "T-20261023-CD86DB",
+      "review_job_id": "xrj_b985031a32134716a1eef2b4a3d03556",
+      "source_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "native_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+      "message_id": "msg_1671e65930015iQpSXsEP5dU3Q",
+      "part_id": "prt_1671e68c0001MeLM54qT0AyqB1",
+      "validation_status": "validated"
+    }
+  ],
+  "release": [
+    {
+      "id": "T-20261023-1B83BA",
+      "status": "CANCELED",
+      "execution_stop_operator": "usr_18b6ad196291",
+      "execution_stop_reason": "用户在任务详情核实执行已停止后确认释放 Worker",
+      "execution_stop_session_id": "ses_e98d7ab91ffeg3iuqcwrnw55OL",
+      "execution_stop_attempt": 1
+    },
+    {
+      "id": "T-20261023-9319D1",
+      "status": "CANCELED",
+      "execution_stop_operator": "usr_18b6ad196291",
+      "execution_stop_reason": "QA实测确认原生Session已停止，权限请求已拒绝，未发生配置文件读取；释放取消任务占用",
+      "execution_stop_session_id": "ses_e99a5a3e2ffewg0xlTsafYFrq6",
+      "execution_stop_attempt": 1
+    }
+  ],
+  "worker": [
+    {
+      "id": "qa-worker-experience-20261023",
+      "current_task_count": 0,
+      "status": "IDLE"
+    }
+  ]
+}

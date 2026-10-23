@@ -31,6 +31,7 @@ class HttpWakeSender:
             try:
                 target = await client.get(
                     f"{settings.nexus_api_base.rstrip('/')}/api/v1/internal/wake-target",
+                    headers=internal_headers(),
                     params={
                         "employee_id": row.responsible_employee_id,
                         "session_id": row.source_session_id or "",

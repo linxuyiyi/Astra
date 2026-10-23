@@ -1,0 +1,41 @@
+{
+  "preview": {
+    "job_id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+    "status": "SUCCEEDED",
+    "clear_old_error": true,
+    "evidence_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "applied": false
+  },
+  "apply": {
+    "job_id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+    "status": "SUCCEEDED",
+    "clear_old_error": true,
+    "evidence_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "applied": true
+  },
+  "idempotent": {
+    "job_id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+    "status": "SUCCEEDED",
+    "clear_old_error": false,
+    "evidence_ids": [],
+    "applied": true
+  }
+}

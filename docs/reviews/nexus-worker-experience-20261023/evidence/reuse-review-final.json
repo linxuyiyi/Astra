@@ -1,0 +1,33 @@
+{
+  "id": "xrj_b985031a32134716a1eef2b4a3d03556",
+  "task_id": "T-20261023-CD86DB",
+  "task_id_snapshot": "T-20261023-CD86DB",
+  "root_session_id": "ses_e98e1b83cffeWaaGy6yWH2EA6W",
+  "status": "SUCCEEDED",
+  "phase": "WRITING",
+  "attempts": 0,
+  "source_message_count": 12,
+  "segment_count": 1,
+  "completed_segment_count": 1,
+  "candidate_ids": [
+    "KNOW_AC3F9F870D7049BA9D96",
+    "KNOW_6C9A40F5662B40F3BA7E",
+    "KNOW_E051F409843141AC876B"
+  ],
+  "zero_reason": null,
+  "error_code": null,
+  "error_message": null,
+  "confirmed_at": "2026-10-23T05:07:15.460876Z",
+  "created_at": "2026-10-23T05:07:15.472891Z",
+  "finished_at": "2026-10-23T05:07:58.695839Z",
+  "segments": [
+    {
+      "id": 2,
+      "segment_index": 0,
+      "status": "DONE",
+      "token_estimate": 3857,
+      "attempts": 0,
+      "error_code": null
+    }
+  ]
+}

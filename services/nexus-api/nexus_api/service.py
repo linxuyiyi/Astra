@@ -11,26 +11,29 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from app.api.gateway_routes import gateway_error_handler
 from app.api.gateway_routes import router as gateway_router
-from app.api.library_routes import library_error_handler
+from app.api.library_routes import library_error_handler, library_principal
 from app.api.library_routes import router as library_router
+from app.api.maintenance_routes import maintenance_actor
 from app.api.maintenance_routes import router as maintenance_router
 from app.api.repository_routes import router as repository_router
 from app.api.routes import router as platform_router
 from app.api.speech_routes import router as speech_router
 from app.api.worker_routes import router as worker_router
+from app.api.workspace_routes import execution_stop_actor
 from app.api.workspace_routes import router as workspace_router
 from app.gateway.security import CredentialError
 from app.gateway.service import GatewayError
-from app.library_service import LibraryError
+from app.library_service import LibraryError, LibraryPrincipal
 from app.main import lifespan as platform_lifespan
 from app.worker_gateway.routes import router as worker_gateway_router
 
 from .agentscope_proxy import router as agentscope_proxy_router
+from .auth import has_permission, require_user
 from .main import create_app as create_chat_app
 from .nebula import router as nebula_router
 
@@ -38,7 +41,20 @@ WEB_DIST = Path(__file__).resolve().parents[1] / "web" / "dist"
 API_PREFIXES = ("api/", "v1/", "agentscope-api/", "docs", "redoc", "openapi.json")
 
 
+def session_maintenance_actor(request: Request) -> str:
+    """统一服务使用 Nexus 登录会话，客户端身份头不参与审计。"""
+    return require_user(request)["uid"]
+
+
+def session_library_principal(request: Request) -> LibraryPrincipal:
+    user = require_user(request)
+    return LibraryPrincipal(user_id=user["uid"], role="admin" if has_permission(user, "*") else "viewer")
+
+
 def _include_platform(app: FastAPI) -> None:
+    app.dependency_overrides[maintenance_actor] = session_maintenance_actor
+    app.dependency_overrides[library_principal] = session_library_principal
+    app.dependency_overrides[execution_stop_actor] = session_maintenance_actor
     app.include_router(platform_router)
     app.include_router(repository_router)
     app.include_router(worker_router)

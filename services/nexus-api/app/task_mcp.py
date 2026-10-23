@@ -116,6 +116,7 @@ def build_mcp_server() -> MCPServer:
         acceptance_criteria: list[str] | None = None,
         priority: str = "MEDIUM",
         worker_id: str | None = None,
+        repository_id: str | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """创建工程任务。相同会话和相同内容不会再建第二条。"""
@@ -128,8 +129,14 @@ def build_mcp_server() -> MCPServer:
             acceptance_criteria=acceptance_criteria,
             priority=priority,
             worker_id=worker_id,
+            repository_id=repository_id,
             idempotency_key=idempotency_key,
         )
+
+    @server.tool(name="nexus_task_repositories", structured_output=True)
+    async def nexus_task_repositories() -> dict[str, Any]:
+        """查询已登记的仓库 ID、地址与分支，不返回凭据。创建任务必须选仓库或已绑定仓库的 Worker。"""
+        return await _call("repositories")
 
     @server.tool(name="nexus_task_categories", structured_output=True)
     async def nexus_task_categories() -> dict[str, Any]:

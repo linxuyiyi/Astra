@@ -705,12 +705,18 @@ async def stop_task(task_id: str, session=Depends(get_session)):
         raise error_response(exc) from exc
 
 
+def execution_stop_actor(
+    user_id: Annotated[str, Header(alias="X-Astra-User-Id")] = "",
+) -> str:
+    return user_id
+
+
 @router.post("/confirm-execution-stop", response_model=TaskRead)
 async def confirm_execution_stop(
     task_id: str,
     body: ExecutionStopConfirm,
     session=Depends(get_session),
-    user_id: Annotated[str, Header(alias="X-Astra-User-Id")] = "",
+    user_id: str = Depends(execution_stop_actor),
 ):
     await require_task(task_id, session)
     try:

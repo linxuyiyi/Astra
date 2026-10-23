@@ -159,6 +159,7 @@ import type { AstraEvent, ExperienceReviewJob, Task, TaskUsage, TaskWorkspaceBin
 import FieldHelp from '@/components/forms/FieldHelp.vue'
 import RuntimeStatusBadge from '@/components/runtime/RuntimeStatusBadge.vue'
 import { useAstraStore } from '@/stores/astra'
+import { confirmDialog } from '@/composables/useConfirm'
 import { employeeDisplayName, formatTaskDuration, formatTime, formatTokens, priorityLabel, taskTypeLabel } from '@/utils/format'
 import { listEmployees } from '../api'
 import type { Employee as NexusEmployee } from '../types'
@@ -250,6 +251,7 @@ const repoSummary = computed(() => repo.value
   : '')
 const currentSession = computed(() => binding.value?.sessions.find(item => item.current))
 const sessionFact = computed(() => {
+  if (task.value?.status === 'CANCELED') return ''
   const current = currentSession.value
   if (!current && task.value?.runtime_connection !== 'UNAVAILABLE') return ''
   if (task.value?.runtime_connection === 'UNAVAILABLE' || current?.status === 'UNKNOWN') return '连接异常/状态待确认'
@@ -266,6 +268,9 @@ const canFinish = computed(() => task.value?.status === 'WAITING'
 const nextStep = computed(() => {
   const current = task.value
   if (!current) return ''
+  if (current.status === 'CANCELED') return current.execution_released === false
+    ? '任务已取消，仍占用 Worker；核实执行停止后确认释放'
+    : '任务已取消，Worker 占用已释放'
   if (current.pending_message_id) return '有一条输入还没确认，先核对并重试'
   if (current.human_required_reason) return current.human_required_reason
   if (!current.current_session_id) return '启动任务，让 Worker 开始执行'
@@ -274,12 +279,12 @@ const nextStep = computed(() => {
   if (current.status === 'WAITING') return sessionFact.value || '等待处理后再继续'
   if (current.status === 'SUCCEEDED') return '任务已完成，可以查看总结'
   if (current.status === 'FAILED') return '执行失败，可以重新开始'
-  if (current.status === 'CANCELED') return '任务已取消'
   return sessionFact.value || '查看当前状态'
 })
 const primaryDetail = computed(() => {
   const current = task.value
   if (!current) return null
+  if (current.status === 'CANCELED' && current.execution_released === false && !current.pending_message_id) return { key: 'release', label: '确认执行已停止', run: () => confirmExecutionStopped() }
   if (!current.current_session_id && !current.pending_message_id) return { key: 'start', label: '启动任务', run: () => action('start') }
   if (canFinish.value) return { key: 'confirm', label: '确认完成', run: () => action('confirm') }
   if (current.pending_message_id) return { key: 'retry', label: '核对并重试', run: () => action('retry-submission') }
@@ -384,6 +389,15 @@ async function action(name: string) {
   busy.value = true
   try { task.value = await api.taskAction(String(route.params.id), name); selectedSession.value = task.value.current_session_id || ''; await load() }
   catch (reason) { error.value = reason instanceof Error ? reason.message : '操作失败' }
+  finally { busy.value = false }
+}
+async function confirmExecutionStopped() {
+  if (!await confirmDialog({ title: '确认执行已停止', message: '请先在工作区或执行机核实没有继续执行的命令。确认后将释放该任务占用的 Worker。', confirmLabel: '已核实，释放 Worker' })) return
+  busy.value = true
+  try {
+    task.value = await api.taskAction(String(route.params.id), 'confirm-execution-stop', { reason: '用户在任务详情核实执行已停止后确认释放 Worker' })
+    await load()
+  } catch (reason) { error.value = reason instanceof Error ? reason.message : '确认失败' }
   finally { busy.value = false }
 }
 async function reconnect() { await action('reconnect'); frameKey.value++ }

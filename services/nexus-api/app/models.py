@@ -248,6 +248,12 @@ class Task(RuntimeProjection, Base):
     def worker_id(self) -> str | None:
         return self.employee_id
 
+    @property
+    def execution_released(self) -> bool:
+        from app.runtime.occupancy import task_occupies
+
+        return not task_occupies(self)
+
 
 class RuntimeSession(Base):
     """Binding and result index; OpenCode owns all messages and execution details."""

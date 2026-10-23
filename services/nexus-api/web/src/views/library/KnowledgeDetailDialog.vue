@@ -36,7 +36,7 @@
           <ElDescriptionsItem label="类型">{{ typeLabel(detail.type) }}</ElDescriptionsItem>
           <ElDescriptionsItem label="所属目录">{{ spaceName }}</ElDescriptionsItem>
           <ElDescriptionsItem label="来源">{{ sourceTypeLabel(detail.source_type) }}</ElDescriptionsItem>
-          <ElDescriptionsItem label="来源员工">{{ detail.source_employee_name || detail.source_employee_id || '—' }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="来源 Worker">{{ detail.source_employee_name || detail.source_employee_id || '—' }}</ElDescriptionsItem>
           <ElDescriptionsItem label="执行会话">{{ detail.source_session_id || '—' }}</ElDescriptionsItem>
           <ElDescriptionsItem label="验证时间">{{ detail.verified_at ? formatDate(detail.verified_at) : '—' }}</ElDescriptionsItem>
           <ElDescriptionsItem label="有帮助">{{ detail.helpful_count }}</ElDescriptionsItem>
@@ -159,8 +159,8 @@
                 <span v-else>{{ row.task_title || '引用' }}</span>
               </template>
             </ElTableColumn>
-            <ElTableColumn label="数字员工" width="140" show-overflow-tooltip>
-              <template #default="{ row }">{{ row.employee_name || row.employee_id || '数字员工' }}</template>
+            <ElTableColumn label="执行 Worker" width="140" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.employee_name || row.employee_id || 'Worker' }}</template>
             </ElTableColumn>
             <ElTableColumn label="动作" prop="action" width="110" />
             <ElTableColumn label="引用时间" width="150">
@@ -315,7 +315,7 @@ const candidateFacts = computed(() => {
   const detail = props.detail
   if (!detail) return []
   const facts = [
-    { label: '来源员工', value: detail.source_employee_name || detail.source_employee_id || '' },
+    { label: '来源 Worker', value: detail.source_employee_name || detail.source_employee_id || '' },
     { label: '来源任务', value: detail.source_task_title || detail.source_task_id || '' },
     { label: '执行会话', value: detail.source_session_id || '' },
     { label: '证据状态', value: detail.verified_at ? '来源会话已验证' : verificationLabel(detail.verification_status) },

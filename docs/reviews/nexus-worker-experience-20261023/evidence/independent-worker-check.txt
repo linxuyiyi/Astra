@@ -1,0 +1,24 @@
+diff --git a/result_summary.py b/result_summary.py
+index b04a211..0eaa812 100644
+--- a/result_summary.py
++++ b/result_summary.py
+@@ -1,3 +1,8 @@
+ def summarize(rows):
+-    # Defect: duplicate test results are counted multiple times.
+-    return {"total": len(rows), "passed": sum(r["status"] == "passed" for r in rows)}
++    latest = {}
++    for row in rows:
++        latest[(row["run_id"], row["case_id"])] = row
++    return {
++        "total": len(latest),
++        "passed": sum(r["status"] == "passed" for r in latest.values()),
++    }
+test_duplicate_identical_result_kept_once (test_result_summary.SummarizeTest.test_duplicate_identical_result_kept_once) ... ok
+test_duplicate_status_reversal_keeps_last (test_result_summary.SummarizeTest.test_duplicate_status_reversal_keeps_last) ... ok
+test_empty_input (test_result_summary.SummarizeTest.test_empty_input) ... ok
+test_same_case_in_different_runs_counted_separately (test_result_summary.SummarizeTest.test_same_case_in_different_runs_counted_separately) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.000s
+
+OK

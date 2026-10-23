@@ -1,0 +1,26 @@
+[
+  {
+    "id": "per_1665a74e6001pshZvk6Bz0GOgh",
+    "sessionID": "ses_e99a5a3e2ffewg0xlTsafYFrq6",
+    "permission": "external_directory",
+    "patterns": [
+      "/etc/nexus/opencode/5/*"
+    ],
+    "metadata": {
+      "command": "cat /etc/nexus/opencode/5/opencode.jsonc",
+      "directories": [
+        "/etc/nexus/opencode/5"
+      ],
+      "patterns": [
+        "/etc/nexus/opencode/5/*"
+      ]
+    },
+    "always": [
+      "/etc/nexus/opencode/5/*"
+    ],
+    "tool": {
+      "messageID": "msg_1665a72150019ABEv3FvkTGPRM",
+      "callID": "call_00_dELuCtO25SwVRz0rnPoU8252"
+    }
+  }
+]

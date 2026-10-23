@@ -1,0 +1,31 @@
+{
+  "backend": {
+    "passed": 1306,
+    "skipped": 32,
+    "failed": 0
+  },
+  "final_targeted": {
+    "passed": 71,
+    "failed": 0
+  },
+  "web_node_tests": {
+    "passed": 30,
+    "failed": 0
+  },
+  "web_typecheck_build": "passed",
+  "ruff": "passed",
+  "openspec_strict": "passed",
+  "live_successful_tasks": [
+    "T-20261023-2863C9",
+    "T-20261023-CD86DB",
+    "T-20261023-A0C02E"
+  ],
+  "live_review_jobs_succeeded": 3,
+  "live_candidates": 9,
+  "human_published": 1,
+  "actual_attributed_reads": 2,
+  "worker_final_occupancy": 0,
+  "mysql": "8.0.36 fresh migration and targeted repository/occupancy checks; full live flow on isolated SQLite",
+  "live_flow_mock": false,
+  "unit_test_external_transports": "existing fakes and mock transports; separate from live evidence"
+}

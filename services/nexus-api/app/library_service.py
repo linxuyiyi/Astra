@@ -1308,15 +1308,45 @@ class KnowledgeService:
         context = await _resolve_runtime_context(self.session, runtime_context)
         resource = await LlmWikiClient().read(resource_id)
 
+        # llm_wiki 的编译来源页通过 YAML sources 保留源文件路径；正文里的
+        # ID 可能只是示例，不能据此归因。多来源不猜选其中一条。
         knowledge_id = None
-        match = re.search(
-            r"(?m)^astra_knowledge_id:\s*['\"]?([A-Za-z0-9_-]{1,64})['\"]?\s*$",
-            resource.content_md,
+        frontmatter = re.match(
+            r"\A---[ \t]*\r?\n(.*?)\r?\n---(?:\r?\n|$)", resource.content_md, re.DOTALL
         )
-        if match:
-            candidate = match.group(1)
-            if await self.session.get(KnowledgeItem, candidate):
-                knowledge_id = candidate
+        if frontmatter:
+            try:
+                metadata = yaml.safe_load(frontmatter[1])
+            except yaml.YAMLError:
+                metadata = None
+            if isinstance(metadata, dict):
+                source_paths = set()
+                direct_id = metadata.get("astra_knowledge_id")
+                if isinstance(direct_id, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", direct_id):
+                    source_paths.add(knowledge_source_path(direct_id))
+                if metadata.get("type") == "source":
+                    sources = metadata.get("sources")
+                    if not isinstance(sources, list) or len(sources) != 1:
+                        source_paths.clear()
+                    elif isinstance(sources[0], str) and re.fullmatch(
+                        r"astra/knowledge/[A-Za-z0-9_-]{1,64}\.md", sources[0]
+                    ):
+                        source_paths.add("raw/sources/" + sources[0])
+                    else:
+                        source_paths.clear()
+                if len(source_paths) == 1:
+                    knowledge_id = await self.session.scalar(
+                        select(KnowledgeItem.id).where(
+                            KnowledgeItem.source_path == next(iter(source_paths)),
+                            KnowledgeItem.status == "published",
+                        )
+                    )
+        if knowledge_id:
+            await self.session.execute(
+                update(KnowledgeItem)
+                .where(KnowledgeItem.id == knowledge_id)
+                .values(reference_count=KnowledgeItem.reference_count + 1)
+            )
 
         self.session.add(
             KnowledgeUsage(

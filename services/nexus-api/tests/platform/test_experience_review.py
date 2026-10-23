@@ -127,10 +127,11 @@ def test_evidence_rejects_missing_cross_session_and_secret():
     assert wrong.value.code == "cross_session_ref"
 
     secret = _candidate(["trace-000001"])
-    secret.content_md = "api_key = sk-abcdefghijklmnopqrstuvwx"
-    with pytest.raises(EvidenceError) as leaked:
-        validate_candidate(secret, trace)
-    assert leaked.value.code == "secret_detected"
+    for content in ("api_key = sk-abcdefghijklmnopqrstuvwx", "context " + "ctx_" + "a" * 43):
+        secret.content_md = content
+        with pytest.raises(EvidenceError) as leaked:
+            validate_candidate(secret, trace)
+        assert leaked.value.code == "secret_detected"
 
 
 def test_harness_candidate_requires_target():
@@ -346,6 +347,7 @@ async def test_candidate_writer_persists_validated_evidence():
         ).all()
         assert evidence
         assert all(row.validation_status == "validated" for row in evidence)
+        assert all(row.review_job_id == job.id for row in evidence)
         assert evidence[0].native_session_id == "ses_1"
         again = await write_candidates(session, job=job, trace=trace, candidates=[candidate])
         await session.commit()
@@ -1089,3 +1091,106 @@ async def test_supersede_between_claim_and_map_is_not_overwritten(monkeypatch):
     assert result.status == coordinator.SUPERSEDED
     assert result.error_code == "new_round"
     assert await coordinator.process_job(job_id, llm=FakeLLM()) is None
+
+
+@pytest.mark.parametrize("target_kind", ["registered", "unregistered", "foreign", "symlink", "missing"])
+def test_worker_review_reads_only_its_registered_worktrees(tmp_path, monkeypatch, target_kind):
+    import subprocess
+
+    from app.worker_agent import trace_read
+
+    root = tmp_path.resolve() / "repo"
+    root.mkdir()
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+
+    git("init", "-b", "main")
+    git("-c", "user.name=QA", "-c", "user.email=qa@example.invalid", "commit", "--allow-empty", "-m", "seed")
+    target = tmp_path.resolve() / ".astra-tasks" / "worker" / "task"
+    target.parent.mkdir(parents=True)
+    git("worktree", "add", "--detach", str(target))
+    called = []
+
+    class Response:
+        headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b"[]"
+
+    def fetch(request, **_):
+        called.append(request.full_url)
+        return Response()
+
+    monkeypatch.setattr(trace_read.urllib.request, "urlopen", fetch)
+    if target_kind == "unregistered":
+        target = target.parent / "arbitrary"
+        target.mkdir()
+    elif target_kind == "foreign":
+        target = target.parent / "foreign"
+        target.mkdir()
+        subprocess.run(["git", "-C", str(target), "init", "-b", "main"], check=True, capture_output=True)
+    elif target_kind == "symlink":
+        link = root / "link"
+        link.symlink_to(target, target_is_directory=True)
+        target = link
+    elif target_kind == "missing":
+        target = ""
+    payload = {"session_id": "ses_qa", "workspace": str(target)}
+    if target_kind == "registered":
+        result = trace_read.read_trace_from_payload("http://127.0.0.1:14096", str(root), payload)
+        assert result["messages"] == []
+        assert len(called) == 1
+        assert "ses_qa/message?" in called[0]
+    else:
+        with pytest.raises((ValueError, RuntimeError)):
+            trace_read.read_trace_from_payload("http://127.0.0.1:14096", str(root), payload)
+        assert called == []
+
+
+def test_trace_redacts_runtime_capabilities_before_model_and_evidence():
+    from app.runtime.experience_review.trace_normalizer import normalize_messages
+
+    capability = "ctx_" + "a" * 43
+    messages = [
+        {
+            "info": {"id": "msg_qa", "role": "user"},
+            "parts": [
+                {"id": "p_context", "type": "text", "text": "ASTRA_RUNTIME_CONTEXT: " + capability},
+                {
+                    "id": "p_tool",
+                    "type": "tool",
+                    "tool": "bash",
+                    "state": {
+                        "status": "completed",
+                        "output": "diagnostic " + capability,
+                        "metadata": {"exit": 0},
+                    },
+                },
+            ],
+        }
+    ]
+    events = normalize_messages(messages, "ses_qa")
+    assert events
+    assert all(capability not in e.excerpt for e in events)
+    assert all("[已隐藏]" in e.excerpt for e in events)
+
+
+@pytest.mark.asyncio
+async def test_successful_review_clears_retried_error():
+    job_id = await _reduce_phase_job()
+    await _write_job_fields(job_id, error_code="source_unavailable", error_message="先前读取失败")
+    async with SessionLocal() as db:
+        job = await coordinator.claim_job(db, job_id, "qa-finalizer")
+        assert job is not None
+        result = await coordinator._finish(
+            db, job_id, job.lease_token, coordinator.SUCCEEDED, candidate_ids=["KNOW-qa"]
+        )
+        assert result.error_code is None
+        assert result.error_message is None

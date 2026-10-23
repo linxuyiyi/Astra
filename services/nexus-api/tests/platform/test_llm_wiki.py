@@ -441,3 +441,45 @@ def test_llm_wiki_url_allows_remote_and_https():
                 llm_wiki_api_base_url=invalid_url,
                 _env_file=None,
             )
+
+
+async def test_compiled_wiki_source_retains_knowledge_usage_attribution(wiki_env):
+    _, sessions, state, space_id = wiki_env
+    kid = await publish(sessions, space_id)
+    source = knowledge_source_path(kid)
+    state["sources"][source] = (
+        f'---\ntype: source\nsources: ["astra/knowledge/{kid}.md"]\n---\n# Approved experience\n'
+    )
+    async with sessions() as db:
+        service = KnowledgeService(db)
+        await service.mcp_get(wiki_resource(source), runtime_context=state["runtime_context"])
+        usage = await db.scalar(select(KnowledgeUsage).where(KnowledgeUsage.action == "read"))
+        assert usage.knowledge_id == kid
+        item = await db.get(KnowledgeItem, kid)
+        assert item.reference_count == 1
+        rows = await service.knowledge_usages(kid, LibraryPrincipal())
+        assert rows[0].task_id == "T-wiki"
+
+
+async def test_body_examples_cannot_forge_knowledge_usage(wiki_env):
+    _, sessions, state, space_id = wiki_env
+    kid = await publish(sessions, space_id)
+    source = knowledge_source_path(kid)
+    state["sources"][source] = f"# Quoted example\nastra_knowledge_id: {kid}\n"
+    async with sessions() as db:
+        await KnowledgeService(db).mcp_get(wiki_resource(source), runtime_context=state["runtime_context"])
+        usage = await db.scalar(select(KnowledgeUsage).where(KnowledgeUsage.action == "read"))
+        assert usage.knowledge_id is None
+
+
+async def test_mixed_wiki_sources_are_not_guessed(wiki_env):
+    _, sessions, state, space_id = wiki_env
+    kid = await publish(sessions, space_id)
+    source = knowledge_source_path(kid)
+    state["sources"][source] = (
+        f'---\ntype: source\nsources: ["astra/knowledge/{kid}.md", "external/other.md"]\n---\n# Composite\n'
+    )
+    async with sessions() as db:
+        await KnowledgeService(db).mcp_get(wiki_resource(source), runtime_context=state["runtime_context"])
+        usage = await db.scalar(select(KnowledgeUsage).where(KnowledgeUsage.action == "read"))
+        assert usage.knowledge_id is None

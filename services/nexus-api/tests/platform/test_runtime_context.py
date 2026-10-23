@@ -146,6 +146,7 @@ async def test_runtime_library_read_records_task_session_and_knowledge(monkeypat
             summary="升级规则",
             content_md="# 参数升级规则",
             status="published",
+            source_path="raw/sources/astra/knowledge/KNOW_READ_1.md",
             verification_status="verified",
             tags=[],
             origin="manual",

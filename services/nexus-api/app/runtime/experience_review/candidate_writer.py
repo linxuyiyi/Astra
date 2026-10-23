@@ -12,7 +12,7 @@ from app.models import ExperienceReviewJob, KnowledgeItem, RuntimeSession
 from .schemas import Candidate, TraceResult
 
 
-def _evidence(candidate: Candidate, trace: TraceResult) -> list[ExperienceEvidenceWrite]:
+def _evidence(candidate: Candidate, trace: TraceResult, job_id: str) -> list[ExperienceEvidenceWrite]:
     index = trace.evidence
     result: list[ExperienceEvidenceWrite] = []
     for ref in candidate.evidence_refs:
@@ -27,6 +27,7 @@ def _evidence(candidate: Candidate, trace: TraceResult) -> list[ExperienceEviden
                 source_system=event.source_system,
                 native_session_id=event.session_id,
                 source_digest=event.content_digest,
+                review_job_id=job_id,
                 validation_status="validated",
             )
         )
@@ -53,7 +54,7 @@ async def write_candidates(
             experience_type=candidate.experience_type,
             scope=candidate.scope,
             tags=candidate.tags,
-            evidence=_evidence(candidate, trace),
+            evidence=_evidence(candidate, trace, job.id),
             experience_data={
                 "kind": candidate.kind,
                 "target_component": candidate.target_component,

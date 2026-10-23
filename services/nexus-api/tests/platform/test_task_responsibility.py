@@ -323,3 +323,126 @@ async def test_task_mcp_exposes_categories_and_enum_types():
         "ISSUE",
         "REQUIREMENT",
     ]
+
+
+@pytest.mark.parametrize("mode", ["worker", "explicit", "missing", "mismatch"])
+async def test_task_mcp_selects_executable_repository(session, mode):
+    from app.models import CodeRepository, OpenCodeExecutionEnvironment, TaskCategory
+    from app.task_tools import nexus_employee_id
+
+    session.add_all(
+        [
+            CodeRepository(id="repo-a", url="file:///qa/a", branch="main"),
+            CodeRepository(id="repo-b", url="file:///qa/b", branch="main"),
+            TaskCategory(id="qa-cat", name="QA"),
+            AgentWorker(
+                id="qa-worker", name="QA", role="QA", task_types=["REQUIREMENT"], category_ids=["qa-cat"]
+            ),
+        ]
+    )
+    await session.flush()
+    session.add(OpenCodeExecutionEnvironment(employee_id="qa-worker", repository_id="repo-a"))
+    await session.commit()
+    token = nexus_employee_id.set("qa-owner")
+    try:
+        kwargs = {"worker_id": "qa-worker"} if mode in ["worker", "mismatch"] else {}
+        if mode in ["explicit", "mismatch"]:
+            kwargs["repository_id"] = "repo-b"
+        result = await TaskTools(session).create(
+            task_type="REQUIREMENT", category_id="qa-cat", title="QA", description="QA", **kwargs
+        )
+        if mode in ["missing", "mismatch"]:
+            assert result["ok"] is False
+            assert await session.scalar(select(Task.id)) is None
+        else:
+            assert result["ok"] is True
+            task = await session.get(Task, result["task_id"])
+            assert task.repository_id == ("repo-a" if mode == "worker" else "repo-b")
+    finally:
+        nexus_employee_id.reset(token)
+
+
+async def test_repositories_do_not_leak_credentials_and_task_keys_include_target(session):
+    from app.models import CodeRepository, GitCredential, TaskCategory
+    from app.task_tools import nexus_employee_id, nexus_session_id
+
+    session.add_all(
+        [
+            CodeRepository(id="repo-a", url="file:///qa/a", branch="main"),
+            CodeRepository(id="repo-b", url="file:///qa/b", branch="release"),
+            GitCredential(repository_id="repo-a", token_ciphertext="private-ciphertext"),
+            TaskCategory(id="qa-cat", name="QA"),
+        ]
+    )
+    await session.commit()
+    repositories = await TaskTools(session).repositories()
+    assert repositories["repositories"] == [
+        {"id": "repo-a", "url": "file:///qa/a", "branch": "main"},
+        {"id": "repo-b", "url": "file:///qa/b", "branch": "release"},
+    ]
+    tokens = [
+        (nexus_employee_id, nexus_employee_id.set("qa-owner")),
+        (nexus_session_id, nexus_session_id.set("qa-session")),
+    ]
+    try:
+        tools = TaskTools(session)
+        a = await tools.create(
+            task_type="REQUIREMENT",
+            category_id="qa-cat",
+            title="same",
+            description="same",
+            repository_id="repo-a",
+        )
+        b = await tools.create(
+            task_type="REQUIREMENT",
+            category_id="qa-cat",
+            title="same",
+            description="same",
+            repository_id="repo-b",
+        )
+        repeat = await tools.create(
+            task_type="REQUIREMENT",
+            category_id="qa-cat",
+            title="same",
+            description="same",
+            repository_id="repo-a",
+        )
+        assert a["task_id"] != b["task_id"]
+        assert repeat["task_id"] == a["task_id"]
+        assert a["repository_id"] == "repo-a"
+    finally:
+        for var, token in tokens:
+            var.reset(token)
+
+
+async def test_task_reassignment_preserves_repository(session):
+    from app.models import CodeRepository, OpenCodeExecutionEnvironment
+    from app.task_tools import nexus_employee_id
+
+    session.add_all(
+        [
+            CodeRepository(id="repo-a", url="file:///qa/a", branch="main"),
+            CodeRepository(id="repo-b", url="file:///qa/b", branch="main"),
+            AgentWorker(
+                id="worker-b", name="B", role="QA", task_types=["REQUIREMENT"], category_ids=["qa-cat"]
+            ),
+        ]
+    )
+    await session.flush()
+    session.add(OpenCodeExecutionEnvironment(employee_id="worker-b", repository_id="repo-b"))
+    task = await TaskService(session).create(
+        _create(
+            task_type="REQUIREMENT",
+            category_id="qa-cat",
+            repository_id="repo-a",
+            responsible_employee_id="qa-owner",
+        )
+    )
+    token = nexus_employee_id.set("qa-owner")
+    try:
+        result = await TaskTools(session).assign(task.id, "worker-b")
+    finally:
+        nexus_employee_id.reset(token)
+    assert result["ok"] is False
+    assert task.repository_id == "repo-a"
+    assert task.employee_id is None

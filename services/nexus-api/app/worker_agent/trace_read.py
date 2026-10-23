@@ -8,6 +8,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from app.worker_agent.workspace import _git_ok, _require_allowed, _validate_registered_worktree
+
 _TIMEOUT_SECONDS = 60.0
 _MAX_PART_CHARS = 8000
 _SAFE_SESSION = ("ses_", "session_")
@@ -65,10 +67,17 @@ def read_trace_from_payload(
         char.isalnum() or char in "_-" for char in session_id
     ):
         raise ValueError("无效的 session_id")
-    workspace = Path(str(options.get("workspace") or "")).resolve()
+    if not workspace_root or not options.get("workspace"):
+        raise ValueError("缺少 Worker 根目录或来源工作区")
+    workspace = Path(str(options["workspace"])).absolute()
     root = Path(workspace_root).resolve()
+    # 执行任务的正式目录是根目录旁的 .astra-tasks，必须复用创建时的
+    # 路径边界并验证 Git 注册归属，不能仅放宽为允许整个兄弟目录。
+    _require_allowed(root, workspace, root)
     if not workspace.is_relative_to(root):
-        raise ValueError("工作区不在 Worker 根目录内")
+        if not _git_ok(root):
+            raise ValueError("来源不是已注册的任务工作区")
+        _validate_registered_worktree(root, workspace)
     try:
         limit = max(1, min(50, int(options.get("limit") or 20)))
     except (TypeError, ValueError) as exc:

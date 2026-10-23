@@ -6,6 +6,8 @@ import hashlib
 import json
 from typing import Any
 
+from app.runtime.redaction import redact_text
+
 from .schemas import TraceEvent
 
 MAX_EXCERPT = 2000
@@ -23,7 +25,7 @@ def _text(value: Any) -> str:
 
 
 def _excerpt(value: Any, limit: int = MAX_EXCERPT) -> str:
-    text = _text(value).strip()
+    text = redact_text(_text(value)).strip()
     if len(text) <= limit:
         return text
     return text[: limit // 2] + "\n...\n" + text[-limit // 2 :]

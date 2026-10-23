@@ -16,6 +16,7 @@ description: 仅在明确查询或操作 Nexus 任务、需要 Worker 工程执�
 
 - `task_type`：缺陷用 `ISSUE`，需求用 `REQUIREMENT`
 - `category_id`：先调用 `nexus_task_categories`，使用返回的已启用分类 ID
+- `repository_id`：先调用 `nexus_task_repositories` 选择已登记仓库；用户明确指定 `worker_id` 时可省略仓库，工具使用该 Worker 的绑定。没有目标不能创建，不猜仓库。
 - `title`、`description`
 - `acceptance_criteria`：可以验收的结果
 

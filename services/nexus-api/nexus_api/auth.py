@@ -91,6 +91,10 @@ class AuthenticationMiddleware:
         if public:
             return await self.app(scope, receive, send)
         request = Request(scope)
+        # Worker HTTP 数据通道使用 Worker token + epoch，管理路由使用部署密钥。
+        # 这些路由自身校验协议凭据，不能要求执行机持有浏览器登录 Cookie。
+        if path.startswith("/api/worker-gateway/"):
+            return await self.app(scope, receive, send)
         try:
             if (
                 path == "/api/gateway/routes" and request.headers.get("x-nexus-internal-key")

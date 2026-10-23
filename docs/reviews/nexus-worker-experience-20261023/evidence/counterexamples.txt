@@ -1,0 +1,763 @@
+===== nexus-unified-worker-red.log =====
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_worker_and_admin_protocol_auth_without_cookie ______________
+tests/platform/test_unified_worker_auth.py:34: in test_worker_and_admin_protocol_auth_without_cookie
+    assert rejected.json()["detail"]["code"] == "unauthorized"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: string indices must be integers, not 'str'
+=============================== warnings summary ===============================
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+1 failed, 10 warnings in 0.67s
+
+
+===== nexus-worker-actor-red.log =====
+.FF                                                                      [100%]
+=================================== FAILURES ===================================
+________ test_maintenance_uses_login_uid_without_legacy_identity[False] ________
+tests/platform/test_unified_worker_auth.py:85: in test_maintenance_uses_login_uid_without_legacy_identity
+    assert response.status_code == 202, response.text
+E   AssertionError: {"detail":"缺少 X-Verified-UID"}
+E   assert 401 == 202
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+________ test_maintenance_uses_login_uid_without_legacy_identity[True] _________
+tests/platform/test_unified_worker_auth.py:86: in test_maintenance_uses_login_uid_without_legacy_identity
+    assert response.json()["requested_by"] == uid
+E   AssertionError: assert 'forged' == 'qa-af22f45dc...ff377e00cf566'
+E
+E     - qa-af22f45dcbf345c9af4ff377e00cf566
+E     + forged
+=============================== warnings summary ===============================
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[False]
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[False]
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[False]
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[False]
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[False]
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[False]
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[False]
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[False]
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_unified_worker_auth.py::test_worker_and_admin_protocol_auth_without_cookie
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[False]
+tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[False]
+FAILED tests/platform/test_unified_worker_auth.py::test_maintenance_uses_login_uid_without_legacy_identity[True]
+2 failed, 1 passed, 28 warnings in 0.79s
+
+
+===== nexus-repository-red.log =====
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+_____________ test_task_mcp_selects_executable_repository[worker] ______________
+tests/platform/test_task_responsibility.py:353: in test_task_mcp_selects_executable_repository
+    assert task.repository_id==('repo-a' if mode=='worker' else 'repo-b')
+E   AssertionError: assert None == 'repo-a'
+E    +  where None = <app.models.Task object at 0x10f7f0e10>.repository_id
+____________ test_task_mcp_selects_executable_repository[explicit] _____________
+tests/platform/test_task_responsibility.py:345: in test_task_mcp_selects_executable_repository
+    result=await TaskTools(session).create(task_type='REQUIREMENT',category_id='qa-cat',
+E   TypeError: TaskTools.create() got an unexpected keyword argument 'repository_id'
+_____________ test_task_mcp_selects_executable_repository[missing] _____________
+tests/platform/test_task_responsibility.py:348: in test_task_mcp_selects_executable_repository
+    assert result['ok'] is False
+E   assert True is False
+____________ test_task_mcp_selects_executable_repository[mismatch] _____________
+tests/platform/test_task_responsibility.py:345: in test_task_mcp_selects_executable_repository
+    result=await TaskTools(session).create(task_type='REQUIREMENT',category_id='qa-cat',
+E   TypeError: TaskTools.create() got an unexpected keyword argument 'repository_id'
+=============================== warnings summary ===============================
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[worker]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[worker]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[explicit]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[missing]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[mismatch]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[worker]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[explicit]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[missing]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[mismatch]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[worker]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[explicit]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[missing]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[mismatch]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[worker]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[explicit]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[missing]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[mismatch]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[worker]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[explicit]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[missing]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[mismatch]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[worker]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[explicit]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[missing]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[mismatch]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[worker]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[explicit]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[missing]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[mismatch]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[worker]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[explicit]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[missing]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[mismatch]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[worker]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[explicit]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[missing]
+tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[mismatch]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[worker]
+FAILED tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[explicit]
+FAILED tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[missing]
+FAILED tests/platform/test_task_responsibility.py::test_task_mcp_selects_executable_repository[mismatch]
+4 failed, 14 deselected, 37 warnings in 0.78s
+
+
+===== nexus-task-wake-red.log =====
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________________ test_task_wake_lookup_authenticates_as_service ________________
+tests/platform/test_unified_worker_auth.py:125: in test_task_wake_lookup_authenticates_as_service
+    await HttpWakeSender(client).send(row)
+app/runtime/task_wakeup.py:41: in send
+    _raise_for_status(target)
+app/runtime/task_wakeup.py:72: in _raise_for_status
+    raise WakePermanent(detail or f"HTTP {response.status_code}")
+E   app.runtime.task_wakeup.WakePermanent: {"detail":"服务间认证失败"}
+=============================== warnings summary ===============================
+tests/platform/test_unified_worker_auth.py::test_task_wake_lookup_authenticates_as_service
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_task_wake_lookup_authenticates_as_service
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_unified_worker_auth.py::test_task_wake_lookup_authenticates_as_service
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_task_wake_lookup_authenticates_as_service
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_unified_worker_auth.py::test_task_wake_lookup_authenticates_as_service
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_unified_worker_auth.py::test_task_wake_lookup_authenticates_as_service
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_task_wake_lookup_authenticates_as_service
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_unified_worker_auth.py::test_task_wake_lookup_authenticates_as_service
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_task_wake_lookup_authenticates_as_service
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_unified_worker_auth.py::test_task_wake_lookup_authenticates_as_service
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_unified_worker_auth.py::test_task_wake_lookup_authenticates_as_service
+1 failed, 3 deselected, 10 warnings in 0.65s
+
+
+===== nexus-review-path-red.log =====
+F....                                                                    [100%]
+=================================== FAILURES ===================================
+______ test_worker_review_reads_only_its_registered_worktrees[registered] ______
+tests/platform/test_experience_review.py:1138: in test_worker_review_reads_only_its_registered_worktrees
+    result = trace_read.read_trace_from_payload("http://127.0.0.1:14096", str(root), payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/worker_agent/trace_read.py:71: in read_trace_from_payload
+    raise ValueError("工作区不在 Worker 根目录内")
+E   ValueError: 工作区不在 Worker 根目录内
+=============================== warnings summary ===============================
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[registered]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[registered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[unregistered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[foreign]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[symlink]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[missing]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[registered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[unregistered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[foreign]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[symlink]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[missing]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[registered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[unregistered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[foreign]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[symlink]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[missing]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[registered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[unregistered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[foreign]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[symlink]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[missing]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[registered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[unregistered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[foreign]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[symlink]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[missing]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[registered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[unregistered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[foreign]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[symlink]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[missing]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[registered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[unregistered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[foreign]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[symlink]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[missing]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[registered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[unregistered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[foreign]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[symlink]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[missing]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[registered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[unregistered]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[foreign]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[symlink]
+tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[missing]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_experience_review.py::test_worker_review_reads_only_its_registered_worktrees[registered]
+1 failed, 4 passed, 23 deselected, 46 warnings in 0.80s
+
+
+===== nexus-review-secret-red.log =====
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_trace_redacts_runtime_capabilities_before_model_and_evidence _______
+tests/platform/test_experience_review.py:1164: in test_trace_redacts_runtime_capabilities_before_model_and_evidence
+    assert all(capability not in e.excerpt for e in events)
+E   assert False
+E    +  where False = all(<generator object test_trace_redacts_runtime_capabilities_before_model_and_evidence.<locals>.<genexpr> at 0x10ded9a80>)
+=============================== warnings summary ===============================
+tests/platform/test_experience_review.py::test_trace_redacts_runtime_capabilities_before_model_and_evidence
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_trace_redacts_runtime_capabilities_before_model_and_evidence
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_experience_review.py::test_trace_redacts_runtime_capabilities_before_model_and_evidence
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_trace_redacts_runtime_capabilities_before_model_and_evidence
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_experience_review.py::test_trace_redacts_runtime_capabilities_before_model_and_evidence
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_experience_review.py::test_trace_redacts_runtime_capabilities_before_model_and_evidence
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_trace_redacts_runtime_capabilities_before_model_and_evidence
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_experience_review.py::test_trace_redacts_runtime_capabilities_before_model_and_evidence
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_trace_redacts_runtime_capabilities_before_model_and_evidence
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_experience_review.py::test_trace_redacts_runtime_capabilities_before_model_and_evidence
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_experience_review.py::test_trace_redacts_runtime_capabilities_before_model_and_evidence
+1 failed, 28 deselected, 10 warnings in 0.54s
+
+
+===== nexus-review-metadata-red.log =====
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+______________ test_candidate_writer_persists_validated_evidence _______________
+tests/platform/test_experience_review.py:349: in test_candidate_writer_persists_validated_evidence
+    assert all(row.review_job_id == job.id for row in evidence)
+E   assert False
+E    +  where False = all(<generator object test_candidate_writer_persists_validated_evidence.<locals>.<genexpr> at 0x10cfa7680>)
+_________________ test_successful_review_clears_retried_error __________________
+tests/platform/test_experience_review.py:1178: in test_successful_review_clears_retried_error
+    assert result.error_code is None
+E   AssertionError: assert 'source_unavailable' is None
+E    +  where 'source_unavailable' = <app.models.ExperienceReviewJob object at 0x10d1ed450>.error_code
+=============================== warnings summary ===============================
+tests/platform/test_experience_review.py::test_candidate_writer_persists_validated_evidence
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_candidate_writer_persists_validated_evidence
+tests/platform/test_experience_review.py::test_successful_review_clears_retried_error
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_experience_review.py::test_candidate_writer_persists_validated_evidence
+tests/platform/test_experience_review.py::test_successful_review_clears_retried_error
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_candidate_writer_persists_validated_evidence
+tests/platform/test_experience_review.py::test_successful_review_clears_retried_error
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_experience_review.py::test_candidate_writer_persists_validated_evidence
+tests/platform/test_experience_review.py::test_successful_review_clears_retried_error
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_experience_review.py::test_candidate_writer_persists_validated_evidence
+tests/platform/test_experience_review.py::test_successful_review_clears_retried_error
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_candidate_writer_persists_validated_evidence
+tests/platform/test_experience_review.py::test_successful_review_clears_retried_error
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_experience_review.py::test_candidate_writer_persists_validated_evidence
+tests/platform/test_experience_review.py::test_successful_review_clears_retried_error
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_candidate_writer_persists_validated_evidence
+tests/platform/test_experience_review.py::test_successful_review_clears_retried_error
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_experience_review.py::test_candidate_writer_persists_validated_evidence
+tests/platform/test_experience_review.py::test_successful_review_clears_retried_error
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_experience_review.py::test_candidate_writer_persists_validated_evidence
+FAILED tests/platform/test_experience_review.py::test_successful_review_clears_retried_error
+2 failed, 28 deselected, 19 warnings in 0.59s
+
+
+===== nexus-library-actor-red.log =====
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_library_audit_identity_uses_authenticated_account ____________
+tests/platform/test_unified_worker_auth.py:141: in test_library_audit_identity_uses_authenticated_account
+    assert response.json()['user_id']=='qa-library-reviewer'
+E   AssertionError: assert 'forged' == 'qa-library-reviewer'
+E
+E     - qa-library-reviewer
+E     + forged
+=============================== warnings summary ===============================
+tests/platform/test_unified_worker_auth.py::test_library_audit_identity_uses_authenticated_account
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_library_audit_identity_uses_authenticated_account
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_unified_worker_auth.py::test_library_audit_identity_uses_authenticated_account
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_library_audit_identity_uses_authenticated_account
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_unified_worker_auth.py::test_library_audit_identity_uses_authenticated_account
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_unified_worker_auth.py::test_library_audit_identity_uses_authenticated_account
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_library_audit_identity_uses_authenticated_account
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_unified_worker_auth.py::test_library_audit_identity_uses_authenticated_account
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_library_audit_identity_uses_authenticated_account
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_unified_worker_auth.py::test_library_audit_identity_uses_authenticated_account
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_unified_worker_auth.py::test_library_audit_identity_uses_authenticated_account
+1 failed, 4 deselected, 10 warnings in 0.57s
+
+
+===== nexus-stop-actor-red.log =====
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_____ test_stop_release_uses_login_and_exposes_canonical_occupancy[False] ______
+tests/platform/test_unified_worker_auth.py:165: in test_stop_release_uses_login_and_exposes_canonical_occupancy
+    assert response.status_code==200,response.text
+E   AssertionError: {"detail":"确认执行停止需要操作人和原因"}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+______ test_stop_release_uses_login_and_exposes_canonical_occupancy[True] ______
+tests/platform/test_unified_worker_auth.py:168: in test_stop_release_uses_login_and_exposes_canonical_occupancy
+    assert current.execution_stop_operator==uid
+E   AssertionError: assert 'forged' == 'qa-stop-d868...3b8882ab8bb94'
+E
+E     - qa-stop-d868aea07aa545e089f3b8882ab8bb94
+E     + forged
+=============================== warnings summary ===============================
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[False]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[False]
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[False]
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[False]
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[False]
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[False]
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[False]
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[False]
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[False]
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[False]
+tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[True]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[False]
+FAILED tests/platform/test_unified_worker_auth.py::test_stop_release_uses_login_and_exposes_canonical_occupancy[True]
+2 failed, 5 deselected, 19 warnings in 0.79s
+
+
+===== nexus-wiki-attribution-red.log =====
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+________ test_compiled_wiki_source_retains_knowledge_usage_attribution _________
+tests/platform/test_llm_wiki.py:455: in test_compiled_wiki_source_retains_knowledge_usage_attribution
+    assert usage.knowledge_id==kid
+E   AssertionError: assert None == 'KNOW_E97CD30079084D48A5B5'
+E    +  where None = <app.models.KnowledgeUsage object at 0x10c92bed0>.knowledge_id
+_______________ test_body_examples_cannot_forge_knowledge_usage ________________
+tests/platform/test_llm_wiki.py:470: in test_body_examples_cannot_forge_knowledge_usage
+    assert usage.knowledge_id is None
+E   AssertionError: assert 'KNOW_E719667E7BBD4D77B3D9' is None
+E    +  where 'KNOW_E719667E7BBD4D77B3D9' = <app.models.KnowledgeUsage object at 0x10c9f3a80>.knowledge_id
+=============================== warnings summary ===============================
+tests/platform/test_llm_wiki.py::test_compiled_wiki_source_retains_knowledge_usage_attribution
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_llm_wiki.py::test_compiled_wiki_source_retains_knowledge_usage_attribution
+tests/platform/test_llm_wiki.py::test_body_examples_cannot_forge_knowledge_usage
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_llm_wiki.py::test_compiled_wiki_source_retains_knowledge_usage_attribution
+tests/platform/test_llm_wiki.py::test_body_examples_cannot_forge_knowledge_usage
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_llm_wiki.py::test_compiled_wiki_source_retains_knowledge_usage_attribution
+tests/platform/test_llm_wiki.py::test_body_examples_cannot_forge_knowledge_usage
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_llm_wiki.py::test_compiled_wiki_source_retains_knowledge_usage_attribution
+tests/platform/test_llm_wiki.py::test_body_examples_cannot_forge_knowledge_usage
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_llm_wiki.py::test_compiled_wiki_source_retains_knowledge_usage_attribution
+tests/platform/test_llm_wiki.py::test_body_examples_cannot_forge_knowledge_usage
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_llm_wiki.py::test_compiled_wiki_source_retains_knowledge_usage_attribution
+tests/platform/test_llm_wiki.py::test_body_examples_cannot_forge_knowledge_usage
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_llm_wiki.py::test_compiled_wiki_source_retains_knowledge_usage_attribution
+tests/platform/test_llm_wiki.py::test_body_examples_cannot_forge_knowledge_usage
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_llm_wiki.py::test_compiled_wiki_source_retains_knowledge_usage_attribution
+tests/platform/test_llm_wiki.py::test_body_examples_cannot_forge_knowledge_usage
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_llm_wiki.py::test_compiled_wiki_source_retains_knowledge_usage_attribution
+tests/platform/test_llm_wiki.py::test_body_examples_cannot_forge_knowledge_usage
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_llm_wiki.py::test_compiled_wiki_source_retains_knowledge_usage_attribution
+FAILED tests/platform/test_llm_wiki.py::test_body_examples_cannot_forge_knowledge_usage
+2 failed, 20 deselected, 19 warnings in 0.81s
+
+
+===== nexus-wiki-mixed-red.log =====
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________________ test_mixed_wiki_sources_are_not_guessed ____________________
+tests/platform/test_llm_wiki.py:483: in test_mixed_wiki_sources_are_not_guessed
+    assert usage.knowledge_id is None
+E   AssertionError: assert 'KNOW_C557564D6C2846CBBB81' is None
+E    +  where 'KNOW_C557564D6C2846CBBB81' = <app.models.KnowledgeUsage object at 0x10e82e850>.knowledge_id
+=============================== warnings summary ===============================
+tests/platform/test_llm_wiki.py::test_mixed_wiki_sources_are_not_guessed
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_llm_wiki.py::test_mixed_wiki_sources_are_not_guessed
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_llm_wiki.py::test_mixed_wiki_sources_are_not_guessed
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_llm_wiki.py::test_mixed_wiki_sources_are_not_guessed
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_llm_wiki.py::test_mixed_wiki_sources_are_not_guessed
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_llm_wiki.py::test_mixed_wiki_sources_are_not_guessed
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_llm_wiki.py::test_mixed_wiki_sources_are_not_guessed
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_llm_wiki.py::test_mixed_wiki_sources_are_not_guessed
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_llm_wiki.py::test_mixed_wiki_sources_are_not_guessed
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_llm_wiki.py::test_mixed_wiki_sources_are_not_guessed
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_llm_wiki.py::test_mixed_wiki_sources_are_not_guessed
+1 failed, 22 deselected, 10 warnings in 0.64s

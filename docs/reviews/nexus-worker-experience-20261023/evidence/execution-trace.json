@@ -1,0 +1,276 @@
+[
+  {
+    "message_id": "msg_1664e76d1001gN79ePV6RW7LKw",
+    "part_id": "prt_1664e7a2d001za4sZaSZhlVeWi",
+    "tool": "bash",
+    "state": {
+      "status": "completed",
+      "input": {
+        "command": "pwd && ls -la && git status && git log --oneline -5"
+      },
+      "output": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5\ntotal 20\ndrwxr-xr-x 2 root root 4096 Oct 23 09:05 .\ndrwxr-xr-x 3 root root 4096 Oct 23 09:05 ..\n-rw-r--r-- 1 root root   95 Oct 23 09:05 .git\n-rw-r--r-- 1 root root   72 Oct 23 09:05 README.md\n-rw-r--r-- 1 root root  172 Oct 23 09:05 result_summary.py\nNot currently on any branch.\nnothing to commit, working tree clean\nda575de test: seed duplicate-count defect\n",
+      "title": "pwd && ls -la && git status && git log --oneline -5",
+      "metadata": {
+        "output": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5\ntotal 20\ndrwxr-xr-x 2 root root 4096 Oct 23 09:05 .\ndrwxr-xr-x 3 root root 4096 Oct 23 09:05 ..\n-rw-r--r-- 1 root root   95 Oct 23 09:05 .git\n-rw-r--r-- 1 root root   72 Oct 23 09:05 README.md\n-rw-r--r-- 1 root root  172 Oct 23 09:05 result_summary.py\nNot currently on any branch.\nnothing to commit, working tree clean\nda575de test: seed duplicate-count defect\n",
+        "exit": 0,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792717781604,
+        "end": 1792717781678
+      }
+    }
+  },
+  {
+    "message_id": "msg_1664e76d1001gN79ePV6RW7LKw",
+    "part_id": "prt_1664e7a8a001XBdWNlYjwM5aXn",
+    "tool": "glob",
+    "state": {
+      "status": "completed",
+      "input": {
+        "pattern": "**/*.py"
+      },
+      "output": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py",
+      "title": "",
+      "metadata": {
+        "count": 1,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792717781688,
+        "end": 1792717783200
+      }
+    }
+  },
+  {
+    "message_id": "msg_1664e80b7001ZHVE7mEey2h7z5",
+    "part_id": "prt_1664e84b7001KcC6H5kUxSoHKm",
+    "tool": "read",
+    "state": {
+      "status": "completed",
+      "input": {
+        "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py"
+      },
+      "output": "<path>/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py</path>\n<type>file</type>\n<content>\n1: def summarize(rows):\n2:     # Defect: duplicate test results are counted multiple times.\n3:     return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n\n(End of file - total 3 lines)\n</content>",
+      "title": "result_summary.py",
+      "metadata": {
+        "preview": "def summarize(rows):\n    # Defect: duplicate test results are counted multiple times.\n    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}",
+        "truncated": false,
+        "loaded": [],
+        "display": {
+          "type": "file",
+          "path": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py",
+          "text": "def summarize(rows):\n    # Defect: duplicate test results are counted multiple times.\n    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}",
+          "lineStart": 1,
+          "lineEnd": 3,
+          "totalLines": 3,
+          "truncated": false
+        }
+      },
+      "time": {
+        "start": 1792717784406,
+        "end": 1792717784422
+      }
+    }
+  },
+  {
+    "message_id": "msg_1664e80b7001ZHVE7mEey2h7z5",
+    "part_id": "prt_1664e8568001Gu0tMh8lkqs8eJ",
+    "tool": "read",
+    "state": {
+      "status": "completed",
+      "input": {
+        "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/README.md"
+      },
+      "output": "<path>/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/README.md</path>\n<type>file</type>\n<content>\n1: # Nexus Worker QA\n2: Isolated real execution fixture. No production files.\n\n(End of file - total 2 lines)\n</content>",
+      "title": "README.md",
+      "metadata": {
+        "preview": "# Nexus Worker QA\nIsolated real execution fixture. No production files.",
+        "truncated": false,
+        "loaded": [],
+        "display": {
+          "type": "file",
+          "path": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/README.md",
+          "text": "# Nexus Worker QA\nIsolated real execution fixture. No production files.",
+          "lineStart": 1,
+          "lineEnd": 2,
+          "totalLines": 2,
+          "truncated": false
+        }
+      },
+      "time": {
+        "start": 1792717784588,
+        "end": 1792717784592
+      }
+    }
+  },
+  {
+    "message_id": "msg_1664e80b7001ZHVE7mEey2h7z5",
+    "part_id": "prt_1664e862e001lK1kLO12sADFla",
+    "tool": "bash",
+    "state": {
+      "status": "completed",
+      "input": {
+        "command": "cat .git && ls -la .git; git show --stat HEAD"
+      },
+      "output": "gitdir: /tmp/nexus-worker-experience-20261023/workspace/.git/worktrees/T-20261023-2863C9-env-5\n-rw-r--r-- 1 root root 95 Oct 23 09:05 .git\ncommit da575de5173bc531ed9a45de484564908512481d\nAuthor: Nexus QA <qa@example.invalid>\nDate:   Fri Oct 23 08:51:11 2026 +0800\n\n    test: seed duplicate-count defect\n\n README.md         | 2 ++\n result_summary.py | 3 +++\n 2 files changed, 5 insertions(+)\n",
+      "title": "cat .git && ls -la .git; git show --stat HEAD",
+      "metadata": {
+        "output": "gitdir: /tmp/nexus-worker-experience-20261023/workspace/.git/worktrees/T-20261023-2863C9-env-5\n-rw-r--r-- 1 root root 95 Oct 23 09:05 .git\ncommit da575de5173bc531ed9a45de484564908512481d\nAuthor: Nexus QA <qa@example.invalid>\nDate:   Fri Oct 23 08:51:11 2026 +0800\n\n    test: seed duplicate-count defect\n\n README.md         | 2 ++\n result_summary.py | 3 +++\n 2 files changed, 5 insertions(+)\n",
+        "exit": 0,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792717785184,
+        "end": 1792717785204
+      }
+    }
+  },
+  {
+    "message_id": "msg_1664e8894001vydWWt2KxN8ypG",
+    "part_id": "prt_1664e8d3a001EWmQSpllPtqlY1",
+    "tool": "write",
+    "state": {
+      "status": "completed",
+      "input": {
+        "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/test_result_summary.py",
+        "content": "import unittest\n\nfrom result_summary import summarize\n\n\nclass SummarizeTest(unittest.TestCase):\n    def test_duplicate_identical_result_kept_once(self):\n        rows = [\n            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n        ]\n        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n\n    def test_duplicate_status_reversal_keeps_last(self):\n        rows = [\n            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"failed\"},\n        ]\n        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\n\n    def test_same_case_in_different_runs_counted_separately(self):\n        rows = [\n            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n            {\"run_id\": \"r2\", \"case_id\": \"c1\", \"status\": \"failed\"},\n        ]\n        self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n\n    def test_empty_input(self):\n        self.assertEqual(summarize([]), {\"total\": 0, \"passed\": 0})\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+      },
+      "output": "Wrote file successfully.",
+      "title": "test_result_summary.py",
+      "metadata": {
+        "diagnostics": {},
+        "filepath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/test_result_summary.py",
+        "exists": false,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792717787584,
+        "end": 1792717787590
+      }
+    }
+  },
+  {
+    "message_id": "msg_1664e91ec001p66cWYGKpCerl2",
+    "part_id": "prt_1664e94370010LwdoMFyJLqBso",
+    "tool": "bash",
+    "state": {
+      "status": "completed",
+      "input": {
+        "command": "python3 -m unittest -v 2>&1"
+      },
+      "output": "test_duplicate_identical_result_kept_once (test_result_summary.SummarizeTest.test_duplicate_identical_result_kept_once) ... FAIL\ntest_duplicate_status_reversal_keeps_last (test_result_summary.SummarizeTest.test_duplicate_status_reversal_keeps_last) ... FAIL\ntest_empty_input (test_result_summary.SummarizeTest.test_empty_input) ... ok\ntest_same_case_in_different_runs_counted_separately (test_result_summary.SummarizeTest.test_same_case_in_different_runs_counted_separately) ... ok\n\n======================================================================\nFAIL: test_duplicate_identical_result_kept_once (test_result_summary.SummarizeTest.test_duplicate_identical_result_kept_once)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/test_result_summary.py\", line 12, in test_duplicate_identical_result_kept_once\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\nAssertionError: {'total': 2, 'passed': 2} != {'total': 1, 'passed': 1}\n- {'passed': 2, 'total': 2}\n?            ^           ^\n\n+ {'passed': 1, 'total': 1}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_duplicate_status_reversal_keeps_last (test_result_summary.SummarizeTest.test_duplicate_status_reversal_keeps_last)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/test_result_summary.py\", line 19, in test_duplicate_status_reversal_keeps_last\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\nAssertionError: {'total': 2, 'passed': 1} != {'total': 1, 'passed': 0}\n- {'passed': 1, 'total': 2}\n?            ^           ^\n\n+ {'passed': 0, 'total': 1}\n?            ^           ^\n\n\n----------------------------------------------------------------------\nRan 4 tests in 0.000s\n\nFAILED (failures=2)\n",
+      "title": "python3 -m unittest -v 2>&1",
+      "metadata": {
+        "output": "test_duplicate_identical_result_kept_once (test_result_summary.SummarizeTest.test_duplicate_identical_result_kept_once) ... FAIL\ntest_duplicate_status_reversal_keeps_last (test_result_summary.SummarizeTest.test_duplicate_status_reversal_keeps_last) ... FAIL\ntest_empty_input (test_result_summary.SummarizeTest.test_empty_input) ... ok\ntest_same_case_in_different_runs_counted_separately (test_result_summary.SummarizeTest.test_same_case_in_different_runs_counted_separately) ... ok\n\n======================================================================\nFAIL: test_duplicate_identical_result_kept_once (test_result_summary.SummarizeTest.test_duplicate_identical_result_kept_once)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/test_result_summary.py\", line 12, in test_duplicate_identical_result_kept_once\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\nAssertionError: {'total': 2, 'passed': 2} != {'total': 1, 'passed': 1}\n- {'passed': 2, 'total': 2}\n?            ^           ^\n\n+ {'passed': 1, 'total': 1}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_duplicate_status_reversal_keeps_last (test_result_summary.SummarizeTest.test_duplicate_status_reversal_keeps_last)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/test_result_summary.py\", line 19, in test_duplicate_status_reversal_keeps_last\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\nAssertionError: {'total': 2, 'passed': 1} != {'total': 1, 'passed': 0}\n- {'passed': 1, 'total': 2}\n?            ^           ^\n\n+ {'passed': 0, 'total': 1}\n?            ^           ^\n\n\n----------------------------------------------------------------------\nRan 4 tests in 0.000s\n\nFAILED (failures=2)\n",
+        "exit": 1,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792717788293,
+        "end": 1792717788327
+      }
+    }
+  },
+  {
+    "message_id": "msg_1664e94bc0011OTYJhK5SkEFXQ",
+    "part_id": "prt_1664e988d00172TfycP0jL0hQC",
+    "tool": "edit",
+    "state": {
+      "status": "completed",
+      "input": {
+        "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py",
+        "oldString": "def summarize(rows):\n    # Defect: duplicate test results are counted multiple times.\n    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}",
+        "newString": "def summarize(rows):\n    latest = {}\n    for row in rows:\n        latest[(row[\"run_id\"], row[\"case_id\"])] = row\n    return {\n        \"total\": len(latest),\n        \"passed\": sum(r[\"status\"] == \"passed\" for r in latest.values()),\n    }"
+      },
+      "output": "Edit applied successfully.",
+      "title": "result_summary.py",
+      "metadata": {
+        "diagnostics": {},
+        "diff": "Index: /tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py\n===================================================================\n--- /tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py\n+++ /tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py\n@@ -1,3 +1,8 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        latest[(row[\"run_id\"], row[\"case_id\"])] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(r[\"status\"] == \"passed\" for r in latest.values()),\n+    }\n",
+        "filediff": {
+          "file": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py",
+          "patch": "Index: /tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py\n===================================================================\n--- /tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py\n+++ /tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5/result_summary.py\n@@ -1,3 +1,8 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        latest[(row[\"run_id\"], row[\"case_id\"])] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(r[\"status\"] == \"passed\" for r in latest.values()),\n+    }\n",
+          "additions": 7,
+          "deletions": 2
+        },
+        "truncated": false
+      },
+      "time": {
+        "start": 1792717789918,
+        "end": 1792717789922
+      }
+    }
+  },
+  {
+    "message_id": "msg_1664e9b110013i3uTGCUd5AfSr",
+    "part_id": "prt_1664e9ecb001WNqpebWuTTI50L",
+    "tool": "bash",
+    "state": {
+      "status": "completed",
+      "input": {
+        "command": "python3 -m unittest -v 2>&1; echo \"--- exit: $?\""
+      },
+      "output": "test_duplicate_identical_result_kept_once (test_result_summary.SummarizeTest.test_duplicate_identical_result_kept_once) ... ok\ntest_duplicate_status_reversal_keeps_last (test_result_summary.SummarizeTest.test_duplicate_status_reversal_keeps_last) ... ok\ntest_empty_input (test_result_summary.SummarizeTest.test_empty_input) ... ok\ntest_same_case_in_different_runs_counted_separately (test_result_summary.SummarizeTest.test_same_case_in_different_runs_counted_separately) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.000s\n\nOK\n--- exit: 0\n",
+      "title": "python3 -m unittest -v 2>&1; echo \"--- exit: $?\"",
+      "metadata": {
+        "output": "test_duplicate_identical_result_kept_once (test_result_summary.SummarizeTest.test_duplicate_identical_result_kept_once) ... ok\ntest_duplicate_status_reversal_keeps_last (test_result_summary.SummarizeTest.test_duplicate_status_reversal_keeps_last) ... ok\ntest_empty_input (test_result_summary.SummarizeTest.test_empty_input) ... ok\ntest_same_case_in_different_runs_counted_separately (test_result_summary.SummarizeTest.test_same_case_in_different_runs_counted_separately) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.000s\n\nOK\n--- exit: 0\n",
+        "exit": 0,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792717790948,
+        "end": 1792717790983
+      }
+    }
+  },
+  {
+    "message_id": "msg_1664e9f21001KQ6ErGc21AS4P4",
+    "part_id": "prt_1664ea27b001aBbG0Pjbk33HBe",
+    "tool": "bash",
+    "state": {
+      "status": "completed",
+      "input": {
+        "command": "git status --short && git diff -- result_summary.py test_result_summary.py"
+      },
+      "output": " M result_summary.py\n?? __pycache__/\n?? test_result_summary.py\ndiff --git a/result_summary.py b/result_summary.py\nindex b04a211..0eaa812 100644\n--- a/result_summary.py\n+++ b/result_summary.py\n@@ -1,3 +1,8 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        latest[(row[\"run_id\"], row[\"case_id\"])] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(r[\"status\"] == \"passed\" for r in latest.values()),\n+    }\n",
+      "title": "git status --short && git diff -- result_summary.py test_result_summary.py",
+      "metadata": {
+        "output": " M result_summary.py\n?? __pycache__/\n?? test_result_summary.py\ndiff --git a/result_summary.py b/result_summary.py\nindex b04a211..0eaa812 100644\n--- a/result_summary.py\n+++ b/result_summary.py\n@@ -1,3 +1,8 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        latest[(row[\"run_id\"], row[\"case_id\"])] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(r[\"status\"] == \"passed\" for r in latest.values()),\n+    }\n",
+        "exit": 0,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792717791890,
+        "end": 1792717791898
+      }
+    }
+  },
+  {
+    "message_id": "msg_1664ea2b1001Y7MF7HhqgEmpfO",
+    "part_id": "prt_1664ea690001icnmUiLBrkXhGw",
+    "tool": "bash",
+    "state": {
+      "status": "completed",
+      "input": {
+        "command": "rm -rf __pycache__ && git status --short && git diff && git diff --no-index /dev/null test_result_summary.py || true"
+      },
+      "output": " M result_summary.py\n?? test_result_summary.py\ndiff --git a/result_summary.py b/result_summary.py\nindex b04a211..0eaa812 100644\n--- a/result_summary.py\n+++ b/result_summary.py\n@@ -1,3 +1,8 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        latest[(row[\"run_id\"], row[\"case_id\"])] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(r[\"status\"] == \"passed\" for r in latest.values()),\n+    }\ndiff --git a/test_result_summary.py b/test_result_summary.py\nnew file mode 100644\nindex 0000000..a842c73\n--- /dev/null\n+++ b/test_result_summary.py\n@@ -0,0 +1,33 @@\n+import unittest\n+\n+from result_summary import summarize\n+\n+\n+class SummarizeTest(unittest.TestCase):\n+    def test_duplicate_identical_result_kept_once(self):\n+        rows = [\n+            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n+            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n+\n+    def test_duplicate_status_reversal_keeps_last(self):\n+        rows = [\n+            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n+            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"failed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\n+\n+    def test_same_case_in_different_runs_counted_separately(self):\n+        rows = [\n+            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n+            {\"run_id\": \"r2\", \"case_id\": \"c1\", \"status\": \"failed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n+\n+    def test_empty_input(self):\n+        self.assertEqual(summarize([]), {\"total\": 0, \"passed\": 0})\n+\n+\n+if __name__ == \"__main__\":\n+    unittest.main()\n",
+      "title": "rm -rf __pycache__ && git status --short && git diff && git diff --no-index /dev/null test_result_summary.py || true",
+      "metadata": {
+        "output": " M result_summary.py\n?? test_result_summary.py\ndiff --git a/result_summary.py b/result_summary.py\nindex b04a211..0eaa812 100644\n--- a/result_summary.py\n+++ b/result_summary.py\n@@ -1,3 +1,8 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        latest[(row[\"run_id\"], row[\"case_id\"])] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(r[\"status\"] == \"passed\" for r in latest.values()),\n+    }\ndiff --git a/test_result_summary.py b/test_result_summary.py\nnew file mode 100644\nindex 0000000..a842c73\n--- /dev/null\n+++ b/test_result_summary.py\n@@ -0,0 +1,33 @@\n+import unittest\n+\n+from result_summary import summarize\n+\n+\n+class SummarizeTest(unittest.TestCase):\n+    def test_duplicate_identical_result_kept_once(self):\n+        rows = [\n+            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n+            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n+\n+    def test_duplicate_status_reversal_keeps_last(self):\n+        rows = [\n+            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n+            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"failed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\n+\n+    def test_same_case_in_different_runs_counted_separately(self):\n+        rows = [\n+            {\"run_id\": \"r1\", \"case_id\": \"c1\", \"status\": \"passed\"},\n+            {\"run_id\": \"r2\", \"case_id\": \"c1\", \"status\": \"failed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n+\n+    def test_empty_input(self):\n+        self.assertEqual(summarize([]), {\"total\": 0, \"passed\": 0})\n+\n+\n+if __name__ == \"__main__\":\n+    unittest.main()\n",
+        "exit": 0,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792717793048,
+        "end": 1792717793060
+      }
+    }
+  },
+  {
+    "message_id": "msg_1664ea74a001Y4Ydd7G22Kcf04",
+    "part_id": "prt_1664eaa14001NqY2LKpsCva2pk",
+    "text": "已完成 T-20261023-2863C9，等待人工确认。\n\n**完成内容**\n1. 先写四类 unittest（`test_result_summary.py`），真实运行并展示旧缺陷：2 个失败（重复记录被重复计数、状态反转未保留最后一条），2 个通过。\n2. 对 `result_summary.py` 做最小修复。\n3. 重跑全部 unittest：`Ran 4 tests ... OK`（exit 0）。\n\n**关键修改**\n- 用 `(run_id, case_id)` 为键遍历写入字典，后写覆盖先写，实现“仅保留最后一条”。\n- 基于去重后的值计算 `total` 和 `passed`。\n\n**验证**\n- 失败运行：`python3 -m unittest -v` → 2 FAIL，实际得到 `{'total': 2, 'passed': 2}` 与 `{'total': 2, 'passed': 1}`。\n- 修复后同命令 → 4 tests OK，覆盖重复相同结果、重复状态反转、不同 run 同 case、空输入。\n- `git status`：仅 `M result_summary.py`、`?? test_result_summary.py`，已清理 `__pycache__`；未提交、未 push、未触碰其他工作区。"
+  }
+]

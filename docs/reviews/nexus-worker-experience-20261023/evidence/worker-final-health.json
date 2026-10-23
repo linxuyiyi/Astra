@@ -1,0 +1,114 @@
+{
+  "environment_id": 5,
+  "employee_id": "qa-worker-experience-20261023",
+  "enabled": true,
+  "connection": {
+    "channel": "worker",
+    "state": "online",
+    "last_heartbeat_at": "2026-10-23T05:16:00.535120+00:00",
+    "epoch": 15
+  },
+  "maintenance": {
+    "state": "SUCCEEDED",
+    "operation_id": "op_f63adc5cc3df4c908ca63782b33ddd7d",
+    "stage": "verify",
+    "attempt": 1
+  },
+  "runtime_health": {
+    "status": "AVAILABLE",
+    "last_checked_at": "2026-10-23T05:15:51.770309+00:00",
+    "capability": {
+      "desired_revision": "d3a444c796db30fe",
+      "applied_revision": "d3a444c796db30fe",
+      "runtime_status": "applied",
+      "error": "",
+      "checked_at": "2026-10-23T05:15:51.770309+00:00"
+    },
+    "equipment": [
+      {
+        "key": "opencode",
+        "label": "OpenCode",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "1.18.35",
+        "actual_revision": "1.18.35",
+        "diff": [],
+        "error": null,
+        "detail": "OpenCode 1.18.35"
+      },
+      {
+        "key": "worker_agent",
+        "label": "Worker Agent",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "1.4.5",
+        "actual_revision": "1.4.5",
+        "diff": [],
+        "error": null,
+        "detail": "Worker Agent 1.4.5"
+      },
+      {
+        "key": "model",
+        "label": "模型",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "nexus-gateway/deepseek-flash",
+        "actual_revision": "nexus-gateway/deepseek-flash",
+        "diff": [],
+        "error": null,
+        "detail": "实际模型 nexus-gateway/deepseek-flash"
+      },
+      {
+        "key": "mcp",
+        "label": "MCP",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "46132b51ee03727b",
+        "actual_revision": "46132b51ee03727b",
+        "diff": [],
+        "error": null,
+        "detail": "已连接：nexus-library"
+      },
+      {
+        "key": "skills",
+        "label": "Skill",
+        "configured": false,
+        "deployed": false,
+        "verified": true,
+        "desired_revision": null,
+        "actual_revision": null,
+        "diff": [],
+        "error": null,
+        "detail": "发现 "
+      },
+      {
+        "key": "git",
+        "label": "Git 仓库",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "c22aede766789f42",
+        "actual_revision": "da575de5173bc531ed9a45de484564908512481d",
+        "diff": [],
+        "error": null,
+        "detail": "main@da575de5173b"
+      }
+    ]
+  },
+  "repository": {
+    "id": "841c140c7aeb477bb9e6c926fe4d664e",
+    "url": "file:///tmp/nexus-worker-experience-20261023/origin.git",
+    "target_branch": "main",
+    "branch": "main",
+    "commit": "da575de5173bc531ed9a45de484564908512481d",
+    "dirty": false,
+    "authentication": "token",
+    "error": null
+  },
+  "schedulable": true,
+  "blocking": []
+}

@@ -151,6 +151,7 @@ export interface HumanIntervention {
 }
 
 export interface Task extends RuntimeProjection {
+  execution_released: boolean
   id: string
   source: string
   external_task_id: string | null

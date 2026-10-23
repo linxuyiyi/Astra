@@ -1,0 +1,22 @@
+[
+  {
+    "id": "xrj_e64423b9bd2f4cc3a9ac72fd27d25fc3",
+    "task_id": "T-20261023-2863C9",
+    "task_id_snapshot": "T-20261023-2863C9",
+    "root_session_id": "ses_e99b48b62ffeI6v9TH4NaefiDF",
+    "status": "RETRY_WAIT",
+    "phase": "COLLECTING",
+    "attempts": 2,
+    "source_message_count": 0,
+    "segment_count": 0,
+    "completed_segment_count": 0,
+    "candidate_ids": [],
+    "zero_reason": null,
+    "error_code": "source_unavailable",
+    "error_message": "读取原生轨迹失败: 工作区不在 Worker 根目录内",
+    "confirmed_at": "2026-10-23T01:12:27.999677Z",
+    "created_at": "2026-10-23T01:12:28.012708Z",
+    "finished_at": null,
+    "segments": []
+  }
+]

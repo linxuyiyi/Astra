@@ -49,7 +49,6 @@ def build_runtime_context_part(token: str) -> dict:
     return {
         "type": "text",
         "synthetic": True,
-        "ignored": True,
         "text": (
             "ASTRA_RUNTIME_CONTEXT: "
             + token

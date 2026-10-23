@@ -1,0 +1,288 @@
+[
+  {
+    "message_id": "msg_1671e49e30013NVUBR78OdvJWz",
+    "part_id": "prt_1671e4dc8001aeK2chfvYw4Gjm",
+    "text": "I'll start by exploring the workspace and searching the knowledge library."
+  },
+  {
+    "message_id": "msg_1671e49e30013NVUBR78OdvJWz",
+    "part_id": "prt_1671e4e20001lgsnPsJpIZDA6Y",
+    "tool": "bash",
+    "state": {
+      "status": "completed",
+      "input": {
+        "command": "ls -la && git status && git log --oneline -5"
+      },
+      "output": "total 20\ndrwxr-xr-x 2 root root 4096 Oct 23 12:56 .\ndrwxr-xr-x 5 root root 4096 Oct 23 12:56 ..\n-rw-r--r-- 1 root root   95 Oct 23 12:56 .git\n-rw-r--r-- 1 root root   72 Oct 23 12:56 README.md\n-rw-r--r-- 1 root root  172 Oct 23 12:56 result_summary.py\nNot currently on any branch.\nnothing to commit, working tree clean\nda575de test: seed duplicate-count defect\n",
+      "title": "ls -la && git status && git log --oneline -5",
+      "metadata": {
+        "output": "total 20\ndrwxr-xr-x 2 root root 4096 Oct 23 12:56 .\ndrwxr-xr-x 5 root root 4096 Oct 23 12:56 ..\n-rw-r--r-- 1 root root   95 Oct 23 12:56 .git\n-rw-r--r-- 1 root root   72 Oct 23 12:56 README.md\n-rw-r--r-- 1 root root  172 Oct 23 12:56 result_summary.py\nNot currently on any branch.\nnothing to commit, working tree clean\nda575de test: seed duplicate-count defect\n",
+        "exit": 0,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792731401833,
+        "end": 1792731401851
+      }
+    }
+  },
+  {
+    "message_id": "msg_1671e49e30013NVUBR78OdvJWz",
+    "part_id": "prt_1671e5068001rEdKAJMAEsQmlK",
+    "tool": "nexus-library_library_search",
+    "state": {
+      "status": "completed",
+      "input": {
+        "runtime_context": "[RUNTIME_CONTEXT_REDACTED]",
+        "query": "按业务键保序去重并保留最后一条记录"
+      },
+      "output": "{\n  \"resource_id\": \"wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md\",\n  \"title\": \"按业务键保序去重并保留最后一条记录\",\n  \"path\": \"wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md\",\n  \"excerpt\": \"--- type: source title: 按业务键保序去重并保留最后一条记录 created: 2026-10-23 updated: 2026-10-23 tags: [去重, 聚合统计, 保序覆盖, 结果汇总, 测试执行结果] re...\",\n  \"score\": 308.0\n}\n\n{\n  \"resource_id\": \"wiki/concepts/按业务键保序去重.md\",\n  \"title\": \"按业务键保序去重\",\n  \"path\": \"wiki/concepts/按业务键保序去重.md\",\n  \"excerpt\": \"...ces: [\\\"astra/knowledge/KNOW_53022A1009074C6E95B4.md\\\"] ---  # 按业务键保序去重  按业务键保序去重是一种以业务键（如 `(run_id, case_id)`）为字典键、按输入顺序遍历写入的技术：后写覆盖先写，从而同时实现\\\"保持输入顺序\\\"与\\\"每个键只保留最后一条记...\",\n  \"score\": 105.0\n}\n\n{\n  \"resource_id\": \"wiki/index.md\",\n  \"title\": \"Wiki Index\",\n  \"path\": \"wiki/index.md\",\n  \"excerpt\": \"...dated - [[sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91]] — 按业务键保序去重并保留最后一条记录 - [[concepts/按业务键保序去重]] — 按业务键保序去重 - [[concepts/去重后聚合]] — 去重后聚合 - [[sources/5-a...\",\n  \"score\": 53.0\n}\n\n{\n  \"resource_id\": \"wiki/log.md\",\n  \"title\": \"Research Log\",\n  \"path\": \"wiki/log.md\",\n  \"excerpt\": \"...pts/低信息量测试记录]] 及查询 [[queries/测试性质经验记录是否应纳入正式知识库]] 相关。  ## [2026-10-23] ingest | 按业务键保序去重并保留最后一条记录  - 新增来源页 [[5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91]]，记录 astra...\",\n  \"score\": 53.0\n}\n\n{\n  \"resource_id\": \"wiki/concepts/去重后聚合.md\",\n  \"title\": \"去重后聚合\",\n  \"path\": \"wiki/concepts/去重后聚合.md\",\n  \"excerpt\": \"...passed）时，对去重后的记录集合（`dict.values()`）而非原始输入行（`rows`）进行聚合。  ## 为什么重要  当输入是追加式记录列表且同一业务键可能出现多次时，直接对原始行计数会把重复记录重复计入，导致指标系统性偏高。状态反转场景（同一键先 failed 后 passed）下，原始行计数还会同时计...\",\n  \"score\": 48.0\n}\n\n{\n  \"resource_id\": \"wiki/concepts/低信息量测试记录.md\",\n  \"title\": \"低信息量测试记录\",\n  \"path\": \"wiki/concepts/低信息量测试记录.md\",\n  \"excerpt\": \"...AACC2.md\\\", \\\"astra/knowledge/KNOW_C45AC55FDD224171BEA1.md\\\"] ---  # 低信息量测试记录  本概念指一类信息密度极低的测试记录：条目虽被写入知识库，但除标题、时间戳与一句目标/期望外，几乎不携带可复用的技术信息。它们通常由批量流程生成，同质化程度高，既无法复现、...\",\n  \"score\": 31.0\n}\n\n{\n  \"resource_id\": \"wiki/concepts/无结论测试记录.md\",\n  \"title\": \"无结论测试记录\",\n  \"path\": \"wiki/concepts/无结论测试记录.md\",\n  \"excerpt\": \"...录测试意图或现象、未给出明确通过或失败结论的记录；此类记录通常缺少执行步骤、请求/响应样本、日志与判定依据。  ### 各来源版本的展开定义  多个来源版本对同一概念各有侧重，均指向「目的—结果」缺口或「缺少验证结果」这一核心，分别保留如下：  - **定义 A（既有版本 on-disk）**：「无结论测试记录」指一类测...\",\n  \"score\": 29.0\n}\n\n{\n  \"resource_id\": \"wiki/concepts/流水线-50004-e2e-测试批次.md\",\n  \"title\": \"流水线 50004 E2E 测试批次\",\n  \"path\": \"wiki/concepts/流水线-50004-e2e-测试批次.md\",\n  \"excerpt\": \"...] ---  # 流水线 50004 E2E 测试批次  「流水线 50004 E2E 测试批次」指在「流水线」场景下反复执行、以 `50004` 为共同现象的一批 E2E 测试记录。这些记录以 `流水线 50004 E2E <时间戳>` 的形式命名，彼此高度同构。  ## 共同特征  - 场景固定为「流水线」； - 现...\",\n  \"score\": 7.0\n}\n\n{\n  \"resource_id\": \"wiki/concepts/平铺空间响应与知识详情的隔离性.md\",\n  \"title\": \"平铺空间响应与知识详情的隔离性\",\n  \"path\": \"wiki/concepts/平铺空间响应与知识详情的隔离性.md\",\n  \"excerpt\": \"...空间响应与知识详情的隔离性  ## 定义  「平铺空间响应与知识详情的隔离性」指 [[平铺空间响应]] 与 [[知识详情]] 之间互不干扰的关系。各来源版本对同一对象给出了互补的表述，分列如下：  - **既有版本（对应来源一至来源四）**：指两者之间应互不干扰的**期望关系**——平铺空间响应的渲染行为（或数据变化）不...\",\n  \"score\": 15.0\n}\n\n{\n  \"resource_id\": \"wiki/sources/5-astra--9-knowledge--24-know09b47e81df9f4399b5ec--jmdvkm.md\",\n  \"title\": \"平铺空间 E2E 1790651301678\",\n  \"path\": \"wiki/sources/5-astra--9-knowledge--24-know09b47e81df9f4399b5ec--jmdvkm.md\",\n  \"excerpt\": \"... 2026 url: \\\"\\\" venue: \\\"\\\" ---  # 平铺空间 E2E 1790651301678  ## 来源概述  本来源是 astra 知识库中的一条 `experience` 类型条目，标题为「平铺空间 E2E 1790651301678」，属于批量生成的平铺空间 E2E 测试记录之一。条目内容极短，仅包...\",\n  \"score\": 7.0\n}",
+      "title": "",
+      "metadata": {
+        "truncated": false
+      },
+      "time": {
+        "start": 1792731402381,
+        "end": 1792731402529
+      }
+    }
+  },
+  {
+    "message_id": "msg_1671e512e00131OJiqst0nvJTH",
+    "part_id": "prt_1671e54b5001PYXoefNPQCg32W",
+    "tool": "nexus-library_library_get",
+    "state": {
+      "status": "completed",
+      "input": {
+        "runtime_context": "[RUNTIME_CONTEXT_REDACTED]",
+        "resource_id": "wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md"
+      },
+      "output": "{\n  \"resource_id\": \"wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md\",\n  \"path\": \"wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md\",\n  \"content_md\": \"---\\ntype: source\\ntitle: 按业务键保序去重并保留最后一条记录\\ncreated: 2026-10-23\\nupdated: 2026-10-23\\ntags: [去重, 聚合统计, 保序覆盖, 结果汇总, 测试执行结果]\\nrelated: [按业务键保序去重, 去重后聚合, 流水线-50004-e2e-测试批次, 测试性质经验记录是否应纳入正式知识库, 期望陈述型测试记录, 低信息量测试记录]\\nsources: [\\\"astra/knowledge/KNOW_53022A1009074C6E95B4.md\\\"]\\nauthors: []\\nyear: 2026\\nurl: \\\"\\\"\\nvenue: \\\"astra knowledge\\\"\\n---\\n\\n# 按业务键保序去重并保留最后一条记录\\n\\n本页是 astra 知识条目 `KNOW_53022A1009074C6E95B4` 的来源摘要。该条目类型为 `experience`（经验型知识），归属知识空间 `SPACE_AF500E3D93444E508E1F`，最后更新时间为 `2026-10-23T01:21:17.197378+00:00`。\\n\\n## 元数据\\n\\n| 字段 | 值 |\\n|------|-----|\\n| astra_knowledge_id | `KNOW_53022A1009074C6E95B4` |\\n| title | 按业务键保序去重并保留最后一条记录 |\\n| type | `experience` |\\n| space_id | `SPACE_AF500E3D93444E508E1F` |\\n| tags | 去重、聚合统计、保序覆盖、结果汇总 |\\n| updated_at | `2026-10-23T01:21:17.197378+00:00` |\\n\\n## 核心主张\\n\\n当统计口径要求每个 `(run_id, case_id)` 只计一次且以最后写入为准时，应先用字典按该业务键顺序写入（后写覆盖先写），再对去重后的值聚合，避免对原始行直接计数。\\n\\n## 适用场景\\n\\n输入是追加式的记录列表（如测试执行结果表），同一业务键 `(run_id, case_id)` 可能出现多次，且语义上\\\"最后一次记录才是最终状态\\\"。\\n\\n## 错误做法\\n\\n直接 `total = len(rows)` 并逐行累加 `passed`：重复记录被重复计数，状态反转（先 failed 后 passed 或反之）时无法只反映最后结果，指标系统性偏高。\\n\\n## 正确做法\\n\\n1. 以 `(run_id, case_id)` 为键构建 dict，按输入顺序遍历写入，后写覆盖先写——自然实现\\\"保序 + 只保留最后一条\\\"，无需额外排序或分组。\\n2. 对 `dict.values()` 做 total 与 passed 的聚合，而不是对原始 rows。\\n3. 状态判定只读取被保留下来的那条记录的状态字段。\\n\\n## 验证方式\\n\\n用重复相同结果与重复状态反转两类用例对比修复前后输出：\\n\\n| 输入场景 | 期望输出 | 错误输出 |\\n|----------|----------|----------|\\n| 2 条相同 passed 记录 | `{total:1, passed:1}` | `{total:2, passed:2}` |\\n| 先 passed 后 failed | `{total:1, passed:0}` | `{total:2, passed:1}` |\\n\\n## 与现有 wiki 的关联\\n\\n- 本条目描述的输入形态（追加式测试执行结果列表）与 [[流水线-50004-e2e-测试批次]] 及多个 `流水线 50004 E2E` 测试批次样本页一致，可作为这些页面统计口径的参考。\\n- 本条目本身是一条经验型知识，可作为 [[测试性质经验记录是否应纳入正式知识库]] 的样本证据。\\n- 与 [[期望陈述型测试记录]]、[[低信息量测试记录]] 同属\\\"测试记录质量与统计口径\\\"主题簇。\\n\\n## 局限与待确认问题\\n\\n- 条目假设\\\"最后一次记录才是最终状态\\\"，但未讨论输入顺序是否可信（并发写入、时间戳乱序、分页拉取导致顺序错乱）。若输入顺序不可靠，保序覆盖会静默给出错误结果。\\n- 仅覆盖单机内存 dict 场景，未涉及大数据量、分布式聚合或 SQL 侧 `ROW_NUMBER() OVER (PARTITION BY ...)` 等替代实现。\\n- 现有 E2E 测试批次页的通过率统计是否已采用此口径尚不明确，若否，历史指标可能需要重算。\\n\\n详见 [[按业务键保序去重]] 与 [[去重后聚合]]。\"\n}",
+      "title": "",
+      "metadata": {
+        "truncated": false
+      },
+      "time": {
+        "start": 1792731403740,
+        "end": 1792731403765
+      }
+    }
+  },
+  {
+    "message_id": "msg_1671e512e00131OJiqst0nvJTH",
+    "part_id": "prt_1671e55ec001fqXMNJWpFl1N8L",
+    "tool": "read",
+    "state": {
+      "status": "completed",
+      "input": {
+        "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/result_summary.py"
+      },
+      "output": "<path>/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/result_summary.py</path>\n<type>file</type>\n<content>\n1: def summarize(rows):\n2:     # Defect: duplicate test results are counted multiple times.\n3:     return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n\n(End of file - total 3 lines)\n</content>",
+      "title": "result_summary.py",
+      "metadata": {
+        "preview": "def summarize(rows):\n    # Defect: duplicate test results are counted multiple times.\n    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}",
+        "truncated": false,
+        "loaded": [],
+        "display": {
+          "type": "file",
+          "path": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/result_summary.py",
+          "text": "def summarize(rows):\n    # Defect: duplicate test results are counted multiple times.\n    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}",
+          "lineStart": 1,
+          "lineEnd": 3,
+          "totalLines": 3,
+          "truncated": false
+        }
+      },
+      "time": {
+        "start": 1792731403948,
+        "end": 1792731403960
+      }
+    }
+  },
+  {
+    "message_id": "msg_1671e512e00131OJiqst0nvJTH",
+    "part_id": "prt_1671e56d6001Deok8QlKUYgzua",
+    "tool": "read",
+    "state": {
+      "status": "completed",
+      "input": {
+        "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/README.md"
+      },
+      "output": "<path>/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/README.md</path>\n<type>file</type>\n<content>\n1: # Nexus Worker QA\n2: Isolated real execution fixture. No production files.\n\n(End of file - total 2 lines)\n</content>",
+      "title": "README.md",
+      "metadata": {
+        "preview": "# Nexus Worker QA\nIsolated real execution fixture. No production files.",
+        "truncated": false,
+        "loaded": [],
+        "display": {
+          "type": "file",
+          "path": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/README.md",
+          "text": "# Nexus Worker QA\nIsolated real execution fixture. No production files.",
+          "lineStart": 1,
+          "lineEnd": 2,
+          "totalLines": 2,
+          "truncated": false
+        }
+      },
+      "time": {
+        "start": 1792731404133,
+        "end": 1792731404144
+      }
+    }
+  },
+  {
+    "message_id": "msg_1671e5792001aw1gt0q0Z6JVyB",
+    "part_id": "prt_1671e5d2a001FHijMHO2OBdmqb",
+    "text": "知识源已实际命中并读取（源知识 ID `KNOW_53022A1009074C6E95B4`）。现在先编写四类测试，运行以复现旧缺陷。"
+  },
+  {
+    "message_id": "msg_1671e5792001aw1gt0q0Z6JVyB",
+    "part_id": "prt_1671e5e0e001q5P1AMQoBt4rrG",
+    "tool": "write",
+    "state": {
+      "status": "completed",
+      "input": {
+        "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/test_result_summary.py",
+        "content": "import unittest\n\nfrom result_summary import summarize\n\n\nclass SummarizeTest(unittest.TestCase):\n    def test_duplicate_identical_results(self):\n        rows = [\n            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n        ]\n        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n\n    def test_duplicate_status_reversal(self):\n        rows = [\n            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"failed\"},\n        ]\n        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\n\n    def test_same_case_different_runs(self):\n        rows = [\n            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n            {\"run_id\": 2, \"case_id\": \"a\", \"status\": \"failed\"},\n        ]\n        self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n\n    def test_empty_input(self):\n        self.assertEqual(summarize([]), {\"total\": 0, \"passed\": 0})\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+      },
+      "output": "Wrote file successfully.",
+      "title": "test_result_summary.py",
+      "metadata": {
+        "diagnostics": {},
+        "filepath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/test_result_summary.py",
+        "exists": false,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792731406879,
+        "end": 1792731406883
+      }
+    }
+  },
+  {
+    "message_id": "msg_1671e62570014hej1FgVXc6hkx",
+    "part_id": "prt_1671e64fe001MGUgJr3LHBhlUz",
+    "tool": "bash",
+    "state": {
+      "status": "completed",
+      "input": {
+        "command": "python3 -m unittest -v 2>&1"
+      },
+      "output": "test_duplicate_identical_results (test_result_summary.SummarizeTest.test_duplicate_identical_results) ... FAIL\ntest_duplicate_status_reversal (test_result_summary.SummarizeTest.test_duplicate_status_reversal) ... FAIL\ntest_empty_input (test_result_summary.SummarizeTest.test_empty_input) ... ok\ntest_same_case_different_runs (test_result_summary.SummarizeTest.test_same_case_different_runs) ... ok\n\n======================================================================\nFAIL: test_duplicate_identical_results (test_result_summary.SummarizeTest.test_duplicate_identical_results)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/test_result_summary.py\", line 12, in test_duplicate_identical_results\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\nAssertionError: {'total': 2, 'passed': 2} != {'total': 1, 'passed': 1}\n- {'passed': 2, 'total': 2}\n?            ^           ^\n\n+ {'passed': 1, 'total': 1}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_duplicate_status_reversal (test_result_summary.SummarizeTest.test_duplicate_status_reversal)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/test_result_summary.py\", line 19, in test_duplicate_status_reversal\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\nAssertionError: {'total': 2, 'passed': 1} != {'total': 1, 'passed': 0}\n- {'passed': 1, 'total': 2}\n?            ^           ^\n\n+ {'passed': 0, 'total': 1}\n?            ^           ^\n\n\n----------------------------------------------------------------------\nRan 4 tests in 0.000s\n\nFAILED (failures=2)\n",
+      "title": "python3 -m unittest -v 2>&1",
+      "metadata": {
+        "output": "test_duplicate_identical_results (test_result_summary.SummarizeTest.test_duplicate_identical_results) ... FAIL\ntest_duplicate_status_reversal (test_result_summary.SummarizeTest.test_duplicate_status_reversal) ... FAIL\ntest_empty_input (test_result_summary.SummarizeTest.test_empty_input) ... ok\ntest_same_case_different_runs (test_result_summary.SummarizeTest.test_same_case_different_runs) ... ok\n\n======================================================================\nFAIL: test_duplicate_identical_results (test_result_summary.SummarizeTest.test_duplicate_identical_results)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/test_result_summary.py\", line 12, in test_duplicate_identical_results\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\nAssertionError: {'total': 2, 'passed': 2} != {'total': 1, 'passed': 1}\n- {'passed': 2, 'total': 2}\n?            ^           ^\n\n+ {'passed': 1, 'total': 1}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_duplicate_status_reversal (test_result_summary.SummarizeTest.test_duplicate_status_reversal)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/test_result_summary.py\", line 19, in test_duplicate_status_reversal\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\nAssertionError: {'total': 2, 'passed': 1} != {'total': 1, 'passed': 0}\n- {'passed': 1, 'total': 2}\n?            ^           ^\n\n+ {'passed': 0, 'total': 1}\n?            ^           ^\n\n\n----------------------------------------------------------------------\nRan 4 tests in 0.000s\n\nFAILED (failures=2)\n",
+        "exit": 1,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792731407697,
+        "end": 1792731407732
+      }
+    }
+  },
+  {
+    "message_id": "msg_1671e65930015iQpSXsEP5dU3Q",
+    "part_id": "prt_1671e68c0001MeLM54qT0AyqB1",
+    "text": "旧缺陷已复现（2 个失败）。按来源页方法做最小修复："
+  },
+  {
+    "message_id": "msg_1671e65930015iQpSXsEP5dU3Q",
+    "part_id": "prt_1671e68cd001tRnFOOwzLt6GEi",
+    "tool": "write",
+    "state": {
+      "status": "completed",
+      "input": {
+        "content": "def summarize(rows):\n    latest = {}\n    for row in rows:\n        latest[(row[\"run_id\"], row[\"case_id\"])] = row\n    return {\n        \"total\": len(latest),\n        \"passed\": sum(r[\"status\"] == \"passed\" for r in latest.values()),\n    }\n",
+        "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/result_summary.py"
+      },
+      "output": "Wrote file successfully.",
+      "title": "result_summary.py",
+      "metadata": {
+        "diagnostics": {},
+        "filepath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5/result_summary.py",
+        "exists": true,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792731408992,
+        "end": 1792731408996
+      }
+    }
+  },
+  {
+    "message_id": "msg_1671e6a930017MJOIefVs9lY3E",
+    "part_id": "prt_1671e6e4b001x7oX4JVbDQiwq6",
+    "tool": "bash",
+    "state": {
+      "status": "completed",
+      "input": {
+        "command": "python3 -m unittest -v 2>&1; echo \"---DIFF---\"; git diff -- result_summary.py test_result_summary.py; echo \"---STATUS---\"; git status --short"
+      },
+      "output": "test_duplicate_identical_results (test_result_summary.SummarizeTest.test_duplicate_identical_results) ... ok\ntest_duplicate_status_reversal (test_result_summary.SummarizeTest.test_duplicate_status_reversal) ... ok\ntest_empty_input (test_result_summary.SummarizeTest.test_empty_input) ... ok\ntest_same_case_different_runs (test_result_summary.SummarizeTest.test_same_case_different_runs) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.000s\n\nOK\n---DIFF---\ndiff --git a/result_summary.py b/result_summary.py\nindex b04a211..0eaa812 100644\n--- a/result_summary.py\n+++ b/result_summary.py\n@@ -1,3 +1,8 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        latest[(row[\"run_id\"], row[\"case_id\"])] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(r[\"status\"] == \"passed\" for r in latest.values()),\n+    }\n---STATUS---\n M result_summary.py\n?? __pycache__/\n?? test_result_summary.py\n",
+      "title": "python3 -m unittest -v 2>&1; echo \"---DIFF---\"; git diff -- result_summary.py test_result_summary.py; echo \"---STATUS---\"; git status --short",
+      "metadata": {
+        "output": "test_duplicate_identical_results (test_result_summary.SummarizeTest.test_duplicate_identical_results) ... ok\ntest_duplicate_status_reversal (test_result_summary.SummarizeTest.test_duplicate_status_reversal) ... ok\ntest_empty_input (test_result_summary.SummarizeTest.test_empty_input) ... ok\ntest_same_case_different_runs (test_result_summary.SummarizeTest.test_same_case_different_runs) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.000s\n\nOK\n---DIFF---\ndiff --git a/result_summary.py b/result_summary.py\nindex b04a211..0eaa812 100644\n--- a/result_summary.py\n+++ b/result_summary.py\n@@ -1,3 +1,8 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        latest[(row[\"run_id\"], row[\"case_id\"])] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(r[\"status\"] == \"passed\" for r in latest.values()),\n+    }\n---STATUS---\n M result_summary.py\n?? __pycache__/\n?? test_result_summary.py\n",
+        "exit": 0,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792731410155,
+        "end": 1792731410193
+      }
+    }
+  },
+  {
+    "message_id": "msg_1671e6f30001M4Sl2RnYoWWt4z",
+    "part_id": "prt_1671e7411001uyqC6cq88RLIkH",
+    "tool": "bash",
+    "state": {
+      "status": "completed",
+      "input": {
+        "command": "rm -rf __pycache__; git diff --no-index /dev/null test_result_summary.py; echo \"---STATUS---\"; git status --short"
+      },
+      "output": "diff --git a/test_result_summary.py b/test_result_summary.py\nnew file mode 100644\nindex 0000000..a015daf\n--- /dev/null\n+++ b/test_result_summary.py\n@@ -0,0 +1,33 @@\n+import unittest\n+\n+from result_summary import summarize\n+\n+\n+class SummarizeTest(unittest.TestCase):\n+    def test_duplicate_identical_results(self):\n+        rows = [\n+            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n+            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n+\n+    def test_duplicate_status_reversal(self):\n+        rows = [\n+            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n+            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"failed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\n+\n+    def test_same_case_different_runs(self):\n+        rows = [\n+            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n+            {\"run_id\": 2, \"case_id\": \"a\", \"status\": \"failed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n+\n+    def test_empty_input(self):\n+        self.assertEqual(summarize([]), {\"total\": 0, \"passed\": 0})\n+\n+\n+if __name__ == \"__main__\":\n+    unittest.main()\n---STATUS---\n M result_summary.py\n?? test_result_summary.py\n",
+      "title": "rm -rf __pycache__; git diff --no-index /dev/null test_result_summary.py; echo \"---STATUS---\"; git status --short",
+      "metadata": {
+        "output": "diff --git a/test_result_summary.py b/test_result_summary.py\nnew file mode 100644\nindex 0000000..a015daf\n--- /dev/null\n+++ b/test_result_summary.py\n@@ -0,0 +1,33 @@\n+import unittest\n+\n+from result_summary import summarize\n+\n+\n+class SummarizeTest(unittest.TestCase):\n+    def test_duplicate_identical_results(self):\n+        rows = [\n+            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n+            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n+\n+    def test_duplicate_status_reversal(self):\n+        rows = [\n+            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n+            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"failed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\n+\n+    def test_same_case_different_runs(self):\n+        rows = [\n+            {\"run_id\": 1, \"case_id\": \"a\", \"status\": \"passed\"},\n+            {\"run_id\": 2, \"case_id\": \"a\", \"status\": \"failed\"},\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n+\n+    def test_empty_input(self):\n+        self.assertEqual(summarize([]), {\"total\": 0, \"passed\": 0})\n+\n+\n+if __name__ == \"__main__\":\n+    unittest.main()\n---STATUS---\n M result_summary.py\n?? test_result_summary.py\n",
+        "exit": 0,
+        "truncated": false
+      },
+      "time": {
+        "start": 1792731411599,
+        "end": 1792731411608
+      }
+    }
+  },
+  {
+    "message_id": "msg_1671e74ba001L6nLF7Qq0rFspo",
+    "part_id": "prt_1671e77ab001TBqkmOCPYchcAR",
+    "text": "已完成，等待人工确认。\n\n**1. 知识来源（AC-01）**\n- `library_search` 查询词：`按业务键保序去重并保留最后一条记录`\n- 返回来源页：`wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md`（标题一致，score 308）\n- 已通过 `library_get` 实际读取该页，页内元数据确认 `astra_knowledge_id = KNOW_53022A1009074C6E95B4`，type `experience`。\n\n**2. 完成内容与关键修改（AC-02/03）**\n仅采用该页「以 `(run_id, case_id)` 为键按输入顺序写入、后写覆盖、再对 `dict.values()` 聚合」的方法：\n- `result_summary.py`：改为字典保序覆盖去重，对去重后的值计算 `total` 与 `passed`。\n- `test_result_summary.py`：新增四类用例（重复相同结果、重复状态反转、不同 run 同 case、空输入）。\n\n**3. 验证（AC-04/05）**\n- 命令：`python3 -m unittest -v`\n- 修复前：2 失败（重复相同结果得到 `{total:2,passed:2}`；状态反转得到 `{total:2,passed:1}`），复现旧缺陷。\n- 修复后：4 个测试全部 OK。\n- 工作区变更仅两文件：`M result_summary.py`、`?? test_result_summary.py`（临时 `__pycache__` 已清理），未 push。\n\n两文件 diff 已在上述命令输出中完整展示。"
+  },
+  {
+    "message_id": "msg_167210519001ZHmIukhUN4651l",
+    "part_id": "prt_167210a8c001YrbUkavVF3L1RB",
+    "tool": "nexus-library_library_get",
+    "state": {
+      "status": "completed",
+      "input": {
+        "resource_id": "wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md",
+        "runtime_context": "[RUNTIME_CONTEXT_REDACTED]"
+      },
+      "output": "{\n  \"resource_id\": \"wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md\",\n  \"path\": \"wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md\",\n  \"content_md\": \"---\\ntype: source\\ntitle: 按业务键保序去重并保留最后一条记录\\ncreated: 2026-10-23\\nupdated: 2026-10-23\\ntags: [去重, 聚合统计, 保序覆盖, 结果汇总, 测试执行结果]\\nrelated: [按业务键保序去重, 去重后聚合, 流水线-50004-e2e-测试批次, 测试性质经验记录是否应纳入正式知识库, 期望陈述型测试记录, 低信息量测试记录]\\nsources: [\\\"astra/knowledge/KNOW_53022A1009074C6E95B4.md\\\"]\\nauthors: []\\nyear: 2026\\nurl: \\\"\\\"\\nvenue: \\\"astra knowledge\\\"\\n---\\n\\n# 按业务键保序去重并保留最后一条记录\\n\\n本页是 astra 知识条目 `KNOW_53022A1009074C6E95B4` 的来源摘要。该条目类型为 `experience`（经验型知识），归属知识空间 `SPACE_AF500E3D93444E508E1F`，最后更新时间为 `2026-10-23T01:21:17.197378+00:00`。\\n\\n## 元数据\\n\\n| 字段 | 值 |\\n|------|-----|\\n| astra_knowledge_id | `KNOW_53022A1009074C6E95B4` |\\n| title | 按业务键保序去重并保留最后一条记录 |\\n| type | `experience` |\\n| space_id | `SPACE_AF500E3D93444E508E1F` |\\n| tags | 去重、聚合统计、保序覆盖、结果汇总 |\\n| updated_at | `2026-10-23T01:21:17.197378+00:00` |\\n\\n## 核心主张\\n\\n当统计口径要求每个 `(run_id, case_id)` 只计一次且以最后写入为准时，应先用字典按该业务键顺序写入（后写覆盖先写），再对去重后的值聚合，避免对原始行直接计数。\\n\\n## 适用场景\\n\\n输入是追加式的记录列表（如测试执行结果表），同一业务键 `(run_id, case_id)` 可能出现多次，且语义上\\\"最后一次记录才是最终状态\\\"。\\n\\n## 错误做法\\n\\n直接 `total = len(rows)` 并逐行累加 `passed`：重复记录被重复计数，状态反转（先 failed 后 passed 或反之）时无法只反映最后结果，指标系统性偏高。\\n\\n## 正确做法\\n\\n1. 以 `(run_id, case_id)` 为键构建 dict，按输入顺序遍历写入，后写覆盖先写——自然实现\\\"保序 + 只保留最后一条\\\"，无需额外排序或分组。\\n2. 对 `dict.values()` 做 total 与 passed 的聚合，而不是对原始 rows。\\n3. 状态判定只读取被保留下来的那条记录的状态字段。\\n\\n## 验证方式\\n\\n用重复相同结果与重复状态反转两类用例对比修复前后输出：\\n\\n| 输入场景 | 期望输出 | 错误输出 |\\n|----------|----------|----------|\\n| 2 条相同 passed 记录 | `{total:1, passed:1}` | `{total:2, passed:2}` |\\n| 先 passed 后 failed | `{total:1, passed:0}` | `{total:2, passed:1}` |\\n\\n## 与现有 wiki 的关联\\n\\n- 本条目描述的输入形态（追加式测试执行结果列表）与 [[流水线-50004-e2e-测试批次]] 及多个 `流水线 50004 E2E` 测试批次样本页一致，可作为这些页面统计口径的参考。\\n- 本条目本身是一条经验型知识，可作为 [[测试性质经验记录是否应纳入正式知识库]] 的样本证据。\\n- 与 [[期望陈述型测试记录]]、[[低信息量测试记录]] 同属\\\"测试记录质量与统计口径\\\"主题簇。\\n\\n## 局限与待确认问题\\n\\n- 条目假设\\\"最后一次记录才是最终状态\\\"，但未讨论输入顺序是否可信（并发写入、时间戳乱序、分页拉取导致顺序错乱）。若输入顺序不可靠，保序覆盖会静默给出错误结果。\\n- 仅覆盖单机内存 dict 场景，未涉及大数据量、分布式聚合或 SQL 侧 `ROW_NUMBER() OVER (PARTITION BY ...)` 等替代实现。\\n- 现有 E2E 测试批次页的通过率统计是否已采用此口径尚不明确，若否，历史指标可能需要重算。\\n\\n详见 [[按业务键保序去重]] 与 [[去重后聚合]]。\"\n}",
+      "title": "",
+      "metadata": {
+        "truncated": false
+      },
+      "time": {
+        "start": 1792731581385,
+        "end": 1792731581430
+      }
+    }
+  },
+  {
+    "message_id": "msg_167210c09001dkobhb2H8tSwmI",
+    "part_id": "prt_167210ef6001RWe8pJXCFQSGeQ",
+    "text": "只读验收完成，未修改或重跑代码。\n\n**来源复核**\n- 页面：`wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md`（`library_get` 二次实际读取成功）\n- 源 ID：`KNOW_53022A1009074C6E95B4`，与首次命中一致；type `experience`，space `SPACE_AF500E3D93444E508E1F`。\n- 去重方法一致：以 `(run_id, case_id)` 为键按输入顺序写入、后写覆盖先写，再对 `dict.values()` 聚合 total 与 passed，状态判定只读保留记录。\n\n**上次运行的 4 个测试结果**（`python3 -m unittest -v`，修复后）\n1. `test_duplicate_identical_results` — ok（`{total:1, passed:1}`）\n2. `test_duplicate_status_reversal` — ok（`{total:1, passed:0}`）\n3. `test_same_case_different_runs` — ok（`{total:2, passed:1}`）\n4. `test_empty_input` — ok（`{total:0, passed:0}`）\n\n合计 4 tests, OK。未自行确认任务完成，等待人工确认。"
+  }
+]

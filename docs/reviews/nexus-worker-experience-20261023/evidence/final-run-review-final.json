@@ -1,0 +1,33 @@
+{
+  "id": "xrj_1425c93e8c744faa9e07db44872079c8",
+  "task_id": "T-20261023-A0C02E",
+  "task_id_snapshot": "T-20261023-A0C02E",
+  "root_session_id": "ses_e98d3291effeMWL171XBlwwp6q",
+  "status": "SUCCEEDED",
+  "phase": "WRITING",
+  "attempts": 0,
+  "source_message_count": 11,
+  "segment_count": 1,
+  "completed_segment_count": 1,
+  "candidate_ids": [
+    "KNOW_EA03BC68011B4EBCBF9F",
+    "KNOW_70CE9E7AB38C437B8DF2",
+    "KNOW_BC83ED654FE246618BBA"
+  ],
+  "zero_reason": null,
+  "error_code": null,
+  "error_message": null,
+  "confirmed_at": "2026-10-23T05:14:29.580986Z",
+  "created_at": "2026-10-23T05:14:29.582190Z",
+  "finished_at": "2026-10-23T05:14:56.611385Z",
+  "segments": [
+    {
+      "id": 3,
+      "segment_index": 0,
+      "status": "DONE",
+      "token_estimate": 3753,
+      "attempts": 0,
+      "error_code": null
+    }
+  ]
+}

@@ -272,6 +272,8 @@ async def _finish(
             status=status,
             zero_reason=zero_reason,
             candidate_ids=candidate_ids or [],
+            error_code=None,
+            error_message=None,
             finished_at=_now(),
             lease_owner=None,
             lease_token=None,

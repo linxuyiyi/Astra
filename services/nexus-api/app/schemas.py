@@ -280,6 +280,7 @@ class TaskUpdate(BaseModel):
 
 
 class TaskRead(RuntimeRead):
+    execution_released: bool
     id: str
     source: str
     external_task_id: str | None

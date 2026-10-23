@@ -1,0 +1,117 @@
+{
+  "source_base_commit": "174bcbd9949797995751dda596010902f64e2f1f",
+  "branch": "codex/nexus-interaction-fixes",
+  "worktree": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra",
+  "processes": {
+    "redis": {
+      "pid": 93080,
+      "create_time": 1792716550.916329,
+      "cwd": "/tmp/nexus-worker-experience-20261023",
+      "actual_cwd": "/private/tmp/nexus-worker-experience-20261023/redis",
+      "identity_verified": true
+    },
+    "api": {
+      "pid": 52594,
+      "create_time": 1792731768.404518,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "taskmcp": {
+      "pid": 52052,
+      "create_time": 1792731301.270341,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "agent": {
+      "pid": 93083,
+      "create_time": 1792716550.921804,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/agent-service",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/agent-service",
+      "identity_verified": true
+    },
+    "tunnel": {
+      "pid": 93966,
+      "create_time": 1792717367.144581,
+      "cwd": "/tmp/nexus-worker-experience-20261023",
+      "actual_cwd": "/private/tmp/nexus-worker-experience-20261023",
+      "identity_verified": true
+    },
+    "librarymcp": {
+      "pid": 52598,
+      "create_time": 1792731768.698456,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "gateway": {
+      "pid": 93965,
+      "create_time": 1792717367.142531,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "celery": {
+      "pid": 52065,
+      "create_time": 1792731302.308667,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "beat": {
+      "pid": 94194,
+      "create_time": 1792717524.00689,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    }
+  },
+  "agentscope_version": "2.0.10",
+  "worker_vm": "nexus-v145-qa / Ubuntu arm64 / systemd",
+  "actual_worker_versions_services": [
+    "1.18.35",
+    "active",
+    "active"
+  ],
+  "ports": {
+    "api": 18520,
+    "agentscope": 18500,
+    "task_mcp": 18502,
+    "library_mcp": 18512,
+    "gateway": 18511,
+    "redis": 18579,
+    "wiki_existing": 19828
+  },
+  "executor_type": "worker",
+  "database": "isolated SQLite copied fixture; separate fresh MySQL 8.0.36 targeted checks",
+  "wiki": "existing configured actual project; QA source publication",
+  "source_sha256": {
+    "services/agent-service/skills/task-management/SKILL.md": "d6fec6291548a3bdb47d30597adc85b75c68120193bf7bead68c1340fd1edfbf",
+    "services/nexus-api/app/api/workspace_routes.py": "6c0851a26ad055953da1a09e958d104d27db2f7129089612f806d6cf19ab45c6",
+    "services/nexus-api/app/library_service.py": "1d1b0b1ad7f12fb9b807c08c79fba0eff088ef55da189ab4d3a531fe51f59a99",
+    "services/nexus-api/app/models.py": "91e640d6a7b0386429e92308bc75c81e322837e24b366c18d2a6f5c555ae8a71",
+    "services/nexus-api/app/runtime/experience_review/candidate_writer.py": "9f0c8d2b1b676d8e1d606297978d870f053d100269647b406f054901cb297acd",
+    "services/nexus-api/app/runtime/experience_review/coordinator.py": "33e4d5f932ceec4483b29ef9e1e292bd63c3245eee36b87c182c2bfe66462a30",
+    "services/nexus-api/app/runtime/experience_review/evidence.py": "2a3edba63f32c1fb8eb4fe30d2475b4b9723e51c092a097f09a2016ad4f61854",
+    "services/nexus-api/app/runtime/experience_review/trace_normalizer.py": "bb0ce1253ca716b4a54157735fd37c58524fe7b1011f9e734a7cf279a2daac14",
+    "services/nexus-api/app/runtime/redaction.py": "acfb1dca1e810ac35b21acd477ec67e0a726891d763ed9367d7984b16358a001",
+    "services/nexus-api/app/runtime/runtime_context.py": "91ce62b1008b01445be7e7d33812e5dc5471684bff2eca89b99383aedea065ab",
+    "services/nexus-api/app/runtime/task_wakeup.py": "ddb8abb04b4c2251fb55e0ace045609b3b3a8847e5305939f1c13de95ee2e8a0",
+    "services/nexus-api/app/schemas.py": "a7fd7b6ee1946b2a6398daca03ac3f0232aa04ed0109f5f5da95128af2e7d2ce",
+    "services/nexus-api/app/task_mcp.py": "1d0ed94587fdde931d42dba7e79751cf9928c506257780233fad223f4de47359",
+    "services/nexus-api/app/task_tools.py": "d9c9196d6273269120f6cd89289a288b3d93676f6216aaaf149733907c301e79",
+    "services/nexus-api/app/worker_agent/trace_read.py": "b1b26a5957433309f0712b4dd0f5c579f5ea0e10b8b7891b7b500f6a619923e7",
+    "services/nexus-api/nexus_api/auth.py": "98adac1ccfb20cb89159a90c1bc74b68e1a3bc8af6f227f1ce67da08f50823b0",
+    "services/nexus-api/nexus_api/service.py": "9915230200e7ace374d26165cc9ff775c36d6af113a0730f7c7dcca0177660af",
+    "services/nexus-api/tests/platform/test_experience_review.py": "95a8dc08529443ef3893c32ed6d50e9ea03eb6d9d37c08b10f3c77eeec63c495",
+    "services/nexus-api/tests/platform/test_llm_wiki.py": "323d5b4cdb5c3726bbe9192a1b3b7d7f467553d98985409ee77dad6673f45a27",
+    "services/nexus-api/tests/platform/test_runtime_context.py": "df318b1e6ba45ba1fc2d881c9b9bea07f77baa93c728655cd7c1cb83bafa5fe5",
+    "services/nexus-api/tests/platform/test_task_responsibility.py": "2ed749f0b964452498ed30e4979357d00cf41ba85a95e5368d33c7007cf22e61",
+    "services/nexus-api/web/src/api/types.ts": "1403e476a9d5aca89ac53557fbb34f8e9972d2f6805649d628451a6c125f1edb",
+    "services/nexus-api/web/src/views/TaskDetailView.vue": "daaefb77a0ec1854079bd3d8fda097b320b9b2d46815c8e0ab76090ff7f66f5c",
+    "services/nexus-api/web/src/views/library/KnowledgeDetailDialog.vue": "74c08875c2fea2dc8a79fbcd9a2a57e046019f8fd093a744743fe728414ff90b",
+    "services/nexus-api/tests/platform/test_unified_worker_auth.py": "b64a4d6b36b3aceeff2e42f5332d7e7b3a3ef2660889277695b94fdf586cbe3e",
+    "tools/repair_experience_review_metadata.py": "d430a254909742ef4c7b8843267afa598a1f2cbd3a31b4d23f46677a649231a8"
+  }
+}

@@ -7,6 +7,7 @@ import re
 from .schemas import Candidate, TraceResult
 
 _SECRET_PATTERNS = (
+    re.compile(r"\bctx_[A-Za-z0-9_-]{20,}\b"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"\bghp_[A-Za-z0-9]{20,}\b"),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),

@@ -49,7 +49,7 @@ Linux QA：Ubuntu 24.04 / ARM64 / glibc 2.39 / Python 3.12.3 / Node 22.23.3。�
 5. 两任务均从页面人工确认完成，Task 为 SUCCEEDED，Host 回收，未知用量不填 0。分别冻结 35 / 118 个原生事件；现有 MAP / REDUCE 通过真实 Gateway 完成，均 `SUCCEEDED / shadow_mode`，没有发布正式候选。现有 candidate 写入 / 人工审核路径由回归覆盖。
 6. 2560×1440 真页面：document scrollWidth = 2560；工作台宽 1560，高约 1117，内部滚动为 auto。修复了长历史被 el-tabs 裁切和历史工具调用永久显示执行中的问题。截图见下方和 evidence 目录。
 
-![已完成任务与复盘](evidence/nexus-dsh-acp-runtime/workbench-completed-2560x1440.png)
+![已完成任务与复盘](evidence/nexus-dsh-acp-runtime/workbench-completed-2560x1440.jpg)
 
 ## Worker 强制退出与恢复
 

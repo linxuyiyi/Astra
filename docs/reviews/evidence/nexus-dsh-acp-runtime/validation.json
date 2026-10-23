@@ -21,17 +21,20 @@
   "openspec_tasks_total": 12,
   "production_cutover": false,
   "screenshots": {
-    "workbench-completed-2560x1440.png": {
-      "width": 65536,
-      "height": 4292542531
+    "workbench-completed-2560x1440.jpg": {
+      "width": 2560,
+      "height": 1440,
+      "mime_type": "image/jpeg"
     },
-    "same-session-continue-2560x1440.png": {
-      "width": 65536,
-      "height": 4292542531
+    "same-session-continue-2560x1440.jpg": {
+      "width": 2560,
+      "height": 1440,
+      "mime_type": "image/jpeg"
     },
-    "explicit-restart-new-session.png": {
-      "width": 65536,
-      "height": 4292542531
+    "explicit-restart-new-session.jpg": {
+      "width": 2560,
+      "height": 1440,
+      "mime_type": "image/jpeg"
     }
   }
 }

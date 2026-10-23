@@ -31,6 +31,7 @@ from app.models import (
     WorkerInstance,
     utcnow,
 )
+from app.worker_agent.dsh_acp.commands import MUTATIONS as DSH_MUTATIONS
 from app.worker_gateway.bus import ConnectionQueues, build_route_bus
 from app.worker_gateway.data_channel import DataChannel, http_frame_data, side_effect_http
 from app.worker_gateway.heartbeat import HeartbeatMonitor
@@ -46,7 +47,7 @@ from app.worker_gateway.protocol import (
 )
 
 # 有副作用且结果未知时不能盲重发。阶段 1 没有 OpenCode 对账，投递成功后就停在原命令上。
-SIDE_EFFECT_COMMANDS = frozenset({"prompt", "upload_file"})
+SIDE_EFFECT_COMMANDS = frozenset({"prompt", "upload_file"}) | DSH_MUTATIONS
 
 logger = logging.getLogger(__name__)
 
@@ -294,6 +295,14 @@ class WorkerGateway:
             from app.worker_gateway.data_channel import encoded_body
 
             encoded_body(payload)
+        dsh_text = None
+        if name == "dsh_submit":
+            import hashlib
+            dsh_text = payload.get("text")
+            if not isinstance(dsh_text, str) or len(dsh_text.encode()) > 8 * 1024 * 1024:
+                raise WorkerGatewayError("invalid_message", "DSH 提交内容无效或过大")
+            payload = {key: value for key, value in payload.items() if key != "text"}
+            payload["text_sha256"] = hashlib.sha256(dsh_text.encode()).hexdigest()
         existing = await session.scalar(select(WorkerCommand).where(WorkerCommand.request_id == request_id))
         if existing is not None:
             self._require_same_command(existing, worker_instance_id, name, payload, session_id)
@@ -348,6 +357,9 @@ class WorkerGateway:
             return DispatchResult(stored, False, True, None)
         if name == "http":
             await DataChannel(self).stage_request(command)
+        if name == "dsh_submit" and online:
+            from app.worker_gateway.data_channel import request_key
+            await self.bus.put_text(request_key(request_id), dsh_text, timeout + 30)
         if not online:
             return DispatchResult(command, False, False, "offline")
         delivered, reason = await self._handoff(command.id, owner_only=False)

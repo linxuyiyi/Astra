@@ -54,3 +54,11 @@ def test_missing_mandatory_package_is_not_confused_with_other_platform_optional_
         path.write_text(json.dumps(lock))
     with pytest.raises(RuntimeError, match="locked_dependency_missing"):
         inspect_installation(executable, expected)
+
+
+def test_linux_official_node_baseline():
+    from app.worker_agent.dsh_acp.preflight import validate_platform
+    validate_platform("Linux", "aarch64", ("glibc", "2.28"), "4.18.0")
+    for libc, kernel in [(("glibc", "2.17"), "3.10.0"), (("glibc", "2.28"), "3.10.0")]:
+        with pytest.raises(RuntimeError, match="unsupported_linux_baseline"):
+            validate_platform("Linux", "x86_64", libc, kernel)

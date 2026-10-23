@@ -4,13 +4,27 @@ from __future__ import annotations
 
 import hashlib
 import json
+import platform
+import re
 from importlib.metadata import version
 from pathlib import Path
 
 from app.worker_agent.dsh_acp.profile import ACP_VERSION, DSH_VERSION
 
 
+def validate_platform(system: str, machine: str, libc: tuple[str, str], kernel: str) -> None:
+    """采用固定 Node 22 的官方 Linux 基线，不将非官方旧 libc 构建计为通过。"""
+    if system != "Linux":
+        return
+    def numbers(value):
+        return tuple(int(x) for x in re.findall(r"\d+", value)[:2])
+    if (machine not in {"aarch64", "arm64", "x86_64"} or libc[0] != "glibc"
+            or numbers(libc[1]) < (2, 28) or numbers(kernel) < (4, 18)):
+        raise RuntimeError("dsh_unsupported_linux_baseline_requires_kernel_4_18_glibc_2_28")
+
+
 def inspect_installation(executable: Path, expected_lock: Path) -> dict:
+    validate_platform(platform.system(), platform.machine(), platform.libc_ver(), platform.release())
     entry = executable.resolve(strict=True)
     package_root = entry.parent.parent
     metadata = json.loads((package_root / "package.json").read_text())

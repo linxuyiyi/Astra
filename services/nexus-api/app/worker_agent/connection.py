@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from app.worker_agent import __version__
+from app.worker_agent.dsh_acp.commands import COMMANDS as DSH_COMMANDS
 from app.worker_agent.files import (
     FILE_COMMAND_LIMIT,
     FILE_COMMANDS,
@@ -47,6 +48,7 @@ CONTROL_COMMANDS = {
     "switch_channel",
     "read_review_trace",
 }
+CONTROL_COMMANDS |= DSH_COMMANDS
 INSPECTION_COMMANDS = {"inspect_runtime", "status"}
 
 
@@ -293,6 +295,7 @@ class WorkerConnectionManager:
         self.fetch_upload = None
         self.local_request = None
         self.upload_body = None
+        self.runtime_driver = None
 
     async def run(self, connect: Connect, stop: asyncio.Event, *, max_sessions: int | None = None) -> None:
         attempt = 1
@@ -344,6 +347,8 @@ class WorkerConnectionManager:
             if reply.type != "response" or not reply.payload.get("ok"):
                 raise WorkerTransportError(str(reply.payload.get("error_code") or "auth_failed"))
             epoch = int(reply.payload["epoch"])
+            if self.runtime_driver:
+                self.runtime_driver.connected = True
             self.epoch = epoch
             self.epochs.append(epoch)
             self.event_seq.clear()
@@ -387,6 +392,8 @@ class WorkerConnectionManager:
                 await self._handle_command(transport, incoming, epoch)
         finally:
             self.closed.set()
+            if self.runtime_driver:
+                self.runtime_driver.connection_lost()
             for task in list(self.http_tasks.values()):
                 task.cancel()
             for task in list(self.event_tasks.values()):
@@ -536,7 +543,30 @@ class WorkerConnectionManager:
             if closed.is_set() or self.epoch != epoch:
                 self.ledger.finish(incoming.request_id, None, "epoch_conflict", self.clock())
                 return
-            if name in INSPECTION_COMMANDS:
+            if name in DSH_COMMANDS:
+                if self.runtime_driver is None:
+                    raise RuntimeError("此 Worker 未显式启用 DSH")
+                data = dict(incoming.payload.get("data") or {})
+                if name == "dsh_submit":
+                    if not self.fetch_body:
+                        raise RuntimeError("DSH 待受理正文通道不可用")
+                    body = await self.fetch_body(incoming.request_id, epoch)
+                    data["text"] = body.get("body")
+                    if (not isinstance(data["text"], str) or hashlib.sha256(data["text"].encode()).hexdigest()
+                            != data.get("text_sha256")):
+                        raise RuntimeError("DSH 待受理正文校验失败")
+                result = await self.runtime_driver.handle(name, data, gate)
+                error_code = None
+                if name in {"dsh_snapshot", "dsh_trace"}:
+                    if self.upload_body is None:
+                        raise RuntimeError("Worker 响应数据通道不可用")
+                    await self.upload_body(incoming.request_id, epoch, {
+                        "status": 200, "body": json.dumps(result, ensure_ascii=False),
+                        "headers": {}, "content_type": "application/json",
+                    })
+                    self.ledger.finish(incoming.request_id, {}, None, self.clock())
+                    return
+            elif name in INSPECTION_COMMANDS:
                 async with self.inspection_slots:
                     result, error_code = await asyncio.to_thread(
                         handle_command,

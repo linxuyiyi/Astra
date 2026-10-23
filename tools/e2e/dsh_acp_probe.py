@@ -38,7 +38,8 @@ from app.worker_agent.dsh_acp.profile import (
 from app.worker_agent.dsh_acp.trace import read_trace_page
 
 CHECKS = (
-    "installation", "gateway_catalog", "initialize", "new_session", "model_selection", "first_turn", "second_turn",
+    "installation", "gateway_catalog", "initialize", "new_session", "model_selection",
+    "first_turn", "second_turn",
     "mcp", "resume", "resume_turn", "cancel", "native_trace", "permission",
     "disconnect_recovery", "long_session", "reasoning", "token_usage", "rate_limit", "cleanup",
 )
@@ -161,8 +162,11 @@ async def probe(args) -> int:
         if not args.protocol_only:
             for name, suffix in (("first_turn", "first"), ("second_turn", "second")):
                 current = name
-                prompt = (f"Compatibility probe. Call nexus_probe_echo exactly once with nonce {nonce+suffix}. "
-                          "Do not use other tools, delegate, or edit files. Then reply with that exact nonce.")
+                prompt = (
+                    "Compatibility probe. Call nexus_probe_echo exactly once with this exact JSON argument: "
+                    + json.dumps({"nonce": nonce + suffix}) + ". "
+                    "Do not use other tools, delegate, or edit files. Then reply with that exact nonce."
+                )
                 result = await asyncio.wait_for(asyncio.shield(supervisor.submit(prompt)), args.timeout)
                 if result.stop_reason != "end_turn":
                     raise RuntimeError("unexpected_stop_reason")
@@ -220,7 +224,10 @@ async def probe(args) -> int:
                             raise RuntimeError("disconnect_fixture_not_started")
                         await asyncio.sleep(.1)
                 process = supervisor.process
-                if process is None or process.returncode is not None or os.getpgid(process.pid) != process.pid:
+                if (
+                    process is None or process.returncode is not None
+                    or os.getpgid(process.pid) != process.pid
+                ):
                     raise RuntimeError("disconnect_process_ownership_unproven")
                 os.killpg(process.pid, signal.SIGKILL)
                 await process.wait()
@@ -252,7 +259,8 @@ async def probe(args) -> int:
                 command = f"printf {shlex.quote(nonce)} > {shlex.quote(str(denied_target))}"
                 await asyncio.wait_for(asyncio.shield(supervisor.submit(
                     f"Controlled approval probe: use bash once to run exactly {command}\n"
-                    'Set sandbox_permissions="danger-full-access" and justification="Controlled probe marker". '
+                    'Set sandbox_permissions="danger-full-access" '
+                    'and justification="Controlled probe marker". '
                     "This writes a disposable marker outside the workspace, owned by this test. "
                     "If approval is denied, do not retry or use another tool; reply DENIED."
                 )), args.timeout)
@@ -272,7 +280,8 @@ async def probe(args) -> int:
                 prior = supervisor.permission_count
                 await asyncio.wait_for(asyncio.shield(supervisor.submit(
                     f"Controlled one-shot approval probe: use bash once to run exactly {command}\n"
-                    'Set sandbox_permissions="danger-full-access" and justification="Controlled probe marker". '
+                    'Set sandbox_permissions="danger-full-access" '
+                    'and justification="Controlled probe marker". '
                     "This is a disposable marker owned by the probe. Do not change the command or retry."
                 )), args.timeout)
                 if (supervisor.permission_count <= prior or not allowed_target.is_file()

@@ -1,0 +1,793 @@
+[
+  {
+    "case": "first",
+    "rep": 1,
+    "raw_count": 3,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "按业务键去重并保留最后记录后再统计",
+          "summary": "对结果汇总类需求，若同一业务键可能重复出现，应先按业务键去重并保留最后一条，再计算总数和通过数，避免重复计数与状态反转误统计。",
+          "content_md": "处理方法：用字典按业务键（如 `(run_id, case_id)`）顺序写入，后写覆盖先写，实现“只保留最后一条”；随后只对字典中的值计算 `total` 与 `passed`。\n\n关键风险：直接对全部 rows 计数会把重复记录重复统计；状态反转场景若不去重，会同时保留旧状态和新状态。\n\n验证方式：至少覆盖重复相同结果、重复状态反转、不同 run 同 case、空输入四类场景。旧实现下应能观察到重复计数或状态统计错误。",
+          "experience_type": "domain",
+          "scope": {
+            "language": "Python",
+            "data_pattern": "重复业务键记录",
+            "domain": "结果汇总统计"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000002",
+            "trace-000005"
+          ],
+          "tags": [
+            "去重",
+            "保留最后一条",
+            "统计",
+            "边界测试"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "修复缺陷前先建立失败测试基线",
+          "summary": "在修改实现前，先编写覆盖缺陷场景的 unittest 并运行到失败，记录实际失败输出，再实施最小修复，最后重跑全部测试。",
+          "content_md": "建议流程：\n1. 先针对需求边界编写测试，包括重复相同结果、重复状态反转、不同 run 同 case、空输入。\n2. 运行测试并记录失败断言与实际值，作为旧缺陷基线。\n3. 仅做满足测试的最小实现修改。\n4. 重跑全部 unittest，确认通过输出与退出码。\n\n这样可以把“问题原因说明”和“实际测试结果”建立在可复现的失败基线上，避免先改代码后补测试导致验证弱化。",
+          "experience_type": "harness_improvement",
+          "scope": {
+            "workflow": "缺陷修复",
+            "test_type": "unittest"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000005"
+          ],
+          "tags": [
+            "失败测试基线",
+            "最小修复",
+            "回归测试"
+          ],
+          "target_component": "test_workflow",
+          "proposed_change": "在缺陷修复流程中增加“先写失败测试并记录输出”的基线步骤，修复后再执行全量 unittest 并保留实际命令与结果。"
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "可重试资源不足错误应保留上下文并退避恢复",
+          "summary": "遇到 `NO_ELIGIBLE_NODE` 且 `isRetryable=true` 的 503 时，应视为暂时性资源不足，保留原任务上下文并退避重试，待上游节点恢复后继续原任务。",
+          "content_md": "观察到的错误为 API 503、资源池无可调度节点、错误码 `NO_ELIGIBLE_NODE`、`isRetryable` 为 true。此类错误不应直接当作任务失败并丢弃上下文。\n\n建议：执行器对明确标记可重试的资源不足错误采用带退避的重试；恢复后继续原任务，不重新初始化无关状态，也不访问其他工作区或执行 push。\n\n注意：这是工作流改进建议，不代表已经验证任何自动重试实现。",
+          "experience_type": "harness_improvement",
+          "scope": {
+            "error_code": "NO_ELIGIBLE_NODE",
+            "retryable": true,
+            "http_status": 503
+          },
+          "evidence_refs": [
+            "trace-000019",
+            "trace-000018"
+          ],
+          "tags": [
+            "重试",
+            "资源调度",
+            "任务恢复",
+            "503"
+          ],
+          "target_component": "task_execution_runner",
+          "proposed_change": "对 `isRetryable=true` 的 `NO_ELIGIBLE_NODE`/503 错误增加带退避的重试与上下文保留逻辑，待资源恢复后继续原任务。"
+        }
+      ]
+    }
+  },
+  {
+    "case": "first",
+    "rep": 2,
+    "raw_count": 3,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "按复合键去重并保留最后一条记录后再聚合",
+          "summary": "对带 (run_id, case_id) 标识的记录做统计时，应先按复合键去重、保留最后一条，再基于去重结果计算 total/passed，否则重复记录会重复计数，状态反转也会统计错误。",
+          "content_md": "处理类似 result_summary.summarize(rows) 的聚合需求时：\n\n1. 先明确唯一键为 `(run_id, case_id)`。\n2. 用字典按唯一键顺序写入记录，后写覆盖先写，从而保留最后一条。\n3. 基于去重后的记录值计算 `total` 与 `passed`，不要直接对原始 rows 计数。\n4. 测试至少覆盖：重复且结果相同、重复且状态反转、不同 run 的同 case、空输入。\n\n观察记录显示：旧实现直接对全部 rows 计数，导致重复相同结果期望 `{'total':1,'passed':1}` 实际 `{'total':2,'passed':2}`；状态反转期望 `{'total':1,'passed':0}` 实际 `{'total':2,'passed':1}`。修复后记录的 unittest 为 4 个测试全部 OK。",
+          "experience_type": "domain",
+          "scope": {
+            "language": "Python",
+            "task_pattern": "记录去重后聚合统计",
+            "key_pattern": "composite_key_last_wins"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000002",
+            "trace-000005"
+          ],
+          "tags": [
+            "去重",
+            "聚合",
+            "last-wins",
+            "unittest"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "先写失败测试锁定缺陷，再做最小修复并跑全量测试",
+          "summary": "对缺陷修复类任务，先运行能复现缺陷的失败测试，再实施最小改动，最后重跑全部测试并记录命令与结果，可清楚区分旧缺陷与修复效果。",
+          "content_md": "建议采用红-绿-最小修复流程：\n\n1. 先补充或运行覆盖缺陷场景的 unittest，确认旧实现失败，并记录实际失败输出。\n2. 只做满足需求的最小实现改动。\n3. 重跑全部相关 unittest，记录测试数量、结果与退出码。\n4. 在交付说明中分别呈现旧缺陷表现与修复后的测试结果。\n\n本次观察中，旧实现下测试进程 exit 1 且 `FAILED (failures=2)`；修复后记录为 `Ran 4 tests ... OK`、exit 0。该流程有助于避免未复现缺陷就直接修改，也便于人工复核。",
+          "experience_type": "harness_improvement",
+          "scope": {
+            "task_type": "REQUIREMENT",
+            "workflow": "test_first_minimal_fix"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000002",
+            "trace-000005"
+          ],
+          "tags": [
+            "失败测试",
+            "最小修复",
+            "全量测试",
+            "验证记录"
+          ],
+          "target_component": "test_workflow",
+          "proposed_change": "建议在修复类任务中默认执行：先运行或新增复现缺陷的失败测试并保存输出，再实施最小修复，最后运行全部相关测试并记录命令、结果和退出码。"
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "区分可重试基础设施错误与代码缺陷",
+          "summary": "执行中遇到 503、NO_ELIGIBLE_NODE 且 isRetryable=true 时，应视为可重试的基础设施/调度问题，不应归因于代码实现；待上游恢复后继续原任务并保持原有约束。",
+          "content_md": "建议在任务执行器中区分两类失败：\n\n- 代码或需求缺陷：通过失败测试、源码差异等证据定位。\n- 可重试基础设施错误：如 API 返回 503、资源池无可用节点 `NO_ELIGIBLE_NODE`、`isRetryable=true`。\n\n对后者应暂停或重试，不修改实现来“修复”环境问题；上游恢复后继续原任务，并沿用原约束，例如不访问其他工作区、不 push、不自行确认完成。观察记录中该错误导致任务中断，随后用户说明上游节点健康恢复并要求继续原任务。",
+          "experience_type": "harness_improvement",
+          "scope": {
+            "error_pattern": "503/NO_ELIGIBLE_NODE",
+            "retryable": true
+          },
+          "evidence_refs": [
+            "trace-000019",
+            "trace-000018"
+          ],
+          "tags": [
+            "可重试错误",
+            "基础设施",
+            "任务恢复",
+            "约束保持"
+          ],
+          "target_component": "execution_controller",
+          "proposed_change": "建议在执行控制器中：捕获 503/NO_ELIGIBLE_NODE 且 isRetryable=true 时标记为可重试基础设施错误，暂停并按上游恢复信号重试；恢复后继续原任务且保持原有访问与交付约束。"
+        }
+      ]
+    }
+  },
+  {
+    "case": "first",
+    "rep": 4,
+    "raw_count": 3,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "按业务键去重时用字典后写覆盖实现“只保留最后一条”",
+          "summary": "对需要按 (run_id, case_id) 去重且保留最后一条记录的统计需求，按顺序把键写入字典、让后写覆盖先写，再基于字典的值聚合计数，可同时修复重复计数和状态反转两类缺陷。",
+          "content_md": "## 适用场景\n对带业务唯一键的记录列表做汇总统计（如 total/passed），要求同一键的重复记录只算一次且以最后一条为准。\n\n## 做法\n1. 明确去重键：本例为 `(run_id, case_id)` 二元组，不要误用单字段。\n2. 顺序遍历 rows，`acc[(row.run_id, row.case_id)] = row`，利用字典覆盖语义实现“最后一条胜出”，无需额外排序或索引比较。\n3. 基于 `acc.values()` 计算 total（长度）与 passed（状态判定计数），而不是对原始 rows 直接 `len()` 或逐行累加。\n4. 空输入时字典为空，total=0、passed=0，天然满足边界场景。\n\n## 典型错误\n- 直接 `len(rows)` 统计总数：重复记录被重复计数。\n- 用 set 去重但不保留顺序/最后一条：状态反转场景（先 pass 后 fail）会算错。\n- 用 groupby 或排序去重：引入对输入顺序的假设，成本更高。\n\n## 验证方式\n覆盖四类用例：重复相同结果、重复状态反转、不同 run 同 case（不应被合并）、空输入。",
+          "experience_type": "domain",
+          "scope": {
+            "language": "python",
+            "task_pattern": "dedup_and_aggregate",
+            "dedup_key": "composite_tuple"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000002"
+          ],
+          "tags": [
+            "dedup",
+            "last-write-wins",
+            "aggregation",
+            "python-dict"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        },
+        {
+          "kind": "domain",
+          "title": "修复统计类缺陷前先用失败用例锁定旧行为的偏差数值",
+          "summary": "在改实现之前先写出覆盖各语义分支的 unittest 并运行，记录旧实现的实际输出与期望值差异，可作为“问题原因说明”的直接证据，并防止修复后回归。",
+          "content_md": "## 适用场景\n修复汇总/统计逻辑缺陷（如去重、计数、状态判定）时，需要向他人说明“错在哪、错多少”。\n\n## 做法\n1. 先按语义分支拆用例：本例为重复相同结果、重复状态反转、不同 run 同 case、空输入。\n2. 在未修改代码的状态下运行测试，记录每条失败用例的期望值与实际值（如期望 `{'total':1,'passed':1}`、实际 `{'total':2,'passed':2}`）。\n3. 用失败输出反推根因，再定位到具体代码行（如 `len(rows)` 加逐行统计），确认根因与失败现象一致。\n4. 做最小修复后再全量重跑同一批用例。\n\n## 价值\n- 失败用例的期望/实际差值就是缺陷说明的量化证据。\n- “不同 run 同 case”这类反向用例能防止去重键写得过宽。\n- 空输入用例能防止修复引入对非空输入的隐式假设。",
+          "experience_type": "domain",
+          "scope": {
+            "task_pattern": "bugfix_with_failing_tests_first",
+            "test_framework": "unittest"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000005"
+          ],
+          "tags": [
+            "test-first",
+            "regression",
+            "root-cause",
+            "unittest"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "遇到 NO_ELIGIBLE_NODE 等可重试调度错误时按可重试策略等待恢复而非直接中断",
+          "summary": "执行中收到 503 / NO_ELIGIBLE_NODE 且 isRetryable=true 时，应识别为资源池暂时不可调度，而不是任务本身失败；建议在工具层提供带退避的重试与状态提示。",
+          "content_md": "## 现象\n任务中途 API 返回 503，错误码 `NO_ELIGIBLE_NODE`，`isRetryable=true`，表示无可用调度节点，任务被中断。恢复后用户要求继续原任务。\n\n## 处理建议\n1. 判断依据优先级：先看错误码与 `isRetryable`，再看 HTTP 状态；`NO_ELIGIBLE_NODE` + isRetryable=true 属于环境侧暂时不可用。\n2. 不应把它当成代码/需求失败，也不应据此修改实现或缩小任务范围。\n3. 恢复后继续原任务时，保持原有约束不变（不访问其他工作区、不 push、不自行确认完成）。\n4. 若已产生部分产物（如 diff、测试输出），恢复后先核对产物是否完整，再补齐剩余步骤。\n\n## 注意\n本观察未记录重试是否被实际执行，仅记录了中断与后续恢复；具体重试次数/退避参数需由平台策略决定。",
+          "experience_type": "harness",
+          "scope": {
+            "error_code": "NO_ELIGIBLE_NODE",
+            "http_status": 503
+          },
+          "evidence_refs": [
+            "trace-000019",
+            "trace-000018"
+          ],
+          "tags": [
+            "retry",
+            "transient-error",
+            "scheduling",
+            "resilience"
+          ],
+          "target_component": "tool_runtime.error_handling",
+          "proposed_change": "在工具运行层对 `isRetryable=true` 的调度类错误（如 NO_ELIGIBLE_NODE / 503）内置带指数退避的自动重试，并在重试期间向调用方输出“环境暂不可用、任务未失败”的状态提示；重试耗尽后再以明确错误上报，避免调用方误判为任务失败而中断或改写需求。"
+        }
+      ]
+    }
+  },
+  {
+    "case": "first",
+    "rep": 5,
+    "raw_count": 4,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "按复合键去重保留最后一条并基于去重结果聚合",
+          "summary": "对 (run_id, case_id) 这类复合键去重时，可用字典按 key 顺序覆盖写入，后写覆盖先写即保留最后一条；total/passed 必须基于去重后的值计算，不能直接对原始 rows 计数。",
+          "content_md": "处理去重聚合类需求时：\n1. 明确去重键，例如 (run_id, case_id)。\n2. 用字典以该键写入记录，重复键直接覆盖，从而保留最后一条。\n3. 仅对去重后的 values 计算 total、passed 等聚合指标，避免重复计数或状态反转统计错误。\n4. 在本次观察中，旧实现对全部 rows 计数导致重复相同结果被统计为 total=2、passed=2，状态反转被统计为 total=2、passed=1。",
+          "experience_type": "domain",
+          "scope": {
+            "language": "python",
+            "pattern": "composite_key_dedup_keep_last"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000002"
+          ],
+          "tags": [
+            "去重",
+            "聚合",
+            "复合键",
+            "保留最后一条"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        },
+        {
+          "kind": "domain",
+          "title": "去重聚合修复应覆盖四类关键场景",
+          "summary": "针对按 (run_id, case_id) 去重后统计 total/passed 的逻辑，测试至少覆盖重复相同结果、重复状态反转、不同 run 同 case、空输入；其中状态反转能验证是否真正保留最后一条。",
+          "content_md": "建议的测试矩阵：\n- 重复相同结果：验证重复记录只计一次。\n- 重复状态反转：同一键先 passed 后 failed（或反向），验证只保留最后一条状态。\n- 不同 run 同 case：验证复合键包含 run_id，不能误合并。\n- 空输入：验证返回结构稳定，如 total=0、passed=0。\n本次观察中，这四类场景在修复后全部通过。",
+          "experience_type": "domain",
+          "scope": {
+            "language": "python",
+            "test_type": "unittest",
+            "domain": "result_summary"
+          },
+          "evidence_refs": [
+            "trace-000005",
+            "trace-000009"
+          ],
+          "tags": [
+            "测试设计",
+            "边界场景",
+            "去重聚合"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "修复前先运行失败测试并记录基线",
+          "summary": "在最小修复前先运行相关测试并记录失败摘要，修复后运行全部测试并记录实际命令、退出码与结果，形成“先失败后通过”的验证证据链。",
+          "content_md": "建议将以下步骤纳入验证清单：\n1. 编写或选择覆盖缺陷的测试。\n2. 修复前运行测试，保存失败用例、实际值和期望值。\n3. 做最小修复。\n4. 修复后运行全部测试，保存通过输出与退出码。\n本次观察中，修复前 2 个测试失败并 exit 1，修复后 4 个测试全部 OK 且 exit 0。",
+          "experience_type": "harness_improvement",
+          "scope": {
+            "workflow": "fix_verification"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000005"
+          ],
+          "tags": [
+            "测试基线",
+            "先失败后通过",
+            "验证证据"
+          ],
+          "target_component": "verification_workflow",
+          "proposed_change": "在任务执行清单中要求：修复前运行相关测试并保存失败摘要，修复后运行全部测试并保存通过摘要与实际命令输出。"
+        }
+      ]
+    }
+  },
+  {
+    "case": "first",
+    "rep": 3,
+    "raw_count": 4,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "按复合键去重时用“后写覆盖先写”保留最后记录",
+          "summary": "对 (run_id, case_id) 这类复合键聚合结果，应先用字典按顺序写入并让后写覆盖先写，再基于去重后的值计算 total 与 passed，避免重复计数和状态反转被错误统计。",
+          "content_md": "处理类似 result_summary.summarize(rows) 的聚合需求时：\n1. 明确去重键和保留规则，例如按 (run_id, case_id) 去重且重复记录只保留最后一条。\n2. 用有序写入的字典实现：以复合键为 key，逐条覆盖赋值，天然保留最后一条。\n3. 所有统计（total、passed 等）都必须基于去重后的记录集合，而不是原始 rows。\n4. 测试至少覆盖：重复相同结果、重复状态反转、不同 run 同 case、空输入。状态反转用例可区分“最后一条生效”和“首次生效/简单去重”。\n5. 验证方式：先运行测试暴露旧实现失败，再做最小修复并运行全量测试。",
+          "experience_type": "domain",
+          "scope": {
+            "language": "Python",
+            "task_type": "REQUIREMENT",
+            "domain": "result_aggregation"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000002",
+            "trace-000005"
+          ],
+          "tags": [
+            "deduplication",
+            "last-write-wins",
+            "aggregation",
+            "unit-test"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "修复类任务交付链路：失败测试基线→最小修复→全量测试→待人工确认",
+          "summary": "缺陷修复任务应固化可审计链路：先运行会失败的测试并记录命令、exit code 与失败断言，再做最小修复，随后运行全部测试并记录通过结果；若任务要求人工确认，交付物输出后保持待确认状态，不自行标记完成。",
+          "content_md": "建议将修复类任务的验证与交付流程固化为以下步骤，并保留可审计证据：\n1. 先编写或运行覆盖缺陷的测试，确认旧实现失败；记录实际测试命令、exit code、失败用例与关键期望/实际值，形成失败基线。\n2. 做最小代码修改，避免顺带重构扩大变更面。\n3. 运行全部 unittest，记录实际命令、测试数量、OK/FAILED 与 exit code，证明修复覆盖指定场景。\n4. 输出交付物：git diff、实际测试命令与结果、问题原因说明。\n5. 当任务显式要求“完成后等待人工确认，不自行确认完成”时，交付后保持 pending_human_confirmation 状态，不自动调用完成/确认接口，不将任务标记为 closed；等待人工确认后再进入完成状态。\n该链路既能证明缺陷真实存在，也能避免仅凭 diff 推断修复有效，同时避免越权确认。",
+          "experience_type": "harness_improvement",
+          "scope": {
+            "task_type": "REQUIREMENT",
+            "workflow": "bug_fix",
+            "delivery": "human_confirmation"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000005",
+            "trace-000018"
+          ],
+          "tags": [
+            "tdd",
+            "verification",
+            "test-evidence",
+            "human-in-the-loop",
+            "task-lifecycle"
+          ],
+          "target_component": "verification_workflow",
+          "proposed_change": "在修复类任务流程中强制记录并输出：修复前失败测试的命令/exit code/失败断言，修复后全量测试的命令/exit code/结果；平台可将缺少失败基线或全量通过记录视为交付不完整。同时在 task_lifecycle 中增加 pending_human_confirmation 状态：交付物输出后不得自动标记完成，必须等待人工确认后再关闭任务。"
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "可重试的资源池 503 应暂停重试而非改代码绕过",
+          "summary": "遇到 APIError 503、NO_ELIGIBLE_NODE 且 isRetryable=true 时，应视为临时基础设施问题，按退避策略重试或等待恢复，恢复后从原任务步骤继续，不通过修改仓库或扩大权限来绕过。",
+          "content_md": "执行期间出现资源池无可用节点时，错误信息包含 NO_ELIGIBLE_NODE 且标记可重试，说明不是代码缺陷。建议：\n1. 识别 isRetryable=true 的基础设施错误，进入有限次退避重试或暂停等待。\n2. 不在失败期间修改业务代码、测试或权限配置来“绕过”调度问题。\n3. 恢复后继续原任务，并保持原有约束（不访问其他工作区、不 push、不自行确认完成）。\n4. 将中断原因和恢复后的继续点记录到执行日志，便于审计。",
+          "experience_type": "harness_improvement",
+          "scope": {
+            "error_type": "APIError",
+            "error_code": "NO_ELIGIBLE_NODE",
+            "task_type": "REQUIREMENT"
+          },
+          "evidence_refs": [
+            "trace-000019",
+            "trace-000018"
+          ],
+          "tags": [
+            "transient-error",
+            "retry",
+            "infrastructure"
+          ],
+          "target_component": "execution_runtime",
+          "proposed_change": "为 execution_runtime 增加对 isRetryable=true 且错误码为 NO_ELIGIBLE_NODE 的 APIError 的有限次指数退避重试/暂停恢复机制，并在恢复后从原步骤继续，不触发仓库修改或权限变更。"
+        }
+      ]
+    }
+  },
+  {
+    "case": "reuse",
+    "rep": 2,
+    "raw_count": 4,
+    "output": {
+      "candidates": [
+        {
+          "kind": "harness_improvement",
+          "title": "经验复用前必须用 library_search + library_get 实证命中源页",
+          "summary": "当任务要求复用刚发布的经验时，不能凭记忆声称已读；应实际检索、读取来源页，并记录查询词、命中路径与页内知识 ID。",
+          "content_md": "## 做法\n1. 用 `library_search` 以业务语义关键词检索，例如「按业务键保序去重并保留最后一条记录」。\n2. 对首条或相关来源页调用 `library_get`，读取页内元数据。\n3. 在交付中记录：查询词、返回的来源页路径、页内 `astra_knowledge_id` 与 `type`。\n4. 若未实际命中，应如实报告，不得假称已读。\n\n## 适用场景\n任务明确要求以某一经验源页为唯一知识来源，或要求确认源知识 ID 时。\n\n## 证据要点\n本次检索首条命中 `wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md`，`library_get` 后页内确认 `astra_knowledge_id = KNOW_53022A1009074C6E95B4`、`type = experience`。",
+          "experience_type": "harness_improvement",
+          "scope": {},
+          "evidence_refs": [
+            "trace-000018",
+            "trace-000014",
+            "trace-000001"
+          ],
+          "tags": [
+            "经验检索",
+            "知识来源确认",
+            "library_search",
+            "library_get"
+          ],
+          "target_component": "nexus-library（library_search / library_get）",
+          "proposed_change": "在经验复用类任务的流程中加入强制检查项：记录实际查询词、命中来源页路径与页内知识 ID；未命中时禁止声称已读取。"
+        },
+        {
+          "kind": "domain",
+          "title": "按业务键去重聚合需覆盖四类回归场景",
+          "summary": "对追加式结果表按 (run_id, case_id) 去重并保留最后一条时，回归测试至少覆盖重复相同结果、重复状态反转、不同 run 同 case、空输入。",
+          "content_md": "## 适用场景\n统计口径要求每个 `(run_id, case_id)` 只计一次，且以最后写入记录的状态为准。\n\n## 关键测试场景\n1. 重复相同结果：同一 `(run_id, case_id)` 两条均为 passed，期望 `{total:1, passed:1}`，而不是 `{total:2, passed:2}`。\n2. 重复状态反转：同一 `(run_id, case_id)` 先 passed 后 failed，期望 `{total:1, passed:0}`，而不是 `{total:2, passed:1}`。\n3. 不同 run 同 case：`case_id` 相同但 `run_id` 不同，两条都应计数。\n4. 空输入：应返回零值统计，不抛异常。\n\n## 实现对应关系\n以 `(run_id, case_id)` 为键顺序写入 dict，后写覆盖先写，再对 `dict.values()` 聚合 `total` 与 `passed`；状态判定只读取保留下来的最后一条记录。\n\n## 验证要点\n先运行测试展示旧缺陷，再应用最小修复并重新运行全部测试；本次 observation 记录修复前 2 个用例 FAIL，修复后 `Ran 4 tests, OK`。",
+          "experience_type": "domain",
+          "scope": {},
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000015",
+            "trace-000004",
+            "trace-000005"
+          ],
+          "tags": [
+            "去重聚合",
+            "业务键",
+            "回归测试",
+            "状态反转",
+            "空输入"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "修复缺陷前先运行失败测试建立基线",
+          "summary": "在修改实现前先运行会失败的 unittest，记录旧实现的错误输出；修复后再运行全部测试，形成可核对的修复前后证据链。",
+          "content_md": "## 做法\n1. 修改代码前运行相关 unittest，确认失败并保留失败输出。\n2. 失败输出应能直接对应旧缺陷，例如重复相同结果得到 `{total:2, passed:2}`、状态反转得到 `{total:2, passed:1}`。\n3. 做最小修复后重新运行全部 unittest，记录测试数量与结果。\n4. 交付时同时给出失败基线、修复实现和通过结果。\n\n## 价值\n避免“未验证先声称修复”，让评审者能区分旧缺陷、修复动作与验证结果。\n\n## 证据要点\n本次 observation 记录了修复前 4 个测试中 2 个 FAIL，修复后 `Ran 4 tests, OK`。",
+          "experience_type": "harness_improvement",
+          "scope": {},
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000015",
+            "trace-000005"
+          ],
+          "tags": [
+            "测试基线",
+            "失败复现",
+            "最小修复",
+            "回归验证"
+          ],
+          "target_component": "unittest / 测试执行流程",
+          "proposed_change": "在缺陷修复类任务模板中要求：修复前必须运行并保存失败测试输出，修复后必须运行全部相关测试并在交付中列出结果。"
+        }
+      ]
+    }
+  },
+  {
+    "case": "reuse",
+    "rep": 3,
+    "raw_count": 3,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "统计型缺陷修复先用失败用例固化旧行为，再按业务键去重并覆盖四类边界",
+          "summary": "对 total/passed 统计偏高类缺陷，先用 unittest 复现重复计数与状态反转，再最小改为按 (run_id, case_id) 字典覆盖，并用四类场景回归。",
+          "content_md": "## 适用场景\n统计口径要求同一业务键只计一次、且以最后一条记录为最终状态时，旧实现直接对原始行计数会导致指标偏高。\n\n## 处理步骤\n1. 修复前先运行 unittest，展示旧缺陷。观察中重复相同结果实际为 `{total:2, passed:2}`、期望 `{total:1, passed:1}`；状态反转实际为 `{total:2, passed:1}`、期望 `{total:1, passed:0}`。\n2. 做最小修复：以 `(run_id, case_id)` 为键构建 dict，按输入顺序后写覆盖先写，再对 `dict.values()` 聚合 total 与 passed。\n3. 测试至少覆盖四类场景：重复相同结果、重复状态反转、不同 run 同 case、空输入。\n4. 重新运行全部 unittest；本观察记录到 4 个测试通过（Ran 4 tests, OK）。\n\n## 注意\n不要对原始 rows 直接计数；状态判定只读取去重后保留的那条记录。",
+          "experience_type": "domain",
+          "scope": {},
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000015",
+            "trace-000005",
+            "trace-000004"
+          ],
+          "tags": [
+            "unittest",
+            "去重统计",
+            "业务键",
+            "回归测试"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "知识库引用前完成 search→get→页内 ID 核对三连",
+          "summary": "在声称使用某经验源页前，保留查询词、命中路径，并用 library_get 读取页内 astra_knowledge_id 与目标 ID 比对；未命中或未读取则如实报告。",
+          "content_md": "## 问题\n任务要求实际检索并读取刚发布的经验源页，不能未读先声称。仅看到搜索结果不足以证明已读取源页内容。\n\n## 建议流程\n1. 用 `library_search` 搜索指定关键词，记录查询词与首条命中路径。\n2. 对返回的来源页调用 `library_get`，读取页内元数据。\n3. 核对页内 `astra_knowledge_id` 是否等于目标任务要求的知识 ID；只有一致时才在交付物中引用该经验。\n4. 若未实际命中或未读取成功，如实报告，不得假称已读。\n\n## 观察中的可复用点\n搜索命中 `wiki/sources/...know53022a1009074c6e95b4...md`，`library_get` 返回页内确认 `astra_knowledge_id = KNOW_53022A1009074C6E95B4`，说明检索路径与页内元数据需要同时留痕。",
+          "experience_type": "harness_improvement",
+          "scope": {},
+          "evidence_refs": [
+            "trace-000018",
+            "trace-000014",
+            "trace-000001"
+          ],
+          "tags": [
+            "nexus-library",
+            "知识引用",
+            "检索留痕"
+          ],
+          "target_component": "nexus-library（library_search / library_get）",
+          "proposed_change": "在知识引用流程中增加强制核对项：记录查询词、返回来源页路径、library_get 页内 astra_knowledge_id；只有三者与目标任务 ID 一致才允许在交付物中引用该经验。"
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "最终交付前清理 __pycache__ 并复查 git status，避免缓存污染 diff",
+          "summary": "运行 unittest 会产生 __pycache__，在交付 diff 前应清理临时缓存并重新检查工作区，确认只保留目标模块与测试文件变更。",
+          "content_md": "## 问题\n验证运行可能生成未跟踪的 `__pycache__/`，干扰工作区状态与交付 diff 的干净程度。观察中某次状态出现未跟踪缓存，后续清理后仅显示目标模块与测试文件变更。\n\n## 建议流程\n1. 运行测试后、生成最终交付 diff 前，检查并清理 `__pycache__` 等运行产物。\n2. 重新执行 `git status` 与 diff 范围检查，确认工作区只包含允许变更的文件。\n3. 若仍出现非目标未跟踪文件，先清理再报告最终变更。\n\n## 注意\n不要将测试运行产物作为交付内容；最终状态需要单独复查，不能沿用清理前的状态。",
+          "experience_type": "harness_improvement",
+          "scope": {},
+          "evidence_refs": [
+            "trace-000004",
+            "trace-000002"
+          ],
+          "tags": [
+            "git status",
+            "交付检查",
+            "临时文件清理"
+          ],
+          "target_component": "git 工作区检查 / 交付前清理",
+          "proposed_change": "在验证后增加一步：清理 __pycache__ 等运行产物，重新执行 git status 与 diff 范围检查；若出现非目标未跟踪文件，先清理再报告最终变更。"
+        }
+      ]
+    }
+  },
+  {
+    "case": "reuse",
+    "rep": 4,
+    "raw_count": 3,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "业务键去重聚合的测试矩阵需覆盖键完整性、状态反转与空输入",
+          "summary": "按 (run_id, case_id) 去重并保留最后一条时，验证不能只测重复相同结果；至少覆盖重复相同结果、重复状态反转、不同 run 同 case（验证键完整性，不能被误合并）、空输入四类，并用修复前后的失败/通过输出对比锁定缺陷。",
+          "content_md": "## 适用场景\n统计逻辑从追加式记录列表聚合指标，且已确定以 (run_id, case_id) 为业务键、最后一条记录代表最终状态。\n\n## 测试矩阵（四类）\n1. 重复相同结果：两条相同 passed 记录，期望 `{total:1, passed:1}`，而不是逐行计数的 `{total:2, passed:2}`。\n2. 重复状态反转：同一键先 passed 后 failed，期望 `{total:1, passed:0}`，证明只读取保留的最后一条状态。\n3. 不同 run 同 case：run_id 不同、case_id 相同，必须保留为两条，证明去重键包含 run_id 而非只用 case_id。\n4. 空输入：返回 total=0、passed=0，避免除零或异常。\n\n## 执行顺序\n先运行修复前的 unittest 记录失败基线（展示旧缺陷的具体输出），再做最小实现修复，最后重跑全部用例确认通过。失败基线能直接证明修复针对的是真实缺陷，而非事后补测试。\n\n## 注意\n不同 run 同 case 这一条最容易被忽略；如果只测重复与反转，用错去重键（如仅 case_id）也可能全部通过。",
+          "experience_type": "domain",
+          "scope": {
+            "task_type": "REQUIREMENT",
+            "language": "python",
+            "domain": "qa_statistics"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000015",
+            "trace-000004",
+            "trace-000005"
+          ],
+          "tags": [
+            "dedup",
+            "aggregation",
+            "unittest",
+            "test-matrix"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "声称使用知识库经验前，必须记录查询词、命中来源页与页内 ID 校验",
+          "summary": "任务要求依据某条已发布经验时，应实际调用 library_search 与 library_get，并在交付中记录查询词、返回的来源页路径、页内 astra_knowledge_id/type 校验结果；未命中应如实报告，不能凭标题假设已读。",
+          "content_md": "## 问题\n任务明确要求确认源知识 ID（如 KNOW_53022A1009074C6E95B4）并如实报告命中路径。若跳过实际检索直接引用经验标题，属于未读先声称。\n\n## 建议做法\n1. 用经验标题/关键做法作为查询词调用 library_search，记录首条命中的来源页路径与 score。\n2. 对返回的来源页调用 library_get，读取页内元数据，核对 astra_knowledge_id 与 type 是否与任务要求一致。\n3. 在交付物中写出完整命中路径：查询词 → 返回来源页 → 读取结果（页内 ID）。\n4. 若搜索未命中或 ID 不一致，如实报告并停止据此实现，不得替换为其他历史结论。\n\n## 价值\n把「知识来源可追溯」变成可核对的证据链，避免经验复用退化为口头声明。",
+          "experience_type": "harness",
+          "scope": {
+            "task_type": "REQUIREMENT"
+          },
+          "evidence_refs": [
+            "trace-000018",
+            "trace-000014",
+            "trace-000001"
+          ],
+          "tags": [
+            "knowledge-reuse",
+            "traceability",
+            "library_search",
+            "library_get"
+          ],
+          "target_component": "knowledge_library_workflow",
+          "proposed_change": "在知识复用类任务的工作流中加入固定检查项：必须粘贴 library_search 查询词、首条命中来源页路径、library_get 返回的页内 ID 校验结果；缺失该三项时任务不得标记为完成。"
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "交付前用 git status 复核变更范围，并清理 __pycache__ 等未跟踪缓存",
+          "summary": "只允许改动指定文件的交付场景，需在生成 diff 前后用 git status 核对；Python 项目应主动清理 __pycache__/ 等运行残留，再复核一次，确保工作区仅含预期修改与新增测试文件。",
+          "content_md": "## 问题\n运行 unittest 会在工作区产生 __pycache__/ 等未跟踪目录，导致 git status 出现额外条目、diff 退出码异常，与「变更仅限两个文件」的交付约束冲突。\n\n## 建议做法\n1. 运行测试后、生成交付 diff 前，执行 git status 检查全部变更（含未跟踪文件）。\n2. 若出现 __pycache__/、*.pyc 等运行残留，清理后再复核。\n3. 确认工作区仅包含预期条目（如 `M result_summary.py` 与 `?? test_result_summary.py`），再输出 diff。\n4. 不在交付物中夹带缓存目录或无关文件。\n\n## 价值\n把「变更范围约束」变成可复核的状态检查，而不是事后凭记忆声明。",
+          "experience_type": "harness",
+          "scope": {
+            "task_type": "REQUIREMENT",
+            "language": "python"
+          },
+          "evidence_refs": [
+            "trace-000004",
+            "trace-000002"
+          ],
+          "tags": [
+            "git-status",
+            "workspace-hygiene",
+            "pycache",
+            "diff-scope"
+          ],
+          "target_component": "delivery_workspace_check",
+          "proposed_change": "在交付前检查流程中增加两步：运行 git status --porcelain 列出全部变更；若存在 __pycache__/ 或 *.pyc 则清理并再次运行，确认只剩预期文件后才生成 diff。"
+        }
+      ]
+    }
+  },
+  {
+    "case": "reuse",
+    "rep": 5,
+    "raw_count": 3,
+    "output": {
+      "candidates": [
+        {
+          "kind": "harness_improvement",
+          "title": "修复缺陷前先复现失败，修复后全量回归",
+          "summary": "先用会失败的 unittest 固定旧缺陷行为，再做最小修复，最后重跑全部测试；两次输出都写入交付记录，形成可核对的前后对比。",
+          "content_md": "## 做法\n1. 修复前运行目标测试，确认失败用例与期望值，并保留失败输出（实际 total/passed 与期望的差异）。\n2. 实施最小修复后，重跑全部 unittest，记录通过数量与结果。\n3. 交付时同时给出修复前失败证据与修复后通过证据，避免只报告最终结果。\n\n## 本次可参考证据\n- 旧实现逐行计数导致重复结果场景实际 `{total:2, passed:2}`、期望 `{total:1, passed:1}`；状态反转场景实际 `{total:2, passed:1}`、期望 `{total:1, passed:0}`。\n- 修复后 4 个 unittest 输出 `Ran 4 tests, OK`。\n\n## 注意\n只描述 observation 中记录到的测试结果，不额外声称平台校验通过。",
+          "experience_type": "harness_improvement",
+          "scope": {},
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000015",
+            "trace-000005",
+            "trace-000004"
+          ],
+          "tags": [
+            "测试验证",
+            "先失败后通过",
+            "回归测试"
+          ],
+          "target_component": "test_verification_workflow",
+          "proposed_change": "在修复类任务的验证流程中固定要求：修复前运行并保存失败用例输出，修复后重跑全部相关测试，并在交付物中并列展示两次结果。"
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "交付前检查工作区范围并清理临时产物",
+          "summary": "用 git status 核对变更范围，清理 __pycache__ 等未跟踪临时文件，确保交付只包含目标模块与测试文件。",
+          "content_md": "## 做法\n1. 修改完成后运行 `git status` 与 diff 检查，确认变更文件列表。\n2. 若出现 `__pycache__/` 等测试运行产生的临时目录，先清理，再重新检查。\n3. 最终状态应只显示目标文件被修改，以及必要时新增的测试文件。\n\n## 本次可参考证据\n- 某次状态中出现未跟踪的 `__pycache__/`，同时 diff-exit=1。\n- 清理缓存后，状态显示仅 `M result_summary.py` 与 `?? test_result_summary.py`。\n\n## 注意\n该检查只能证明工作区文件状态符合观察记录，不代表功能验证由平台确认。",
+          "experience_type": "harness_improvement",
+          "scope": {},
+          "evidence_refs": [
+            "trace-000004",
+            "trace-000002"
+          ],
+          "tags": [
+            "工作区卫生",
+            "git status",
+            "交付范围"
+          ],
+          "target_component": "workspace_hygiene_check",
+          "proposed_change": "在交付前增加固定检查步骤：运行 git status 与 diff，清理 __pycache__ 等临时产物，确认变更仅限任务要求的文件后再提交或等待人工确认。"
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "知识源检索与读取要留痕并核对页内 ID",
+          "summary": "检索知识源后记录查询词、命中路径和 library_get 返回的页内元数据，核对知识 ID 一致后再引用，避免未读先声称。",
+          "content_md": "## 做法\n1. 使用 `library_search` 搜索任务指定关键词，记录查询词与返回来源页路径。\n2. 对命中的来源页调用 `library_get`，读取页内元数据。\n3. 核对页内知识 ID、类型与任务要求一致后，再在实现或交付物中引用。\n4. 若未实际命中或读取失败，应如实报告，不得假称已读。\n\n## 本次可参考证据\n- 查询「按业务键保序去重并保留最后一条记录」首条命中 `wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md`（score 308.0）。\n- `library_get` 返回该页，页内确认 `astra_knowledge_id = KNOW_53022A1009074C6E95B4`，`type = experience`。\n\n## 注意\n留痕用于证明检索路径真实存在，不替代功能测试验证。",
+          "experience_type": "harness_improvement",
+          "scope": {},
+          "evidence_refs": [
+            "trace-000018",
+            "trace-000014",
+            "trace-000001"
+          ],
+          "tags": [
+            "知识检索",
+            "library_search",
+            "library_get",
+            "来源核验"
+          ],
+          "target_component": "knowledge_retrieval_trace",
+          "proposed_change": "在依赖知识库的任务中增加检索留痕步骤：记录查询词、命中来源页路径、library_get 读取结果与页内知识 ID，并核对一致后再引用该知识。"
+        }
+      ]
+    }
+  },
+  {
+    "case": "reuse",
+    "rep": 1,
+    "raw_count": 4,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "按业务键保序去重统计的修复模式与四类回归用例",
+          "summary": "当结果行按 (run_id, case_id) 只应计一次且以最后一条为最终状态时，用字典按该键顺序写入并后写覆盖先写，再聚合去重后的值；回归需覆盖重复相同结果、状态反转、同 case 不同 run、空输入。",
+          "content_md": "## 适用场景\n输入是追加式结果记录，同一业务键 (run_id, case_id) 可能出现多次，且语义上最后一次写入代表最终状态。\n\n## 修复模式\n1. 以 (run_id, case_id) 为键构建 dict，按输入顺序遍历写入，后写覆盖先写。\n2. 对 dict.values() 聚合 total 与 passed，而不是直接对原始 rows 计数。\n3. 状态判定只读取保留下来的最后一条记录。\n\n## 回归用例\n- 重复相同结果：2 条相同 passed 应得 {total:1, passed:1}。\n- 重复状态反转：先 passed 后 failed 应得 {total:1, passed:0}，反向亦然。\n- 不同 run 同 case：两条记录应保留为 2 条，不得误合并。\n- 空输入：应返回 total=0、passed=0。\n\n## 证据\n观察记录显示修复前 4 个测试中 2 个失败，修复后全部 4 个 unittest 通过（Ran 4 tests, OK）；失败输出与实现变更分别见 trace-000009、trace-000015、trace-000004、trace-000005。",
+          "experience_type": "domain",
+          "scope": {
+            "language": "python",
+            "task_type": "bugfix",
+            "business_key": [
+              "run_id",
+              "case_id"
+            ]
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000015",
+            "trace-000004",
+            "trace-000005"
+          ],
+          "tags": [
+            "dedupe",
+            "last-write-wins",
+            "aggregation",
+            "regression-testing"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "知识来源确认应固定执行 search→get 并记录实际命中路径",
+          "summary": "任务要求引用指定知识源时，先 library_search，再对返回来源页 library_get，并记录查询词、返回路径、页内 ID/type；未实际命中需如实报告。",
+          "content_md": "## 问题\n任务明确要求不得未读先声称已读取指定经验源。\n\n## 做法\n1. 用 library_search 执行任务给定关键词。\n2. 对返回的来源页调用 library_get。\n3. 交付物记录：查询词、返回的来源页路径、页内 astra_knowledge_id 与 type。\n4. 若未命中或页内 ID 不符，应如实报告失败，不得虚构读取结果。\n\n## 证据\n观察记录显示搜索首条命中 wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md，library_get 后页内确认 astra_knowledge_id = KNOW_53022A1009074C6E95B4、type = experience。",
+          "experience_type": "harness_improvement",
+          "scope": {
+            "workflow": "knowledge_retrieval",
+            "tools": [
+              "library_search",
+              "library_get"
+            ]
+          },
+          "evidence_refs": [
+            "trace-000018",
+            "trace-000014",
+            "trace-000001"
+          ],
+          "tags": [
+            "knowledge-retrieval",
+            "evidence",
+            "source-confirmation"
+          ],
+          "target_component": "knowledge_retrieval_workflow",
+          "proposed_change": "在任务前置检查中加入固定的 library_search→library_get 步骤，并要求交付物记录查询词、返回路径、页内 ID/type；提供未命中时的如实失败报告模板。"
+        },
+        {
+          "kind": "harness_improvement",
+          "title": "修复型任务保留先失败后通过的测试证据链",
+          "summary": "修复前先运行旧 unittest 记录失败输出，完成最小修复后再跑全部测试，并在交付中保留失败与通过的命令和结果。",
+          "content_md": "## 问题\n仅展示修复后通过，无法证明旧缺陷存在，也不利于审阅修复是否针对问题。\n\n## 做法\n1. 修改前运行相关 unittest，保留失败用例与期望/实际差异。\n2. 做最小修复后重新运行全部 unittest。\n3. 交付物同时列出失败输出和通过输出，并对应到 diff。\n\n## 证据\n观察记录显示修复前 4 个测试中 2 个 FAIL，修复后 4 个 unittest 通过（Ran 4 tests, OK）。",
+          "experience_type": "harness_improvement",
+          "scope": {
+            "workflow": "test_execution",
+            "task_type": "bugfix"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000015",
+            "trace-000005"
+          ],
+          "tags": [
+            "red-green",
+            "test-evidence",
+            "bugfix-verification"
+          ],
+          "target_component": "test_execution_workflow",
+          "proposed_change": "在修复型任务模板中要求先记录失败测试输出，再执行最小修复并记录全量测试通过输出，二者均纳入交付证据。"
+        }
+      ]
+    }
+  }
+]

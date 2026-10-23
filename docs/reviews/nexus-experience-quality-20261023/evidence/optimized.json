@@ -1,0 +1,259 @@
+[
+  {
+    "case": "first",
+    "rep": 1,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "复合主键结果汇总需先去重保留最后记录再计数",
+          "summary": "当汇总函数按 (run_id, case_id) 统计 total/passed 且重复记录应覆盖为最后一条时，旧实现直接 len(rows) 并逐行计数会把重复记录重复统计，状态反转时也会同时计入两次。实际修复为按复合键顺序写入字典、后写覆盖先写，再基于去重后的值计算 total 和 passed。",
+          "content_md": "### 触发条件\n结果汇总函数按 `(run_id, case_id)` 识别同一条用例结果，重复记录只应保留最后一条，并在去重后统计 `total` 与 `passed`。\n\n### 旧做法的问题\n旧实现直接使用 `len(rows)` 作为总数并逐行累计通过数。实际失败表现为：\n- 重复相同结果：期望 `{'total': 1, 'passed': 1}`，实际 `{'total': 2, 'passed': 2}`；\n- 重复状态反转：期望 `{'total': 1, 'passed': 0}`，实际 `{'total': 2, 'passed': 1}`。\n\n### 实际改动\n按 `(run_id, case_id)` 顺序写入字典，后写覆盖先写，从而保留最后一条记录；随后仅对去重后的值统计 `total`，并统计 `status` 为通过的数量。\n\n### 验证方式与结果\n新增测试覆盖四类场景：重复相同结果、重复状态反转、不同 run 同 case、空输入。修复前运行 unittest 得到 `FAILED (failures=2)`、exit 1；修复后 `Ran 4 tests ... OK`、exit 0。`git diff` 可确认去重实现与新增测试文件。\n\n### 未覆盖边界\n证据只覆盖上述四类场景及该仓库的行顺序语义；未验证其他去重键、并发写入或非列表输入的行为。",
+          "experience_type": "domain",
+          "scope": {
+            "task_type": "REQUIREMENT",
+            "language": "Python",
+            "module": "result_summary",
+            "dedup_key": "run_id,case_id",
+            "dedup_policy": "keep_last"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000002",
+            "trace-000005"
+          ],
+          "tags": [
+            "去重",
+            "复合主键",
+            "结果汇总",
+            "unittest",
+            "before-after验证"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        }
+      ]
+    }
+  },
+  {
+    "case": "first",
+    "rep": 2,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "按业务键去重且“最后一条生效”的统计修复：先让测试矩阵证伪旧实现，再改为有序字典覆盖",
+          "summary": "当汇总函数对原始 rows 直接计数、而业务要求同一 (run_id, case_id) 只保留最后一条记录时，应改为按复合键顺序写入字典（后写覆盖先写），再基于去重后的值计算 total/passed；并用“重复相同结果 / 重复状态反转 / 不同 run 同 case / 空输入”四类用例先在旧实现上运行，确认失败数值可定位缺陷（total 2 vs 1、passed 2 vs 1 与 passed 1 vs 0），再在修复后全量通过。",
+          "content_md": "## 触发条件\n汇总函数（如 `result_summary.summarize(rows)`）直接对全部输入行计数，而业务语义是：以 `(run_id, case_id)` 为唯一键，重复记录只保留最后一条，再据此统计 `total` 与 `passed`。\n\n## 原做法的问题\n旧实现用 `len(rows)` 作 total 并逐行累加 passed，重复键被重复计入：\n- 两条完全相同的记录：期望 `{'total':1,'passed':1}`，实际 `{'total':2,'passed':2}`（total 与 passed 同时虚高）。\n- 同一键状态反转（先 fail 后 pass 或反之）：期望 `{'total':1,'passed':0}`，实际 `{'total':2,'passed':1}`（total 多算 1，passed 取到了非最后一条）。\n两类失败数值不同，能区分“未去重”和“未保留最后一条”两个缺陷面。\n\n## 实际改动\n按 `(run_id, case_id)` 顺序写入字典，后写覆盖先写，使每个键只留最后出现的记录；再对字典的值（而非原始 rows）计算 total 与 passed。新增 `test_result_summary.py` 覆盖四类场景。\n\n## 改变前后可定位的执行差异\n- 修复前：运行新增 unittest，进程 `exit 1`，`FAILED (failures=2)`，失败断言分别落在重复相同结果与状态反转两类用例上；另外两类（不同 run 同 case、空输入）在旧实现下即为通过，说明它们约束的是“不误合并跨 run 的同 case”与“空输入不报错”，而非去重本身。\n- 修复后：同一条命令输出 `Ran 4 tests ... OK`、`exit 0`。\n- 源码差异：`git diff` 可见由 `len(rows)` + 逐行统计改为先按复合键构建字典再统计。\n\n## 验证方法\n1. 先写覆盖四类场景的 unittest 并在旧代码上运行，记录失败用例名与期望/实际数值（exit 1、failures=2），证明测试对旧缺陷有区分力。\n2. 做最小改动后重跑全部 unittest，要求 `Ran 4 tests ... OK`、exit 0，且未触碰四类场景之外的断言。\n3. 用 `git diff` 核对改动范围仅限目标函数与新增测试文件。\n\n## 未覆盖边界\n- 输入行的顺序是否由调用方保证未验证；若上游顺序不稳定，“最后一条”的语义需要额外定义（本任务未验证）。\n- 缺少 `run_id` 或 `case_id` 字段、键不可哈希、输入非列表/为 None 等异常输入未纳入测试矩阵。\n- 大输入量下的时间/空间开销未测量。",
+          "experience_type": "domain",
+          "scope": {
+            "task_type": "REQUIREMENT",
+            "language": "python",
+            "domain": "test-result 聚合统计",
+            "applies_to": "以复合业务键去重且要求最后一条生效的计数类函数修复"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000002",
+            "trace-000005"
+          ],
+          "tags": [
+            "去重",
+            "last-write-wins",
+            "统计正确性",
+            "unittest",
+            "缺陷复现"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        }
+      ]
+    }
+  },
+  {
+    "case": "first",
+    "rep": 3,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "按复合键最后一条优先去重后再汇总计数",
+          "summary": "当汇总结果由多条可能重复的 (run_id, case_id) 记录构成时，先按输入顺序做 last-wins 去重，再基于去重后的记录计算 total 与 passed，避免直接对原始行计数导致重复统计和状态反转误计。",
+          "content_md": "触发场景：summarize(rows) 一类汇总函数直接对原始行计数，而同一 (run_id, case_id) 可能出现多条记录，且后一条可能把状态从 passed 反转为 failed。\n\n原做法问题：旧实现用 len(rows) 加逐行统计。重复相同结果时 total/passed 被重复累计；状态反转时旧的 passed 仍被保留，得到错误的 passed 数。观察中旧实现分别把期望 {'total':1,'passed':1} 算成 {'total':2,'passed':2}，把期望 {'total':1,'passed':0} 算成 {'total':2,'passed':1}。\n\n实际改动：使用字典按 (run_id, case_id) 顺序写入，后写覆盖先写；再基于字典中的去重结果计算 total 与 passed。这样同一 run 内同一 case 只保留输入顺序上的最后一条，而不同 run 的同一 case 因键不同不会被合并。\n\n验证方法：新增 unittest 覆盖四类场景——重复相同结果、重复状态反转、不同 run 同 case、空输入；先运行测试展示旧缺陷（FAILED failures=2，exit 1），修复后重跑全部 unittest，输出 Ran 4 tests ... OK，exit 0。\n\n边界：观察只验证了“按输入顺序最后一条覆盖”的语义；若业务要求按时间戳而非输入顺序判定最后一条，或输入可能乱序、字段缺失，该实现尚未验证。",
+          "experience_type": "domain",
+          "scope": {
+            "language": "Python",
+            "task_pattern": "按复合键去重后统计汇总",
+            "data_characteristic": "同一 (run_id, case_id) 有多条记录且可能状态反转",
+            "ordering_assumption": "按输入顺序，后出现覆盖先出现",
+            "not_covered": "未验证按时间戳排序、乱序输入或缺失字段"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000002",
+            "trace-000005"
+          ],
+          "tags": [
+            "去重",
+            "last-wins",
+            "聚合统计",
+            "unittest",
+            "边界测试"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        }
+      ]
+    }
+  },
+  {
+    "case": "first",
+    "rep": 4,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "按 (run_id, case_id) 保留最后一条记录的去重聚合修复",
+          "summary": "修复对结果行直接 len 计数的聚合缺陷：先用键 (run_id, case_id) 构建有序字典使后写覆盖先写以保留最后一条，再对去重后的值统计 total/passed；用四类 unittest 在修复前后形成可定位的差异证据。",
+          "content_md": "## 触发场景\n结果聚合函数（如 result_summary.summarize(rows)）需要按 (run_id, case_id) 这一业务主键去重，重复记录只保留最后一条，再计算 total 与 passed。旧实现直接对全部 rows 计数（len(rows) 加逐行统计），当输入含重复键时会把同一条用例统计多次；当重复记录的状态发生反转（先 failed 后 passed，或反之）时，也无法只保留最后一条的状态。\n\n## 旧做法的问题（可定位差异）\n- 重复相同结果：期望 {'total':1,'passed':1}，旧实现得到 {'total':2,'passed':2}；\n- 重复状态反转：期望 {'total':1,'passed':0}，旧实现得到 {'total':2,'passed':1}；\n前者暴露计数重复，后者暴露未按“最后一条”取值。\n\n## 实际改动\n1. 按 (run_id, case_id) 顺序写入 dict，后写覆盖先写，从而得到“每个键保留最后一条”的去重结果；\n2. 只对去重后的值集合汇总 total 与 passed，不再对原始 rows 逐行累加。\n\n最小修复集中在聚合函数内部，未改动调用方与数据模型。\n\n## 测试矩阵（固定为四类，缺一会漏掉一类缺陷）\n| 场景 | 输入特征 | 期望 |\n|---|---|---|\n| 重复相同结果 | 同键多条、状态一致 | total=1、passed=1 |\n| 重复状态反转 | 同键多条、状态先 failed 后 passed 等 | total=1、passed 取最后一条 |\n| 不同 run 同 case | run_id 不同、case_id 相同 | 视为不同键，均计入 |\n| 空输入 | rows=[] | total=0、passed=0，不抛异常 |\n\n## 验证方式\n先运行新增/既有的 unittest 展示旧缺陷：进程 exit 1，FAILED (failures=2)；最小修复后重跑全部 unittest，输出 Ran 4 tests ... OK、exit 0。“不同 run 同 case”与“空输入”两类用于确认去重键选取正确、且去重逻辑没有把不同 run 的同名 case 误合并。\n\n## 边界与待验证\n- “最后一条”的语义取决于输入迭代顺序；若上游传入的是无序集合或并发写入的流，保留哪一条需要另行定义，本任务未覆盖。\n- 去重键必须可哈希；run_id 或 case_id 为不可哈希结构时该方案不适用，未验证。\n- passed 的判定沿用原字段/原语义，未改变状态归一化规则。",
+          "experience_type": "domain",
+          "scope": {
+            "language": "python",
+            "task_pattern": "聚合函数去重后统计",
+            "applicability": "小型仓库中对含业务主键重复行的结果汇总，输入为可迭代且顺序稳定的记录序列"
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000002",
+            "trace-000005"
+          ],
+          "tags": [
+            "去重",
+            "保留最后一条",
+            "聚合统计",
+            "unittest",
+            "最小修复"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        }
+      ]
+    }
+  },
+  {
+    "case": "reuse",
+    "rep": 1,
+    "output": {
+      "candidates": []
+    }
+  },
+  {
+    "case": "first",
+    "rep": 5,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "按复合键保留最后一条后再做通过率聚合",
+          "summary": "当统计 total/passed 前需要按 (run_id, case_id) 去重，且重复记录的语义是最后一条有效时，应先用字典按复合键覆盖写入，再对去重后的值聚合；直接 len(rows) 或逐行累加会把重复记录和状态反转计错。",
+          "content_md": "触发条件：结果汇总需要按复合键去重后计算 total 与 passed，重复记录的语义是保留最后一条。\n\n原做法问题：旧实现直接使用 len(rows) 并对全部行逐行统计，导致重复的 (run_id, case_id) 被重复计数；状态反转时也会同时计入旧状态和新状态，无法只保留最后一条。观察到的旧缺陷为：重复相同结果期望 {'total':1,'passed':1}，实际 {'total':2,'passed':2}；状态反转期望 {'total':1,'passed':0}，实际 {'total':2,'passed':1}。\n\n实际改动：用字典以 (run_id, case_id) 为键顺序写入，后写覆盖先写，再基于去重后的值计算 total 和 passed；同时新增 test_result_summary.py 覆盖四类场景。\n\n验证方式：先运行 unittest 展示旧缺陷，输出 FAILED (failures=2)、exit 1；修复后重跑全部 unittest，输出 Ran 4 tests ... OK、exit 0。四类场景为重复相同结果、重复状态反转、不同 run 同 case、空输入。\n\n未覆盖边界：验证范围是该小型 Python 仓库的 unittest，未覆盖并发写入、超大输入性能、跨进程持久化去重等场景；去重后的键顺序未被验证为业务要求。",
+          "experience_type": "domain",
+          "scope": {
+            "language": "Python",
+            "task_pattern": "按复合键去重后聚合",
+            "dedupe_key": "(run_id, case_id)",
+            "duplicate_semantics": "保留最后一条",
+            "test_scenarios": [
+              "重复相同结果",
+              "重复状态反转",
+              "不同 run 同 case",
+              "空输入"
+            ],
+            "not_covered": [
+              "并发写入",
+              "超大输入性能",
+              "跨进程持久化去重"
+            ]
+          },
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013",
+            "trace-000002",
+            "trace-000005"
+          ],
+          "tags": [
+            "去重",
+            "聚合",
+            "last-write-wins",
+            "unittest",
+            "result-summary"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        }
+      ]
+    }
+  },
+  {
+    "case": "reuse",
+    "rep": 3,
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "按 (run_id, case_id) 去重聚合时的两组必须显式验证的边界",
+          "summary": "复用「字典按业务键后写覆盖」方法时，除重复结果与状态反转外，还需用「同 case_id 不同 run_id 必须分别计数」和「空输入返回 total=0/passed=0」两组用例锁住去重键与聚合口径，否则键写错（只用 case_id）或空输入未处理都不会被前两类用例暴露。",
+          "content_md": "## 触发条件\n输入是追加式执行结果行，需要按 (run_id, case_id) 只计一次并以最后一条记录为准来聚合 total / passed。源方法（KNOW_53022A1009074C6E95B4）已给出「dict 按业务键顺序写入、后写覆盖、再对 values() 聚合」及其两组典型用例（重复相同结果、重复状态反转）。\n\n## 相对已有知识新增的部分\n源页只覆盖了「同一键重复」的两类用例，未说明去重键中 run_id 与 case_id 缺一不可，也未说明空输入下的聚合结果。实际验证补充两组边界：\n1. 同一 case_id 在不同 run_id 下是不同业务键，必须各计一次——若误把键写成 case_id，这类用例才会失败；仅用「同键重复」用例无法暴露该错误。\n2. 空输入必须得到 {total: 0, passed: 0}，而不是异常或空值——聚合要建立在去重后的集合（含空集合）上，而非依赖至少一条原始行。\n\n## 做法\n1. 键严格为 (run_id, case_id) 二元组，不用 case_id 单独作键。\n2. 遍历写入 dict 后，对 dict.values() 求 total 与 passed；对空 dict 同样走该聚合路径，返回 0/0。\n3. 状态判定只读被保留下来的那条记录的状态字段。\n\n## 验证\n修复前后各跑一次 unittest：修复前 4 个用例中 2 个 FAIL（重复相同结果得 {total:2,passed:2}、状态反转得 {total:2,passed:1}），修复后「Ran 4 tests, OK」，四类场景同时通过。diff 仅涉及 result_summary 实现与测试文件。\n\n## 未覆盖边界\n只验证了 passed/failed 二值状态；聚合结果之外的输出顺序、其他状态取值、run_id 非字符串等情况未验证。",
+          "experience_type": "domain",
+          "scope": {
+            "trigger": "按 (run_id, case_id) 去重并保留最后一条后聚合 total/passed 的统计函数",
+            "increment_over": "KNOW_53022A1009074C6E95B4",
+            "boundary": "仅验证 passed/failed 二值状态与 Python dict 实现；其他状态取值与输出顺序未验证"
+          },
+          "evidence_refs": [
+            "trace-000018",
+            "trace-000014",
+            "trace-000015",
+            "trace-000009",
+            "trace-000004",
+            "trace-000005",
+            "trace-000002"
+          ],
+          "tags": [
+            "去重聚合",
+            "业务键",
+            "测试矩阵",
+            "边界用例"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        }
+      ]
+    }
+  },
+  {
+    "case": "reuse",
+    "rep": 2,
+    "output": {
+      "candidates": []
+    }
+  },
+  {
+    "case": "reuse",
+    "rep": 4,
+    "output": {
+      "candidates": []
+    }
+  },
+  {
+    "case": "reuse",
+    "rep": 5,
+    "output": {
+      "candidates": []
+    }
+  }
+]

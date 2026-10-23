@@ -1,0 +1,133 @@
+[
+  {
+    "case": "first",
+    "input": {
+      "task": {
+        "id": "T-20261023-2863C9",
+        "title": "QA-WORKER-EXPERIENCE-20261023",
+        "description": "在隔离小型 Python 仓库修复 result_summary.summarize(rows)：按 (run_id, case_id) 去重，重复记录只保留最后一条，再计算 total 和 passed。\n\n执行步骤：\n1. 先运行会失败的 unittest，展示旧缺陷\n2. 做最小修复\n3. 运行全部 unittest\n\n测试覆盖四类场景：重复相同结果、重复状态反转、不同 run 同 case、空输入。\n\n约束：不要修改平台、不访问其他工作区、不 push。\n\n交付物：git diff、实际测试命令与实际测试结果、问题原因说明；完成后等待人工确认，不自行确认完成。",
+        "task_type": "REQUIREMENT",
+        "category_id": "CAT-5CAA990C",
+        "repository_id": "841c140c7aeb477bb9e6c926fe4d664e",
+        "employee_id": "qa-worker-experience-20261023"
+      },
+      "observations": [
+        {
+          "problem": "旧实现直接对全部 rows 计数：重复的 (run_id, case_id) 会被重复统计，状态反转时也不会只保留最后一条。",
+          "attempt": "先编写覆盖重复相同结果、重复状态反转、不同 run 同 case、空输入的四类 unittest，并运行测试以展示旧缺陷。",
+          "outcome": "旧实现下 2 个测试失败：重复相同结果期望 {'total':1,'passed':1}，实际得到 {'total':2,'passed':2}；状态反转期望 {'total':1,'passed':0}，实际得到 {'total':2,'passed':1}。",
+          "correction": "无，此步骤用于暴露缺陷。",
+          "verification": "测试进程 exit 1，输出 FAILED (failures=2)；读取源码确认旧实现为 len(rows) 加逐行统计。",
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000013"
+          ]
+        },
+        {
+          "problem": "需要按 (run_id, case_id) 去重，并让重复记录只保留最后一条。",
+          "attempt": "用字典按 (run_id, case_id) 顺序写入，后写覆盖先写；再基于去重后的值计算 total 与 passed，并新增 test_result_summary.py 覆盖四类场景。",
+          "outcome": "result_summary.py 已改为先去重再统计，测试文件包含四类场景。",
+          "correction": "无。",
+          "verification": "git diff 显示 result_summary.py 的去重实现与新增测试文件；修复后 unittest 全部通过。",
+          "evidence_refs": [
+            "trace-000002",
+            "trace-000005"
+          ]
+        },
+        {
+          "problem": "验证修复后是否满足四类测试场景。",
+          "attempt": "重跑全部 unittest。",
+          "outcome": "4 个测试全部 ok：重复相同结果、重复状态反转、不同 run 同 case、空输入。",
+          "correction": "无。",
+          "verification": "输出 Ran 4 tests ... OK，exit 0。",
+          "evidence_refs": [
+            "trace-000005"
+          ]
+        },
+        {
+          "problem": "执行期间 API 返回 503，资源池没有可调度节点，错误码 NO_ELIGIBLE_NODE，isRetryable 为 true。",
+          "attempt": "继续执行任务时发生 APIError。",
+          "outcome": "请求失败，任务执行中断。",
+          "correction": "用户随后说明上游节点健康已恢复，要求继续原任务，并重申不访问其他工作区、不 push、不自行确认完成。",
+          "verification": "无。",
+          "evidence_refs": [
+            "trace-000019",
+            "trace-000018"
+          ]
+        }
+      ],
+      "existing_experiences": []
+    }
+  },
+  {
+    "case": "reuse",
+    "input": {
+      "task": {
+        "id": "T-20261023-A0C02E",
+        "title": "QA-WORKER-EXPERIENCE-REUSE-V3-20261023",
+        "description": "目标：在本次隔离任务 Git worktree 中修复 result_summary.summarize(rows)，按 (run_id, case_id) 去重并保留最后一条。本任务为最终复验。\n\n步骤一：知识来源确认\n1. 用 nexus-library 的 library_search 搜索关键词「按业务键保序去重并保留最后一条记录」\n2. 对搜索返回的来源页调用 library_get\n3. 确认源知识 ID 为 KNOW_53022A1009074C6E95B4\n4. 必须记录实际命中路径（查询词、返回的来源页、读取结果）。该经验刚由第一次真实执行的测试证据经人工审核发布，不得假称已读过；未实际命中需如实报告。\n\n步骤二：实现约束\n只使用该源页确认的方法，不引用其他历史流水线或指标结论。\n\n步骤三：修复与验证\n1. 先运行会失败的 unittest，展示旧缺陷\n2. 做最小修复：按 (run_id, case_id) 去重，保留最后一条，再计算 total 和 passed\n3. 重新运行全部 unittest\n\n测试覆盖四类场景：重复相同结果、重复状态反转、不同 run 同 case、空输入。\n\n交付物：实际搜索/读取路径、验证命令、测试结果、两文件 diff（result_summary 模块与测试文件）。\n\n约束：不要访问其他工作区，不 push。工具的 runtime_context 使用当前会话内部上下文，不能写入文件或展示。\n\n完成后等待人工确认，不自行确认完成。",
+        "task_type": "REQUIREMENT",
+        "category_id": "CAT-5CAA990C",
+        "repository_id": "841c140c7aeb477bb9e6c926fe4d664e",
+        "employee_id": "qa-worker-experience-20261023"
+      },
+      "observations": [
+        {
+          "problem": "任务要求实际检索并读取刚发布的经验源页，确认源知识 ID 为 KNOW_53022A1009074C6E95B4，不能未读先声称。",
+          "attempt": "使用 library_search 查询「按业务键保序去重并保留最后一条记录」，并对返回来源页调用 library_get。",
+          "outcome": "搜索首条命中 wiki/sources/5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91.md（score 308.0）；library_get 返回该页，页内确认 astra_knowledge_id = KNOW_53022A1009074C6E95B4，type = experience。",
+          "correction": "",
+          "verification": "命中路径与页内元数据一致，可见 trace-000018 与 trace-000014。",
+          "evidence_refs": [
+            "trace-000018",
+            "trace-000014",
+            "trace-000001"
+          ]
+        },
+        {
+          "problem": "旧版 result_summary.summarize 对每条 row 逐行计数，重复结果和状态反转会导致 total/passed 偏高。",
+          "attempt": "修复前先运行 unittest，展示旧缺陷。",
+          "outcome": "4 个测试中 2 个 FAIL：重复相同结果实际为 {total:2, passed:2}，期望 {total:1, passed:1}；状态反转实际为 {total:2, passed:1}，期望 {total:1, passed:0}。",
+          "correction": "后续改为按 (run_id, case_id) 写入 dict，后写覆盖先写，再对 dict.values() 聚合 total 与 passed。",
+          "verification": "旧实现可见 trace-000015，失败输出可见 trace-000009，二者对应。",
+          "evidence_refs": [
+            "trace-000009",
+            "trace-000015",
+            "trace-000004"
+          ]
+        },
+        {
+          "problem": "需要按来源页方法做最小修复，并验证四类场景。",
+          "attempt": "应用补丁：以 (run_id, case_id) 为键构建 dict，保留最后一条，再计算 total 和 passed；同时新增四类 unittest。",
+          "outcome": "diff 显示 result_summary.py 实现变更及 test_result_summary.py 新增；全部 4 个 unittest 通过（Ran 4 tests, OK）。",
+          "correction": "",
+          "verification": "trace-000005 输出 4 个测试 OK；trace-000004 展示实现与四类测试代码。",
+          "evidence_refs": [
+            "trace-000004",
+            "trace-000005",
+            "trace-000002"
+          ]
+        },
+        {
+          "problem": "交付约束要求工作区变更仅限 result_summary 模块与对应测试文件。",
+          "attempt": "使用 git status 检查工作区状态。",
+          "outcome": "某次状态中出现未跟踪的 __pycache__/，同时 diff-exit=1；后续状态显示仅 M result_summary.py 与 ?? test_result_summary.py。",
+          "correction": "清理临时 __pycache__ 后再次检查工作区。",
+          "verification": "trace-000004 记录缓存残留，trace-000002 显示清理后的工作区状态。",
+          "evidence_refs": [
+            "trace-000004",
+            "trace-000002"
+          ]
+        }
+      ],
+      "existing_experiences": [
+        {
+          "id": "KNOW_53022A1009074C6E95B4",
+          "title": "按业务键保序去重并保留最后一条记录",
+          "summary": "当统计口径要求每个 (run_id, case_id) 只计一次且以最后写入为准时，用字典按该键顺序写入（后写覆盖先写），再对去重后的值聚合，避免对原始行直接计数。",
+          "content_md": "## 适用场景\n输入是追加式的记录列表（如测试执行结果表），同一业务键 (run_id, case_id) 可能出现多次，且语义上\"最后一次记录才是最终状态\"。\n\n## 错误做法\n直接 `total = len(rows)` 并逐行累加 `passed`：重复记录被重复计数，状态反转（先 failed 后 passed 或反之）时无法只反映最后结果，指标系统性偏高。\n\n## 正确做法\n1. 以 `(run_id, case_id)` 为键构建 dict，按输入顺序遍历写入，后写覆盖先写——自然实现\"保序 + 只保留最后一条\"，无需额外排序或分组。\n2. 对 `dict.values()` 做 total 与 passed 的聚合，而不是对原始 rows。\n3. 状态判定只读取被保留下来的那条记录的状态字段。\n\n## 验证方式\n用重复相同结果与重复状态反转两类用例对比修复前后输出：例如 2 条相同 passed 记录应得 `{total:1, passed:1}` 而非 `{total:2, passed:2}`；先 passed 后 failed 应得 `{total:1, passed:0}` 而非 `{total:2, passed:1}`。"
+        }
+      ]
+    }
+  }
+]

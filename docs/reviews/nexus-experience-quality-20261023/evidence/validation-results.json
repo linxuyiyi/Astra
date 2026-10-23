@@ -1,0 +1,54 @@
+{
+  "policy_replays": {
+    "baseline-final-policy": {
+      "first": [
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "reuse": [
+        3,
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    "optimized-final-policy": {
+      "first": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "reuse": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "backend": {
+    "passed": 1311,
+    "skipped": 32,
+    "failed": 0
+  },
+  "targeted": {
+    "passed": 35,
+    "failed": 0
+  },
+  "web": {
+    "passed": 30,
+    "build": "passed"
+  },
+  "ruff": "passed",
+  "live_task": "T-20261023-62873B",
+  "live_review": "NO_FINDINGS",
+  "live_new_knowledge": 0,
+  "scope": "one model; bounded samples; human semantic review required"
+}

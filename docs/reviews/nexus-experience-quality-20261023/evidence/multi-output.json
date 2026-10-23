@@ -1,0 +1,54 @@
+{
+  "candidates": [
+    {
+      "kind": "domain",
+      "title": "按事件时间取每键最新状态，替代按输入顺序覆盖",
+      "summary": "当同一业务键的记录可能乱序到达、且统计口径要求“以最大 timestamp 的记录为最终状态”时，按输入顺序后写覆盖会取到旧事件状态；应改为逐键比较 timestamp 保留最大值，再对保留下来的记录聚合，聚合方式（如 total 计键数）不变。",
+      "content_md": "## 触发条件\n输入是追加式记录列表，同一 (run_id, case_id) 出现多次，且记录到达顺序与事件时间不一致（例：timestamp=20 的 passed 先到，timestamp=10 的 failed 后到），口径要求“最终状态取事件时间最新的一条”。\n\n## 原做法的问题\n沿用“按输入顺序写入 dict、后写覆盖先写”（既有经验 KNOW_53022A1009074C6E95B4）只在“输入顺序即事件顺序”时成立。乱序输入下会把较旧事件当成最终状态：上述两行得到 total=1/passed=0（取到了 failed），与口径不符。\n\n## 实际改动\n- 每键保留时比较 timestamp：仅当新记录 timestamp 大于已保留记录时才替换，否则丢弃。\n- 聚合仍基于去重后的 dict.values() 计数（total 计键数、passed 计状态），不因排序改动而改变总数口径。\n- 既有“按输入顺序”的合同在输入有序场景下保持不变，本改动只用于事件时间口径。\n\n## 验证方式\n同一组乱序输入（timestamp 20 passed、timestamp 10 failed）对照：原做法 `{\"total\":1,\"passed\":0}`，改为按 timestamp 取值后 `{\"total\":1,\"passed\":1}`，total 不变说明只改了“选哪条记录”，没有改动聚合。\n\n## 边界（未覆盖）\n- 相同 timestamp 的冲突如何取舍（先到/后到/报错）未定义，本反例未涉及。\n- 只验证了一个键的一条反例，未验证多键交错、timestamp 缺失或非数值的情况。\n- 若下游依赖“输入顺序即最终版本”的旧语义，需按调用方口径区分，不能全局替换。",
+      "experience_type": "domain",
+      "scope": {
+        "applicability": "同一业务键多次出现且允许乱序到达的追加式记录统计",
+        "preconditions": "存在可比的事件时间字段（timestamp），口径明确为“最新事件时间为最终状态”",
+        "out_of_scope": "相同 timestamp 冲突规则、timestamp 缺失/非数值、既有按输入顺序语义的下游契约",
+        "independent_value": "新增价值在于推翻既有 KNOW_53022A1009074C6E95B4 的隐含前提（输入有序），乱序场景需要不同的选择操作（比较 timestamp 而非覆盖），不是同一方法的常规测试样例。"
+      },
+      "evidence_refs": [
+        "trace-000003",
+        "trace-000004"
+      ],
+      "tags": [
+        "去重",
+        "事件时间",
+        "乱序",
+        "聚合口径"
+      ],
+      "target_component": null,
+      "proposed_change": null
+    },
+    {
+      "kind": "domain",
+      "title": "管道末段掩盖上游命令失败：用 pipefail 恢复退出码传播",
+      "summary": "脚本用 `cmd | cat` 之类的管道时，退出码取自末段命令，上游失败被忽略，导致调用方误判成功；在同一脚本中启用 `bash -o pipefail`（或 `set -o pipefail`）后，同一失败命令的退出码由 0 变为 1，调用方可检测。",
+      "content_md": "## 触发条件\n脚本把被测命令通过管道交给另一个命令（如 `cmd | cat`）并依赖脚本退出码向调用方报告成败；上游命令失败但管道末段成功。\n\n## 原做法的问题\n管道的退出状态默认取最后一条命令，`false | cat` 让脚本返回 0，错误被静默忽略，调用方无法区分成功与失败。\n\n## 实际改动\n在脚本中启用 `bash -o pipefail`（或 `set -o pipefail`），使管道中任一命令非零即令整条管道非零。\n\n## 验证方式\n保持同一 shell、同一命令（`false | cat`）、只切换 pipefail 这一个因素：原退出码 0，改动后退出码 1；两次运行都记录退出码，构成单因素前后对照。\n\n## 边界（未覆盖）\n- 只验证了“上游失败、末段成功”的单一反例，未覆盖管道中间多段、命令替换 `$(...)`、子 shell 或后台任务中错误被忽略的情况。\n- 属于脚本级开关改动，未涉及通过 Skill 加载或模型设置带来的收益，不能据此推断工具链层面的通用改进。\n- 若脚本有意容忍上游非零（如 `grep` 无匹配），需单独放行，本改动未讨论该豁免。",
+      "experience_type": "domain",
+      "scope": {
+        "applicability": "以管道形式执行被测命令、并以脚本退出码向调用方传播成败的脚本",
+        "preconditions": "bash 环境支持 pipefail；管道是判定成败的路径",
+        "out_of_scope": "命令替换/子 shell/后台任务的错误传播、需要容忍上游非零的管道",
+        "independent_value": "与既有去重经验和另一候选均无关：错误传播属于脚本退出码机制，独立单因素对照（trace-000001/000002），修复手段与适用条件互不影响。"
+      },
+      "evidence_refs": [
+        "trace-000001",
+        "trace-000002"
+      ],
+      "tags": [
+        "bash",
+        "pipefail",
+        "退出码",
+        "错误传播"
+      ],
+      "target_component": null,
+      "proposed_change": null
+    }
+  ]
+}

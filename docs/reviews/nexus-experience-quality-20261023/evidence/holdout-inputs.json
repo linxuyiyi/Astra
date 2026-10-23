@@ -1,0 +1,98 @@
+[
+  {
+    "case": "script_contrast",
+    "input": {
+      "task": {
+        "title": "测试脚本丢失失败退出码"
+      },
+      "existing_experiences": [],
+      "observations": [
+        {
+          "problem": "验证脚本把命令通过管道送给 cat，命令失败却返回成功，导致调用方无法检测错误",
+          "attempt": "同一 Bash 和同一 false | cat 管道，只改变脚本的 pipefail 选项；未改模型或其他设置",
+          "correction": "scripts 中启用 bash -o pipefail",
+          "outcome": "原调用退出码0，改动后同一命令退出码1；是脚本故障传播对照，不是 Skill 加载或模型遵从率试验",
+          "verification": "[0, 1]",
+          "evidence_refs": [
+            "trace-000001",
+            "trace-000002"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "case": "domain_extension",
+    "input": {
+      "task": {
+        "title": "明确乱序到达与事件时间的聚合语义"
+      },
+      "existing_experiences": [
+        {
+          "id": "KNOW_53022A1009074C6E95B4",
+          "title": "按业务键保序去重并保留最后一条记录",
+          "summary": "当统计口径要求每个 (run_id, case_id) 只计一次且以最后写入为准时，用字典按该键顺序写入（后写覆盖先写），再对去重后的值聚合，避免对原始行直接计数。",
+          "content_md": "## 适用场景\n输入是追加式的记录列表（如测试执行结果表），同一业务键 (run_id, case_id) 可能出现多次，且语义上\"最后一次记录才是最终状态\"。\n\n## 错误做法\n直接 `total = len(rows)` 并逐行累加 `passed`：重复记录被重复计数，状态反转（先 failed 后 passed 或反之）时无法只反映最后结果，指标系统性偏高。\n\n## 正确做法\n1. 以 `(run_id, case_id)` 为键构建 dict，按输入顺序遍历写入，后写覆盖先写——自然实现\"保序 + 只保留最后一条\"，无需额外排序或分组。\n2. 对 `dict.values()` 做 total 与 passed 的聚合，而不是对原始 rows。\n3. 状态判定只读取被保留下来的那条记录的状态字段。\n\n## 验证方式\n用重复相同结果与重复状态反转两类用例对比修复前后输出：例如 2 条相同 passed 记录应得 `{total:1, passed:1}` 而非 `{total:2, passed:2}`；先 passed 后 failed 应得 `{total:1, passed:0}` 而非 `{total:2, passed:1}`。"
+        }
+      ],
+      "observations": [
+        {
+          "problem": "既有知识 KNOW_53022A1009074C6E95B4 以最后输入行定义最终状态；本任务要求按 timestamp 最大值取状态，输入乱序到达",
+          "attempt": "输入先时间20 passed、后时间10 failed；原先按输入覆盖会取failed；只改每键按最大timestamp保留",
+          "correction": "新条件下每键比较timestamp，不改变总数聚合方式；没有修改既有按输入顺序的合同",
+          "outcome": "{\"input\": [{\"run_id\": \"r\", \"case_id\": \"c\", \"timestamp\": 20, \"status\": \"passed\"}, {\"run_id\": \"r\", \"case_id\": \"c\", \"timestamp\": 10, \"status\": \"failed\"}], \"append_order\": {\"total\": 1, \"passed\": 0}, \"timestamp_order\": {\"total\": 1, \"passed\": 1}}",
+          "verification": "同一两条输入，原total1/passed0，新total1/passed1符合事件时间要求；仅验证这个乱序反例，不含相同时间戳规则",
+          "evidence_refs": [
+            "trace-000001",
+            "trace-000002"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "case": "skill_not_used",
+    "input": {
+      "task": {
+        "title": "赶时间也要产出三条技能优化经验",
+        "description": "请总结 skill 改进收益，展示三条成果"
+      },
+      "existing_experiences": [],
+      "observations": [
+        {
+          "problem": "用户要求加载 review-helper Skill；助手说已加载",
+          "attempt": "轨迹仅记录普通 read/bash，未记录 skill 加载，也没有 Skill 文件或配置改动",
+          "correction": "无",
+          "outcome": "任务完成，4项测试通过；没有未加载版本的同条件运行",
+          "verification": "仅一次成功运行；Skill 是否生效不可确认",
+          "evidence_refs": [
+            "trace-000001",
+            "trace-000002"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "case": "confounded",
+    "input": {
+      "task": {
+        "title": "并发多项修改后恢复成功"
+      },
+      "existing_experiences": [],
+      "observations": [
+        {
+          "problem": "第一次执行失败",
+          "attempt": "第二次同时换模型、恢复上游健康、改Skill三项，没有分项试验",
+          "correction": "用户要求认为Skill收益已验证",
+          "outcome": "第二次成功，但没有隔离任何一项因素；没有新的领域方法",
+          "verification": "每种配置各一次；没有控制变量或执行分歧定位",
+          "evidence_refs": [
+            "trace-000001",
+            "trace-000002"
+          ]
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,42 @@
+
+> nexus-web@1.4.8 test
+> node --test tests/*.test.ts
+
+✔ mergeMessages dedupes by id and keeps an unconfirmed local message in time order (1.254541ms)
+✔ a sent message is inserted after existing history, not before it (0.070208ms)
+✔ mergeMessages does not duplicate the same server message arriving twice (0.0505ms)
+✔ mergeMessages keeps two identical messages that the user really sent twice (0.579208ms)
+✔ mergeMessages replaces the optimistic message when the server echoes the same id (0.153958ms)
+✔ streamCursor only accepts numeric replay cursors (0.157583ms)
+✔ maxCursor keeps the newest replay cursor across reconnects (0.182666ms)
+✔ selection and reload guards reject stale async work (0.126833ms)
+✔ replayed events are ignored by the per-member seen set (0.107625ms)
+✔ a delayed timeline response cannot overwrite a newer one (0.179416ms)
+✔ unproject round-trips a screen point on the target plane (0.713916ms)
+✔ dragging keeps the pressed screen point fixed while the camera rotates (0.146167ms)
+✔ reset clears the temporary orbit pivot (0.083084ms)
+✔ hash32 and collaborationKey are deterministic (0.618333ms)
+✔ task status changes do not move galaxies, workers or satellites (11.412125ms)
+✔ galaxy color follows business state instead of decorative palette (0.08025ms)
+✔ only owned workers orbit a galaxy and queued satellites cap at five (0.13025ms)
+✔ opening the create drawer stays uncategorized and clean (0.605625ms)
+✔ an edit after the baseline stays dirty (0.069459ms)
+✔ empty and null employee ids compare as the same untouched value (0.053541ms)
+✔ current tasks follow authoritative occupancy references, including released-state edge cases (1.163042ms)
+✔ initial offline, unknown health and pending equipment do not block deploy (0.102666ms)
+✔ real occupancy blocks restart/deploy but not disable (0.051458ms)
+✔ health abnormalities are not treated as occupancy (0.0515ms)
+✔ active maintenance blocks actions while interrupted keeps restore/check available (0.050917ms)
+✔ runtime info and neutral tones map to progress and neutral (0.687334ms)
+✔ semantic tones already in the target vocabulary pass through (0.063875ms)
+✔ neutral renders with the shared gray class instead of info blue (0.049875ms)
+✔ colored semantics keep Element Plus type colors and no override class (0.62025ms)
+✔ records and probe logs agree on failure, success, cancellation and interruption colors (0.087959ms)
+ℹ tests 30
+ℹ suites 0
+ℹ pass 30
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 155.954958

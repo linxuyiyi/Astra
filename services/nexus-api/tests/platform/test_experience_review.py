@@ -172,6 +172,7 @@ async def test_enqueue_is_idempotent(monkeypatch):
         second = await coordinator.enqueue_in_transaction(session, task=task, event=event, snapshot=snapshot)
         await session.commit()
         assert first.id == second.id
+        assert first.prompt_version == "2"
         count = await session.scalar(select(func.count()).select_from(ExperienceReviewJob))
         assert count == 1
 
@@ -189,12 +190,14 @@ async def test_claim_lease_and_retry(monkeypatch):
             "source_session_ids": ["ses_1"],
         }
         job = await coordinator.enqueue_in_transaction(session, task=task, event=event, snapshot=snapshot)
+        job.prompt_version = "1"
         await session.commit()
         job_id = job.id
 
     async with SessionLocal() as session:
         claimed = await coordinator.claim_job(session, job_id, "worker-a")
         assert claimed is not None
+        assert claimed.prompt_version == "2"
         again = await coordinator.claim_job(session, job_id, "worker-b")
         assert again is None
         claimed.lease_until = datetime.now(UTC) - timedelta(seconds=1)
@@ -712,7 +715,7 @@ async def test_superseded_review_abandons_late_model_result(monkeypatch):
     async def fake_read(_snapshot):
         return _trace()
 
-    async def superseding_reduce(_client, *, task_meta, observations):
+    async def superseding_reduce(_client, *, task_meta, observations, existing_experiences=None):
         # 独立 Session 模拟任务新轮次的作废写入，发生在模型返回之前。
         async with SessionLocal() as other:
             await other.execute(
@@ -793,7 +796,7 @@ async def test_writing_is_atomic_against_a_crash_before_finish(monkeypatch):
             raise SystemExit("模拟进程在 _finish 前退出")
         return await original_finish(session, job_id, token, status, **kwargs)
 
-    async def fake_reduce(_client, *, task_meta, observations):
+    async def fake_reduce(_client, *, task_meta, observations, existing_experiences=None):
         return [_candidate(["trace-000001", "trace-000002"])]
 
     monkeypatch.setattr(coordinator, "read_trace", fake_read)
@@ -856,7 +859,7 @@ async def test_writing_phase_recovers_instead_of_failing(monkeypatch):
     async def fake_read(_snapshot):
         return _trace()
 
-    async def fake_reduce(_client, *, task_meta, observations):
+    async def fake_reduce(_client, *, task_meta, observations, existing_experiences=None):
         return [_candidate(["trace-000001", "trace-000002"])]
 
     monkeypatch.setattr(coordinator, "read_trace", fake_read)
@@ -921,7 +924,7 @@ async def test_superseded_job_is_not_revived_by_a_late_failure(monkeypatch):
     async def fake_read(_snapshot):
         return _trace()
 
-    async def failing_reduce(_client, *, task_meta, observations):
+    async def failing_reduce(_client, *, task_meta, observations, existing_experiences=None):
         await _write_job_fields(
             job_id,
             status=coordinator.SUPERSEDED,
@@ -986,7 +989,7 @@ async def test_taken_over_job_keeps_the_new_workers_result(monkeypatch):
     async def fake_read(_snapshot):
         return _trace()
 
-    async def taken_over_reduce(_client, *, task_meta, observations):
+    async def taken_over_reduce(_client, *, task_meta, observations, existing_experiences=None):
         assert await _write_job_fields(
             job_id,
             status=coordinator.SUCCEEDED,
@@ -1194,3 +1197,157 @@ async def test_successful_review_clears_retried_error():
         )
         assert result.error_code is None
         assert result.error_message is None
+
+
+@pytest.mark.asyncio
+async def test_overlapping_lessons_are_merged_below_the_configured_cap(monkeypatch):
+    import json
+
+    from app.runtime.experience_review.reduce_analyzer import reduce_observations
+    from app.runtime.experience_review.schemas import Observation
+
+    monkeypatch.setattr(get_settings(), "experience_review_max_candidates", 3)
+
+    class Model:
+        calls = 0
+
+        async def complete_json(self, system, user):
+            self.calls += 1
+            if self.calls == 1:
+                return {"candidates": [
+                    _candidate(["trace-000002"]).model_dump(),
+                    {**_candidate(["trace-000003"]).model_dump(), "title": "同一方法的测试矩阵"},
+                ]}
+            payload = json.loads(user)
+            assert len(payload["candidates"]) == 2
+            return {"candidates": [{
+                **_candidate(["trace-000002", "trace-000003"]).model_dump(),
+                "content_md": "同一方法与验证矩阵合并为一条。",
+            }]}
+
+    model = Model()
+    result = await reduce_observations(
+        model, task_meta={}, observations=[Observation(problem="同一去重缺陷")]
+    )
+    assert len(result) == 1
+    assert set(result[0].evidence_refs) == {"trace-000002", "trace-000003"}
+
+
+@pytest.mark.asyncio
+async def test_reduce_receives_only_read_experiences_from_its_source_sessions(monkeypatch):
+    import json
+    from uuid import uuid4
+
+    from app.models import KnowledgeUsage
+
+    monkeypatch.setattr(get_settings(), "experience_review_enabled", True)
+    job_id = await _reduce_phase_job()
+    suffix = uuid4().hex[:8]
+    root_id, old_id = "ses-qa-" + suffix, "ses-old-" + suffix
+    secret = "ctx_" + "q" * 43
+    async with SessionLocal() as db:
+        job = await db.get(ExperienceReviewJob, job_id)
+        snapshot = dict(job.source_snapshot)
+        snapshot.update(root_session_id=root_id, source_session_ids=[root_id])
+        job.source_snapshot = snapshot
+        job.root_session_id = root_id
+        db.add(ExperienceReviewSegment(
+            job_id=job.id, segment_index=0, source_refs=["trace-000002"],
+            input_digest="qa", token_estimate=1, status="DONE",
+            analysis_json={"observations": [{
+                "problem": "复用已有方法", "evidence_refs": ["trace-000002"],
+            }]},
+        ))
+        db.add(AgentWorker(id="worker-" + suffix, name="QA", role="QA"))
+        for sid in (root_id, old_id):
+            db.add(RuntimeSession(
+                id=sid, task_id=job.task_id, employee_id="worker-" + suffix,
+                workspace="/tmp/qa", environment={}, status="SUCCEEDED",
+            ))
+        ids = {}
+        for label, action, sid, status in (
+            ("read", "read", root_id, "published"),
+            ("feedback", "feedback", root_id, "published"),
+            ("old", "read", old_id, "published"),
+            ("draft", "read", root_id, "draft"),
+        ):
+            kid = "KNOW-" + label + suffix
+            ids[label] = kid
+            db.add(KnowledgeItem(
+                id=kid, title=label, type="experience", summary="QA",
+                content_md="来源方法 " + secret + " " + "x" * 16000,
+                status=status, created_by="qa", updated_by="qa",
+            ))
+            await db.flush()
+            db.add(KnowledgeUsage(
+                knowledge_id=kid, task_id=job.task_id, session_id=sid,
+                tool_name="library_get", action=action,
+            ))
+        await db.commit()
+
+    captured = []
+
+    class Model:
+        async def complete_json(self, system, user):
+            captured.append(json.loads(user))
+            return {"candidates": []}
+
+        async def aclose(self):
+            pass
+
+    async def read(_snapshot):
+        return _trace()
+
+    monkeypatch.setattr(coordinator, "read_trace", read)
+    result = await coordinator.process_job(job_id, llm=Model())
+    assert result.status == coordinator.NO_FINDINGS
+    assert captured
+    known = captured[0].get("existing_experiences", [])
+    assert [x["id"] for x in known] == [ids["read"]]
+    assert secret not in json.dumps(known)
+    assert len(json.dumps(known)) < 9000
+
+
+@pytest.mark.parametrize("independent", [False, True])
+def test_multiple_candidates_need_independent_value(independent):
+    from app.runtime.experience_review.evidence import validate_candidates
+
+    a = _candidate(["trace-000002"])
+    b = _candidate(["trace-000003"])
+    b.title = "另一条经验"
+    if independent:
+        a.scope = {"independent_value": "独立的输入校验条件"}
+        b.scope = {"independent_value": "独立的恢复条件"}
+    accepted, rejected = validate_candidates([a, b], _trace(), limit=3)
+    assert len(accepted) == (2 if independent else 0)
+    assert len(rejected) == (0 if independent else 2)
+
+
+@pytest.mark.asyncio
+async def test_single_candidate_is_compared_against_read_knowledge():
+    import json
+
+    from app.runtime.experience_review.reduce_analyzer import reduce_observations
+    from app.runtime.experience_review.schemas import Observation
+
+    known = [{"id": "KNOW-existing", "title": "既有方法", "content_md": "先校验规则"}]
+
+    class Model:
+        calls = 0
+
+        async def complete_json(self, system, user):
+            self.calls += 1
+            data = json.loads(user)
+            assert data["existing_experiences"] == known
+            if self.calls == 1:
+                return {"candidates": [_candidate(["trace-000002"]).model_dump()]}
+            assert len(data["candidates"]) == 1
+            return {"candidates": []}
+
+    model = Model()
+    result = await reduce_observations(
+        model, task_meta={}, observations=[Observation(problem="已有方法的成功复用")],
+        existing_experiences=known,
+    )
+    assert result == []
+    assert model.calls == 2

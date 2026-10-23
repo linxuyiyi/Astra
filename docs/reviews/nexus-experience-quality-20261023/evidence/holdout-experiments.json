@@ -1,0 +1,44 @@
+{
+  "commands": [
+    [
+      "/bin/bash",
+      "-c",
+      "false | cat"
+    ],
+    [
+      "/bin/bash",
+      "-o",
+      "pipefail",
+      "-c",
+      "false | cat"
+    ]
+  ],
+  "return_codes": [
+    0,
+    1
+  ],
+  "event_time": {
+    "input": [
+      {
+        "run_id": "r",
+        "case_id": "c",
+        "timestamp": 20,
+        "status": "passed"
+      },
+      {
+        "run_id": "r",
+        "case_id": "c",
+        "timestamp": 10,
+        "status": "failed"
+      }
+    ],
+    "append_order": {
+      "total": 1,
+      "passed": 0
+    },
+    "timestamp_order": {
+      "total": 1,
+      "passed": 1
+    }
+  }
+}

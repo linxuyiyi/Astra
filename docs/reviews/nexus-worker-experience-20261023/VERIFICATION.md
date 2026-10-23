@@ -2,6 +2,8 @@
 
 日期：2026-10-23。基线为 `174bcbd9949797995751dda596010902f64e2f1f`，在 `codex/nexus-interaction-fixes` 隔离 worktree 上继续修复。代码文件 SHA-256 和进程身份见 [environment.json](evidence/environment.json)。原开发工作区、主数据库、原有 12 名员工及既有 Worker 未改动。
 
+> 后续质量优化（2026-10-23）：经验的独立价值、复用去重与零条结果另见 [Harness² 优化报告](../nexus-experience-quality-20261023/VERIFICATION.md)。下方九条候选为当时的历史产出，不等于九条有效新增经验。
+
 ## 结果
 
 **真实 Linux Worker 执行 → 人工确认 → 后台复盘 → 候选审核发布 → Wiki 同步 → 新任务实际检索读取并复用**已跑通。真实执行和服务交互没有 Mock；自动化测试使用仓库既有的外部接口替身，单独计数。

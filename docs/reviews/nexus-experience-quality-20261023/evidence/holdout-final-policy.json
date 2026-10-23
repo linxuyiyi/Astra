@@ -1,0 +1,84 @@
+[
+  {
+    "case": "script_contrast",
+    "output": {
+      "candidates": [
+        {
+          "kind": "harness_improvement",
+          "title": "Bash 管道掩蔽失败退出码：用 pipefail 让测试脚本传播错误",
+          "summary": "当 Bash 验证脚本把命令输出通过管道交给 cat 等后处理程序时，上游命令失败可能被管道末端成功退出码掩盖；启用 pipefail 可让脚本返回失败。",
+          "content_md": "**触发场景**：Bash 测试/验证脚本中存在 `command | cat` 或其他管道，并依赖脚本退出码判断命令是否成功。\n\n**原做法的问题**：管道默认返回最后一个命令的退出码。观察中 `false | cat` 返回 0，调用方因此把失败误判为成功，测试脚本丢失失败退出码。\n\n**实际改动**：在 scripts 中启用 `bash -o pipefail`（或在脚本内设置 `set -o pipefail`），使管道中任一命令失败时整体返回非零。\n\n**改动前后可定位的执行差异**：同一 Bash 环境、同一 `false | cat` 管道，仅改变 pipefail 选项：改动前退出码为 0，改动后为 1。\n\n**验证方式**：用失败命令构造管道，比较启用 pipefail 前后的退出码；观察记录显示退出码由 [0] 变为 [1]。可在测试脚本交付前保留一个失败管道用例作为回归检查。\n\n**边界**：观察只覆盖 Bash 下 `false | cat` 这一条管道，未覆盖其他 shell、多级管道、与 `set -e`/`set -u` 的组合、以及有意忽略上游失败的管道；这些场景需另行验证。该对照是脚本故障传播验证，不是 Skill 加载或模型遵从率试验。",
+          "experience_type": "harness_improvement",
+          "scope": {
+            "applicable_to": "Bash 测试/验证脚本中通过管道传递命令且需要保留失败退出码的场景",
+            "not_applicable_to": "非 Bash 环境，或业务上明确允许忽略上游命令失败的管道",
+            "verified_scope": "同一 Bash 环境中 `false | cat` 管道在启用 pipefail 前后退出码分别为 0 和 1",
+            "unverified_scope": "其他 shell、多级管道、`set -euo pipefail` 组合及有意忽略失败的管道",
+            "evaluation_level": "observed",
+            "requires_further_validation": true
+          },
+          "evidence_refs": [
+            "trace-000001",
+            "trace-000002"
+          ],
+          "tags": [
+            "bash",
+            "pipefail",
+            "退出码",
+            "测试脚本",
+            "错误传播"
+          ],
+          "target_component": "tool_guidance",
+          "proposed_change": "在 scripts 的 Bash shebang 或脚本开头启用 pipefail（如 `#!/usr/bin/env bash -o pipefail` 或 `set -o pipefail`），并增加一个失败管道用例验证退出码能变为非零。"
+        }
+      ]
+    }
+  },
+  {
+    "case": "skill_not_used",
+    "output": {
+      "candidates": []
+    }
+  },
+  {
+    "case": "confounded",
+    "output": {
+      "candidates": []
+    }
+  },
+  {
+    "case": "domain_extension",
+    "output": {
+      "candidates": [
+        {
+          "kind": "domain",
+          "title": "乱序追加记录按事件时间（最大 timestamp）去重取状态，而非按输入顺序覆盖",
+          "summary": "当同一业务键 (run_id, case_id) 的记录可能乱序到达、且统计口径以事件时间最新状态为准时，按输入顺序后写覆盖会取到错误状态；应改为每键比较 timestamp 保留最大值那条，再对去重后的值聚合 total/passed。",
+          "content_md": "## 适用场景\n追加式记录列表（如测试执行结果）中，同一业务键 (run_id, case_id) 出现多次，且语义上\"最终状态\"由事件时间字段 `timestamp` 的最大值决定，而不是由记录在输入中的先后位置决定。典型表现是输入乱序到达（较晚 timestamp 的记录先出现）。\n\n## 原做法的问题\n参照 KNOW_53022A1009074C6E95B4 的\"按输入顺序写入 dict，后写覆盖先写\"实现：该做法把\"最后一条记录\"等同于\"输入中最后出现的记录\"。在乱序输入下二者不等价——当 timestamp=20 passed 先到、timestamp=10 failed 后到时，覆盖结果取到 failed，`passed=0`，与事件时间语义相反。\n\n## 实际改动\n只改去重键的保留规则：对每个 (run_id, case_id)，写入前比较 `timestamp`，仅当新记录 timestamp 更大时才替换已存记录；总数聚合方式不变（仍对去重后的 `dict.values()` 计 total 与 passed，不逐行累加原始 rows）。不修改既有\"按输入顺序\"那份合同，二者是不同口径下的两条规则。\n\n## 改变前后的可定位差异\n同一组两条输入 `[{ts:20, passed}, {ts:10, failed}]`：\n- 输入顺序覆盖（原）：`{total:1, passed:0}`；\n- 最大 timestamp 保留（新）：`{total:1, passed:1}`。\n差异只体现在状态取值上，total 恒为 1（去重逻辑未被破坏）。\n\n## 验证方式\n用上述乱序反例直接对比修复前后输出，断言结果符合事件时间要求（total=1、passed=1，取到 ts=20 的 passed）。该用例同时覆盖了\"乱序\"与\"状态反转\"两个维度。\n\n## 未覆盖边界\n- timestamp 相同（并列最大）时如何取舍，未定义也未验证；不能假定等于\"先到优先\"或\"后到优先\"。\n- 未验证 timestamp 缺失、类型不一致或跨时区/字符串时间等情形。\n- 未验证非整数 timestamp 或与其他排序键组合的场景。",
+          "experience_type": "domain",
+          "scope": {
+            "task_type": "乱序事件记录的状态聚合/去重",
+            "trigger": "同一业务键多条记录乱序到达，语义要求按事件时间最大值取最终状态",
+            "applies_to": "对去重后值做聚合的指标计算（total/passed 类计数）",
+            "boundary": "相同 timestamp 的并列取舍、缺失或非数值 timestamp 未覆盖",
+            "relation_to_existing": "KNOW_53022A1009074C6E95B4 的补充与反例：该条以输入顺序定义最终状态，本条给出乱序输入下按最大 timestamp 保留的替代规则及其差异证据",
+            "independent_value": "与既有条目的判断条件不同（事件时间最大值 vs 输入顺序末条），且有乱序反例证明结论相反（total=1 下 passed 从 0 变 1），属独立语义而非同一方法的常规样例补充"
+          },
+          "evidence_refs": [
+            "trace-000001",
+            "trace-000002"
+          ],
+          "tags": [
+            "事件时间",
+            "乱序到达",
+            "去重",
+            "聚合语义",
+            "timestamp"
+          ],
+          "target_component": null,
+          "proposed_change": null
+        }
+      ]
+    }
+  }
+]

@@ -42,7 +42,7 @@
         </ElTag>
         <ElText v-if="reviewJob.segment_count" type="info">轨迹片段 {{ reviewJob.completed_segment_count }}/{{ reviewJob.segment_count }}</ElText>
         <ElText v-if="reviewJob.candidate_ids.length" type="success">{{ reviewJob.candidate_ids.length }} 条候选经验</ElText>
-        <ElText v-else-if="reviewJob.zero_reason" type="info">{{ reviewJob.zero_reason }}</ElText>
+        <ElText v-else-if="reviewJob.zero_reason && reviewJob.zero_reason !== 'no_findings'" type="info">{{ reviewJob.zero_reason }}</ElText>
         <ElText v-if="reviewJob.error_message" type="danger">{{ reviewJob.error_message }}</ElText>
         <RouterLink v-if="reviewJob.candidate_ids.length" :to="{ path: '/library', query: { status: 'candidate' } }">查看候选</RouterLink>
         <ElButton

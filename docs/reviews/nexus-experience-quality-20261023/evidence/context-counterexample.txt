@@ -1,0 +1,137 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.3, pytest-8.4.2, pluggy-1.6.0
+rootdir: /Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api
+configfile: pytest.ini
+plugins: cov-6.3.0, anyio-4.14.2, asyncio-0.26.0
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 34 items / 33 deselected / 1 selected
+
+tests/platform/test_experience_review.py F                               [100%]
+
+=================================== FAILURES ===================================
+_____ test_reduce_receives_only_read_experiences_from_its_source_sessions ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10f2d15b0>
+
+    @pytest.mark.asyncio
+    async def test_reduce_receives_only_read_experiences_from_its_source_sessions(monkeypatch):
+        import json
+        from uuid import uuid4
+
+        from app.models import KnowledgeUsage
+
+        monkeypatch.setattr(get_settings(), "experience_review_enabled", True)
+        job_id = await _reduce_phase_job()
+        suffix = uuid4().hex[:8]
+        root_id, old_id = "ses-qa-" + suffix, "ses-old-" + suffix
+        secret = "ctx_" + "q" * 43
+        async with SessionLocal() as db:
+            job = await db.get(ExperienceReviewJob, job_id)
+            snapshot = dict(job.source_snapshot)
+            snapshot.update(root_session_id=root_id, source_session_ids=[root_id])
+            job.source_snapshot = snapshot
+            job.root_session_id = root_id
+            db.add(ExperienceReviewSegment(
+                job_id=job.id, segment_index=0, source_refs=["trace-000002"],
+                input_digest="qa", token_estimate=1, status="DONE",
+                analysis_json={"observations": [{
+                    "problem": "复用已有方法", "evidence_refs": ["trace-000002"],
+                }]},
+            ))
+            db.add(AgentWorker(id="worker-" + suffix, name="QA", role="QA"))
+            for sid in (root_id, old_id):
+                db.add(RuntimeSession(
+                    id=sid, task_id=job.task_id, employee_id="worker-" + suffix,
+                    workspace="/tmp/qa", environment={}, status="SUCCEEDED",
+                ))
+            ids = {}
+            for label, action, sid, status in (
+                ("read", "read", root_id, "published"),
+                ("feedback", "feedback", root_id, "published"),
+                ("old", "read", old_id, "published"),
+                ("draft", "read", root_id, "draft"),
+            ):
+                kid = "KNOW-" + label + suffix
+                ids[label] = kid
+                db.add(KnowledgeItem(
+                    id=kid, title=label, type="experience", summary="QA",
+                    content_md="来源方法 " + secret + " " + "x" * 16000,
+                    status=status, created_by="qa", updated_by="qa",
+                ))
+                await db.flush()
+                db.add(KnowledgeUsage(
+                    knowledge_id=kid, task_id=job.task_id, session_id=sid,
+                    tool_name="library_get", action=action,
+                ))
+            await db.commit()
+
+        captured = []
+
+        class Model:
+            async def complete_json(self, system, user):
+                captured.append(json.loads(user))
+                return {"candidates": []}
+
+            async def aclose(self):
+                pass
+
+        async def read(_snapshot):
+            return _trace()
+
+        monkeypatch.setattr(coordinator, "read_trace", read)
+        result = await coordinator.process_job(job_id, llm=Model())
+        assert result.status == coordinator.NO_FINDINGS
+        assert captured
+        known = captured[0].get("existing_experiences", [])
+>       assert [x["id"] for x in known] == [ids["read"]]
+E       AssertionError: assert [] == ['KNOW-read141c020a']
+E
+E         Right contains one more item: 'KNOW-read141c020a'
+E         Use -v to get more diff
+
+tests/platform/test_experience_review.py:1303: AssertionError
+=============================== warnings summary ===============================
+tests/platform/test_experience_review.py::test_reduce_receives_only_read_experiences_from_its_source_sessions
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_reduce_receives_only_read_experiences_from_its_source_sessions
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_experience_review.py::test_reduce_receives_only_read_experiences_from_its_source_sessions
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_reduce_receives_only_read_experiences_from_its_source_sessions
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_experience_review.py::test_reduce_receives_only_read_experiences_from_its_source_sessions
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_experience_review.py::test_reduce_receives_only_read_experiences_from_its_source_sessions
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_reduce_receives_only_read_experiences_from_its_source_sessions
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_experience_review.py::test_reduce_receives_only_read_experiences_from_its_source_sessions
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_reduce_receives_only_read_experiences_from_its_source_sessions
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_experience_review.py::test_reduce_receives_only_read_experiences_from_its_source_sessions
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_experience_review.py::test_reduce_receives_only_read_experiences_from_its_source_sessions
+================ 1 failed, 33 deselected, 10 warnings in 0.57s =================

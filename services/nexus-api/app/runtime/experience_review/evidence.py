@@ -60,6 +60,11 @@ def validate_candidates(
             continue
         try:
             validate_candidate(candidate, trace)
+            independent_value = candidate.scope.get("independent_value")
+            if len(candidates) > 1 and (
+                not isinstance(independent_value, str) or not independent_value.strip()
+            ):
+                raise EvidenceError("missing_independent_value", "多条候选缺少独立新增价值说明")
         except EvidenceError as exc:
             rejected.append(f"{candidate.title}: {exc.code}")
             continue

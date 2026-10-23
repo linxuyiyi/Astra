@@ -1,0 +1,61 @@
+_________ test_overlapping_lessons_are_merged_below_the_configured_cap _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10d229480>
+
+    @pytest.mark.asyncio
+    async def test_overlapping_lessons_are_merged_below_the_configured_cap(monkeypatch):
+        import json
+
+        from app.runtime.experience_review.reduce_analyzer import reduce_observations
+        from app.runtime.experience_review.schemas import Observation
+
+        monkeypatch.setattr(get_settings(), "experience_review_max_candidates", 3)
+
+        class Model:
+            calls = 0
+
+            async def complete_json(self, system, user):
+                self.calls += 1
+                if self.calls == 1:
+                    return {"candidates": [
+                        _candidate(["trace-000002"]).model_dump(),
+                        {**_candidate(["trace-000003"]).model_dump(), "title": "同一方法的测试矩阵"},
+                    ]}
+                payload = json.loads(user)
+                assert len(payload["candidates"]) == 2
+                return {"candidates": [{
+                    **_candidate(["trace-000002", "trace-000003"]).model_dump(),
+                    "content_md": "同一方法与验证矩阵合并为一条。",
+                }]}
+
+        model = Model()
+        result = await reduce_observations(
+            model, task_meta={}, observations=[Observation(problem="同一去重缺陷")]
+        )
+>       assert len(result) == 1
+E       AssertionError: assert 2 == 1
+E        +  where 2 = len([Candidate(kind='domain', title='升级脚本先校验规则', summary='先读取规则再生成', content_md='生成参数升级脚本前先读取规则并验证。', experience_type='dom...erience_type='domain', scope={}, evidence_refs=['trace-000003'], tags=[], target_component=None, proposed_change=None)])
+
+tests/platform/test_experience_review.py:1229: AssertionError
+
+
+____________ test_multiple_candidates_need_independent_value[False] ____________
+
+independent = False
+
+    @pytest.mark.parametrize("independent", [False, True])
+    def test_multiple_candidates_need_independent_value(independent):
+        from app.runtime.experience_review.evidence import validate_candidates
+
+        a = _candidate(["trace-000002"])
+        b = _candidate(["trace-000003"])
+        b.title = "另一条经验"
+        if independent:
+            a.scope = {"independent_value": "独立的输入校验条件"}
+            b.scope = {"independent_value": "独立的恢复条件"}
+        accepted, rejected = validate_candidates([a, b], _trace(), limit=3)
+>       assert len(accepted) == (2 if independent else 0)
+E       AssertionError: assert 2 == 0
+E        +  where 2 = len([Candidate(kind='domain', title='升级脚本先校验规则', summary='先读取规则再生成', content_md='生成参数升级脚本前先读取规则并验证。', experience_type='dom...erience_type='domain', scope={}, evidence_refs=['trace-000003'], tags=[], target_component=None, proposed_change=None)])
+
+tests/platform/test_experience_review.py:1312: AssertionError

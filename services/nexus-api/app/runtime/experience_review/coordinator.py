@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -13,7 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.database import SessionLocal, worker_session
-from app.models import Event, ExperienceReviewJob, ExperienceReviewSegment, Task
+from app.models import (
+    Event,
+    ExperienceReviewJob,
+    ExperienceReviewSegment,
+    KnowledgeItem,
+    KnowledgeUsage,
+    Task,
+)
 from app.runtime.experience_review.candidate_writer import write_candidates
 from app.runtime.experience_review.evidence import validate_candidates
 from app.runtime.experience_review.llm_client import ReviewLLMClient, ReviewLLMError
@@ -22,8 +30,10 @@ from app.runtime.experience_review.reduce_analyzer import reduce_observations
 from app.runtime.experience_review.schemas import Observation, SegmentInput
 from app.runtime.experience_review.trace_reader import TraceTooLarge, TraceUnavailable, read_trace
 from app.runtime.experience_review.trace_segmenter import segment_events
+from app.runtime.redaction import redact_text
 
 logger = logging.getLogger(__name__)
+PROMPT_VERSION = "2"
 
 PENDING = "PENDING"
 COLLECTING = "COLLECTING"
@@ -84,7 +94,7 @@ async def enqueue_in_transaction(
         segment_count=0,
         completed_segment_count=0,
         candidate_ids=[],
-        prompt_version="1",
+        prompt_version=PROMPT_VERSION,
     )
     session.add(job)
     await session.flush()
@@ -103,6 +113,7 @@ async def claim_job(session: AsyncSession, job_id: str, owner: str) -> Experienc
             or_(ExperienceReviewJob.status != RETRY_WAIT, ExperienceReviewJob.next_retry_at <= now),
         )
         .values(
+            prompt_version=PROMPT_VERSION,
             lease_owner=owner,
             lease_token=token,
             lease_until=now + timedelta(seconds=get_settings().experience_review_lease_seconds),
@@ -137,6 +148,37 @@ async def retry_job(session: AsyncSession, job_id: str) -> ExperienceReviewJob |
 def _task_meta(job: ExperienceReviewJob) -> dict[str, Any]:
     task = job.source_snapshot.get("task") if isinstance(job.source_snapshot, dict) else {}
     return task if isinstance(task, dict) else {}
+
+
+async def _read_experiences(session: AsyncSession, job: ExperienceReviewJob) -> list[dict[str, str]]:
+    source_ids = set(job.source_snapshot.get("source_session_ids") or [])
+    source_ids.add(job.root_session_id)
+    items = await session.scalars(
+        select(KnowledgeItem)
+        .join(KnowledgeUsage, KnowledgeUsage.knowledge_id == KnowledgeItem.id)
+        .where(
+            KnowledgeUsage.task_id == job.task_id_snapshot,
+            KnowledgeUsage.session_id.in_(source_ids),
+            KnowledgeUsage.action == "read",
+            KnowledgeItem.type == "experience",
+            KnowledgeItem.status.in_(("candidate", "published")),
+        )
+        .distinct()
+        .order_by(KnowledgeItem.updated_at.desc(), KnowledgeItem.id)
+        .limit(8)
+    )
+    result: list[dict[str, str]] = []
+    for item in items:
+        entry = {
+            "id": item.id,
+            "title": redact_text(item.title),
+            "summary": redact_text(item.summary)[:500],
+            "content_md": redact_text(item.content_md)[:3000],
+        }
+        if len(json.dumps([*result, entry], ensure_ascii=False)) > 8000:
+            break
+        result.append(entry)
+    return result
 
 
 async def _create_segments(session: AsyncSession, job: ExperienceReviewJob, trace) -> None:
@@ -443,7 +485,10 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
                             except Exception:
                                 continue
                     candidates = await reduce_observations(
-                        client, task_meta=_task_meta(job), observations=observations
+                        client,
+                        task_meta=_task_meta(job),
+                        observations=observations,
+                        existing_experiences=await _read_experiences(session, job),
                     )
                     if not await _lease_holds(session, job.id, token):
                         return await _abandoned(session, job)

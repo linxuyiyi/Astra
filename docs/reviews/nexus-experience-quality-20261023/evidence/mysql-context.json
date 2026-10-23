@@ -1,0 +1,7 @@
+{
+  "mysql_version": "8.0.36",
+  "fresh_alembic": "passed",
+  "distinct_json_text_context_query": "passed",
+  "duplicate_read_context_entries": 1,
+  "private_instance": "unix socket only; stopped after verification"
+}

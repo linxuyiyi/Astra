@@ -1,0 +1,95 @@
+{
+  "captured_at": "2026-10-23T06:12:23.644870+00:00",
+  "source_base_commit": "9a36cd65fdf68f51c374b717e941668bd4d9f6e2",
+  "branch": "codex/nexus-interaction-fixes",
+  "worktree": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra",
+  "upstream": "https://github.com/google-research/harness2",
+  "upstream_commit": "1cfe254e8d25b15f37048c3730134686abe60335",
+  "model_parameters": {
+    "model": "deepseek-flash",
+    "gateway": "http://127.0.0.1:18511/v1/chat/completions",
+    "max_candidates": 3,
+    "reduce_budget": 8000,
+    "temperature": 0
+  },
+  "processes": {
+    "redis": {
+      "pid": 93080,
+      "create_time": 1792716550.916329,
+      "cwd": "/tmp/nexus-worker-experience-20261023",
+      "actual_cwd": "/private/tmp/nexus-worker-experience-20261023/redis",
+      "identity_verified": true
+    },
+    "api": {
+      "pid": 61993,
+      "create_time": 1792734795.276824,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "taskmcp": {
+      "pid": 52052,
+      "create_time": 1792731301.270341,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "agent": {
+      "pid": 93083,
+      "create_time": 1792716550.921804,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/agent-service",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/agent-service",
+      "identity_verified": true
+    },
+    "tunnel": {
+      "pid": 93966,
+      "create_time": 1792717367.144581,
+      "cwd": "/tmp/nexus-worker-experience-20261023",
+      "actual_cwd": "/private/tmp/nexus-worker-experience-20261023",
+      "identity_verified": true
+    },
+    "librarymcp": {
+      "pid": 52598,
+      "create_time": 1792731768.698456,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "gateway": {
+      "pid": 93965,
+      "create_time": 1792717367.142531,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "celery": {
+      "pid": 64334,
+      "create_time": 1792735137.436103,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "beat": {
+      "pid": 94194,
+      "create_time": 1792717524.00689,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "actual_cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+      "identity_verified": true
+    }
+  },
+  "code_sha256": {
+    "services/nexus-api/app/runtime/experience_review/coordinator.py": "862db173ae18ef2173122f0e64fc8bb550374260c8f886c5cb44de12db168641",
+    "services/nexus-api/app/runtime/experience_review/evidence.py": "902578054f378d53d136a766a09014167266c80db4375ff11fc823b829d27000",
+    "services/nexus-api/app/runtime/experience_review/map_analyzer.py": "6d5457edf3dcfe111f85662d66e2153f79d003f883d821d6bb9fe11b772ab704",
+    "services/nexus-api/app/runtime/experience_review/reduce_analyzer.py": "b6e5fbc38418f01f92777b80a4d75fa0f65a482e8c238a5a7636691519f806ae",
+    "services/nexus-api/tests/platform/test_experience_review.py": "297c78ae9215ad7577e93fba9425f23b388bb4a63ed4fdb9ff53e4d70c70fad0",
+    "services/nexus-api/web/src/views/TaskDetailView.vue": "45c6068b17fce1cd4e802c44a3766434a53d3d25d377b4937f41e5c390d6b49f"
+  },
+  "prompt_sha256": {
+    "baseline-system.txt": "ee6c62fe749a3d0cd0ec07a91691c327510495d7e83c1ba0d2c2618ac43e556f",
+    "baseline-merge-system.txt": "3faee510c83987a7b9142e5fd776565312d8d06fd979bbcafd12c4ac8a481fb1",
+    "optimized-system.txt": "d60bc6cd37f917c31b0560c50610dba1909dbec96ae2aee11bf00a2710dc94c8",
+    "optimized-merge-system.txt": "b0f901a63b6ad01fb0834d82d9f2d46f48a2183048e961180c74cfcfa561efaf"
+  },
+  "inputs_sha256": "7916f9a4d3ce42d3b8ccdd2935ce3f49468730f9a38cea971ddabd179ecb2b58"
+}

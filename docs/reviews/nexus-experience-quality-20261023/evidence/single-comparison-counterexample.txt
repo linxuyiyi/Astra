@@ -1,0 +1,91 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.3, pytest-8.4.2, pluggy-1.6.0
+rootdir: /Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api
+configfile: pytest.ini
+plugins: cov-6.3.0, anyio-4.14.2, asyncio-0.26.0
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 35 items / 34 deselected / 1 selected
+
+tests/platform/test_experience_review.py F                               [100%]
+
+=================================== FAILURES ===================================
+___________ test_single_candidate_is_compared_against_read_knowledge ___________
+
+    @pytest.mark.asyncio
+    async def test_single_candidate_is_compared_against_read_knowledge():
+        import json
+
+        from app.runtime.experience_review.reduce_analyzer import reduce_observations
+        from app.runtime.experience_review.schemas import Observation
+
+        known = [{"id": "KNOW-existing", "title": "既有方法", "content_md": "先校验规则"}]
+
+        class Model:
+            calls = 0
+
+            async def complete_json(self, system, user):
+                self.calls += 1
+                data = json.loads(user)
+                assert data["existing_experiences"] == known
+                if self.calls == 1:
+                    return {"candidates": [_candidate(["trace-000002"]).model_dump()]}
+                assert len(data["candidates"]) == 1
+                return {"candidates": []}
+
+        model = Model()
+        result = await reduce_observations(
+            model, task_meta={}, observations=[Observation(problem="已有方法的成功复用")],
+            existing_experiences=known,
+        )
+>       assert result == []
+E       AssertionError: assert [Candidate(ki..._change=None)] == []
+E
+E         Left contains one more item: Candidate(kind='domain', title='升级脚本先校验规则', summary='先读取规则再生成', content_md='生成参数升级脚本前先读取规则并验证。', experience_type='domain', scope={}, evidence_refs=['trace-000002'], tags=[], target_component=None, proposed_change=None)
+E         Use -v to get more diff
+
+tests/platform/test_experience_review.py:1352: AssertionError
+=============================== warnings summary ===============================
+tests/platform/test_experience_review.py::test_single_candidate_is_compared_against_read_knowledge
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_single_candidate_is_compared_against_read_knowledge
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_experience_review.py::test_single_candidate_is_compared_against_read_knowledge
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_single_candidate_is_compared_against_read_knowledge
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_experience_review.py::test_single_candidate_is_compared_against_read_knowledge
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_experience_review.py::test_single_candidate_is_compared_against_read_knowledge
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_single_candidate_is_compared_against_read_knowledge
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_experience_review.py::test_single_candidate_is_compared_against_read_knowledge
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_single_candidate_is_compared_against_read_knowledge
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_experience_review.py::test_single_candidate_is_compared_against_read_knowledge
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_experience_review.py::test_single_candidate_is_compared_against_read_knowledge
+================ 1 failed, 34 deselected, 10 warnings in 0.60s =================

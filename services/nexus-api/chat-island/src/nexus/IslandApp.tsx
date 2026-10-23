@@ -123,7 +123,7 @@ function PrivateChatApp({ conversationId }: { conversationId: string }) {
           loading={resolving || chat.loading}
           phase={chat.phase}
           disabled={!binding || !binding.enabled}
-          onSend={(content: ContentBlock[]) => void chat.send(content)}
+          onSend={(content: ContentBlock[]) => chat.send(content)}
           onUserConfirm={async (_tool: ToolCallBlock, _confirm: boolean, _replyId: string) => {
             // 私聊会话固定在 dont_ask 策略下，确认卡不会出现；这里只作为兜底。
             throw new Error("当前会话不提供人工确认");

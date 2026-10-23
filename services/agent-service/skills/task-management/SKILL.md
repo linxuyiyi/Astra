@@ -1,6 +1,6 @@
 ---
 name: 任务管理
-description: 把需要改代码、跑工程或交付工作区结果的请求做成 Nexus 任务，并在状态提示后先查询再决定。
+description: 仅在明确查询或操作 Nexus 任务、需要 Worker 工程执行时使用。普通设计讨论、职责问答、需求澄清和联系同事不加载本技能。收到任务状态提示后先查询再决定。
 ---
 
 # 任务管理
@@ -15,7 +15,7 @@ description: 把需要改代码、跑工程或交付工作区结果的请求做�
 ## 创建时要写清
 
 - `task_type`：缺陷用 `ISSUE`，需求用 `REQUIREMENT`
-- `category_id`：使用任务中心已启用的分类
+- `category_id`：先调用 `nexus_task_categories`，使用返回的已启用分类 ID
 - `title`、`description`
 - `acceptance_criteria`：可以验收的结果
 
@@ -30,6 +30,9 @@ description: 把需要改代码、跑工程或交付工作区结果的请求做�
 ## 工具
 
 查询：`nexus_task_get`、`nexus_task_list`、`nexus_task_logs`、`nexus_task_result`、`nexus_task_summary`
+标题前缀不代表任务类型。例如 `title="E2E-TEST 查询能力"`，`task_type="REQUIREMENT"`。
+普通设计讨论和职责问答不需要加载本技能，只有查询或操作 Nexus 任务时使用。
+
 创建和修改：`nexus_task_create`、`nexus_task_update`、`nexus_task_assign`
 控制：`nexus_task_start`、`nexus_task_pause`、`nexus_task_resume`、`nexus_task_terminate`、`nexus_task_retry`、`nexus_task_intervene`、`nexus_task_confirm`
 

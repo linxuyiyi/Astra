@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hmac
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.mcpserver import MCPServer
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -109,7 +109,7 @@ def build_mcp_server() -> MCPServer:
 
     @server.tool(name="nexus_task_create", structured_output=True)
     async def nexus_task_create(
-        task_type: str,
+        task_type: Literal["ISSUE", "REQUIREMENT"],
         category_id: str,
         title: str,
         description: str,
@@ -130,6 +130,11 @@ def build_mcp_server() -> MCPServer:
             worker_id=worker_id,
             idempotency_key=idempotency_key,
         )
+
+    @server.tool(name="nexus_task_categories", structured_output=True)
+    async def nexus_task_categories() -> dict[str, Any]:
+        """查询已启用的任务分类。创建任务前先选取返回的分类 ID，不猜分类。"""
+        return await _call("categories")
 
     @server.tool(name="nexus_task_get", structured_output=True)
     async def nexus_task_get(task_id: str) -> dict[str, Any]:

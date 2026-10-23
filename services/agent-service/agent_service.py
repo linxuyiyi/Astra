@@ -485,7 +485,7 @@ def main() -> None:
         async def contact_employee(employee_name: str, message: str) -> str:
             """把一条提示交给另一位数字员工，由对方自己推理后回复。
 
-            employee_name: 同事的姓名。私聊和自己的邮箱会话都按员工目录查找对方的邮箱。
+            employee_name: 同事的精确姓名、员工 ID 或唯一岗位名。岗位有多位同事时，按错误中的候选指定姓名。私聊和自己的邮箱会话都按员工目录查找对方的邮箱。
             message: 需要对方看到的原话。不要代替对方编写结论。
             """
             return await deliver_peer_hint(
@@ -622,7 +622,7 @@ async def deliver_peer_hint(
     peer = response.json()
     if peer.get("scheduled"):
         return json.dumps({"ok": True, "peer": employee_name, "status": "scheduled"}, ensure_ascii=False)
-    hint = hint_block(hint=message, source=peer.get("sender_name") or agent_id)
+    hint = hint_block(id=peer["delivery_id"], hint=message, source=peer.get("sender_name") or agent_id)
     await deliver_to_inbox(
         message_bus,
         user_id=user_id,

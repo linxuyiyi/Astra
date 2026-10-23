@@ -77,6 +77,8 @@
 			"name": "Grep"
 		},
 		"summary": {
+			"failed_one": "失败 {{count}} 次工具调用",
+			"failed_other": "失败 {{count}} 次工具调用",
 			"separator": "，",
 			"bash_one": "执行 {{count}} 次脚本",
 			"bash_other": "执行 {{count}} 次脚本",
@@ -107,6 +109,7 @@
 		"yesWithRule": "是，且该次对话中都允许 {{toolName}} 执行 {{ruleContent}}"
 	},
 	"messageBubble": {
+		"peerReply": "同事回复",
 		"thinking": "思考中",
 		"thinkingFor": "思考 {{duration}}",
 		"audioGenerating": "正在生成音频…",

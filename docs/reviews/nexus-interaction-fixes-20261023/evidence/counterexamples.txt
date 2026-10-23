@@ -1,0 +1,473 @@
+## nexus-interaction-red.log
+FFFFFFFFF                                                                [100%]
+=================================== FAILURES ===================================
+_ test_quoted_mentions_do_not_schedule_a_colleague[@\u5c0f\u725b\u7801 \u4e0b\u9762\u662f\u65e5\u5fd7\uff1amessage="@\u5c0f\u638c\u67dc \u8bf7\u5f00\u59cb\u6267\u884c"\uff0c\u8bf7\u5206\u6790] _
+tests/nexus/test_interaction_reliability.py:24: in test_quoted_mentions_do_not_schedule_a_colleague
+    assert named_employees(body, staff) == ['dev']
+E   AssertionError: assert ['dev', 'qa'] == ['dev']
+E
+E     Left contains one more item: 'qa'
+E     Use -v to get more diff
+_ test_quoted_mentions_do_not_schedule_a_colleague[@\u5c0f\u725b\u7801 \u8bf7\u5206\u6790 `@\u5c0f\u638c\u67dc \u8bf7\u5f00\u59cb`] _
+tests/nexus/test_interaction_reliability.py:24: in test_quoted_mentions_do_not_schedule_a_colleague
+    assert named_employees(body, staff) == ['dev']
+E   AssertionError: assert ['dev', 'qa'] == ['dev']
+E
+E     Left contains one more item: 'qa'
+E     Use -v to get more diff
+_ test_quoted_mentions_do_not_schedule_a_colleague[@\u5c0f\u725b\u7801 \u8bf7\u5206\u6790\n```python\nmessage="@\u5c0f\u638c\u67dc \u8bf7\u5f00\u59cb"\n```] _
+tests/nexus/test_interaction_reliability.py:24: in test_quoted_mentions_do_not_schedule_a_colleague
+    assert named_employees(body, staff) == ['dev']
+E   AssertionError: assert ['dev', 'qa'] == ['dev']
+E
+E     Left contains one more item: 'qa'
+E     Use -v to get more diff
+_ test_quoted_mentions_do_not_schedule_a_colleague[@\u5c0f\u725b\u7801 \u8bf7\u5206\u6790\n> @\u5c0f\u638c\u67dc \u8bf7\u5f00\u59cb] _
+tests/nexus/test_interaction_reliability.py:24: in test_quoted_mentions_do_not_schedule_a_colleague
+    assert named_employees(body, staff) == ['dev']
+E   AssertionError: assert ['dev', 'qa'] == ['dev']
+E
+E     Left contains one more item: 'qa'
+E     Use -v to get more diff
+_ test_quoted_mentions_do_not_schedule_a_colleague[@\u5c0f\u725b\u7801 \u8bf7\u89e3\u91ca\u201c@\u5c0f\u638c\u67dc \u8bf7\u5f00\u59cb\u201d] _
+tests/nexus/test_interaction_reliability.py:24: in test_quoted_mentions_do_not_schedule_a_colleague
+    assert named_employees(body, staff) == ['dev']
+E   AssertionError: assert ['dev', 'qa'] == ['dev']
+E
+E     Left contains one more item: 'qa'
+E     Use -v to get more diff
+________________ test_peer_can_be_resolved_by_unique_role_or_id ________________
+tests/nexus/test_interaction_reliability.py:29: in test_peer_can_be_resolved_by_unique_role_or_id
+    assert employee_by_name(db, '自动化测试工程师')['id'] == 'qa'
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'NoneType' object is not subscriptable
+______________ test_ambiguous_role_does_not_silently_pick_a_peer _______________
+tests/nexus/test_interaction_reliability.py:37: in test_ambiguous_role_does_not_silently_pick_a_peer
+    with pytest.raises(HTTPException) as failure:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+__________ test_large_input_does_not_starve_second_selected_employee ___________
+tests/nexus/test_interaction_reliability.py:50: in test_large_input_does_not_starve_second_selected_employee
+    assert speakers == {'dev', 'qa'}
+E   AssertionError: assert {'dev'} == {'dev', 'qa'}
+E
+E     Extra items in the right set:
+E     'qa'
+E     Use -v to get more diff
+___________ test_followup_participant_and_delta_source_are_persisted ___________
+tests/nexus/test_interaction_reliability.py:63: in test_followup_participant_and_delta_source_are_persisted
+    assert participants == ['dev', 'qa']
+E   AssertionError: assert ['dev'] == ['dev', 'qa']
+E
+E     Right contains one more item: 'qa'
+E     Use -v to get more diff
+=============================== warnings summary ===============================
+tests/nexus/test_interaction_reliability.py::test_quoted_mentions_do_not_schedule_a_colleague[@\u5c0f\u725b\u7801 \u4e0b\u9762\u662f\u65e5\u5fd7\uff1amessage="@\u5c0f\u638c\u67dc \u8bf7\u5f00\u59cb\u6267\u884c"\uff0c\u8bf7\u5206\u6790]
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/nexus/test_interaction_reliability.py::test_quoted_mentions_do_not_schedule_a_colleague[@\u5c0f\u725b\u7801 \u4e0b\u9762\u662f\u65e5\u5fd7\uff1amessage="@\u5c0f\u638c\u67dc \u8bf7\u5f00\u59cb\u6267\u884c"\uff0c\u8bf7\u5206\u6790]
+FAILED tests/nexus/test_interaction_reliability.py::test_quoted_mentions_do_not_schedule_a_colleague[@\u5c0f\u725b\u7801 \u8bf7\u5206\u6790 `@\u5c0f\u638c\u67dc \u8bf7\u5f00\u59cb`]
+FAILED tests/nexus/test_interaction_reliability.py::test_quoted_mentions_do_not_schedule_a_colleague[@\u5c0f\u725b\u7801 \u8bf7\u5206\u6790\n```python\nmessage="@\u5c0f\u638c\u67dc \u8bf7\u5f00\u59cb"\n```]
+FAILED tests/nexus/test_interaction_reliability.py::test_quoted_mentions_do_not_schedule_a_colleague[@\u5c0f\u725b\u7801 \u8bf7\u5206\u6790\n> @\u5c0f\u638c\u67dc \u8bf7\u5f00\u59cb]
+FAILED tests/nexus/test_interaction_reliability.py::test_quoted_mentions_do_not_schedule_a_colleague[@\u5c0f\u725b\u7801 \u8bf7\u89e3\u91ca\u201c@\u5c0f\u638c\u67dc \u8bf7\u5f00\u59cb\u201d]
+FAILED tests/nexus/test_interaction_reliability.py::test_peer_can_be_resolved_by_unique_role_or_id
+FAILED tests/nexus/test_interaction_reliability.py::test_ambiguous_role_does_not_silently_pick_a_peer
+FAILED tests/nexus/test_interaction_reliability.py::test_large_input_does_not_starve_second_selected_employee
+FAILED tests/nexus/test_interaction_reliability.py::test_followup_participant_and_delta_source_are_persisted
+9 failed, 1 warning in 1.63s
+
+
+## nexus-interaction-red2.log
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_____ test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible ______
+tests/nexus/test_api.py:1219: in test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible
+    assert any(m['name'] == '知微' and '阈值按账号计算' in str(m['content']) for m in native['messages'])
+E   assert False
+E    +  where False = any(<generator object test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible.<locals>.<genexpr> at 0x10beee890>)
+------------------------------ Captured log call -------------------------------
+WARNING  nexus.task_skill:task_skill.py:145 任务技能未收回：AgentScope 返回 404：{"detail":"missing"}
+WARNING  nexus.task_skill:task_skill.py:145 任务技能未收回：AgentScope 返回 404：{"detail":"missing"}
+WARNING  nexus.task_skill:task_skill.py:145 任务技能未收回：AgentScope 返回 404：{"detail":"missing"}
+________ test_rotated_key_replaces_mcp_and_skill_revokes_by_stored_name ________
+tests/nexus/test_task_capability.py:124: in test_rotated_key_replaces_mcp_and_skill_revokes_by_stored_name
+    asyncio.run(scenario())
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py:204: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/nexus/test_task_capability.py:92: in scenario
+    assert set(mcps) == {("agt_1", "private"), ("agt_1", "team")}
+E   AssertionError: assert {('agt_1', 'm...t_1', 'team')} == {('agt_1', 'p...t_1', 'team')}
+E
+E     Extra items in the left set:
+E     ('agt_1', 'mailbox')
+E     Use -v to get more diff
+____________________ test_busy_chat_is_an_explicit_conflict ____________________
+tests/nexus/test_chat_native.py:423: in test_busy_chat_is_an_explicit_conflict
+    assert response.status_code == 409
+E   assert 200 == 409
+E    +  where 200 = <Response [200 OK]>.status_code
+------------------------------ Captured log call -------------------------------
+WARNING  nexus.task_skill:task_skill.py:145 任务技能未收回：AgentScope 返回 404：{"detail":"missing"}
+WARNING  nexus.schedule_mcp:schedule_skill.py:47 NEXUS_SCHEDULE_MCP_KEY 未设置，日程 MCP 不会挂接
+=============================== warnings summary ===============================
+tests/nexus/test_api.py::test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/nexus/test_api.py::test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible
+FAILED tests/nexus/test_task_capability.py::test_rotated_key_replaces_mcp_and_skill_revokes_by_stored_name
+FAILED tests/nexus/test_chat_native.py::test_busy_chat_is_an_explicit_conflict
+3 failed, 1 warning in 0.66s
+
+
+## nexus-interaction-red3.log
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_______________ test_task_categories_only_return_enabled_choices _______________
+tests/platform/test_task_responsibility.py:306: in test_task_categories_only_return_enabled_choices
+    result = await TaskTools(session).categories()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'TaskTools' object has no attribute 'categories'
+_______________ test_task_mcp_exposes_categories_and_enum_types ________________
+tests/platform/test_task_responsibility.py:315: in test_task_mcp_exposes_categories_and_enum_types
+    assert 'nexus_task_categories' in tools
+E   AssertionError: assert 'nexus_task_categories' in {'nexus_task_assign': Tool(name='nexus_task_assign', title=None, description='把待领取任务指定给一个 Agent Worker。', input_schema...operties': True, 'title': 'nexus_task_getDictOutput', 'type': 'object'}, icons=None, annotations=None, meta=None), ...}
+=============================== warnings summary ===============================
+tests/platform/test_task_responsibility.py::test_task_categories_only_return_enabled_choices
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_task_responsibility.py::test_task_categories_only_return_enabled_choices
+tests/platform/test_task_responsibility.py::test_task_mcp_exposes_categories_and_enum_types
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_task_responsibility.py::test_task_categories_only_return_enabled_choices
+tests/platform/test_task_responsibility.py::test_task_mcp_exposes_categories_and_enum_types
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_task_responsibility.py::test_task_categories_only_return_enabled_choices
+tests/platform/test_task_responsibility.py::test_task_mcp_exposes_categories_and_enum_types
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_task_responsibility.py::test_task_categories_only_return_enabled_choices
+tests/platform/test_task_responsibility.py::test_task_mcp_exposes_categories_and_enum_types
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_task_responsibility.py::test_task_categories_only_return_enabled_choices
+tests/platform/test_task_responsibility.py::test_task_mcp_exposes_categories_and_enum_types
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_task_responsibility.py::test_task_categories_only_return_enabled_choices
+tests/platform/test_task_responsibility.py::test_task_mcp_exposes_categories_and_enum_types
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_task_responsibility.py::test_task_categories_only_return_enabled_choices
+tests/platform/test_task_responsibility.py::test_task_mcp_exposes_categories_and_enum_types
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_task_responsibility.py::test_task_categories_only_return_enabled_choices
+tests/platform/test_task_responsibility.py::test_task_mcp_exposes_categories_and_enum_types
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_task_responsibility.py::test_task_categories_only_return_enabled_choices
+tests/platform/test_task_responsibility.py::test_task_mcp_exposes_categories_and_enum_types
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_task_responsibility.py::test_task_categories_only_return_enabled_choices
+FAILED tests/platform/test_task_responsibility.py::test_task_mcp_exposes_categories_and_enum_types
+2 failed, 12 deselected, 19 warnings in 1.04s
+
+
+## nexus-interaction-ui-red.log
+
+> nexus-chat-island@0.1.0 test
+> node --test tests/*.test.ts
+
+✔ 默认 Alt+K 在 Mac 显示 Option 风格，在其他平台显示 Alt (0.7555ms)
+✔ 只接受非修饰键，Space/Enter/Esc 不能作为快捷键 (0.668125ms)
+✔ 校验必须包含 Alt/Ctrl/Command，并拒绝系统保留组合 (0.084834ms)
+✔ 释放任意一个组合键都结束录音 (0.058417ms)
+✔ 偏好持久化损坏时回退默认，保存后可重新读取 (0.124792ms)
+✔ 私聊和群聊的同名 ID 不共享草稿 (1.108208ms)
+✔ 切换可恢复已上传附件，但不恢复未完成上传 (0.713833ms)
+✔ 损坏或不可访问的存储不阻塞输入 (0.15875ms)
+✔ 历史已包含刚发送的消息时不重复 (1.335542ms)
+✔ 历史尚未落盘时保留乐观气泡 (0.0645ms)
+✔ 首轮回复在连流前完成时，历史补回答案并保留用户气泡 (0.07175ms)
+✔ 本地消息已落盘但 id 不同：用服务端 id 替换，不产生第二条 (0.053541ms)
+✔ 群事件按 id 合并，已有对象不被覆盖 (0.076417ms)
+✔ 带时区的人类消息、本地时间的历史回复、UTC 流式回复按实际先后排列 (1.116333ms)
+✔ 同一时刻保持确定顺序 (6.944083ms)
+✖ 失败的 Write 不得汇总为成功编辑文件 (1.182667ms)
+✖ 只汇总成功编辑的行数 (0.125625ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 15
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 137.534334
+
+✖ failing tests:
+
+test at tests/tool-summary.test.ts:11:1
+✖ 失败的 Write 不得汇总为成功编辑文件 (1.182667ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'Tool.summary.edit:1'
+  - 'Tool.summary.failed:1'
+                  ^
+
+      at TestContext.<anonymous> (file:///Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api/chat-island/tests/tool-summary.test.ts:13:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1095:25)
+      at Test.start (node:internal/test_runner/test:992:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Tool.summary.edit:1',
+    expected: 'Tool.summary.failed:1',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/tool-summary.test.ts:17:1
+✖ 只汇总成功编辑的行数 (0.125625ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  6 !== 3
+
+      at TestContext.<anonymous> (file:///Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api/chat-island/tests/tool-summary.test.ts:19:10)
+      at Test.runInAsyncScope (node:async_hooks:213:14)
+      at Test.run (node:internal/test_runner/test:1095:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:777:18)
+      at Test.postRun (node:internal/test_runner/test:1224:19)
+      at Test.run (node:internal/test_runner/test:1152:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 6,
+    expected: 3,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+
+## nexus-interaction-lock-red.log
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_sqlite_async_task_writer_does_not_block_discussion_loop _________
+tests/nexus/test_interaction_reliability.py:104: in test_sqlite_async_task_writer_does_not_block_discussion_loop
+    assert page['channel']['discussion']['state'] == 'completed'
+E   AssertionError: assert 'failed' == 'completed'
+E
+E     - completed
+E     + failed
+------------------------------ Captured log call -------------------------------
+WARNING  nexus.groups:collaboration.py:1224 群讨论失败: OperationalError
+=============================== warnings summary ===============================
+tests/nexus/test_interaction_reliability.py::test_sqlite_async_task_writer_does_not_block_discussion_loop
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/nexus/test_interaction_reliability.py::test_sqlite_async_task_writer_does_not_block_discussion_loop
+1 failed, 1 warning in 11.19s
+
+
+## nexus-interaction-correlation-red.log
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_identical_peer_text_cannot_select_another_delivery_reply _________
+tests/nexus/test_interaction_reliability.py:141: in test_identical_peer_text_cannot_select_another_delivery_reply
+    assert len(replies) == 1
+E   assert 0 == 1
+E    +  where 0 = len([])
+=============================== warnings summary ===============================
+tests/nexus/test_interaction_reliability.py::test_identical_peer_text_cannot_select_another_delivery_reply
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/nexus/test_interaction_reliability.py::test_identical_peer_text_cannot_select_another_delivery_reply
+1 failed, 1 warning in 0.34s
+
+
+## nexus-interaction-partial-red.log
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_peer_partial_reply_is_not_presented_as_completed _____________
+tests/nexus/test_interaction_reliability.py:158: in test_peer_partial_reply_is_not_presented_as_completed
+    assert assistant_reply_messages_after([partial], 'delivery-partial') == []
+E   AssertionError: assert [{'content': ... 'assistant'}] == []
+E
+E     Left contains one more item: {'content': [{'hint': '请求', 'id': 'delivery-partial', 'type': 'hint'}, {'text': '尚未生成完', 'type': 'text'}], 'role': 'assistant'}
+E     Use -v to get more diff
+=============================== warnings summary ===============================
+tests/nexus/test_interaction_reliability.py::test_peer_partial_reply_is_not_presented_as_completed
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/nexus/test_interaction_reliability.py::test_peer_partial_reply_is_not_presented_as_completed
+1 failed, 1 warning in 0.44s
+
+
+## nexus-interaction-send-lock-red.log
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_group_send_can_wait_for_an_async_task_commit _______________
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlite3.OperationalError: database is locked
+
+The above exception was the direct cause of the following exception:
+tests/nexus/test_interaction_reliability.py:203: in test_group_send_can_wait_for_an_async_task_commit
+    response = send(owner, cid, '补充一条说明，不要求员工回答')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/nexus/test_collaboration.py:177: in send
+    return client.post(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/testclient.py:556: in post
+    return super().post(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:1204: in post
+    return self.request(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/testclient.py:455: in request
+    return super().request(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:797: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:980: in send
+    response = self._send_handling_auth(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:1008: in _send_handling_auth
+    response = self._send_handling_redirects(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:1043: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:1076: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/testclient.py:354: in handle_request
+    raise exc
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/testclient.py:351: in handle_request
+    portal.call(self.app, scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/anyio/from_thread.py:338: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/concurrent/futures/_base.py:450: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/concurrent/futures/_base.py:395: in __get_result
+    raise self._exception
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/anyio/from_thread.py:263: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/applications.py:1163: in __call__
+    await super().__call__(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py:88: in __call__
+    await self.app(scope, receive, send)
+nexus_api/auth.py:141: in __call__
+    await self.app(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/routing.py:670: in __call__
+    await self.middleware_stack(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:2734: in app
+    await route.handle(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:1281: in handle
+    await super().handle(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/routing.py:280: in handle
+    await self.app(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:158: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:144: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:706: in app
+    raw_response = await run_endpoint_function(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:352: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+nexus_api/collaboration.py:721: in send
+    lock_channel(db, channel_id)
+nexus_api/collaboration.py:60: in lock_channel
+    result = db.execute(text("UPDATE t_nexus_channels SET next_seq=next_seq WHERE id=:c"), {"c": channel_id})
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1421: in execute
+    return meth(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/sql/elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1848: in _execute_context
+    return self._exec_single_context(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:2365: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) database is locked
+E   [SQL: UPDATE t_nexus_channels SET next_seq=next_seq WHERE id=?]
+E   [parameters: ('ch_c12f25cbdbc4',)]
+E   (Background on this error at: https://sqlalche.me/e/20/e3q8)
+=============================== warnings summary ===============================
+tests/nexus/test_interaction_reliability.py::test_group_send_can_wait_for_an_async_task_commit
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/nexus/test_interaction_reliability.py::test_group_send_can_wait_for_an_async_task_commit
+1 failed, 1 warning in 11.60s
+
+
+## nexus-interaction-thinking-red.log
+{"failed_tool_summary":{"pass":true,"wrong_success_label":0},"rejected_draft":{"pass":true,"status":409,"retained":true},"peer_visible":{"pass":false,"source_label":true,"completed_thinking_running_labels":3}}

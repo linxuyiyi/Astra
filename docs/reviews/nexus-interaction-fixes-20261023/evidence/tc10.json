@@ -1,0 +1,56 @@
+{
+  "conversation_id": "conv_67ccc9161680",
+  "posts": [
+    {
+      "status": 200,
+      "payload": {
+        "message": {
+          "id": "msg_c02f6a22d830",
+          "sender": "user",
+          "speaker": "usr_b3a03526e8cd",
+          "text": "第0条，请用200字解释测试覆盖率，不调用工具。",
+          "attachments": [],
+          "accepted": true,
+          "created_at": "2026-10-22T23:58:25.968761+00:00"
+        },
+        "agentscope": {
+          "accepted": true,
+          "detail": "",
+          "session_id": "74d433e1653f436086b1440dbfa0ed99"
+        }
+      }
+    },
+    {
+      "status": 409,
+      "payload": {
+        "detail": "AgentScope 返回 409：{\"detail\":\"Session '74d433e1653f436086b1440dbfa0ed99' already has an active chat run in this process.\"}"
+      }
+    },
+    {
+      "status": 409,
+      "payload": {
+        "detail": "AgentScope 返回 409：{\"detail\":\"Session '74d433e1653f436086b1440dbfa0ed99' already has an active chat run in this process.\"}"
+      }
+    },
+    {
+      "status": 409,
+      "payload": {
+        "detail": "AgentScope 返回 409：{\"detail\":\"Session '74d433e1653f436086b1440dbfa0ed99' already has an active chat run in this process.\"}"
+      }
+    },
+    {
+      "status": 409,
+      "payload": {
+        "detail": "AgentScope 返回 409：{\"detail\":\"Session '74d433e1653f436086b1440dbfa0ed99' already has an active chat run in this process.\"}"
+      }
+    }
+  ],
+  "statuses": [
+    200,
+    409,
+    409,
+    409,
+    409
+  ],
+  "pass": true
+}

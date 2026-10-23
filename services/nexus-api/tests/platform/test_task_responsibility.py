@@ -294,3 +294,32 @@ async def test_group_task_cannot_override_server_side_source(session):
         nexus_channel_id.reset(channel)
     # 允许的值继续进入分类校验，而不是被来源检查误伤。
     assert allowed == {"ok": False, "error": "请选择已启用的任务分类"}
+
+
+async def test_task_categories_only_return_enabled_choices(session):
+    from app.models import TaskCategory
+
+    session.add_all(
+        [
+            TaskCategory(
+                id="visible-test", name="可用测试分类", description="测试说明", enabled=True, sort_order=1
+            ),
+            TaskCategory(id="hidden-test", name="停用分类", enabled=False),
+        ]
+    )
+    await session.commit()
+    result = await TaskTools(session).categories()
+    assert result["ok"] is True
+    assert any(c["id"] == "visible-test" and c["description"] == "测试说明" for c in result["categories"])
+    assert all(c["id"] != "hidden-test" and c["enabled"] for c in result["categories"])
+
+
+async def test_task_mcp_exposes_categories_and_enum_types():
+    from app.task_mcp import build_mcp_server
+
+    tools = {t.name: t for t in await build_mcp_server().list_tools()}
+    assert "nexus_task_categories" in tools
+    assert tools["nexus_task_create"].input_schema["properties"]["task_type"]["enum"] == [
+        "ISSUE",
+        "REQUIREMENT",
+    ]

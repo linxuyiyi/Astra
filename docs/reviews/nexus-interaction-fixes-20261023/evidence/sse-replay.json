@@ -1,0 +1,194 @@
+{
+  "after": 69262,
+  "frames": [
+    {
+      "cursor": 69263,
+      "event": {
+        "type": "delta",
+        "message_id": "318edb9fd74a41e886f0da009eec5969",
+        "event": {
+          "id": "c8bf823731c249a9a60e49de2b763c74",
+          "created_at": "2026-10-23T07:58:20.228630",
+          "metadata": {},
+          "type": "THINKING_BLOCK_DELTA",
+          "reply_id": "318edb9fd74a41e886f0da009eec5969",
+          "block_id": "91c7fba50b5d4ce5a06d98eca237a2ab",
+          "delta": "."
+        },
+        "discussion_id": "dis_9739c2c90a69",
+        "employee_id": "emp_803687238e28",
+        "seq": 4
+      }
+    },
+    {
+      "cursor": 69264,
+      "event": {
+        "type": "delta",
+        "message_id": "318edb9fd74a41e886f0da009eec5969",
+        "event": {
+          "id": "8f4c16a542f84b1ca3136f57021d7f46",
+          "created_at": "2026-10-23T07:58:20.229268",
+          "metadata": {},
+          "type": "THINKING_BLOCK_END",
+          "reply_id": "318edb9fd74a41e886f0da009eec5969",
+          "block_id": "91c7fba50b5d4ce5a06d98eca237a2ab"
+        },
+        "discussion_id": "dis_9739c2c90a69",
+        "employee_id": "emp_803687238e28",
+        "seq": 4
+      }
+    },
+    {
+      "cursor": 69265,
+      "event": {
+        "type": "delta",
+        "message_id": "318edb9fd74a41e886f0da009eec5969",
+        "event": {
+          "id": "e1dd9920c89042df99babdfc0b66e3b4",
+          "created_at": "2026-10-23T07:58:20.229752",
+          "metadata": {},
+          "type": "TEXT_BLOCK_START",
+          "reply_id": "318edb9fd74a41e886f0da009eec5969",
+          "block_id": "bfdcd6aa0eeb43f2b1d75fd03c586dcc"
+        },
+        "discussion_id": "dis_9739c2c90a69",
+        "employee_id": "emp_803687238e28",
+        "seq": 4
+      }
+    },
+    {
+      "cursor": 69266,
+      "event": {
+        "type": "delta",
+        "message_id": "318edb9fd74a41e886f0da009eec5969",
+        "event": {
+          "id": "8bc1cbadce874e30b7aa2d8b9d70f877",
+          "created_at": "2026-10-23T07:58:20.230159",
+          "metadata": {},
+          "type": "TEXT_BLOCK_DELTA",
+          "reply_id": "318edb9fd74a41e886f0da009eec5969",
+          "block_id": "bfdcd6aa0eeb43f2b1d75fd03c586dcc",
+          "delta": "B"
+        },
+        "discussion_id": "dis_9739c2c90a69",
+        "employee_id": "emp_803687238e28",
+        "seq": 4
+      }
+    },
+    {
+      "cursor": 69267,
+      "event": {
+        "type": "delta",
+        "message_id": "318edb9fd74a41e886f0da009eec5969",
+        "event": {
+          "id": "9cd2928a894c42508c8fe3a4246b34f1",
+          "created_at": "2026-10-23T07:58:20.240423",
+          "metadata": {},
+          "type": "TEXT_BLOCK_DELTA",
+          "reply_id": "318edb9fd74a41e886f0da009eec5969",
+          "block_id": "bfdcd6aa0eeb43f2b1d75fd03c586dcc",
+          "delta": "（"
+        },
+        "discussion_id": "dis_9739c2c90a69",
+        "employee_id": "emp_803687238e28",
+        "seq": 4
+      }
+    },
+    {
+      "cursor": 69268,
+      "event": {
+        "type": "delta",
+        "message_id": "318edb9fd74a41e886f0da009eec5969",
+        "event": {
+          "id": "f2e7587fe3f348bfa05f1ef5d8ab7c08",
+          "created_at": "2026-10-23T07:58:20.240995",
+          "metadata": {},
+          "type": "TEXT_BLOCK_DELTA",
+          "reply_id": "318edb9fd74a41e886f0da009eec5969",
+          "block_id": "bfdcd6aa0eeb43f2b1d75fd03c586dcc",
+          "delta": "测试"
+        },
+        "discussion_id": "dis_9739c2c90a69",
+        "employee_id": "emp_803687238e28",
+        "seq": 4
+      }
+    },
+    {
+      "cursor": 69269,
+      "event": {
+        "type": "delta",
+        "message_id": "318edb9fd74a41e886f0da009eec5969",
+        "event": {
+          "id": "1de074a11ca74b23ba3ed20c4f7f36fb",
+          "created_at": "2026-10-23T07:58:20.241516",
+          "metadata": {},
+          "type": "TEXT_BLOCK_DELTA",
+          "reply_id": "318edb9fd74a41e886f0da009eec5969",
+          "block_id": "bfdcd6aa0eeb43f2b1d75fd03c586dcc",
+          "delta": "工具"
+        },
+        "discussion_id": "dis_9739c2c90a69",
+        "employee_id": "emp_803687238e28",
+        "seq": 4
+      }
+    },
+    {
+      "cursor": 69270,
+      "event": {
+        "type": "delta",
+        "message_id": "318edb9fd74a41e886f0da009eec5969",
+        "event": {
+          "id": "736d904fccc14441be4088e96dcf4693",
+          "created_at": "2026-10-23T07:58:20.241989",
+          "metadata": {},
+          "type": "TEXT_BLOCK_DELTA",
+          "reply_id": "318edb9fd74a41e886f0da009eec5969",
+          "block_id": "bfdcd6aa0eeb43f2b1d75fd03c586dcc",
+          "delta": "工程师"
+        },
+        "discussion_id": "dis_9739c2c90a69",
+        "employee_id": "emp_803687238e28",
+        "seq": 4
+      }
+    },
+    {
+      "cursor": 69271,
+      "event": {
+        "type": "delta",
+        "message_id": "318edb9fd74a41e886f0da009eec5969",
+        "event": {
+          "id": "d544c4a06870476fab9b94a856c4179f",
+          "created_at": "2026-10-23T07:58:20.242460",
+          "metadata": {},
+          "type": "TEXT_BLOCK_DELTA",
+          "reply_id": "318edb9fd74a41e886f0da009eec5969",
+          "block_id": "bfdcd6aa0eeb43f2b1d75fd03c586dcc",
+          "delta": "）"
+        },
+        "discussion_id": "dis_9739c2c90a69",
+        "employee_id": "emp_803687238e28",
+        "seq": 4
+      }
+    },
+    {
+      "cursor": 69272,
+      "event": {
+        "type": "delta",
+        "message_id": "318edb9fd74a41e886f0da009eec5969",
+        "event": {
+          "id": "adb3f55dde344db387e3d354e9960303",
+          "created_at": "2026-10-23T07:58:20.256819",
+          "metadata": {},
+          "type": "TEXT_BLOCK_DELTA",
+          "reply_id": "318edb9fd74a41e886f0da009eec5969",
+          "block_id": "bfdcd6aa0eeb43f2b1d75fd03c586dcc",
+          "delta": "的"
+        },
+        "discussion_id": "dis_9739c2c90a69",
+        "employee_id": "emp_803687238e28",
+        "seq": 4
+      }
+    }
+  ],
+  "pass": true
+}

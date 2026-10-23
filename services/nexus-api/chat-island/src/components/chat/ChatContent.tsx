@@ -75,7 +75,7 @@ interface ChatContentProps {
 	 */
 	phase: ReplyPhase;
 	disabled: boolean;
-	onSend: (content: ContentBlock[]) => void;
+	onSend: (content: ContentBlock[]) => void | Promise<boolean>;
 	onUserConfirm: (
 		toolCall: ToolCallBlock,
 		confirm: boolean,

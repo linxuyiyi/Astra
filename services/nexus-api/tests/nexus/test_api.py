@@ -14,7 +14,7 @@ from sqlalchemy import text as sql_text
 from nexus_api.agentscope import AgentScopeClient, AgentScopeError
 from nexus_api.main import (
     assistant_messages,
-    assistant_replies_after,
+    assistant_reply_messages_after,
     create_app,
     data_dir,
     interleave_messages,
@@ -127,12 +127,8 @@ def test_private_chat_keeps_threads_and_does_not_invent_replies(client):
         headers=headers,
         json={"text": "你负责哪些工作？", "attachment_ids": []},
     )
-    assert sent.status_code == 200
-    body = sent.json()
-    assert body["message"]["sender"] == "user"
-    assert body["message"]["speaker"] == "browser-a"
-    assert body["agentscope"]["accepted"] is False
-    assert "assistant" not in body
+    assert sent.status_code == 503
+    assert "AgentScope" in sent.json()["detail"]
     stored = client.get(f"/api/v1/conversations/{first.json()['id']}", headers=headers).json()["messages"]
     assert stored == []
     forged = client.get(
@@ -313,7 +309,7 @@ def test_owners_keep_separate_conversations_across_restart(tmp_path, monkeypatch
             headers=owner_a,
             json={"text": "只属于 a"},
         )
-        assert sent.status_code == 200
+        assert sent.status_code == 503
         hidden = test_client.get(f"/api/v1/employees/{employee['id']}/conversations", headers=owner_b)
         assert hidden.json()["items"] == []
         missing = test_client.get(f"/api/v1/conversations/{first['id']}", headers=owner_b)
@@ -1095,8 +1091,14 @@ def test_stream_closes_when_the_started_reply_ends():
 def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
     patched: list[dict] = []
+    chats: list[dict] = []
+    delivery_ids = []
+    peer_text = "阈值按账号计算"
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/chat/":
+            chats.append(json.loads(request.content))
+            return httpx.Response(200, json={"status": "started", "session_id": "session-private"})
         if request.method == "PATCH" and request.url.path.startswith("/sessions/"):
             patched.append(json.loads(request.content.decode()))
             return httpx.Response(200, json={})
@@ -1111,8 +1113,14 @@ def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path
                 200,
                 json={
                     "messages": [
-                        {"role": "user", "content": [{"type": "text", "text": "方案要点"}]},
-                        {"role": "assistant", "content": [{"type": "text", "text": "阈值按账号计算"}]},
+                        {
+                            "role": "assistant",
+                            "finished_at": "2026-10-23T01:00:00Z",
+                            "content": [
+                                {"type": "hint", "id": delivery_ids[0], "hint": "方案要点"},
+                                {"type": "text", "text": peer_text},
+                            ],
+                        },
                     ],
                     "has_more": False,
                 },
@@ -1179,10 +1187,13 @@ def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path
         connection.close()
 
         def resolve(session_id: str, name: str, message: str):
-            return test_client.get(
+            result = test_client.get(
                 "/api/v1/peers/resolve",
                 params={"session_id": session_id, "name": name, "message": message},
             )
+            if result.status_code == 200:
+                delivery_ids.append(result.json()["delivery_id"])
+            return result
 
         assert resolve("session-private", "知微", "方案要点").status_code == 200
         assert resolve("session-private", "知微", "再补充一点").status_code == 200
@@ -1204,38 +1215,60 @@ def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path
         peer_lines = [item for item in stored["messages"] if item["sender"] == zhi["id"]]
         assert [item["text"] for item in peer_lines] == ["阈值按账号计算"]
         assert (
-            assistant_replies_after(
+            assistant_reply_messages_after(
                 [{"role": "user", "content": [{"type": "text", "text": "方案要点"}]}],
                 "方案要点",
             )
             == []
         )
 
+        native = test_client.get(f"/api/v1/conversations/{first['id']}/messages", headers=headers).json()
+        assert any(m["name"] == "知微" and "阈值按账号计算" in str(m["content"]) for m in native["messages"])
+        sent = test_client.post(
+            f"/api/v1/conversations/{first['id']}/messages", headers=headers, json={"text": "同事回复了吗？"}
+        )
+        assert sent.status_code == 200
+        assert sent.json()["agentscope"]["accepted"] is True
+        assert any(
+            b.get("type") == "hint" and "阈值按账号计算" in b.get("hint", "")
+            for m in chats[-1]["input"]
+            for b in m["content"]
+        )
+
+        peer_text = '<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name="Bash">'
+        malformed = test_client.get(f"/api/v1/conversations/{first['id']}/messages", headers=headers).json()
+        failed = [m for m in malformed["messages"] if (m.get("metadata") or {}).get("peer_employee_id")]
+        assert failed[0]["metadata"]["nexus_error"] == "NEXUS_UPSTREAM_TOOL_PARSE_ERROR"
+        assert "DSML" not in str(failed[0]["content"])
+
 
 def test_multiline_hint_inside_the_reply_is_returned_once():
     needle = "请李四联系王五。\n给出测试要点。"
     dumped = json.dumps({"hint": needle}, ensure_ascii=False)
     assert needle not in dumped
-    replies = assistant_replies_after(
+    replies = assistant_reply_messages_after(
         [
             {
                 "role": "assistant",
+                "finished_at": "2026-10-23T01:00:00Z",
                 "content": [
-                    {"type": "hint", "hint": needle},
+                    {"type": "hint", "id": "delivery-one", "hint": needle},
                     {"type": "text", "text": "已转达王五。\n阈值按账号计算"},
                 ],
             },
             {
                 "role": "assistant",
+                "finished_at": "2026-10-23T01:00:00Z",
                 "content": [
                     {"type": "hint", "hint": "另一条唤醒"},
                     {"type": "text", "text": "下一跳的答复"},
                 ],
             },
         ],
-        needle,
+        "delivery-one",
     )
-    assert replies == ["已转达王五。\n阈值按账号计算"]
+    assert len(replies) == 1
+    assert replies[0]["content"][1]["text"] == "已转达王五。\n阈值按账号计算"
 
 
 def test_channel_timestamps_sort_by_instant_not_local_text():
@@ -1405,9 +1438,11 @@ def test_new_employee_attaches_task_capability_with_the_new_agent_id(tmp_path, m
             return httpx.Response(201, json={"session_id": f"session-{body['agent_id']}"})
         if request.method == "PATCH" and request.url.path.startswith("/sessions/"):
             return httpx.Response(200, json={})
-        if request.url.path in {"/workspace/skill/upload", "/workspace/mcp"}:
+        if request.url.path in {"/workspace/skill/upload", "/workspace/mcp"} and request.method == "POST":
             attached.append((request.url.path, request.url.params.get("agent_id")))
             return httpx.Response(200, json={})
+        if request.url.path == "/workspace/mcp" and request.method == "GET":
+            return httpx.Response(200, json=[])
         if request.url.path == "/skill":
             return httpx.Response(200, json=[])
         return httpx.Response(404, json={"detail": "missing"})
@@ -1425,7 +1460,7 @@ def test_new_employee_attaches_task_capability_with_the_new_agent_id(tmp_path, m
 
     assert employee["agentscope_agent_id"] == "agent-星河"
     assert ("/workspace/skill/upload", "agent-星河") in attached
-    assert ("/workspace/mcp", "agent-星河") in attached
+    assert ("/workspace/mcp", "agent-星河") not in attached
 
 
 def test_disabled_employee_defers_wake(client):
@@ -1531,5 +1566,5 @@ def test_task_skill_is_revoked_and_restored_on_existing_sessions(tmp_path, monke
         )
         assert restored.status_code == 200, restored.text
         mcp_calls = [item for item in calls if item[0] == "POST" and item[1] == "/workspace/mcp"]
-        assert {item[2] for item in mcp_calls} >= {employee["mailbox_session_id"], "ses_chat"}
+        assert {item[2] for item in mcp_calls} == {"ses_chat"}
         assert all(item[3] == "Bearer shared-secret" for item in mcp_calls)

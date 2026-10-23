@@ -1,0 +1,68 @@
+{
+  "backend": {
+    "command": "pytest tests/platform tests/nexus -q --tb=short",
+    "passed": 1283,
+    "skipped": 32,
+    "warnings": 10306,
+    "elapsed_seconds": 204.33,
+    "exit_code": 0
+  },
+  "mysql": {
+    "version": "8.0.36",
+    "passed": 2,
+    "exit_code": 0
+  },
+  "ruff": {
+    "command": "ruff check app nexus_api tests",
+    "exit_code": 0
+  },
+  "chat_island": {
+    "node_tests_passed": 17,
+    "type_check_exit_code": 0,
+    "build_exit_code": 0
+  },
+  "web": {
+    "type_check_exit_code": 0,
+    "build_exit_code": 0
+  },
+  "real_api_cases": {
+    "tc14": {
+      "pass": true
+    },
+    "tc16": {
+      "pass": true
+    },
+    "tc10": {
+      "pass": true
+    },
+    "tc05": {
+      "pass": true
+    },
+    "tc11": {
+      "pass": true
+    }
+  },
+  "browser": {
+    "failed_tool_summary": {
+      "pass": true,
+      "wrong_success_label": 0
+    },
+    "rejected_draft": {
+      "pass": true,
+      "status": 409,
+      "retained": true,
+      "attachment_retained": true,
+      "attachment_ids_sent": 1
+    },
+    "peer_visible": {
+      "pass": true,
+      "source_label": true,
+      "completed_thinking_running_labels": 0
+    }
+  },
+  "group_task_sse": true,
+  "sse_replay": true,
+  "authorization": true,
+  "task_create": true,
+  "mailbox_mcp": true
+}

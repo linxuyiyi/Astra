@@ -172,6 +172,23 @@ class TaskTools:
             await self.session.commit()
         return self._ok(task)
 
+    async def categories(self) -> dict[str, Any]:
+        rows = (
+            await self.session.scalars(
+                select(TaskCategory)
+                .where(TaskCategory.enabled.is_(True))
+                .order_by(TaskCategory.sort_order, TaskCategory.id)
+                .limit(200)
+            )
+        ).all()
+        return {
+            "ok": True,
+            "categories": [
+                {"id": row.id, "name": row.name, "description": row.description, "enabled": row.enabled}
+                for row in rows
+            ],
+        }
+
     async def get(self, task_id: str) -> dict[str, Any]:
         task = await self._owned(task_id)
         if isinstance(task, dict):

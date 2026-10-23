@@ -62,6 +62,16 @@ def lock_channel(db, channel_id):
         raise HTTPException(404, "群组不存在")
 
 
+async def acquire_channel_lock(db, channel_id):
+    """同步数据库等待不能阻塞 Task MCP 的异步提交；取消时先等连接操作结束。"""
+    pending = asyncio.create_task(asyncio.to_thread(lock_channel, db, channel_id))
+    try:
+        await asyncio.shield(pending)
+    except asyncio.CancelledError:
+        await pending
+        raise
+
+
 def emit(db, channel_id, payload):
     result = db.execute(
         group_events.insert().values(channel_id=channel_id, payload_json=dumps(payload), created_at=utcnow())
@@ -227,7 +237,19 @@ def channel_payload(db, channel_id, uid):
     }
 
 
+def routing_text(body):
+    """引用和代码是待分析的数据，不参与选人；保留位置供提及排序。"""
+    pattern = (
+        r"```[\s\S]*?(?:```|\Z)|~~~[\s\S]*?(?:~~~|\Z)"
+        r'|`[^`\n]*(?:`|$)|"(?:\\.|[^"\\\n])*(?:"|$)'
+        r"|'(?:\\.|[^'\\\n])*(?:'|$)|“[^”\n]*(?:”|$)|‘[^’\n]*(?:’|$)"
+        r"|(?m:^\s*>[^\n]*$)"
+    )
+    return re.sub(pattern, lambda m: re.sub(r"[^\n]", " ", m.group()), body)
+
+
 def named_employees(body, staff):
+    body = routing_text(body)
     found = []
     for employee in staff:
         match = re.search(r"@" + re.escape(employee["name"]) + r"(?=$|[\s@，,。！？!?：:、])", body)
@@ -237,6 +259,7 @@ def named_employees(body, staff):
 
 
 def select_participants(body, staff, *, human_names=(), human_count=1, previous_employee=""):
+    body = routing_text(body)
     enabled = [e for e in staff if e["enabled"] and e["agentscope_agent_id"]]
     explicit = named_employees(body, enabled)
     if explicit:
@@ -275,6 +298,7 @@ def select_participants(body, staff, *, human_names=(), human_count=1, previous_
 
 
 def followup(body, staff, speaker_id, counts):
+    body = routing_text(body)
     # 只让被点名并被提问的同事继续；泛化问候/致谢不产生轮次。
     if not re.search(r"[?？]|请.*(回答|介绍|说明|补充)|怎么看|呢[。\s]*$", body):
         return []
@@ -691,7 +715,7 @@ class Collaboration:
                 }
 
         @app.post("/api/v1/channels/{channel_id}/messages")
-        async def send(channel_id: str, body: SendBody, request: Request):
+        def send(channel_id: str, body: SendBody, request: Request):
             user = session_user(request)
             with connect() as db:
                 lock_channel(db, channel_id)
@@ -808,7 +832,7 @@ class Collaboration:
             }
 
         @app.post("/api/v1/channels/{channel_id}/interrupt")
-        async def interrupt(channel_id: str, request: Request):
+        def interrupt(channel_id: str, request: Request):
             uid = session_user(request)["uid"]
             with connect() as db:
                 lock_channel(db, channel_id)
@@ -854,6 +878,9 @@ class Collaboration:
                                 .all()
                             )
                             if heartbeat % 50 == 0:
+                                await acquire_channel_lock(db, channel_id)
+                                session_user(request)
+                                member(db, channel_id, uid)
                                 db.execute(
                                     text(
                                         """UPDATE t_nexus_channel_members SET last_seen=:t
@@ -1111,6 +1138,7 @@ class Collaboration:
     async def run_channel(self, cid):
         token = new_id("lease")
         with connect() as db:
+            await acquire_channel_lock(db, cid)
             result = db.execute(
                 text(
                     """UPDATE t_nexus_channels SET lease_token=:t,lease_until=:e WHERE id=:c AND
@@ -1140,7 +1168,7 @@ class Collaboration:
         async def heartbeat():
             while True:
                 await asyncio.sleep(5)
-                if not self.renew(cid, token):
+                if not await asyncio.to_thread(self.renew, cid, token):
                     main_task.cancel()
                     return
 
@@ -1177,10 +1205,10 @@ class Collaboration:
                             logger.warning("旧群讨论停止未确认，保留租约等待恢复")
                             release = False
                             return
-                self.finish(old["id"], "interrupted", "旧讨论已中断")
+                await asyncio.to_thread(self.finish, old["id"], "interrupted", "旧讨论已中断")
             while True:
                 with connect() as db:
-                    lock_channel(db, cid)
+                    await acquire_channel_lock(db, cid)
                     d = one(
                         db,
                         """SELECT d.* FROM t_nexus_discussions d JOIN t_nexus_channels c ON
@@ -1208,7 +1236,7 @@ class Collaboration:
                     raise
                 except Exception as exc:
                     logger.warning("群讨论失败: %s", type(exc).__name__)
-                    self.finish(d["id"], "failed", str(exc)[:300])
+                    await asyncio.to_thread(self.finish, d["id"], "failed", str(exc)[:300])
                     # 未确认上游停止时保留租约，等待过期恢复，避免双执行。
                     return
         except BaseException:
@@ -1219,6 +1247,7 @@ class Collaboration:
             await asyncio.gather(heartbeat_task, return_exceptions=True)
             if release:
                 with connect() as db:
+                    await acquire_channel_lock(db, cid)
                     db.execute(
                         text(
                             """UPDATE t_nexus_channels SET lease_token='',lease_until='' WHERE id=:c AND
@@ -1234,21 +1263,25 @@ class Collaboration:
         scheduled_count = len(queue)
         started = asyncio.get_running_loop().time()
         total_tokens = 0
+        generated_tokens = 0
         for turn in range(MAX_TURNS):
             if not queue:
-                self.finish(d["id"], "completed")
+                await asyncio.to_thread(self.finish, d["id"], "completed")
                 return
             if not self.current(d["id"])["valid"]:
-                self.finish(d["id"], "interrupted")
+                await asyncio.to_thread(self.finish, d["id"], "interrupted")
                 return
-            if asyncio.get_running_loop().time() - started > MAX_SECONDS or total_tokens >= MAX_TOKEN_BUDGET:
-                self.finish(d["id"], "limited", "讨论已达到时间或 Token 上限")
+            if (
+                asyncio.get_running_loop().time() - started > MAX_SECONDS
+                or generated_tokens >= MAX_TOKEN_BUDGET
+            ):
+                await asyncio.to_thread(self.finish, d["id"], "limited", "讨论已达到时间或 Token 上限")
                 return
             eid = queue.pop(0)
             if counts[eid] >= 2:
                 continue
             with connect() as db:
-                lock_channel(db, d["channel_id"])
+                await acquire_channel_lock(db, d["channel_id"])
                 member(db, d["channel_id"], d["initiator_id"])
                 staff = employees(db, d["channel_id"])
                 e = next((e for e in staff if e["id"] == eid and e["enabled"]), None)
@@ -1367,19 +1400,20 @@ class Collaboration:
                 )
                 db.commit()
             if not self.current(d["id"])["valid"]:
-                self.finish(d["id"], "interrupted")
+                await asyncio.to_thread(self.finish, d["id"], "interrupted")
                 return
-            if not self.renew(d["channel_id"], token):
+            if not await asyncio.to_thread(self.renew, d["channel_id"], token):
                 raise UnconfirmedStop("发言前租约已失效")
             reply = await self.reply(d, e, session_id, inputs, token, started)
             if reply is None:
-                self.finish(d["id"], "interrupted")
+                await asyncio.to_thread(self.finish, d["id"], "interrupted")
                 return
             counts[eid] += 1
             usage = reply.get("usage") or {}
+            generated_tokens += int(usage.get("output_tokens", 0) or 0)
             total_tokens += int(usage.get("input_tokens", 0) or 0) + int(usage.get("output_tokens", 0) or 0)
             with connect() as db:
-                lock_channel(db, d["channel_id"])
+                await acquire_channel_lock(db, d["channel_id"])
                 db.execute(
                     text("UPDATE t_nexus_discussions SET tokens=:t WHERE id=:i"),
                     {"t": total_tokens, "i": d["id"]},
@@ -1407,12 +1441,26 @@ class Collaboration:
             )
             explicit = named_employees(source["text"], staff) if source else []
             strict_single = len(explicit) == 1 and not any(
-                other["name"] in source["text"] for other in staff if other["id"] != explicit[0]
+                other["name"] in routing_text(source["text"]) for other in staff if other["id"] != explicit[0]
             )
             for target in [] if greeting or strict_single else followup(body, staff, eid, counts):
                 if target not in queue:
                     queue.append(target)
-        self.finish(d["id"], "limited", "讨论已达到最大轮次")
+                    with connect() as db:
+                        await acquire_channel_lock(db, d["channel_id"])
+                        latest = one(
+                            db, "SELECT participants_json FROM t_nexus_discussions WHERE id=:i", i=d["id"]
+                        )
+                        scheduled = json.loads(latest["participants_json"])
+                        if target not in scheduled:
+                            scheduled.append(target)
+                            db.execute(
+                                text("UPDATE t_nexus_discussions SET participants_json=:p WHERE id=:i"),
+                                {"p": dumps(scheduled), "i": d["id"]},
+                            )
+                        db.commit()
+                    scheduled_count = len(scheduled)
+        await asyncio.to_thread(self.finish, d["id"], "limited", "讨论已达到最大轮次")
 
     async def reply(self, d, e, session_id, inputs, token, started):
         client = self.app.state.agentscope
@@ -1438,7 +1486,7 @@ class Collaboration:
             while True:
                 now = asyncio.get_running_loop().time()
                 if now - last_renew > 5:
-                    if not self.renew(d["channel_id"], token):
+                    if not await asyncio.to_thread(self.renew, d["channel_id"], token):
                         raise RuntimeError("群讨论租约已失效")
                     last_renew = now
                 current = self.current(d["id"])
@@ -1459,6 +1507,7 @@ class Collaboration:
                 if kind == "REPLY_START":
                     reply_id = event["reply_id"]
                     with connect() as db:
+                        await acquire_channel_lock(db, d["channel_id"])
                         append_message(
                             db,
                             d["channel_id"],
@@ -1472,12 +1521,21 @@ class Collaboration:
                         db.commit()
                 if reply_id:
                     with connect() as db:
-                        lock_channel(db, d["channel_id"])
-                        row = one(db, "SELECT native_json FROM t_nexus_messages WHERE id=:i", i=reply_id)
+                        await acquire_channel_lock(db, d["channel_id"])
+                        row = one(db, "SELECT native_json,seq FROM t_nexus_messages WHERE id=:i", i=reply_id)
                         native = json.loads(row["native_json"])
                         native["metadata"].setdefault("stream_events", []).append(event)
                         event_id = emit(
-                            db, d["channel_id"], {"type": "delta", "message_id": reply_id, "event": event}
+                            db,
+                            d["channel_id"],
+                            {
+                                "type": "delta",
+                                "message_id": reply_id,
+                                "event": event,
+                                "discussion_id": d["id"],
+                                "employee_id": e["id"],
+                                "seq": row["seq"],
+                            },
                         )
                         native["metadata"]["stream_cursor"] = event_id
                         db.execute(
@@ -1516,7 +1574,7 @@ class Collaboration:
         else:
             raise RuntimeError("AgentScope 未完成消息持久化")
         with connect() as db:
-            lock_channel(db, d["channel_id"])
+            await acquire_channel_lock(db, d["channel_id"])
             row = one(
                 db,
                 "SELECT * FROM t_nexus_messages WHERE id=:i AND channel_id=:c",

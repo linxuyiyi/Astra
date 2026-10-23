@@ -89,7 +89,7 @@ def test_rotated_key_replaces_mcp_and_skill_revokes_by_stored_name(monkeypatch):
             monkeypatch.setenv("NEXUS_TASK_MCP_KEY", "old-key")
             await sync_task_capability(client, employee, sessions)
             assert skills["agt_1"]["name"] == "任务管理"
-            assert set(mcps) == {("agt_1", "mailbox"), ("agt_1", "private"), ("agt_1", "team")}
+            assert set(mcps) == {("agt_1", "private"), ("agt_1", "team")}
             assert all(
                 item["mcp_config"]["headers"]["Authorization"] == "Bearer old-key" for item in mcps.values()
             )

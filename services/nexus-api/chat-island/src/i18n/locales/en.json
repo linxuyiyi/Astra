@@ -77,6 +77,8 @@
 			"name": "Grep"
 		},
 		"summary": {
+			"failed_one": "{{count}} failed tool call",
+			"failed_other": "{{count}} failed tool calls",
 			"separator": ", ",
 			"bash_one": "ran {{count}} shell command",
 			"bash_other": "ran {{count}} shell commands",
@@ -107,6 +109,7 @@
 		"yesWithRule": "Yes, and allow {{toolName}} to execute {{ruleContent}} for this session"
 	},
 	"messageBubble": {
+		"peerReply": "Colleague reply",
 		"thinking": "Thinking",
 		"thinkingFor": "Thinking for {{duration}}",
 		"audioGenerating": "Generating audio…",

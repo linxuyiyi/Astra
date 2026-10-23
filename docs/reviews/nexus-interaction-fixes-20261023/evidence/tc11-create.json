@@ -1,0 +1,15 @@
+{
+  "persisted": [
+    {
+      "id": "T-20261023-ACB350",
+      "task_type": "REQUIREMENT",
+      "title": "E2E-TEST 分类可发现性验证",
+      "category_id": "testing-platform",
+      "status": "PENDING",
+      "responsible_employee_id": "emp_90d1baf5766d",
+      "worker_id": null,
+      "source_session_id": "1b6aa4388c4e446597e0fe79e6a68845"
+    }
+  ],
+  "pass": true
+}

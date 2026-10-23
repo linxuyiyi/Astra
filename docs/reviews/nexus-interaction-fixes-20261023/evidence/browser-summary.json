@@ -1,0 +1,18 @@
+{
+  "failed_tool_summary": {
+    "pass": true,
+    "wrong_success_label": 0
+  },
+  "rejected_draft": {
+    "pass": true,
+    "status": 409,
+    "retained": true,
+    "attachment_retained": true,
+    "attachment_ids_sent": 1
+  },
+  "peer_visible": {
+    "pass": true,
+    "source_label": true,
+    "completed_thinking_running_labels": 0
+  }
+}

@@ -322,7 +322,7 @@ def test_tool_policy_checks_human_and_employee_and_retired_binding(setup):
     with connect() as db:
         db.execute(
             text(
-                "UPDATE t_nexus_employees SET tools_json='[\"Bash\",\"contact_employee\"]', "
+                'UPDATE t_nexus_employees SET tools_json=\'["Bash","contact_employee"]\', '
                 "skills_json='[\"task-management\"]' WHERE id='qa'"
             )
         )
@@ -460,9 +460,7 @@ def wait_discussion_state(client, cid, did, timeout=10):
     state = ""
     while time.monotonic() < end:
         with connect() as db:
-            row = db.execute(
-                text("SELECT state FROM t_nexus_discussions WHERE id=:i"), {"i": did}
-            ).first()
+            row = db.execute(text("SELECT state FROM t_nexus_discussions WHERE id=:i"), {"i": did}).first()
         state = row[0] if row else ""
         if state in {"completed", "limited", "failed", "interrupted"}:
             return state
@@ -472,7 +470,7 @@ def wait_discussion_state(client, cid, did, timeout=10):
 
 def test_token_budget_stops_following_employee_and_caps_output(setup):
     _, owner, _, cid, fake = setup
-    fake.usage = {"input_tokens": 9000, "output_tokens": 8000}
+    fake.usage = {"input_tokens": 9000, "output_tokens": 16001}
     sent = send(owner, cid, "@小牛码 @小掌柜 你们相互介绍下")
     assert sent.json()["participants"] == ["dev", "qa"]
     page = wait_done(owner, cid)
@@ -484,7 +482,7 @@ def test_token_budget_stops_following_employee_and_caps_output(setup):
             text("SELECT tokens FROM t_nexus_discussions WHERE id=:i"),
             {"i": sent.json()["discussion_id"]},
         ).scalar_one()
-    assert tokens == 17000
+    assert tokens == 25001
 
 
 def test_expired_lease_interrupts_stale_run_then_processes_queue(setup):
@@ -526,9 +524,7 @@ def test_expired_lease_interrupts_stale_run_then_processes_queue(setup):
     assert wait_discussion_state(owner, cid, queued) == "completed"
     with connect() as db:
         states = dict(
-            db.execute(
-                text("SELECT id,state FROM t_nexus_discussions WHERE channel_id=:c"), {"c": cid}
-            ).all()
+            db.execute(text("SELECT id,state FROM t_nexus_discussions WHERE channel_id=:c"), {"c": cid}).all()
         )
         lease = db.execute(
             text("SELECT lease_token,lease_until FROM t_nexus_channels WHERE id=:c"), {"c": cid}
@@ -614,9 +610,7 @@ def test_tool_policy_requires_user_grant_and_matching_mcp_ref(setup):
             },
             ignore_keys=["id"],
         )
-        db.execute(
-            text("UPDATE t_nexus_employees SET mcp_json='[\"mcp-demo\"]' WHERE id='qa'")
-        )
+        db.execute(text("UPDATE t_nexus_employees SET mcp_json='[\"mcp-demo\"]' WHERE id='qa'"))
         db.execute(text("UPDATE t_nexus_channels SET lease_until='2999-01-01' WHERE id=:c"), {"c": cid})
         db.execute(
             text(

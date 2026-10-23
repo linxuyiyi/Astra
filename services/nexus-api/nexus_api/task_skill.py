@@ -125,6 +125,11 @@ async def sync_task_capability(client: AgentScopeClient, employee: dict, session
             logger.warning("任务技能未装上：%s", exc.detail)
         for item in usable:
             try:
+                if not item.get("conversation_id") and not item.get("channel_id"):
+                    installed = await client.list_workspace_mcp(agent_id, item["session_id"])
+                    if any(m.get("name") == "nexus-task" for m in installed):
+                        await client.remove_workspace_mcp(agent_id, item["session_id"])
+                    continue
                 await client.add_workspace_mcp(
                     agent_id,
                     item["session_id"],

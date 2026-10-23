@@ -217,13 +217,13 @@ export const chatApi = {
     if (!response.ok) throw new Error(await errorDetail(response));
     const result = (await response.json()) as SendResponse;
     const sessionId = result.agentscope?.session_id ?? "";
-    if (localId && result.message?.id) sentMessageIds.set(localId, result.message.id);
     if (sessionId) onBound?.(sessionId);
     if (result.agentscope && result.agentscope.accepted === false) {
       // 后端以 200 返回业务结果；不接受时必须让调用方和用户看到原因，
       // 否则输入框清空、气泡留下，却没有任何失败提示。
       throw new Error(result.agentscope.detail || "消息未被员工接受");
     }
+    if (localId && result.message?.id) sentMessageIds.set(localId, result.message.id);
     return { status: "accepted", session_id: sessionId };
   },
 };

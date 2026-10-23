@@ -1,0 +1,4 @@
+# Vite 生成包的 HTML 实体模板含有语义的行尾空白，不能直接裁剪。
+# 仅对此类压缩产物关闭行尾空白检查，手写源码仍按默认规则检查。
+services/nexus-api/web/public/nexus-chat/assets/*.js whitespace=-blank-at-eol
+services/nexus-api/web/dist/nexus-chat/assets/*.js whitespace=-blank-at-eol

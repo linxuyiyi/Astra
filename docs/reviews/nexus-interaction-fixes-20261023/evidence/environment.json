@@ -1,0 +1,37 @@
+{
+  "api": {
+    "pid": 89515,
+    "create_time": 1792714200.551164,
+    "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api"
+  },
+  "taskmcp": {
+    "pid": 83594,
+    "create_time": 1792713066.426804,
+    "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api"
+  },
+  "agent": {
+    "pid": 84903,
+    "create_time": 1792713460.863929,
+    "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/agent-service"
+  },
+  "base_commit": "c3bd9c81e8d3ecba3a76cf0f16eea4448d9ad08d",
+  "branch": "codex/nexus-interaction-fixes",
+  "gateway_port": 18310,
+  "source_sha256": {
+    "services/nexus-api/nexus_api/main.py": "10e05eeaeccc60dbe59157544c555b31db3afdaf71d3e4bda34333099cdf05c0",
+    "services/nexus-api/nexus_api/collaboration.py": "6b149bde84d32660268b1ae01ba86e262ebade22f237724c485ae4d56a0a3411",
+    "services/agent-service/agent_service.py": "55761dfc6b4fcf0bca5071bbfcf8b162765f1180007c1c9e2dcb53f5afae5f7c",
+    "services/nexus-api/chat-island/src/components/chat/ASMessageBubble.tsx": "0eb9ca4e51e19aaaf32b5a18c3b7cfdf090ed894e23911fc88e3ff9a54f07e8d",
+    "services/nexus-api/web/dist/nexus-chat/index.html": "1d198528bdfeb780c80518baef12ffc0ebc16877593beb714097f769ddb3a573"
+  },
+  "worker_instances_by_status": [
+    [
+      "offline",
+      1
+    ]
+  ],
+  "local_cli_version": "1.19.3",
+  "required_worker_opencode_version": "1.18.35",
+  "employees_with_mcp_bindings": 1,
+  "third_party_mcp_acceptance": "未执行；已有绑定目录项为 E2E任务MCP，未作为第三方验收"
+}

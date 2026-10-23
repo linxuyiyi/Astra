@@ -69,6 +69,7 @@ class AgentScopeClient:
 
     def _headers(self) -> dict[str, str]:
         from .auth import internal_headers
+
         return {"X-User-ID": self.user_id, **internal_headers()}
 
     async def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
@@ -251,6 +252,7 @@ class AgentScopeClient:
         attachments: list[dict[str, Any]] | None = None,
         display_text: str | None = None,
         message_id: str | None = None,
+        context: list[dict[str, Any]] | None = None,
     ) -> str:
         message: dict[str, Any] = {"name": user_name, "role": "user", "content": content}
         if message_id:
@@ -272,7 +274,7 @@ class AgentScopeClient:
             json={
                 "agent_id": agent_id,
                 "session_id": session_id,
-                "input": message,
+                "input": [*context, message] if context else message,
             },
         )
         payload = response.json()
@@ -506,14 +508,10 @@ class AgentScopeClient:
         """Upload one skill folder. AgentScope re-checks the manifest and tar layout."""
 
         safe_root = "".join(ch for ch in root if ch.isalnum() or ch in "-_.") or "skill"
-        entries = [
-            {"path": f"{safe_root}/{path}", "size": len(data)}
-            for path, data in files.items()
-        ]
+        entries = [{"path": f"{safe_root}/{path}", "size": len(data)} for path, data in files.items()]
         manifest = json.dumps({"entries": entries}, ensure_ascii=False)
         parts = [
-            ("files", (Path(path).name, data, "application/octet-stream"))
-            for path, data in files.items()
+            ("files", (Path(path).name, data, "application/octet-stream")) for path, data in files.items()
         ]
         await self.request(
             "POST",
@@ -665,12 +663,14 @@ class AgentScopeClient:
         results: list[dict[str, Any]] = []
         for name in LAUNCHER_TOOLS:
             meta = LAUNCHER_TOOL_META.get(name, {})
-            results.append({
-                "id": name,
-                "name": meta.get("name", name),
-                "category": meta.get("category", "builtin"),
-                "description": meta.get("description", ""),
-            })
+            results.append(
+                {
+                    "id": name,
+                    "name": meta.get("name", name),
+                    "category": meta.get("category", "builtin"),
+                    "description": meta.get("description", ""),
+                }
+            )
         return results
 
     def stream_session(self, agent_id: str, session_id: str, after: str | None = None) -> Any:

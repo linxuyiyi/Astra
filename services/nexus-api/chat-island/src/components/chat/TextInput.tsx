@@ -64,7 +64,7 @@ interface ProcessedFile {
 }
 
 interface TextInputProps {
-	onSend: (blocks: ContentBlock[]) => void;
+	onSend: (blocks: ContentBlock[]) => void | Promise<boolean>;
 	placeholder?: string;
 	autoComplete?: (input: string) => string | null;
 	disabled?: boolean;
@@ -194,7 +194,8 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 		const sessionKey = draftKey(window.location.search) || 'default';
 		const textareaRef = useRef<HTMLTextAreaElement>(null);
 		const fileInputRef = useRef<HTMLInputElement>(null);
-		const valueRef = useRef(value);
+		const submitting = useRef(false);
+        const valueRef = useRef(value);
 		valueRef.current = value;
 		const measureRef = useRef<HTMLSpanElement>(null);
 		/** ``true`` — textarea takes the full width, buttons drop to their own row. */
@@ -317,10 +318,10 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 			}
 		};
 
-		const handleSend = () => {
+		const handleSend = async () => {
 			// ``phase`` is guarded here rather than only on the button, since Enter
 			// calls this directly and would otherwise send during a running reply.
-			if (phase !== 'idle' || !hasContent || disabled || hasProcessing) return;
+			if (submitting.current || phase !== 'idle' || !hasContent || disabled || hasProcessing) return;
 
 			const blocks: ContentBlock[] = [];
 
@@ -343,9 +344,16 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 				}
 			});
 
-			onSend?.(blocks);
-			setValue('');
-			setFiles([]);
+            submitting.current = true;
+            try {
+                const accepted = await onSend(blocks);
+                if (accepted !== false) {
+                    if (valueRef.current === value) setValue('');
+                    setFiles(current => current.filter(f => !files.includes(f)));
+                }
+            } finally {
+                submitting.current = false;
+            }
 		};
 
 		/**

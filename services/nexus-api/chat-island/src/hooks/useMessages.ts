@@ -413,7 +413,7 @@ export function useMessages(
 	 */
 	const send = useCallback(
 		async (content: ContentBlock[]) => {
-			if (!agentId || !sessionId) return;
+			if (!agentId || !sessionId) return false;
 
 			// 新的发送清除上一次的投递失败；本次失败会在 catch 里重新设置。
 			setError(null);
@@ -427,8 +427,12 @@ export function useMessages(
 					session_id: sessionId,
 					input: userMsg,
 				});
+                return true;
 			} catch (e) {
+                msgsRef.current = msgsRef.current.filter(m => m.id !== userMsg.id);
+                scheduleUpdate();
 				setError(e as Error);
+                return false;
 			}
 		},
 		[agentId, sessionId, scheduleUpdate],

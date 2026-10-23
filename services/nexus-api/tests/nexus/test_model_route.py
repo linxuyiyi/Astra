@@ -284,9 +284,8 @@ def test_empty_route_without_bootstrap_does_not_create_a_session(tmp_path, monke
             headers=headers,
             json={"text": "你好"},
         )
-        assert sent.status_code == 200, sent.text
-        assert sent.json()["agentscope"]["accepted"] is False
-        assert "请先选择模型路由" in sent.json()["agentscope"]["detail"]
+        assert sent.status_code == 422, sent.text
+        assert "请先选择模型路由" in sent.json()["detail"]
         assert not any(item.method == "POST" and item.url.path == "/sessions/" for item in seen)
 
         updated = client.patch(

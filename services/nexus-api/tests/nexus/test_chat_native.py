@@ -408,3 +408,23 @@ def test_legacy_stream_still_starts_from_the_latest_checkpoint(tmp_path, monkeyp
         assert streamed[0].url.params["after"] == "9-0"
     finally:
         client.__exit__(None, None, None)
+
+
+def test_busy_chat_is_an_explicit_conflict(tmp_path, monkeypatch):
+    client = build_client(tmp_path, monkeypatch, (200, {"messages": [], "is_running": True}))
+
+    async def busy(*args, **kwargs):
+        from nexus_api.agentscope import AgentScopeError
+
+        raise AgentScopeError("Session already has an active chat run", status_code=409)
+
+    monkeypatch.setattr(client.app.state.agentscope, "trigger_chat", busy)
+    try:
+        cid = create_conversation(client)
+        bind_session(cid, "session-1")
+        response = client.post(
+            f"/api/v1/conversations/{cid}/messages", headers=OWNER, json={"text": "不要丢弃"}
+        )
+        assert response.status_code == 409
+    finally:
+        client.__exit__(None, None, None)

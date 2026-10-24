@@ -1,18 +1,10 @@
 <template>
   <ElContainer direction="vertical" class="task-detail" data-testid="task-workspace">
     <ElHeader v-if="task" class="task-header">
-      <ElButton :tag="RouterLink" to="/tasks" :icon="ArrowLeft">返回任务列表</ElButton>
+      <ElButton :tag="RouterLink" to="/tasks" :icon="ArrowLeft" class="task-header__back">返回任务列表</ElButton>
       <div class="task-title">
-        <p class="task-kicker">任务目标</p>
-        <h1>{{ task.description || task.title }}</h1>
-        <div class="task-title__row">
-          <RuntimeStatusBadge :projection="task" :show-detail="false" />
-          <ElText type="info">{{ task.title }} · {{ task.id }}</ElText>
-        </div>
-        <p class="task-next">下一步：{{ nextStep }}</p>
-        <ElText v-if="sessionFact" type="warning">{{ sessionFact }}</ElText>
+        <h1 :title="task.title || task.description">{{ displayTitle }}</h1>
       </div>
-      <ElTag v-if="repo" class="repo" type="info" effect="plain" :title="repo.commit">{{ repoSummary }}</ElTag>
       <ElSelect v-if="binding?.sessions.length" v-model="selectedSession" class="task-header__session" data-testid="session-select" :data-session-id="selectedSession" aria-label="选择会话">
         <ElOption v-for="(item, index) in binding.sessions" :key="item.id" :value="item.id" :label="`会话 #${binding.sessions.length - index} · ${item.current ? '当前' : '历史只读'}`" />
       </ElSelect>
@@ -37,7 +29,7 @@
 
     <ElMain class="task-detail__main">
       <div v-if="reviewJob" class="review-strip" data-testid="experience-review">
-        <ElTag :type="reviewJob.status === 'FAILED' ? 'danger' : reviewJob.status === 'SUCCEEDED' ? 'success' : 'info'">
+        <ElTag size="small" :type="reviewJob.status === 'FAILED' ? 'danger' : reviewJob.status === 'SUCCEEDED' ? 'success' : 'info'">
           经验复盘：{{ reviewStatusLabel }}
         </ElTag>
         <ElText v-if="reviewJob.segment_count" type="info">轨迹片段 {{ reviewJob.completed_segment_count }}/{{ reviewJob.segment_count }}</ElText>
@@ -94,6 +86,10 @@
         <div><dt>下一步</dt><dd>{{ nextStep }}</dd></div>
         <div><dt>责任数字员工</dt><dd>{{ responsibleName }}</dd></div>
         <div><dt>执行 Worker</dt><dd>{{ employeeName }}</dd></div>
+        <div v-if="repo">
+          <dt>代码仓库</dt>
+          <dd><ElTag type="info" effect="plain" class="task-info__repo" :title="repo.commit">{{ repoSummary }}</ElTag></dd>
+        </div>
         <div>
           <dt>验收标准</dt>
           <dd>
@@ -156,7 +152,6 @@ import { RouterLink, useRoute } from 'vue-router'
 import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElContainer, ElDrawer, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElHeader, ElMain, ElOption, ElSelect, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag, ElText, ElTimeline, ElTimelineItem } from 'element-plus'
 import { api } from '@/api/client'
 import type { AstraEvent, ExperienceReviewJob, Task, TaskUsage, TaskWorkspaceBinding } from '@/api/types'
-import RuntimeStatusBadge from '@/components/runtime/RuntimeStatusBadge.vue'
 import { useAstraStore } from '@/stores/astra'
 import { confirmDialog } from '@/composables/useConfirm'
 import { employeeDisplayName, formatTaskDuration, formatTime, formatTokens, priorityLabel, taskTypeLabel } from '@/utils/format'
@@ -208,6 +203,14 @@ async function retryReviewJob() {
 }
 
 const owners = ref<NexusEmployee[]>([])
+const displayTitle = computed(() => {
+  const current = task.value
+  if (!current) return ''
+  const title = current.title?.trim()
+  if (title) return title
+  const desc = current.description?.trim() || '未命名任务'
+  return desc.length > 40 ? `${desc.slice(0, 40)}…` : desc
+})
 const employeeName = computed(() => {
   const workerId = task.value?.worker_id || task.value?.employee_id
   const employee = store.employees.find(item => item.id === workerId)
@@ -410,25 +413,23 @@ onBeforeUnmount(() => { clearInterval(timer); diffRequest?.abort(); closeEvents(
 
 <style scoped>
 .task-detail{--el-border-color-lighter:var(--astra-border);height:100%;min-height:480px;overflow:hidden}
-.task-header{--el-header-height:auto;display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px;padding:12px 20px;border-bottom:1px solid var(--astra-border);background:var(--astra-bg-panel)}
-.task-title{flex:1;min-width:240px;display:grid;gap:4px}
-.task-kicker{margin:0;color:var(--astra-text-muted)}
-.task-title h1{display:-webkit-box;overflow:hidden;margin:0;font-size:var(--astra-font-section);line-height:1.4;-webkit-box-orient:vertical;-webkit-line-clamp:2}
-.task-title__row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.task-next{margin:0;line-height:1.5}
+.task-header{--el-header-height:56px;height:56px;min-height:56px;max-height:64px;display:flex;flex-wrap:nowrap;align-items:center;gap:12px;padding:0 20px;box-sizing:border-box;border-bottom:1px solid var(--astra-border);background:var(--astra-bg-panel)}
+.task-header__back{flex-shrink:0}
+.task-title{flex:1 1 auto;min-width:0;display:flex;align-items:center}
+.task-title h1{margin:0;font-size:var(--astra-font-section);font-weight:600;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .task-facts{display:grid;gap:12px;margin:0 0 16px}
 .task-facts div{display:grid;gap:2px}
 .task-facts dt{color:var(--astra-text-muted)}
 .task-facts dd{margin:0;line-height:1.55}
 .task-header__session{width:220px;flex:none}
-.task-header__actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-left:auto}
-.repo{max-width:400px}
-.repo :deep(.el-tag__content){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.task-header__actions{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+.task-info__repo{max-width:100%;height:auto;white-space:normal;line-height:1.4;padding:4px 8px;word-break:break-all}
 .task-detail__main{--el-main-padding:0;display:flex;flex-direction:column;min-height:0;overflow:hidden;background:var(--astra-bg-base)}
-.review-strip{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--astra-border);background:var(--astra-bg-panel);font-size:13px}
+.review-strip{display:flex;align-items:center;gap:10px;padding:0 16px;height:38px;min-height:36px;max-height:40px;box-sizing:border-box;border-bottom:1px solid var(--astra-border);background:var(--astra-bg-panel);font-size:13px;white-space:nowrap;overflow:hidden}
 .review-strip a{color:var(--astra-primary)}
 .review-strip__reason{min-width:0;max-width:480px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.workspace-alert{flex:none;border-radius:0}
+.workspace-alert{flex:none;border-radius:0;padding:6px 16px}
+.workspace-alert :deep(.el-alert__content){min-height:0}
 .workspace-alert__body{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:6px}
 .task-detail__frame{flex:1;width:100%;min-height:0;border:0;background:#fff}
 .task-detail__main :deep(.el-empty){margin:auto}

@@ -12,7 +12,11 @@
 
 必须运行 npm 安装脚本，不能使用 `--ignore-scripts`：DSH 有平台原生扩展，`dsh --version` 成功不能证明 ACP 能初始化。锁中版本与完整性不能因镜像源差异而修改。Worker wheel 的 `dsh` extra 包含固定 ACP / psutil；生成的 wheel 同时携带核验用 `dependency-lock.json`，不要求控制机安装 DSH 或 OpenCode。
 
-Linux 预检遵循固定 Node 22 官方最低基线：x86_64 / ARM64、glibc 2.28+、kernel 4.18+；随后仍需通过依赖指纹、真实 ACP initialize 和 Gateway 目录检查。公司 glibc 2.28、Windows 尚未取得实机证据。Windows 当前不启用 POSIX 进程监督。Mac 仅作独立探针使用。
+Linux 预检遵循固定 Node 22 官方最低基线：x86_64 / ARM64、glibc 2.28+、kernel 4.18+；随后仍需通过依赖指纹、真实 ACP initialize 和 Gateway 目录检查。公司 ARM64/glibc 2.28、Windows 尚未取得实机证据。Windows 当前不启用 POSIX 进程监督。Mac 仅作独立探针使用。
+
+上述是 Node / ACP 装配基线，不能当作完整 Worker 的最低要求。现有 Worker 文件通道使用 `openat2`（上游 Linux 5.6 引入），目标内核必须提供并允许该系统调用；DSH 健康检查通过真实文件通道核验，不采用路径隔离降级。原版 CentOS 8 的 4.18 内核不能满足完整 Worker。本次实测组合为 CentOS 8 / x86_64 / glibc 2.28、ELRepo 5.15.223 内核、独立 Python 3.11.15 和 Node 22.23.3；文件、Diff、停止与续接通过，不能据此声称其它发行版或安全策略已通过。
+
+Bash 的 `workspace-write` 还需要可用的 bubblewrap 或 Landlock 后端。CentOS 8 补装 bubblewrap 后已取得默认沙箱下写入 / 读取自有标记、零审批绕过的实测证据；缺失后端时 DSH 拒绝不受约束地执行，不能将一次手工批准计为正常沙箱通过。该证据不替代独立系统身份与网络出口隔离验收。
 
 完整离线归档、公司安装器与系统身份 / 网络隔离尚未验收。不要把此目录的锁文件或 Linux QA 通过当作离线部署完成。
 
@@ -41,7 +45,7 @@ Linux 预检遵循固定 Node 22 官方最低基线：x86_64 / ARM64、glibc 2.2
 
 示例均为占位值，必须填写已启用的真实路由与稳定调用 key。模型没有默认厂商地址或自动候选回退。`key_file` 必须归 Worker 用户独占、0600，值不进入 argv、日志和仓库。`state_root` 为绝对路径、0700，不能和其他 Worker 共用；日志与原生磁盘应按组织保留策略管理。
 
-Worker 管理页选择 DSH、Linux Remote、Worker 通道和明确路由别名。先在该 Linux Worker 独立安装固定运行时并配置 `NEXUS_DSH_CONFIG`，重启 Worker，执行“检查”；健康检查核对实际 ACP、模型、Skill hash、MCP 名称与 Git 仓库，核验成功才允许调度。当前页面不提供 DSH 一键安装、更新或原生 Web 入口。
+Worker 管理页选择 DSH、Linux Remote、Worker 通道和明确路由别名。先在该 Linux Worker 独立安装固定运行时并配置 `NEXUS_DSH_CONFIG`，重启 Worker，执行“检查”；健康检查核对固定装配、真实文件通道、ACP、模型、Skill hash、MCP 名称与 Git 仓库，核验成功才允许调度。当前页面不提供 DSH 一键安装、更新或原生 Web 入口。
 
 `skills` 是名称到本机 Skill 目录的精确白名单，`SKILL.md` 名称必须一致，拒绝 symlink。每绑定复制全部资源并冻结 hash，禁用 DSH 默认 Skill 根目录；恢复时发现漂移即拒绝。`mcp_servers` 使用官方 ACP 的固定 stdio / HTTP server 定义，控制面的 MCP 名称须与本地配置集合一致；不允许模型动态新增插件或 MCP。普通业务澄清使用已登记的 Task MCP，不能把工具审批当作业务回答。
 

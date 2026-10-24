@@ -131,7 +131,8 @@ async def probe_equipment(
         try:
             result = await WorkerCommandTransport(environment_id=environment.id).run_command("dsh_health", {})
             return {"runtime_engine": "dsh", "dsh": result, "repository": result.get("repository", {}),
-                    "source": "worker", "worker_agent_version": WORKER_AGENT_VERSION}
+                    "source": "worker", "worker_agent_version": WORKER_AGENT_VERSION,
+                    "error": result.get("error")}
         except Exception:
             return {"runtime_engine": "dsh", "error": "DSH Worker 固定装配或 Gateway 检查失败"}
     expected = _expected_payload(desired)
@@ -183,6 +184,7 @@ def health_status(
         dsh = observation.get("dsh", {})
         expected = {str(x.get("name")) for x in (desired.get("mcp") or {}).get("items", [])}
         ready = (dsh.get("healthy") is True and dsh.get("protocol_initialized") is True
+                 and dsh.get("file_channel_verified") is True
                  and (desired.get("model") or {}).get("route") in dsh.get("models", [])
                  and all(dsh.get("skill_hashes", {}).get(x["name"], {}).get("SKILL.md") == x["fullfile_hash"]
                     for x in (desired.get("skills") or {}).get("items", []))
@@ -296,7 +298,7 @@ def equipment_rows(
                  "deployed": bool(dsh.get("dsh")), "verified": ready,
                  "desired_revision": (want.get("dsh") or {}).get("version"),
                  "actual_revision": dsh.get("dsh"), "error": seen.get("error"),
-                 "detail": "固定装配、Gateway 模型目录和仓库核对"}, _git_row(want, seen, snapshot)]
+                 "detail": "固定装配、文件通道、Gateway 模型目录和仓库核对"}, _git_row(want, seen, snapshot)]
     return [
         _opencode_row(want, seen, snapshot),
         _worker_agent_row(want, seen, snapshot),

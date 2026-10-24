@@ -224,13 +224,16 @@ class DshAcpDriver:
             )
 
     async def health(self) -> dict:
-        from app.worker_agent.dsh_acp.preflight import inspect_installation
+        from app.worker_agent.dsh_acp.preflight import inspect_installation, inspect_worker_file_channel
 
         result = await asyncio.to_thread(
             inspect_installation,
             self.config.executable,
             self.config.lock_file,
         )
+        file_channel = await asyncio.to_thread(inspect_worker_file_channel, self.config.workspace_root)
+        if not file_channel["file_channel_verified"]:
+            return {"engine": "dsh", "healthy": False, **result, **file_channel}
         for alias, spec in self.config.models.items():
             GatewayModel(self.config.gateway_url, alias, **spec)
         if not self.config.models:
@@ -283,6 +286,7 @@ class DshAcpDriver:
             "repository": repository,
             "mcp_names": sorted(str(x["name"]) for x in self.config.mcp_servers),
             **result,
+            **file_channel,
         }
 
     def _binding(self, data: dict, *, preparing: bool = False, canceling: bool = False) -> sqlite3.Row:

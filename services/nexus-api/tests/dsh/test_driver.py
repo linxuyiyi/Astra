@@ -1,6 +1,8 @@
 """DSH 受理/隔离反例。假 ACP 只用于故障窗口，真实协议另由 Linux 探针覆盖。"""
 
 import asyncio
+import errno
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,7 +23,7 @@ class Host:
         self.stop_confirmed = False
         self.inputs = []
         self.prompt = None
-        self.permission_sink = kwargs["permission_sink"]
+        self.permission_sink = kwargs.get("permission_sink")
         self.instances.append(self)
 
     async def start(self):
@@ -100,6 +102,43 @@ async def prepare_and_input(driver, prepare):
         "text": "do exactly one operation",
     }
     return args
+
+
+@pytest.mark.parametrize("error_number", [errno.ENOSYS, errno.EPERM])
+async def test_health_rejects_unusable_file_channel_before_gateway_or_native(rig, monkeypatch, error_number):
+    import httpx
+
+    from app.worker_agent import files
+
+    driver, _, _ = rig
+    calls = []
+    opened = []
+    original_client = httpx.AsyncClient
+
+    def catalog(request):
+        calls.append(request.url.path)
+        return httpx.Response(200, json={"data": [{"id": "qa"}]})
+
+    monkeypatch.setattr(
+        httpx, "AsyncClient",
+        lambda **kwargs: original_client(transport=httpx.MockTransport(catalog), **kwargs),
+    )
+
+    def unavailable(directory, _relative):
+        opened.append(directory)
+        error = OSError(error_number, "openat2 unavailable")
+        raise files.map_open_error(error) from error
+
+    monkeypatch.setattr(files, "validate_inside", unavailable)
+    result = await driver.health()
+    assert result["healthy"] is False
+    assert result["file_channel_verified"] is False
+    assert "openat2" in result["error"]
+    assert calls == [] and Host.instances == []
+    assert len(opened) == 1
+    with pytest.raises(OSError) as closed:
+        os.fstat(opened[0])
+    assert closed.value.errno == errno.EBADF
 
 
 async def test_duplicate_different_gateway_request_ids_execute_once(rig):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 import re
 from importlib.metadata import version
@@ -21,6 +22,25 @@ def validate_platform(system: str, machine: str, libc: tuple[str, str], kernel: 
     if (machine not in {"aarch64", "arm64", "x86_64"} or libc[0] != "glibc"
             or numbers(libc[1]) < (2, 28) or numbers(kernel) < (4, 18)):
         raise RuntimeError("dsh_unsupported_linux_baseline_requires_kernel_4_18_glibc_2_28")
+
+
+def inspect_worker_file_channel(workspace_root: Path) -> dict:
+    """复用真实文件通道检查；Node/ACP 的最低基线不能证明 Worker 文件操作可用。"""
+    from app.worker_agent.files import FileCommandError, open_workspace, validate_inside
+
+    directory = None
+    try:
+        directory = open_workspace(str(workspace_root), str(workspace_root))
+        validate_inside(directory, ".")
+    except FileCommandError:
+        return {
+            "file_channel_verified": False,
+            "error": "Worker 文件通道检查失败：请确认目录可访问且内核支持并允许 openat2",
+        }
+    finally:
+        if directory is not None:
+            os.close(directory)
+    return {"file_channel_verified": True}
 
 
 def inspect_installation(executable: Path, expected_lock: Path) -> dict:

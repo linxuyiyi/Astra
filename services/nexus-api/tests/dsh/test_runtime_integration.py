@@ -24,6 +24,39 @@ def test_native_end_turn_is_not_business_completion():
         assert session_state(snapshot).status == "UNKNOWN"
 
 
+@pytest.mark.parametrize("verified", [None, False, True])
+def test_worker_health_requires_explicit_file_channel_verification(monkeypatch, verified):
+    from app.runtime import worker_health
+
+    monkeypatch.setattr(worker_health, "_matches_repository", lambda *_: True)
+    desired = {"runtime_engine": "dsh", "model": {"route": "qa"}}
+    native = {"healthy": True, "protocol_initialized": True, "models": ["qa"], "mcp_names": []}
+    if verified is not None:
+        native["file_channel_verified"] = verified
+    result = worker_health.health_status({"dsh": native}, desired)
+    assert result == ("AVAILABLE" if verified is True else "UNAVAILABLE")
+
+
+async def test_worker_health_exposes_file_channel_failure(monkeypatch):
+    from app.runtime import worker_health
+    from app.runtime.worker_transport import WorkerCommandTransport
+
+    error = "Worker 文件通道检查失败：请确认目录可访问且内核支持并允许 openat2"
+
+    async def health(_self, name, payload):
+        assert name == "dsh_health" and payload == {}
+        return {"healthy": False, "file_channel_verified": False, "error": error}
+
+    monkeypatch.setattr(WorkerCommandTransport, "run_command", health)
+    desired = {"runtime_engine": "dsh"}
+    result = await worker_health.probe_equipment(
+        SimpleNamespace(id=1, runtime_engine="dsh"), desired, SimpleNamespace(),
+        worker_instance=SimpleNamespace(status="online"),
+    )
+    assert result["error"] == error
+    assert worker_health.health_status(result, desired) == "UNAVAILABLE"
+
+
 class Native:
     def __init__(self, binding):
         self.binding = binding

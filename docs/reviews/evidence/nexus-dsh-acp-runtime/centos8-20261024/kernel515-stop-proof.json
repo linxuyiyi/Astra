@@ -1,0 +1,30 @@
+{
+  "start_observed_http": 200,
+  "start_observed_content": "START\n",
+  "state_before_stop": "running",
+  "permission_count": 0,
+  "stop_http": 200,
+  "stop_started_epoch": 1792806463.53004,
+  "stop_finished_epoch": 1792806464.009183,
+  "checked_seconds_after_stop": 43.682658195495605,
+  "late_file_http": 200,
+  "late_file_error": {
+    "path": "kernel515-stop-late.txt",
+    "content": ""
+  },
+  "snapshot_state_after_stop": "stopped",
+  "stop_confirmed": true,
+  "task_state_after_stop": {
+    "status": "WAITING",
+    "waiting_reason": "MANUAL_INTERVENTION",
+    "connection": "CONNECTED",
+    "pending_submission": null,
+    "binding_id": "dsh_ab72039374dd44a7937e78fef183fd47",
+    "session_status": "INTERRUPTED"
+  },
+  "worker_count_after_stop": 1,
+  "late_file_exists_authenticated_sftp": false,
+  "direct_filesystem_checked_seconds_after_stop": 147.6624870300293,
+  "file_api_missing_contract": "worker_read_text returns empty content for missing files; HTTP 200 cannot prove existence",
+  "first_assertion_expected_http_404": "incorrect QA assumption, corrected after source inspection and independent SFTP stat"
+}

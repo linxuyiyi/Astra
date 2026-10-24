@@ -1,0 +1,6 @@
+{
+  "authorized_action": "install ELRepo kernel-lt 5.15.223, preserve old kernel and reboot test machine",
+  "authorization": "explicit user approval in this chat",
+  "target": "47.77.219.113",
+  "previous_kernel": "4.18.0-193.28.1.el8_2.x86_64"
+}

@@ -1,0 +1,28 @@
+{
+  "cwd": "/root/agentwork/nexus-dsh-qa-20261024/source/services/nexus-api",
+  "argv": [
+    "/root/agentwork/nexus-dsh-qa-20261024/venv/bin/python",
+    "-m",
+    "pytest",
+    "tests/dsh",
+    "tests/platform/test_worker_gateway.py",
+    "tests/platform/test_worker_gateway_faults.py",
+    "tests/platform/test_worker_data_channel.py",
+    "tests/platform/test_worker_caller.py",
+    "tests/platform/test_worker_occupancy.py",
+    "tests/platform/test_worker_phase2_faults.py",
+    "tests/platform/test_worker_agent_files.py",
+    "tests/platform/test_worker_workspace_files.py",
+    "tests/platform/test_worker_file_channel.py",
+    "tests/platform/test_worker_equipment_v145.py",
+    "tests/platform/test_worker_runtime_inspection_v145.py",
+    "-q",
+    "--disable-warnings"
+  ],
+  "environment": {
+    "ASTRA_TEST_REDIS_URL": "redis://127.0.0.1:18642/15"
+  },
+  "summary": "207 passed, 1 warning in 64.42s",
+  "mac_dsh_summary": "59 passed, 289 warnings in 1.10s",
+  "ruff": "app nexus_api tests: all checks passed"
+}

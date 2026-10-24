@@ -1,0 +1,58 @@
+{
+  "platform": {
+    "kernel": "5.15.223-1.el8.elrepo.x86_64",
+    "glibc": [
+      "glibc",
+      "2.28"
+    ],
+    "python": "3.11.15",
+    "system_release": "CentOS Linux release 8.2.2004 (Core)",
+    "node": "v22.23.3",
+    "git": "git version 2.27.0"
+  },
+  "native_sessions": [
+    {
+      "task_id": "T-20261024-C8618B",
+      "native_session_id": "fd0ae2f8-a811-48ab-89d7-a9e28cb4a139",
+      "sha256": "59f3025aa5c12f83c3463cbd1c49a8f0c2838df8134a02f0a5975b98c316a953",
+      "event_count": 67,
+      "complete": true,
+      "independently_counted_messages": 12
+    },
+    {
+      "task_id": "T-20261024-C83CA2",
+      "native_session_id": "d0bbf6b4-978a-455b-b664-3b7852bbcf78",
+      "sha256": "ee87f2037bbbb2969a966191fefea7affce9865657c61c0ddf8b44eb778d8911",
+      "event_count": 120,
+      "complete": true,
+      "independently_counted_messages": 21
+    }
+  ],
+  "worker_stop": {
+    "owner": {
+      "pid": 1183,
+      "create_time": 1792806262.66,
+      "cwd": "/root/agentwork/nexus-dsh-qa-20261024/source/services/nexus-api"
+    },
+    "children_before_stop": [],
+    "graceful_sigterm": true,
+    "worker_exited": true
+  },
+  "remaining_qa_processes_after_worker_stop": [
+    {
+      "pid": 2559,
+      "create_time": 1792807074.01,
+      "cwd": "/root/agentwork/nexus-dsh-qa-20261024",
+      "name": "bash"
+    }
+  ],
+  "credential_matches_before_cleanup": [
+    "gateway-key",
+    "probe-full/dsh-home/.credentials.yaml",
+    "probe-kernel515/dsh-home/.credentials.yaml",
+    "probe-protocol/dsh-home/.credentials.yaml",
+    "worker-credentials.json",
+    "worker-state/dsh_2f661fe42f5f4c9a8c3229c691f905b8/.credentials.yaml",
+    "worker-state/dsh_ab72039374dd44a7937e78fef183fd47/.credentials.yaml"
+  ]
+}

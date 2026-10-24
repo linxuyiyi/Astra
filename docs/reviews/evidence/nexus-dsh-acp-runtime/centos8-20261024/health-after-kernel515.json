@@ -1,0 +1,184 @@
+{
+  "id": "op_024a0623f3284d45a43b5197914ad45a",
+  "environment_id": 3,
+  "action": "check",
+  "state": "SUCCEEDED",
+  "stage": "checking",
+  "attempt": 1,
+  "requested_by": "centos8-qa",
+  "requested_at": "2026-10-24T01:44:33.076119+00:00",
+  "started_at": "2026-10-24T01:44:33.482463+00:00",
+  "finished_at": "2026-10-24T01:44:36.918154+00:00",
+  "lease_owner": null,
+  "lease_until": null,
+  "cancel_requested": false,
+  "danger_dispatched": false,
+  "reconcile_required": false,
+  "reconcile_only": false,
+  "execution_channel": "worker",
+  "execution_reason": "读取在线 Worker 的真实装备与原生状态",
+  "retry_of_attempt": null,
+  "target_revision": {
+    "opencode_version": "1.18.35",
+    "worker_agent_version": "1.4.5",
+    "model_name": "deepseek-flash",
+    "opencode_path": "opencode",
+    "repository_id": "b2dd3cc328394995ae303fa99a1df105",
+    "branch": "main",
+    "repository_commit": null,
+    "skills": [],
+    "mcp": [],
+    "capability_revision": "d2b5555fbebcc4bd"
+  },
+  "before_snapshot": {
+    "environment_id": 3,
+    "runtime_engine": "dsh",
+    "worker_channel": "worker",
+    "mode": "LINUX_REMOTE",
+    "name": "CentOS 8 ACP QA",
+    "host": "47.77.219.113",
+    "port": 22,
+    "username": "root",
+    "has_ssh_password": false,
+    "opencode_server_port": 14096,
+    "opencode_path": "opencode",
+    "model_name": "deepseek-flash",
+    "workspace_root": "/root/agentwork/nexus-dsh-qa-20261024/repo",
+    "repository_id": "b2dd3cc328394995ae303fa99a1df105",
+    "labels": [],
+    "skill_refs": [],
+    "mcp_names": [],
+    "capability_revision": "d2b5555fbebcc4bd"
+  },
+  "after_snapshot": {
+    "status": "AVAILABLE",
+    "equipment": [
+      {
+        "key": "dsh",
+        "label": "DSH ACP",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "0.2.1-rc.2",
+        "actual_revision": "0.2.1-rc.2",
+        "error": null,
+        "detail": "固定装配、文件通道、Gateway 模型目录和仓库核对"
+      },
+      {
+        "key": "git",
+        "label": "Git 仓库",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "58a56f2a3c8e3beb",
+        "actual_revision": "396eb1ffadc4bc0d8a4293f78c94cbd8bb9f835e",
+        "diff": [],
+        "error": null,
+        "detail": "main@396eb1ffadc4"
+      }
+    ],
+    "repository": {
+      "id": "b2dd3cc328394995ae303fa99a1df105",
+      "url": "/root/agentwork/nexus-dsh-qa-20261024/origin.git",
+      "target_branch": "main",
+      "branch": "main",
+      "commit": "396eb1ffadc4bc0d8a4293f78c94cbd8bb9f835e",
+      "dirty": false,
+      "authentication": "token",
+      "error": null
+    },
+    "stale": false
+  },
+  "error_code": null,
+  "error_message": null,
+  "events": [
+    {
+      "id": 23,
+      "operation_id": "op_024a0623f3284d45a43b5197914ad45a",
+      "attempt": 1,
+      "type": "started",
+      "stage": "preflight",
+      "name": "开始维护",
+      "state": "PREFLIGHT",
+      "message": "开始执行 check",
+      "detail": {
+        "attempt": 1,
+        "reconcile_required": false
+      },
+      "created_at": "2026-10-24T01:44:33.491051+00:00"
+    },
+    {
+      "id": 24,
+      "operation_id": "op_024a0623f3284d45a43b5197914ad45a",
+      "attempt": 1,
+      "type": "step",
+      "stage": "checking",
+      "name": "只读检查",
+      "state": "running",
+      "message": "正在核对执行引擎、模型装配与 Git",
+      "detail": {},
+      "created_at": "2026-10-24T01:44:33.495119+00:00"
+    },
+    {
+      "id": 25,
+      "operation_id": "op_024a0623f3284d45a43b5197914ad45a",
+      "attempt": 1,
+      "type": "step",
+      "stage": "checking",
+      "name": "DSH ACP",
+      "state": "passed",
+      "message": "",
+      "detail": {
+        "key": "dsh",
+        "label": "DSH ACP",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "0.2.1-rc.2",
+        "actual_revision": "0.2.1-rc.2",
+        "error": null,
+        "detail": "固定装配、文件通道、Gateway 模型目录和仓库核对"
+      },
+      "created_at": "2026-10-24T01:44:36.912707+00:00"
+    },
+    {
+      "id": 26,
+      "operation_id": "op_024a0623f3284d45a43b5197914ad45a",
+      "attempt": 1,
+      "type": "step",
+      "stage": "checking",
+      "name": "Git 仓库",
+      "state": "passed",
+      "message": "",
+      "detail": {
+        "key": "git",
+        "label": "Git 仓库",
+        "configured": true,
+        "deployed": true,
+        "verified": true,
+        "desired_revision": "58a56f2a3c8e3beb",
+        "actual_revision": "396eb1ffadc4bc0d8a4293f78c94cbd8bb9f835e",
+        "diff": [],
+        "error": null,
+        "detail": "main@396eb1ffadc4"
+      },
+      "created_at": "2026-10-24T01:44:36.915939+00:00"
+    },
+    {
+      "id": 27,
+      "operation_id": "op_024a0623f3284d45a43b5197914ad45a",
+      "attempt": 1,
+      "type": "result",
+      "stage": "checking",
+      "name": "result",
+      "state": "SUCCEEDED",
+      "message": "维护完成",
+      "detail": {
+        "success": true,
+        "state": "SUCCEEDED",
+        "checks": []
+      },
+      "created_at": "2026-10-24T01:44:36.924631+00:00"
+    }
+  ]
+}

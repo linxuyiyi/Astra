@@ -1,0 +1,14 @@
+{
+  "wrong_native": {
+    "http_status": 404,
+    "body": {
+      "detail": "Task、绑定或原生 Session 不匹配"
+    }
+  },
+  "escape": {
+    "http_status": 403,
+    "body": {
+      "detail": "不允许访问此路径"
+    }
+  }
+}

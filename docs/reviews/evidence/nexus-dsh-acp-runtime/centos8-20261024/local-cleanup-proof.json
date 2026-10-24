@@ -1,0 +1,72 @@
+{
+  "stopped_owned_processes": [
+    {
+      "name": "review",
+      "pid": 98195,
+      "create_time": 1792805219.456978,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api",
+      "terminated_by": "SIGTERM",
+      "same_process_exited": true
+    },
+    {
+      "name": "api",
+      "pid": 98866,
+      "create_time": 1792806246.53617,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api",
+      "terminated_by": "SIGTERM",
+      "same_process_exited": true
+    },
+    {
+      "name": "gateway-api-relay",
+      "pid": 98729,
+      "create_time": 1792806018.283107,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra",
+      "remote_forwards": {
+        "18651": 18511,
+        "18641": 18641
+      },
+      "terminated_by": "SIGTERM",
+      "same_process_exited": true
+    },
+    {
+      "name": "redis-relay",
+      "pid": 98737,
+      "create_time": 1792806019.443477,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra",
+      "remote_forwards": {
+        "18642": 18642
+      },
+      "terminated_by": "SIGTERM",
+      "same_process_exited": true
+    },
+    {
+      "name": "redis",
+      "pid": 96898,
+      "create_time": 1792803840.430672,
+      "cwd": "/private/tmp/nexus-dsh-replaced-20261024",
+      "terminated_by": "SIGTERM",
+      "same_process_exited": true
+    }
+  ],
+  "removed_private_files": [
+    "id_ed25519",
+    "id_ed25519.pub",
+    "server-env.json",
+    "worker-credentials.json"
+  ],
+  "actual_secret_residual_matches": [],
+  "preserved_gateway": {
+    "pid": 93965,
+    "create_time": 1792717367.142531,
+    "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+    "models_http": 200,
+    "identity_unchanged": true
+  },
+  "scope": "Only QA processes and temporary credentials created for this CentOS run; kernel upgrade and shared Gateway retained",
+  "implementation_commit": "0c6f1828842d215efaa08778a383ed2fd0ebc2a7",
+  "actual_secret_scan": {
+    "staged_files": 33,
+    "implementation_commit_files": 9,
+    "matches": 0
+  }
+}

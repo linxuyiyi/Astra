@@ -1,0 +1,11 @@
+{
+  "sandbox_mode": "workspace-write",
+  "approval_bypass": false,
+  "kernel": "4.18.0-193.28.1.el8_2.x86_64",
+  "bubblewrap": "bubblewrap 0.4.0",
+  "result": "PASS",
+  "native_session_id": "c54f2099-5756-4394-8492-ddc52096855d",
+  "permission_count": 0,
+  "marker_sha256": "c30c399a128f70c606037d1e1e1157bf98167c760e29f553ea2c8352c528bb8c",
+  "owned_process_stopped": true
+}

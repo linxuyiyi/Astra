@@ -8,7 +8,7 @@
 
 | 维度 | 核验 |
 | --- | --- |
-| 完整性 | 完成 8/12；4 项外部 / 部署 / 长测门禁保留未完成 |
+| 完整性 | 完成 9/13；新增文件通道门禁已完成，4 项外部 / 部署 / 长测门禁保留未完成 |
 | 正确性 | 5 项功能 Requirement 有代码、测试和 Linux 产品闭环；固定版本兼容性、灰度发布 2 项仍有真实门禁缺口 |
 | 一致性 | 复用 Task / Worker / Git / Gateway / 人工确认 / 复盘，不镜像全文、不伪造 OpenCode API、不另建 Run；默认引擎保持 OpenCode |
 
@@ -19,7 +19,8 @@
 | Scenario | 代码与验证证据 |
 | --- | --- |
 | 运行环境不兼容 | `dsh_acp/preflight.py` / `test_installation.py`；云端 glibc 2.17 / kernel 3.10 预检明确失败，实际 ACP 原生 binding 初始化失败另留报告 |
-| 真实协议验收 | 固定版 `process.py`、`dsh_acp_probe.py`；Linux 产品闭环可运行，但最新完整探针曾出现 nonce 偏差 / Gateway 503；长 Session / 限流未测，完整 P0 不通过 |
+| 真实协议验收 | 固定版 `process.py`、`dsh_acp_probe.py`；重装后的目标 CentOS 8 / kernel 5.15.223 完整短测 17 PASS / 2 UNVERIFIED；历次 nonce 偏差 / Gateway 503 仍保留，长 Session / 限流未测，完整 P0 不通过 |
+| ACP 可初始化但 Worker 文件通道不可用 | `inspect_worker_file_channel()` 复用现有 `open_workspace` / `validate_inside`；ENOSYS / EPERM 反例验证拒绝、关闭 FD、未调用 Gateway / ACP；控制面要求显式 true 并传递错误。目标 4.18 健康检查 UNAVAILABLE，升级 5.15 后 AVAILABLE，文件 / 两种 Diff / 403 越界 / 404 错误 Session 实测通过。CentOS 定向 207 passed，Mac DSH 59 passed |
 | 旧 Session 继续执行 | `RuntimeSession.runtime_engine`、`lifecycle.py`、`dsh_lifecycle.py`；禁止重启时跨引擎，恢复保留 Worker / workspace / profile / native ID；旧 OpenCode 回归通过 |
 | 人工显式重新开始 | Workbench 只允许当前绑定发起 restart；已结束任务输入仍 409，历史绑定 restart 409。新增接口反例测试，页面已实测切换到会话 #2 和新原生 ID |
 | 重复投递 | SQLite receipt / FULL / 单写入锁；不同 Gateway request ID 的相同 submission 只调用一次 prompt，返回旧 receipt，不以当前轮覆盖旧受理证据 |
@@ -35,7 +36,7 @@
 
 ## CRITICAL：归档前仍须完成
 
-1. **1.2**：在受支持的用户目标 Linux / Mac 完整复跑含长 Session 的真实 P0；现有云端旧 OS 不能通过，不以 Linux QA 替代。
+1. **1.2**：目标 CentOS 已通过真实短测与产品闭环；继续在 Linux / Mac 完成含长 Session 的 P0，不以本次短测替代持续运行证据。
 2. **1.3**：提供健康的已登记 GLM / Qwen 路由，完成流式、工具、reasoning、原生用量 / 限流及公司 ARM64 / glibc 2.28、Windows 加载实测。
 3. **2.1**：补完整离线归档 / 公司安装器、独立系统身份、OS 工具与网络白名单实证。当前目录权限、配置与 hash 不能作为完整 OS 隔离证据。
 4. **4.1**：同模型 / 同网关任务对照、至少 100 任务 / 72 小时，记录正确性、人工修复、用量、吞吐与故障恢复；完成前不得切默认引擎。
@@ -44,7 +45,7 @@
 
 - MySQL 8.0.36 实库迁移未运行；SQLite 增量迁移 / 数据保留与 MySQL 方言检查不能替代它。
 - 没有启动真实 Task MCP 业务澄清、AgentScope 聊天或正式候选发布服务；现有业务机制由定向 / 全量回归覆盖。实际复盘仅影子模式 MAP / REDUCE。
-- DSH 仍是预览版。真实 Linux Bash 提示 Landlock 部分生效，完整系统 / 网络隔离不能宣称通过。
+- DSH 仍是预览版。目标 CentOS 补装 bubblewrap 后，默认 workspace-write Bash 写读成功、无需审批绕过；另一台 Linux 曾提示 Landlock 部分生效。两者均不能替代独立系统身份 / 网络出口隔离。
 - RuntimeService 保留现有 OpenCode 分支和 Client，提取共用传输 / 确认 / 重启；不为满足类名形式再复制一套大生命周期抽象。
 
 本轮按原 Scenario 与新增边界测试核验，不 sync 历史 `openspec/specs`，不提前 archive。没有权限审批或凭据缺失阻挡代码收尾；剩余项是实际平台、服务配置、隔离与持续运行证据。

@@ -1,0 +1,14 @@
+{
+  "http_status": 200,
+  "body": [
+    {
+      "file": "kernel515-acceptance.txt",
+      "patch": "--- /dev/null\n+++ b/kernel515-acceptance.txt\n@@ -0,0 +1 @@\n+KERNEL515_DSH_ACP_OK\n",
+      "before": "",
+      "after": "KERNEL515_DSH_ACP_OK\n",
+      "additions": 1,
+      "deletions": 0,
+      "status": "added"
+    }
+  ]
+}

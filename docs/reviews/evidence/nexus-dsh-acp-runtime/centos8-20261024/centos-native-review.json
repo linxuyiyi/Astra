@@ -1,0 +1,32 @@
+[
+  {
+    "id": "xrj_329030300857489d9370c4869c1f9847",
+    "task_id": "T-20261024-C8618B",
+    "status": "SUCCEEDED",
+    "phase": "REDUCE",
+    "source_digest": "59f3025aa5c12f83c3463cbd1c49a8f0c2838df8134a02f0a5975b98c316a953",
+    "source_message_count": 12,
+    "segment_count": 1,
+    "completed_segment_count": 1,
+    "zero_reason": "shadow_mode",
+    "error_code": null,
+    "error_message": null,
+    "attempts": 0,
+    "lease_until": null
+  },
+  {
+    "id": "xrj_57b21ba20dcd41aeb99451db632cb800",
+    "task_id": "T-20261024-C83CA2",
+    "status": "SUCCEEDED",
+    "phase": "REDUCE",
+    "source_digest": "ee87f2037bbbb2969a966191fefea7affce9865657c61c0ddf8b44eb778d8911",
+    "source_message_count": 21,
+    "segment_count": 1,
+    "completed_segment_count": 1,
+    "zero_reason": "shadow_mode",
+    "error_code": null,
+    "error_message": null,
+    "attempts": 0,
+    "lease_until": null
+  }
+]

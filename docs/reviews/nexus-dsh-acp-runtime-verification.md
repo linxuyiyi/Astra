@@ -4,13 +4,13 @@
 
 需求基线 `feat/nexus-dsh-acp-runtime` / `a3511ddba` 只有设计，原 Task 执行入口依赖 OpenCode。此次在独立分支 `codex/nexus-dsh-acp-runtime` 实现 DSH Worker、Runtime、任务工作台和原生轨迹复盘，继续使用现有 Task 状态、Worker 占用、人工确认和候选审核。
 
-**功能闭环与 Linux QA 回归通过；完整平台、模型、安全隔离和长测门禁未通过，不能正式切流。** 用户此前提供的云端 Linux 已连接并测试，其旧 glibc / kernel 和原生扩展加载失败单独保留，不以另一台 Linux 的通过替代。OpenSpec change 保持活动，不归档。
+**功能闭环与 Linux QA 回归通过；完整平台、模型、安全隔离和长测门禁未通过，不能正式切流。** 用户目标云端的旧系统失败保留为历史证据。用户重装 CentOS 8 后，目标机已运行真实 ACP；此次经明确授权保留旧内核、升级并重启至 5.15.223，补齐真实文件通道门禁，并在该机完成文件 / Diff / 停止 / 续接 / 人工确认闭环。OpenSpec change 9/13，保持活动，不归档。
 
-工作树：`/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra`。原 `/Users/niuniu/程序/Astra` 的未提交工作未覆盖。P1 提交 `4c48d818b`，P2 提交 `655b325a0`，只读页面收尾 `65665162f`；此前 P0 为 `cdab00f1a`。本次只做本地提交，没有推送、合并或重启正式服务。
+工作树：`/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra`。原 `/Users/niuniu/程序/Astra` 的未提交工作未覆盖。P1 提交 `4c48d818b`，P2 提交 `655b325a0`，只读页面收尾 `65665162f`；此前 P0 为 `cdab00f1a`，本次文件门禁修复为 `0c6f18288`。只做本地提交，没有推送、合并或重启正式服务；本次重启仅针对用户明确授权的测试机。
 
 ## 修改内容
 
-- Worker 每绑定独立 ACP Host / DSH_HOME，固定官方 DSH `0.2.1-rc.2`、ACP Python `0.8.1`。配置 / Skill / MCP hash 冻结；恢复漂移即拒绝。真实健康检查包含 ACP initialize、Gateway 目录、精确模型别名、Skill、MCP 与 Git，不能只看 `--version`。
+- Worker 每绑定独立 ACP Host / DSH_HOME，固定官方 DSH `0.2.1-rc.2`、ACP Python `0.8.1`。配置 / Skill / MCP hash 冻结；恢复漂移即拒绝。真实健康检查包含安全文件通道、ACP initialize、Gateway 目录、精确模型别名、Skill、MCP 与 Git，不能只看 `--version`。文件通道未核验不能 AVAILABLE，失败原因传递到现有设备状态。
 - SQLite WAL + FULL 持久受理先于原生 prompt，仅存 submission hash、generation、fence 和绑定。重复投递返回 receipt，不重投；重启中的 running 变为 unknown。取消先持久 fencing，再核验 PID / create_time / cwd / 进程组；不能证明停止就保留占用。
 - 复用 Worker Gateway 的命令、鉴权、Redis 与 HTTP 数据通道。提交文本只在有 TTL 的临时数据通道中传送；命令审计不存 prompt / transcript。已受理的原生执行不随 WebSocket 断线自动取消或重跑，审批断线默认拒绝。
 - 新增 `0002_dsh_runtime` 保存 engine、native ID、配置索引与 fence，保留已发布 `0001_init`。OpenCode 仍用现有原生 Client；抽出共用 Worker 传输和 Task 完成 / 重启业务规则。DSH 不提供 OpenCode API 伪兼容，也不增加 Run 状态机。
@@ -21,9 +21,10 @@
 
 | 检查 | 结果与边界 |
 | --- | --- |
-| Linux 全量 `tests/platform tests/nexus tests/dsh` | **1310 passed / 6 skipped**，158.24 秒；提供专用真实 Redis，相关 Lua / 跨进程 Worker 用例实际运行。原始输出：`evidence/nexus-dsh-acp-runtime/linux-pytest.txt` |
+| 目标 CentOS 8 / kernel 5.15 定向 | **207 passed / 0 skipped**，64.42 秒；包含全部 DSH、Worker Gateway / 数据通道 / 占用 / 故障 / 文件 / 设备检查回归，真实 Redis DB15；`centos8-20261024/centos-kernel515-pytest.txt` |
+| Ubuntu ARM 全量（此前实现） | **1310 passed / 6 skipped**，158.24 秒；提供专用真实 Redis，相关 Lua / 跨进程 Worker 用例实际运行。原始输出：`evidence/nexus-dsh-acp-runtime/linux-pytest.txt`；本次文件门禁修改后没有重跑该全量集 |
 | 6 个跳过项 | 1 个真实 OpenCode、1 个真实 MySQL、4 个真实 AgentScope；未设置其 opt-in 服务环境，不计通过 |
-| Mac 定向 Runtime / 复盘 / DSH | **221 passed**，31.40 秒；DSH 定向集现为 53 项（重新开始接口新增 1 项，定向 7 项通过）。全量 Mac 还遇到现有 Linux-only `os.O_PATH` / 安装脚本检查，未把它当 Linux 验收 |
+| Mac 定向 Runtime / 复盘 / DSH | 此前 **221 passed**，31.40 秒；本次文件门禁新增 6 个反例，当前 DSH 集 **59 passed**。全量 Mac 曾遇到现有 Linux-only `os.O_PATH` / 安装脚本检查，未把它当 Linux 验收 |
 | Ruff | Mac / Linux 的 `app nexus_api tests` 与探针检查通过 |
 | 前端 | `services/nexus-api/web` 的 type-check / build 通过，构建产物已更新；保留已有大 chunk 警告。未改 chat-island，未声称真实 AgentScope 聊天通过 |
 | Migration | SQLite 新库、重复 upgrade、已发布 `0001_init` → `0002` 的原绑定 / 状态 / 用量保留与 native ID 回填通过；MySQL 8.0.36 实库迁移未验证 |
@@ -31,7 +32,33 @@
 
 代码测试以修正后的原生消息计数为准：tool/call、内部状态和 turn 事件不能充当额外消息。实测复盘作业最初记录了原生事件数；随后对相同冻结轨迹独立重读，消息数分别为 5 / 21，摘要不变。`native-review.json` 同时保留当时结果与重读值，没有改写原生记录或伪造复盘结论。
 
-## Linux 真实产品闭环
+## 目标 CentOS 8：内核升级与真实闭环
+
+测试机 `47.77.219.113`，私有目录 `/root/agentwork/nexus-dsh-qa-20261024`。系统为 x86_64 / glibc 2.28，独立 Python 3.11.15 / Node 22.23.3，DSH / ACP 固定版本和 618 项依赖指纹匹配。只通过 Nexus Gateway `deepseek-flash`；未使用厂商直连。此处为手工装配的测试 Worker，不能算公司一键安装、私有 Git 服务认证或独立系统身份验收。
+
+**原因与修复**：Node 22 的 kernel 4.18 / glibc 2.28 基线只说明 Node / ACP 能加载。该机 4.18 内核上，真实 ACP 已有 17 PASS / 2 UNVERIFIED，但现有 Worker 文件通道因 `openat2` ENOSYS 返回 503；此前健康检查仍可标为 AVAILABLE，是完整 Worker 预检的缺口。已复用现有 `open_workspace` / `validate_inside` 做实际探测，不修改路径访问规则或增加降级。新增 ENOSYS / EPERM、缺少验证标记、错误传递测试；修复后在同一 4.18 机实测 UNAVAILABLE 并明确显示 openat2 原因。
+
+**升级与重新验证**：取得用户明确授权后，使用 ELRepo 官方 `kernel-lt` / core / modules `5.15.223-1.el8.elrepo.x86_64`。三包 RPM 签名与摘要均通过；先核对官方 v2 公钥，未接受初次 NOKEY。保留 4.18.0-193.28.1 及其它原启动项、备份 GRUB，并验证新 initramfs 后设置默认内核并重启。重启后 boot ID 改变、`uname -r` 为 5.15.223，真实文件探测 true；现有维护操作 `op_024a0623f3284d45a43b5197914ad45a` SUCCEEDED，Worker AVAILABLE。元数据见 `kernel-upgrade-proof.json` / `kernel-packages-proof.json`。
+
+完整 ACP 短测在新内核上为 **17 PASS / 0 FAIL / 2 UNVERIFIED**，退出码 2；包含初始化、双轮、MCP、原 Session 恢复、一次批准 / 拒绝、取消、强制断线恢复、reasoning 与原生 token。长 Session、限流明确未验证。103 个原生事件完整，SHA `628e1c1c40799460e7b8be23b873de03485c5a9cd361aa793654efe431e931b3`，报告 `centos-kernel515-full.json`。原版 4.18 的协议通过与文件失败分别留证，不再混为一个平台通过结论。
+
+默认 `workspace-write` Bash 在原版内核缺少后端时会拒绝执行。补装签名 CentOS bubblewrap 0.4.0 后，另建原生 Session 实测 Bash 写读自有标记、permission_count=0、Host 退出；新内核任务也无需审批绕过。首个旧任务的一次人工批准仅是精确命令授权，不计为默认沙箱验收；它与这次独立探针分别记录。
+
+新任务 `T-20261024-C83CA2`，绑定 `dsh_ab72039374dd44a7937e78fef183fd47`，原生 Session `d0bbf6b4-978a-455b-b664-3b7852bbcf78`：
+
+1. 经真实 `/start` 与 Bash 写读 `kernel515-acceptance.txt`，文件 API 为 200、内容严格匹配；`git` / `task` 两种 Diff 都显示新增一行。越界路径 403、错误 native ID 404。
+2. 同 Session 续接读取原文件，生成 `kernel515-continue.txt`。end_turn 后 Task WAITING / EXECUTION_RESULT_REVIEW、Worker 占用 1，没有自动业务完成。
+3. 对 `START → sleep 30 → LATE` 命令，先从文件 API 观察到 START 且原生 running，再停止当前回复。停止回执确认、Task WAITING / MANUAL_INTERVENTION、占用仍为 1；147 秒后经独立认证 SFTP stat 确认 LATE 文件不存在。文件读取 API 沿用缺失文件返回空内容的约定，初次 QA 将其假定为 404 的断言已纠正，未据 HTTP 200 误判文件存在。
+4. 再续接同一原生 Session，生成 `kernel515-final.txt`。人工确认 HTTP 200 后 Task SUCCEEDED，Worker 占用 1→0，repository_id 保留。120 条原生事件分页 SHA 一致，21 条复盘消息；中断工具的一个失败结果是上述受控取消，不是未解释的执行失败。
+5. 该任务与此前 4.18 上的已确认任务，都经现有 Celery 复盘队列完成真实 Gateway MAP / REDUCE，两个作业 SUCCEEDED / shadow_mode；没有发布正式候选。独立在远端重读原生磁盘，摘要与复盘作业一致，消息数分别为 12 / 21，不将 tool/call 或内部事件算作额外消息。QA 按阶段调用现有扫描函数，不把手工短测写成持续运行验收。
+
+上述 CentOS 任务验证使用真实 Nexus API / Worker Gateway 与远端文件系统；没有声称本次重新做了浏览器操作。2560×1440 真页面证据来自下节 Ubuntu ARM 闭环。所有当前目标证据放在 `evidence/nexus-dsh-acp-runtime/centos8-20261024/`，不包含原生全文、凭据或安装二进制。
+
+一次 4.18 定向回归因 QA Redis SSH 转发已断开而 ConnectionRefused，中止输出保留；隧道补 keepalive 并在升级后重新运行 207 项全过，没有将失败尝试改写成通过。
+
+取证后核对 PID / create_time / cwd 并正常停止目标 Worker，无残余自有执行进程；清除 9 个临时凭据 / 私有配置文件，实际 Gateway key 与 Worker token 在 101 个生成文件中无残留匹配。保留 0700 测试目录、固定运行时、Git 夹具和私有原生轨迹，不回滚已获授权的新内核。当前远端与本地清理分别见 `centos-cleanup-proof.json`、`local-cleanup-proof.json`；清理期间一次 SSH 超时后已重新连接核实，未假定远端动作成功。
+
+## Ubuntu ARM 真实产品闭环（此前）
 
 Linux QA：Ubuntu 24.04 / ARM64 / glibc 2.39 / Python 3.12.3 / Node 22.23.3。独立目录 `/tmp/nexus-dsh-integration-20261024`，两个 Worker 指向两个独立 agentwork 仓库；统一 Nexus API 在 Mac 独立端口 `18641`，Gateway 经自有 SSH 隧道访问真实 `18511/v1`，路由 `deepseek-flash`。这是跨进程 / Linux Worker 联调，**不是公司跨主机 HTTPS 部署验收**。
 
@@ -63,13 +90,13 @@ Linux QA：Ubuntu 24.04 / ARM64 / glibc 2.39 / Python 3.12.3 / Node 22.23.3。�
 
 | 项目 | 真实结果 |
 | --- | --- |
-| 用户的云端 Linux | 已安全连接，x86_64 / glibc 2.17 / kernel 3.10.0 / Python 3.11.17。`--version` 可返回，但实际 ACP 初始化失败：原生 binding 不可用。普通 npm ci 还遇到 spawn ENOMEM。最终预检明确拒绝该平台，未升级系统或干扰原有 Worker |
-| 官方 Linux 基线 | Node 22 x64 / ARM64 官方基线为 glibc 2.28+、kernel 4.18+，见 [固定版 BUILDING.md](https://github.com/nodejs/node/blob/v22.23.3/BUILDING.md)。系统条件满足后仍必须通过真实 ACP，不能据平台列表声称已支持 |
-| 最新完整 Linux 探针 | 一次真实 MCP 已调用，但模型首次 nonce 少后缀，严格断言失败；明确 JSON 参数后复测首轮通过，第二轮 Gateway `503 / NO_ELIGIBLE_NODE / CIRCUIT_OPEN`。两次均清理自有进程组并保留失败报告；观察到任务工具调用恢复后，独立复测仍在次轮遇到 503，第三份报告也保留，未自动改模型 |
+| 旧云端 OS（历史） | 用户重装前的 x86_64 / glibc 2.17 / kernel 3.10.0 / Python 3.11.17。`--version` 可返回，但实际 ACP 初始化失败：原生 binding 不可用。普通 npm ci 还遇到 spawn ENOMEM。该阶段未改系统；现在的 CentOS 8 / 5.15 实测另列，旧失败仍保留 |
+| Linux 基线边界 | Node 22 x64 / ARM64 官方基线为 glibc 2.28+、kernel 4.18+，见 [固定版 BUILDING.md](https://github.com/nodejs/node/blob/v22.23.3/BUILDING.md)。完整 Worker 还要求内核提供并允许 [openat2](https://man7.org/linux/man-pages/man2/openat2.2.html)，Bash 要有可用沙箱后端；必须实测，不能只看发行版名称 |
+| 此前 Ubuntu 完整探针失败 | 一次真实 MCP 已调用，但模型首次 nonce 少后缀，严格断言失败；明确 JSON 参数后复测首轮通过，第二轮 Gateway `503 / NO_ELIGIBLE_NODE / CIRCUIT_OPEN`。两次均清理自有进程组并保留失败报告；观察到任务工具调用恢复后，独立复测仍在次轮遇到 503，第三份报告也保留，未自动改模型。当前 CentOS 复测的通过不覆盖这些历史失败 |
 | 历史 P0 | 2026-10-23 Linux 的 17 PASS / 2 UNVERIFIED 只作为历史证据；不能覆盖本轮失败。Mac 最终复测也曾遇到 Gateway 503；Qwen 不健康，GLM 未配置 |
-| 系统安全 / 离线部署 | 私有目录、配置白名单和 hash 已实现；完整离线包、公司安装器、独立系统身份、网络出口与 OS 工具限制尚无完整实证。真实 Bash 曾提示 Landlock 部分生效，不能声称 OS 隔离通过 |
+| 系统安全 / 离线部署 | 私有目录、配置白名单和 hash 已实现；CentOS 默认 bubblewrap Bash 已实测。完整离线包、公司安装器、独立系统身份、网络出口与 OS 工具限制尚无完整实证；此前 Ubuntu Bash 的 Landlock 部分生效也未被忽略，不能声称完整 OS 隔离通过 |
 | 生产门禁 | 公司 ARM64 / glibc 2.28、Windows、GLM / Qwen 工具流、长 Session、限流、同模型任务对照、100 任务 / 72 小时未完成；保持默认 OpenCode |
 
-本轮临时进程、隧道和测试凭据在取证后按所有权清理；仅保留脱敏元数据、测试输出和截图。原生全文没有复制到 Git 或平台消息表。
+此前 Ubuntu / 旧云端阶段的临时进程、隧道和测试凭据已按所有权清理；仅保留脱敏元数据、测试输出和截图。原生全文没有复制到 Git 或平台消息表。
 
 清理记录见 `cleanup.json`：Linux QA 关闭两自有 Worker，清除 10 个临时凭据文件；云端清除 2 个，均无残留测试进程。清理时 Linux 的 Unix 创建时间随时钟修正偏移 1 秒，旧时间戳检查已拒绝直接终止；再次以精确脚本、独占 journal / flock、cwd、boot start ticks 和 pidfd 核实后发送 SIGTERM。产品严格进程身份检查遇到此类时钟变化仍会保留占用，需要人工核对，未降低判断标准。原有 Gateway 身份与进程保持。

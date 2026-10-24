@@ -36,21 +36,25 @@
         </ElSelect>
       </ElFormItem>
 
-      <ElFormItem label="验证状态" prop="verification_status">
-        <ElSelect v-model="form.verification_status">
-          <ElOption value="unverified" label="未验证" />
-          <ElOption value="verified" label="已验证" />
-          <ElOption value="failed" label="验证失败" />
-        </ElSelect>
-      </ElFormItem>
+      <ElCollapse v-model="secondaryOpen" class="knowledge-metadata-collapse" style="margin-bottom: 18px;">
+        <ElCollapseItem title="摘要、标签与验证状态（可选元数据）" name="meta">
+          <ElFormItem label="验证状态" prop="verification_status">
+            <ElSelect v-model="form.verification_status">
+              <ElOption value="unverified" label="未验证" />
+              <ElOption value="verified" label="已验证" />
+              <ElOption value="failed" label="验证失败" />
+            </ElSelect>
+          </ElFormItem>
 
-      <ElFormItem label="标签" prop="tags">
-        <ElInput v-model="form.tags" placeholder="用逗号分隔" />
-      </ElFormItem>
+          <ElFormItem label="标签" prop="tags">
+            <ElInput v-model="form.tags" placeholder="用逗号分隔" />
+          </ElFormItem>
 
-      <ElFormItem label="摘要" prop="summary">
-        <ElInput v-model.trim="form.summary" type="textarea" :rows="2" maxlength="4000" show-word-limit placeholder="摘要" />
-      </ElFormItem>
+          <ElFormItem label="摘要" prop="summary">
+            <ElInput v-model.trim="form.summary" type="textarea" :rows="2" maxlength="4000" show-word-limit placeholder="摘要" />
+          </ElFormItem>
+        </ElCollapseItem>
+      </ElCollapse>
 
       <ElFormItem label="Markdown 正文" prop="content_md">
         <div class="markdown-editor">
@@ -62,7 +66,7 @@
             <ElButton :icon="Upload" plain @click="pickMarkdown">导入 .md</ElButton>
             <input ref="fileInput" class="markdown-editor__file" type="file" accept=".md,text/markdown,text/plain" @change="readMarkdown" />
           </div>
-          <ElInput v-if="markdownMode === 'edit'" v-model="form.content_md" class="markdown-editor__input" type="textarea" :rows="16" resize="vertical" aria-label="Markdown 正文编辑区" placeholder="## 问题现象&#10;&#10;说明知识内容……" />
+          <ElInput v-if="markdownMode === 'edit'" v-model="form.content_md" class="markdown-editor__input" type="textarea" :rows="10" resize="vertical" aria-label="Markdown 正文编辑区" placeholder="## 问题现象&#10;&#10;说明知识内容……" />
           <div v-else class="markdown-editor__preview markdown-body" v-html="safeMarkdown" />
         </div>
       </ElFormItem>
@@ -93,10 +97,12 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { Upload } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElDrawer, ElForm, ElFormItem, ElInput, ElOption, ElRadioGroup, ElRadioButton, ElSelect, ElSpace, ElTag, ElText } from 'element-plus'
+import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElDrawer, ElForm, ElFormItem, ElInput, ElOption, ElRadioGroup, ElRadioButton, ElSelect, ElSpace, ElTag, ElText } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { confirmDialog } from '@/composables/useConfirm'
 import type { KnowledgeDetail } from '@/api/types'
+
+const secondaryOpen = ref<string[]>([])
 
 const props = defineProps<{ open: boolean; directories: Array<{ id: string; name: string; level: number }>; saving: boolean; error: string; editing?: KnowledgeDetail | null; initialContent?: string; initialTitle?: string; initialSpaceId?: string }>()
 const emit = defineEmits<{ close: []; save: [payload: Record<string, unknown>] }>()

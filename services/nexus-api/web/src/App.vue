@@ -1,10 +1,10 @@
 <template>
   <div class="app" :class="{ 'app--nebula': route.path === '/' }">
     <header v-if="route.path !== '/'" class="top">
-      <div class="brand">
+      <router-link to="/" class="brand" title="星云首页">
         <div class="mark">✦</div>
         <div class="brandname">NEXUS <span class="version">v1.4.8</span></div>
-      </div>
+      </router-link>
       <nav class="top-nav" aria-label="页面导航">
         <router-link
           v-for="item in navItems"
@@ -41,24 +41,56 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import AstraConfirmHost from "@/components/astra/AstraConfirmHost.vue";
 import { useAstraStore } from "@/stores/astra";
-import { getRuntime, resolveOwner, signIn } from "./api";
+import { canManagePlatform, getRuntime, hasPermission, resolveOwner, signIn } from "./api";
 import type { RuntimeStatus } from "./types";
 
 const store = useAstraStore();
 const route = useRoute();
-const navItems = computed(() => [
-  { to: "/", label: "星云首页", active: route.path === "/" },
-  { to: "/chat", label: "数字员工", active: route.path === "/chat" || route.path === "/team" },
-  { to: "/schedules", label: "日程安排", active: route.path.startsWith("/schedules") },
-  { to: "/tasks", label: "任务大厅", active: route.path.startsWith("/tasks") || route.path.startsWith("/interventions") },
-  { to: "/library", label: "数字图书馆", active: route.path.startsWith("/library") },
-  { to: "/gateway", label: "API 网关", active: route.path.startsWith("/gateway") },
-  {
-    to: "/settings",
-    label: "配置中心",
-    active: route.path.startsWith("/settings") || route.path.startsWith("/employees") || route.path.startsWith("/workers"),
-  },
-]);
+const navItems = computed(() => {
+  const items = [
+    {
+      to: "/chat",
+      label: "数字员工",
+      active: route.path === "/chat" || route.path === "/team",
+      requiredPermission: "chat",
+    },
+    {
+      to: "/tasks",
+      label: "任务大厅",
+      active: route.path.startsWith("/tasks") || route.path.startsWith("/interventions"),
+      requiredPermission: "*",
+    },
+    {
+      to: "/library",
+      label: "数字图书馆",
+      active: route.path.startsWith("/library"),
+      requiredPermission: "*",
+    },
+    {
+      to: "/gateway",
+      label: "API 网关",
+      active: route.path.startsWith("/gateway"),
+      requiredPermission: "*",
+    },
+    {
+      to: "/settings",
+      label: "配置中心",
+      active:
+        route.path.startsWith("/settings") ||
+        route.path.startsWith("/employees") ||
+        route.path.startsWith("/workers") ||
+        route.path.startsWith("/schedules"),
+      requiredPermission: "*",
+    },
+  ];
+
+  return items.filter((item) => {
+    if (item.requiredPermission === "*") {
+      return canManagePlatform();
+    }
+    return hasPermission(item.requiredPermission) || canManagePlatform();
+  });
+});
 
 const runtime = ref<RuntimeStatus | null>(null);
 const identity = ref<"loading" | "ready" | "ask">("loading");
@@ -99,7 +131,7 @@ onMounted(async () => {
   } catch {
     identity.value = "ask";
   }
-  if (identity.value === "ready" && !store.lastUpdated) void store.refresh();
+  if (identity.value === "ready" && canManagePlatform() && !store.lastUpdated) void store.refresh();
   await refreshRuntime();
   runtimeTimer = window.setInterval(refreshRuntime, 15_000);
 });
@@ -110,6 +142,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.brand { text-decoration: none; color: inherit; }
 .auth-card { width:min(420px, calc(100% - 32px)); margin:64px auto; color:var(--astra-text-primary); }
 .app--nebula {
   padding: 0;

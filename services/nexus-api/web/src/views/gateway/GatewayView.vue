@@ -26,7 +26,8 @@
               <div id="gateway-header-actions" class="gateway-header-actions" />
             </div>
           </template>
-          <RouterView />
+          <ElEmpty v-if="!canManage" description="需要平台管理权限" :image-size="80" style="padding: 48px 0;" />
+          <RouterView v-else />
         </ElCard>
       </ElMain>
     </ElContainer>
@@ -37,9 +38,11 @@
 import { Activity, Boxes, ClipboardList, KeyRound, Route as RouteIcon, ScrollText, Server } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
-import { ElAside, ElCard, ElContainer, ElMain, ElMenu, ElMenuItem, ElMenuItemGroup } from 'element-plus'
+import { ElAside, ElCard, ElContainer, ElEmpty, ElMain, ElMenu, ElMenuItem, ElMenuItemGroup } from 'element-plus'
+import { canManagePlatform } from '@/api'
 
 const route = useRoute()
+const canManage = computed(() => canManagePlatform())
 
 const menuGroups = [
   {

@@ -6,7 +6,7 @@
 
     <GatewayHeaderActions>
       <ElButton :loading="loading" :icon="RefreshCw" data-testid="gateway-pools-refresh" @click="load">刷新</ElButton>
-      <ElButton type="primary" :icon="Plus" data-testid="gateway-pool-create" @click="openPoolCreate">新增资源池</ElButton>
+      <ElButton v-if="canManage" type="primary" :icon="Plus" data-testid="gateway-pool-create" @click="openPoolCreate">新增资源池</ElButton>
     </GatewayHeaderActions>
 
     <div class="admin-page__toolbar" role="search" aria-label="资源池筛选" data-testid="gateway-pool-filter">
@@ -140,6 +140,7 @@
 <script setup lang="ts">
 import { Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { canManagePlatform } from '@/api'
 import {
   ElAlert,
   ElButton,
@@ -171,6 +172,7 @@ import { errorMessage } from '@/utils/gateway'
 import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
 const pools = ref<GatewayPool[]>([])
+const canManage = computed(() => canManagePlatform())
 const nodes = ref<GatewayNode[]>([])
 const loading = ref(false)
 const error = ref('')

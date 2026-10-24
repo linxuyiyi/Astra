@@ -5,13 +5,17 @@
         <h2 class="admin-card__title">数字图书馆</h2>
         <div class="admin-card__actions">
           <ElButton :icon="RefreshCw" :loading="refreshing" data-testid="library-refresh" @click="refreshAll">刷新</ElButton>
-          <template v-if="permissions?.can_manage">
+          <template v-if="canManage">
             <ElButton :icon="Upload" data-testid="library-import" @click="triggerImport">导入知识</ElButton>
             <ElButton type="primary" :icon="Plus" data-testid="library-create" @click="beginCreate">新建知识</ElButton>
           </template>
         </div>
       </div>
     </template>
+
+    <ElEmpty v-if="!canManagePlatform()" description="需要平台管理权限" :image-size="80" style="padding: 48px 0;" />
+
+    <template v-else>
     <ElAlert v-if="libraryNotice" class="library-notice" :type="libraryNotice.level" show-icon :closable="false" :title="libraryNotice.title" data-testid="library-service-state">
       <p>{{ libraryNotice.next }}</p>
       <ElButton
@@ -131,6 +135,7 @@
         <ElButton type="primary" @click="deleteBlocked = null">知道了</ElButton>
       </template>
     </AstraDialog>
+    </template>
   </ElCard>
 </template>
 
@@ -138,8 +143,9 @@
 import { Plus, RefreshCw, Upload } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElAlert, ElAside, ElButton, ElCard, ElContainer, ElMain } from 'element-plus'
+import { ElAlert, ElAside, ElButton, ElCard, ElContainer, ElEmpty, ElMain } from 'element-plus'
 import { api } from '@/api/client'
+import { canManagePlatform } from '@/api'
 import type { KnowledgeDetail, KnowledgeListItem, KnowledgePage, KnowledgeSpace, KnowledgeUsageRecord, LibraryPermissions, LibraryStats as LibraryStatsData, LibraryUsageSummary, LibraryServiceStatus, RelatedTask } from '@/api/types'
 import AstraDialog from '@/components/astra/AstraDialog.vue'
 import { confirmDialog } from '@/composables/useConfirm'
@@ -220,7 +226,7 @@ const working = ref(false)
 let searchTimer = 0
 
 const selectedSpace = computed(() => spaces.value.find((space) => space.id === filters.spaceId) ?? findNode(spaces.value, filters.spaceId) ?? null)
-const canManage = computed(() => Boolean(permissions.value?.can_manage))
+const canManage = computed(() => Boolean(permissions.value?.can_manage && canManagePlatform()))
 const pendingCount = computed(() => serviceStatus.value?.pending_count ?? 0)
 const failedCount = computed(() => serviceStatus.value?.failed_count ?? 0)
 const libraryNotice = computed(() => {
@@ -276,6 +282,7 @@ const activeFilterLabel = computed(() => {
 })
 
 onMounted(async () => {
+  if (!canManagePlatform()) return
   void loadServiceStatus()
   if (route.query.status === 'candidate') {
     filters.type = 'experience'

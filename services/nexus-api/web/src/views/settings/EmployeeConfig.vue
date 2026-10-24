@@ -92,62 +92,6 @@
         </div>
       </section>
 
-      <section class="config-section" data-testid="worker-scope-section">
-        <header class="config-section__head">
-          <div>
-            <h3>工作范围</h3>
-          </div>
-        </header>
-
-        <ElFormItem label="支持任务类型" prop="task_types">
-          <ElCheckboxGroup v-model="form.task_types">
-            <ElCheckbox value="ISSUE">问题</ElCheckbox>
-            <ElCheckbox value="REQUIREMENT">需求</ElCheckbox>
-          </ElCheckboxGroup>
-        </ElFormItem>
-
-        <ElFormItem label="支持任务分类" prop="category_id">
-          <ElSelect v-model="form.category_id" class="worker-config-control" placeholder="选择一个任务分类">
-            <ElOption v-for="category in enabledCategories" :key="category.id" :value="category.id" :label="category.name">
-              {{ category.name }}
-            </ElOption>
-          </ElSelect>
-        </ElFormItem>
-      </section>
-
-      <section class="config-section" data-testid="worker-dispatch-section">
-        <header class="config-section__head">
-          <div>
-            <h3>派单配置</h3>
-          </div>
-        </header>
-
-        <div class="dispatch-grid">
-          <ElFormItem>
-            <template #label>允许平台调度</template>
-            <ElSwitch v-model="form.enabled" aria-label="允许平台调度" />
-          </ElFormItem>
-          <ElFormItem>
-            <template #label>自动领取任务</template>
-            <ElSwitch v-model="form.auto_claim" aria-label="自动领取任务" />
-          </ElFormItem>
-          <ElFormItem>
-            <template #label>允许自主执行</template>
-            <ElSwitch v-model="form.auto_execute" aria-label="允许自主执行" />
-          </ElFormItem>
-        </div>
-
-        <ElFormItem v-if="!creating">
-          <template #label>手动暂停</template>
-          <div class="runtime-row">
-            <p>{{ paused ? '已暂停接单' : '未暂停' }}</p>
-            <ElButton :disabled="statusChanging || (!paused && currentTaskCount > 0)" @click="toggleRuntime">
-              {{ statusChanging ? '处理中…' : paused ? '继续接单' : '暂停接单' }}
-            </ElButton>
-          </div>
-        </ElFormItem>
-      </section>
-
       <section class="config-section" data-testid="environment-form">
         <header class="config-section__head">
           <div>
@@ -199,60 +143,113 @@
               :placeholder="form.environment.mode === 'LOCAL' ? 'D:\\code\\project 或 ./workspaces/worker-01' : '/home/nexus/project'"
             />
           </ElFormItem>
-          <div class="config-grid">
-            <ElFormItem label="代码仓库地址">
-              <ElInput v-model.trim="form.environment.repository_url" placeholder="https://codeup.aliyun.com/group/project.git" />
-            </ElFormItem>
-            <ElFormItem label="目标分支">
-              <ElInput v-model.trim="form.environment.repository_branch" maxlength="255" placeholder="main" />
-            </ElFormItem>
-          </div>
-          <ElFormItem label="Codeup 账号 / Token">
-            <ElInput
-              v-model="form.environment.repository_token"
-              type="password"
-              show-password
-              autocomplete="new-password"
-              :placeholder="repositoryTokenPlaceholder"
-            />
-          </ElFormItem>
-          <div v-if="form.environment.repository_id" class="repository-bound">
-            <ElTag size="small" type="success" effect="plain">已绑定仓库</ElTag>
-            <span>{{ form.environment.repository_url || `仓库 ${form.environment.repository_id}` }}</span>
-            <ElButton link type="danger" @click="clearRepository">解除绑定</ElButton>
-          </div>
         </div>
+      </section>
 
-        <div class="environment-block" data-testid="worker-coding-section">
-          <div class="environment-block__head">
-            <h4>编码 Agent</h4>
-          </div>
-          <div class="config-grid">
-            <ElFormItem label="编程工具">
-              <ElSelect v-model="form.environment.coding_tool" class="worker-config-control">
-                <ElOption value="opencode" label="OpenCode" />
-                <ElOption value="deepseek-harness" label="DeepSeek Harness（未接入）" disabled />
-              </ElSelect>
-            </ElFormItem>
-            <ElFormItem label="编程模型">
-              <ElInput v-model.trim="form.environment.model_name" maxlength="255" placeholder="例如：nexus-gateway/deepseek-v4" />
-            </ElFormItem>
-          </div>
-        </div>
-
-        <ElCollapse v-model="advancedOpen" class="advanced-settings">
-          <ElCollapseItem title="高级设置" name="advanced">
-            <div class="config-grid">
-              <ElFormItem label="OpenCode 可执行文件" prop="environment.opencode_path">
-                <ElInput v-model.trim="form.environment.opencode_path" :placeholder="form.environment.mode === 'LOCAL' ? 'opencode' : '/usr/local/bin/opencode'" />
+      <ElCollapse v-model="secondarySections" class="advanced-settings" data-testid="worker-secondary-collapse">
+        <ElCollapseItem title="派单配置（调度开关与自主执行策略）" name="dispatch">
+          <section class="config-section" data-testid="worker-dispatch-section">
+            <div class="dispatch-grid">
+              <ElFormItem>
+                <template #label>允许平台调度</template>
+                <ElSwitch v-model="form.enabled" aria-label="允许平台调度" />
               </ElFormItem>
-              <ElFormItem label="OpenCode Server 端口" prop="environment.opencode_server_port">
-                <ElInput v-model.number="form.environment.opencode_server_port" type="number" min="1" max="65535" />
+              <ElFormItem>
+                <template #label>自动领取任务</template>
+                <ElSwitch v-model="form.auto_claim" aria-label="自动领取任务" />
+              </ElFormItem>
+              <ElFormItem>
+                <template #label>允许自主执行</template>
+                <ElSwitch v-model="form.auto_execute" aria-label="允许自主执行" />
               </ElFormItem>
             </div>
-          </ElCollapseItem>
-        </ElCollapse>
-      </section>
+
+            <ElFormItem v-if="!creating">
+              <template #label>手动暂停</template>
+              <div class="runtime-row">
+                <p>{{ paused ? '已暂停接单' : '未暂停' }}</p>
+                <ElButton :disabled="statusChanging || (!paused && currentTaskCount > 0)" @click="toggleRuntime">
+                  {{ statusChanging ? '处理中…' : paused ? '继续接单' : '暂停接单' }}
+                </ElButton>
+              </div>
+            </ElFormItem>
+          </section>
+        </ElCollapseItem>
+
+        <ElCollapseItem title="工作范围（支持任务类型与分类）" name="scope">
+          <section class="config-section" data-testid="worker-scope-section">
+            <ElFormItem label="支持任务类型" prop="task_types">
+              <ElCheckboxGroup v-model="form.task_types">
+                <ElCheckbox value="ISSUE">问题</ElCheckbox>
+                <ElCheckbox value="REQUIREMENT">需求</ElCheckbox>
+              </ElCheckboxGroup>
+            </ElFormItem>
+
+            <ElFormItem label="支持任务分类" prop="category_id">
+              <ElSelect v-model="form.category_id" class="worker-config-control" placeholder="选择一个任务分类">
+                <ElOption v-for="category in enabledCategories" :key="category.id" :value="category.id" :label="category.name">
+                  {{ category.name }}
+                </ElOption>
+              </ElSelect>
+            </ElFormItem>
+          </section>
+        </ElCollapseItem>
+
+        <ElCollapseItem title="代码仓库与编码 Agent（可选）" name="repo">
+          <div class="environment-block" data-testid="worker-repo-section">
+            <div class="config-grid">
+              <ElFormItem label="代码仓库地址">
+                <ElInput v-model.trim="form.environment.repository_url" placeholder="https://codeup.aliyun.com/group/project.git" />
+              </ElFormItem>
+              <ElFormItem label="目标分支">
+                <ElInput v-model.trim="form.environment.repository_branch" maxlength="255" placeholder="main" />
+              </ElFormItem>
+            </div>
+            <ElFormItem label="Codeup 账号 / Token">
+              <ElInput
+                v-model="form.environment.repository_token"
+                type="password"
+                show-password
+                autocomplete="new-password"
+                :placeholder="repositoryTokenPlaceholder"
+              />
+            </ElFormItem>
+            <div v-if="form.environment.repository_id" class="repository-bound">
+              <ElTag size="small" type="success" effect="plain">已绑定仓库</ElTag>
+              <span>{{ form.environment.repository_url || `仓库 ${form.environment.repository_id}` }}</span>
+              <ElButton link type="danger" @click="clearRepository">解除绑定</ElButton>
+            </div>
+          </div>
+
+          <div class="environment-block" data-testid="worker-coding-section">
+            <div class="environment-block__head">
+              <h4>编码 Agent</h4>
+            </div>
+            <div class="config-grid">
+              <ElFormItem label="编程工具">
+                <ElSelect v-model="form.environment.coding_tool" class="worker-config-control">
+                  <ElOption value="opencode" label="OpenCode" />
+                  <ElOption value="deepseek-harness" label="DeepSeek Harness（未接入）" disabled />
+                </ElSelect>
+              </ElFormItem>
+              <ElFormItem label="编程模型">
+                <ElInput v-model.trim="form.environment.model_name" maxlength="255" placeholder="例如：nexus-gateway/deepseek-v4" />
+              </ElFormItem>
+            </div>
+          </div>
+        </ElCollapseItem>
+
+        <ElCollapseItem title="高级设置（OpenCode 路径与端口）" name="advanced">
+          <div class="config-grid">
+            <ElFormItem label="OpenCode 可执行文件" prop="environment.opencode_path">
+              <ElInput v-model.trim="form.environment.opencode_path" :placeholder="form.environment.mode === 'LOCAL' ? 'opencode' : '/usr/local/bin/opencode'" />
+            </ElFormItem>
+            <ElFormItem label="OpenCode Server 端口" prop="environment.opencode_server_port">
+              <ElInput v-model.number="form.environment.opencode_server_port" type="number" min="1" max="65535" />
+            </ElFormItem>
+          </div>
+        </ElCollapseItem>
+      </ElCollapse>
 
       <ElAlert
         v-if="message"
@@ -329,6 +326,7 @@ const message = ref('')
 const messageIsError = ref(false)
 const originalSnapshot = ref('')
 const advancedOpen = ref<string[]>([])
+const secondarySections = ref<string[]>(props.creating ? [] : ['dispatch', 'scope'])
 
 const emptyEnvironment = () => ({
   mode: 'LOCAL' as 'LOCAL' | 'LINUX_REMOTE',
@@ -588,8 +586,14 @@ async function save(deployRequested = false) {
     return
   }
   const valid = formRef.value ? await formRef.value.validate().catch(() => false) : true
-  if (!valid) return
+  if (!valid) {
+    if (!form.task_types.length || !form.category_id) {
+      if (!secondarySections.value.includes('scope')) secondarySections.value.push('scope')
+    }
+    return
+  }
   if (!form.task_types.length) {
+    if (!secondarySections.value.includes('scope')) secondarySections.value.push('scope')
     message.value = '工作范围至少需要一种任务类型'
     messageIsError.value = true
     return

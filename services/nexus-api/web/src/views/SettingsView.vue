@@ -23,7 +23,8 @@
               <div id="settings-header-actions" class="settings-header-actions" />
             </div>
           </template>
-          <RouterView />
+          <ElEmpty v-if="!canManage" description="需要平台管理权限" :image-size="80" style="padding: 48px 0;" />
+          <RouterView v-else />
         </ElCard>
       </ElMain>
     </ElContainer>
@@ -31,15 +32,18 @@
 </template>
 
 <script setup lang="ts">
-import { Bot, Boxes, Plug, Sparkles, Tags, Users } from "lucide-vue-next";
+import { Bot, Boxes, Calendar, Plug, Sparkles, Tags, Users } from "lucide-vue-next";
 import { computed } from "vue";
 import { RouterView, useRoute } from "vue-router";
-import { ElAside, ElCard, ElContainer, ElMain, ElMenu, ElMenuItem } from "element-plus";
+import { ElAside, ElCard, ElContainer, ElEmpty, ElMain, ElMenu, ElMenuItem } from "element-plus";
+import { canManagePlatform } from "@/api";
 
 const route = useRoute();
+const canManage = computed(() => canManagePlatform());
 const menuItems = [
   { id: "employees", label: "数字员工管理", path: "/settings/employees", icon: Users },
   { id: "workers", label: "Agent Worker", path: "/settings/workers", icon: Bot },
+  { id: "schedules", label: "日程安排", path: "/settings/schedules", icon: Calendar },
   { id: "skills", label: "技能管理", path: "/settings/skills", icon: Sparkles },
   { id: "mcps", label: "MCP 管理", path: "/settings/mcps", icon: Plug },
   { id: "categories", label: "任务分类", path: "/settings/categories", icon: Tags },

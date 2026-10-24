@@ -1,12 +1,12 @@
 <template>
   <el-drawer v-model="visible" append-to-body :title="employee ? '编辑数字员工' : '创建数字员工'" size="610px" :close-on-click-modal="false" @close="onClose">
-    <el-form label-position="top" @submit.prevent="submit">
+    <el-form ref="formRef" :model="form" :rules="rules" label-position="top" scroll-to-error @submit.prevent="submit">
       <div class="form-cap">身份与职责</div>
       <div class="pair">
-        <el-form-item label="员工名称" required>
+        <el-form-item label="员工名称" prop="name">
           <el-input v-model="form.name" maxlength="24" placeholder="例如：星河" />
         </el-form-item>
-        <el-form-item label="责任领域" required>
+        <el-form-item label="责任领域" prop="domain">
           <el-input v-model="form.domain" maxlength="42" placeholder="例如：测试自动化工程师" />
         </el-form-item>
       </div>
@@ -15,12 +15,10 @@
           <el-option v-for="item in avatars" :key="item" :label="item" :value="item" />
         </el-select>
       </el-form-item>
-      <el-form-item required>
-        <template #label>职责说明</template>
+      <el-form-item label="职责说明" prop="description">
         <el-input v-model="form.description" type="textarea" :rows="3" placeholder="例如：负责测试平台的问题定位和需求澄清，不直接改生产配置。" />
       </el-form-item>
-      <el-form-item required>
-        <template #label>工作指令</template>
+      <el-form-item label="工作指令" prop="instructions">
         <el-input v-model="form.instructions" type="textarea" :rows="5" placeholder="例如：先确认现象和影响范围，信息不足时追问，需要同事时再联系对方。" />
       </el-form-item>
       <el-form-item>
@@ -100,9 +98,66 @@
 
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from "vue";
+import type { FormInstance, FormRules } from "element-plus";
 import type { Employee, ResourceCatalog } from "../types";
 import type { GatewayRoute } from "../api/gateway";
 import { formatToolLabel } from "../utils/tools";
+
+const formRef = ref<FormInstance>();
+const rules: FormRules = {
+  name: [
+    { required: true, message: "请输入员工名称", trigger: ["blur", "change"] },
+    {
+      validator: (_rule, value, callback) => {
+        if (!value || !value.trim()) {
+          callback(new Error("员工名称不能为空"));
+        } else {
+          callback();
+        }
+      },
+      trigger: ["blur", "change"],
+    },
+  ],
+  domain: [
+    { required: true, message: "请输入责任领域", trigger: ["blur", "change"] },
+    {
+      validator: (_rule, value, callback) => {
+        if (!value || !value.trim()) {
+          callback(new Error("责任领域不能为空"));
+        } else {
+          callback();
+        }
+      },
+      trigger: ["blur", "change"],
+    },
+  ],
+  description: [
+    { required: true, message: "请输入职责说明", trigger: ["blur", "change"] },
+    {
+      validator: (_rule, value, callback) => {
+        if (!value || !value.trim()) {
+          callback(new Error("职责说明不能为空"));
+        } else {
+          callback();
+        }
+      },
+      trigger: ["blur", "change"],
+    },
+  ],
+  instructions: [
+    { required: true, message: "请输入工作指令", trigger: ["blur", "change"] },
+    {
+      validator: (_rule, value, callback) => {
+        if (!value || !value.trim()) {
+          callback(new Error("工作指令不能为空"));
+        } else {
+          callback();
+        }
+      },
+      trigger: ["blur", "change"],
+    },
+  ],
+};
 
 const props = defineProps<{
   open: boolean;
@@ -184,6 +239,9 @@ watch(
     form.mcps = [...(employee?.mcps ?? [])];
     form.tools = [...(employee?.tools ?? defaultTools())];
     form.model_route_id = employee?.model_route_id ?? "";
+    void nextTick(() => {
+      formRef.value?.clearValidate();
+    });
   },
   { immediate: true },
 );
@@ -206,7 +264,10 @@ function defaultTools(): string[] {
   return known ? ["contact_employee"] : [];
 }
 
-function submit() {
+async function submit() {
+  if (!formRef.value) return;
+  const valid = await formRef.value.validate().catch(() => false);
+  if (!valid) return;
   emit("save", {
     name: form.name.trim(),
     domain: form.domain.trim(),

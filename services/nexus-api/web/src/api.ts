@@ -1,3 +1,4 @@
+import { ref, computed } from "vue";
 import type {
   AgentScopeOutcome,
   Attachment,
@@ -14,21 +15,58 @@ import type {
   SkillVersion,
 } from "./types";
 
+export interface UserSession {
+  uid: string;
+  username: string;
+  display_name: string;
+  permissions: string[];
+}
+
+export const currentUser = ref<UserSession | null>(null);
+
 let resolvedUid = "";
-export function currentUid(): string { return resolvedUid; }
-export function storedOwnerId(): string { return resolvedUid; }
+export function currentUid(): string { return currentUser.value?.uid || resolvedUid; }
+export function storedOwnerId(): string { return currentUser.value?.uid || resolvedUid; }
+
+export function hasPermission(permission: string): boolean {
+  if (!currentUser.value) return false;
+  const perms = currentUser.value.permissions || [];
+  return perms.includes("*") || perms.includes(permission);
+}
+
+export function canManagePlatform(): boolean {
+  return hasPermission("*");
+}
+
+export function usePermissions() {
+  const canManage = computed(() => Boolean(currentUser.value?.permissions?.includes("*")));
+  const isChatOnly = computed(() => !canManage.value && Boolean(currentUser.value?.permissions?.includes("chat")));
+  return { currentUser, canManage, isChatOnly, hasPermission, canManagePlatform };
+}
+
 export async function resolveOwner(): Promise<string> {
   const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
   if (!response.ok) throw new Error("请先登录");
-  const user = await response.json() as { uid: string };
+  const user = await response.json() as UserSession;
+  currentUser.value = user;
   resolvedUid = user.uid;
   return resolvedUid;
 }
 export async function signIn(mode: "login" | "register", username: string, password: string, displayName: string) {
   const response = await fetch(`/api/v1/auth/${mode}`, { method: "POST", credentials: "same-origin",
     headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password, display_name: displayName }) });
-  const user = await read<{ uid: string; display_name: string }>(response);
+  const user = await read<{ uid: string; display_name: string; permissions?: string[] }>(response);
   resolvedUid = user.uid;
+  try {
+    await resolveOwner();
+  } catch {
+    currentUser.value = {
+      uid: user.uid,
+      username,
+      display_name: user.display_name,
+      permissions: user.permissions || [],
+    };
+  }
   return user;
 }
 function headers(json = true): HeadersInit { return json ? { "Content-Type": "application/json" } : {}; }

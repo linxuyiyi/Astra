@@ -46,88 +46,16 @@
           :placeholder="node?.has_api_key ? '已配置，留空保持不变' : '上游 Proxy 的 Token / 凭据值'"
         />
       </ElFormItem>
-      <ElFormItem label="健康路径">
-        <ElInput v-model="form.healthPath" placeholder="/health" />
-      </ElFormItem>
-      <ElFormItem label="探测间隔（秒）">
-        <ElInput v-model="form.probeInterval" type="number" min="10" placeholder="继承默认" />
-      </ElFormItem>
-      <ElFormItem label="连接超时（秒）">
-        <ElInput v-model="form.connectTimeout" type="number" min="0.1" step="0.1" placeholder="继承默认" />
-      </ElFormItem>
-      <ElFormItem label="请求超时（秒）">
-        <ElInput v-model="form.requestTimeout" type="number" min="0.1" step="0.1" placeholder="继承默认" />
-      </ElFormItem>
 
-      <ElDivider content-position="left">模型与探测</ElDivider>
+      <ElDivider content-position="left">模型与资源池</ElDivider>
       <ElFormItem label="支持模型（逗号或换行分隔）" prop="modelsText">
         <ElInput v-model="form.modelsText" type="textarea" :rows="3" placeholder="gpt-4o-mini&#10;claude-3-5-sonnet" />
       </ElFormItem>
-      <ElFormItem label="探测策略">
-        <ElSelect v-model="form.probeStrategy" data-testid="gateway-node-probe-strategy" @change="applyProbeStrategy">
-          <ElOption value="SSE" label="聊天流式" />
-          <ElOption value="NON_STREAM" label="聊天非流式" />
-          <ElOption value="EMBEDDING" label="向量嵌入" />
-          <ElOption value="ASR" label="语音识别（ASR）" />
-          <ElOption value="SCOPED" label="诊断探测" />
-        </ElSelect>
-      </ElFormItem>
-      <ElFormItem v-if="form.probeStrategy === 'SCOPED'">
-        <template #label>探测项目</template>
-        <ElCheckboxGroup v-model="form.probeTypes">
-          <ElCheckbox v-for="type in probeTypes" :key="type" :value="type">{{ probeTypeLabel(type) }}</ElCheckbox>
-        </ElCheckboxGroup>
-      </ElFormItem>
-      <div class="node-form__probe-bar">
-        <ElButton type="primary" plain :loading="probeRunning" :disabled="busy || !form.probeTypes.length" data-testid="gateway-node-probe-run" @click="runProbe">
-          {{ probeRunning ? '探测中…' : '保存并执行探测' }}
-        </ElButton>
-        <span class="node-form__health-line">
-          <ElTag :type="tagType(healthTone(currentHealth))">健康：{{ healthStateLabel(currentHealth) }}</ElTag>
-          <ElTag v-if="probeChecks.length" :type="tagType(authenticationTone(probeAuthentication))">{{ authenticationLabel(probeAuthentication) }}</ElTag>
-        </span>
-      </div>
-      <ul v-if="probeChecks.length" class="node-probe-result" data-testid="gateway-node-probe-checks">
-        <li v-for="check in probeChecks" :key="check.id">
-          <CheckCircle2 v-if="check.success" :size="14" class="ok" /><XCircle v-else :size="14" class="bad" />
-          <span>{{ probeTypeLabel(check.probe_type) }}</span>
-          <small>{{ check.latency_ms }} ms</small>
-          <small v-if="check.status_code">HTTP {{ check.status_code }}</small>
-          <em v-if="check.error" :title="check.error">{{ check.error }}</em>
-        </li>
-      </ul>
-
-      <ElDivider content-position="left">限额与额度</ElDivider>
-      <ElFormItem label="权重">
-        <ElInput v-model="form.weight" type="number" min="1" />
-      </ElFormItem>
-      <ElFormItem label="最大并发（0 为不限）">
-        <ElInput v-model="form.maxConcurrency" type="number" min="0" />
-      </ElFormItem>
-      <ElFormItem>
-        <template #label>每小时 Token 限额</template>
-        <ElInput v-model="form.hourly" type="number" min="0" placeholder="不限" />
-      </ElFormItem>
-      <ElFormItem label="每日 Token 限额">
-        <ElInput v-model="form.daily" type="number" min="0" placeholder="不限" />
-      </ElFormItem>
-      <ElFormItem label="额度策略">
-        <ElSelect v-model="form.quotaPolicy">
-          <ElOption value="STOP" label="达到限额停止新请求" />
-          <ElOption value="ALERT" label="达到限额仅告警" />
-          <ElOption value="RECORD" label="达到限额仅记录" />
-        </ElSelect>
-      </ElFormItem>
-
-      <ElDivider content-position="left">资源池与启用</ElDivider>
       <ElFormItem label="资源池">
         <ElSelect v-model="form.poolId">
           <ElOption value="" label="不分配" />
           <ElOption v-for="pool in pools" :key="pool.id" :value="pool.id" :label="`${pool.name}${pool.enabled ? '' : '（已禁用）'}`" />
         </ElSelect>
-      </ElFormItem>
-      <ElFormItem label="排序">
-        <ElInput v-model="form.sortOrder" type="number" />
       </ElFormItem>
       <ElFormItem>
         <template #label>调度状态</template>
@@ -143,6 +71,82 @@
       <p v-if="!activationReady" class="node-form__note node-form__note--warn">
         <TriangleAlert :size="13" />只有完成所选策略的完整探测并达到 HEALTHY/DEGRADED，且未修改连接配置（Base URL、认证、模型、健康路径）时，才可启用并进入「调度中」。
       </p>
+
+      <ElCollapse v-model="secondaryOpen" class="node-secondary-collapse">
+        <ElCollapseItem title="超时与健康探测高级配置" name="probe">
+          <ElFormItem label="健康路径">
+            <ElInput v-model="form.healthPath" placeholder="/health" />
+          </ElFormItem>
+          <ElFormItem label="探测间隔（秒）">
+            <ElInput v-model="form.probeInterval" type="number" min="10" placeholder="继承默认" />
+          </ElFormItem>
+          <ElFormItem label="连接超时（秒）">
+            <ElInput v-model="form.connectTimeout" type="number" min="0.1" step="0.1" placeholder="继承默认" />
+          </ElFormItem>
+          <ElFormItem label="请求超时（秒）">
+            <ElInput v-model="form.requestTimeout" type="number" min="0.1" step="0.1" placeholder="继承默认" />
+          </ElFormItem>
+          <ElFormItem label="探测策略">
+            <ElSelect v-model="form.probeStrategy" data-testid="gateway-node-probe-strategy" @change="applyProbeStrategy">
+              <ElOption value="SSE" label="聊天流式" />
+              <ElOption value="NON_STREAM" label="聊天非流式" />
+              <ElOption value="EMBEDDING" label="向量嵌入" />
+              <ElOption value="ASR" label="语音识别（ASR）" />
+              <ElOption value="SCOPED" label="诊断探测" />
+            </ElSelect>
+          </ElFormItem>
+          <ElFormItem v-if="form.probeStrategy === 'SCOPED'">
+            <template #label>探测项目</template>
+            <ElCheckboxGroup v-model="form.probeTypes">
+              <ElCheckbox v-for="type in probeTypes" :key="type" :value="type">{{ probeTypeLabel(type) }}</ElCheckbox>
+            </ElCheckboxGroup>
+          </ElFormItem>
+          <div class="node-form__probe-bar">
+            <ElButton type="primary" plain :loading="probeRunning" :disabled="busy || !form.probeTypes.length" data-testid="gateway-node-probe-run" @click="runProbe">
+              {{ probeRunning ? '探测中…' : '保存并执行探测' }}
+            </ElButton>
+            <span class="node-form__health-line">
+              <ElTag :type="tagType(healthTone(currentHealth))">健康：{{ healthStateLabel(currentHealth) }}</ElTag>
+              <ElTag v-if="probeChecks.length" :type="tagType(authenticationTone(probeAuthentication))">{{ authenticationLabel(probeAuthentication) }}</ElTag>
+            </span>
+          </div>
+          <ul v-if="probeChecks.length" class="node-probe-result" data-testid="gateway-node-probe-checks">
+            <li v-for="check in probeChecks" :key="check.id">
+              <CheckCircle2 v-if="check.success" :size="14" class="ok" /><XCircle v-else :size="14" class="bad" />
+              <span>{{ probeTypeLabel(check.probe_type) }}</span>
+              <small>{{ check.latency_ms }} ms</small>
+              <small v-if="check.status_code">HTTP {{ check.status_code }}</small>
+              <em v-if="check.error" :title="check.error">{{ check.error }}</em>
+            </li>
+          </ul>
+        </ElCollapseItem>
+
+        <ElCollapseItem title="限额与并发策略配置" name="quota">
+          <ElFormItem label="权重">
+            <ElInput v-model="form.weight" type="number" min="1" />
+          </ElFormItem>
+          <ElFormItem label="最大并发（0 为不限）">
+            <ElInput v-model="form.maxConcurrency" type="number" min="0" />
+          </ElFormItem>
+          <ElFormItem>
+            <template #label>每小时 Token 限额</template>
+            <ElInput v-model="form.hourly" type="number" min="0" placeholder="不限" />
+          </ElFormItem>
+          <ElFormItem label="每日 Token 限额">
+            <ElInput v-model="form.daily" type="number" min="0" placeholder="不限" />
+          </ElFormItem>
+          <ElFormItem label="额度策略">
+            <ElSelect v-model="form.quotaPolicy">
+              <ElOption value="STOP" label="达到限额停止新请求" />
+              <ElOption value="ALERT" label="达到限额仅告警" />
+              <ElOption value="RECORD" label="达到限额仅记录" />
+            </ElSelect>
+          </ElFormItem>
+          <ElFormItem label="排序">
+            <ElInput v-model="form.sortOrder" type="number" />
+          </ElFormItem>
+        </ElCollapseItem>
+      </ElCollapse>
 
       <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error" data-testid="gateway-node-error" />
     </ElForm>
@@ -167,6 +171,8 @@ import {
   ElButton,
   ElCheckbox,
   ElCheckboxGroup,
+  ElCollapse,
+  ElCollapseItem,
   ElDivider,
   ElDrawer,
   ElForm,
@@ -208,6 +214,7 @@ const props = defineProps<{ open: boolean; node: GatewayNode | null; pools: Gate
 const emit = defineEmits<{ close: []; saved: [] }>()
 
 const probeTypes: GatewayProbeType[] = ['NETWORK', 'SERVICE', 'MODEL', 'STREAM']
+const secondaryOpen = ref<string[]>([])
 
 const formRef = ref<FormInstance>()
 const saving = ref(false)

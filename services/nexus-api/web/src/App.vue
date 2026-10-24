@@ -41,56 +41,13 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import AstraConfirmHost from "@/components/astra/AstraConfirmHost.vue";
 import { useAstraStore } from "@/stores/astra";
-import { canManagePlatform, getRuntime, hasPermission, resolveOwner, signIn } from "./api";
+import { canManagePlatform, getRuntime, resolveOwner, signIn } from "./api";
+import { getVisibleNavItems } from "./navigation";
 import type { RuntimeStatus } from "./types";
 
 const store = useAstraStore();
 const route = useRoute();
-const navItems = computed(() => {
-  const items = [
-    {
-      to: "/chat",
-      label: "数字员工",
-      active: route.path === "/chat" || route.path === "/team",
-      requiredPermission: "chat",
-    },
-    {
-      to: "/tasks",
-      label: "任务大厅",
-      active: route.path.startsWith("/tasks") || route.path.startsWith("/interventions"),
-      requiredPermission: "*",
-    },
-    {
-      to: "/library",
-      label: "数字图书馆",
-      active: route.path.startsWith("/library"),
-      requiredPermission: "*",
-    },
-    {
-      to: "/gateway",
-      label: "API 网关",
-      active: route.path.startsWith("/gateway"),
-      requiredPermission: "*",
-    },
-    {
-      to: "/settings",
-      label: "配置中心",
-      active:
-        route.path.startsWith("/settings") ||
-        route.path.startsWith("/employees") ||
-        route.path.startsWith("/workers") ||
-        route.path.startsWith("/schedules"),
-      requiredPermission: "*",
-    },
-  ];
-
-  return items.filter((item) => {
-    if (item.requiredPermission === "*") {
-      return canManagePlatform();
-    }
-    return hasPermission(item.requiredPermission) || canManagePlatform();
-  });
-});
+const navItems = computed(() => getVisibleNavItems(route.path));
 
 const runtime = ref<RuntimeStatus | null>(null);
 const identity = ref<"loading" | "ready" | "ask">("loading");

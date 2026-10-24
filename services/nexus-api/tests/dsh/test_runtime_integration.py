@@ -274,6 +274,45 @@ async def test_workbench_rejects_cross_task_native_and_history_writes(runtime):
         ).status_code == 409
 
 
+@pytest.mark.parametrize("outcome,status", [("conflict", 409), ("accepted", 200), ("unreachable", 503)])
+async def test_permission_domain_rejection_is_not_a_transport_failure(runtime, monkeypatch, outcome, status):
+    from app.runtime.dsh_client import DshRuntimeClient
+    from app.runtime.worker_transport import WorkerCommandError
+
+    db, _, native = runtime
+    calls = []
+
+    class Transport:
+        async def run_command(self, name, data, **kwargs):
+            calls.append((name, data))
+            if outcome == "unreachable":
+                raise WorkerCommandError("io", "控制命令执行失败")
+            return {"accepted": outcome == "accepted", "error": "审批已过期或不属于当前 Session"}
+
+    monkeypatch.setattr(
+        "app.api.workbench_routes.DshRuntimeClient",
+        lambda environment_id, binding: DshRuntimeClient(environment_id, binding, transport=Transport()),
+    )
+    app = FastAPI()
+    app.include_router(router)
+
+    async def session():
+        yield db
+
+    app.dependency_overrides[get_session] = session
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        native_id = native["b1"].binding.native_session_id
+        response = await client.post(
+            "/api/tasks/t1/workbench/b1/permission",
+            json={"native_session_id": native_id, "permission_id": "expired", "option_id": "reject_once"},
+        )
+    assert response.status_code == status, response.text
+    assert calls[0][0] == "dsh_permission"
+    assert calls[0][1]["native_session_id"] == native_id
+    if outcome == "conflict":
+        assert "审批已过期" in response.json()["detail"]
+
+
 async def test_closed_task_restart_keeps_history_readonly_and_requires_current_binding(runtime, monkeypatch):
     db, _, native = runtime
     task = await db.get(Task, "t1")

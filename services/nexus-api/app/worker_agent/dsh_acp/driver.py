@@ -192,7 +192,11 @@ class DshAcpDriver:
                     raise RuntimeError("只允许关闭已正常结束的 ACP Host")
                 await self.cancel(row, data, preserve_success=True)
             elif name == "dsh_permission":
-                self.reply_permission(row, data)
+                try:
+                    self.reply_permission(row, data)
+                except ValueError as exc:
+                    return {"accepted": False, "error": str(exc)}
+                return {"accepted": True}
             elif name == "dsh_trace":
                 return await asyncio.to_thread(
                     read_trace_page,

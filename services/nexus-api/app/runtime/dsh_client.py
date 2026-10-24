@@ -51,7 +51,10 @@ class DshRuntimeClient:
         return await self.call("dispose", fence=fence)
 
     async def reply_permission(self, *, permission_id: str, option_id: str) -> dict:
-        return await self.call("permission", permission_id=permission_id, option_id=option_id)
+        result = await self.call("permission", permission_id=permission_id, option_id=option_id)
+        if result.get("accepted") is not True:
+            raise ValueError(result.get("error") or "审批结果未确认，请刷新核对")
+        return result
 
     async def read_trace_page(self, *, cursor: int = 0, limit: int = 40) -> dict:
         return await self.call("trace", cursor=cursor, limit=limit)

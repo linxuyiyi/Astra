@@ -237,14 +237,40 @@ async def test_permission_rejects_cross_session_and_disconnect_denies(rig):
     await asyncio.sleep(0)
     view = await driver.handle("dsh_snapshot", data)
     approval = view["permissions"][0]["id"]
-    with pytest.raises(ValueError):
-        await driver.handle("dsh_permission", {**data, "permission_id": approval, "option_id": "always"})
+    rejected = await driver.handle(
+        "dsh_permission", {**data, "permission_id": approval, "option_id": "always"}
+    )
+    assert rejected["accepted"] is False and not future.done()
+    missing = await driver.handle(
+        "dsh_permission", {**data, "permission_id": "other-session", "option_id": "yes"}
+    )
+    assert missing["accepted"] is False and not future.done()
     with pytest.raises(ValueError):
         await driver.handle(
             "dsh_permission", {**data, "task_id": "task-2", "permission_id": approval, "option_id": "yes"}
         )
     driver.connection_lost()
     assert await future is None
+
+
+@pytest.mark.parametrize("option_id", ["yes", "no"])
+async def test_permission_reply_acknowledges_only_one_decision(rig, option_id):
+    driver, _, prepare = rig
+    data = await prepare_and_input(driver, prepare)
+    await driver.handle("dsh_submit", data)
+    future = asyncio.create_task(Host.instances[0].permission_sink(
+        data["native_session_id"],
+        [{"optionId": "yes", "kind": "allow_once"}, {"optionId": "no", "kind": "reject_once"}],
+        {"toolCallId": "tool-1", "title": "controlled fixture"},
+    ))
+    await asyncio.sleep(0)
+    approval = (await driver.handle("dsh_snapshot", data))["permissions"][0]["id"]
+    reply = {**data, "permission_id": approval, "option_id": option_id}
+    assert await driver.handle("dsh_permission", reply) == {"accepted": True}
+    assert await future == option_id
+    duplicate = await driver.handle("dsh_permission", reply)
+    assert duplicate["accepted"] is False
+    assert future.result() == option_id
 
 
 async def test_profile_drift_and_second_writer_are_rejected(rig):

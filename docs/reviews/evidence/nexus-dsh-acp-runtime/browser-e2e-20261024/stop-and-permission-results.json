@@ -1,0 +1,40 @@
+{
+  "a": {
+    "state": "stopped",
+    "stop_confirmed": true,
+    "permission_count": 0,
+    "task_status": "WAITING",
+    "waiting_reason": "MANUAL_INTERVENTION",
+    "worker_count": 1
+  },
+  "b": {
+    "state": "succeeded",
+    "stop_confirmed": false,
+    "permission_count": 0,
+    "task_status": "WAITING",
+    "waiting_reason": "EXECUTION_RESULT_REVIEW",
+    "worker_count": 1
+  },
+  "expired_permission_http": 409,
+  "expired_permission_error": {
+    "detail": "审批已过期或不属于当前 Session"
+  },
+  "seconds_after_stop_click": 121.4653570652008,
+  "late_file_exists_authenticated_sftp": false,
+  "filesystem": {
+    "a": {
+      "own_content": "E2E_A_20261024_OK\n",
+      "foreign_file_exists": false
+    },
+    "b": {
+      "own_content": "E2E_B_20261024_OK\n",
+      "foreign_file_exists": false
+    },
+    "denied-b.txt": {
+      "exists": false
+    },
+    "denied-b-after-fix.txt": {
+      "exists": false
+    }
+  }
+}

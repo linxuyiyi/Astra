@@ -1,0 +1,55 @@
+{
+  "source_commit": "ee024b6e236456a35bd5d77623fe7058822c8a4d",
+  "mac_dsh": {
+    "command": ".venv/bin/pytest tests/dsh -q",
+    "result": "PASS",
+    "passed": 64,
+    "duration_seconds": 1.46,
+    "warnings": 334,
+    "evidence_kind": "terminal result summarized; not a raw log"
+  },
+  "centos_dsh": {
+    "command": "fixed venv: pytest tests/dsh -q",
+    "result": "PASS",
+    "passed": 64,
+    "skipped": 0,
+    "duration_seconds": 3.66,
+    "raw_output": "linux-dsh-tests.txt"
+  },
+  "ruff": {
+    "command": ".venv/bin/ruff check app nexus_api tests",
+    "result": "PASS",
+    "evidence_kind": "terminal result summarized"
+  },
+  "frontend_tests": {
+    "command": "npm test",
+    "result": "PASS",
+    "passed": 30,
+    "evidence_kind": "terminal result summarized"
+  },
+  "frontend_typecheck": {
+    "command": "npm run type-check",
+    "result": "PASS",
+    "evidence_kind": "terminal result summarized"
+  },
+  "frontend_build": {
+    "command": "npm run build",
+    "result": "PASS",
+    "raw_output": "frontend-build.log",
+    "existing_warning": "bundle chunk greater than 500 kB"
+  },
+  "excluded": "No chat-island change; no current full-platform suite, MySQL or AgentScope E2E claimed.",
+  "openspec": {
+    "command": "node .opencode/tools/openspec.mjs validate nexus-dsh-acp-runtime --strict --json",
+    "result": "PASS",
+    "raw_output": "openspec-validate.json",
+    "tasks_complete": 9,
+    "tasks_total": 13
+  },
+  "permission_regression_before": {
+    "result": "expected regression failure before fix",
+    "raw_source_sha256": "a249fb83191f8896df53fb17fbc5993cf3436d61d0dd29926289539266904040",
+    "tracked_copy_sha256": "332db5d5cba6df226b249ea4521a2622d2d4981db8c1c0b0dcc5940490692bf3",
+    "normalization": "Remove trailing whitespace only; raw original remains in private evidence directory."
+  }
+}

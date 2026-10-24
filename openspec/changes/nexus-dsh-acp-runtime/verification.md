@@ -14,6 +14,8 @@
 
 **NOT READY FOR ARCHIVE / PRODUCTION CUTOVER**。这不抹掉已完成的功能开发，也不将失败平台写成通过。
 
+本轮追加真实 CentOS 浏览器 E2E，8 个选定场景通过，详见 `docs/reviews/nexus-dsh-acp-runtime-e2e-20261024.md`。修复创建表单遗漏既有仓库字段，以及无效审批误归为传输错误；保持原 Task 归属、一次审批和占用契约，不另建 change。Mac / CentOS DSH 各 64 passed、前端 30 passed、type-check / build、Ruff 和 strict validate 通过，完整性仍为 9/13。
+
 ## Scenario 对照
 
 | Scenario | 代码与验证证据 |
@@ -26,9 +28,9 @@
 | 重复投递 | SQLite receipt / FULL / 单写入锁；不同 Gateway request ID 的相同 submission 只调用一次 prompt，返回旧 receipt，不以当前轮覆盖旧受理证据 |
 | 断线或 Worker 重启 | 真实受理 running 后 SIGKILL 自有 Worker，重启 unknown，Task 保持占用，新输入 409；原生文件 / turn/start / receipt 各 1，未自动重投 |
 | 停止无回执 | 取消 fence 先落盘，只有核实归属进程组退出才确认；单元反例覆盖 PID 复用、通知 / future 不等于停止、迟到提交；页面长命令停止后无 LATE 文件 |
-| 过期或跨任务审批 | Driver task / binding / native / tool 关联，超时 / 失联默认拒绝，仅一次选项；跨 Session 单测与真实页面拒绝 / allow-once，通过文件效果核实 |
-| 引擎 end_turn | 两真实 Task 进入 WAITING 并占用，人工确认后才 SUCCEEDED；确认前回收 Host，现有完成 / 复盘事务复用 |
-| 同员工两任务与刷新 | 两 Worker 同测试责任员工、不同 agentwork / native ID；切换 / 刷新 / 原 Session 续接，跨任务 / native 404、文件逃逸 403；在线增量按 stream + seq 去重 |
+| 过期或跨任务审批 | Driver task / binding / native / tool 关联，超时 / 失联默认拒绝，仅一次选项；本轮真实跨任务、无效选项与过期请求均 409，前两者不消费原审批，真实 IO 回归仍为 503；两次页面拒绝后独立 SFTP 证实没有文件效果。本轮未点击 allow-once，此前页面与原生短测另留证据 |
+| 引擎 end_turn | 两真实 Task 进入 WAITING 并占用，人工确认后才 SUCCEEDED；确认前回收 Host，现有完成 / 复盘事务复用。本轮两个影子 MAP / REDUCE 成功，摘要与各 11 条消息均独立匹配；旧取消夹具经停止确认后 Worker 持续为 0 |
+| 同员工两任务与刷新 | 两 Worker 同合成责任员工、不同 agentwork / native ID；本轮从页面显式选择仓库并创建 / 启动、只改仓库的草稿保护、切换 / 刷新 / 原 Session 续接通过；跨任务绑定 404、文件逃逸拒绝；已完成轮次的 Worker 计划重启保留绑定和 turn/start 数，无重投。本轮不覆盖生产员工身份或执行中 SIGKILL，后者历史证据另列 |
 | 原生特性不可用 | UI 明确不支持计划 / 待办 / 终端，reasoning capability 为 false；OpenCode 保留原生 iframe；2560×1440 真实截图、滚动与尺寸检查 |
 | 轨迹缺失 / 格式变化 | 固定 v4 plain 解析、页间 SHA / seq / cursor / native / workspace 校验；损坏、symlink、部分尾行、重复和不完整都拒绝成功复盘 |
 | 确认时证据不可用 | 原生 end_turn + Host 回收可证明时仍保留人工业务完成，复盘 source_error、用量 unknown；反例 `test_incomplete_trace_does_not_redefine_human_completion` |

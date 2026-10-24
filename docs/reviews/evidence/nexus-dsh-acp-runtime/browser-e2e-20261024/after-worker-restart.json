@@ -1,0 +1,18 @@
+{
+  "a": {
+    "binding_unchanged": true,
+    "native_session_unchanged": true,
+    "task_status": "WAITING",
+    "worker_count": 1,
+    "turn_start_count": 1,
+    "complete": true
+  },
+  "b": {
+    "binding_unchanged": true,
+    "native_session_unchanged": true,
+    "task_status": "WAITING",
+    "worker_count": 1,
+    "turn_start_count": 2,
+    "complete": true
+  }
+}

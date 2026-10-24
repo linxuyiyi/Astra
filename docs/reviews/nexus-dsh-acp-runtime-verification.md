@@ -8,6 +8,12 @@
 
 工作树：`/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra`。原 `/Users/niuniu/程序/Astra` 的未提交工作未覆盖。P1 提交 `4c48d818b`，P2 提交 `655b325a0`，只读页面收尾 `65665162f`；此前 P0 为 `cdab00f1a`，本次文件门禁修复为 `0c6f18288`。只做本地提交，没有推送、合并或重启正式服务；本次重启仅针对用户明确授权的测试机。
 
+## 本轮补充：CentOS 浏览器 E2E
+
+用户追加 E2E 验证后，从真实页面完成 8 个选定场景，包含创建 / 草稿保护、双任务隔离、文件 / 两种 Diff、越界 / 无效审批、刷新 / 计划重启、拒绝审批、长命令停止后同 Session 续接、人工确认与真实影子复盘。发现并修复创建任务遗漏 `repository_id`（`1dbf5fabb`）、无效审批误报连接 503（`ee024b6e2`）；修复后真实冲突返回 409且不消费原审批。
+
+当前 Mac / CentOS 的 DSH 定向集各 **64 passed**，前端 **30 passed**、type-check / build 和 Ruff 通过。两个真实复盘均 SUCCEEDED / shadow_mode，独立磁盘摘要和每任务 11 条消息吻合。取消的两条旧失败夹具按现有停止确认规则释放，随后 Worker 均空闲；测试预览保留运行，不能将下节此前阶段的凭据清理套用于本轮新预览。完整证据与未验证边界见 [本轮 E2E 报告](nexus-dsh-acp-runtime-e2e-20261024.md)。本轮视口 1280×720，生产门禁仍未完成。
+
 ## 修改内容
 
 - Worker 每绑定独立 ACP Host / DSH_HOME，固定官方 DSH `0.2.1-rc.2`、ACP Python `0.8.1`。配置 / Skill / MCP hash 冻结；恢复漂移即拒绝。真实健康检查包含安全文件通道、ACP initialize、Gateway 目录、精确模型别名、Skill、MCP 与 Git，不能只看 `--version`。文件通道未核验不能 AVAILABLE，失败原因传递到现有设备状态。
@@ -24,7 +30,7 @@
 | 目标 CentOS 8 / kernel 5.15 定向 | **207 passed / 0 skipped**，64.42 秒；包含全部 DSH、Worker Gateway / 数据通道 / 占用 / 故障 / 文件 / 设备检查回归，真实 Redis DB15；`centos8-20261024/centos-kernel515-pytest.txt` |
 | Ubuntu ARM 全量（此前实现） | **1310 passed / 6 skipped**，158.24 秒；提供专用真实 Redis，相关 Lua / 跨进程 Worker 用例实际运行。原始输出：`evidence/nexus-dsh-acp-runtime/linux-pytest.txt`；本次文件门禁修改后没有重跑该全量集 |
 | 6 个跳过项 | 1 个真实 OpenCode、1 个真实 MySQL、4 个真实 AgentScope；未设置其 opt-in 服务环境，不计通过 |
-| Mac 定向 Runtime / 复盘 / DSH | 此前 **221 passed**，31.40 秒；本次文件门禁新增 6 个反例，当前 DSH 集 **59 passed**。全量 Mac 曾遇到现有 Linux-only `os.O_PATH` / 安装脚本检查，未把它当 Linux 验收 |
+| Mac 定向 Runtime / 复盘 / DSH | 此前 **221 passed**，31.40 秒；文件门禁阶段 DSH **59 passed**，本轮审批回执修复后 Mac / CentOS 的 DSH 集均 **64 passed**。全量 Mac 曾遇到现有 Linux-only `os.O_PATH` / 安装脚本检查，未把它当 Linux 验收 |
 | Ruff | Mac / Linux 的 `app nexus_api tests` 与探针检查通过 |
 | 前端 | `services/nexus-api/web` 的 type-check / build 通过，构建产物已更新；保留已有大 chunk 警告。未改 chat-island，未声称真实 AgentScope 聊天通过 |
 | Migration | SQLite 新库、重复 upgrade、已发布 `0001_init` → `0002` 的原绑定 / 状态 / 用量保留与 native ID 回填通过；MySQL 8.0.36 实库迁移未验证 |

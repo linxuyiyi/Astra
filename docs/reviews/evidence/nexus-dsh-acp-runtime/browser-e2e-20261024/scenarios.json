@@ -1,0 +1,123 @@
+{
+  "scope": "selected E2E scenarios, not production gate acceptance",
+  "count": 8,
+  "passed": 8,
+  "cases": [
+    {
+      "id": 1,
+      "scenario": "页面创建、显式仓库与启动",
+      "result": "PASS",
+      "evidence": [
+        "two-active-tasks.json",
+        "first-turns-and-scope.json"
+      ],
+      "channels": [
+        "browser",
+        "API readback"
+      ]
+    },
+    {
+      "id": 2,
+      "scenario": "仅仓库变更的未保存草稿保护",
+      "result": "PASS",
+      "evidence": [
+        "03-repository-only-draft-guard.jpg"
+      ],
+      "channels": [
+        "browser"
+      ]
+    },
+    {
+      "id": 3,
+      "scenario": "双任务消息、文件和两种 Diff 隔离",
+      "result": "PASS",
+      "evidence": [
+        "07-task-b-cumulative-diff.jpg",
+        "08-task-b-uncommitted-diff.jpg",
+        "stop-and-permission-results.json"
+      ],
+      "channels": [
+        "browser",
+        "authenticated SFTP readback"
+      ]
+    },
+    {
+      "id": 4,
+      "scenario": "路径、任务绑定和无效审批边界",
+      "result": "PASS",
+      "evidence": [
+        "06-path-escape-denied.jpg",
+        "first-turns-and-scope.json",
+        "after-fix-permission-http.json",
+        "stop-and-permission-results.json"
+      ],
+      "channels": [
+        "browser",
+        "API adversarial requests"
+      ]
+    },
+    {
+      "id": 5,
+      "scenario": "刷新和完成轮次后的 Worker 计划重启",
+      "result": "PASS",
+      "evidence": [
+        "before-worker-restart.json",
+        "after-worker-restart.json"
+      ],
+      "channels": [
+        "browser",
+        "SSH process identity checks",
+        "journal readback"
+      ]
+    },
+    {
+      "id": 6,
+      "scenario": "页面两次拒绝审批且无文件效果",
+      "result": "PASS",
+      "evidence": [
+        "12-permission-routing-after-fix.jpg",
+        "15-permission-denied-without-effect.jpg",
+        "stop-and-permission-results.json"
+      ],
+      "channels": [
+        "browser",
+        "authenticated SFTP stat"
+      ]
+    },
+    {
+      "id": 7,
+      "scenario": "执行中停止及同 Session 续接",
+      "result": "PASS",
+      "evidence": [
+        "stop-start-observed.json",
+        "stop-ui-action.json",
+        "stop-and-permission-results.json",
+        "same-session-continue.json",
+        "final-native-evidence.json"
+      ],
+      "channels": [
+        "browser",
+        "API readback",
+        "authenticated SFTP stat"
+      ]
+    },
+    {
+      "id": 8,
+      "scenario": "人工确认、只读、释放和真实影子复盘",
+      "result": "PASS",
+      "evidence": [
+        "tasks-confirmed-and-readonly.json",
+        "canceled-fixture-release.json",
+        "preview-handoff.json",
+        "native-review-jobs.json",
+        "review-crosscheck.json",
+        "18-completed-and-reviewed.jpg"
+      ],
+      "channels": [
+        "browser",
+        "API readback",
+        "independent native file parsing"
+      ]
+    }
+  ]
+}

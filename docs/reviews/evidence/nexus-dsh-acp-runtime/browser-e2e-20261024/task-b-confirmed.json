@@ -1,0 +1,14 @@
+{
+  "a": {
+    "task_status": "WAITING",
+    "waiting_reason": "MANUAL_INTERVENTION",
+    "worker_count": 1,
+    "repository_id": "b2dd3cc328394995ae303fa99a1df105"
+  },
+  "b": {
+    "task_status": "SUCCEEDED",
+    "waiting_reason": null,
+    "worker_count": 0,
+    "repository_id": "b2dd3cc328394995ae303fa99a1df105"
+  }
+}

@@ -1,0 +1,28 @@
+[
+  {
+    "id": "xrj_0c7b621f706c48c487a5202af0eff728",
+    "task_id": "T-20261024-2AA586",
+    "status": "SUCCEEDED",
+    "phase": "REDUCE",
+    "source_digest": "2e2e6c02cb916c61acff317e31849a9d0c929e7a11b9e2d7da0fd4526449096d",
+    "source_message_count": 11,
+    "segment_count": 1,
+    "completed_segment_count": 1,
+    "zero_reason": "shadow_mode",
+    "error_code": null,
+    "error_message": null
+  },
+  {
+    "id": "xrj_0434ee8619114a358ebaf5c7289f0510",
+    "task_id": "T-20261024-DC8958",
+    "status": "SUCCEEDED",
+    "phase": "REDUCE",
+    "source_digest": "590c9e5e1c1eda8cafeb8658e9bb9398e0edbcc961475fb3ac81ae7d0d7a4c71",
+    "source_message_count": 11,
+    "segment_count": 1,
+    "completed_segment_count": 1,
+    "zero_reason": "shadow_mode",
+    "error_code": null,
+    "error_message": null
+  }
+]

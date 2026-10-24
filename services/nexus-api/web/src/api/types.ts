@@ -157,6 +157,7 @@ export interface Task extends RuntimeProjection {
   external_task_id: string | null
   task_type: TaskType
   category_id: string | null
+  repository_id: string | null
   title: string
   description: string
   acceptance_criteria: AcceptanceCriterion[]

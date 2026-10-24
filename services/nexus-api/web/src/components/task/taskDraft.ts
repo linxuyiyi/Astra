@@ -2,6 +2,7 @@ export interface TaskDraftSnapshot {
   title: string
   task_type: string
   category_id: string
+  repository_id: string
   priority: string
   description: string
   criteria: string[]
@@ -15,6 +16,7 @@ export function taskDraftSnapshot(draft: TaskDraftSnapshot): string {
     title: draft.title,
     task_type: draft.task_type,
     category_id: draft.category_id,
+    repository_id: draft.repository_id || '',
     priority: draft.priority,
     description: draft.description,
     criteria: draft.criteria,

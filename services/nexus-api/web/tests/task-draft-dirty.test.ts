@@ -8,6 +8,7 @@ function blank(): TaskDraftSnapshot {
     title: '',
     task_type: 'ISSUE',
     category_id: '',
+    repository_id: '',
     priority: 'MEDIUM',
     description: '',
     criteria: [''],

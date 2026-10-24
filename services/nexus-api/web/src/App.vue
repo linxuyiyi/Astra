@@ -1,6 +1,6 @@
 <template>
   <div class="app" :class="{ 'app--nebula': route.path === '/' }">
-    <header class="top">
+    <header v-if="route.path !== '/'" class="top">
       <router-link to="/" class="brand" title="星云首页">
         <div class="mark">✦</div>
         <div class="brandname">NEXUS <span class="version">v1.4.8</span></div>
@@ -102,32 +102,16 @@ onBeforeUnmount(() => {
 .brand { text-decoration: none; color: inherit; }
 .auth-card { width:min(420px, calc(100% - 32px)); margin:64px auto; color:var(--astra-text-primary); }
 .app--nebula {
-  --top-nav-height: 56px;
   padding: 0;
   gap: 0;
   height: 100dvh;
   min-height: 100dvh;
   overflow: hidden;
   background: #010e16;
-  display: flex;
-  flex-direction: column;
 }
 .app--nebula .top,
 .app--nebula .page { max-width: none; }
-.app--nebula .top {
-  flex: 0 0 auto;
-  min-height: var(--top-nav-height);
-  padding: 0 16px;
-  background: rgba(245, 250, 247, 0.96);
-  border-bottom: 1px solid #d7e8df;
-  z-index: 20;
-}
-.app--nebula .page {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: calc(100dvh - var(--top-nav-height));
-  overflow: hidden;
-}
+.app--nebula .page { height: 100dvh; overflow: hidden; }
 
 .top-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .top-nav a {

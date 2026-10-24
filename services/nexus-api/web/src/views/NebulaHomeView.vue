@@ -35,6 +35,9 @@
       />
 
       <div class="top-right">
+        <RouterLink class="workbench-link" to="/chat" title="返回常规工作台">
+          ☰ 工作台
+        </RouterLink>
         <AttentionEntry
           :snapshot="store.snapshot"
           @select-task="selectTaskFromAttention"
@@ -429,13 +432,14 @@ onBeforeUnmount(() => {
   position: absolute; right: 22px; top: 20px; display: flex; align-items: center; gap: 6px;
   flex-wrap: wrap; justify-content: flex-end; z-index: 8; max-width: calc(100% - 40px);
 }
-.top-right button {
+.top-right button, .workbench-link {
   background: #103f38df; color: #b7e2d3; border: 1px solid #366a5d; border-radius: 9px;
   padding: 7px 10px; font-size: 10px; cursor: pointer; white-space: nowrap; text-decoration: none;
 }
-.top-right button:hover { background: #155246; }
+.top-right button:hover, .workbench-link:hover { background: #155246; }
 .top-right button.pressed { background: #128e6f; color: #e2fff4; border-color: #5de6bb; box-shadow: 0 0 18px #2fc39455; }
 .top-right button:disabled { opacity: .5; cursor: not-allowed; }
+.workbench-link { background: #0d483c; color: #d5f4e9; border-color: #347b67; }
 .search {
   position: absolute; right: 22px; top: 64px; z-index: 4; display: flex; align-items: center; gap: 6px;
   background: #0a4036c9; border: 1px solid #316a58; border-radius: 9px; padding: 6px 9px;
@@ -481,7 +485,7 @@ onBeforeUnmount(() => {
   .guide { max-width: calc(100% - 360px); }
 }
 @media (max-width: 900px) {
-  /* stay in .page under global header — do not fixed-cover top-nav */
+  .nebula-home { position: fixed; inset: 0; }
   .top-right { right: 12px; top: 12px; max-width: calc(100% - 24px); }
   .search { right: 12px; top: 58px; }
   .guide { left: 12px; bottom: 12px; max-width: calc(100% - 24px); }

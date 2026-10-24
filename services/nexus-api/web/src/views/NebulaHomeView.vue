@@ -35,35 +35,6 @@
       />
 
       <div class="top-right">
-        <el-dropdown
-          trigger="click"
-          placement="bottom-end"
-          popper-class="workbench-dropdown-popper"
-          @command="handleNavigate"
-          @visible-change="(val: boolean) => (workbenchOpen = val)"
-        >
-          <button
-            type="button"
-            class="workbench-link"
-            :class="{ pressed: workbenchOpen }"
-            title="打开工作台导航"
-            aria-label="打开工作台导航"
-          >
-            ☰ 工作台
-          </button>
-          <template #dropdown>
-            <el-dropdown-menu class="workbench-dropdown-menu">
-              <el-dropdown-item
-                v-for="item in navItems"
-                :key="item.to"
-                :command="item.to"
-                class="workbench-dropdown-item"
-              >
-                {{ item.label }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
         <AttentionEntry
           :snapshot="store.snapshot"
           @select-task="selectTaskFromAttention"
@@ -152,7 +123,6 @@ import AttentionEntry from "../features/nebula/components/AttentionEntry.vue";
 import NodeHint, { type NodeHintKind } from "../features/nebula/components/NodeHint.vue";
 import { buildScene, collaborationKey, type NebulaScene } from "../features/nebula/layout";
 import { useNebulaStore } from "../features/nebula/stores/nebulaStore";
-import { getVisibleNavItems } from "../navigation";
 import type { NebulaTask } from "../features/nebula/types";
 import type { NebulaSelection } from "../features/nebula/renderer";
 
@@ -163,16 +133,6 @@ const store = useNebulaStore();
 const route = useRoute();
 const router = useRouter();
 const canvasRef = ref<InstanceType<typeof NebulaCanvas> | null>(null);
-
-const navItems = computed(() => getVisibleNavItems(route.path));
-const workbenchOpen = ref(false);
-
-function handleNavigate(to: string): void {
-  workbenchOpen.value = false;
-  if (route.path !== to) {
-    void router.push(to);
-  }
-}
 
 const selectedEmployeeId = ref<string | null>(null);
 const selectedWorkerId = ref<string | null>(null);
@@ -469,61 +429,13 @@ onBeforeUnmount(() => {
   position: absolute; right: 22px; top: 20px; display: flex; align-items: center; gap: 6px;
   flex-wrap: wrap; justify-content: flex-end; z-index: 8; max-width: calc(100% - 40px);
 }
-.top-right button, .workbench-link {
+.top-right button {
   background: #103f38df; color: #b7e2d3; border: 1px solid #366a5d; border-radius: 9px;
   padding: 7px 10px; font-size: 10px; cursor: pointer; white-space: nowrap; text-decoration: none;
 }
-.top-right button:hover, .workbench-link:hover { background: #155246; }
+.top-right button:hover { background: #155246; }
 .top-right button.pressed { background: #128e6f; color: #e2fff4; border-color: #5de6bb; box-shadow: 0 0 18px #2fc39455; }
 .top-right button:disabled { opacity: .5; cursor: not-allowed; }
-.workbench-link {
-  background: #0d483c;
-  color: #d5f4e9;
-  border-color: #347b67;
-  font-family: inherit;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: inherit;
-}
-.workbench-link:focus,
-.workbench-link:focus-visible {
-  outline: none;
-}
-:global(.workbench-dropdown-popper) {
-  --el-bg-color-overlay: #072a23;
-  --el-border-color-light: #347b67;
-  --el-text-color-regular: #d5f4e9;
-  --el-text-color-primary: #e6fff4;
-  --el-dropdown-menuItem-hover-fill: #155246;
-  --el-dropdown-menuItem-hover-color: #8fffd5;
-}
-:global(.workbench-dropdown-popper .el-dropdown-menu) {
-  background: #072a23;
-  border: 1px solid #347b67;
-  border-radius: 10px;
-  padding: 5px;
-  min-width: 130px;
-  box-shadow: 0 14px 32px rgba(0, 26, 26, 0.7);
-  backdrop-filter: blur(12px);
-}
-:global(.workbench-dropdown-popper .el-dropdown-menu__item) {
-  color: #d5f4e9;
-  font-size: 11px;
-  padding: 8px 14px;
-  border-radius: 6px;
-  letter-spacing: 0.3px;
-  cursor: pointer;
-}
-:global(.workbench-dropdown-popper .el-dropdown-menu__item:hover),
-:global(.workbench-dropdown-popper .el-dropdown-menu__item:focus) {
-  background-color: #155246;
-  color: #8fffd5;
-}
-:global(.workbench-dropdown-popper .el-popper__arrow::before) {
-  background: #072a23 !important;
-  border-color: #347b67 !important;
-}
 .search {
   position: absolute; right: 22px; top: 64px; z-index: 4; display: flex; align-items: center; gap: 6px;
   background: #0a4036c9; border: 1px solid #316a58; border-radius: 9px; padding: 6px 9px;
@@ -569,7 +481,7 @@ onBeforeUnmount(() => {
   .guide { max-width: calc(100% - 360px); }
 }
 @media (max-width: 900px) {
-  .nebula-home { position: fixed; inset: 0; }
+  /* stay in .page under global header — do not fixed-cover top-nav */
   .top-right { right: 12px; top: 12px; max-width: calc(100% - 24px); }
   .search { right: 12px; top: 58px; }
   .guide { left: 12px; bottom: 12px; max-width: calc(100% - 24px); }

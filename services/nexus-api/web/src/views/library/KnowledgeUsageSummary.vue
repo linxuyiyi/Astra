@@ -1,11 +1,11 @@
 <template>
   <section class="usage-summary">
-    <div class="usage-summary__entry">
+    <div class="usage-summary__entry" @click="detailOpen = true">
       <div>
         <h3>知识使用分析</h3>
         <p>{{ entryLine }}</p>
       </div>
-      <button type="button" class="usage-summary__more" @click="detailOpen = true">查看详情</button>
+      <button type="button" class="usage-summary__more" @click.stop="detailOpen = true">查看详情</button>
     </div>
 
     <AstraDialog
@@ -60,11 +60,14 @@ const barHeight = (value: number) => value ? Math.max(12, Math.round(value / max
 </script>
 
 <style scoped>
-.usage-summary { flex: none; border: 1px solid var(--astra-border); border-radius: 10px; background: var(--astra-bg-panel); }
-.usage-summary__entry { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 40px; padding: 4px 12px; }
-.usage-summary h3,.usage-summary p,.usage-summary h4 { margin: 0; }.usage-summary__entry h3 { color: var(--astra-text-primary); font-size: var(--astra-font-label); }.usage-summary__entry p { margin-left: 10px; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
-/* 助手入口已收进顶部栏，这里不再需要为悬浮球让位的右边距。 */
-.usage-summary__more { flex: none; min-height: var(--astra-control-height); padding: 0 12px; color: var(--astra-primary-bright); border: 1px solid var(--astra-primary-border); border-radius: 8px; background: var(--astra-primary-soft); font-size: var(--astra-font-helper); cursor: pointer; }
+.usage-summary { flex: none; border: 1px solid var(--astra-border); border-radius: 8px; background: var(--astra-bg-panel); }
+.usage-summary__entry { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 32px; min-height: 32px; padding: 0 10px; cursor: pointer; }
+.usage-summary__entry:hover { background: #f8fbf9; }
+.usage-summary__entry > div { display: flex; align-items: center; gap: 8px; overflow: hidden; }
+.usage-summary h3,.usage-summary p,.usage-summary h4 { margin: 0; }
+.usage-summary__entry h3 { color: var(--astra-text-primary); font-size: var(--astra-font-label); white-space: nowrap; }
+.usage-summary__entry p { color: var(--astra-text-muted); font-size: var(--astra-font-helper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usage-summary__more { flex: none; height: 24px; min-height: 24px; padding: 0 8px; color: var(--astra-primary-bright); border: 1px solid var(--astra-primary-border); border-radius: 6px; background: var(--astra-primary-soft); font-size: var(--astra-font-helper); cursor: pointer; }
 .usage-summary__more:hover { background: var(--astra-primary-glow); }
 .usage-summary__empty { color: var(--astra-text-muted); font-size: var(--astra-font-body); line-height: 1.6; }
 .usage-summary__body { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

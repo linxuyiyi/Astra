@@ -14,19 +14,41 @@
     </template>
 
 
-    <ElAlert v-if="libraryNotice" class="library-notice" :type="libraryNotice.level" show-icon :closable="false" :title="libraryNotice.title" data-testid="library-service-state">
-      <p>{{ libraryNotice.next }}</p>
+    <ElAlert
+      v-if="serviceAlert"
+      class="library-service-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      :title="serviceAlert.title"
+      data-testid="library-service-state"
+    >
       <ElButton
-        v-if="canManage && libraryNotice.resync"
+        v-if="canManage && serviceAlert.canResync"
         text
         type="primary"
+        size="small"
         :loading="resyncing"
         :disabled="!serviceStatus?.enabled"
         data-testid="library-service-resync"
         @click="resyncKnowledge"
       >重新同步</ElButton>
-      <ElButton v-if="libraryNotice.review" text type="primary" data-testid="library-review-queue" @click="applyStat('candidate')">去审核</ElButton>
     </ElAlert>
+
+    <div
+      v-if="candidateCount > 0 && permissions?.can_review"
+      class="library-status-bar library-notice"
+      data-testid="library-review-bar"
+    >
+      <span class="library-status-bar__text">{{ candidateCount }} 条待审核</span>
+      <ElButton
+        text
+        type="primary"
+        size="small"
+        data-testid="library-review-queue"
+        @click="applyStat('candidate')"
+      >去审核</ElButton>
+    </div>
     <input ref="importInput" class="hidden-input" data-testid="library-import-input" type="file" accept=".md,text/markdown,text/plain" @change="importMarkdown" />
 
     <ElMain class="library-body">
@@ -226,35 +248,21 @@ const selectedSpace = computed(() => spaces.value.find((space) => space.id === f
 const canManage = computed(() => Boolean(permissions.value?.can_manage))
 const pendingCount = computed(() => serviceStatus.value?.pending_count ?? 0)
 const failedCount = computed(() => serviceStatus.value?.failed_count ?? 0)
-const libraryNotice = computed(() => {
-  const parts: string[] = []
-  const steps: string[] = []
-  let level: 'error' | 'warning' = 'warning'
+const candidateCount = computed(() => stats.value?.candidate_experiences ?? 0)
+const serviceAlert = computed(() => {
   if (serviceError.value || serviceStatus.value?.healthy === false) {
-    level = 'error'
-    parts.push(serviceError.value || serviceStatus.value?.message || '知识服务异常，暂时不能确认内容是否最新')
-    steps.push('重新同步')
+    return {
+      title: serviceError.value || serviceStatus.value?.message || '知识服务异常，暂时不能确认内容是否最新',
+      canResync: true,
+    }
   }
   if (failedCount.value > 0) {
-    parts.push(`${failedCount.value} 条同步失败，新内容可能还没进图书馆`)
-    steps.push('重新同步')
-  } else if (pendingCount.value > 0) {
-    parts.push(`${pendingCount.value} 条还在同步，刷新前先别当成已经入库`)
-    steps.push('稍后刷新')
+    return {
+      title: `${failedCount.value} 条同步失败，新内容可能还没进图书馆`,
+      canResync: true,
+    }
   }
-  const candidates = stats.value?.candidate_experiences ?? 0
-  if (permissions.value?.can_review && candidates > 0) {
-    parts.push(`${candidates} 条经验待人工审核，审核和验证是两件独立的事`)
-    steps.push('打开待审核列表')
-  }
-  if (!parts.length) return null
-  return {
-    level,
-    title: parts.join('。'),
-    next: `下一步：${[...new Set(steps)].join('，')}。`,
-    resync: steps.includes('重新同步'),
-    review: steps.includes('打开待审核列表'),
-  }
+  return null
 })
 const selectedPath = computed(() => {
   if (!filters.spaceId) return '全部知识'
@@ -497,17 +505,22 @@ function normalizeSpaces(nodes: KnowledgeSpace[]): KnowledgeSpace[] {
 /* 标题区、筛选面板、表格面板与页脚统一走 styles/page-layout.css。
    本页只保留「左目录树 + 右知识表格」的双栏骨架与页面独有的排版。 */
 .hidden-input{display:none}
-.library-body{--el-main-padding:0;display:flex;flex-direction:column;gap:16px;min-width:0;overflow:visible}
+.digital-library-card :deep(> .el-card__body){display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.library-status-bar{display:flex;align-items:center;justify-content:space-between;height:36px;min-height:36px;max-height:40px;padding:0 12px;border:1px solid #fde2b3;border-radius:8px;background:#fdf6ec;color:#a36200;font-size:12px;flex:none;box-sizing:border-box}
+.library-status-bar__text{font-weight:500;color:#a36200}
+.library-status-bar :deep(.el-button){padding:0 8px;height:28px;font-size:12px}
+.library-service-alert{flex:none}
+.library-body{--el-main-padding:0;display:flex;flex-direction:column;gap:8px;min-width:0;flex:1 1 auto;min-height:0;overflow:hidden}
 .library-error{flex:none}
 .library-service-reason{overflow:hidden;max-width:340px;color:var(--astra-danger);text-overflow:ellipsis;white-space:nowrap}
-.library-workspace{display:flex;min-height:360px;border:1px solid var(--astra-border);border-radius:12px;background:var(--astra-bg-panel);box-shadow:var(--astra-shadow-panel)}
-.library-aside{--el-aside-width:300px;overflow:visible}
-.library-content{--el-main-padding:0;min-width:0;overflow:visible}
+.library-workspace{display:flex;flex:1 1 auto;min-height:0;border:1px solid var(--astra-border);border-radius:12px;background:var(--astra-bg-panel);box-shadow:var(--astra-shadow-panel);overflow:hidden}
+.library-aside{--el-aside-width:220px;width:220px;flex:0 0 220px;min-width:200px;max-width:240px;overflow:hidden}
+.library-content{--el-main-padding:0;min-width:0;overflow:hidden;flex:1 1 auto;min-height:0}
 /* 发布弹窗用原生 select：标签行高与控件高度都对齐全局 32px 基准，
    与 ElForm（label-position="top"）的单列表单保持同一节奏。 */
 .move-knowledge-card label{display:grid;grid-template-rows:var(--astra-control-height) auto;gap:2px;margin-top:14px;color:var(--astra-text-secondary);font-size:var(--astra-font-body);line-height:var(--astra-control-height)}
 .move-knowledge-card select{height:var(--astra-control-height);padding:0 9px;color:var(--astra-text-primary);border:1px solid var(--astra-border);border-radius:8px;background:#fff;font:inherit}
 .delete-blocked{display:grid;gap:8px}.delete-blocked p{margin:0;color:var(--astra-text-secondary);line-height:1.6}.delete-blocked p strong{color:var(--astra-text-primary)}
-@media(max-width:1100px){.library-aside{--el-aside-width:270px}}
-@media(max-width:780px){.library-workspace{min-height:420px}.library-aside{flex:none;height:300px;--el-aside-width:auto}.library-content{min-height:420px}.library-service-reason{max-width:100%}}
+@media(max-width:1100px){.library-aside{--el-aside-width:220px;width:220px;flex:0 0 220px}}
+@media(max-width:780px){.digital-library-card :deep(> .el-card__body){overflow:auto}.library-workspace{min-height:420px}.library-aside{flex:none;height:300px;--el-aside-width:auto;width:auto}.library-content{min-height:420px}.library-service-reason{max-width:100%}}
 </style>

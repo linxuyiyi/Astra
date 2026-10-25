@@ -263,9 +263,10 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('zh-CN', { month: 
 <style scoped>
 /* 筛选面板、行操作与表格外壳统一走 styles/page-layout.css，
    这里只保留「目录路径行、批量操作条、单元格排版」这些本页独有的部分。 */
-.knowledge-list{display:flex;flex-direction:column;gap:16px;min-width:0;background:var(--astra-bg-panel)}
+.knowledge-list{display:flex;flex-direction:column;gap:8px;min-width:0;height:100%;padding:10px 12px;background:var(--astra-bg-panel);box-sizing:border-box}
 /* 目录路径行只做上下文提示，不再重复展示列表总数 —— 总数只在分页左侧出现一次。 */
-.knowledge-list__header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;padding:0 2px 1px}
+.knowledge-list__header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;height:30px;padding:0 2px 1px}
+.knowledge-table-wrap{flex:1 1 auto;min-height:0}
 .knowledge-list h3{overflow:hidden;margin:0;color:var(--astra-text-primary);font-size:var(--astra-font-label);text-overflow:ellipsis;white-space:nowrap}
 .knowledge-list__batch{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 12px;border:1px solid var(--astra-border);border-radius:10px;background:var(--astra-primary-soft)}
 .knowledge-table{--el-table-border-color:var(--astra-border)}

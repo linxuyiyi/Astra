@@ -18,4 +18,4 @@ export function useTableMaxHeight(offset = 280, minHeight = 320) {
 }
 
 export const TABLE_MAX_HEIGHT = computed(() => Math.max(320, windowHeight.value - 280))
-export const TABLE_MAX_HEIGHT_DENSE = computed(() => Math.max(280, windowHeight.value - 340))
+export const TABLE_MAX_HEIGHT_DENSE = computed(() => Math.max(220, windowHeight.value - 460))

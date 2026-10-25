@@ -1,0 +1,961 @@
+$ OPENCODE_CHANNEL=prod vite build
+vite v7.1.4 building for production...
+<script src="/oc-theme-preload.js"> in "/index.html" can't be bundled without type="module" attribute
+transforming...
+
+/assets/JetBrainsMonoNerdFontMono-Regular.woff2 referenced in /assets/JetBrainsMonoNerdFontMono-Regular.woff2 didn't resolve at build time, it will remain unchanged to be resolved at runtime
+
+/assets/Inter.ttf referenced in /assets/Inter.ttf didn't resolve at build time, it will remain unchanged to be resolved at runtime
+✓ 2569 modules transformed.
+rendering chunks...
+[plugin vite:reporter]
+(!) /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/ui/src/theme/themes/oc-2.json is dynamically imported by /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/ui/src/theme/context.tsx but also statically imported by /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/ui/src/theme/context.tsx, /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/ui/src/theme/default-themes.ts, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter]
+(!) /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/components/dialog-select-model.tsx is dynamically imported by /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/pages/session/use-composer-commands.tsx but also statically imported by /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/components/prompt-input-v2.tsx, /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/components/prompt-input.tsx, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter]
+(!) /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/components/dialog-select-server.tsx is dynamically imported by /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/components/status-popover-body.tsx, /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/components/status-popover-body.tsx, /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/pages/layout.tsx but also statically imported by /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/components/settings-servers.tsx, /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/components/settings-v2/dialog-server-v2.tsx, /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/components/settings-v2/servers.tsx, /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/pages/home/home-projects-controller.tsx, /Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/web/workspace-ui/upstream/packages/app/src/pages/home/legacy-home.tsx, dynamic import will not move module into another chunk.
+
+computing gzip size...
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/codeowners-CtwIM3TN.js                            0.55 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/shellsession-DSlzxnCM.js                          0.72 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tsv-BFtm7NXx.js                                   0.74 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/html-derivative-BxANmYVz.js                       0.90 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/git-rebase-DeZqv4fp.js                            0.99 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/qmldir-DXd9s5XC.js                                1.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/csv-D5aBhKLr.js                                   1.15 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/git-commit-CJPsQObV.js                            1.23 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/xsl-C6UUWSil.js                                   1.39 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dotenv-Bea-FkXq.js                                1.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sparql-BJh4JEw-.js                                1.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ini-Dix3pTmg.js                                   1.53 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fortran-fixed-form-DFFnVrrY.js                    1.67 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/docker-DG9neUKd.js                                1.75 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hxml-CkS3Eie7.js                                  1.75 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/desktop-DZfyBMgF.js                               1.84 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/index.html                                               2.08 kB │ gzip:   0.93 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wenyan-CYFFG9DK.js                                2.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jssm-CWE2S0Z5.js                                  2.24 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/reg-Cvyu2Gnx.js                                   2.35 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/edge-DTiORMU5.js                                  2.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/diff-jW5kmiru.js                                  2.57 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gleam-BeBqoPwE.js                                 2.58 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/erb-DjWesHSX.js                                   2.61 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hy-DI6mCUnw.js                                    2.65 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/json-B8JryHcM.js                                  2.83 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/openscad-CXHpNBsb.js                              2.83 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/log-CcaF_xNv.js                                   2.86 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cairo-BYiDgOF2.js                                 2.94 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/berry-CVKoklHx.js                                 3.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jsonl-9I_GBd5L.js                                 3.02 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jsonc-CvUCa1o5.js                                 3.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/logo-D9WQLoKQ.js                                  3.13 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/po-LG0lFwH4.js                                    3.24 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/json5-Cdatmj9n.js                                 3.26 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mipsasm-yE_Aqo9y.js                               3.26 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tasl-B9CVvjfG.js                                  3.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/genie-DSsjfZMX.js                                 3.36 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rel-BlqNHz8k.js                                   3.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vala-z59IxkFd.js                                  3.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/splunk-h-bNAnbk.js                                3.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fluent-Bwo2XpEt.js                                3.61 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ssh-config-CywOjoXH.js                            3.62 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jsonnet-XoenQ2oc.js                               3.62 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kdl-CMbyIXjQ.js                                   3.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/glsl-BOG9l2nV.js                                  3.64 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hurl-CxQrh4RI.js                                  3.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/narrat-DXUZ_ZkW.js                                3.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/turtle-DpRhbQZY.js                                3.70 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/zenscript-BIAKq-aR.js                             3.92 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ron-j5NfrB3z.js                                   3.92 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gn-Dxr0sSUf.js                                    4.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pascal-Sr-XLSE6.js                                4.15 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-02-EygnDbCM.aac                              4.19 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-08-COPo0uNf.aac                              4.24 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/staplebops-06-Cj_2vOI4.aac                        4.28 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-03-DXp7Zb0f.aac                           4.39 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yup-01-BtRq6dLN.aac                               4.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Size3-Regular-CTq5MqoE.woff                 4.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tcl-Bq9dbVAF.js                                   4.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nextflow-D9i3Mg89.js                              4.51 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rosmsg-ZkSIzPhc.js                                4.53 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/http-CG3jvXcS.js                                  4.55 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/staplebops-07-cqQEvbIf.aac                        4.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/staplebops-04-olyHi8qQ.aac                        4.67 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/polar-DjOs3GWb.js                                 4.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-02-CS75AsoP.aac                             4.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sdbl-CvZs3G9c.js                                  4.71 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fennel-DBMsxtrh.js                                4.77 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-05-DZsXzrQW.aac                              4.80 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bibtex-DRcCXNgM.js                                4.80 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Size4-Regular-Dl5lxZxV.woff2                4.93 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/llvm-BJRUtCev.js                                  5.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wgsl-CxjTZs-b.js                                  5.15 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-07-0r0kiLGz.aac                             5.19 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-05-D2gbGoRH.aac                             5.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Size2-Regular-Dy4dx90m.woff2                5.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gdresource-BD-1uzY7.js                            5.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-08-DBf7Bwjz.aac                           5.30 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/staplebops-03-Aug82oH0.aac                        5.31 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-04-CaGsIGFP.aac                             5.32 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/qml-DmGQGbca.js                                   5.34 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/zig-bSFrHQ7n.js                                   5.34 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dax-oldcCaJg.js                                   5.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bicep-jWz-hQ8I.js                                 5.39 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/xml-BkAJuBCc.js                                   5.39 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yup-05-CuuaeyjC.aac                               5.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/awk-CrWgQKhV.js                                   5.47 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Size1-Regular-mCD8mA8B.woff2                5.47 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/coq-BBL5-mG4.js                                   5.53 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-04-CfVtpI7z.aac                           5.58 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-06-BuvNosjK.aac                           5.62 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jinja-CGKoJZuT.js                                 5.70 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-12-BJR1Ka3c.aac                              5.72 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-11-CVdXg8G-.aac                              5.77 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/lean-C4RHkN41.js                                  5.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/moonbit-CR8uFLGd.js                               5.90 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/powerquery-DHf-dtTS.js                            5.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/shaderlab-CEJedz68.js                             5.93 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/verilog-LfQUkHDc.js                               5.94 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cypher-DYQk2G82.js                                5.96 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Size4-Regular-BF-4gkZK.woff                 5.98 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vb-4AxSLKIU.js                                    6.10 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Size2-Regular-oD1tc_U0.woff                 6.19 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/red-DR6ZwibK.js                                   6.26 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/min-dark-DhfaepVE.js                              6.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-01-BuOD_o_q.aac                             6.30 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-08-CZowNquU.aac                             6.32 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gdshader-G7X6ysY3.js                              6.33 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/prisma-Dgf8IN_C.js                                6.33 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ara-C1--7J61.js                                   6.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/clojure-KnfDkB_V.js                               6.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/postcss-GRRkWn2F.js                               6.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/toml-Ms459DBw.js                                  6.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vscode-C5BXgFjm.svg                               6.46 kB │ gzip:   2.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/solarized-light-DeSzljQz.js                       6.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Size1-Regular-C195tn64.woff                 6.50 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/r-1ts4xG1r.js                                     6.55 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/proto-dqx_Sj2i.js                                 6.55 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/smalltalk-B9IHbYt7.js                             6.59 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-10-Ck5hR7zH.aac                             6.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/talonscript-eRuyeYHl.js                           6.76 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/solarized-dark-G9yBjKj_.js                        6.84 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Caligraphic-Regular-Di6jR-x-.woff2          6.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Caligraphic-Bold-Dq_IR9rO.woff2             6.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/riscv-C5dpdlr7.js                                 6.92 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/min-light-6xx0uMgm.js                             6.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/soy-DEV4yxgM.js                                   6.99 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/scheme-OJppFQF3.js                                7.17 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yup-03-BHLEoqSS.aac                               7.18 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hlsl-MKeth5V9.js                                  7.27 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-06-GK5Tqy6u.aac                             7.41 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/qss-B7NnhfIi.js                                   7.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Size3-Regular-DgpXs0kz.ttf                  7.59 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Caligraphic-Regular-CTRA-rTL.woff           7.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Caligraphic-Bold-BEiXGLvX.woff              7.72 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/systemd-DKMPPZjB.js                               7.87 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/monokai-BodnsaDQ.js                               7.88 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/regexp-DK-WlHNu.js                                7.99 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/antigravity-m-mWKI7R.svg                          8.03 kB │ gzip:   2.14 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/haml-C4vGXCDX.js                                  8.27 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yup-04-C7yadpJT.aac                               8.38 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/typst-Dfd71gQj.js                                 8.39 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vue-html-zEfNEgpj.js                              8.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/plsql-Dbm3tV2N.js                                 8.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dart-ByalkS20.js                                  8.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/horizon-cslQss18.js                               8.78 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/horizon-bright-BVMyA0so.js                        8.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kotlin-BQy537ds.js                                8.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/make-DXVx14cr.js                                  8.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/andromeeda-CT0vplkN.js                            9.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sas-DPMpzP9X.js                                   9.07 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dark-plus-DLU5INA3.js                             9.10 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/slack-dark-CWRQmTmo.js                            9.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sass-bfEVHPJ8.js                                  9.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/plastic-CXnNNlFZ.js                               9.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/slack-ochin-DO_ok7XK.js                           9.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Script-Regular-D3wIWfF6.woff2               9.64 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tex-BHxF5DMe.js                                   9.67 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jison-B9XHrcYJ.js                                 9.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cmake-bh2MLnkv.js                                 9.86 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/light-plus-g_Fi9vkG.js                            9.94 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hcl-B6OePqme.js                                  10.06 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_SansSerif-Regular-DDBCnlJ7.woff2           10.34 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Size4-Regular-DWFBv043.ttf                 10.36 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pkl-CRusufhw.js                                  10.38 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/beancount-dPJi_gci.js                            10.38 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nextflow-groovy-BtKenbWl.js                      10.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dream-maker-DAHQwpwp.js                          10.47 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/raku-BMJwmrCS.js                                 10.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yaml-Bopit2L3.js                                 10.51 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Script-Regular-D5yQViql.woff               10.59 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rst-DNugHtZA.js                                  10.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/elm-BjIDgKzz.js                                  10.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-light-Rcb2q3L5.js                         11.18 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/just-WcmGqwHQ.js                                 11.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Fraktur-Regular-CTYiF6lA.woff2             11.32 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Fraktur-Bold-CL6g_b3V.woff2                11.35 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/prolog-9JcfiY6I.js                               11.36 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/terraform-CAp711iT.js                            11.39 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-dark-BQV5ugrc.js                          11.40 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/puppet-Di57VbSS.js                               11.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/laserwave-si7wuSrt.js                            11.50 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Size2-Regular-B7gKUWhC.ttf                 11.51 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gherkin-Cl2Fw-_0.js                              11.95 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wasm-CFi-k9--.js                                 12.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_SansSerif-Italic-C3H0VqGB.woff2            12.03 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hjson-D2jn7IRw.js                                12.06 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-09-CxEgoAHQ.aac                          12.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/handlebars-BsldGL5W.js                           12.15 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_SansSerif-Bold-D1sUS0GD.woff2              12.22 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Size1-Regular-Dbsnue_I.ttf                 12.23 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_SansSerif-Regular-CS6fqUqJ.woff            12.32 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Caligraphic-Regular-wX97UBjC.ttf           12.34 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Caligraphic-Bold-ATXxdsX0.ttf              12.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/apache-PcO-DBxQ.js                               12.46 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vesper-DxfWgk_t.js                               12.73 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bat-B0cHNp6s.js                                  12.89 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fish-BxskpYPN.js                                 13.04 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Fraktur-Regular-Dxdc4cR9.woff              13.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/v-BH76v7br.js                                    13.22 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Fraktur-Bold-BsDP51OF.woff                 13.30 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Typewriter-Regular-CO6r4hn1.woff2          13.57 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vitesse-light-gUX51GpB.js                        13.61 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/aurora-x-C0VKFdlO.js                             13.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vitesse-black-B_BYPdvp.js                        13.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vitesse-dark-DOSOf2Sz.js                         13.76 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pug-kUpeg2wB.js                                  13.85 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/synthwave-84-DRVv-_m_.js                         14.03 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_SansSerif-Italic-DN2j7dab.woff             14.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-light-default-CQ75esMw.js                 14.15 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-light-high-contrast-CRF1wyLy.js           14.27 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/clarity-CC_0IFDj.js                              14.28 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_SansSerif-Bold-DbIhKOiC.woff               14.41 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-dark-dimmed-D1FmiR_p.js                   14.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-dark-default-DLWDM7FH.js                  14.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-dark-high-contrast-BilLoi0o.js            14.59 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gnuplot-CtW3R_Hz.js                              14.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rust-CxuBE0J8.js                                 15.07 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kusto-Bh6esMjd.js                                15.18 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/actionscript-3-8WTK4YD2.js                       15.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nix-Ckjrpg0r.js                                  15.53 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/lua-8Av-h-ns.js                                  15.54 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/luau-CrdyyxLX.js                                 15.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/abap-Dg923wIy.js                                 15.86 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Typewriter-Regular-C0xS9mPB.woff           16.03 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/solidity-B3CjIuAd.js                             16.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/matlab-DzreyMvm.js                               16.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cue-WCin6O4e.js                                  16.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/elixir-DnIH90qd.js                               16.33 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Math-BoldItalic-CZnvNsCZ.woff2             16.40 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Math-Italic-t53AETM-.woff2                 16.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/odin-Bxc4S6Xn.js                                 16.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ts-tags-xUT7JH_c.js                              16.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Script-Regular-C5JkGWo-.ttf                16.65 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-BoldItalic-DxDJ3AOS.woff2             16.78 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-Italic-NWA7e6Wa.woff2                 16.99 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kanagawa-wave-0SAlpf0s.js                        17.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kanagawa-lotus-Bwcd7Bvx.js                       17.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kanagawa-dragon-BOvIHJVT.js                      17.13 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/move-CyYMWVy5.js                                 17.51 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/graphql-B6XHM4uj.js                              18.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/liquid-VEiCTF4k.js                               18.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/svelte-B-Z8GLL9.js                               18.25 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/material-theme-CIJ3cGaW.js                       18.61 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/material-theme-darker-BWg3m1GB.js                18.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/material-theme-ocean-CZf9pk28.js                 18.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/material-theme-lighter-DR8HWMN7.js               18.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/material-theme-palenight-BF01YeZy.js             18.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Math-BoldItalic-iY-2wyZ7.woff              18.67 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Math-Italic-DA0__PXp.woff                  18.75 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gdscript-C3mT4Uym.js                             19.00 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/groovy-DFxE31Qs.js                               19.18 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-BoldItalic-SpSLRI95.woff              19.41 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_SansSerif-Regular-BNo7hRIc.ttf             19.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Fraktur-Regular-CB_wures.ttf               19.57 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Fraktur-Bold-BdnERNNW.ttf                  19.58 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mdc-DuMdwZAv.js                                  19.64 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-Italic-BMLOBm91.woff                  19.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/glimmer-js-F_qk9EQT.js                           20.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/glimmer-ts-Dhzi-GJU.js                           20.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ayu-dark-wZ6ORhBL.js                             20.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ayu-mirage-CQckA_sP.js                           20.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ayu-light-xXLJ_Ch1.js                            20.15 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/powershell-DXrKVo3G.js                           20.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/viml-pbKHW3Ia.js                                 20.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nushell-DtHLcZf1.js                              20.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/snazzy-light-B5llO_gK.js                         20.77 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dracula-XcYHBZy6.js                              21.06 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dracula-soft-BPeX9gxW.js                         21.07 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/twig-7VFzIvA2.js                                 21.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wit-DDW3hD69.js                                  21.47 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rose-pine-CN2F2lJl.js                            21.74 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rose-pine-moon-DzBDT4rc.js                       21.75 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rose-pine-dawn-0S8NEhsA.js                       21.75 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_SansSerif-Italic-YYjJ1zSn.ttf              22.36 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nim-D9lokC5T.js                                  22.46 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/common-lisp-DXc9XcIM.js                          22.59 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/surrealql-2KNEnAt7.js                            22.59 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-dark-hard-C37G1gbc.js                    22.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-dark-soft-eZmcmZ9I.js                    22.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-light-hard-BYj-vz_3.js                   22.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-light-soft-BGNwjiRh.js                   22.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-dark-medium-C3G9m3TV.js                  22.64 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-light-medium-BdQlDiiF.js                 22.64 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bird2-OwWL2xOz.js                                22.95 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sql-Dq2MiB0T.js                                  23.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cadence-BuaeHeSu.js                              23.67 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/astro-BWgTGUF8.js                                24.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/apl-Dz5ncP8G.js                                  24.04 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/templ-W185oS4p.js                                24.07 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vhdl-DJCsFYgn.js                                 24.27 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/angular-html-DX9ZP5JV.js                         24.27 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_SansSerif-Bold-CFMepnvq.ttf                24.50 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vue-CzubQWux.js                                  24.53 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/purescript-BgpM7rDH.js                           24.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/typespec-B09nCZui.js                             25.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/one-light-BuCQ22aO.js                            25.30 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fsharp-DRAF1jsN.js                               25.31 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-Bold-Cx986IdX.woff2                   25.32 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/marko-6XzqJfhW.js                                25.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/night-owl-light-Bk-lYVyk.js                      25.90 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/system-verilog-Qdm_1g2q.js                       26.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-Regular-B22Nviop.woff2                26.27 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nord-BAu0wM6c.js                                 26.72 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/codeql-D164juXQ.js                               26.89 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/c3-crbJOFTy.js                                   26.98 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/scss-n48HZsmL.js                                 27.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/java-BTDmaRNO.js                                 27.22 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/coffee-Bk-z6oI_.js                               27.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/razor-C2a5o_rD.js                                27.51 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Typewriter-Regular-D3Ib7_Hf.ttf            27.56 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_AMS-Regular-BQhdFMY1.woff2                 28.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/scala-Dtw19ca_.js                                28.89 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/night-owl-EdP2Hztp.js                            28.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/crystal-Dvqzbpz8.js                              29.39 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mermaid-Cwy4Up_p.js                              29.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/applescript-Ds_W2jPS.js                          29.58 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-Bold-Jm3AIy58.woff                    29.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-Regular-Dr94JaBh.woff                 30.77 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/stylus-CIg617SB.js                               31.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/julia-z72n2X8P.js                                31.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Math-BoldItalic-B3XSjfu4.ttf               31.20 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Math-Italic-flOr_0UB.ttf                   31.31 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-BoldItalic-DzxPMmG6.ttf               32.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/poimandres-BrOVMvuE.js                           33.49 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_AMS-Regular-DMm9YOAa.woff                  33.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-Italic-3WenGoN9.ttf                   33.58 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/one-dark-pro-utPxbBbJ.js                         33.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bsl-jNujDQK2.js                                  33.87 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/haxe-DVIybFAS.js                                 35.17 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nginx-DSXkacNc.js                                35.38 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/houston-RHIKkNfR.js                              35.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tokyo-night-BvwC8l2v.js                          35.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/erlang-DNeY46SW.js                               37.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cobol-DbURsbuN.js                                39.13 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/asm-CTFRnVOM.js                                  40.72 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/android-studio-t3zZ7G0e.svg                      41.29 kB │ gzip:  10.32 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/shellscript-DgJyDXW6.js                          41.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/haskell-BfdhR_WN.js                              41.49 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/perl-CP_GSK0L.js                                 43.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/d-DVc-yF-l.js                                    43.80 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ruby-DtA7rz7D.js                                 46.72 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/go-B7VTfpnm.js                                   46.82 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/catppuccin-mocha-D9fcC0iT.js                     47.25 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/catppuccin-latte-DoBaWTGn.js                     47.25 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/catppuccin-frappe-CfssSZMA.js                    47.26 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/catppuccin-macchiato-BkAuvdZC.js                 47.26 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/apex-4lMl2vhg.js                                 47.78 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ada-CTi7YQtL.js                                  48.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/css-Br67jR8j.js                                  49.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/imba-D-Pk5S0X.js                                 49.93 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-Bold-waoOVXN0.ttf                     51.34 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_Main-Regular-ypZvNtVU.ttf                  53.58 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/everforest-dark-WOub3wle.js                      53.74 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/everforest-light-DCUg8VH8.js                     53.75 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wikitext-Bx2qct8O.js                             55.89 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/stata-BcICKvEt.js                                57.00 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/html-BW_6VhB7.js                                 57.25 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ballerina-a0yOSyc5.js                            58.70 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/markdown-DX-TNHnc.js                             59.34 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ocaml-DTbn2Hv7.js                                62.45 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/KaTeX_AMS-Regular-DRggAlZN.ttf                   63.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mojo-M6pJPbMk.js                                 69.80 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/python-B6Ihcp-E.js                               69.96 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/c-BG-tZi7o.js                                    72.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/latex-DDhGBJRe.js                                72.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vyper-DpazWNpx.js                                74.65 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hack-CJGL07zV.js                                 81.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/swift-tEesUtni.js                                86.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fortran-free-form-DB5N_DgY.js                    88.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/csharp-CFxe5pRo.js                               90.19 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/racket-CeDx7KO2.js                               92.39 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/less-XNfgnZC7.js                                 97.64 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/blade-DFktsHST.js                               104.99 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/objective-c-BoaBTdtz.js                         105.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/php-CNeTOyEV.js                                 113.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/asciidoc-nTfEFGxb.js                            131.53 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mdx-C2fqO2XY.js                                 136.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tabs-BFWcS4qR.png                               167.25 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/objective-cpp-DstR8hNy.js                       171.98 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/javascript-WyGyM1wV.js                          174.83 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tsx-D6116Ycy.js                                 175.54 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jsx-8cLv2Six.js                                 177.80 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/typescript-BqvgUolh.js                          181.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/angular-ts-1O2hJJmY.js                          183.84 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vue-vine-DQRWX4iy.js                            190.06 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/home-CFGvK6P5.png                               191.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/worker-B7E0o2bU.js                              207.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wolfram-pu21K997.js                             262.40 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sprite-CMBzwCGs.svg                             282.21 kB │ gzip: 101.62 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/markdown.worker-BZwH5Q2k.js                     533.30 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cpp-B28oCXVK.js                                 626.10 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/emacs-lisp-DaE6cnv4.js                          779.88 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sprite-Fb-TFjRY.svg                             943.96 kB │ gzip: 245.87 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/introducing-tabs-BDG1jhHE.mp4                 1,367.49 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-select-directory-v2-BLfZvzPV.css           2.16 kB │ gzip:   0.65 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/row-BjpwzvFU.css                                  3.52 kB │ gzip:   0.95 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-edit-project-v2-D9qNnyx9.css               3.76 kB │ gzip:   0.93 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-command-palette-v2-CTGIdC2q.css            3.82 kB │ gzip:   0.99 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/index-GGAIvKVQ.css                               17.26 kB │ gzip:   2.94 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/index-ps7knGWE.css                              482.69 kB │ gzip:  70.56 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/__vite-browser-external-2447137e-BIHI7g3E.js      0.03 kB │ gzip:   0.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yup-01-DQMmQq_0.js                                0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yup-03-Du9XXBlK.js                                0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yup-04-CayxQkjm.js                                0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yup-05-Dl9O7Jxz.js                                0.09 kB │ gzip:   0.10 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-02-3xn8F7Mx.js                               0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-05-Cy7Hef_M.js                               0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-08-D6OwdMnQ.js                               0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-11-8V7nAwvi.js                               0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-12-CFsXfFQH.js                               0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-01-acGlA3wi.js                              0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-02-DzdtSgHE.js                              0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-04-BVaT_Fra.js                              0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-05-CfXnz_Rc.js                              0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-06-vgDNaEjS.js                              0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-07-eXud-7j6.js                              0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-08-z9fNoNby.js                              0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-10-Bwvn3Dlk.js                              0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-03-B9X7PdvP.js                            0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-04-Brf0HDue.js                            0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-06-DNnhcpYI.js                            0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-08-DdXGWUma.js                            0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-09-JLVLrUG5.js                            0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/staplebops-03-x3q-C9UK.js                         0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/staplebops-04-C9-GZ0T3.js                         0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/staplebops-06-DKgI8IvE.js                         0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/staplebops-07-wxb4g9oW.js                         0.09 kB │ gzip:   0.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/list-C4UJv1ED.js                                  0.17 kB │ gzip:   0.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mcp-rADaFGRQ.js                                   0.27 kB │ gzip:   0.22 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/codeowners-Bp6g37R7.js                            0.55 kB │ gzip:   0.32 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/shellsession-BADoaaVG.js                          0.71 kB │ gzip:   0.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tsv-B_m7g4N7.js                                   0.74 kB │ gzip:   0.34 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-CpxwLcJ7.js                               0.81 kB │ gzip:   0.41 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/catppuccin-DZcIPKtX.js                            0.81 kB │ gzip:   0.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/onedarkpro-BqVu_Wgg.js                            0.82 kB │ gzip:   0.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/switch-DEi_cdTo.js                                0.82 kB │ gzip:   0.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nord-NfRmCUpk.js                                  0.83 kB │ gzip:   0.40 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nightowl-Pa1W3oWG.js                              0.84 kB │ gzip:   0.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tokyonight-CbcoahaJ.js                            0.87 kB │ gzip:   0.46 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/html-derivative-DlHx6ybY.js                       0.90 kB │ gzip:   0.50 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/amoled-XzrX3rqH.js                                0.91 kB │ gzip:   0.43 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dracula-Bwy36Hqr.js                               0.92 kB │ gzip:   0.46 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/monokai-BmT5Sw19.js                               0.92 kB │ gzip:   0.46 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/solarized-B2lq4jlr.js                             0.92 kB │ gzip:   0.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/aura-WWK1QSNq.js                                  0.96 kB │ gzip:   0.45 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vesper-67WFNJYM.js                                0.96 kB │ gzip:   0.41 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ayu-DOIePaTS.js                                   0.96 kB │ gzip:   0.49 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/shadesofpurple-BtwY-YRg.js                        0.98 kB │ gzip:   0.49 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/git-rebase-r7XF79zn.js                            0.98 kB │ gzip:   0.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/qmldir-C8lEn-DE.js                                1.00 kB │ gzip:   0.45 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/carbonfox-DDZsuZPB.js                             1.01 kB │ gzip:   0.46 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/row-CMNXST4e.js                                   1.04 kB │ gzip:   0.50 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/csv-fuZLfV_i.js                                   1.14 kB │ gzip:   0.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/git-commit-F4YmCXRG.js                            1.23 kB │ gzip:   0.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/xsl-CtQFsRM5.js                                   1.39 kB │ gzip:   0.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dotenv-Da5cRb03.js                                1.42 kB │ gzip:   0.53 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sparql-rVzFXLq3.js                                1.48 kB │ gzip:   0.82 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ini-BEwlwnbL.js                                   1.53 kB │ gzip:   0.50 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fortran-fixed-form-CkoXwp7k.js                    1.67 kB │ gzip:   0.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-fork-CnQ6bF11.js                           1.70 kB │ gzip:   0.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/docker-BcOcwvcX.js                                1.74 kB │ gzip:   0.60 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hxml-Bvhsp5Yf.js                                  1.74 kB │ gzip:   0.88 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/edit-project-Tol-QEV1.js                          1.80 kB │ gzip:   0.87 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/desktop-BmXAJ9_W.js                               1.83 kB │ gzip:   0.76 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-Bnlt5SaI.js                                2.00 kB │ gzip:   0.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rosepine-DFf5RIYd.js                              2.00 kB │ gzip:   0.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/palenight-Djgtir2l.js                             2.00 kB │ gzip:   0.67 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/catppuccin-frappe-BbhwKQAy.js                     2.02 kB │ gzip:   0.54 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/flexoki-Cuz5xwiW.js                               2.02 kB │ gzip:   0.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/catppuccin-macchiato-Cusx3TK6.js                  2.03 kB │ gzip:   0.54 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mercury-CL9KPSEM.js                               2.03 kB │ gzip:   0.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/orng-BM7q_Z0y.js                                  2.04 kB │ gzip:   0.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cobalt2-DAVdkIoy.js                               2.04 kB │ gzip:   0.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/zenburn-3iKGnI7X.js                               2.04 kB │ gzip:   0.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/material-CDQyWXdQ.js                              2.05 kB │ gzip:   0.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/synthwave84-mo9EICVe.js                           2.05 kB │ gzip:   0.71 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/lucent-orng-BLBLS6VI.js                           2.05 kB │ gzip:   0.67 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/osaka-jade-LSg9CtTT.js                            2.07 kB │ gzip:   0.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kanagawa-C2GZrYFD.js                              2.08 kB │ gzip:   0.65 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/one-dark-Bjk1FzZz.js                              2.08 kB │ gzip:   0.72 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/opencode-D7rBuNi7.js                              2.08 kB │ gzip:   0.70 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/everforest-CeaUU-qR.js                            2.08 kB │ gzip:   0.70 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vercel-BEJw6zHg.js                                2.10 kB │ gzip:   0.73 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cursor-CX4xD2IP.js                                2.14 kB │ gzip:   0.73 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wenyan-BV7otONQ.js                                2.16 kB │ gzip:   1.06 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-select-mcp-D--sH_ys.js                     2.19 kB │ gzip:   1.03 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-03-DrFH92rH.js                              2.20 kB │ gzip:   1.60 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jssm-C2t-YnRu.js                                  2.24 kB │ gzip:   0.62 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/reg-C-SQnVFl.js                                   2.35 kB │ gzip:   0.70 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/edge-FbVlp4U3.js                                  2.36 kB │ gzip:   0.70 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-01-HWHtipgi.js                               2.40 kB │ gzip:   1.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-04-CmCNjd7G.js                               2.56 kB │ gzip:   1.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/diff-D97Zzqfu.js                                  2.57 kB │ gzip:   0.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gleam-BspZqrRM.js                                 2.58 kB │ gzip:   0.82 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/erb-Dm6A9KJ5.js                                   2.61 kB │ gzip:   0.84 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hy-DFXneXwc.js                                    2.65 kB │ gzip:   1.17 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/json-Cp-IABpG.js                                  2.82 kB │ gzip:   0.78 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/openscad-C4EeE6gA.js                              2.82 kB │ gzip:   1.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-07-nvIV4VRE.js                               2.85 kB │ gzip:   2.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/log-2UxHyX5q.js                                   2.85 kB │ gzip:   0.89 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/matrix-BQ_S38An.js                                2.90 kB │ gzip:   0.77 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cairo-KRGpt6FW.js                                 2.94 kB │ gzip:   0.81 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/berry-uYugtg8r.js                                 3.01 kB │ gzip:   0.81 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jsonl-DcaNXYhu.js                                 3.01 kB │ gzip:   0.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jsonc-Des-eS-w.js                                 3.11 kB │ gzip:   0.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-10-C1PuPJJ6.js                               3.13 kB │ gzip:   2.39 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/logo-BtOb2qkB.js                                  3.13 kB │ gzip:   1.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/po-BTJTHyun.js                                    3.24 kB │ gzip:   0.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/json5-C9tS-k6U.js                                 3.25 kB │ gzip:   0.83 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mipsasm-CKIfxQSi.js                               3.26 kB │ gzip:   1.17 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tasl-QIJgUcNo.js                                  3.29 kB │ gzip:   0.85 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/genie-D0YGMca9.js                                 3.36 kB │ gzip:   1.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rel-C3B-1QV4.js                                   3.37 kB │ gzip:   1.10 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vala-CsfeWuGM.js                                  3.37 kB │ gzip:   1.18 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/splunk-BtCnVYZw.js                                3.44 kB │ gzip:   1.53 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fluent-C4IJs8-o.js                                3.61 kB │ gzip:   0.90 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ssh-config-_ykCGR6B.js                            3.62 kB │ gzip:   1.61 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jsonnet-DFQXde-d.js                               3.62 kB │ gzip:   1.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kdl-DV7GczEv.js                                   3.63 kB │ gzip:   1.03 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/LROKH5N7-niEjgSZv.js                              3.63 kB │ gzip:   1.47 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/glsl-DplSGwfg.js                                  3.63 kB │ gzip:   1.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hurl-irOxFIW8.js                                  3.65 kB │ gzip:   1.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/narrat-DRg8JJMk.js                                3.67 kB │ gzip:   1.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/turtle-BsS91CYL.js                                3.70 kB │ gzip:   0.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-06-CfV385SL.js                               3.81 kB │ gzip:   2.84 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yup-06-W4HuBYhb.js                                3.90 kB │ gzip:   2.81 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/zenscript-DVFEvuxE.js                             3.91 kB │ gzip:   1.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ron-D8l8udqQ.js                                   3.91 kB │ gzip:   0.98 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gn-n2N0HUVH.js                                    4.00 kB │ gzip:   1.50 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-09-8gNK4nDO.js                               4.05 kB │ gzip:   2.96 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-01-SdbMMaiV.js                            4.14 kB │ gzip:   3.02 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pascal-D93ZcfNL.js                                4.15 kB │ gzip:   1.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-10-E37zfY9y.js                            4.33 kB │ gzip:   2.90 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tcl-dwOrl1Do.js                                   4.43 kB │ gzip:   1.51 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nextflow-C-mBbutL.js                              4.51 kB │ gzip:   1.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rosmsg-BJDFO7_C.js                                4.52 kB │ gzip:   1.06 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/http-jrhK8wxY.js                                  4.55 kB │ gzip:   1.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/staplebops-05-BVmKob0k.js                         4.67 kB │ gzip:   3.57 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/polar-C0HS_06l.js                                 4.67 kB │ gzip:   1.13 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-select-file-Dl68W8me.js                    4.68 kB │ gzip:   1.80 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sdbl-DVxCFoDh.js                                  4.70 kB │ gzip:   1.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fennel-BYunw83y.js                                4.77 kB │ gzip:   1.56 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/staplebops-02-dGmDElbO.js                         4.78 kB │ gzip:   3.64 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bibtex-CHM0blh-.js                                4.80 kB │ gzip:   0.83 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/llvm-DjAJT7YJ.js                                  5.05 kB │ gzip:   2.03 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nope-03-D3_ztwN2.js                               5.08 kB │ gzip:   3.86 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yup-02-BIvWfOQf.js                                5.08 kB │ gzip:   3.55 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wgsl-Dx-B1_4e.js                                  5.14 kB │ gzip:   1.38 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-05-BNanGIjD.js                            5.16 kB │ gzip:   3.92 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/alert-09-CidmJWaA.js                              5.17 kB │ gzip:   3.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/staplebops-01-gmydkbKo.js                         5.24 kB │ gzip:   3.99 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gdresource-BOOCDP_w.js                            5.29 kB │ gzip:   1.34 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/qml-3beO22l8.js                                   5.34 kB │ gzip:   1.38 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/zig-VOosw3JB.js                                   5.34 kB │ gzip:   1.55 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dax-CEL-wOlO.js                                   5.37 kB │ gzip:   2.20 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bicep-Bmn6On1c.js                                 5.38 kB │ gzip:   1.15 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/xml-sdJ4AIDG.js                                   5.38 kB │ gzip:   1.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-02-CujvGF7f.js                            5.40 kB │ gzip:   3.99 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bip-bop-07-BoG3Fd8O.js                            5.44 kB │ gzip:   4.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/awk-DMzUqQB5.js                                   5.46 kB │ gzip:   1.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-edit-project-CVNzmYtc.js                   5.50 kB │ gzip:   2.00 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/coq-DkFqJrB1.js                                   5.53 kB │ gzip:   1.93 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jinja-f2NsQr07.js                                 5.69 kB │ gzip:   1.40 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/lean-BZvkOJ9d.js                                  5.78 kB │ gzip:   1.92 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/moonbit-_H4v1dQx.js                               5.90 kB │ gzip:   1.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/powerquery-CEu0bR-o.js                            5.90 kB │ gzip:   1.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/shaderlab-Dg9Lc6iA.js                             5.92 kB │ gzip:   2.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/verilog-BQ8w6xss.js                               5.93 kB │ gzip:   1.90 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cypher-COkxafJQ.js                                5.96 kB │ gzip:   1.71 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vb-D17OF-Vu.js                                    6.09 kB │ gzip:   2.33 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/red-bN70gL4F.js                                   6.26 kB │ gzip:   1.60 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/min-dark-CafNBF8u.js                              6.29 kB │ gzip:   1.72 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-manage-models-B6aypDW5.js                  6.30 kB │ gzip:   2.23 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gdshader-DkwncUOv.js                              6.33 kB │ gzip:   1.73 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/prisma-Dd19v3D-.js                                6.33 kB │ gzip:   1.39 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ara-BRHolxvo.js                                   6.36 kB │ gzip:   1.80 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/clojure-P80f7IUj.js                               6.41 kB │ gzip:   1.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/postcss-CXtECtnM.js                               6.42 kB │ gzip:   1.92 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/toml-vGWfd6FD.js                                  6.43 kB │ gzip:   1.28 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/solarized-light-L9t79GZl.js                       6.48 kB │ gzip:   1.74 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/r-Dspwwk_N.js                                     6.54 kB │ gzip:   1.78 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/proto-C7zT0LnQ.js                                 6.55 kB │ gzip:   1.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/smalltalk-BERRCDM3.js                             6.59 kB │ gzip:   1.62 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/talonscript-CkByrt1z.js                           6.76 kB │ gzip:   1.49 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/solarized-dark-DXbdFlpD.js                        6.85 kB │ gzip:   1.81 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/riscv-BM1_JUlF.js                                 6.91 kB │ gzip:   1.98 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/min-light-CTRr51gU.js                             6.97 kB │ gzip:   1.90 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/soy-8wufbnw4.js                                   6.98 kB │ gzip:   1.65 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/scheme-C98Dy4si.js                                7.17 kB │ gzip:   2.06 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hlsl-D3lLCCz7.js                                  7.26 kB │ gzip:   2.18 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/qss-IeuSbFQv.js                                   7.47 kB │ gzip:   2.59 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/systemd-4A_iFExJ.js                               7.87 kB │ gzip:   2.53 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/monokai-D4h5O-jR.js                               7.88 kB │ gzip:   1.92 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/regexp-CDVJQ6XC.js                                7.99 kB │ gzip:   1.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/haml-D5jkg6IW.js                                  8.26 kB │ gzip:   1.81 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/typst-DHCkPAjA.js                                 8.39 kB │ gzip:   1.67 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vue-html-AaS7Mt5G.js                              8.47 kB │ gzip:   1.67 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/plsql-ChMvpjG-.js                                 8.51 kB │ gzip:   3.02 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dart-bE4Kk8sk.js                                  8.62 kB │ gzip:   2.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/horizon-BUw7H-hv.js                               8.78 kB │ gzip:   1.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kotlin-BdnUsdx6.js                                8.79 kB │ gzip:   2.13 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/horizon-bright-CUuTKBJd.js                        8.79 kB │ gzip:   1.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/make-CHLpvVh8.js                                  8.96 kB │ gzip:   1.76 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/andromeeda-C4gqWexZ.js                            9.02 kB │ gzip:   2.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sas-DEy46yEz.js                                   9.06 kB │ gzip:   3.78 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dark-plus-C3mMm8J8.js                             9.10 kB │ gzip:   2.10 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/slack-dark-BthQWCQV.js                            9.12 kB │ gzip:   1.98 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/zh-C5pDW30z.js                                    9.24 kB │ gzip:   3.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/zht-CvBLcgVB.js                                   9.26 kB │ gzip:   3.17 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/no-Djrl_YYi.js                                    9.28 kB │ gzip:   2.94 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sass-Cj5Yp3dK.js                                  9.29 kB │ gzip:   2.49 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/plastic-3e1v2bzS.js                               9.30 kB │ gzip:   1.99 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fo-ND0QEdG-.js                                    9.33 kB │ gzip:   3.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/et-CjsfnKtF.js                                    9.35 kB │ gzip:   3.02 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/da-Kf4Wut3q.js                                    9.38 kB │ gzip:   2.98 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ms-DBzL1Jxt.js                                    9.38 kB │ gzip:   2.90 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/slack-ochin-DqwNpetd.js                           9.43 kB │ gzip:   2.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sv-DQiClmAl.js                                    9.47 kB │ gzip:   3.03 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/id-DEM0kS_y.js                                    9.51 kB │ gzip:   2.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-edit-project-v2-CVfIzUDe.js                9.52 kB │ gzip:   3.32 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/is-C0Vs_sj4.js                                    9.54 kB │ gzip:   3.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fi-BPP_74VE.js                                    9.66 kB │ gzip:   3.10 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tex-idrVyKtj.js                                   9.67 kB │ gzip:   3.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tr-DejgcGul.js                                    9.68 kB │ gzip:   3.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jison-wvAkD_A8.js                                 9.69 kB │ gzip:   1.85 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nl-jEDmtDHH.js                                    9.71 kB │ gzip:   3.02 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tk-CJ4Ql6_y.js                                    9.76 kB │ gzip:   3.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sq-BsuDqj1j.js                                    9.84 kB │ gzip:   3.18 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bs-BhQknnE6.js                                    9.84 kB │ gzip:   3.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cmake-D1j8_8rp.js                                 9.86 kB │ gzip:   3.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ko-yEMXU7tI.js                                    9.87 kB │ gzip:   3.28 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/lv-CtX6i5PT.js                                    9.88 kB │ gzip:   3.10 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hr-C4B1FhHz.js                                    9.88 kB │ gzip:   3.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/uz-CvEErGaK.js                                    9.89 kB │ gzip:   3.13 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/de-DLNsfDjw.js                                    9.90 kB │ gzip:   3.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/light-plus-B7mTdjB0.js                            9.94 kB │ gzip:   2.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ro-O2a-Hp-Z.js                                    9.95 kB │ gzip:   3.03 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/es-BuUOS10k.js                                    9.99 kB │ gzip:   3.06 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/it-DPCKW2h2.js                                    9.99 kB │ gzip:   3.04 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/az-DUAZt0a7.js                                    9.99 kB │ gzip:   3.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ca-dK8ULAzd.js                                   10.02 kB │ gzip:   3.20 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/br-CYgz3ePN.js                                   10.02 kB │ gzip:   3.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sl-Ce-cMNqE.js                                   10.04 kB │ gzip:   3.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hcl-BWvSN4gD.js                                  10.05 kB │ gzip:   1.93 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hu-B1snEkm3.js                                   10.12 kB │ gzip:   3.34 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pl-y3iapvFA.js                                   10.30 kB │ gzip:   3.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/lt-BTLABkp1.js                                   10.33 kB │ gzip:   3.26 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fr-DkMMkFmH.js                                   10.33 kB │ gzip:   3.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sk-Csf_nZnx.js                                   10.33 kB │ gzip:   3.24 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cs-DsDHxesy.js                                   10.34 kB │ gzip:   3.33 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pkl-u5AG7uiY.js                                  10.37 kB │ gzip:   1.38 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/beancount-k_qm7-4y.js                            10.37 kB │ gzip:   1.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vi-DlcPuwK2.js                                   10.40 kB │ gzip:   3.25 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nextflow-groovy-vE_lwT2v.js                      10.44 kB │ gzip:   2.13 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dream-maker-BtqSS_iP.js                          10.47 kB │ gzip:   2.25 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/raku-DXvB9xmW.js                                 10.47 kB │ gzip:   2.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/yaml-Buea-lGh.js                                 10.51 kB │ gzip:   2.26 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ja-BaAAHI8J.js                                   10.59 kB │ gzip:   3.38 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rst-CpCqk9r5.js                                  10.67 kB │ gzip:   2.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/status-popover-body-CTJ6HGpM.js                  10.75 kB │ gzip:   3.40 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/elm-DbKCFpqz.js                                  10.97 kB │ gzip:   2.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-command-palette-v2-CRgEcH7X.js            11.01 kB │ gzip:   4.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-light-DAi9KRSo.js                         11.18 kB │ gzip:   2.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/just-CUsbIsdP.js                                 11.21 kB │ gzip:   2.76 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/prolog-CbFg5uaA.js                               11.36 kB │ gzip:   3.85 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/am-DjzTQWVS.js                                   11.38 kB │ gzip:   3.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/terraform-BETggiCN.js                            11.39 kB │ gzip:   2.51 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-dark-DHJKELXO.js                          11.41 kB │ gzip:   2.56 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/puppet-BMWR74SV.js                               11.44 kB │ gzip:   2.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/laserwave-DUszq2jm.js                            11.50 kB │ gzip:   2.60 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pa-Bt14FkNZ.js                                   11.50 kB │ gzip:   3.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fa-B0puVY54.js                                   11.51 kB │ gzip:   3.41 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gherkin-DyxjwDmM.js                              11.95 kB │ gzip:   4.94 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wasm-MzD3tlZU.js                                 12.01 kB │ gzip:   2.19 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hjson-D5-asLiD.js                                12.05 kB │ gzip:   1.64 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mn-DXWu_r38.js                                   12.09 kB │ gzip:   3.61 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/handlebars-BpdQsYii.js                           12.15 kB │ gzip:   2.37 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ur-CB75jsbs.js                                   12.21 kB │ gzip:   3.51 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ar-Cns22lqy.js                                   12.22 kB │ gzip:   3.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sr-DsJ1E_Kk.js                                   12.32 kB │ gzip:   3.54 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/apache-Pmp26Uib.js                               12.46 kB │ gzip:   3.71 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hy-sKrhf0PI.js                                   12.46 kB │ gzip:   3.53 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tg-CH4sz7BR.js                                   12.54 kB │ gzip:   3.64 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bg-D7dx2Gga.js                                   12.57 kB │ gzip:   3.61 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mk-BnS1WuAg.js                                   12.57 kB │ gzip:   3.62 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vesper-DRje8inN.js                               12.73 kB │ gzip:   1.99 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/el-CWz4Pbcc.js                                   12.80 kB │ gzip:   3.84 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/uk-DjAbEHSO.js                                   12.86 kB │ gzip:   3.65 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bat-BkioyH1T.js                                  12.89 kB │ gzip:   3.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ru-CiYD0SDY.js                                   12.98 kB │ gzip:   3.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fish-BvzEVeQv.js                                 13.04 kB │ gzip:   1.74 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/v-BcVCzyr7.js                                    13.21 kB │ gzip:   2.74 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/lo-ufIyZBGw.js                                   13.48 kB │ gzip:   3.54 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vitesse-light-CVO1_9PV.js                        13.62 kB │ gzip:   3.06 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dv-BjzrEEpj.js                                   13.65 kB │ gzip:   3.65 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/aurora-x-D-2ljcwZ.js                             13.66 kB │ gzip:   2.30 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vitesse-black-Bkuqu6BP.js                        13.68 kB │ gzip:   3.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vitesse-dark-D0r3Knsf.js                         13.76 kB │ gzip:   3.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pug-DKIMFp6K.js                                  13.84 kB │ gzip:   2.57 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/synthwave-84-CbfX1IO0.js                         14.04 kB │ gzip:   2.88 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/th-Bb2RAEpl.js                                   14.15 kB │ gzip:   3.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-light-default-D7oLnXFd.js                 14.16 kB │ gzip:   3.06 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hi-CI-fcCRm.js                                   14.26 kB │ gzip:   3.61 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/clarity-D53aC0YG.js                              14.28 kB │ gzip:   2.46 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-light-high-contrast-BfjtVDDH.js           14.28 kB │ gzip:   3.04 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/si-CYaQCg-3.js                                   14.30 kB │ gzip:   3.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bn-DR0HKgdi.js                                   14.41 kB │ gzip:   3.57 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-dark-dimmed-DH5Ifo-i.js                   14.43 kB │ gzip:   3.14 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-dark-default-Cuk6v7N8.js                  14.44 kB │ gzip:   3.14 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/km-BJyV1VxI.js                                   14.57 kB │ gzip:   3.58 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/github-dark-high-contrast-E3gJ1_iC.js            14.60 kB │ gzip:   3.10 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/settings-keybinds-ChbX2gY1.js                    14.68 kB │ gzip:   5.00 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ka-C-doVCTI.js                                   14.73 kB │ gzip:   3.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gnuplot-DdkO51Og.js                              14.78 kB │ gzip:   3.28 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rust-B1yitclQ.js                                 15.07 kB │ gzip:   2.70 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kusto-wEQ09or8.js                                15.17 kB │ gzip:   3.95 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/actionscript-3-CoDkCxhg.js                       15.21 kB │ gzip:   2.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ne-tGBFBB0T.js                                   15.33 kB │ gzip:   3.57 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nix-CwoSXNpI.js                                  15.51 kB │ gzip:   2.49 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/lua-BaeVxFsk.js                                  15.54 kB │ gzip:   3.17 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/luau-KW6xsasC.js                                 15.63 kB │ gzip:   3.41 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/abap-BdImnpbu.js                                 15.85 kB │ gzip:   5.90 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/solidity-rGO070M0.js                             16.07 kB │ gzip:   3.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/matlab-D7o27uSR.js                               16.09 kB │ gzip:   3.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cue-D82EKSYY.js                                  16.20 kB │ gzip:   2.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/elixir-CkH2-t6x.js                               16.32 kB │ gzip:   2.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/odin-BBf5iR-q.js                                 16.51 kB │ gzip:   2.94 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ts-tags-D351s5mN.js                              16.57 kB │ gzip:   2.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/my-CXuYiPUT.js                                   16.67 kB │ gzip:   3.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dz-D-uIy7Sq.js                                   16.90 kB │ gzip:   3.81 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kanagawa-wave-DWedfzmr.js                        17.12 kB │ gzip:   2.93 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kanagawa-lotus-CfQXZHmo.js                       17.13 kB │ gzip:   2.94 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/kanagawa-dragon-CkXjmgJE.js                      17.13 kB │ gzip:   2.95 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/move-IF9eRakj.js                                 17.51 kB │ gzip:   3.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/graphql-ChdNCCLP.js                              18.00 kB │ gzip:   2.52 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/liquid-C0sCDyMI.js                               18.09 kB │ gzip:   3.17 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/svelte-Cy7k_4gC.js                               18.24 kB │ gzip:   3.14 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/material-theme-D5KoaKCx.js                       18.62 kB │ gzip:   3.13 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/material-theme-darker-BfHTSMKl.js                18.63 kB │ gzip:   3.12 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/material-theme-ocean-CyktbL80.js                 18.63 kB │ gzip:   3.15 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/material-theme-lighter-B0m2ddpp.js               18.63 kB │ gzip:   3.13 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/material-theme-palenight-Csfq5Kiy.js             18.64 kB │ gzip:   3.14 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gdscript-C5YyOfLZ.js                             18.99 kB │ gzip:   3.75 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/groovy-gcz8RCvz.js                               19.18 kB │ gzip:   3.59 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mdc-DTYItulj.js                                  19.63 kB │ gzip:   6.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/glimmer-js-ByusRIyA.js                           20.07 kB │ gzip:   2.94 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/glimmer-ts-BfAWNZQY.js                           20.07 kB │ gzip:   2.94 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ayu-dark-DYE7WIF3.js                             20.08 kB │ gzip:   3.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ayu-mirage-32ctXXKs.js                           20.09 kB │ gzip:   3.96 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/powershell-Dpen1YoG.js                           20.15 kB │ gzip:   4.07 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ayu-light-BA47KaF1.js                            20.15 kB │ gzip:   3.95 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/viml-CJc9bBzg.js                                 20.37 kB │ gzip:   6.76 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nushell-Cz2AlsmD.js                              20.41 kB │ gzip:   5.24 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/snazzy-light-Bw305WKR.js                         20.77 kB │ gzip:   3.85 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dracula-BzJJZx-M.js                              21.07 kB │ gzip:   4.03 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dracula-soft-BXkSAIEj.js                         21.08 kB │ gzip:   4.07 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/twig-CW1WmMYd.js                                 21.36 kB │ gzip:   3.87 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wit-5i3qLPDT.js                                  21.47 kB │ gzip:   2.88 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rose-pine-qdsjHGoJ.js                            21.74 kB │ gzip:   3.89 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rose-pine-moon-D4_iv3hh.js                       21.75 kB │ gzip:   3.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/rose-pine-dawn-DHQR4-dF.js                       21.75 kB │ gzip:   3.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nim-BIad80T-.js                                  22.46 kB │ gzip:   3.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/common-lisp-Cg-RD9OK.js                          22.58 kB │ gzip:   6.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/surrealql-Bq5Q-fJD.js                            22.58 kB │ gzip:   4.27 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-dark-hard-CFHQjOhq.js                    22.63 kB │ gzip:   4.20 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-dark-soft-CVdnzihN.js                    22.63 kB │ gzip:   4.20 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-light-hard-CH1njM8p.js                   22.64 kB │ gzip:   4.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-light-soft-hJgmCMqR.js                   22.64 kB │ gzip:   4.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-dark-medium-GsRaNv29.js                  22.64 kB │ gzip:   4.20 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/gruvbox-light-medium-DRw_LuNl.js                 22.64 kB │ gzip:   4.21 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bird2-BIv1doCn.js                                22.94 kB │ gzip:   4.65 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sql-CRqJ_cUM.js                                  23.43 kB │ gzip:   7.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cadence-Bv_4Rxtq.js                              23.67 kB │ gzip:   3.67 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/astro-HNnZUWAn.js                                24.01 kB │ gzip:   7.58 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/apl-CORt7UWP.js                                  24.04 kB │ gzip:   4.17 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/templ-DhtptRzy.js                                24.06 kB │ gzip:   5.41 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vhdl-CeAyd5Ju.js                                 24.26 kB │ gzip:   3.89 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/angular-html-DA-rfuFy.js                         24.29 kB │ gzip:   4.00 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vue-D2xRrEX4.js                                  24.48 kB │ gzip:   2.97 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/purescript-CklMAg4u.js                           24.69 kB │ gzip:   3.24 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/typespec-CAFt9gP4.js                             25.05 kB │ gzip:   2.62 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/one-light-C3Wv6jpd.js                            25.30 kB │ gzip:   3.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fsharp-CXgrBDvD.js                               25.31 kB │ gzip:   4.13 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/marko-DjSrsDqO.js                                25.48 kB │ gzip:   3.59 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/night-owl-light-CMTm3GFP.js                      25.90 kB │ gzip:   4.28 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/system-verilog-CnnmHF94.js                       26.20 kB │ gzip:   4.83 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nord-Ddv68eIx.js                                 26.72 kB │ gzip:   4.41 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/codeql-DsOJ9woJ.js                               26.88 kB │ gzip:   3.80 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/c3-MRO5bC_T.js                                   26.98 kB │ gzip:   3.94 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/scss-D5BDwBP9.js                                 27.20 kB │ gzip:   4.20 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/java-CylS5w8V.js                                 27.22 kB │ gzip:   4.27 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/coffee-Ch7k5sss.js                               27.42 kB │ gzip:   6.35 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/razor-BjBPvh-w.js                                27.51 kB │ gzip:   3.56 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/new-session-D0i_JKLy.js                          28.06 kB │ gzip:   8.67 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/scala-C151Ov-r.js                                28.88 kB │ gzip:   3.93 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/night-owl-C39BiMTA.js                            28.91 kB │ gzip:   5.18 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/crystal-DGywbUpC.js                              29.39 kB │ gzip:   4.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mermaid-mWjccvbQ.js                              29.51 kB │ gzip:   3.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/applescript-Co6uUVPk.js                          29.57 kB │ gzip:   5.96 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pierre-dark-Dy3oF52j.js                          30.52 kB │ gzip:   4.78 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pierre-light-DhMpYZcV.js                         30.52 kB │ gzip:   4.77 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pierre-dark-soft-K7D5SChL.js                     30.53 kB │ gzip:   4.81 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pierre-light-soft-cPlVRKcQ.js                    30.53 kB │ gzip:   4.78 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/stylus-BEDo0Tqx.js                               31.07 kB │ gzip:   8.02 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/julia-D7OTSIA_.js                                31.08 kB │ gzip:   4.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/poimandres-CS3Unz2-.js                           33.49 kB │ gzip:   5.53 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/one-dark-pro-DVMEJ2y_.js                         33.79 kB │ gzip:   5.54 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bsl-BO_Y6i37.js                                  33.87 kB │ gzip:   8.30 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-settings-DHuTbU9v.js                      33.88 kB │ gzip:   8.13 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/haxe-CzTSHFRz.js                                 35.16 kB │ gzip:   5.93 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nginx-BpAMiNFr.js                                35.37 kB │ gzip:   4.46 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/houston-DnULxvSX.js                              35.42 kB │ gzip:   5.80 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tokyo-night-hegEt444.js                          35.67 kB │ gzip:   6.26 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-connect-provider-Bx6tU3V5.js              37.35 kB │ gzip:  10.07 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/erlang-DsQrWhSR.js                               37.48 kB │ gzip:   4.40 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cobol-nBiQ_Alo.js                                39.13 kB │ gzip:  10.86 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/asm-D_Q5rh1f.js                                  40.72 kB │ gzip:   8.24 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/shellscript-Yzrsuije.js                          41.48 kB │ gzip:   6.10 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/haskell-Df6bDoY_.js                              41.49 kB │ gzip:   6.42 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/perl-B9cMNwum.js                                 43.16 kB │ gzip:   4.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/d-85-TOEBH.js                                    43.80 kB │ gzip:   8.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pierre-dark-vibrant-KQ6p6T2R.js                  44.73 kB │ gzip:   5.33 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pierre-light-vibrant-0cUW3kII.js                 44.73 kB │ gzip:   5.31 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ruby-DyJCeAvU.js                                 46.72 kB │ gzip:   5.85 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/go-C27-OAKa.js                                   46.82 kB │ gzip:   5.19 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/catppuccin-mocha-D87Tk5Gz.js                     47.26 kB │ gzip:   8.04 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/catppuccin-latte-C9dUb6Cb.js                     47.26 kB │ gzip:   8.04 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/catppuccin-frappe-DFWUc33u.js                    47.26 kB │ gzip:   8.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/catppuccin-macchiato-DQyhUUbL.js                 47.26 kB │ gzip:   8.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/apex-Dqspr-GT.js                                 47.77 kB │ gzip:   6.88 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ada-bCR0ucgS.js                                  48.08 kB │ gzip:   6.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/css-CLj8gQPS.js                                  49.04 kB │ gzip:  11.86 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/imba-DGztddWO.js                                 49.93 kB │ gzip:   9.47 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/everforest-dark-BgDCqdQA.js                      53.75 kB │ gzip:   8.46 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/everforest-light-C8M2exoo.js                     53.75 kB │ gzip:   8.46 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wikitext-BhOHFoWU.js                             55.89 kB │ gzip:   4.72 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/stata-DI20mbqo.js                                56.99 kB │ gzip:  12.32 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/html-pp8916En.js                                 57.25 kB │ gzip:  11.75 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ballerina-BFfxhgS-.js                            58.69 kB │ gzip:   8.19 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/markdown-Cvjx9yec.js                             59.34 kB │ gzip:   5.63 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/index-BPuvp5_E.js                                60.12 kB │ gzip:  15.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/zh-D74Y4t1y.js                                   60.30 kB │ gzip:  16.91 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/zht-DwXEn0Pa.js                                  60.99 kB │ gzip:  17.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/is-CTAk_CxP.js                                   62.34 kB │ gzip:  17.32 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ocaml-C0hk2d4L.js                                62.45 kB │ gzip:   5.04 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/id-CEYe1hbs.js                                   62.95 kB │ gzip:  16.17 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ms-DuANTqKx.js                                   63.18 kB │ gzip:  16.36 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hr-IQil4sS3.js                                   63.25 kB │ gzip:  17.31 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/da-yaaIqgbf.js                                   63.55 kB │ gzip:  16.90 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/et-LUQ3uLxg.js                                   63.60 kB │ gzip:  17.31 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/no-DWuRC-aK.js                                   63.76 kB │ gzip:  16.85 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fo-BmPE5Ns-.js                                   63.78 kB │ gzip:  17.50 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/lt-B1lTqOxd.js                                   64.33 kB │ gzip:  17.73 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sv-DJftQhoH.js                                   64.72 kB │ gzip:  16.96 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sl-BHOwvC_4.js                                   64.76 kB │ gzip:  17.58 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bs-Dje3CrJB.js                                   65.04 kB │ gzip:  17.40 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tk-XMdHqTT3.js                                   65.64 kB │ gzip:  17.56 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tr-k21vi5J8.js                                   65.71 kB │ gzip:  17.31 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/nl-CqHvGdiX.js                                   65.72 kB │ gzip:  17.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/lv-ChFMxxHZ.js                                   65.75 kB │ gzip:  17.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fi-B4PKdVEc.js                                   65.94 kB │ gzip:  17.61 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ro-DZMRPDTz.js                                   66.11 kB │ gzip:  17.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/uz-CORS2Y0z.js                                   66.36 kB │ gzip:  17.35 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cs-CZ8BEp05.js                                   66.40 kB │ gzip:  18.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/br-QLlKgGM0.js                                   66.55 kB │ gzip:  17.20 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sq-DKYYOtXD.js                                   66.66 kB │ gzip:  17.84 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hu-DtGNnUoP.js                                   66.70 kB │ gzip:  18.29 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sk-C_RPHA8j.js                                   66.73 kB │ gzip:  17.87 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/es-CBkPTGb9.js                                   66.91 kB │ gzip:  17.25 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ko-CEFNmmLV.js                                   67.14 kB │ gzip:  17.49 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pl-BdpPT4yZ.js                                   67.22 kB │ gzip:  18.28 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/it-u_pkKKUy.js                                   67.41 kB │ gzip:  17.30 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ca-B8X-jZVh.js                                   67.46 kB │ gzip:  17.68 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/de-DPPrl5ZN.js                                   67.56 kB │ gzip:  17.66 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/az-Ee1TYAeT.js                                   67.59 kB │ gzip:  17.56 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fr-BxQ3Duno.js                                   69.55 kB │ gzip:  17.78 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mojo-rZm6bMo-.js                                 69.80 kB │ gzip:   9.28 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/python-B6aJPvgy.js                               69.95 kB │ gzip:   9.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vi-6d4poEct.js                                   71.21 kB │ gzip:  17.40 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/c-BIGW1oBm.js                                    72.11 kB │ gzip:  10.48 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/latex-CaSxy8MP.js                                72.90 kB │ gzip:   6.78 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vyper-CDx5xZoG.js                                74.65 kB │ gzip:  10.74 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ja-vqBZHfTW.js                                   75.31 kB │ gzip:  18.22 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ar-WBBCMpy4.js                                   77.82 kB │ gzip:  18.62 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/pa-DY9t_epA.js                                   78.30 kB │ gzip:  18.93 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/am-ggcn78t4.js                                   79.33 kB │ gzip:  19.49 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fa-hv4fU-ll.js                                   79.99 kB │ gzip:  19.03 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hack-DbPARsA_.js                                 81.11 kB │ gzip:  26.24 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ur-Dey9f72g.js                                   81.90 kB │ gzip:  18.85 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/sr-jqt7rgZm.js                                   84.60 kB │ gzip:  19.75 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tg-CbCUDLRE.js                                   86.32 kB │ gzip:  20.10 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mn-CBDFHZtj.js                                   86.43 kB │ gzip:  19.70 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hy-DZJIyRtV.js                                   86.53 kB │ gzip:  19.78 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/swift-D82vCrfD.js                                86.69 kB │ gzip:  14.71 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/uk-wdRAuiJn.js                                   86.92 kB │ gzip:  19.98 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ru-BqfuU4ez.js                                   86.99 kB │ gzip:  20.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mk-f_-6HTpR.js                                   87.95 kB │ gzip:  20.09 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bg-CdbjmDNN.js                                   88.66 kB │ gzip:  20.02 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/fortran-free-form-BxgE0vQu.js                    88.97 kB │ gzip:  11.28 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/csharp-DSvCPggb.js                               90.19 kB │ gzip:  10.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/el-CLBrXZdc.js                                   91.27 kB │ gzip:  21.02 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/racket-BqYA7rlc.js                               92.39 kB │ gzip:  15.08 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dv-DyvxXsSb.js                                   95.31 kB │ gzip:  20.33 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/lo--g5jhDOG.js                                   97.15 kB │ gzip:  19.39 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/less-B1dDrJ26.js                                 97.63 kB │ gzip:  14.79 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/th-C8sRhDiC.js                                   98.55 kB │ gzip:  19.01 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/hi-HnJJ6FVx.js                                   99.62 kB │ gzip:  19.98 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/si-xH91Y8cM.js                                  100.88 kB │ gzip:  20.31 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/bn-BGozIOIb.js                                  102.34 kB │ gzip:  19.96 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/km-DgboS3Zs.js                                  104.97 kB │ gzip:  19.92 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/blade-2xfisSek.js                               104.98 kB │ gzip:  28.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/objective-c-DXmwc3jG.js                         105.41 kB │ gzip:  23.35 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ne-YizHnFmf.js                                  105.54 kB │ gzip:  20.05 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ka-W8q_iRuA.js                                  106.01 kB │ gzip:  20.44 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/php-Csjmro_R.js                                 113.09 kB │ gzip:  28.69 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/my-GXau4pKZ.js                                  119.73 kB │ gzip:  21.24 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dz-DaQkHxRa.js                                  123.90 kB │ gzip:  21.57 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/asciidoc-Ve4PFQV2.js                            131.53 kB │ gzip:   9.33 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/mdx-Cmh6b_Ma.js                                 136.11 kB │ gzip:  23.58 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/objective-cpp-CLxacb5B.js                       171.97 kB │ gzip:  30.74 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/javascript-wDzz0qaB.js                          174.83 kB │ gzip:  16.60 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/tsx-COt5Ahok.js                                 175.54 kB │ gzip:  16.59 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/jsx-g9-lgVsj.js                                 177.79 kB │ gzip:  16.72 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/typescript-BPQ3VLAy.js                          181.08 kB │ gzip:  16.11 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/angular-ts-BrjP3tb8.js                          183.82 kB │ gzip:  16.70 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/vue-vine-BoDAl6tE.js                            190.05 kB │ gzip:  18.04 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/dialog-select-directory-v2-BPCTZ6fa.js          258.41 kB │ gzip:  74.22 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wolfram-lXgVvXCa.js                             262.39 kB │ gzip:  77.07 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/wasm-CG6Dc4jp.js                                622.34 kB │ gzip: 231.16 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/cpp-UfJy6YNI.js                                 626.08 kB │ gzip:  44.90 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/emacs-lisp-CXvaQtF9.js                          779.88 kB │ gzip: 196.54 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/ghostty-web-DtMTW8wU.js                       1,381.48 kB │ gzip: 425.98 kB
+../../services/nexus-api/web/public/opencode-workspace/1.18.35/assets/index-v-pf0UBp.js                             2,731.19 kB │ gzip: 812.41 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 7.16s

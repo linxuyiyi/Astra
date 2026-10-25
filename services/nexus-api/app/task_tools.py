@@ -12,7 +12,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import Priority, TaskStatus, TaskType
 from app.executors.errors import OpenCodeExecutionTimeout, OpenCodeServerUnavailable
-from app.models import AgentWorker, CodeRepository, Event, OpenCodeExecutionEnvironment, Task, TaskCategory
+from app.models import (
+    AgentWorker,
+    CodeRepository,
+    Event,
+    ExperienceReviewJob,
+    KnowledgeItem,
+    OpenCodeExecutionEnvironment,
+    Task,
+    TaskCategory,
+)
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 from app.schemas import AcceptanceCriterion, TaskCreate
 from app.services import TaskService
@@ -385,6 +394,57 @@ class TaskTools:
             "workspace": task.workspace,
             "current_session_id": task.current_session_id,
             "finished_at": task.finished_at.isoformat() if task.finished_at else None,
+        }
+
+    async def summary(self, task_id: str) -> dict[str, Any]:
+        task = await self._owned(task_id)
+        if isinstance(task, dict):
+            return task
+        job = await self.session.scalar(
+            select(ExperienceReviewJob)
+            .where(ExperienceReviewJob.task_id == task.id)
+            .order_by(ExperienceReviewJob.confirmed_at.desc(), ExperienceReviewJob.id.desc())
+            .limit(1)
+        )
+        candidates = []
+        if job and job.candidate_ids:
+            knowledge = (
+                await self.session.scalars(
+                    select(KnowledgeItem)
+                    .where(KnowledgeItem.id.in_(job.candidate_ids), KnowledgeItem.source_task_id == task.id)
+                    .limit(20)
+                )
+            ).all()
+            candidates = [
+                {
+                    "id": item.id,
+                    "title": item.title,
+                    "status": item.status,
+                    "verification_status": item.verification_status,
+                    "summary": item.summary[:4000],
+                    "url": f"/library?knowledge={item.id}",
+                }
+                for item in knowledge
+            ]
+        return {
+            "ok": True,
+            "task_id": task.id,
+            "status": task.status,
+            "current_progress": task.current_progress,
+            "task_url": f"/tasks/{task.id}",
+            "review": None
+            if job is None
+            else {
+                "id": job.id,
+                "status": job.status,
+                "phase": job.phase,
+                "zero_reason": job.zero_reason,
+                "candidate_count": len(candidates),
+            },
+            "candidates": candidates,
+            "hint": "尚未生成复盘作业；任务验收确认后由后台处理"
+            if job is None
+            else "复盘与候选审核是独立状态；候选未发布前不能当作正式经验",
         }
 
     async def intervene(self, task_id: str, reason: str) -> dict[str, Any]:

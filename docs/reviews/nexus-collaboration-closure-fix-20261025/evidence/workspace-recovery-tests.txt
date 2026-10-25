@@ -1,0 +1,10 @@
+✔ EOF and transport errors cause one recovery on next successful stream (21.847292ms)
+✔ intentional abort/cancellation and non-SSE responses do not recover (0.521542ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 122.533792

@@ -1,0 +1,43 @@
+{
+  "api": {
+    "pid": 94331,
+    "pgid": 94331,
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+    "create_time": "1792889540.591",
+    "command": [
+      "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python",
+      "-m",
+      "uvicorn",
+      "nexus_api.service:app",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "18520",
+      "--no-access-log"
+    ],
+    "port": 18520
+  },
+  "task-mcp": {
+    "pid": 94345,
+    "pgid": 94345,
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+    "create_time": "1792889590.134",
+    "command": [
+      "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python",
+      "-m",
+      "app.task_mcp"
+    ],
+    "port": 18502
+  },
+  "agent-service": {
+    "pid": 93083,
+    "pgid": 93083,
+    "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/agent-service",
+    "create_time": "1792716550.922",
+    "command": [
+      "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python",
+      "agent_service.py"
+    ],
+    "port": 18500
+  }
+}

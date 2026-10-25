@@ -1,0 +1,426 @@
+Browser tab: 6, Title: "Nexus v1.4.8", URL: "http://127.0.0.1:18520/library?knowledge=KNOW_A394DEFC1CA34211826F".
+1 AXWebArea Nexus v1.4.8, URL: 127.0.0.1:18520/library?knowledge=KNOW_A394DEFC1CA34211826F
+	2 container app
+		3 container
+			4 link Description: ✦ NEXUS v1.4.8, Help: 星云首页, Value: 127.0.0.1:18520/
+			5 container 页面导航
+				6 link Description: 数字员工, Value: 127.0.0.1:18520/chat
+				7 link Description: 任务大厅, Value: 127.0.0.1:18520/tasks
+				8 link Description: 数字图书馆, Value: 127.0.0.1:18520/library
+				9 link Description: API 网关, Value: 127.0.0.1:18520/gateway
+				10 link Description: 配置中心, Value: 127.0.0.1:18520/settings
+			11 text AgentScope 2.0.10 已连接
+		12 container
+			13 heading 数字图书馆, Value: 2
+				14 text 数字图书馆
+			15 button 刷新
+				16 text 刷新
+			17 button 导入知识
+				18 text 导入知识
+			19 button 新建知识
+				20 text 新建知识
+			21 text 9 条待审核
+			22 button 去审核
+			23 container
+				24 container
+					25 heading 知识空间, Value: 3
+						26 text 知识空间
+					27 button 新建知识空间
+						28 image
+					29 container
+						30 image
+						31 text field (settable) Description: 搜索知识空间, ID: el-id-1578-26
+					32 container 知识空间目录树
+						33 button 全部知识 12, Help: 当前身份可见的全部知识 12 条（含未归入目录的知识）
+							34 image
+							35 text 全部知识
+							36 text 12
+						37 outline
+							38 row (collapsed) QA真实Worker经验闭环20261023 4 管理目录 QA真实Worker经验闭环20261023, Value: 0, Secondary Actions: Expand
+								39 image
+								40 text QA真实Worker经验闭环20261023
+								41 text 4
+								42 pop up button (collapsed) Description: 管理目录 QA真实Worker经验闭环20261023, ID: el-id-1578-32, Secondary Actions: Expand
+									43 image
+							44 row (collapsed) 公共知识库 8 管理目录 公共知识库, Value: 0, Secondary Actions: Expand
+								45 image
+								46 text 公共知识库
+								47 text 8
+								48 pop up button (collapsed) Description: 管理目录 公共知识库, ID: el-id-1578-37, Secondary Actions: Expand
+									49 image
+							50 row (collapsed) 测试领域知识 0 管理目录 测试领域知识, Value: 0, Secondary Actions: Expand
+								51 image
+								52 text 测试领域知识
+								53 text 0
+								54 pop up button (collapsed) Description: 管理目录 测试领域知识, ID: el-id-1578-42, Secondary Actions: Expand
+									55 image
+							56 row (collapsed) 开发领域知识 0 管理目录 开发领域知识, Value: 0, Secondary Actions: Expand
+								57 image
+								58 text 开发领域知识
+								59 text 0
+								60 pop up button (collapsed) Description: 管理目录 开发领域知识, ID: el-id-1578-47, Secondary Actions: Expand
+									61 image
+							62 row (collapsed) 项目知识库 0 管理目录 项目知识库, Value: 0, Secondary Actions: Expand
+								63 image
+								64 text 项目知识库
+								65 text 0
+								66 pop up button (collapsed) Description: 管理目录 项目知识库, ID: el-id-1578-52, Secondary Actions: Expand
+									67 image
+							68 row (collapsed) 工具与脚本 0 管理目录 工具与脚本, Value: 0, Secondary Actions: Expand
+								69 image
+								70 text 工具与脚本
+								71 text 0
+								72 pop up button (collapsed) Description: 管理目录 工具与脚本, ID: el-id-1578-57, Secondary Actions: Expand
+									73 image
+				74 container
+					75 heading 全部知识, Value: 3
+						76 text 全部知识
+					77 container 知识筛选
+						78 container
+							79 combo box (collapsed, settable) Description: 知识类型, ID: el-id-1578-27, Secondary Actions: Expand
+							80 text 类型：全部
+							81 image
+						82 container
+							83 combo box (collapsed, settable) Description: 知识状态, ID: el-id-1578-28, Secondary Actions: Expand
+							84 text 状态：全部
+							85 image
+						86 container
+							87 combo box (collapsed, settable) Description: 知识排序, ID: el-id-1578-29, Secondary Actions: Expand
+							88 text 最近更新
+							89 image
+						90 container
+							91 image
+							92 text field (settable) Description: 搜索当前空间, ID: el-id-1578-30
+						93 button 搜索
+							94 text 搜索
+					95 container
+						96 table
+							97 row
+								98 cell
+									99 container 选择所有行
+										100 checkbox (settable, integer) Description: 选择所有行, Value: 0, ID: el-id-1578-66
+								101 cell
+									102 text 标题
+								103 cell
+									104 text 审核
+								105 cell
+									106 text 验证
+								107 cell
+									108 text 操作
+						109 table
+							110 container
+								111 row
+									112 cell
+										113 container 选择当前行
+											114 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-137
+									115 cell
+										116 text 【QA】乱序事件按业务键取最大 event_time，同时间保留最后输入
+										117 text KNOW_A394DEFC1CA34211826F · 经验 · QA真实Worker经验闭环20261023 · 10/25 17:56
+									118 cell
+										119 text 已发布
+									120 cell
+										121 text 已验证
+									122 cell
+										123 button 查看
+										124 button 编辑
+										125 pop up button (collapsed) 更多, ID: el-id-1578-67, Secondary Actions: Expand
+								126 row
+									127 cell
+										128 container 选择当前行
+											129 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-138
+									130 cell
+										131 text 乱序 event_time 聚合的“打乱顺序结果一致”不具判别力，需固定目标聚合值才能暴露按行计数实现
+										132 text KNOW_2AB6F3EC866F4312B58C · 经验 · QA真实Worker经验闭环20261023 · 10/25 13:52
+									133 cell
+										134 text 待人工审核
+									135 cell
+										136 text 未验证
+									137 cell
+										138 button 查看
+										139 button 编辑
+										140 pop up button (collapsed) 更多, ID: el-id-1578-72, Secondary Actions: Expand
+								141 row
+									142 cell
+										143 container 选择当前行
+											144 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-139
+									145 cell
+										146 text 按业务键保序去重并保留最后一条记录
+										147 text KNOW_53022A1009074C6E95B4 · 经验 · QA真实Worker经验闭环20261023 · 10/25 13:38
+									148 cell
+										149 text 已发布
+									150 cell
+										151 text 已验证
+									152 cell
+										153 button 查看
+										154 button 编辑
+										155 pop up button (collapsed) 更多, ID: el-id-1578-78, Secondary Actions: Expand
+								156 row
+									157 cell
+										158 container 选择当前行
+											159 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-140
+									160 cell
+										161 text 【QA】v148表格MD换行验收样例
+										162 text KNOW_217FFEACFC494D1A9E18 · 经验 · QA真实Worker经验闭环20261023 · 10/24 07:02
+									163 cell
+										164 text 草稿
+									165 cell
+										166 text 未验证
+									167 cell
+										168 button 查看
+										169 button 编辑
+										170 pop up button (collapsed) 更多, ID: el-id-1578-83, Secondary Actions: Expand
+								171 row
+									172 cell
+										173 container 选择当前行
+											174 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-141
+									175 cell
+										176 text 交付前清理缓存并复核工作区变更范围
+										177 text KNOW_BC83ED654FE246618BBA · 经验 · 公共知识库 · 10/23 13:14
+									178 cell
+										179 text 待人工审核
+									180 cell
+										181 text 未验证
+									182 cell
+										183 button 查看
+										184 button 编辑
+										185 pop up button (collapsed) 更多, ID: el-id-1578-89, Secondary Actions: Expand
+								186 row
+									187 cell
+										188 container 选择当前行
+											189 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-142
+									190 cell
+										191 text 知识来源先检索、读取并确认页内元数据
+										192 text KNOW_70CE9E7AB38C437B8DF2 · 经验 · 公共知识库 · 10/23 13:14
+									193 cell
+										194 text 待人工审核
+									195 cell
+										196 text 未验证
+									197 cell
+										198 button 查看
+										199 button 编辑
+										200 pop up button (collapsed) 更多, ID: el-id-1578-95, Secondary Actions: Expand
+								201 row
+									202 cell
+										203 container 选择当前行
+											204 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-143
+									205 cell
+										206 text 按业务键去重并保留最后一条后再聚合
+										207 text KNOW_EA03BC68011B4EBCBF9F · 经验 · 公共知识库 · 10/23 13:14
+									208 cell
+										209 text 待人工审核
+									210 cell
+										211 text 未验证
+									212 cell
+										213 button 查看
+										214 button 编辑
+										215 pop up button (collapsed) 更多, ID: el-id-1578-101, Secondary Actions: Expand
+								216 row
+									217 cell
+										218 container 选择当前行
+											219 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-144
+									220 cell
+										221 text 先复现旧缺陷再做最小修复
+										222 text KNOW_E051F409843141AC876B · 经验 · 公共知识库 · 10/23 13:07
+									223 cell
+										224 text 待人工审核
+									225 cell
+										226 text 未验证
+									227 cell
+										228 button 查看
+										229 button 编辑
+										230 pop up button (collapsed) 更多, ID: el-id-1578-107, Secondary Actions: Expand
+								231 row
+									232 cell
+										233 container 选择当前行
+											234 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-145
+									235 cell
+										236 text 知识源确认要记录实际查询、命中页与读取结果
+										237 text KNOW_6C9A40F5662B40F3BA7E · 经验 · 公共知识库 · 10/23 13:07
+									238 cell
+										239 text 待人工审核
+									240 cell
+										241 text 未验证
+									242 cell
+										243 button 查看
+										244 button 编辑
+										245 pop up button (collapsed) 更多, ID: el-id-1578-113, Secondary Actions: Expand
+								246 row
+									247 cell
+										248 container 选择当前行
+											249 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-146
+									250 cell
+										251 text 按业务键保序去重并保留最后一条记录
+										252 text KNOW_AC3F9F870D7049BA9D96 · 经验 · 公共知识库 · 10/23 13:07
+									253 cell
+										254 text 待人工审核
+									255 cell
+										256 text 未验证
+									257 cell
+										258 button 查看
+										259 button 编辑
+										260 pop up button (collapsed) 更多, ID: el-id-1578-119, Secondary Actions: Expand
+								261 row
+									262 cell
+										263 container 选择当前行
+											264 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-147
+									265 cell
+										266 text 修复前后各留一次完整测试命令与退出码作为交付证据
+										267 text KNOW_1F13B474BAB444B09F98 · 经验 · 公共知识库 · 10/23 09:15
+									268 cell
+										269 text 待人工审核
+									270 cell
+										271 text 未验证
+									272 cell
+										273 button 查看
+										274 button 编辑
+										275 pop up button (collapsed) 更多, ID: el-id-1578-125, Secondary Actions: Expand
+								276 row
+									277 cell
+										278 container 选择当前行
+											279 checkbox (settable, integer) Description: 选择当前行, Value: 0, ID: el-id-1578-148
+									280 cell
+										281 text 聚合类缺陷的四类最小测试矩阵
+										282 text KNOW_4331BDF91B074D369702 · 经验 · 公共知识库 · 10/23 09:15
+									283 cell
+										284 text 待人工审核
+									285 cell
+										286 text 未验证
+									287 cell
+										288 button 查看
+										289 button 编辑
+										290 pop up button (collapsed) 更多, ID: el-id-1578-131, Secondary Actions: Expand
+					294 container 知识列表分页
+						295 text 共 12 条
+						296 container
+							297 combo box (collapsed, settable) ID: el-id-1578-31, Secondary Actions: Expand
+							298 text 20条/页
+							299 image
+						300 button (disabled) 上一页
+						301 content list
+							302 container 第 1 页
+								303 text 1
+						304 button (disabled) 下一页
+			305 container
+				327 text 经验
+				328 text 去重聚合
+				329 text event_time
+				330 text 乱序事件
+				331 text 测试矩阵
+				332 text 输出结构兼容
+				306 heading 【QA】乱序事件按业务键取最大 event_time，同时间保留最后输入, Value: 2, ID: knowledge-KNOW_A394DEFC1CA34211826F
+					307 text 【QA】乱序事件按业务键取最大 event_time，同时间保留最后输入
+				333 text 审核状态 · 已发布
+				334 text 证据状态 · 已验证
+				308 link Description: 来源任务：T-20261025-EFFA68, Value: 127.0.0.1:18520/tasks/T-20261025-EFFA68
+				309 text 更新 2026/10/25 17:56 引用 2
+				310 button 关闭知识详情
+				311 button 关闭此对话框
+				312 container
+					335 table
+						336 row
+							337 cell
+								338 text 类型
+							339 cell
+								340 text 经验
+							341 cell
+								342 text 所属目录
+							343 cell
+								344 text QA真实Worker经验闭环20261023
+							345 cell
+								346 text 来源
+							347 cell
+								348 text 任务沉淀
+						349 row
+							350 cell
+								351 text 来源 Worker
+							352 cell
+								353 text 真实Worker经验闭环QA
+							354 cell
+								355 text 执行会话
+							356 cell
+								357 text ses_e8e6ed5d1ffeZ40r8tSK3w9D50
+							358 cell
+								359 text 验证时间
+							360 cell
+								361 text —
+						362 row
+							363 cell
+								364 text 有帮助
+							365 cell
+								366 text 0
+							367 cell
+								368 text 更新时间
+							369 cell
+								370 text 2026/10/25 17:56
+							371 cell
+								372 text 发布时间
+							373 cell
+								374 text 2026/10/25 13:43
+					313 heading 知识正文, Value: 3
+						375 text 知识正文
+					314 heading 适用条件, Value: 2
+						376 text 适用条件
+					377 text 这是隔离 QA 仓库验证过的方法。输入字段为 run_id、case_id、status（PASS/FAIL）、event_time；时间统一为同一时区的固定格式 YYYY-MM-DDTHH:MM:SS。业务要求按事件时间取最新，输入到达顺序可能乱序。
+					315 heading 方法, Value: 2
+						378 text 方法
+					379 text 按 (run_id, case_id) 分组。遍历时仅在尚无记录或当前 event_time >= 已存 event_time 时覆盖；相等时因此保留最后输入。再对保留值汇总 total 和 passed，passed 统计 status == "PASS"。保持原输出字段 total、passed，失败数为 total-passed。
+					316 heading 能区分错误实现的反例, Value: 2
+						380 text 能区分错误实现的反例
+					381 text 同一键先出现 PASS@12:00，后出现 FAIL@09:00：正确输出 {total:1, passed:1}；仅按输入后写覆盖会输出 {total:1, passed:0}。独立实际运行此对照已确认差异。相同时间 PASS→FAIL 应得 passed=0；反向 FAIL→PASS 应得 passed=1；跨 run 或跨 case 不得合并。空输入应返回 {total:0, passed:0}，两个实际字段必须存在。
+					317 heading 本次证据, Value: 2
+						382 text 本次证据
+					383 text 来源任务 T-20261025-EFFA68，原生 Session ses_e8e6ed5d1ffeZ40r8tSK3w9D50。Worker 对 seeded HEAD 先跑5例，4失败，随后修复后5例通过。人工通过独立SSH复跑这5例，并检查7个边界输入、3个不同时间事件的全部6种排列，全部通过；同时读取真实源码diff，确认 >= 比较。报告证据为 nexus-collaboration-closure-20261025/evidence/17-independent-first-with-naive-control.json。
+					318 heading 与已有经验的关系, Value: 2
+						384 text 与已有经验的关系
+					385 text 既有 KNOW_53022A1009074C6E95B4 处理按输入顺序定义最终状态的场景；本条补充按显式事件时间定义最终状态的实现与实证，不替代原方法的适用范围。旧代码还使用小写passed，修复同时适配本任务明确的PASS枚举；旧基线的4个失败不能全部归因于时间选择一个改动。
+					319 heading 未验证范围, Value: 2
+						386 text 未验证范围
+					387 text 没有验证混时区、混精度、Z/毫秒与epoch混用、缺失或非法时间、分布式聚合和生产数据。固定格式字符串比较仅限上述约定。此次结论不代表员工个人记忆自动更新，也不证明一般任务的收益。
+					320 heading 最近引用, Value: 3
+						388 text 最近引用
+					389 container
+						390 table
+							391 row
+								392 cell
+									393 text 任务
+								394 cell
+									395 text 执行 Worker
+								396 cell
+									397 text 动作
+								398 cell
+									399 text 引用时间
+						400 table
+							401 container
+								402 row
+									403 cell
+										404 link Description: QA-COLLAB-CLOSURE-FIX-20261025, Value: 127.0.0.1:18520/tasks/T-20261025-C81270
+									405 cell
+										406 text 真实Worker经验闭环QA
+									407 cell
+										408 text read
+									409 cell
+										410 text 2026/10/25 17:56
+								411 row
+									412 cell
+										413 link Description: QA-COLLAB-EVENTTIME-REUSE-20261025, Value: 127.0.0.1:18520/tasks/T-20261025-BD9C6D
+									414 cell
+										415 text 真实Worker经验闭环QA
+									416 cell
+										417 text read
+									418 cell
+										419 text 2026/10/25 13:45
+					420 button 查看全部关联任务
+				321 button 收藏
+					421 text 收藏
+				322 button 有帮助 (0)
+					422 text 有帮助 (0)
+				323 button 分享
+					423 text 分享
+				324 button 复制链接
+					424 text 复制链接
+				325 button 查看关联任务
+					425 text 查看关联任务
+				326 button 编辑
+					426 text 编辑
+
+The focused UI element is 427 container

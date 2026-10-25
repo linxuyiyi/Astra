@@ -209,6 +209,11 @@ def build_mcp_server() -> MCPServer:
         """读取任务结果摘要。"""
         return await _call("result", task_id=task_id)
 
+    @server.tool(name="nexus_task_summary", structured_output=True)
+    async def nexus_task_summary(task_id: str) -> dict[str, Any]:
+        """只读查询任务的真实复盘状态、经验候选和图书馆入口。"""
+        return await _call("summary", task_id=task_id)
+
     @server.tool(name="nexus_task_intervene", structured_output=True)
     async def nexus_task_intervene(task_id: str, reason: str) -> dict[str, Any]:
         """把任务转为等待人工处理，并记下原因。"""

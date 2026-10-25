@@ -13,7 +13,7 @@ export default defineConfig({
   server: { proxy: { '/api': 'http://127.0.0.1:8000' } },
   build: {
     target: 'esnext',
-    outDir: `../nexus/public/opencode-workspace/${version}`,
+    outDir: `../../services/nexus-api/web/public/opencode-workspace/${version}`,
     emptyOutDir: true,
   },
 })

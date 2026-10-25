@@ -1,0 +1,91 @@
+{
+  "at": 1792923343.687401,
+  "branch": "codex/collaboration-closure-fixes",
+  "base_sha": "a3aeb28d050a33b54fa5893bd7a4a744a21dd638",
+  "health": {
+    "api": {
+      "status": 200
+    },
+    "task-mcp": {
+      "status": 200
+    },
+    "agent-service": {
+      "status": 200
+    }
+  },
+  "processes": {
+    "api": {
+      "pid": 10425,
+      "create_time": "1792922446.610",
+      "cwd": "/Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/services/nexus-api"
+    },
+    "task-mcp": {
+      "pid": 9922,
+      "create_time": "1792921790.732",
+      "cwd": "/Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/services/nexus-api"
+    },
+    "agent-service": {
+      "pid": 9898,
+      "create_time": "1792921773.249",
+      "cwd": "/Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/services/agent-service"
+    },
+    "celery-worker": {
+      "pid": 10296,
+      "create_time": "1792922346.096",
+      "cwd": "/Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/services/nexus-api"
+    },
+    "celery-beat": {
+      "pid": 10297,
+      "create_time": "1792922346.097",
+      "cwd": "/Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/services/nexus-api"
+    }
+  },
+  "assets": [
+    {
+      "url": "/",
+      "sha256": "000e8c750acd860a9094b052fef15230bfbaa1f2be33a06557507366a62f0867",
+      "module_scripts": [
+        "/assets/index-DPL0R7La.js"
+      ]
+    },
+    {
+      "url": "/nexus-chat/index.html",
+      "sha256": "97e66b5ddcdecfaffa454b05c9ff4fcf76418c63912c671ace832e00dca52254",
+      "module_scripts": [
+        "/nexus-chat/assets/index-IC9AjlAE.js"
+      ]
+    },
+    {
+      "url": "/opencode-workspace/1.18.35/index.html",
+      "sha256": "b513e24640cc30939637ba4764458fbf5caaea40879b5a06a058803bc72c3d93",
+      "module_scripts": [
+        "/opencode-workspace/1.18.35/assets/index-v-pf0UBp.js"
+      ]
+    }
+  ],
+  "credential_scan": {
+    "scanned_paths": 198,
+    "hits": [],
+    "runtime_context_hits": []
+  },
+  "workers": [
+    {
+      "id": "qa-worker-experience-20261023",
+      "status": "IDLE",
+      "current_task_count": 0,
+      "last_heartbeat": "2026-10-25 10:15:36.752549"
+    },
+    {
+      "id": "qa-worker-concurrent-2-20261023",
+      "status": "IDLE",
+      "current_task_count": 0,
+      "last_heartbeat": "2026-10-25 10:15:36.757289"
+    },
+    {
+      "id": "qa-worker-concurrent-3-20261023",
+      "status": "IDLE",
+      "current_task_count": 0,
+      "last_heartbeat": "2026-10-25 10:15:36.762349"
+    }
+  ]
+}

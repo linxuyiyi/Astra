@@ -446,3 +446,79 @@ async def test_task_reassignment_preserves_repository(session):
     assert result["ok"] is False
     assert task.repository_id == "repo-a"
     assert task.employee_id is None
+
+
+async def test_summary_uses_real_review_and_preserves_ownership(session):
+    from app.models import ExperienceReviewJob, KnowledgeItem
+    from app.task_tools import nexus_channel_id, nexus_conversation_id, nexus_employee_id
+
+    task = await TaskService(session).create(
+        _create(responsible_employee_id="emp_1", source_channel_id="group-a", source_conversation_id="conv-a")
+    )
+    other = await TaskService(session).create(_create(responsible_employee_id="emp_2"))
+    token = nexus_employee_id.set("emp_1")
+    try:
+        tools = TaskTools(session)
+        assert (await tools.summary(task.id))["review"] is None
+        event = await session.scalar(select(Event).where(Event.task_id == task.id))
+        now = datetime.now(UTC)
+        session.add(
+            ExperienceReviewJob(
+                id="review-real",
+                confirmation_event_id=event.id,
+                review_key="review-real",
+                task_id=task.id,
+                task_id_snapshot=task.id,
+                root_session_id="native-1",
+                confirmed_at=now,
+                status="SUCCEEDED",
+                phase="WRITING",
+                candidate_ids=["know-own", "know-other"],
+                lease_token="never-expose-lease",
+                source_snapshot={"runtime_context": "never-expose-context"},
+            )
+        )
+        session.add_all(
+            [
+                KnowledgeItem(
+                    id="know-own",
+                    title="本任务经验",
+                    source_task_id=task.id,
+                    status="candidate",
+                    summary="尚待审核",
+                    created_by="tester",
+                    updated_by="tester",
+                ),
+                KnowledgeItem(
+                    id="know-other",
+                    title="其他任务经验",
+                    source_task_id=other.id,
+                    created_by="tester",
+                    updated_by="tester",
+                ),
+            ]
+        )
+        await session.commit()
+        result = await tools.summary(task.id)
+        assert result["review"]["status"] == "SUCCEEDED"
+        assert [k["id"] for k in result["candidates"]] == ["know-own"]
+        assert result["candidates"][0]["status"] == "candidate"
+        assert result["candidates"][0]["url"] == "/library?knowledge=know-own"
+        assert "never-expose" not in str(result)
+        assert not (await tools.summary(other.id))["ok"]
+        for context in (nexus_channel_id, nexus_conversation_id):
+            mismatch = context.set("foreign")
+            try:
+                assert not (await tools.summary(task.id))["ok"]
+            finally:
+                context.reset(mismatch)
+    finally:
+        nexus_employee_id.reset(token)
+
+
+async def test_summary_is_registered_as_a_readonly_task_tool():
+    from app.task_mcp import build_mcp_server
+
+    tools = {t.name: t for t in await build_mcp_server().list_tools()}
+    assert "nexus_task_summary" in tools
+    assert set(tools["nexus_task_summary"].input_schema["properties"]) == {"task_id"}

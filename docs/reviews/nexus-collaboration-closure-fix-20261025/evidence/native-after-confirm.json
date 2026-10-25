@@ -1,0 +1,1431 @@
+{
+  "at": 1792922570.389408,
+  "task": {
+    "runtime_state": "SUCCEEDED",
+    "runtime_status_label": "已完成",
+    "runtime_detail": "任务已人工确认完成",
+    "failure": null,
+    "execution_released": true,
+    "id": "T-20261025-C81270",
+    "source": "nexus-employee",
+    "external_task_id": null,
+    "task_type": "REQUIREMENT",
+    "category_id": "CAT-5CAA990C",
+    "title": "QA-COLLAB-CLOSURE-FIX-20261025",
+    "description": "隔离QA复验 COLLAB-FIX-20261025：修复测试结果汇总器 result_summary.summarize(rows) 的乱序事件缺陷。\n\n【执行边界】\n1. 仅在本任务新建的 worktree 内操作 result_summary.summarize(rows)，日志只写本任务 worktree。\n2. 不得 push；不得读取部署配置；不得读取其他任务 worktree。\n3. 不得自行确认任务完成。\n4. 不承担测试平台后端开发与发布部署。\n\n【知识库检索（必做，不可用任务文字冒充）】\n先 library_search 检索 event_time 乱序相关经验，再 library_get 真实读取已发布 KNOW_A394DEFC1CA34211826F 源页；交付物中必须记录命中路径与源 ID。\n\n【目标语义】\n每行字段：run_id / case_id / status（PASS 或 FAIL）/ event_time（同一时区 YYYY-MM-DDTHH:MM:SS）。\n- 按 (run_id, case_id) 复合键分组，取最大 event_time 的事件；\n- 同 (run_id, case_id) 且 event_time 相同时，取输入顺序的最后一行；\n- 输出 total（分组数）与 passed（最终 status 为 PASS 的组数）。\n- 该时间格式下字符串比较等价于时间比较，不得用本地时区解析。\n\n【必测用例】\n1. 乱序三行（B 样例1，击穿\"只保留输入最后一行\"）：\n   R1|C1|FAIL|2026-10-25T09:00:00\n   R1|C1|PASS|2026-10-25T12:00:00\n   R1|C1|FAIL|2026-10-25T10:00:00\n   正确：total=1, passed=1；\"只保留输入最后一行\"会得 passed=0，必须失败。\n2. 同时间冲突方向 a（PASS 在前、FAIL 在后，独立用例）：\n   R1|C1|PASS|2026-10-25T12:00:00\n   R1|C1|FAIL|2026-10-25T12:00:00\n   期望 total=1, passed=0。\n3. 同时间冲突方向 b（FAIL 在前、PASS 在后，独立用例）：\n   R1|C1|FAIL|2026-10-25T12:00:00\n   R1|C1|PASS|2026-10-25T12:00:00\n   期望 total=1, passed=1。\n   2 与 3 必须分开成两个用例，不得合并进同一个 rows。\n4. 跨 run 独立计数：至少 2 个不同 run_id 各自收敛，验证不是全局取最大时间。\n5. 跨 case 独立计数：至少 2 个不同 case_id 各自收敛。\n6. 空输入：rows=[] → total=0, passed=0。\n7. 时间互异三行事件的全部 6 种输入排列（itertools.permutations），每种排列结果一致，验证与输入顺序无关（同时间场景除外）。\n\n【交付流程】\n1. 先对旧代码写独立固定期望测试（期望值来自上述规格，不读实现），运行取得真实失败输出。\n2. 再修复实现。\n3. 再跑同一套测试必须全绿。\n4. 交付实际执行命令、真实输出、以及知识库检索命中路径与源 ID 的证据。",
+    "acceptance_criteria": [
+      {
+        "id": "AC-01",
+        "content": "在本任务新建 worktree 内完成，未 push、未读取部署配置或其他任务 worktree"
+      },
+      {
+        "id": "AC-02",
+        "content": "library_search 命中 event_time 乱序经验，且 library_get 真实读取 KNOW_A394DEFC1CA34211826F 源页，交付物记录命中路径与源 ID"
+      },
+      {
+        "id": "AC-03",
+        "content": "修复前用独立固定期望测试对旧代码取得真实失败输出（含实际命令与日志）"
+      },
+      {
+        "id": "AC-04",
+        "content": "修复后同一套测试全部通过（含实际命令与日志）"
+      },
+      {
+        "id": "AC-05",
+        "content": "乱序三行样例 R1/C1 FAIL@09:00, PASS@12:00, FAIL@10:00 输出 total=1, passed=1"
+      },
+      {
+        "id": "AC-06",
+        "content": "同时间 PASS 在前 FAIL 在后（独立用例）输出 total=1, passed=0"
+      },
+      {
+        "id": "AC-07",
+        "content": "同时间 FAIL 在前 PASS 在后（独立用例）输出 total=1, passed=1，且两个方向为独立用例未合并"
+      },
+      {
+        "id": "AC-08",
+        "content": "覆盖跨 run、跨 case 独立计数，以及空输入 total=0, passed=0"
+      },
+      {
+        "id": "AC-09",
+        "content": "时间互异三行事件的全部 6 种排列结果一致"
+      },
+      {
+        "id": "AC-10",
+        "content": "日志仅写本任务 worktree，未自行确认任务完成"
+      }
+    ],
+    "attachments": [],
+    "priority": "MEDIUM",
+    "completion_policy": "MANUAL_CONFIRM",
+    "status": "SUCCEEDED",
+    "employee_id": "qa-worker-experience-20261023",
+    "worker_id": "qa-worker-experience-20261023",
+    "responsible_employee_id": "emp_90d1baf5766d",
+    "source_session_id": "3239ed3b0a444632b5d74495ffef20d9",
+    "source_conversation_id": null,
+    "source_channel_id": "ch_6e8a2e0c5f73",
+    "idempotency_key": "3239ed3b0a444632b5d74495ffef20d9:ca4c632731325f37a6d539a6d61aa0fb",
+    "repository_id": "841c140c7aeb477bb9e6c926fe4d664e",
+    "related_task_id": null,
+    "base_commit": "da575de5173bc531ed9a45de484564908512481d",
+    "current_session_id": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+    "session_status": "SUCCEEDED",
+    "session_terminal_reason": "completed",
+    "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+    "runtime_connection": "CONNECTED",
+    "pending_message_id": null,
+    "runtime_error": null,
+    "current_progress": "任务已人工确认完成",
+    "suspension": null,
+    "execution_error": null,
+    "inactivity_alert": false,
+    "inactivity_alert_since": null,
+    "last_activity_at": "2026-10-25T10:01:59.392717Z",
+    "submitted_at": null,
+    "confirmed_at": "2026-10-25T10:01:59.381269Z",
+    "failure_reason": null,
+    "human_required_reason": null,
+    "waiting_reason": null,
+    "human_intervention": null,
+    "execution_environment_snapshot": {
+      "environment_id": 5,
+      "mode": "LINUX_REMOTE",
+      "name": "Linux QA 真实执行",
+      "host": "127.0.0.1",
+      "port": 18522,
+      "username": "nexusqa1023",
+      "has_ssh_password": true,
+      "opencode_server_port": 18596,
+      "opencode_path": "/root/.local/share/nexus/workers/5/bin/opencode",
+      "model_name": "nexus-gateway/deepseek-flash",
+      "workspace_root": "/tmp/nexus-worker-experience-20261023/workspace",
+      "repository_id": "841c140c7aeb477bb9e6c926fe4d664e",
+      "labels": [],
+      "capability_revision": "d3a444c796db30fe",
+      "base_commit": "da575de5173bc531ed9a45de484564908512481d",
+      "opencode_version": "1.18.35"
+    },
+    "claimed_at": "2026-10-25T09:56:04.424199Z",
+    "started_at": "2026-10-25T09:56:05.182117Z",
+    "finished_at": "2026-10-25T10:01:59.392694Z",
+    "created_at": "2026-10-25T09:56:01.330855Z",
+    "updated_at": "2026-10-25T10:01:59.393034Z"
+  },
+  "native_messages": [
+    {
+      "info": {
+        "id": "msg_1727d1cce000104d028529b16d",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "user",
+        "time": {
+          "created": 1792922165231
+        },
+        "summary": {
+          "diffs": [
+            {
+              "file": "logs/evidence.md",
+              "patch": "Index: logs/evidence.md\n===================================================================\n--- logs/evidence.md\t\n+++ logs/evidence.md\t\n@@ -0,0 +1,39 @@\n+# QA-COLLAB-CLOSURE-FIX-20261025 执行证据\n+\n+## 知识库命中\n+\n+- library_search 命中路径：`wiki/sources/5-astra--9-knowledge--24-knowa394defc1ca34211826f--1q38rm4.md`\n+- 源 ID：`KNOW_A394DEFC1CA34211826F`（frontmatter `sources: [\"astra/knowledge/KNOW_A394DEFC1CA34211826F.md\"]`）\n+- 关联概念：`wiki/concepts/按事件时间取最新去重.md`、`wiki/concepts/去重后聚合.md`\n+\n+## 修复前（旧代码，独立固定期望测试）\n+\n+命令：\n+\n+```bash\n+python3 -m unittest discover -s tests -v\n+```\n+\n+结果：`Ran 7 tests`，`FAILED (failures=6)`，日志见 `logs/pre-fix.log`。\n+空输入用例通过；乱序、同时间两方向、跨 run、跨 case、6 排列均失败。\n+\n+## 修复后（同一套测试）\n+\n+命令：\n+\n+```bash\n+python3 -m unittest discover -s tests -v\n+```\n+\n+结果：`Ran 7 tests`，`OK`，日志见 `logs/post-fix.log`。\n+\n+## 规格样例输出\n+\n+命令：`python3` 内联脚本（见 shell 历史），日志见 `logs/spec-cases.log`。\n+\n+- AC-05 乱序三行 -> `{'total': 1, 'passed': 1}`\n+- AC-06 同时间 PASS 在前 FAIL 在后 -> `{'total': 1, 'passed': 0}`\n+- AC-07 同时间 FAIL 在前 PASS 在后 -> `{'total': 1, 'passed': 1}`\n+- AC-08 空输入 -> `{'total': 0, 'passed': 0}`\n+\n+所有日志仅写在本任务 worktree 的 `logs/` 内；未 push。\n",
+              "additions": 39,
+              "deletions": 0,
+              "status": "added"
+            },
+            {
+              "file": "logs/post-fix.log",
+              "patch": "Index: logs/post-fix.log\n===================================================================\n--- logs/post-fix.log\t\n+++ logs/post-fix.log\t\n@@ -0,0 +1,12 @@\n+test_all_six_permutations_of_distinct_times_agree (test_result_summary.SummarizeFixedExpectationTests.test_all_six_permutations_of_distinct_times_agree) ... ok\n+test_cross_case_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_case_counted_independently) ... ok\n+test_cross_run_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_run_counted_independently) ... ok\n+test_empty_input (test_result_summary.SummarizeFixedExpectationTests.test_empty_input) ... ok\n+test_out_of_order_three_events_latest_wins (test_result_summary.SummarizeFixedExpectationTests.test_out_of_order_three_events_latest_wins) ... ok\n+test_same_time_fail_then_pass_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_fail_then_pass_keeps_last_input) ... ok\n+test_same_time_pass_then_fail_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_pass_then_fail_keeps_last_input) ... ok\n+\n+----------------------------------------------------------------------\n+Ran 7 tests in 0.000s\n+\n+OK\n",
+              "additions": 12,
+              "deletions": 0,
+              "status": "added"
+            },
+            {
+              "file": "logs/pre-fix.log",
+              "patch": "Index: logs/pre-fix.log\n===================================================================\n--- logs/pre-fix.log\t\n+++ logs/pre-fix.log\t\n@@ -0,0 +1,96 @@\n+test_all_six_permutations_of_distinct_times_agree (test_result_summary.SummarizeFixedExpectationTests.test_all_six_permutations_of_distinct_times_agree) ... FAIL\n+test_cross_case_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_case_counted_independently) ... FAIL\n+test_cross_run_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_run_counted_independently) ... FAIL\n+test_empty_input (test_result_summary.SummarizeFixedExpectationTests.test_empty_input) ... ok\n+test_out_of_order_three_events_latest_wins (test_result_summary.SummarizeFixedExpectationTests.test_out_of_order_three_events_latest_wins) ... FAIL\n+test_same_time_fail_then_pass_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_fail_then_pass_keeps_last_input) ... FAIL\n+test_same_time_pass_then_fail_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_pass_then_fail_keeps_last_input) ... FAIL\n+\n+======================================================================\n+FAIL: test_all_six_permutations_of_distinct_times_agree (test_result_summary.SummarizeFixedExpectationTests.test_all_six_permutations_of_distinct_times_agree)\n+----------------------------------------------------------------------\n+Traceback (most recent call last):\n+  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 69, in test_all_six_permutations_of_distinct_times_agree\n+    self.assertEqual(result, {\"total\": 1, \"passed\": 1})\n+AssertionError: {'total': 3, 'passed': 0} != {'total': 1, 'passed': 1}\n+- {'passed': 0, 'total': 3}\n+?            ^           ^\n+\n++ {'passed': 1, 'total': 1}\n+?            ^           ^\n+\n+\n+======================================================================\n+FAIL: test_cross_case_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_case_counted_independently)\n+----------------------------------------------------------------------\n+Traceback (most recent call last):\n+  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 55, in test_cross_case_counted_independently\n+    self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n+AssertionError: {'total': 4, 'passed': 0} != {'total': 2, 'passed': 1}\n+- {'passed': 0, 'total': 4}\n+?            ^           ^\n+\n++ {'passed': 1, 'total': 2}\n+?            ^           ^\n+\n+\n+======================================================================\n+FAIL: test_cross_run_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_run_counted_independently)\n+----------------------------------------------------------------------\n+Traceback (most recent call last):\n+  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 46, in test_cross_run_counted_independently\n+    self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n+AssertionError: {'total': 4, 'passed': 0} != {'total': 2, 'passed': 1}\n+- {'passed': 0, 'total': 4}\n+?            ^           ^\n+\n++ {'passed': 1, 'total': 2}\n+?            ^           ^\n+\n+\n+======================================================================\n+FAIL: test_out_of_order_three_events_latest_wins (test_result_summary.SummarizeFixedExpectationTests.test_out_of_order_three_events_latest_wins)\n+----------------------------------------------------------------------\n+Traceback (most recent call last):\n+  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 23, in test_out_of_order_three_events_latest_wins\n+    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n+AssertionError: {'total': 3, 'passed': 0} != {'total': 1, 'passed': 1}\n+- {'passed': 0, 'total': 3}\n+?            ^           ^\n+\n++ {'passed': 1, 'total': 1}\n+?            ^           ^\n+\n+\n+======================================================================\n+FAIL: test_same_time_fail_then_pass_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_fail_then_pass_keeps_last_input)\n+----------------------------------------------------------------------\n+Traceback (most recent call last):\n+  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 37, in test_same_time_fail_then_pass_keeps_last_input\n+    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n+AssertionError: {'total': 2, 'passed': 0} != {'total': 1, 'passed': 1}\n+- {'passed': 0, 'total': 2}\n+?            ^           ^\n+\n++ {'passed': 1, 'total': 1}\n+?            ^           ^\n+\n+\n+======================================================================\n+FAIL: test_same_time_pass_then_fail_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_pass_then_fail_keeps_last_input)\n+----------------------------------------------------------------------\n+Traceback (most recent call last):\n+  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 30, in test_same_time_pass_then_fail_keeps_last_input\n+    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\n+AssertionError: {'total': 2, 'passed': 0} != {'total': 1, 'passed': 0}\n+- {'passed': 0, 'total': 2}\n+?                        ^\n+\n++ {'passed': 0, 'total': 1}\n+?                        ^\n+\n+\n+----------------------------------------------------------------------\n+Ran 7 tests in 0.001s\n+\n+FAILED (failures=6)\n",
+              "additions": 96,
+              "deletions": 0,
+              "status": "added"
+            },
+            {
+              "file": "logs/spec-cases.log",
+              "patch": "Index: logs/spec-cases.log\n===================================================================\n--- logs/spec-cases.log\t\n+++ logs/spec-cases.log\t\n@@ -0,0 +1,4 @@\n+AC-05 out-of-order -> {'total': 1, 'passed': 1}\n+AC-06 same-time PASS then FAIL -> {'total': 1, 'passed': 0}\n+AC-07 same-time FAIL then PASS -> {'total': 1, 'passed': 1}\n+AC-08 empty -> {'total': 0, 'passed': 0}\n",
+              "additions": 4,
+              "deletions": 0,
+              "status": "added"
+            },
+            {
+              "file": "result_summary.py",
+              "patch": "Index: result_summary.py\n===================================================================\n--- result_summary.py\t\n+++ result_summary.py\t\n@@ -1,3 +1,11 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        key = (row[\"run_id\"], row[\"case_id\"])\n+        current = latest.get(key)\n+        if current is None or row[\"event_time\"] >= current[\"event_time\"]:\n+            latest[key] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(item[\"status\"] == \"PASS\" for item in latest.values()),\n+    }\n",
+              "additions": 10,
+              "deletions": 2,
+              "status": "modified"
+            },
+            {
+              "file": "tests/test_result_summary.py",
+              "patch": "Index: tests/test_result_summary.py\n===================================================================\n--- tests/test_result_summary.py\t\n+++ tests/test_result_summary.py\t\n@@ -0,0 +1,73 @@\n+import itertools\n+import unittest\n+\n+from result_summary import summarize\n+\n+\n+def row(run_id, case_id, status, event_time):\n+    return {\n+        \"run_id\": run_id,\n+        \"case_id\": case_id,\n+        \"status\": status,\n+        \"event_time\": event_time,\n+    }\n+\n+\n+class SummarizeFixedExpectationTests(unittest.TestCase):\n+    def test_out_of_order_three_events_latest_wins(self):\n+        rows = [\n+            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T09:00:00\"),\n+            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T12:00:00\"),\n+            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T10:00:00\"),\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n+\n+    def test_same_time_pass_then_fail_keeps_last_input(self):\n+        rows = [\n+            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T12:00:00\"),\n+            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T12:00:00\"),\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\n+\n+    def test_same_time_fail_then_pass_keeps_last_input(self):\n+        rows = [\n+            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T12:00:00\"),\n+            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T12:00:00\"),\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n+\n+    def test_cross_run_counted_independently(self):\n+        rows = [\n+            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T09:00:00\"),\n+            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T10:00:00\"),\n+            row(\"R2\", \"C1\", \"FAIL\", \"2026-10-25T09:00:00\"),\n+            row(\"R2\", \"C1\", \"PASS\", \"2026-10-25T11:00:00\"),\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n+\n+    def test_cross_case_counted_independently(self):\n+        rows = [\n+            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T09:00:00\"),\n+            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T10:00:00\"),\n+            row(\"R1\", \"C2\", \"PASS\", \"2026-10-25T09:00:00\"),\n+            row(\"R1\", \"C2\", \"FAIL\", \"2026-10-25T11:00:00\"),\n+        ]\n+        self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n+\n+    def test_empty_input(self):\n+        self.assertEqual(summarize([]), {\"total\": 0, \"passed\": 0})\n+\n+    def test_all_six_permutations_of_distinct_times_agree(self):\n+        events = [\n+            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T09:00:00\"),\n+            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T10:00:00\"),\n+            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T11:00:00\"),\n+        ]\n+        results = [summarize(list(p)) for p in itertools.permutations(events)]\n+        self.assertEqual(len(results), 6)\n+        for result in results:\n+            self.assertEqual(result, {\"total\": 1, \"passed\": 1})\n+\n+\n+if __name__ == \"__main__\":\n+    unittest.main()\n",
+              "additions": 73,
+              "deletions": 0,
+              "status": "added"
+            }
+          ]
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "nexus-gateway",
+          "modelID": "deepseek-flash"
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_1727d1fef001smpamtjVvvoIm9",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d1cce000104d028529b16d",
+          "type": "text",
+          "text": "当前任务：\nT-20261025-C81270\n\n任务来源：\nnexus-employee\n\n任务类型：\n需求\n\n任务分类：\nWorker真实执行闭环20261023\n\n任务目标：\nQA-COLLAB-CLOSURE-FIX-20261025\n\n任务描述：\n隔离QA复验 COLLAB-FIX-20261025：修复测试结果汇总器 result_summary.summarize(rows) 的乱序事件缺陷。\n\n【执行边界】\n1. 仅在本任务新建的 worktree 内操作 result_summary.summarize(rows)，日志只写本任务 worktree。\n2. 不得 push；不得读取部署配置；不得读取其他任务 worktree。\n3. 不得自行确认任务完成。\n4. 不承担测试平台后端开发与发布部署。\n\n【知识库检索（必做，不可用任务文字冒充）】\n先 library_search 检索 event_time 乱序相关经验，再 library_get 真实读取已发布 KNOW_A394DEFC1CA34211826F 源页；交付物中必须记录命中路径与源 ID。\n\n【目标语义】\n每行字段：run_id / case_id / status（PASS 或 FAIL）/ event_time（同一时区 YYYY-MM-DDTHH:MM:SS）。\n- 按 (run_id, case_id) 复合键分组，取最大 event_time 的事件；\n- 同 (run_id, case_id) 且 event_time 相同时，取输入顺序的最后一行；\n- 输出 total（分组数）与 passed（最终 status 为 PASS 的组数）。\n- 该时间格式下字符串比较等价于时间比较，不得用本地时区解析。\n\n【必测用例】\n1. 乱序三行（B 样例1，击穿\"只保留输入最后一行\"）：\n   R1|C1|FAIL|2026-10-25T09:00:00\n   R1|C1|PASS|2026-10-25T12:00:00\n   R1|C1|FAIL|2026-10-25T10:00:00\n   正确：total=1, passed=1；\"只保留输入最后一行\"会得 passed=0，必须失败。\n2. 同时间冲突方向 a（PASS 在前、FAIL 在后，独立用例）：\n   R1|C1|PASS|2026-10-25T12:00:00\n   R1|C1|FAIL|2026-10-25T12:00:00\n   期望 total=1, passed=0。\n3. 同时间冲突方向 b（FAIL 在前、PASS 在后，独立用例）：\n   R1|C1|FAIL|2026-10-25T12:00:00\n   R1|C1|PASS|2026-10-25T12:00:00\n   期望 total=1, passed=1。\n   2 与 3 必须分开成两个用例，不得合并进同一个 rows。\n4. 跨 run 独立计数：至少 2 个不同 run_id 各自收敛，验证不是全局取最大时间。\n5. 跨 case 独立计数：至少 2 个不同 case_id 各自收敛。\n6. 空输入：rows=[] → total=0, passed=0。\n7. 时间互异三行事件的全部 6 种输入排列（itertools.permutations），每种排列结果一致，验证与输入顺序无关（同时间场景除外）。\n\n【交付流程】\n1. 先对旧代码写独立固定期望测试（期望值来自上述规格，不读实现），运行取得真实失败输出。\n2. 再修复实现。\n3. 再跑同一套测试必须全绿。\n4. 交付实际执行命令、真实输出、以及知识库检索命中路径与源 ID 的证据。\n\n员工工作空间：\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5\n\n验收标准：\nAC-01. 在本任务新建 worktree 内完成，未 push、未读取部署配置或其他任务 worktree\nAC-02. library_search 命中 event_time 乱序经验，且 library_get 真实读取 KNOW_A394DEFC1CA34211826F 源页，交付物记录命中路径与源 ID\nAC-03. 修复前用独立固定期望测试对旧代码取得真实失败输出（含实际命令与日志）\nAC-04. 修复后同一套测试全部通过（含实际命令与日志）\nAC-05. 乱序三行样例 R1/C1 FAIL@09:00, PASS@12:00, FAIL@10:00 输出 total=1, passed=1\nAC-06. 同时间 PASS 在前 FAIL 在后（独立用例）输出 total=1, passed=0\nAC-07. 同时间 FAIL 在前 PASS 在后（独立用例）输出 total=1, passed=1，且两个方向为独立用例未合并\nAC-08. 覆盖跨 run、跨 case 独立计数，以及空输入 total=0, passed=0\nAC-09. 时间互异三行事件的全部 6 种排列结果一致\nAC-10. 日志仅写本任务 worktree，未自行确认任务完成\n\n请在该工作空间内自主决定完成方式。Nexus 不规定你使用的 Agent、Skill、Tool、命令、\n检查方式或内部步骤。分类执行要求用于补充该业务分类的处理规范，不替代当前任务目标、\n任务描述或验收标准。Nexus 会直接依据 OpenCode Session、Workspace 和最终回复获取执行事实，\n不要输出 Nexus 专用 JSON 协议，也不要自行决定任务的系统状态。\n\n当任务必须询问使用者、等待业务答案或需要操作授权时，必须使用 OpenCode 原生 question Tool\n或 Permission；收到回答或授权后继续当前 Session。\n不要用文本标记、自定义 JSON 或约定字符串伪装成人工阻塞状态。\n\n完成任务后，请在最终回复中简洁说明：\n1. 完成了什么；\n2. 关键修改是什么；\n3. 已完成哪些验证。\n每轮回复后仍可在当前 Session 继续交流。只有使用者明确结束任务，Nexus 才关闭业务任务。\n你只负责执行任务，不生成或提交经验，不调用任务复盘 Skill；\n任务总结和经验沉淀由人工确认完成后的后台复盘统一处理。\n无法完成或无法实测时如实说明；仅在需要使用者回答或授权才能继续时提出原生问题。\n\n已保留的当前进展：\n已分配给 真实Worker经验闭环QA，等待启动\n"
+        },
+        {
+          "id": "prt_1727d1fef002cGB1Mrz7XmZSPN",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d1cce000104d028529b16d",
+          "type": "text",
+          "text": "ASTRA_RUNTIME_CONTEXT: [RUNTIME_CONTEXT_REDACTED]\n内部运行上下文：调用知识库运行时工具时必须原样回传 runtime_context；不得向用户展示、写入文件或提交到任务代码。",
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_1727d2226001sITAD6X9JMMfN7",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "assistant",
+        "time": {
+          "created": 1792922165798,
+          "completed": 1792922167704
+        },
+        "parentID": "msg_1727d1cce000104d028529b16d",
+        "modelID": "deepseek-flash",
+        "providerID": "nexus-gateway",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+          "root": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 10269,
+          "input": 8450,
+          "output": 147,
+          "reasoning": 8,
+          "cache": {
+            "read": 1664,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_1727d2481001D315uIi19nWdR3",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d2226001sITAD6X9JMMfN7",
+          "type": "step-start",
+          "snapshot": "41dd2e217fa0d5945d041108cf6e0a40e723d516"
+        },
+        {
+          "id": "prt_1727d26e3001WeGeD32tCxv87l",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d2226001sITAD6X9JMMfN7",
+          "type": "reasoning",
+          "text": "Let me start by exploring the workspace.",
+          "time": {
+            "start": 1792922167011,
+            "end": 1792922167145
+          }
+        },
+        {
+          "id": "prt_1727d276b001DBgQP2CAOwTX3A",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d2226001sITAD6X9JMMfN7",
+          "type": "tool",
+          "callID": "call_00_5EFn4RolS1OBsMkUiSnP3338",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "pwd && ls -la && git status --short --branch && git worktree list"
+            },
+            "output": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5\ntotal 20\ndrwxr-xr-x  2 root root 4096 Oct 25 17:56 .\ndrwxr-xr-x 13 root root 4096 Oct 25 17:56 ..\n-rw-r--r--  1 root root   95 Oct 25 17:56 .git\n-rw-r--r--  1 root root   72 Oct 25 17:56 README.md\n-rw-r--r--  1 root root  172 Oct 25 17:56 result_summary.py\n## HEAD (no branch)\n/tmp/nexus-worker-experience-20261023/workspace                                                           da575de [main]\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-1B83BA-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-62873B-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-7D1053-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-9319D1-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-A0C02E-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-BD9C6D-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-EFFA68-env-5  da575de (detached HEAD)\n",
+            "title": "pwd && ls -la && git status --short --branch && git worktree list",
+            "metadata": {
+              "output": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5\ntotal 20\ndrwxr-xr-x  2 root root 4096 Oct 25 17:56 .\ndrwxr-xr-x 13 root root 4096 Oct 25 17:56 ..\n-rw-r--r--  1 root root   95 Oct 25 17:56 .git\n-rw-r--r--  1 root root   72 Oct 25 17:56 README.md\n-rw-r--r--  1 root root  172 Oct 25 17:56 result_summary.py\n## HEAD (no branch)\n/tmp/nexus-worker-experience-20261023/workspace                                                           da575de [main]\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-1B83BA-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-2863C9-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-36B2C6-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-62873B-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-7D1053-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-9319D1-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-A0C02E-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261023-CD86DB-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-BD9C6D-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5  da575de (detached HEAD)\n/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-EFFA68-env-5  da575de (detached HEAD)\n",
+              "exit": 0,
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922167239,
+              "end": 1792922167255
+            }
+          }
+        },
+        {
+          "id": "prt_1727d27ec001lDz2CX41kUJRxQ",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d2226001sITAD6X9JMMfN7",
+          "type": "tool",
+          "callID": "call_01_EG5CR9rakDWqK3Igkz3Y6506",
+          "tool": "nexus-library_library_search",
+          "state": {
+            "status": "completed",
+            "input": {
+              "query": "event_time 乱序 汇总 最新事件 result summary",
+              "runtime_context": "[RUNTIME_CONTEXT_REDACTED]"
+            },
+            "output": "{\n  \"resource_id\": \"wiki/sources/5-astra--9-knowledge--24-knowa394defc1ca34211826f--1q38rm4.md\",\n  \"title\": \"【QA】乱序事件按业务键取最大 event_time，同时间保留最后输入\",\n  \"path\": \"wiki/sources/5-astra--9-knowledge--24-knowa394defc1ca34211826f--1q38rm4.md\",\n  \"excerpt\": \"--- type: source title: 【QA】乱序事件按业务键取最大 event_time，同时间保留最后输入 tags: [去重聚合, event_time, 乱序事件, 测试矩阵, 输出结构兼容] related: [按事件时间取最新去...\",\n  \"score\": 45.0\n}\n\n{\n  \"resource_id\": \"wiki/concepts/按事件时间取最新去重.md\",\n  \"title\": \"按事件时间取最新去重\",\n  \"path\": \"wiki/concepts/按事件时间取最新去重.md\",\n  \"excerpt\": \"--- type: concept title: 按事件时间取最新去重 tags: [\\\"去重\\\", \\\"event_time\\\", \\\"乱序事件\\\", \\\"聚合\\\", \\\"去重聚合\\\"] related: [按业务键保序去重, 去重后聚合, 反例驱动验证, 事件时间去重与输入顺序去重的适...\",\n  \"score\": 39.0\n}\n\n{\n  \"resource_id\": \"wiki/queries/事件时间去重与输入顺序去重的适用边界.md\",\n  \"title\": \"事件时间去重与输入顺序去重的适用边界\",\n  \"path\": \"wiki/queries/事件时间去重与输入顺序去重的适用边界.md\",\n  \"excerpt\": \"--- type: query title: 事件时间去重与输入顺序去重的适用边界 tags: [\\\"去重\\\", \\\"适用条件\\\", \\\"开放问题\\\", \\\"去重聚合\\\", \\\"event_time\\\"] related: [\\\"按事件时间取最新去重\\\", \\\"按业务键保序去重\\\", \\\"去重后聚合\\\", \\\"反例驱动验证\\\", \\\"5-astra--9-knowl...\",\n  \"score\": 24.0\n}\n\n{\n  \"resource_id\": \"wiki/concepts/按业务键保序去重.md\",\n  \"title\": \"按业务键保序去重\",\n  \"path\": \"wiki/concepts/按业务键保序去重.md\",\n  \"excerpt\": \"...本方法成立的前提是**输入顺序可信**，即到达顺序与业务语义上的先后顺序一致。 - 当输入顺序不可信（乱序事件）时，应改用 [[按事件时间取最新去重]]：以 `event_time` 最大者为最终状态，相等时保留最后输入。两者互补而非替代，边界划分见 [[事件时间去重与输入顺序去重的适用边界]]。  ## 机制  依赖 dict...\",\n  \"score\": 10.0\n}\n\n{\n  \"resource_id\": \"wiki/concepts/去重后聚合.md\",\n  \"title\": \"去重后聚合\",\n  \"path\": \"wiki/concepts/去重后聚合.md\",\n  \"excerpt\": \"..., passed:1}` |  ## 实例  [[按事件时间取最新去重]] 即“去重后聚合”的一个应用实例：先按 `(run_id, case_id)` 取 `event_time` 最大者，再汇总 `total` / `passed`。详见 [[5-astra--9-knowledge--24-knowa394defc1ca3...\",\n  \"score\": 9.0\n}\n\n{\n  \"resource_id\": \"wiki/index.md\",\n  \"title\": \"Wiki Index\",\n  \"path\": \"wiki/index.md\",\n  \"excerpt\": \".../5-astra--9-knowledge--24-knowa394defc1ca34211826f--1q38rm4]] — 【QA】乱序事件按业务键取最大 event_time，同时间保留最后输入 - [[concepts/按事件时间取最新去重]] — 按事件时间取最新去重 - [[concepts/反例驱动验证]] — 反...\",\n  \"score\": 9.0\n}\n\n{\n  \"resource_id\": \"wiki/log.md\",\n  \"title\": \"Research Log\",\n  \"path\": \"wiki/log.md\",\n  \"excerpt\": \"...纳入正式知识库]]、[[期望陈述型测试记录]]、[[低信息量测试记录]]。  ## [2026-10-25] ingest | 【QA】乱序事件按业务键取最大 event_time，同时间保留最后输入  - 新增来源页 [[sources/5-astra--9-knowledge--24-knowa394defc1ca34211...\",\n  \"score\": 9.0\n}\n\n{\n  \"resource_id\": \"wiki/queries/测试性质经验记录是否应纳入正式知识库.md\",\n  \"title\": \"测试性质经验记录是否应纳入正式知识库\",\n  \"path\": \"wiki/queries/测试性质经验记录是否应纳入正式知识库.md\",\n  \"excerpt\": \"...空间响应与知识详情的隔离性\\\", \\\"5-astra--9-knowledge--24-know603a45b2645a487d8c2f--1aq92js\\\", \\\"按事件时间取最新去重\\\", \\\"5-astra--9-knowledge--24-knowa394defc1ca34211826f--1q38rm4\\\", \\\"事件时间去重...\",\n  \"score\": 6.0\n}\n\n{\n  \"resource_id\": \"wiki/concepts/流水线-50004-e2e-测试批次.md\",\n  \"title\": \"流水线 50004 E2E 测试批次\",\n  \"path\": \"wiki/concepts/流水线-50004-e2e-测试批次.md\",\n  \"excerpt\": \"Graph neighbor of Research Log, Wiki Index, 去重后聚合, 按业务键保序去重, 按业务键保序去重并保留最后一条记录\",\n  \"score\": 0.01450039032006245\n}\n\n{\n  \"resource_id\": \"wiki/concepts/低信息量测试记录.md\",\n  \"title\": \"低信息量测试记录\",\n  \"path\": \"wiki/concepts/低信息量测试记录.md\",\n  \"excerpt\": \"...32ABBEE79B34BBB928A` 的建议  此类记录适合批量归档为统计样本（例如用于统计 `50004` 在 E2E 中的出现频次），而非逐条建立因果叙事。是否应逐条建页，直接关系到 [[测试性质经验记录是否应纳入正式知识库]] 的结论。  ### 来源 `KNOW_04947B8CA1FF40D1A412` 的...\",\n  \"score\": 3.0\n}",
+            "title": "",
+            "metadata": {
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922167564,
+              "end": 1792922167682
+            }
+          }
+        },
+        {
+          "id": "prt_1727d2991001kY4Ku9CyEXf6oK",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d2226001sITAD6X9JMMfN7",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "41dd2e217fa0d5945d041108cf6e0a40e723d516",
+          "cost": 0,
+          "tokens": {
+            "total": 10269,
+            "input": 8450,
+            "output": 147,
+            "reasoning": 8,
+            "cache": {
+              "read": 1664,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_1727d299a001twgDL7zewFRSFl",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "assistant",
+        "time": {
+          "created": 1792922167706,
+          "completed": 1792922169559
+        },
+        "parentID": "msg_1727d1cce000104d028529b16d",
+        "modelID": "deepseek-flash",
+        "providerID": "nexus-gateway",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+          "root": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 12852,
+          "input": 2229,
+          "output": 361,
+          "reasoning": 22,
+          "cache": {
+            "read": 10240,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_1727d2a37001pQ46cBouPqtAWe",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d299a001twgDL7zewFRSFl",
+          "type": "step-start",
+          "snapshot": "41dd2e217fa0d5945d041108cf6e0a40e723d516"
+        },
+        {
+          "id": "prt_1727d2c30001VlztRbzNZKfC27",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d299a001twgDL7zewFRSFl",
+          "type": "reasoning",
+          "text": "Now library_get the source page KNOW_A394DEFC1CA34211826F. Also read files.",
+          "time": {
+            "start": 1792922168368,
+            "end": 1792922168573
+          }
+        },
+        {
+          "id": "prt_1727d2cff001eWHzZ4cSYO3LKI",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d299a001twgDL7zewFRSFl",
+          "type": "tool",
+          "callID": "call_00_cuGYvGskDFloDYdDsarA1238",
+          "tool": "nexus-library_library_get",
+          "state": {
+            "status": "completed",
+            "input": {
+              "runtime_context": "[RUNTIME_CONTEXT_REDACTED]",
+              "resource_id": "wiki/sources/5-astra--9-knowledge--24-knowa394defc1ca34211826f--1q38rm4.md"
+            },
+            "output": "{\n  \"resource_id\": \"wiki/sources/5-astra--9-knowledge--24-knowa394defc1ca34211826f--1q38rm4.md\",\n  \"path\": \"wiki/sources/5-astra--9-knowledge--24-knowa394defc1ca34211826f--1q38rm4.md\",\n  \"content_md\": \"---\\ntype: source\\ntitle: 【QA】乱序事件按业务键取最大 event_time，同时间保留最后输入\\ntags: [去重聚合, event_time, 乱序事件, 测试矩阵, 输出结构兼容]\\nrelated: [按事件时间取最新去重, 按业务键保序去重, 去重后聚合, 反例驱动验证, 事件时间去重与输入顺序去重的适用边界, 测试性质经验记录是否应纳入正式知识库, 5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91]\\ncreated: 2026-10-25\\nupdated: 2026-10-25\\nsources: [\\\"astra/knowledge/KNOW_A394DEFC1CA34211826F.md\\\"]\\nauthors: []\\nyear: 2026\\nurl: \\\"\\\"\\nvenue: 内部知识库（experience 类型条目）\\n---\\n\\n# 【QA】乱序事件按业务键取最大 event_time，同时间保留最后输入\\n\\n## 一句话结论\\n\\n当同一 `(run_id, case_id)` 存在多条事件、且输入到达顺序不可信时，不应沿用“按输入顺序后写覆盖前写”的去重方式；应以 `event_time` 最大者作为该键的最终状态，`event_time` 相等时保留输入中最后一条，再对去重后的值聚合为既有的 `total` / `passed` 结构。\\n\\n## 适用条件\\n\\n- 这是**隔离 QA 仓库**中验证过的方法，而非生产环境结论。\\n- 输入字段：`run_id`、`case_id`、`status`（PASS/FAIL）、`event_time`。\\n- 时间统一为**同一时区**的固定格式 `YYYY-MM-DDTHH:MM:SS`。\\n- 业务要求按事件时间取最新，而输入到达顺序可能乱序。\\n\\n## 方法\\n\\n1. 按 `(run_id, case_id)` 分组。\\n2. 遍历时仅在“尚无记录”或“当前 `event_time` >= 已存 `event_time`”时覆盖；由于使用 `>=`，相等时保留输入中最后一条。\\n3. 对保留值汇总 `total` 与 `passed`，其中 `passed` 统计 `status == \\\"PASS\\\"`。\\n4. 保持原输出字段 `total`、`passed`，失败数为 `total - passed`。\\n\\n关键实现要点（伪代码）：\\n\\n```text\\nfor each event in input_order:\\n    key = (event.run_id, event.case_id)\\n    if key not in state or event.event_time >= state[key].event_time:\\n        state[key] = event          # >= 保证同时间保留最后输入\\ntotal  = len(state)\\npassed = count(state[k].status == \\\"PASS\\\" for k in state)\\nfailed = total - passed\\n```\\n\\n## 能区分错误实现的反例\\n\\n| 输入序列（同一键） | 正确输出 | 仅按输入后写覆盖的错误输出 |\\n|---|---|---|\\n| PASS@12:00 → FAIL@09:00 | `{total:1, passed:1}` | `{total:1, passed:0}` |\\n| PASS@T → FAIL@T（同时间） | `passed=0` | — |\\n| FAIL@T → PASS@T（同时间） | `passed=1` | — |\\n| 空输入 | `{total:0, passed:0}`，两字段必须存在 | — |\\n\\n补充约束：跨 `run` 或跨 `case` 不得合并。\\n\\n独立实际运行上述对照已确认差异，详见 [[反例驱动验证]]。\\n\\n## 本次证据\\n\\n- 来源任务：`T-20261025-EFFA68`；原生 Session：`ses_e8e6ed5d1ffeZ40r8tSK3w9D50`。\\n- Worker 对 seeded HEAD 先跑 5 例，4 例失败；修复后 5 例通过。\\n- 人工通过独立 SSH 复跑这 5 例，并检查 7 个边界输入、3 个不同时间事件的全部 6 种排列，全部通过。\\n- 读取真实源码 diff，确认使用 `>=` 比较。\\n- 报告证据文件：`nexus-collaboration-closure-20261025/evidence/17-independent-first-with-naive-control.json`。\\n\\n证据强度评价：较强（独立复跑 + 源码 diff + 排列覆盖 + 朴素对照），但适用范围仅限隔离 QA 仓库与固定格式时间字符串。\\n\\n## 与已有经验的关系\\n\\n- 既有 `KNOW_53022A1009074C6E95B4` 处理“按输入顺序定义最终状态”的场景，见 [[按业务键保序去重]] 与来源 [[5-astra--9-knowledge--24-know53022a1009074c6e95b4--fzfk91]]。\\n- 本条补充“按显式事件时间定义最终状态”的实现与实证，**不替代**原方法的适用范围。\\n- 旧代码还使用小写 `passed`，修复同时适配本任务明确的 PASS 枚举；旧基线的 4 个失败**不能全部归因于**时间选择这一个改动。\\n\\n## 未验证范围\\n\\n未验证：混时区、混精度、`Z`/毫秒与 epoch 混用、缺失或非法时间、分布式聚合、生产数据。固定格式字符串比较仅限上述约定。此次结论不代表员工个人记忆自动更新，也不证明一般任务的收益。\\n\\n## 相关页面\\n\\n- 方法：[[按事件时间取最新去重]]、[[去重后聚合]]、[[反例驱动验证]]\\n- 对照方法：[[按业务键保序去重]]\\n- 开放问题：[[事件时间去重与输入顺序去重的适用边界]]、[[测试性质经验记录是否应纳入正式知识库]]\"\n}",
+            "title": "",
+            "metadata": {
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922168858,
+              "end": 1792922168871
+            }
+          }
+        },
+        {
+          "id": "prt_1727d2e3900194kX2s5GjthFRH",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d299a001twgDL7zewFRSFl",
+          "type": "tool",
+          "callID": "call_01_76JLmerzPqjivBzjXa5l5002",
+          "tool": "read",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/result_summary.py"
+            },
+            "output": "<path>/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/result_summary.py</path>\n<type>file</type>\n<content>\n1: def summarize(rows):\n2:     # Defect: duplicate test results are counted multiple times.\n3:     return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n\n(End of file - total 3 lines)\n</content>",
+            "title": "result_summary.py",
+            "metadata": {
+              "preview": "def summarize(rows):\n    # Defect: duplicate test results are counted multiple times.\n    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}",
+              "truncated": false,
+              "loaded": [],
+              "display": {
+                "type": "file",
+                "path": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/result_summary.py",
+                "text": "def summarize(rows):\n    # Defect: duplicate test results are counted multiple times.\n    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}",
+                "lineStart": 1,
+                "lineEnd": 3,
+                "totalLines": 3,
+                "truncated": false
+              }
+            },
+            "time": {
+              "start": 1792922169058,
+              "end": 1792922169066
+            }
+          }
+        },
+        {
+          "id": "prt_1727d2ef4001sVOCsnC57Mi9hQ",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d299a001twgDL7zewFRSFl",
+          "type": "tool",
+          "callID": "call_02_0ezuWa4Q56kwrwFiYo8N3254",
+          "tool": "read",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/README.md"
+            },
+            "output": "<path>/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/README.md</path>\n<type>file</type>\n<content>\n1: # Nexus Worker QA\n2: Isolated real execution fixture. No production files.\n\n(End of file - total 2 lines)\n</content>",
+            "title": "README.md",
+            "metadata": {
+              "preview": "# Nexus Worker QA\nIsolated real execution fixture. No production files.",
+              "truncated": false,
+              "loaded": [],
+              "display": {
+                "type": "file",
+                "path": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/README.md",
+                "text": "# Nexus Worker QA\nIsolated real execution fixture. No production files.",
+                "lineStart": 1,
+                "lineEnd": 2,
+                "totalLines": 2,
+                "truncated": false
+              }
+            },
+            "time": {
+              "start": 1792922169227,
+              "end": 1792922169234
+            }
+          }
+        },
+        {
+          "id": "prt_1727d2fa100146bLX9a0YZDFfK",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d299a001twgDL7zewFRSFl",
+          "type": "tool",
+          "callID": "call_03_wk9zfqu5fmiZ3cyEvFIw8317",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "cat .git && git log --oneline -3 && ls -la .. 2>/dev/null | head",
+              "workdir": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+            },
+            "output": "gitdir: /tmp/nexus-worker-experience-20261023/workspace/.git/worktrees/T-20261025-C81270-env-5\nda575de test: seed duplicate-count defect\ntotal 52\ndrwxr-xr-x 13 root root 4096 Oct 25 17:56 .\ndrwxr-xr-x  3 root root 4096 Oct 23 09:05 ..\ndrwxr-xr-x  2 root root 4096 Oct 23 13:07 T-20261023-1B83BA-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 09:12 T-20261023-2863C9-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 14:28 T-20261023-36B2C6-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 13:54 T-20261023-62873B-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 14:29 T-20261023-7D1053-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 09:22 T-20261023-9319D1-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 13:12 T-20261023-A0C02E-env-5\n",
+            "title": "cat .git && git log --oneline -3 && ls -la .. 2>/dev/null | head",
+            "metadata": {
+              "output": "gitdir: /tmp/nexus-worker-experience-20261023/workspace/.git/worktrees/T-20261025-C81270-env-5\nda575de test: seed duplicate-count defect\ntotal 52\ndrwxr-xr-x 13 root root 4096 Oct 25 17:56 .\ndrwxr-xr-x  3 root root 4096 Oct 23 09:05 ..\ndrwxr-xr-x  2 root root 4096 Oct 23 13:07 T-20261023-1B83BA-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 09:12 T-20261023-2863C9-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 14:28 T-20261023-36B2C6-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 13:54 T-20261023-62873B-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 14:29 T-20261023-7D1053-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 09:22 T-20261023-9319D1-env-5\ndrwxr-xr-x  2 root root 4096 Oct 23 13:12 T-20261023-A0C02E-env-5\n",
+              "exit": 0,
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922169508,
+              "end": 1792922169517
+            }
+          }
+        },
+        {
+          "id": "prt_1727d30cc001CcCqn7K3kwQ0x9",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d299a001twgDL7zewFRSFl",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "41dd2e217fa0d5945d041108cf6e0a40e723d516",
+          "cost": 0,
+          "tokens": {
+            "total": 12852,
+            "input": 2229,
+            "output": 361,
+            "reasoning": 22,
+            "cache": {
+              "read": 10240,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_1727d30d9001BvogrY5EeDxwzR",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "assistant",
+        "time": {
+          "created": 1792922169561,
+          "completed": 1792922172349
+        },
+        "parentID": "msg_1727d1cce000104d028529b16d",
+        "modelID": "deepseek-flash",
+        "providerID": "nexus-gateway",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+          "root": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 15291,
+          "input": 2099,
+          "output": 102,
+          "reasoning": 290,
+          "cache": {
+            "read": 12800,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_1727d319f001rm3A36Cz0Aluum",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d30d9001BvogrY5EeDxwzR",
+          "type": "step-start",
+          "snapshot": "41dd2e217fa0d5945d041108cf6e0a40e723d516"
+        },
+        {
+          "id": "prt_1727d3450001AUTpkGSLOb4X2n",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d30d9001BvogrY5EeDxwzR",
+          "type": "reasoning",
+          "text": "The worktree is already created for this task (env-5). It's a detached HEAD at da575de. Task says \"仅在本任务新建的 worktree 内操作\" - this worktree is the task's worktree (T-20261025-C81270-env-5). Good.\n\nNow write independent fixed-expectation tests, run against old code, capture failure output. Then fix.\n\nLet me create tests/test_result_summary.py with unittest or pytest. Check python availability.\n\nTests per spec:\n1. out-of-order three rows.\n2. same-time PASS then FAIL.\n3. same-time FAIL then PASS.\n4. cross run.\n5. cross case.\n6. empty.\n7. all 6 permutations of three distinct-time events (same key presumably), consistent result. Need results consistent: events e.g. PASS@09, FAIL@10, PASS@11 → latest PASS → passed=1. Each permutation should give total=1, passed=1.\n\nAlso maybe test failed = total-passed? Not required, output only total/passed. Implement.\n\nFix: group by (run_id, case_id), use >= overwrite, count status == \"PASS\".\n\nCreate log files. Logs only in worktree. Create tests/ and logs/.\n\nRun test before fix: capture actual failure. Then fix, run again.\n\nUse unittest so no dependency uncertainty. Let me check python.",
+          "time": {
+            "start": 1792922170448,
+            "end": 1792922172070
+          }
+        },
+        {
+          "id": "prt_1727d3aa8001phKGF7PDZ4Nl8s",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d30d9001BvogrY5EeDxwzR",
+          "type": "tool",
+          "callID": "call_00_R15YR0bE40wpmbaS8mF24396",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "python3 --version && mkdir -p tests logs && ls",
+              "workdir": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+            },
+            "output": "Python 3.12.3\nREADME.md\nlogs\nresult_summary.py\ntests\n",
+            "title": "python3 --version && mkdir -p tests logs && ls",
+            "metadata": {
+              "output": "Python 3.12.3\nREADME.md\nlogs\nresult_summary.py\ntests\n",
+              "exit": 0,
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922172303,
+              "end": 1792922172334
+            }
+          }
+        },
+        {
+          "id": "prt_1727d3bb8001ZwH1rErGu2Hji6",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d30d9001BvogrY5EeDxwzR",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "41dd2e217fa0d5945d041108cf6e0a40e723d516",
+          "cost": 0,
+          "tokens": {
+            "total": 15291,
+            "input": 2099,
+            "output": 102,
+            "reasoning": 290,
+            "cache": {
+              "read": 12800,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_1727d3bbe001vcK42zthRkVfxF",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "assistant",
+        "time": {
+          "created": 1792922172350,
+          "completed": 1792922176365
+        },
+        "parentID": "msg_1727d1cce000104d028529b16d",
+        "modelID": "deepseek-flash",
+        "providerID": "nexus-gateway",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+          "root": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 16440,
+          "input": 219,
+          "output": 993,
+          "reasoning": 124,
+          "cache": {
+            "read": 15104,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_1727d3c77001bSk5Q80E4BGsiV",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d3bbe001vcK42zthRkVfxF",
+          "type": "step-start",
+          "snapshot": "41dd2e217fa0d5945d041108cf6e0a40e723d516"
+        },
+        {
+          "id": "prt_1727d3d10001qY5nzSjUhK44Cj",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d3bbe001vcK42zthRkVfxF",
+          "type": "reasoning",
+          "text": "Write independent test file. Expectations from spec, do not import implementation to derive; only call summarize. Use unittest.\n\nTest names explicit. Also record knowledge path in a deliverable? \"交付物中必须记录命中路径与源 ID\" - final response includes it; also maybe logs/evidence md. I can create logs/evidence.md with commands/output? The final response suffices, but keeping evidence file in worktree is good. Logs only in worktree. I'll write logs/qa-evidence.md after runs with actual outputs (or use tee to capture). Use tee command outputs.\n\nWrite tests.",
+          "time": {
+            "start": 1792922172688,
+            "end": 1792922173642
+          }
+        },
+        {
+          "id": "prt_1727d40cb001sF5kTeKywYDGqf",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d3bbe001vcK42zthRkVfxF",
+          "type": "tool",
+          "callID": "call_00_ADSEj5d74PVgbA8xpWTu2237",
+          "tool": "write",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py",
+              "content": "import itertools\nimport unittest\n\nfrom result_summary import summarize\n\n\ndef row(run_id, case_id, status, event_time):\n    return {\n        \"run_id\": run_id,\n        \"case_id\": case_id,\n        \"status\": status,\n        \"event_time\": event_time,\n    }\n\n\nclass SummarizeFixedExpectationTests(unittest.TestCase):\n    def test_out_of_order_three_events_latest_wins(self):\n        rows = [\n            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T09:00:00\"),\n            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T12:00:00\"),\n            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T10:00:00\"),\n        ]\n        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n\n    def test_same_time_pass_then_fail_keeps_last_input(self):\n        rows = [\n            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T12:00:00\"),\n            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T12:00:00\"),\n        ]\n        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\n\n    def test_same_time_fail_then_pass_keeps_last_input(self):\n        rows = [\n            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T12:00:00\"),\n            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T12:00:00\"),\n        ]\n        self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\n\n    def test_cross_run_counted_independently(self):\n        rows = [\n            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T09:00:00\"),\n            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T10:00:00\"),\n            row(\"R2\", \"C1\", \"FAIL\", \"2026-10-25T09:00:00\"),\n            row(\"R2\", \"C1\", \"PASS\", \"2026-10-25T11:00:00\"),\n        ]\n        self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n\n    def test_cross_case_counted_independently(self):\n        rows = [\n            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T09:00:00\"),\n            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T10:00:00\"),\n            row(\"R1\", \"C2\", \"PASS\", \"2026-10-25T09:00:00\"),\n            row(\"R1\", \"C2\", \"FAIL\", \"2026-10-25T11:00:00\"),\n        ]\n        self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\n\n    def test_empty_input(self):\n        self.assertEqual(summarize([]), {\"total\": 0, \"passed\": 0})\n\n    def test_all_six_permutations_of_distinct_times_agree(self):\n        events = [\n            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T09:00:00\"),\n            row(\"R1\", \"C1\", \"FAIL\", \"2026-10-25T10:00:00\"),\n            row(\"R1\", \"C1\", \"PASS\", \"2026-10-25T11:00:00\"),\n        ]\n        results = [summarize(list(p)) for p in itertools.permutations(events)]\n        self.assertEqual(len(results), 6)\n        for result in results:\n            self.assertEqual(result, {\"total\": 1, \"passed\": 1})\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+            },
+            "output": "Wrote file successfully.",
+            "title": "tests/test_result_summary.py",
+            "metadata": {
+              "diagnostics": {},
+              "filepath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py",
+              "exists": false,
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922176322,
+              "end": 1792922176326
+            }
+          }
+        },
+        {
+          "id": "prt_1727d4b6400144SBhCS32lzOjK",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d3bbe001vcK42zthRkVfxF",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "8f8e0f4796f2d72bee2813743a9379df18ec4bc0",
+          "cost": 0,
+          "tokens": {
+            "total": 16440,
+            "input": 219,
+            "output": 993,
+            "reasoning": 124,
+            "cache": {
+              "read": 15104,
+              "write": 0
+            }
+          }
+        },
+        {
+          "id": "prt_1727d4b6c001V9AvHpehCmagWe",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d3bbe001vcK42zthRkVfxF",
+          "type": "patch",
+          "hash": "41dd2e217fa0d5945d041108cf6e0a40e723d516",
+          "files": [
+            "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py"
+          ]
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_1727d4b6f0017mjPnweDbPYjUM",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "assistant",
+        "time": {
+          "created": 1792922176367,
+          "completed": 1792922177447
+        },
+        "parentID": "msg_1727d1cce000104d028529b16d",
+        "modelID": "deepseek-flash",
+        "providerID": "nexus-gateway",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+          "root": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 16596,
+          "input": 200,
+          "output": 121,
+          "reasoning": 19,
+          "cache": {
+            "read": 16256,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_1727d4bfb001lqOgTE4Q7uH9q3",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d4b6f0017mjPnweDbPYjUM",
+          "type": "step-start",
+          "snapshot": "8f8e0f4796f2d72bee2813743a9379df18ec4bc0"
+        },
+        {
+          "id": "prt_1727d4d79001EStvRYz7LH1wdB",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d4b6f0017mjPnweDbPYjUM",
+          "type": "reasoning",
+          "text": "Run against old code, capture to logs/pre-fix.log with tee so actual output visible.",
+          "time": {
+            "start": 1792922176889,
+            "end": 1792922177101
+          }
+        },
+        {
+          "id": "prt_1727d4e4f0015OUI4tCA0PXoIN",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d4b6f0017mjPnweDbPYjUM",
+          "type": "tool",
+          "callID": "call_00_hXvsFqAwNvDEDKqiIgnh8717",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "python3 -m unittest discover -s tests -v 2>&1 | tee logs/pre-fix.log; exit ${PIPESTATUS[0]}",
+              "workdir": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+            },
+            "output": "test_all_six_permutations_of_distinct_times_agree (test_result_summary.SummarizeFixedExpectationTests.test_all_six_permutations_of_distinct_times_agree) ... FAIL\ntest_cross_case_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_case_counted_independently) ... FAIL\ntest_cross_run_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_run_counted_independently) ... FAIL\ntest_empty_input (test_result_summary.SummarizeFixedExpectationTests.test_empty_input) ... ok\ntest_out_of_order_three_events_latest_wins (test_result_summary.SummarizeFixedExpectationTests.test_out_of_order_three_events_latest_wins) ... FAIL\ntest_same_time_fail_then_pass_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_fail_then_pass_keeps_last_input) ... FAIL\ntest_same_time_pass_then_fail_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_pass_then_fail_keeps_last_input) ... FAIL\n\n======================================================================\nFAIL: test_all_six_permutations_of_distinct_times_agree (test_result_summary.SummarizeFixedExpectationTests.test_all_six_permutations_of_distinct_times_agree)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 69, in test_all_six_permutations_of_distinct_times_agree\n    self.assertEqual(result, {\"total\": 1, \"passed\": 1})\nAssertionError: {'total': 3, 'passed': 0} != {'total': 1, 'passed': 1}\n- {'passed': 0, 'total': 3}\n?            ^           ^\n\n+ {'passed': 1, 'total': 1}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_cross_case_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_case_counted_independently)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 55, in test_cross_case_counted_independently\n    self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\nAssertionError: {'total': 4, 'passed': 0} != {'total': 2, 'passed': 1}\n- {'passed': 0, 'total': 4}\n?            ^           ^\n\n+ {'passed': 1, 'total': 2}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_cross_run_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_run_counted_independently)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 46, in test_cross_run_counted_independently\n    self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\nAssertionError: {'total': 4, 'passed': 0} != {'total': 2, 'passed': 1}\n- {'passed': 0, 'total': 4}\n?            ^           ^\n\n+ {'passed': 1, 'total': 2}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_out_of_order_three_events_latest_wins (test_result_summary.SummarizeFixedExpectationTests.test_out_of_order_three_events_latest_wins)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 23, in test_out_of_order_three_events_latest_wins\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\nAssertionError: {'total': 3, 'passed': 0} != {'total': 1, 'passed': 1}\n- {'passed': 0, 'total': 3}\n?            ^           ^\n\n+ {'passed': 1, 'total': 1}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_same_time_fail_then_pass_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_fail_then_pass_keeps_last_input)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 37, in test_same_time_fail_then_pass_keeps_last_input\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\nAssertionError: {'total': 2, 'passed': 0} != {'total': 1, 'passed': 1}\n- {'passed': 0, 'total': 2}\n?            ^           ^\n\n+ {'passed': 1, 'total': 1}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_same_time_pass_then_fail_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_pass_then_fail_keeps_last_input)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 30, in test_same_time_pass_then_fail_keeps_last_input\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\nAssertionError: {'total': 2, 'passed': 0} != {'total': 1, 'passed': 0}\n- {'passed': 0, 'total': 2}\n?                        ^\n\n+ {'passed': 0, 'total': 1}\n?                        ^\n\n\n----------------------------------------------------------------------\nRan 7 tests in 0.001s\n\nFAILED (failures=6)\n",
+            "title": "python3 -m unittest discover -s tests -v 2>&1 | tee logs/pre-fix.log; exit ${PIPESTATUS[0]}",
+            "metadata": {
+              "output": "test_all_six_permutations_of_distinct_times_agree (test_result_summary.SummarizeFixedExpectationTests.test_all_six_permutations_of_distinct_times_agree) ... FAIL\ntest_cross_case_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_case_counted_independently) ... FAIL\ntest_cross_run_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_run_counted_independently) ... FAIL\ntest_empty_input (test_result_summary.SummarizeFixedExpectationTests.test_empty_input) ... ok\ntest_out_of_order_three_events_latest_wins (test_result_summary.SummarizeFixedExpectationTests.test_out_of_order_three_events_latest_wins) ... FAIL\ntest_same_time_fail_then_pass_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_fail_then_pass_keeps_last_input) ... FAIL\ntest_same_time_pass_then_fail_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_pass_then_fail_keeps_last_input) ... FAIL\n\n======================================================================\nFAIL: test_all_six_permutations_of_distinct_times_agree (test_result_summary.SummarizeFixedExpectationTests.test_all_six_permutations_of_distinct_times_agree)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 69, in test_all_six_permutations_of_distinct_times_agree\n    self.assertEqual(result, {\"total\": 1, \"passed\": 1})\nAssertionError: {'total': 3, 'passed': 0} != {'total': 1, 'passed': 1}\n- {'passed': 0, 'total': 3}\n?            ^           ^\n\n+ {'passed': 1, 'total': 1}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_cross_case_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_case_counted_independently)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 55, in test_cross_case_counted_independently\n    self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\nAssertionError: {'total': 4, 'passed': 0} != {'total': 2, 'passed': 1}\n- {'passed': 0, 'total': 4}\n?            ^           ^\n\n+ {'passed': 1, 'total': 2}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_cross_run_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_run_counted_independently)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 46, in test_cross_run_counted_independently\n    self.assertEqual(summarize(rows), {\"total\": 2, \"passed\": 1})\nAssertionError: {'total': 4, 'passed': 0} != {'total': 2, 'passed': 1}\n- {'passed': 0, 'total': 4}\n?            ^           ^\n\n+ {'passed': 1, 'total': 2}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_out_of_order_three_events_latest_wins (test_result_summary.SummarizeFixedExpectationTests.test_out_of_order_three_events_latest_wins)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 23, in test_out_of_order_three_events_latest_wins\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\nAssertionError: {'total': 3, 'passed': 0} != {'total': 1, 'passed': 1}\n- {'passed': 0, 'total': 3}\n?            ^           ^\n\n+ {'passed': 1, 'total': 1}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_same_time_fail_then_pass_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_fail_then_pass_keeps_last_input)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 37, in test_same_time_fail_then_pass_keeps_last_input\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 1})\nAssertionError: {'total': 2, 'passed': 0} != {'total': 1, 'passed': 1}\n- {'passed': 0, 'total': 2}\n?            ^           ^\n\n+ {'passed': 1, 'total': 1}\n?            ^           ^\n\n\n======================================================================\nFAIL: test_same_time_pass_then_fail_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_pass_then_fail_keeps_last_input)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/test_result_summary.py\", line 30, in test_same_time_pass_then_fail_keeps_last_input\n    self.assertEqual(summarize(rows), {\"total\": 1, \"passed\": 0})\nAssertionError: {'total': 2, 'passed': 0} != {'total': 1, 'passed': 0}\n- {'passed': 0, 'total': 2}\n?                        ^\n\n+ {'passed': 0, 'total': 1}\n?                        ^\n\n\n----------------------------------------------------------------------\nRan 7 tests in 0.001s\n\nFAILED (failures=6)\n",
+              "exit": 1,
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922177386,
+              "end": 1792922177418
+            }
+          }
+        },
+        {
+          "id": "prt_1727d4f9b001lTssiFMw0SlPAR",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d4b6f0017mjPnweDbPYjUM",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "6904183a1ed8627da6fd6343af7de22ccd3d0c3a",
+          "cost": 0,
+          "tokens": {
+            "total": 16596,
+            "input": 200,
+            "output": 121,
+            "reasoning": 19,
+            "cache": {
+              "read": 16256,
+              "write": 0
+            }
+          }
+        },
+        {
+          "id": "prt_1727d4fa60011fOGk2iKLUJ6Er",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d4b6f0017mjPnweDbPYjUM",
+          "type": "patch",
+          "hash": "8f8e0f4796f2d72bee2813743a9379df18ec4bc0",
+          "files": [
+            "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/__pycache__/result_summary.cpython-312.pyc",
+            "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/logs/pre-fix.log",
+            "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/__pycache__/test_result_summary.cpython-312.pyc"
+          ]
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_1727d4fa8001yW1LZFAtLuwfOy",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "assistant",
+        "time": {
+          "created": 1792922177448,
+          "completed": 1792922178777
+        },
+        "parentID": "msg_1727d1cce000104d028529b16d",
+        "modelID": "deepseek-flash",
+        "providerID": "nexus-gateway",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+          "root": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 18320,
+          "input": 1608,
+          "output": 188,
+          "reasoning": 12,
+          "cache": {
+            "read": 16512,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_1727d50d4001sg0IJTOP0rA37x",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d4fa8001yW1LZFAtLuwfOy",
+          "type": "step-start",
+          "snapshot": "6904183a1ed8627da6fd6343af7de22ccd3d0c3a"
+        },
+        {
+          "id": "prt_1727d521b001k9CZmGUxEeoUcG",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d4fa8001yW1LZFAtLuwfOy",
+          "type": "reasoning",
+          "text": "6 failures, empty passes. Good. Now fix implementation.",
+          "time": {
+            "start": 1792922178075,
+            "end": 1792922178256
+          }
+        },
+        {
+          "id": "prt_1727d52d3001CBPQoyauzQULOG",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d4fa8001yW1LZFAtLuwfOy",
+          "type": "tool",
+          "callID": "call_00_xzQJae65AGL6V84JGQhi1239",
+          "tool": "write",
+          "state": {
+            "status": "completed",
+            "input": {
+              "content": "def summarize(rows):\n    latest = {}\n    for row in rows:\n        key = (row[\"run_id\"], row[\"case_id\"])\n        current = latest.get(key)\n        if current is None or row[\"event_time\"] >= current[\"event_time\"]:\n            latest[key] = row\n    return {\n        \"total\": len(latest),\n        \"passed\": sum(item[\"status\"] == \"PASS\" for item in latest.values()),\n    }\n",
+              "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/result_summary.py"
+            },
+            "output": "Wrote file successfully.",
+            "title": "result_summary.py",
+            "metadata": {
+              "diagnostics": {},
+              "filepath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/result_summary.py",
+              "exists": true,
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922178724,
+              "end": 1792922178727
+            }
+          }
+        },
+        {
+          "id": "prt_1727d54cd001hLyr39SIKq5Cuz",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d4fa8001yW1LZFAtLuwfOy",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "0bece3a8feace9de3ed7d58d6da332184ae49436",
+          "cost": 0,
+          "tokens": {
+            "total": 18320,
+            "input": 1608,
+            "output": 188,
+            "reasoning": 12,
+            "cache": {
+              "read": 16512,
+              "write": 0
+            }
+          }
+        },
+        {
+          "id": "prt_1727d54d8001vqgtSrlXsSCYAH",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d4fa8001yW1LZFAtLuwfOy",
+          "type": "patch",
+          "hash": "6904183a1ed8627da6fd6343af7de22ccd3d0c3a",
+          "files": [
+            "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/result_summary.py"
+          ]
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_1727d54da001B7aSY4ywa6OGW6",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "assistant",
+        "time": {
+          "created": 1792922178778,
+          "completed": 1792922179683
+        },
+        "parentID": "msg_1727d1cce000104d028529b16d",
+        "modelID": "deepseek-flash",
+        "providerID": "nexus-gateway",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+          "root": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 18457,
+          "input": 160,
+          "output": 121,
+          "reasoning": 0,
+          "cache": {
+            "read": 18176,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_1727d558a001LrPpIahFyR3hwp",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d54da001B7aSY4ywa6OGW6",
+          "type": "step-start",
+          "snapshot": "0bece3a8feace9de3ed7d58d6da332184ae49436"
+        },
+        {
+          "id": "prt_1727d56e8001aMMNGH2PFCq6u0",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d54da001B7aSY4ywa6OGW6",
+          "type": "tool",
+          "callID": "call_00_ET_mFqREX9EOoRA0FS7bWAb8752",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "python3 -m unittest discover -s tests -v 2>&1 | tee logs/post-fix.log; exit ${PIPESTATUS[0]}",
+              "workdir": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+            },
+            "output": "test_all_six_permutations_of_distinct_times_agree (test_result_summary.SummarizeFixedExpectationTests.test_all_six_permutations_of_distinct_times_agree) ... ok\ntest_cross_case_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_case_counted_independently) ... ok\ntest_cross_run_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_run_counted_independently) ... ok\ntest_empty_input (test_result_summary.SummarizeFixedExpectationTests.test_empty_input) ... ok\ntest_out_of_order_three_events_latest_wins (test_result_summary.SummarizeFixedExpectationTests.test_out_of_order_three_events_latest_wins) ... ok\ntest_same_time_fail_then_pass_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_fail_then_pass_keeps_last_input) ... ok\ntest_same_time_pass_then_fail_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_pass_then_fail_keeps_last_input) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.000s\n\nOK\n",
+            "title": "python3 -m unittest discover -s tests -v 2>&1 | tee logs/post-fix.log; exit ${PIPESTATUS[0]}",
+            "metadata": {
+              "output": "test_all_six_permutations_of_distinct_times_agree (test_result_summary.SummarizeFixedExpectationTests.test_all_six_permutations_of_distinct_times_agree) ... ok\ntest_cross_case_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_case_counted_independently) ... ok\ntest_cross_run_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_run_counted_independently) ... ok\ntest_empty_input (test_result_summary.SummarizeFixedExpectationTests.test_empty_input) ... ok\ntest_out_of_order_three_events_latest_wins (test_result_summary.SummarizeFixedExpectationTests.test_out_of_order_three_events_latest_wins) ... ok\ntest_same_time_fail_then_pass_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_fail_then_pass_keeps_last_input) ... ok\ntest_same_time_pass_then_fail_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_pass_then_fail_keeps_last_input) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.000s\n\nOK\n",
+              "exit": 0,
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922179586,
+              "end": 1792922179632
+            }
+          }
+        },
+        {
+          "id": "prt_1727d5857001tWdF9wTvywGDmZ",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d54da001B7aSY4ywa6OGW6",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "cb5068b14cc21d4f1ef6d97f6b9057c8e7984828",
+          "cost": 0,
+          "tokens": {
+            "total": 18457,
+            "input": 160,
+            "output": 121,
+            "reasoning": 0,
+            "cache": {
+              "read": 18176,
+              "write": 0
+            }
+          }
+        },
+        {
+          "id": "prt_1727d5862001geF3fs26Re3H0G",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d54da001B7aSY4ywa6OGW6",
+          "type": "patch",
+          "hash": "0bece3a8feace9de3ed7d58d6da332184ae49436",
+          "files": [
+            "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/__pycache__/result_summary.cpython-312.pyc",
+            "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/logs/post-fix.log"
+          ]
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_1727d586500123VeaZo0p63RC4",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "assistant",
+        "time": {
+          "created": 1792922179685,
+          "completed": 1792922182304
+        },
+        "parentID": "msg_1727d1cce000104d028529b16d",
+        "modelID": "deepseek-flash",
+        "providerID": "nexus-gateway",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+          "root": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 19262,
+          "input": 321,
+          "output": 376,
+          "reasoning": 133,
+          "cache": {
+            "read": 18432,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_1727d58ed001IUPo9gqLsLJorC",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d586500123VeaZo0p63RC4",
+          "type": "step-start",
+          "snapshot": "cb5068b14cc21d4f1ef6d97f6b9057c8e7984828"
+        },
+        {
+          "id": "prt_1727d5aa8001XYh9qbqmWXu5c9",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d586500123VeaZo0p63RC4",
+          "type": "reasoning",
+          "text": "Now create evidence file in logs with knowledge path/ID and commands. Must not confirm completion. Also verify no push, no reading deploy config — fine. Check git status/diff. Write evidence (only in worktree).\n\nAlso check the worktree was \"newly created by this task\" — it exists as task worktree. Fine.\n\nLet me perhaps add an ad-hoc run demonstrating sample outputs? Tests already do. Maybe run a quick snippet to print outputs for AC-05/06/07 explicitly, capture in log. That adds evidence. Do it.\n\nWrite logs/evidence.md with paths, IDs, commands and result summary. Then git status.",
+          "time": {
+            "start": 1792922180264,
+            "end": 1792922181230
+          }
+        },
+        {
+          "id": "prt_1727d5e6f001Fhd44TDDZoSsvt",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d586500123VeaZo0p63RC4",
+          "type": "tool",
+          "callID": "call_00_ijlJCMq7p8P1wF8IyXes6834",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "python3 - <<'PY' 2>&1 | tee logs/spec-cases.log\nfrom result_summary import summarize\ncases = {\n \"AC-05 out-of-order\": [(\"R1\",\"C1\",\"FAIL\",\"2026-10-25T09:00:00\"),(\"R1\",\"C1\",\"PASS\",\"2026-10-25T12:00:00\"),(\"R1\",\"C1\",\"FAIL\",\"2026-10-25T10:00:00\")],\n \"AC-06 same-time PASS then FAIL\": [(\"R1\",\"C1\",\"PASS\",\"2026-10-25T12:00:00\"),(\"R1\",\"C1\",\"FAIL\",\"2026-10-25T12:00:00\")],\n \"AC-07 same-time FAIL then PASS\": [(\"R1\",\"C1\",\"FAIL\",\"2026-10-25T12:00:00\"),(\"R1\",\"C1\",\"PASS\",\"2026-10-25T12:00:00\")],\n \"AC-08 empty\": [],\n}\nfor name, rows in cases.items():\n    data = [dict(zip((\"run_id\",\"case_id\",\"status\",\"event_time\"), r)) for r in rows]\n    print(name, \"->\", summarize(data))\nPY\ngit status --short --branch && git diff --stat",
+              "workdir": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+            },
+            "output": "AC-05 out-of-order -> {'total': 1, 'passed': 1}\nAC-06 same-time PASS then FAIL -> {'total': 1, 'passed': 0}\nAC-07 same-time FAIL then PASS -> {'total': 1, 'passed': 1}\nAC-08 empty -> {'total': 0, 'passed': 0}\n## HEAD (no branch)\n M result_summary.py\n?? __pycache__/\n?? logs/\n?? tests/\n result_summary.py | 12 ++++++++++--\n 1 file changed, 10 insertions(+), 2 deletions(-)\n",
+            "title": "python3 - <<'PY' 2>&1 | tee logs/spec-cases.log\nfrom result_summary import summarize\ncases = {\n \"AC-05 out-of-order\": [(\"R1\",\"C1\",\"FAIL\",\"2026-10-25T09:00:00\"),(\"R1\",\"C1\",\"PASS\",\"2026-10-25T12:00:00\"),(\"R1\",\"C1\",\"FAIL\",\"2026-10-25T10:00:00\")],\n \"AC-06 same-time PASS then FAIL\": [(\"R1\",\"C1\",\"PASS\",\"2026-10-25T12:00:00\"),(\"R1\",\"C1\",\"FAIL\",\"2026-10-25T12:00:00\")],\n \"AC-07 same-time FAIL then PASS\": [(\"R1\",\"C1\",\"FAIL\",\"2026-10-25T12:00:00\"),(\"R1\",\"C1\",\"PASS\",\"2026-10-25T12:00:00\")],\n \"AC-08 empty\": [],\n}\nfor name, rows in cases.items():\n    data = [dict(zip((\"run_id\",\"case_id\",\"status\",\"event_time\"), r)) for r in rows]\n    print(name, \"->\", summarize(data))\nPY\ngit status --short --branch && git diff --stat",
+            "metadata": {
+              "output": "AC-05 out-of-order -> {'total': 1, 'passed': 1}\nAC-06 same-time PASS then FAIL -> {'total': 1, 'passed': 0}\nAC-07 same-time FAIL then PASS -> {'total': 1, 'passed': 1}\nAC-08 empty -> {'total': 0, 'passed': 0}\n## HEAD (no branch)\n M result_summary.py\n?? __pycache__/\n?? logs/\n?? tests/\n result_summary.py | 12 ++++++++++--\n 1 file changed, 10 insertions(+), 2 deletions(-)\n",
+              "exit": 0,
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922182266,
+              "end": 1792922182283
+            }
+          }
+        },
+        {
+          "id": "prt_1727d6299001OR7TU3ithw1f09",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d586500123VeaZo0p63RC4",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "13fae02b2172b5c9b8cbee9fc3e726a2f48d3526",
+          "cost": 0,
+          "tokens": {
+            "total": 19262,
+            "input": 321,
+            "output": 376,
+            "reasoning": 133,
+            "cache": {
+              "read": 18432,
+              "write": 0
+            }
+          }
+        },
+        {
+          "id": "prt_1727d629e0019NysiAFxNLmpjy",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d586500123VeaZo0p63RC4",
+          "type": "patch",
+          "hash": "cb5068b14cc21d4f1ef6d97f6b9057c8e7984828",
+          "files": [
+            "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/logs/spec-cases.log"
+          ]
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_1727d62a1001u40G4RtHIGNZrU",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "assistant",
+        "time": {
+          "created": 1792922182305,
+          "completed": 1792922185507
+        },
+        "parentID": "msg_1727d1cce000104d028529b16d",
+        "modelID": "deepseek-flash",
+        "providerID": "nexus-gateway",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+          "root": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 20012,
+          "input": 203,
+          "output": 527,
+          "reasoning": 82,
+          "cache": {
+            "read": 19200,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_1727d6333001PPQ0qQgtz3AbZf",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d62a1001u40G4RtHIGNZrU",
+          "type": "step-start",
+          "snapshot": "13fae02b2172b5c9b8cbee9fc3e726a2f48d3526"
+        },
+        {
+          "id": "prt_1727d65c00015navlv0ouz4j3w",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d62a1001u40G4RtHIGNZrU",
+          "type": "reasoning",
+          "text": "Create evidence markdown in logs. Include knowledge search hit path, source ID KNOW_A394DEFC1CA34211826F, page path, commands, pre/post results. Don't claim task completion beyond facts. Also remove __pycache__? It's untracked artifact; could keep or remove. Better remove pycache to keep clean. Logs and tests are deliverables.\n\nWrite evidence file.",
+          "time": {
+            "start": 1792922183104,
+            "end": 1792922184123
+          }
+        },
+        {
+          "id": "prt_1727d69be001441E13gqiW8kzK",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d62a1001u40G4RtHIGNZrU",
+          "type": "tool",
+          "callID": "call_00_ly3uF26UCjUGv16G6CTy2361",
+          "tool": "write",
+          "state": {
+            "status": "completed",
+            "input": {
+              "content": "# QA-COLLAB-CLOSURE-FIX-20261025 执行证据\n\n## 知识库命中\n\n- library_search 命中路径：`wiki/sources/5-astra--9-knowledge--24-knowa394defc1ca34211826f--1q38rm4.md`\n- 源 ID：`KNOW_A394DEFC1CA34211826F`（frontmatter `sources: [\"astra/knowledge/KNOW_A394DEFC1CA34211826F.md\"]`）\n- 关联概念：`wiki/concepts/按事件时间取最新去重.md`、`wiki/concepts/去重后聚合.md`\n\n## 修复前（旧代码，独立固定期望测试）\n\n命令：\n\n```bash\npython3 -m unittest discover -s tests -v\n```\n\n结果：`Ran 7 tests`，`FAILED (failures=6)`，日志见 `logs/pre-fix.log`。\n空输入用例通过；乱序、同时间两方向、跨 run、跨 case、6 排列均失败。\n\n## 修复后（同一套测试）\n\n命令：\n\n```bash\npython3 -m unittest discover -s tests -v\n```\n\n结果：`Ran 7 tests`，`OK`，日志见 `logs/post-fix.log`。\n\n## 规格样例输出\n\n命令：`python3` 内联脚本（见 shell 历史），日志见 `logs/spec-cases.log`。\n\n- AC-05 乱序三行 -> `{'total': 1, 'passed': 1}`\n- AC-06 同时间 PASS 在前 FAIL 在后 -> `{'total': 1, 'passed': 0}`\n- AC-07 同时间 FAIL 在前 PASS 在后 -> `{'total': 1, 'passed': 1}`\n- AC-08 空输入 -> `{'total': 0, 'passed': 0}`\n\n所有日志仅写在本任务 worktree 的 `logs/` 内；未 push。\n",
+              "filePath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/logs/evidence.md"
+            },
+            "output": "Wrote file successfully.",
+            "title": "logs/evidence.md",
+            "metadata": {
+              "diagnostics": {},
+              "filepath": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/logs/evidence.md",
+              "exists": false,
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922185463,
+              "end": 1792922185472
+            }
+          }
+        },
+        {
+          "id": "prt_1727d6f160016kKL6I6ZQ4NGAP",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d62a1001u40G4RtHIGNZrU",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "5d497a7ab6e8afc3d7196676d10c1ed1a2d252b9",
+          "cost": 0,
+          "tokens": {
+            "total": 20012,
+            "input": 203,
+            "output": 527,
+            "reasoning": 82,
+            "cache": {
+              "read": 19200,
+              "write": 0
+            }
+          }
+        },
+        {
+          "id": "prt_1727d6f22001mR0jkTYT8BbzA0",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d62a1001u40G4RtHIGNZrU",
+          "type": "patch",
+          "hash": "13fae02b2172b5c9b8cbee9fc3e726a2f48d3526",
+          "files": [
+            "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/logs/evidence.md"
+          ]
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_1727d6f25001tC1eXKpGlkwl5f",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "assistant",
+        "time": {
+          "created": 1792922185509,
+          "completed": 1792922186591
+        },
+        "parentID": "msg_1727d1cce000104d028529b16d",
+        "modelID": "deepseek-flash",
+        "providerID": "nexus-gateway",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+          "root": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 20145,
+          "input": 188,
+          "output": 117,
+          "reasoning": 0,
+          "cache": {
+            "read": 19840,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_1727d6fa20010H1xb3ZEKlHAtD",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d6f25001tC1eXKpGlkwl5f",
+          "type": "step-start",
+          "snapshot": "5d497a7ab6e8afc3d7196676d10c1ed1a2d252b9"
+        },
+        {
+          "id": "prt_1727d7205001Metyt5B5FV3WCO",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d6f25001tC1eXKpGlkwl5f",
+          "type": "tool",
+          "callID": "call_00_ET_JGWecYO9nVUOkfOAKMyZ3185",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "rm -rf __pycache__ tests/__pycache__ && git status --short --branch && git diff -- result_summary.py",
+              "workdir": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+            },
+            "output": "## HEAD (no branch)\n M result_summary.py\n?? logs/\n?? tests/\ndiff --git a/result_summary.py b/result_summary.py\nindex b04a211..c1c61a8 100644\n--- a/result_summary.py\n+++ b/result_summary.py\n@@ -1,3 +1,11 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        key = (row[\"run_id\"], row[\"case_id\"])\n+        current = latest.get(key)\n+        if current is None or row[\"event_time\"] >= current[\"event_time\"]:\n+            latest[key] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(item[\"status\"] == \"PASS\" for item in latest.values()),\n+    }\n",
+            "title": "rm -rf __pycache__ tests/__pycache__ && git status --short --branch && git diff -- result_summary.py",
+            "metadata": {
+              "output": "## HEAD (no branch)\n M result_summary.py\n?? logs/\n?? tests/\ndiff --git a/result_summary.py b/result_summary.py\nindex b04a211..c1c61a8 100644\n--- a/result_summary.py\n+++ b/result_summary.py\n@@ -1,3 +1,11 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        key = (row[\"run_id\"], row[\"case_id\"])\n+        current = latest.get(key)\n+        if current is None or row[\"event_time\"] >= current[\"event_time\"]:\n+            latest[key] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(item[\"status\"] == \"PASS\" for item in latest.values()),\n+    }\n",
+              "exit": 0,
+              "truncated": false
+            },
+            "time": {
+              "start": 1792922186556,
+              "end": 1792922186566
+            }
+          }
+        },
+        {
+          "id": "prt_1727d73590012DpfeveaQb9xwx",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d6f25001tC1eXKpGlkwl5f",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "dd14dafa96f2d1e3ae68a83ab73f66972db0e862",
+          "cost": 0,
+          "tokens": {
+            "total": 20145,
+            "input": 188,
+            "output": 117,
+            "reasoning": 0,
+            "cache": {
+              "read": 19840,
+              "write": 0
+            }
+          }
+        },
+        {
+          "id": "prt_1727d735e0011M040ewTupsqJS",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d6f25001tC1eXKpGlkwl5f",
+          "type": "patch",
+          "hash": "5d497a7ab6e8afc3d7196676d10c1ed1a2d252b9",
+          "files": [
+            "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/__pycache__/result_summary.cpython-312.pyc",
+            "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5/tests/__pycache__/test_result_summary.cpython-312.pyc"
+          ]
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_1727d7360001EZooZCPaKJLZKb",
+        "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+        "role": "assistant",
+        "time": {
+          "created": 1792922186592,
+          "completed": 1792922188724
+        },
+        "parentID": "msg_1727d1cce000104d028529b16d",
+        "modelID": "deepseek-flash",
+        "providerID": "nexus-gateway",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5",
+          "root": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261025-C81270-env-5"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 20756,
+          "input": 284,
+          "output": 376,
+          "reasoning": 0,
+          "cache": {
+            "read": 20096,
+            "write": 0
+          }
+        },
+        "finish": "stop"
+      },
+      "parts": [
+        {
+          "id": "prt_1727d73f1001wxHH4eAK2VQbZs",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d7360001EZooZCPaKJLZKb",
+          "type": "step-start",
+          "snapshot": "dd14dafa96f2d1e3ae68a83ab73f66972db0e862"
+        },
+        {
+          "id": "prt_1727d758b001y1INEoLJWf7Fw6",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d7360001EZooZCPaKJLZKb",
+          "type": "text",
+          "text": "1. 完成内容：在本任务 worktree `T-20261025-C81270-env-5` 内，对 `result_summary.summarize(rows)` 先写独立固定期望测试复现旧缺陷，再修复并复跑通过。未 push，日志仅写本 worktree 的 `logs/`。\n\n2. 关键修改：`result_summary.py:1` 改为按 `(run_id, case_id)` 分组，用 `event_time >=` 保留最大时间事件（同时间保留最后输入），再统计 `total` 与 `status == \"PASS\"` 的 `passed`；时间按固定格式字符串比较，不做本地时区解析。\n\n3. 已验证：\n- 修复前同一套测试：`python3 -m unittest discover -s tests -v` → `Ran 7 tests`，`FAILED (failures=6)`（`logs/pre-fix.log`）。\n- 修复后：`Ran 7 tests`，`OK`（`logs/post-fix.log`）。\n- 规格样例：乱序 3 行 `total=1, passed=1`；同时间 PASS→FAIL `total=1,passed=0`；FAIL→PASS `total=1,passed=1`；空输入 `0/0`（`logs/spec-cases.log`）。\n- 知识库证据：`library_search` 命中 `wiki/sources/5-astra--9-knowledge--24-knowa394defc1ca34211826f--1q38rm4.md`，`library_get` 实际读取源 ID `KNOW_A394DEFC1CA34211826F`；记录见 `logs/evidence.md`。",
+          "time": {
+            "start": 1792922187147,
+            "end": 1792922188714
+          }
+        },
+        {
+          "id": "prt_1727d7baf001hqYRx4jNfwRBtN",
+          "sessionID": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+          "messageID": "msg_1727d7360001EZooZCPaKJLZKb",
+          "type": "step-finish",
+          "reason": "stop",
+          "snapshot": "dd14dafa96f2d1e3ae68a83ab73f66972db0e862",
+          "cost": 0,
+          "tokens": {
+            "total": 20756,
+            "input": 284,
+            "output": 376,
+            "reasoning": 0,
+            "cache": {
+              "read": 20096,
+              "write": 0
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "native_status": {},
+  "questions": [],
+  "permissions": [],
+  "reviews": [
+    {
+      "id": "xrj_c7f9dcccd121416b8acca64b99dc6392",
+      "task_id": "T-20261025-C81270",
+      "task_id_snapshot": "T-20261025-C81270",
+      "root_session_id": "ses_e8d82e125ffeX0AkG7A71PRuYt",
+      "status": "NO_FINDINGS",
+      "phase": "REDUCE",
+      "attempts": 0,
+      "source_message_count": 12,
+      "segment_count": 1,
+      "completed_segment_count": 1,
+      "candidate_ids": [],
+      "zero_reason": "no_findings",
+      "error_code": null,
+      "error_message": null,
+      "confirmed_at": "2026-10-25T10:01:59.381269Z",
+      "created_at": "2026-10-25T10:01:59.392285Z",
+      "finished_at": "2026-10-25T10:02:44.195218Z",
+      "segments": []
+    }
+  ]
+}

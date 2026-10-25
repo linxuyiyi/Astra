@@ -1,0 +1,35 @@
+{
+  "at": 1792922527.954355,
+  "repeat_responses": [
+    {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "duplicate": true
+      }
+    },
+    {
+      "status": 200,
+      "body": {
+        "ok": true,
+        "duplicate": true
+      }
+    }
+  ],
+  "message_count": 1,
+  "task": {
+    "id": "T-20261025-C81270",
+    "status": "SUCCEEDED",
+    "confirmed_at": "2026-10-25 10:01:59.381269"
+  },
+  "reviews": [
+    {
+      "id": "xrj_c7f9dcccd121416b8acca64b99dc6392",
+      "status": "ANALYZING",
+      "phase": "MAP",
+      "candidate_ids": "[]",
+      "error_code": null,
+      "error_message": null
+    }
+  ]
+}

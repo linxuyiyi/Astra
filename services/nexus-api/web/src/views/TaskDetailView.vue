@@ -61,7 +61,7 @@
         </div>
       </ElAlert>
       <ElAlert v-if="workspaceUiError" class="workspace-alert" type="warning" show-icon :closable="false" :title="workspaceUiError" />
-      <iframe v-else-if="frameUrl" :key="frameKey" :src="frameUrl" title="OpenCode Task Workspace" class="task-detail__frame" allow="clipboard-read; clipboard-write" />
+      <iframe v-else-if="frameUrl" :key="frameKey" :src="frameUrl" ref="workspaceFrame" title="OpenCode Task Workspace" class="task-detail__frame" allow="clipboard-read; clipboard-write" />
       <ElEmpty v-else-if="binding" :image-size="80" :description="task?.current_session_id ? 'Session 绑定异常，请重连检查' : '任务尚未创建 Session，请先启动任务。'" />
     </ElMain>
 
@@ -227,18 +227,40 @@ const events = ref<AstraEvent[]>([])
 const usage = ref<TaskUsage | null>(null)
 const usageError = ref('')
 let eventSource: EventSource | null = null
+const workspaceFrame = ref<HTMLIFrameElement | null>(null)
 function closeEvents() { eventSource?.close(); eventSource = null }
-async function openEvents() {
-  const id = String(route.params.id)
-  showEvents.value = true
-  events.value = await api.taskEvents(id).catch(() => [])
+function workspaceReady(event: MessageEvent) {
+  if (event.origin !== location.origin || event.source !== workspaceFrame.value?.contentWindow) return
+  if (event.data?.type !== 'astra-workspace-ready' || event.data.taskId !== String(route.params.id)
+    || event.data.sessionId !== selectedSession.value) return
+  refreshFromEvent()
+}
+let refreshPending = false
+let eventRefresh: Promise<void> | null = null
+function refreshFromEvent() {
+  refreshPending = true
+  if (eventRefresh) return
+  eventRefresh = (async () => {
+    while (refreshPending) { refreshPending = false; await load() }
+  })().finally(() => { eventRefresh = null })
+}
+function connectTaskEvents() {
   closeEvents()
+  const id = String(route.params.id)
   eventSource = new EventSource('/api/events/stream')
+  eventSource.addEventListener('connected', () => refreshFromEvent())
   eventSource.addEventListener('update', (message) => {
     const data = JSON.parse((message as MessageEvent).data) as { id: number; type?: string; task_id: string | null; employee_id: string | null; phase: string; message: string; created_at: string }
-    if (data.task_id !== id || events.value.some(item => item.id === data.id)) return
-    events.value = [...events.value, { id: data.id, task_id: data.task_id, employee_id: data.employee_id, event_type: data.type || '', phase: data.phase, message: data.message, detail: {}, created_at: data.created_at }]
+    if (id !== String(route.params.id) || data.task_id !== id) return
+    if (showEvents.value && !events.value.some(item => item.id === data.id)) {
+      events.value = [...events.value, { ...data, event_type: data.type || '', detail: {} }]
+    }
+    if (data.type?.startsWith('TASK_') || data.type?.startsWith('RUNTIME_')) refreshFromEvent()
   })
+}
+async function openEvents() {
+  showEvents.value = true
+  events.value = await api.taskEvents(String(route.params.id)).catch(() => [])
 }
 async function openUsage() {
   showUsage.value = true
@@ -403,12 +425,13 @@ async function confirmExecutionStopped() {
   finally { busy.value = false }
 }
 async function reconnect() { await action('reconnect'); frameKey.value++ }
-watch(() => route.params.id, () => { selectedSession.value = ''; reviewJob.value = null; closeEvents(); showEvents.value = false; void load() }, { immediate: true })
+watch(() => route.params.id, () => { selectedSession.value = ''; reviewJob.value = null; connectTaskEvents(); showEvents.value = false; void load() }, { immediate: true })
 onMounted(() => {
+  window.addEventListener('message', workspaceReady)
   timer = setInterval(() => { now.value = Date.now() }, 1000)
   void listEmployees().then(items => { owners.value = items }).catch(() => { owners.value = [] })
 })
-onBeforeUnmount(() => { clearInterval(timer); diffRequest?.abort(); closeEvents() })
+onBeforeUnmount(() => { window.removeEventListener('message', workspaceReady); clearInterval(timer); diffRequest?.abort(); closeEvents() })
 </script>
 
 <style scoped>

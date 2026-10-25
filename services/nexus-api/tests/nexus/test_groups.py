@@ -278,7 +278,10 @@ def test_group_toolkit_filters_tools_by_server_origin(monkeypatch):
         Tool("mcp__nexus-task__nexus_task_get", is_mcp=True, mcp_name="nexus-task"),
     ]
 
+    assembled_records = []
+
     async def factory(**_kwargs):
+        assembled_records.append(_kwargs["agent_record"])
         return Toolkit(tools, [task_client])
 
     assembled = module.secure_group_toolkit(factory, "http://nexus", loader)
@@ -296,7 +299,8 @@ def test_group_toolkit_filters_tools_by_server_origin(monkeypatch):
         toolkit = asyncio.run(assembled(**kwargs))
         available = asyncio.run(toolkit._get_available_tools(["basic"]))
         assert set(available) == {"Bash", "mcp__demo__lookup", "mcp__nexus-task__nexus_task_get"}
-        assert kwargs["agent_record"].data.chat_config.react_config.max_iters == 2
+        assert assembled_records[-1].data.chat_config.react_config.max_iters == 8
+        assert kwargs["agent_record"].data.chat_config.react_config.max_iters == 99
         with pytest.raises(PermissionError):
             asyncio.run(_collect(toolkit, "mcp__evil__lookup"))
         assert asyncio.run(_collect(toolkit, "mcp__demo__lookup")) == ["called"]

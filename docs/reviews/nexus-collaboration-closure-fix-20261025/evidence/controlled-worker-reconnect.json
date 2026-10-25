@@ -1,0 +1,19 @@
+{
+  "unit": "nexus-worker-5.service",
+  "before": {
+    "MainPID": "428578",
+    "NRestarts": "0",
+    "ActiveState": "active",
+    "cwd": "/tmp/nexus-worker-experience-20261023/workspace",
+    "start_ticks": "37304073"
+  },
+  "stopped_at": 1792922598.850063,
+  "restarted_at": 1792922616.8862898,
+  "after": {
+    "MainPID": "429221",
+    "NRestarts": "0",
+    "ActiveState": "active",
+    "cwd": "/tmp/nexus-worker-experience-20261023/workspace",
+    "start_ticks": "37340475"
+  }
+}

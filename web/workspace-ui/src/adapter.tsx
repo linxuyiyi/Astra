@@ -9,6 +9,7 @@ import {
   type Platform,
 } from '@opencode-ai/app'
 import { base64Encode } from '@opencode-ai/core/util/encode'
+import { streamRecovery } from './stream-recovery'
 
 declare const __OPENCODE_WORKSPACE_VERSION__: string
 
@@ -95,7 +96,8 @@ function pageCrashed() {
   return SOLID_CRASH.some(item => text.includes(item))
 }
 
-function watchWorker(endpoint: string) {
+function watchWorker(endpoint: string, sessionID = selected || '') {
+  let lastBinding = ''
   const observer = new MutationObserver(() => {
     if (pageCrashed()) showOfflineNotice()
   })
@@ -110,6 +112,13 @@ function watchWorker(endpoint: string) {
       if (!response.ok) return
       const binding = await response.json()
       if (binding?.runtime?.worker_online === false) showOfflineNotice()
+      else {
+        const fact = JSON.stringify([binding.task_status, binding.runtime?.connection, binding.runtime?.error])
+        if (lastBinding !== fact) {
+          lastBinding = fact
+          notifyParent(sessionID)
+        }
+      }
     } catch {
       // The platform itself blipped. Leave the open workspace in place.
     }
@@ -136,7 +145,13 @@ function watchWorker(endpoint: string) {
   window.setInterval(() => { void recover() }, 1000)
 }
 
+function notifyParent(sessionID: string) {
+  if (!sessionID) return
+  window.parent.postMessage({ type: 'astra-workspace-ready', taskId: taskID, sessionId: sessionID }, location.origin)
+}
+
 function installFetchRewrite(endpoint: string) {
+  const recoverStream = streamRecovery(showOfflineNotice)
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const next = rewriteOpenCodeUrl(input, endpoint)
     const response = next
@@ -147,7 +162,8 @@ function installFetchRewrite(endpoint: string) {
         if (text.includes('不在线') || text.includes('不可连接')) showOfflineNotice()
       }).catch(() => {})
     }
-    return response
+    const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined)
+    return next ? recoverStream(new URL(next).pathname, response, signal) : response
   }
 }
 
@@ -188,7 +204,8 @@ async function boot() {
     defaultServer={ServerConnection.Key.make(endpoint)} servers={[server]} router={HashRouter}
   ></AppInterface></AppBaseProviders></PlatformProvider>, root)
   sessionStorage.removeItem(RECOVER_KEY)
-  watchWorker(endpoint)
+  watchWorker(endpoint, sessionID)
+  notifyParent(sessionID)
 }
 boot().catch(error => {
   const message = String(error.message || error)

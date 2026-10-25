@@ -162,3 +162,20 @@ async def test_wake_post_includes_event_id_and_retries_disabled_employee(session
         await HttpWakeSender(client).send(row)
     assert seen["event"] == str(row.event_id)
     assert seen["body"] == str(row.event_id)
+
+
+async def test_group_wake_posts_canonical_event_without_agent_inference(session):
+    task = await TaskService(session).create(new_task(responsible_employee_id="emp_1"))
+    await TaskService(session).transition(task, TaskStatus.FAILED)
+    row = await session.scalar(select(TaskWakeOutbox))
+    seen = []
+
+    def handler(request):
+        if request.url.path.endswith("/wake-target"):
+            return httpx.Response(200, json={"channel_id": "group-a"})
+        seen.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(200, json={"ok": True})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await HttpWakeSender(client).send(row)
+    assert seen == [("/api/v1/internal/group-task-event", {"event_id": row.event_id})]

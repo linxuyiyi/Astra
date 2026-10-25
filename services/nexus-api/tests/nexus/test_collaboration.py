@@ -182,6 +182,43 @@ def join(owner, other, cid):
     assert response.status_code == 200, response.text
 
 
+def test_peer_http_response_matches_committed_delivery(setup):
+    _, owner, _, cid, fake = setup
+    fake.delay = 0.25
+    with connect() as db:
+        db.execute(
+            text("UPDATE t_nexus_employees SET tools_json=:t WHERE id='dev'"),
+            {"t": json.dumps(["contact_employee"])},
+        )
+        db.commit()
+    sent = send(owner, cid, "@小牛码 请联系同事")
+    did = sent.json()["discussion_id"]
+    deadline = time.monotonic() + 3
+    sid = None
+    while time.monotonic() < deadline:
+        with connect() as db:
+            sid = db.execute(
+                text(
+                    "SELECT agentscope_session_id FROM t_nexus_channel_members "
+                    "WHERE channel_id=:c AND employee_id='dev'"
+                ),
+                {"c": cid},
+            ).scalar()
+        if sid:
+            break
+        time.sleep(0.01)
+    assert sid
+    response = owner.get(
+        "/api/v1/peers/resolve",
+        headers={"X-Nexus-Internal-Key": "test-internal-key"},
+        params={"session_id": sid, "name": "小掌柜", "message": "唯一联系反例", "execution_id": did},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["scheduled"] is True
+    page = wait_done(owner, cid)
+    assert sum(item["text"] == "唯一联系反例" for item in page["items"]) == 1
+
+
 def test_temporary_uid_and_group_membership_boundary(setup):
     app, _, uid, cid, _ = setup
     outsider = TestClient(app)
@@ -619,3 +656,74 @@ def test_tool_policy_requires_user_grant_and_matching_mcp_ref(setup):
     assert policy["mcp_refs"] == {"mcp-demo": "demo"}
     with pytest.raises(HTTPException):
         app.state.collaboration.policy(sid, tool, "dis-other", "mcp-demo")
+
+
+def test_task_notification_survives_closed_discussion_and_is_idempotent(setup):
+    from sqlalchemy.orm import Session
+
+    from app.models import Event, Task, TaskWakeOutbox
+    from app.models import utcnow as db_now
+
+    _, owner, _, cid, _ = setup
+    send(owner, cid, "@小牛码 你好")
+    page = wait_done(owner, cid)
+    with connect() as db:
+        sid = db.execute(
+            text(
+                "SELECT agentscope_session_id FROM t_nexus_channel_members "
+                "WHERE channel_id=:c AND employee_id='dev'"
+            ),
+            {"c": cid},
+        ).scalar()
+        with Session(bind=db) as session:
+            session.add(
+                Task(
+                    id="T-NOTICE",
+                    title="交付验收",
+                    task_type="REQUIREMENT",
+                    responsible_employee_id="dev",
+                    source_channel_id=cid,
+                    source_session_id=sid,
+                    status="WAITING",
+                )
+            )
+            session.flush()
+            event = Event(task_id="T-NOTICE", event_type="TASK_WAITING", message="执行结束，待确认")
+            session.add(event)
+            session.flush()
+            eid = event.id
+            session.add(
+                TaskWakeOutbox(
+                    event_id=eid,
+                    task_id="T-NOTICE",
+                    responsible_employee_id="dev",
+                    source_session_id=sid,
+                    status="pending",
+                    hint="待确认",
+                    next_retry_at=db_now(),
+                )
+            )
+            session.commit()
+        db.commit()
+    headers = {"X-Nexus-Internal-Key": "test-internal-key"}
+    target = owner.get(
+        "/api/v1/internal/wake-target", headers=headers, params={"employee_id": "dev", "session_id": sid}
+    )
+    assert target.json() == {"channel_id": cid}
+    assert owner.post("/api/v1/internal/group-task-event", json={"event_id": eid}).status_code == 401
+    for duplicate in (False, True):
+        response = owner.post("/api/v1/internal/group-task-event", headers=headers, json={"event_id": eid})
+        assert response.status_code == 200, response.text
+        assert response.json()["duplicate"] is duplicate
+    after = owner.get(f"/api/v1/channels/{cid}/messages").json()
+    notices = [x for x in after["items"] if x["id"] == f"task_event_{eid}"]
+    assert len(notices) == 1 and notices[0]["sender_type"] == "system"
+    assert notices[0]["message"]["metadata"]["task_id"] == "T-NOTICE"
+    assert after["channel"]["discussion"] == page["channel"]["discussion"]
+    with connect() as db:
+        db.execute(text("UPDATE t_nexus_tasks SET source_session_id='foreign' WHERE id='T-NOTICE'"))
+        db.commit()
+    assert (
+        owner.post("/api/v1/internal/group-task-event", headers=headers, json={"event_id": eid}).status_code
+        == 403
+    )

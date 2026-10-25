@@ -1,0 +1,85 @@
+{
+  "api": {
+    "pid": 10425,
+    "pgid": 10425,
+    "create_time": "1792922446.610",
+    "cwd": "/Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/services/nexus-api",
+    "log": "/tmp/nexus-collaboration-closure-fixes-20261025/api.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/.venv/bin/python",
+      "-m",
+      "uvicorn",
+      "nexus_api.service:app",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "18520",
+      "--no-access-log"
+    ],
+    "port": 18520
+  },
+  "task-mcp": {
+    "pid": 9922,
+    "pgid": 9922,
+    "create_time": "1792921790.732",
+    "cwd": "/Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/services/nexus-api",
+    "log": "/tmp/nexus-collaboration-closure-fixes-20261025/task-mcp.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/.venv/bin/python",
+      "-m",
+      "app.task_mcp"
+    ],
+    "port": 18502
+  },
+  "agent-service": {
+    "pid": 9898,
+    "pgid": 9898,
+    "create_time": "1792921773.249",
+    "cwd": "/Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/services/agent-service",
+    "log": "/tmp/nexus-collaboration-closure-fixes-20261025/agent-service.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/nexus/deploy/.venv-agentscope/bin/python",
+      "agent_service.py"
+    ],
+    "port": 18500
+  },
+  "celery-worker": {
+    "pid": 10296,
+    "pgid": 10296,
+    "create_time": "1792922346.096",
+    "cwd": "/Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/services/nexus-api",
+    "log": "/tmp/nexus-collaboration-closure-fixes-20261025/celery-worker.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/.venv/bin/python",
+      "-m",
+      "celery",
+      "-A",
+      "app.runtime.celery_app:celery",
+      "worker",
+      "--pool=solo",
+      "--concurrency=1",
+      "-Q",
+      "nexus-control,nexus-review",
+      "--loglevel=INFO",
+      "--hostname=qa-worker-experience"
+    ]
+  },
+  "celery-beat": {
+    "pid": 10297,
+    "pgid": 10297,
+    "create_time": "1792922346.097",
+    "cwd": "/Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/services/nexus-api",
+    "log": "/tmp/nexus-collaboration-closure-fixes-20261025/celery-beat.log",
+    "command": [
+      "/Users/niuniu/程序/Astra/.venv/bin/python",
+      "-m",
+      "celery",
+      "-A",
+      "app.runtime.celery_app:celery",
+      "beat",
+      "--loglevel=INFO",
+      "--schedule",
+      "/tmp/nexus-worker-experience-20261023/celerybeat-schedule"
+    ]
+  }
+}

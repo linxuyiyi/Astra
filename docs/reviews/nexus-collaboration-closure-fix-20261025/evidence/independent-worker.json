@@ -1,0 +1,160 @@
+{
+  "checks": [
+    {
+      "name": "late_then_early",
+      "expected": {
+        "total": 1,
+        "passed": 1
+      },
+      "new": {
+        "total": 1,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "early_then_late",
+      "expected": {
+        "total": 1,
+        "passed": 0
+      },
+      "new": {
+        "total": 1,
+        "passed": 0
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "tie_forward",
+      "expected": {
+        "total": 1,
+        "passed": 0
+      },
+      "new": {
+        "total": 1,
+        "passed": 0
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "tie_reverse",
+      "expected": {
+        "total": 1,
+        "passed": 1
+      },
+      "new": {
+        "total": 1,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 1
+      },
+      "passed": true
+    },
+    {
+      "name": "different_run",
+      "expected": {
+        "total": 2,
+        "passed": 1
+      },
+      "new": {
+        "total": 2,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 2,
+        "passed": 1
+      },
+      "passed": true
+    },
+    {
+      "name": "different_case",
+      "expected": {
+        "total": 2,
+        "passed": 1
+      },
+      "new": {
+        "total": 2,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 2,
+        "passed": 1
+      },
+      "passed": true
+    },
+    {
+      "name": "empty",
+      "expected": {
+        "total": 0,
+        "passed": 0
+      },
+      "new": {
+        "total": 0,
+        "passed": 0
+      },
+      "old": {
+        "total": 0,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 0,
+        "passed": 0
+      },
+      "passed": true
+    }
+  ],
+  "all_checks_passed": true,
+  "unique_time_permutations_passed": 6,
+  "worker_test_command": [
+    "python3",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests",
+    "-v"
+  ],
+  "worker_tests_returncode": 0,
+  "worker_tests_output": "test_all_six_permutations_of_distinct_times_agree (test_result_summary.SummarizeFixedExpectationTests.test_all_six_permutations_of_distinct_times_agree) ... ok\ntest_cross_case_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_case_counted_independently) ... ok\ntest_cross_run_counted_independently (test_result_summary.SummarizeFixedExpectationTests.test_cross_run_counted_independently) ... ok\ntest_empty_input (test_result_summary.SummarizeFixedExpectationTests.test_empty_input) ... ok\ntest_out_of_order_three_events_latest_wins (test_result_summary.SummarizeFixedExpectationTests.test_out_of_order_three_events_latest_wins) ... ok\ntest_same_time_fail_then_pass_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_fail_then_pass_keeps_last_input) ... ok\ntest_same_time_pass_then_fail_keeps_last_input (test_result_summary.SummarizeFixedExpectationTests.test_same_time_pass_then_fail_keeps_last_input) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.000s\n\nOK\n",
+  "git_diff": "diff --git a/result_summary.py b/result_summary.py\nindex b04a211..c1c61a8 100644\n--- a/result_summary.py\n+++ b/result_summary.py\n@@ -1,3 +1,11 @@\n def summarize(rows):\n-    # Defect: duplicate test results are counted multiple times.\n-    return {\"total\": len(rows), \"passed\": sum(r[\"status\"] == \"passed\" for r in rows)}\n+    latest = {}\n+    for row in rows:\n+        key = (row[\"run_id\"], row[\"case_id\"])\n+        current = latest.get(key)\n+        if current is None or row[\"event_time\"] >= current[\"event_time\"]:\n+            latest[key] = row\n+    return {\n+        \"total\": len(latest),\n+        \"passed\": sum(item[\"status\"] == \"PASS\" for item in latest.values()),\n+    }\n",
+  "git_status": " M result_summary.py\n?? __pycache__/\n?? logs/\n?? tests/\n",
+  "head": "da575de5173bc531ed9a45de484564908512481d"
+}

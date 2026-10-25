@@ -1,0 +1,30 @@
+Browser tab: 6, Title: "Nexus v1.4.8", URL: "http://127.0.0.1:18520/tasks/T-20261025-C81270".
+1 AXWebArea Nexus v1.4.8, URL: 127.0.0.1:18520/tasks/T-20261025-C81270
+	2 container app
+		3 container
+			4 link Description: ✦ NEXUS v1.4.8, Help: 星云首页, Value: 127.0.0.1:18520/
+			5 container 页面导航
+				6 link Description: 数字员工, Value: 127.0.0.1:18520/chat
+				7 link Description: 任务大厅, Value: 127.0.0.1:18520/tasks
+				8 link Description: 数字图书馆, Value: 127.0.0.1:18520/library
+				9 link Description: API 网关, Value: 127.0.0.1:18520/gateway
+				10 link Description: 配置中心, Value: 127.0.0.1:18520/settings
+			11 text AgentScope 2.0.10 已连接
+		12 container
+			13 link Description: 返回任务列表, Value: 127.0.0.1:18520/tasks
+			14 heading QA-COLLAB-CLOSURE-FIX-20261025, Value: 1
+				15 text QA-COLLAB-CLOSURE-FIX-20261025
+			16 container
+				17 combo box (collapsed, settable) Description: 选择会话, ID: el-id-4448-19, Secondary Actions: Expand
+				18 text 会话 #1 · 当前
+				19 image
+			20 button 刷新状态
+			22 pop up button (collapsed) 更多, ID: el-id-4448-9, Secondary Actions: Expand
+			25 text 经验复盘：无新经验
+			26 text 轨迹片段 1/1
+			27 button 重试复盘
+			23 container OpenCode Task Workspace
+				24 AXWebArea Task Workspace, URL: 127.0.0.1:18520/opencode-workspace/1.18.35/index.html?task=T-20261025-C81270&session=ses_e8d82e125ffeX0AkG7A71PRuYt#/server/aHR0cDovLzEyNy4wLjAuMToxODUyMC9hcGkvdGFza3MvVC0yMDI2MTAyNS1DODEyNzAvb3BlbmNvZGUvc2VzX2U4ZDgyZTEyNWZmZVgwQWtHN0E3MVBSdVl0/session/ses_e8d82e125ffeX0AkG7A71PRuYt
+					28 text Worker 不在线。正在自动重试…
+
+The focused UI element is 1 AXWebArea Nexus v1.4.8, URL: 127.0.0.1:18520/tasks/T-20261025-C81270

@@ -32,6 +32,10 @@ class UnconfirmedStop(RuntimeError):
     """保留运行身份，等待租约恢复时再次确认上游停止。"""
 
 
+class TaskEventBody(BaseModel):
+    event_id: int = Field(gt=0)
+
+
 def dumps(value):
     return json.dumps(value, ensure_ascii=False)
 
@@ -913,6 +917,57 @@ class Collaboration:
             require_internal(request)
             return self.policy(session_id, tool_name, execution_id, mcp_ref)
 
+        @app.post("/api/v1/internal/group-task-event")
+        async def task_event(body: TaskEventBody, request: Request):
+            require_internal(request)
+            return await asyncio.to_thread(self.publish_task_event, body.event_id)
+
+    def publish_task_event(self, event_id: int):
+        """只投影可信Task事件，不唤醒旧讨论或借用其权限。"""
+        with connect() as db:
+            source = one(
+                db,
+                """SELECT e.message,e.created_at,t.id,t.title,t.source_channel_id,
+                t.source_session_id,t.responsible_employee_id FROM t_nexus_events e
+                JOIN t_nexus_tasks t ON t.id=e.task_id
+                JOIN t_nexus_task_wake_outbox o ON o.event_id=e.id AND o.task_id=t.id WHERE e.id=:i""",
+                i=event_id,
+            )
+            if not source or not source["source_channel_id"]:
+                raise HTTPException(404, "事件没有来源群")
+            cid = source["source_channel_id"]
+            lock_channel(db, cid)
+            binding = one(
+                db,
+                """SELECT 1 FROM t_nexus_channel_members WHERE channel_id=:c
+                AND employee_id=:e AND agentscope_session_id=:s AND member_type='employee'""",
+                c=cid,
+                e=source["responsible_employee_id"],
+                s=source["source_session_id"],
+            )
+            if not binding:
+                raise HTTPException(403, "任务来源与员工群会话不一致")
+            mid = f"task_event_{event_id}"
+            if one(db, "SELECT id FROM t_nexus_messages WHERE id=:i", i=mid):
+                return {"ok": True, "duplicate": True}
+            body = f"任务《{source['title'] or source['id']}》：{source['message']}"
+            append_message(
+                db,
+                cid,
+                "system",
+                "",
+                "任务通知",
+                body,
+                message_id=mid,
+                native={
+                    "role": "user",
+                    "content": [{"type": "text", "text": body}],
+                    "metadata": {"task_id": source["id"], "task_event_id": event_id},
+                },
+            )
+            db.commit()
+            return {"ok": True, "duplicate": False}
+
     def policy(self, session_id, tool_name="", execution_id="", mcp_ref=""):
         with connect() as db:
             binding = one(
@@ -1382,7 +1437,8 @@ class Collaboration:
                                 "text": f"当前群成员：{names}。你是{e['name']}。"
                                 "请根据以上真实群发言回应当前讨论目标；前面同事已回答的部分不重复。"
                                 f"这是第{turn + 1}/{MAX_TURNS}次发言。"
-                                "可以向具体同事提出必要的问题，直接在公开回复中称呼其姓名；不要代写同事回答。"
+                                "需要同事继续行动或把结果交还请求者时，使用contact_employee向该同事投递，"
+                                "并在原话中说清回传对象和下一步；仅公开陈述结果不会自动唤醒请求者。不要代写同事回答。"
                                 "不需要继续时直接结束，不为客套提出新问题。普通交流不创建工程任务或职责请求。权限由服务端判定。",
                             }
                         ],

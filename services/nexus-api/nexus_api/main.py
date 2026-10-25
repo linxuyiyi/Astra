@@ -2201,6 +2201,14 @@ def create_app() -> FastAPI:
         connection=Depends(database),
     ) -> dict[str, str]:
         employee = load_employee(connection, employee_id)
+        if session_id.strip():
+            group = connection.execute(
+                sql_text("""SELECT channel_id FROM t_nexus_channel_members WHERE employee_id=:e
+                    AND agentscope_session_id=:s AND member_type='employee'"""),
+                {"e": employee_id, "s": session_id.strip()},
+            ).mappings().first()
+            if group:
+                return {"channel_id": group["channel_id"]}
         if not employee["enabled"]:
             raise HTTPException(status_code=409, detail="员工已禁用，稍后再投递")
         agent_id = employee["agentscope_agent_id"]
@@ -2908,7 +2916,7 @@ def create_app() -> FastAPI:
         connection=Depends(database),
         message: str = "",
         execution_id: str = "",
-    ) -> dict[str, str]:
+    ) -> dict[str, str | bool]:
         target_name = name.strip()
         private = (
             connection.execute(

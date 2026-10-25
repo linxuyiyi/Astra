@@ -160,7 +160,13 @@ export function GroupApp({ channelId }: { channelId: string }) {
         {loading && <div className="text-sm text-muted-foreground">正在读取群组…</div>}
         {!loading && !items.length && !revoked && <div className="text-sm text-muted-foreground">向大家打个招呼，或直接询问相关岗位的工作。</div>}
         {items.map(item => {
-          if (item.sender_type === "system") return <div key={item.id} className="text-center text-xs text-muted-foreground" data-kind="system">{item.text}</div>;
+          if (item.sender_type === "system") {
+            const taskId = (item.message.metadata as Record<string, unknown> | undefined)?.task_id;
+            return <div key={item.id} className="text-center text-xs text-muted-foreground" data-kind="system">
+              {item.text}
+              {typeof taskId === "string" && <a className="ml-2 underline" target="_parent" href={`/tasks/${encodeURIComponent(taskId)}`}>查看任务</a>}
+            </div>;
+          }
           const self = item.sender_type === "human" && item.sender_id === channel?.viewer_id;
           const who = channel?.members.find(m => m.member_id === item.sender_id);
           return <div key={item.id} className="group-message" data-self={String(self)} data-sender={item.sender_id} data-seq={item.seq}>

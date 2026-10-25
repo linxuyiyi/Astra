@@ -18,8 +18,9 @@ const upstreamTag = JSON.parse(
 const version = String(upstreamTag).replace(/^v/, "")
 const bundle = path.join(
   root,
+  "services",
+  "nexus-api",
   "web",
-  "nexus",
   "public",
   "opencode-workspace",
   version,
@@ -30,12 +31,12 @@ const dependenciesInstalled = existsSync(path.join(workspace, "node_modules"))
 if (action === "build" && !dependenciesInstalled) {
   if (existsSync(bundle)) {
     console.log(
-      `[workspace-ui] workspace-ui dependencies are not installed; reusing committed production bundle at web/nexus/public/opencode-workspace/${version}`,
+      `[workspace-ui] workspace-ui dependencies are not installed; reusing committed production bundle at services/nexus-api/web/public/opencode-workspace/${version}`,
     )
     process.exit(0)
   }
   console.error(
-    `[workspace-ui] dependencies missing and no committed bundle for OpenCode ${version} at web/nexus/public/opencode-workspace/${version}/index.html; run: node tools/e2e/workspace_ui.mjs install`,
+    `[workspace-ui] dependencies missing and no committed bundle for OpenCode ${version} at services/nexus-api/web/public/opencode-workspace/${version}/index.html; run: node tools/e2e/workspace_ui.mjs install`,
   )
   process.exit(1)
 }

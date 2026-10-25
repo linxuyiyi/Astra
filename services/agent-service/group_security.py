@@ -4,6 +4,7 @@ from __future__ import annotations
 import hmac
 import os
 from contextvars import ContextVar
+from copy import deepcopy
 
 import httpx
 from starlette.responses import JSONResponse
@@ -62,9 +63,11 @@ def secure_group_toolkit(factory, nexus_api, policy_loader=None):
         # 群调用必须来自此次 /chat/ 原始输入，不能从复用 Session 猜测发起者。
         if policy.get("generation") and (not fence or fence != policy["discussion_id"]):
             raise PermissionError("群讨论运行来源无效")
-        toolkit = await factory(**kwargs)
         if policy.get("generation"):
-            kwargs["agent_record"].data.chat_config.react_config.max_iters = 2
+            # 装配器可能共享员工记录；群预算只作用于本次会话。
+            kwargs["agent_record"] = deepcopy(kwargs["agent_record"])
+            kwargs["agent_record"].data.chat_config.react_config.max_iters = 8
+        toolkit = await factory(**kwargs)
         original = toolkit._get_available_tools
         original_call = toolkit.call_tool
 

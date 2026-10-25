@@ -42,20 +42,27 @@ class HttpWakeSender:
             _raise_for_status(target)
             body = target.json()
             try:
-                response = await client.post(
-                    f"{settings.agentscope_base_url.rstrip('/')}/nexus/task-hint",
-                    headers={
-                        "X-Nexus-Event-Id": str(row.event_id),
-                        **internal_headers(),
-                    },
-                    json={
-                        "session_id": body["session_id"],
-                        "agent_id": body["agent_id"],
-                        "hint": row.hint,
-                        "user_id": settings.agentscope_user_id,
-                        "event_id": str(row.event_id),
-                    },
-                )
+                if body.get("channel_id"):
+                    response = await client.post(
+                        f"{settings.nexus_api_base.rstrip('/')}/api/v1/internal/group-task-event",
+                        headers=internal_headers(),
+                        json={"event_id": row.event_id},
+                    )
+                else:
+                    response = await client.post(
+                        f"{settings.agentscope_base_url.rstrip('/')}/nexus/task-hint",
+                        headers={
+                            "X-Nexus-Event-Id": str(row.event_id),
+                            **internal_headers(),
+                        },
+                        json={
+                            "session_id": body["session_id"],
+                            "agent_id": body["agent_id"],
+                            "hint": row.hint,
+                            "user_id": settings.agentscope_user_id,
+                            "event_id": str(row.event_id),
+                        },
+                    )
             except httpx.HTTPError as exc:
                 raise WakeRetry(str(exc)) from exc
             _raise_for_status(response)

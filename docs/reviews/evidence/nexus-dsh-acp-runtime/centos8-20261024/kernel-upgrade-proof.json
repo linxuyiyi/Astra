@@ -1,0 +1,13 @@
+{
+  "installed_kernel": "5.15.223-1.el8.elrepo.x86_64",
+  "previous_kernel": "4.18.0-193.28.1.el8_2.x86_64",
+  "previous_kernel_image_preserved": true,
+  "new_initramfs_present": true,
+  "boot_id_before": "74843d42-c8ac-4ef1-ad0e-aaf6f93e37cf",
+  "prepared_at_utc": "2026-10-24T01:37:05.011184+00:00",
+  "running_kernel_after": "5.15.223-1.el8.elrepo.x86_64",
+  "boot_id_after": "eaccff46-b4d7-4265-b7dd-476a1be1924a",
+  "file_channel_probe_after": {
+    "file_channel_verified": true
+  }
+}

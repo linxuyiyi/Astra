@@ -1,0 +1,190 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_________ test_celery_review_result_is_serializable_and_excludes_lease _________
+
+wrapper = <class 'kombu.exceptions.EncodeError'>
+include = (<class 'Exception'>,)
+exclude = (<class 'kombu.exceptions.SerializerNotInstalled'>,)
+
+    @contextmanager
+    def _reraise_errors(wrapper,
+                        include=(Exception,), exclude=(SerializerNotInstalled,)):
+        try:
+>           yield
+
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/kombu/serialization.py:41:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/kombu/serialization.py:220: in dumps
+    payload = encoder(data)
+              ^^^^^^^^^^^^^
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/kombu/utils/json.py:63: in dumps
+    return _dumps(s, cls=cls, **dict(default_kwargs, **kwargs))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/__init__.py:242: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/encoder.py:202: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/encoder.py:263: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/kombu/utils/json.py:47: in default
+    return super().default(o)
+           ^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <kombu.utils.json.JSONEncoder object at 0x10b4baba0>
+o = <app.models.ExperienceReviewJob object at 0x10b5ac050>
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return super().default(o)
+
+        """
+>       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type ExperienceReviewJob is not JSON serializable
+
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/encoder.py:182: TypeError
+
+During handling of the above exception, another exception occurred:
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10afd1f30>
+
+    def test_celery_review_result_is_serializable_and_excludes_lease(monkeypatch):
+        from kombu.serialization import dumps
+
+        from app.runtime import celery_app as adapter
+
+        job = ExperienceReviewJob(id="review-result", task_id="task-result", status="NO_FINDINGS")
+        job.lease_token = "private-review-lease"
+
+        def completed(coroutine):
+            coroutine.close()
+            return job
+
+        monkeypatch.setattr(adapter, "run_async", completed)
+        result = adapter.experience_review_process.run(job.id)
+>       _, _, body = dumps(result, serializer="json")
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/platform/test_experience_review.py:42:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/kombu/serialization.py:219: in dumps
+    with _reraise_errors(EncodeError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py:162: in __exit__
+    self.gen.throw(value)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/kombu/serialization.py:45: in _reraise_errors
+    reraise(wrapper, wrapper(exc), sys.exc_info()[2])
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/kombu/exceptions.py:34: in reraise
+    raise value.with_traceback(tb)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/kombu/serialization.py:41: in _reraise_errors
+    yield
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/kombu/serialization.py:220: in dumps
+    payload = encoder(data)
+              ^^^^^^^^^^^^^
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/kombu/utils/json.py:63: in dumps
+    return _dumps(s, cls=cls, **dict(default_kwargs, **kwargs))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/__init__.py:242: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/encoder.py:202: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/encoder.py:263: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/kombu/utils/json.py:47: in default
+    return super().default(o)
+           ^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <kombu.utils.json.JSONEncoder object at 0x10b4baba0>
+o = <app.models.ExperienceReviewJob object at 0x10b5ac050>
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return super().default(o)
+
+        """
+>       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       kombu.exceptions.EncodeError: Object of type ExperienceReviewJob is not JSON serializable
+
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/json/encoder.py:182: EncodeError
+=============================== warnings summary ===============================
+tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+1 failed, 10 warnings in 0.72s

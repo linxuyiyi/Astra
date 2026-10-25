@@ -35,6 +35,8 @@ def _capability_revision(environment: OpenCodeExecutionEnvironment) -> str:
 def environment_snapshot(environment: OpenCodeExecutionEnvironment) -> dict:
     return {
         "environment_id": environment.id,
+        "runtime_engine": environment.runtime_engine or "opencode",
+        "worker_channel": environment.worker_channel,
         "mode": environment.mode,
         "name": environment.name,
         "host": environment.host,
@@ -47,6 +49,8 @@ def environment_snapshot(environment: OpenCodeExecutionEnvironment) -> dict:
         "workspace_root": environment.workspace_root,
         "repository_id": environment.repository_id,
         "labels": list(environment.labels or []),
+        "skill_refs": list(environment.skill_refs or []),
+        "mcp_names": [str(x.get("name")) for x in environment.mcp_refs or []],
         "capability_revision": _capability_revision(environment),
     }
 
@@ -54,6 +58,8 @@ def environment_snapshot(environment: OpenCodeExecutionEnvironment) -> dict:
 def environment_from_snapshot(snapshot: dict, employee_id: str) -> OpenCodeExecutionEnvironment:
     return OpenCodeExecutionEnvironment(
         id=snapshot.get("environment_id"),
+        runtime_engine=snapshot.get("runtime_engine", "opencode"),
+        worker_channel=snapshot.get("worker_channel", "ssh"),
         employee_id=employee_id,
         mode=snapshot["mode"],
         name=snapshot["name"],
@@ -112,6 +118,20 @@ class ExecutionEnvironmentRuntime:
                 await session.close()
 
     async def test(self, environment: OpenCodeExecutionEnvironment) -> list[CheckItem]:
+        if environment.runtime_engine == "dsh":
+            from app.runtime.worker_transport import WorkerCommandTransport
+
+            if environment.mode != ExecutionMode.LINUX_REMOTE or environment.worker_channel != "worker":
+                return [CheckItem("DSH Worker", False, "DSH 必须使用已连接的远程 Worker 通道")]
+            try:
+                client = WorkerCommandTransport(environment_id=environment.id)
+                result = await client.run_command("dsh_health", {})
+                detail = dict(environment.status_detail or {})
+                detail["dsh"] = result
+                environment.status_detail = detail
+                return [CheckItem("DSH ACP", result.get("healthy") is True, "固定版本与装配已核对")]
+            except Exception:
+                return [CheckItem("DSH ACP", False, "DSH 健康检查失败，请核对 Worker 固定安装和私有配置")]
         if environment.mode == ExecutionMode.LOCAL:
             return await self._test_local(environment)
         return await self._test_remote(environment)

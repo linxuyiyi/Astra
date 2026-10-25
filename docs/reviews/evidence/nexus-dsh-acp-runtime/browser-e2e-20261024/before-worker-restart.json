@@ -1,0 +1,59 @@
+{
+  "workers": {
+    "a": {
+      "owner": {
+        "pid": 13242,
+        "create_time": 1792838736.49,
+        "cwd": "/root/agentwork/nexus-dsh-qa-20261024/source/services/nexus-api",
+        "slot": "a"
+      },
+      "bindings": [
+        {
+          "id": "dsh_6d20cdde3ba041038dfc99a677854c8e",
+          "task_id": "T-20261024-DC8958",
+          "native_id": "9c1a050d-b4ad-428d-81e4-94487918e3cb",
+          "workspace": "/root/agentwork/nexus-dsh-browser-e2e-20261024/a/.astra-tasks/dsh-e2e-a-20261024/T-20261024-DC8958-env-4",
+          "state": "succeeded"
+        }
+      ],
+      "receipt_count": 1,
+      "trace": [
+        {
+          "native_id": "9c1a050d-b4ad-428d-81e4-94487918e3cb",
+          "turn_start_count": 1,
+          "sha256": "6df5f168e7dd987c00b70b34fc4f55460033e2e7546db11e0c8a51102d4a573b",
+          "complete": true
+        }
+      ],
+      "owned_worker_stopped": true
+    },
+    "b": {
+      "owner": {
+        "pid": 13243,
+        "create_time": 1792838736.49,
+        "cwd": "/root/agentwork/nexus-dsh-qa-20261024/source/services/nexus-api",
+        "slot": "b"
+      },
+      "bindings": [
+        {
+          "id": "dsh_20099ff398ef4c95b0a278df267ade4c",
+          "task_id": "T-20261024-2AA586",
+          "native_id": "a18d46ff-5ccb-4d4b-9aa8-110f57c746d2",
+          "workspace": "/root/agentwork/nexus-dsh-browser-e2e-20261024/b/.astra-tasks/dsh-e2e-b-20261024/T-20261024-2AA586-env-5",
+          "state": "succeeded"
+        }
+      ],
+      "receipt_count": 2,
+      "trace": [
+        {
+          "native_id": "a18d46ff-5ccb-4d4b-9aa8-110f57c746d2",
+          "turn_start_count": 2,
+          "sha256": "12e9a21e303a9cf42dfd974208c766e0f04f37560a53745944bb2bb1d8824b8a",
+          "complete": true
+        }
+      ],
+      "owned_worker_stopped": true
+    }
+  },
+  "denied_marker_exists": false
+}

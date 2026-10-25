@@ -1,0 +1,62 @@
+[
+  {
+    "id": "T-20261025-96E997",
+    "status": "SUCCEEDED",
+    "created_at": "2026-10-25 14:20:32.129026",
+    "started_at": "2026-10-25 14:22:49.065904",
+    "completed_at": "2026-10-25 14:27:26.387553",
+    "confirmed_at": "2026-10-25 14:27:26.387553",
+    "reviews": [
+      {
+        "id": "xrj_f6fb4ad4a0d8499ea067cb9484f192a2",
+        "status": "SUCCEEDED",
+        "phase": "WRITING",
+        "source_message_count": 33,
+        "candidate_ids": "[\"KNOW_BDC326F6F9954A88847A\", \"KNOW_4A95036E5C0E4870B83D\"]",
+        "zero_reason": null,
+        "created_at": "2026-10-25 14:27:26.393511",
+        "updated_at": "2026-10-25 14:44:59.779409"
+      }
+    ]
+  },
+  {
+    "id": "T-20261025-F20055",
+    "status": "SUCCEEDED",
+    "created_at": "2026-10-25 14:31:37.994114",
+    "started_at": "2026-10-25 14:31:46.463000",
+    "completed_at": "2026-10-25 14:38:06.926298",
+    "confirmed_at": "2026-10-25 14:38:06.926298",
+    "reviews": [
+      {
+        "id": "xrj_07f5f6abe5e74d13803c487c7fb4c077",
+        "status": "NO_FINDINGS",
+        "phase": "REDUCE",
+        "source_message_count": 23,
+        "candidate_ids": "[]",
+        "zero_reason": "no_findings",
+        "created_at": "2026-10-25 14:38:06.928147",
+        "updated_at": "2026-10-25 14:39:49.033424"
+      }
+    ]
+  },
+  {
+    "id": "T-20261025-AF090B",
+    "status": "SUCCEEDED",
+    "created_at": "2026-10-25 14:54:31.679174",
+    "started_at": "2026-10-25 14:54:43.758729",
+    "completed_at": "2026-10-25 14:59:14.487788",
+    "confirmed_at": "2026-10-25 14:59:14.487788",
+    "reviews": [
+      {
+        "id": "xrj_2a9e956a225e4363a2367177f5b8c04b",
+        "status": "NO_FINDINGS",
+        "phase": "REDUCE",
+        "source_message_count": 32,
+        "candidate_ids": "[]",
+        "zero_reason": "no_findings",
+        "created_at": "2026-10-25 14:59:14.492689",
+        "updated_at": "2026-10-25 15:01:26.194141"
+      }
+    ]
+  }
+]

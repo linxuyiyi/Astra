@@ -1,0 +1,9 @@
+{
+  "permission_id": "2e1266b9017b4ae3a055a40d0f1b0a43",
+  "native_session_id": "fd0ae2f8-a811-48ab-89d7-a9e28cb4a139",
+  "option_kind": "allow_once",
+  "scope": "exact read-only acceptance fixture command",
+  "command_sha256": "2a9e481a9272b52dd2a46fde640e368d174e4ae6c5d175772b3990f5f1cbbe89",
+  "http_status": 200,
+  "persistent_approval": false
+}

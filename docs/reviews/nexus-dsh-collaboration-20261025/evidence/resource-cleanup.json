@@ -1,0 +1,80 @@
+{
+  "local": [
+    {
+      "name": "celery-beat",
+      "pid": 16049,
+      "stopped": true
+    },
+    {
+      "name": "celery-worker",
+      "pid": 21977,
+      "stopped": true
+    },
+    {
+      "name": "task-mcp",
+      "pid": 16040,
+      "stopped": true
+    },
+    {
+      "name": "library-mcp",
+      "pid": 16047,
+      "stopped": true
+    },
+    {
+      "name": "agent-service",
+      "pid": 16014,
+      "stopped": true
+    },
+    {
+      "name": "api",
+      "pid": 19103,
+      "stopped": true
+    },
+    {
+      "name": "relay",
+      "pid": 16137,
+      "stopped": true
+    }
+  ],
+  "remote": {
+    "stopped_workers": [
+      {
+        "pid": 59652,
+        "stopped": true
+      },
+      {
+        "pid": 59653,
+        "stopped": true
+      }
+    ],
+    "original_workers_unchanged": [
+      {
+        "pid": 15164,
+        "create_time": 1792840574.67,
+        "cwd": "/root/agentwork/nexus-dsh-qa-20261024/source/services/nexus-api"
+      },
+      {
+        "pid": 15165,
+        "create_time": 1792840574.67,
+        "cwd": "/root/agentwork/nexus-dsh-qa-20261024/source/services/nexus-api"
+      }
+    ]
+  },
+  "original_local_listeners_unchanged": [
+    {
+      "port": 18520,
+      "pid": 10425,
+      "create_time": 1792922446.610437,
+      "cwd": "/Users/niuniu/.codex/worktrees/collaboration-closure-fixes/Astra/services/nexus-api"
+    },
+    {
+      "port": 18641,
+      "pid": 5797,
+      "create_time": 1792840568.73272,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api"
+    }
+  ],
+  "tasks_succeeded": 3,
+  "workers_released_before_stop": true,
+  "private_databases_and_source_retained": true
+}

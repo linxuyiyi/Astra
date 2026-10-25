@@ -9,20 +9,20 @@
           :disabled="actionDisabled('check')"
           @click="runAction('check')"
         >检查</ElButton>
-        <ElButton v-if="mode === 'LINUX_REMOTE'"
+        <ElButton v-if="mode === 'LINUX_REMOTE' && runtimeEngine !== 'dsh'"
           data-testid="deploy-environment"
           type="primary"
           :loading="busyAction === 'deploy'"
           :disabled="actionDisabled('deploy')"
           @click="runAction('deploy')"
         >一键部署</ElButton>
-        <ElButton v-if="mode === 'LINUX_REMOTE'"
+        <ElButton v-if="mode === 'LINUX_REMOTE' && runtimeEngine !== 'dsh'"
           data-testid="update-environment"
           :loading="busyAction === 'update'"
           :disabled="actionDisabled('update')"
           @click="runAction('update')"
         >更新</ElButton>
-        <ElButton v-if="mode === 'LINUX_REMOTE'"
+        <ElButton v-if="mode === 'LINUX_REMOTE' && runtimeEngine !== 'dsh'"
           data-testid="restart-environment"
           :loading="busyAction === 'restart'"
           :disabled="actionDisabled('restart')"
@@ -229,10 +229,12 @@ import { formatTime } from '@/utils/format'
 const props = withDefaults(defineProps<{
   controller: WorkerMaintenanceController
   mode: 'LOCAL' | 'LINUX_REMOTE' | null
+  runtimeEngine?: 'opencode' | 'dsh'
   disabledReason?: string
   showHistory?: boolean
 }>(), {
   disabledReason: '',
+  runtimeEngine: 'opencode',
   showHistory: true,
 })
 

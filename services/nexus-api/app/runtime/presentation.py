@@ -19,6 +19,7 @@ def project_channel_health(
     employee_status: str | None,
     task_statuses: list[str],
     runtime_connections: list[str],
+    runtime_engine: str = "opencode",
 ) -> dict[str, bool | str]:
     """Split Worker, OpenCode, repository and human-wait facts.
 
@@ -39,7 +40,9 @@ def project_channel_health(
         opencode_reachable = False
     return {
         "worker_online": worker_online if remote_worker else True,
-        "opencode_reachable": opencode_reachable,
+        "runtime_engine": runtime_engine,
+        "runtime_reachable": opencode_reachable,
+        "opencode_reachable": opencode_reachable if runtime_engine == "opencode" else False,
         "repository_bound": bool(repository_id),
         "executing": employee_status == "WORKING" or "RUNNING" in task_statuses,
         "waiting_human": employee_status == "WAIT_HUMAN" or "WAITING" in task_statuses,

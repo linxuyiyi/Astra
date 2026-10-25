@@ -1,0 +1,14 @@
+{
+  "system": "Linux",
+  "machine": "x86_64",
+  "libc": [
+    "glibc",
+    "2.17"
+  ],
+  "kernel": "3.10.0-514.26.2.el7.x86_64",
+  "python": "3.11.17",
+  "target": "cloud-linux-agentwork",
+  "native_initialize_error": "node-addon-require-builtin-linux-x64-gnu: No usable native binding found",
+  "ordinary_npm_ci_result": "spawn ENOMEM",
+  "production_accepted": false
+}

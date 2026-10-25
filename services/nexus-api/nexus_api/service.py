@@ -23,6 +23,7 @@ from app.api.maintenance_routes import router as maintenance_router
 from app.api.repository_routes import router as repository_router
 from app.api.routes import router as platform_router
 from app.api.speech_routes import router as speech_router
+from app.api.workbench_routes import router as workbench_router
 from app.api.worker_routes import router as worker_router
 from app.api.workspace_routes import execution_stop_actor
 from app.api.workspace_routes import router as workspace_router
@@ -61,6 +62,7 @@ def _include_platform(app: FastAPI) -> None:
     app.include_router(worker_gateway_router)
     app.include_router(maintenance_router)
     app.include_router(workspace_router)
+    app.include_router(workbench_router)
     app.include_router(library_router)
     app.include_router(gateway_router)
     app.include_router(speech_router)

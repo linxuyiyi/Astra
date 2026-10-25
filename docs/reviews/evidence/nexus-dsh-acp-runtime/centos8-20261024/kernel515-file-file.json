@@ -1,0 +1,7 @@
+{
+  "http_status": 200,
+  "body": {
+    "path": "kernel515-acceptance.txt",
+    "content": "KERNEL515_DSH_ACP_OK\n"
+  }
+}

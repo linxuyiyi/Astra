@@ -3011,7 +3011,9 @@ def create_app() -> FastAPI:
                 message,
                 target["mailbox_session_id"],
             )
-        return request.app.state.collaboration.request_peer(session_id, target_name, message, execution_id)
+        return await asyncio.to_thread(
+            request.app.state.collaboration.request_peer, session_id, target_name, message, execution_id
+        )
 
     async def proxy_stream(
         client: AgentScopeClient,

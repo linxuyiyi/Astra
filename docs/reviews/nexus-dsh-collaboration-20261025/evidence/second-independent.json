@@ -1,0 +1,157 @@
+{
+  "checks": [
+    {
+      "name": "late_then_early",
+      "expected": {
+        "total": 1,
+        "passed": 1
+      },
+      "new": {
+        "total": 1,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "early_then_late",
+      "expected": {
+        "total": 1,
+        "passed": 0
+      },
+      "new": {
+        "total": 1,
+        "passed": 0
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "tie_forward",
+      "expected": {
+        "total": 1,
+        "passed": 0
+      },
+      "new": {
+        "total": 1,
+        "passed": 0
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "tie_reverse",
+      "expected": {
+        "total": 1,
+        "passed": 1
+      },
+      "new": {
+        "total": 1,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 1
+      },
+      "passed": true
+    },
+    {
+      "name": "different_run",
+      "expected": {
+        "total": 2,
+        "passed": 1
+      },
+      "new": {
+        "total": 2,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 2,
+        "passed": 1
+      },
+      "passed": true
+    },
+    {
+      "name": "different_case",
+      "expected": {
+        "total": 2,
+        "passed": 1
+      },
+      "new": {
+        "total": 2,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 2,
+        "passed": 1
+      },
+      "passed": true
+    },
+    {
+      "name": "empty",
+      "expected": {
+        "total": 0,
+        "passed": 0
+      },
+      "new": {
+        "total": 0,
+        "passed": 0
+      },
+      "old": {
+        "total": 0,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 0,
+        "passed": 0
+      },
+      "passed": true
+    }
+  ],
+  "all_checks_passed": true,
+  "unique_time_permutations_passed": 6,
+  "worker_test_command": [
+    "/root/agentwork/nexus-dsh-qa-20261024/venv/bin/python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
+  "worker_tests_returncode": 0,
+  "worker_tests_output": "........                                                                 [100%]\n8 passed in 0.01s\n",
+  "git_diff": "diff --git a/result_summary.py b/result_summary.py\nindex 4c4f8ae..41fb89a 100644\n--- a/result_summary.py\n+++ b/result_summary.py\n@@ -1,2 +1,18 @@\n def summarize(rows):\n-    return {\"total\": len(rows), \"passed\": sum(row[\"status\"] == \"passed\" for row in rows)}\n+    \"\"\"Summarize the latest event per (run_id, case_id) group.\n+\n+    Rows are grouped by (run_id, case_id). Within a group the row with the\n+    greatest event_time decides the status; on an exact event_time tie the\n+    last row in input order wins because replacement uses \">=\". The result\n+    keeps the existing shape: total is the number of groups and passed counts\n+    groups whose chosen status is PASS.\n+    \"\"\"\n+    latest = {}\n+    for row in rows:\n+        key = (row[\"run_id\"], row[\"case_id\"])\n+        if key not in latest or row[\"event_time\"] >= latest[key][\"event_time\"]:\n+            latest[key] = row\n+\n+    total = len(latest)\n+    passed = sum(1 for row in latest.values() if row[\"status\"] == \"PASS\")\n+    return {\"total\": total, \"passed\": passed}\n",
+  "git_status": " M result_summary.py\n?? DELIVERY.md\n?? __pycache__/\n?? evidence/\n?? test_result_summary.py\n",
+  "head": "2187c520f8a883d282c106c8b25fba90e85b74c4"
+}

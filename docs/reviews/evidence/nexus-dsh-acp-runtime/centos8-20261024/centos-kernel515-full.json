@@ -1,0 +1,204 @@
+{
+  "started_at": "2026-10-24T01:44:23.350706+00:00",
+  "platform": {
+    "system": "Linux",
+    "machine": "x86_64",
+    "libc": [
+      "glibc",
+      "2.28"
+    ],
+    "python": "3.11.15"
+  },
+  "expected_versions": {
+    "dsh": "0.2.1-rc.2",
+    "agent_client_protocol": "0.8.1"
+  },
+  "model_alias": "deepseek-flash",
+  "gateway_url": "http://127.0.0.1:18651/v1",
+  "checks": {
+    "installation": {
+      "status": "PASS",
+      "dsh": "0.2.1-rc.2",
+      "agent_client_protocol": "0.8.1",
+      "dependency_count": 618,
+      "lock_sha256": "28baa120aa63691494beb36c7a84cfb2c5baa5df20bb68a4ce43b99e1290791a",
+      "installed_versions_sha256": "3c68a321ec2aa41e1a7ce68bd0664faab5811754d11c951290aa58fd27699c99"
+    },
+    "gateway_catalog": {
+      "status": "PASS",
+      "http_status": 200,
+      "alias_present": true
+    },
+    "initialize": {
+      "status": "PASS",
+      "protocol_version": 1
+    },
+    "new_session": {
+      "status": "PASS"
+    },
+    "model_selection": {
+      "status": "PASS",
+      "provider": "nexus-gateway",
+      "alias": "deepseek-flash"
+    },
+    "first_turn": {
+      "status": "PASS",
+      "stop_reason": "end_turn"
+    },
+    "second_turn": {
+      "status": "PASS",
+      "stop_reason": "end_turn"
+    },
+    "mcp": {
+      "status": "PASS",
+      "real_echo_calls": 2
+    },
+    "resume": {
+      "status": "PASS",
+      "same_native_session": true
+    },
+    "resume_turn": {
+      "status": "PASS",
+      "stop_reason": "end_turn"
+    },
+    "cancel": {
+      "status": "PASS",
+      "confirmed": true,
+      "method": "prompt_settled",
+      "stop_reason": "cancelled"
+    },
+    "native_trace": {
+      "status": "PASS",
+      "event_count": 103,
+      "sha256": "628e1c1c40799460e7b8be23b873de03485c5a9cd361aa793654efe431e931b3"
+    },
+    "permission": {
+      "status": "PASS",
+      "denied_without_effect": true,
+      "exact_fixture_allowed_once": true
+    },
+    "disconnect_recovery": {
+      "status": "PASS",
+      "same_native_session": true,
+      "automatic_resubmissions": 0,
+      "original_delay_invocations": 1
+    },
+    "long_session": {
+      "status": "UNVERIFIED"
+    },
+    "reasoning": {
+      "status": "PASS",
+      "observed_updates": 6
+    },
+    "token_usage": {
+      "status": "PASS",
+      "native_usage_records": 12,
+      "native_usage_totals": {
+        "inputTokens": 2536,
+        "outputTokens": 1625,
+        "totalTokens": 83905,
+        "cacheReadTokens": 79744
+      },
+      "context_usage_updates": 12
+    },
+    "rate_limit": {
+      "status": "UNVERIFIED"
+    },
+    "cleanup": {
+      "status": "PASS",
+      "owned_process_group_stopped": true
+    }
+  },
+  "production_cutover": false,
+  "source_files": {
+    "services/nexus-api/app/worker_agent/dsh_acp/__init__.py": "1e2d0abdbfc0ce4bd83d1686b4e7021dd55ed651a999f35cf75863f98840122c",
+    "services/nexus-api/app/worker_agent/dsh_acp/commands.py": "712900d4976960fc300760fc0f11ed900f598641a40b8f7b6c0d0e985708e39e",
+    "services/nexus-api/app/worker_agent/dsh_acp/driver.py": "5a1334b035c560135a8682714be821ae758c184af665f5c06bd6e901ccb7c825",
+    "services/nexus-api/app/worker_agent/dsh_acp/preflight.py": "d0903a79034caa74aa0d62fb272af3b1de78b5d9e57a913ec678785cd9334455",
+    "services/nexus-api/app/worker_agent/dsh_acp/process.py": "f575f86f127d0e7e95f6462620883aae57cfd4654c15b283828e3b53475cc969",
+    "services/nexus-api/app/worker_agent/dsh_acp/profile.py": "751a8bc87e5ad890e7dcc96693eed1ff953fb2e4bb826a17fca676911316b73e",
+    "services/nexus-api/app/worker_agent/dsh_acp/skills.py": "d817e9e52452258e96f8a589a7df5c8fa050a8c5c7a381825c49917cc7c361c9",
+    "services/nexus-api/app/worker_agent/dsh_acp/trace.py": "b8394237476c01bc402df311841628b785eb1a1370bb22af79876041d455e191",
+    "tools/e2e/dsh_acp_probe.py": "8579aa2e2713a044284d691347f11356b99b6916149855e058426f1b25d556e2",
+    "tools/e2e/dsh_probe_mcp.py": "f992f01f901f40d97c62ce1faa50a36945009341f2b13393576207db6985a16f",
+    "services/nexus-api/app/worker_agent/process_env.py": "5903b0c52b90787640f14daaf7101e64239f00b85767b7f7bfe0cf46d51dfde3",
+    "ops/runtime/dsh/package.json": "f719db6e87f27231151f0be9467de1e057e099d5be64b32cb03e6c3c23708c92",
+    "ops/runtime/dsh/package-lock.json": "28baa120aa63691494beb36c7a84cfb2c5baa5df20bb68a4ce43b99e1290791a",
+    "ops/runtime/dsh/requirements.txt": "cc6ecdca5de5d892bc808fbafdae7df02e039b419158e9ae9cf21191a36d1fee"
+  },
+  "source_sha256": "db5f32ae2a4948384cf3845dd483205ceda5cf91e6db2f6fb74525b095a49794",
+  "installation": {
+    "dsh": "0.2.1-rc.2",
+    "agent_client_protocol": "0.8.1",
+    "dependency_count": 618,
+    "lock_sha256": "28baa120aa63691494beb36c7a84cfb2c5baa5df20bb68a4ce43b99e1290791a",
+    "installed_versions_sha256": "3c68a321ec2aa41e1a7ce68bd0664faab5811754d11c951290aa58fd27699c99"
+  },
+  "profile_sha256": "55334277af1167f19f4ea6cd3a2c62fb2b48162e00c39c48ec02dbb2ccc1f2cb",
+  "agent_capabilities": {
+    "loadSession": false,
+    "mcpCapabilities": {
+      "http": true,
+      "sse": false
+    },
+    "promptCapabilities": {
+      "audio": false,
+      "embeddedContext": false,
+      "image": false
+    },
+    "sessionCapabilities": {
+      "list": {},
+      "resume": {}
+    }
+  },
+  "native_session_id": "c35cbef2-e1a3-4279-bf8b-3d95644b56df",
+  "native_trace": {
+    "session_id": "c35cbef2-e1a3-4279-bf8b-3d95644b56df",
+    "format": "dsh-v4-jsonl",
+    "next_cursor": 1,
+    "event_count": 103,
+    "event_types": {
+      "permission/preset": 1,
+      "sandbox/mode": 1,
+      "approval/policy": 1,
+      "agent/inbox/spliced": 14,
+      "turn/start": 7,
+      "step/start": 12,
+      "system/message": 1,
+      "user/message": 8,
+      "request/header": 3,
+      "request/context": 1,
+      "session/title": 1,
+      "assistant/message": 12,
+      "tool/call": 7,
+      "tool/result": 7,
+      "step/end": 12,
+      "turn/end": 7,
+      "session/end-seed": 2,
+      "approval/asked": 2,
+      "approval/decided": 2,
+      "job/registered": 1,
+      "job/settled": 1
+    },
+    "sha256": "628e1c1c40799460e7b8be23b873de03485c5a9cd361aa793654efe431e931b3",
+    "complete": true,
+    "unsettled_turns": [],
+    "native_usage_records": 12,
+    "native_usage_totals": {
+      "inputTokens": 2536,
+      "outputTokens": 1625,
+      "totalTokens": 83905,
+      "cacheReadTokens": 79744
+    }
+  },
+  "online_update_counts": {
+    "agent_thought_chunk": 6,
+    "usage_update": 12,
+    "tool_call": 7,
+    "tool_call_update": 6,
+    "agent_message_chunk": 5
+  },
+  "tool_call_count": 7,
+  "finished_at": "2026-10-24T01:45:03.232499+00:00",
+  "overall": "INCOMPLETE"
+}

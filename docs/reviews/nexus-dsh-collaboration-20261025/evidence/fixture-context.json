@@ -1,0 +1,30 @@
+{
+  "remote_root": "/root/agentwork/nexus-dsh-collaboration-20261025",
+  "repository_id": "fcf20a4a7cc647cba2285be07cc4b093",
+  "category_id": "CAT-5CAA990C",
+  "workers": {
+    "a": {
+      "worker_id": "dsh-collab-a-20261025",
+      "employee_id": "emp_90d1baf5766d",
+      "environment_id": 8,
+      "worker_instance_id": "wrk_c06974ae9e5fb2b31c9f606847e57b4c"
+    },
+    "b": {
+      "worker_id": "dsh-collab-b-20261025",
+      "employee_id": "emp_803687238e28",
+      "environment_id": 9,
+      "worker_instance_id": "wrk_bb03b81bcbc4d10ab3dcd8801a421aa9"
+    }
+  },
+  "remote_pids": {
+    "a": 59652,
+    "b": 59653
+  },
+  "platform": {
+    "kernel": "5.15.223-1.el8.elrepo.x86_64",
+    "machine": "x86_64",
+    "base_commit": "2187c520f8a883d282c106c8b25fba90e85b74c4"
+  },
+  "knowledge_id": "KNOW_A394DEFC1CA34211826F",
+  "setup_scope": "isolated QA; existing pinned runtime; real AgentScope/Task MCP/Library MCP; not company installer"
+}

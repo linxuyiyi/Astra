@@ -1,0 +1,20 @@
+{
+  "failures": [
+    {
+      "run": "p0-current-json",
+      "seq": 28,
+      "native_error_code": "SERVER",
+      "http_status": 503,
+      "no_eligible_node": true,
+      "circuit_open": true
+    },
+    {
+      "run": "p0-after-gateway-recovery",
+      "seq": 28,
+      "native_error_code": "SERVER",
+      "http_status": 503,
+      "no_eligible_node": true,
+      "circuit_open": true
+    }
+  ]
+}

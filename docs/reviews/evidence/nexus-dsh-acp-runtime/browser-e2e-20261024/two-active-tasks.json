@@ -1,0 +1,24 @@
+{
+  "a": {
+    "task_id": "T-20261024-DC8958",
+    "binding_id": "dsh_6d20cdde3ba041038dfc99a677854c8e",
+    "native_session_id": "9c1a050d-b4ad-428d-81e4-94487918e3cb",
+    "workspace": "/root/agentwork/nexus-dsh-browser-e2e-20261024/a/.astra-tasks/dsh-e2e-a-20261024/T-20261024-DC8958-env-4",
+    "repository_id": "b2dd3cc328394995ae303fa99a1df105",
+    "created_via": "browser",
+    "started_via": "browser",
+    "task_status": "WAITING",
+    "worker_count": 1
+  },
+  "b": {
+    "task_id": "T-20261024-2AA586",
+    "binding_id": "dsh_20099ff398ef4c95b0a278df267ade4c",
+    "native_session_id": "a18d46ff-5ccb-4d4b-9aa8-110f57c746d2",
+    "workspace": "/root/agentwork/nexus-dsh-browser-e2e-20261024/b/.astra-tasks/dsh-e2e-b-20261024/T-20261024-2AA586-env-5",
+    "repository_id": "b2dd3cc328394995ae303fa99a1df105",
+    "created_via": "browser",
+    "started_via": "browser",
+    "task_status": "WAITING",
+    "worker_count": 1
+  }
+}

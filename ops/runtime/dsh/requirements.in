@@ -1,0 +1,6 @@
+# 固定 P0/Worker ACP 客户端；独立 venv，不改变控制机运行时。
+agent-client-protocol==0.8.1
+httpx==0.28.1
+PyYAML==6.0.3
+# 真实 MCP fixture；与 Nexus 当前支持的 mcp 2.x 一致。
+mcp==2.3.0

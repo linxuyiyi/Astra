@@ -92,7 +92,8 @@ def experience_review_scan() -> list[str]:
 
 @celery.task(name="nexus.experience-review.process")
 def experience_review_process(job_id: str):
-    return run_async(process_job(job_id))
+    job = run_async(process_job(job_id))
+    return {"job_id": job.id, "status": job.status} if job is not None else None
 
 
 @celery.task(name="nexus.scout")

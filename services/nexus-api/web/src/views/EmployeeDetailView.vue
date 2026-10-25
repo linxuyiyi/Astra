@@ -148,8 +148,9 @@
             <template #header><div class="worker-card__title"><h3>编码 Agent</h3></div></template>
             <ElDescriptions :column="1" border size="small">
               <ElDescriptionsItem label="编程工具">OpenCode</ElDescriptionsItem>
+              <ElDescriptionsItem label="执行引擎">{{ environment?.runtime_engine === 'dsh' ? 'DSH ACP' : 'OpenCode' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="编程模型">{{ environment?.model_name || '使用平台默认模型' }}</ElDescriptionsItem>
-              <ElDescriptionsItem label="可执行文件">{{ environment?.opencode_path || '—' }}</ElDescriptionsItem>
+              <ElDescriptionsItem v-if="environment?.runtime_engine !== 'dsh'" label="可执行文件">{{ environment?.opencode_path || '—' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="Server 端口">{{ environment?.opencode_server_port ?? '—' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="Worker 通道">{{ channelLabel(health?.connection?.channel) }}</ElDescriptionsItem>
             </ElDescriptions>
@@ -165,7 +166,7 @@
                 <h3>部署与维护</h3>
               </div>
             </template>
-            <WorkerMaintenancePanel :controller="maintenance" :mode="environment?.mode ?? null" @changed="onMaintenanceChanged" />
+            <WorkerMaintenancePanel :controller="maintenance" :mode="environment?.mode ?? null" :runtime-engine="environment?.runtime_engine || 'opencode'" @changed="onMaintenanceChanged" />
           </ElCard>
 
           <ElCollapse class="worker-diagnostics worker-card--wide">

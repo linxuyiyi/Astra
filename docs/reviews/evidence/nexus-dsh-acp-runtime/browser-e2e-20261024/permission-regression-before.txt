@@ -1,0 +1,49 @@
+
+=================================== FAILURES ===================================
+__ test_permission_domain_rejection_is_not_a_transport_failure[conflict-409] ___
+
+runtime = (<sqlalchemy.ext.asyncio.session.AsyncSession object at 0x10c4e7230>, <app.runtime.lifecycle.RuntimeService object at ...test_runtime_integration.Native object at 0x10c6d5400>, 'b2': <test_runtime_integration.Native object at 0x10c760e10>})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c4aeea0>
+outcome = 'conflict', status = 409
+
+    @pytest.mark.parametrize("outcome,status", [("conflict", 409), ("accepted", 200), ("unreachable", 503)])
+    async def test_permission_domain_rejection_is_not_a_transport_failure(runtime, monkeypatch, outcome, status):
+        from app.runtime.dsh_client import DshRuntimeClient
+        from app.runtime.worker_transport import WorkerCommandError
+
+        db, _, native = runtime
+        calls = []
+
+        class Transport:
+            async def run_command(self, name, data, **kwargs):
+                calls.append((name, data))
+                if outcome == "unreachable":
+                    raise WorkerCommandError("io", "控制命令执行失败")
+                return {"accepted": outcome == "accepted", "error": "审批已过期或不属于当前 Session"}
+
+        monkeypatch.setattr(
+            "app.api.workbench_routes.DshRuntimeClient",
+            lambda environment_id, binding: DshRuntimeClient(environment_id, binding, transport=Transport()),
+        )
+        app = FastAPI()
+        app.include_router(router)
+
+        async def session():
+            yield db
+
+        app.dependency_overrides[get_session] = session
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            native_id = native["b1"].binding.native_session_id
+            response = await client.post(
+                "/api/tasks/t1/workbench/b1/permission",
+                json={"native_session_id": native_id, "permission_id": "expired", "option_id": "reject_once"},
+            )
+>       assert response.status_code == status, response.text
+E       AssertionError: {"accepted":true}
+E       assert 200 == 409
+E        +  where 200 = <Response [200 OK]>.status_code
+
+tests/dsh/test_runtime_integration.py:309: AssertionError
+=========================== short test summary info ============================
+FAILED tests/dsh/test_runtime_integration.py::test_permission_domain_rejection_is_not_a_transport_failure[conflict-409]
+1 failed, 2 passed, 11 deselected, 28 warnings in 0.66s

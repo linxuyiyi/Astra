@@ -1,0 +1,40 @@
+{
+  "cloud": {
+    "target": "cloud-linux",
+    "active_owned_root_processes": [],
+    "private_credential_files_removed": 2
+  },
+  "linux_qa": {
+    "workers": [
+      {
+        "worker": 1,
+        "pid": 285581,
+        "original_created": 1792777725.07,
+        "verified_created": 1792777724.07,
+        "start_ticks": "24015307",
+        "script_and_exclusive_journal_verified": true,
+        "signaled_via_pidfd": true,
+        "exited": true
+      },
+      {
+        "worker": 2,
+        "pid": 285254,
+        "original_created": 1792777614.55,
+        "verified_created": 1792777613.55,
+        "start_ticks": "24004255",
+        "script_and_exclusive_journal_verified": true,
+        "signaled_via_pidfd": true,
+        "exited": true
+      }
+    ],
+    "remaining_owned_root_processes": [],
+    "credential_files_removed": 10,
+    "native_trace_and_journals_retained_private": true
+  },
+  "local_listeners_stopped": {
+    "18641": true,
+    "18642": true
+  },
+  "owned_tunnels_stopped": true,
+  "original_gateway_preserved": true
+}

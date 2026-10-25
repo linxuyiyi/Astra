@@ -1,0 +1,74 @@
+{
+  "a": {
+    "binding": {
+      "id": "dsh_6d20cdde3ba041038dfc99a677854c8e",
+      "native_id": "9c1a050d-b4ad-428d-81e4-94487918e3cb",
+      "state": "succeeded",
+      "owner": null
+    },
+    "receipt_count": 3,
+    "receipts": [
+      {
+        "submission_id": "msg_16d8d978f000307e75310a2888",
+        "state": "succeeded",
+        "fence": 1,
+        "generation": 1
+      },
+      {
+        "submission_id": "sub_4d7d143ab0ff4e8ab85c03e6e3c493a4",
+        "state": "succeeded",
+        "fence": 4,
+        "generation": 3
+      },
+      {
+        "submission_id": "sub_8480153c1fe6466ea411789eedd8ab5c",
+        "state": "interrupted",
+        "fence": 2,
+        "generation": 2
+      }
+    ],
+    "native_session_id": "9c1a050d-b4ad-428d-81e4-94487918e3cb",
+    "event_count": 64,
+    "turn_start_count": 3,
+    "complete": true,
+    "sha256": "590c9e5e1c1eda8cafeb8658e9bb9398e0edbcc961475fb3ac81ae7d0d7a4c71",
+    "independent_message_count": 11,
+    "late_file_exists": false
+  },
+  "b": {
+    "binding": {
+      "id": "dsh_20099ff398ef4c95b0a278df267ade4c",
+      "native_id": "a18d46ff-5ccb-4d4b-9aa8-110f57c746d2",
+      "state": "succeeded",
+      "owner": null
+    },
+    "receipt_count": 3,
+    "receipts": [
+      {
+        "submission_id": "msg_16d8e76f200000a357c7e34520",
+        "state": "succeeded",
+        "fence": 1,
+        "generation": 1
+      },
+      {
+        "submission_id": "sub_80e2625b50374e7faec5459d250c30c8",
+        "state": "succeeded",
+        "fence": 2,
+        "generation": 2
+      },
+      {
+        "submission_id": "sub_dd8a0748814a4ea3b97a53199a23d466",
+        "state": "succeeded",
+        "fence": 3,
+        "generation": 3
+      }
+    ],
+    "native_session_id": "a18d46ff-5ccb-4d4b-9aa8-110f57c746d2",
+    "event_count": 62,
+    "turn_start_count": 3,
+    "complete": true,
+    "sha256": "2e2e6c02cb916c61acff317e31849a9d0c929e7a11b9e2d7da0fd4526449096d",
+    "independent_message_count": 11,
+    "late_file_exists": false
+  }
+}

@@ -57,12 +57,17 @@
           <span>最后已知状态：{{ task?.runtime_status_label }}</span>
           <ElButton :loading="loading" :disabled="busy || loading" @click="load">刷新状态</ElButton>
           <ElButton :disabled="busy || loading" @click="reconnect">重连</ElButton>
-          <ElButton v-if="task?.pending_message_id" :disabled="busy || loading" @click="action('retry-submission')">核对并重试未确认输入</ElButton>
+          <ElButton v-if="task?.pending_message_id && !isDsh" :disabled="busy || loading" @click="action('retry-submission')">核对并重试未确认输入</ElButton>
         </div>
       </ElAlert>
-      <ElAlert v-if="workspaceUiError" class="workspace-alert" type="warning" show-icon :closable="false" :title="workspaceUiError" />
+      <DshWorkbench v-if="isDsh && task && selectedSessionBinding?.native_session_id"
+        :key="`${task.id}:${selectedSession}`" :task-id="task.id" :binding-id="selectedSession"
+        :native-session-id="selectedSessionBinding.native_session_id"
+        :readonly="!selectedSessionBinding.current || ['SUCCEEDED', 'CANCELED'].includes(task.status)"
+        @changed="load" @changes="showChanges = true; loadChanges()" />
+      <ElAlert v-else-if="workspaceUiError" class="workspace-alert" type="warning" show-icon :closable="false" :title="workspaceUiError" />
       <iframe v-else-if="frameUrl" :key="frameKey" :src="frameUrl" ref="workspaceFrame" title="OpenCode Task Workspace" class="task-detail__frame" allow="clipboard-read; clipboard-write" />
-      <ElEmpty v-else-if="binding" :image-size="80" :description="task?.current_session_id ? 'Session 绑定异常，请重连检查' : '任务尚未创建 Session，请先启动任务。'" />
+      <ElEmpty v-else-if="binding" :image-size="80" :description="task?.current_session_id ? 'Session 绑定异常，请重连检查；系统不会自动创建新 Session。' : '任务尚未创建 Session，请先启动任务。'" />
     </ElMain>
 
     <ElDrawer v-model="showChanges" title="代码变更" size="min(800px, 100%)">
@@ -129,8 +134,8 @@
         <ElDescriptions :column="1" border size="small">
           <ElDescriptionsItem label="总 Token">{{ formatTokens(usage.summary.total_tokens) }}</ElDescriptionsItem>
           <ElDescriptionsItem label="输入 / 输出">{{ formatTokens(usage.summary.input_tokens) }} / {{ formatTokens(usage.summary.output_tokens) }}</ElDescriptionsItem>
-          <ElDescriptionsItem label="模型调用">{{ usage.summary.llm_call_count ?? 0 }}</ElDescriptionsItem>
-          <ElDescriptionsItem label="工具调用">{{ usage.summary.tool_call_count ?? 0 }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="模型调用">{{ usage.summary.llm_call_count ?? '—' }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="工具调用">{{ usage.summary.tool_call_count ?? '—' }}</ElDescriptionsItem>
           <ElDescriptionsItem label="会话数">{{ usage.sessions }}</ElDescriptionsItem>
         </ElDescriptions>
         <ElTable v-if="usage.tools.length" :data="usage.tools" size="small" style="margin-top: 16px">
@@ -150,8 +155,9 @@ import { ArrowLeft } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElContainer, ElDrawer, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElHeader, ElMain, ElOption, ElSelect, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag, ElText, ElTimeline, ElTimelineItem } from 'element-plus'
-import { api } from '@/api/client'
+import { api, request } from '@/api/client'
 import type { AstraEvent, ExperienceReviewJob, Task, TaskUsage, TaskWorkspaceBinding } from '@/api/types'
+import DshWorkbench from '@/components/runtime/DshWorkbench.vue'
 import { useAstraStore } from '@/stores/astra'
 import { confirmDialog } from '@/composables/useConfirm'
 import { employeeDisplayName, formatTaskDuration, formatTime, formatTokens, priorityLabel, taskTypeLabel } from '@/utils/format'
@@ -186,12 +192,24 @@ const reviewLabels: Record<string, string> = {
   SKIPPED_TOO_LARGE: '轨迹超出上限',
 }
 const reviewStatusLabel = computed(() => reviewJob.value ? reviewLabels[reviewJob.value.status] ?? reviewJob.value.status : '')
+const activeReviewStatuses = new Set(['PENDING', 'COLLECTING', 'ANALYZING', 'VALIDATING', 'WRITING', 'RETRY_WAIT'])
+let reviewTimer: ReturnType<typeof setTimeout> | undefined
+let detailAlive = true
+function scheduleReviewRefresh(id: string) {
+  clearTimeout(reviewTimer)
+  if (detailAlive && id === String(route.params.id) && reviewJob.value
+    && activeReviewStatuses.has(reviewJob.value.status)) {
+    reviewTimer = setTimeout(() => { void loadReviewJob(id) }, 2000)
+  }
+}
 async function loadReviewJob(id: string) {
   try {
     const jobs = await api.experienceReviewJobs(id)
     if (id === String(route.params.id)) reviewJob.value = jobs[0] ?? null
   } catch {
-    if (id === String(route.params.id)) reviewJob.value = null
+    // 保留最后一次真实结果；尚在进行的复盘继续读取，不把网络失败当成作业结束。
+  } finally {
+    if (detailAlive && id === String(route.params.id)) scheduleReviewRefresh(id)
   }
 }
 async function retryReviewJob() {
@@ -199,7 +217,7 @@ async function retryReviewJob() {
   reviewJobLoading.value = true
   try { reviewJob.value = await api.retryExperienceReview(reviewJob.value.id) }
   catch { /* 错误由刷新后的状态兜底 */ }
-  finally { reviewJobLoading.value = false }
+  finally { reviewJobLoading.value = false; scheduleReviewRefresh(String(route.params.id)) }
 }
 
 const owners = ref<NexusEmployee[]>([])
@@ -311,7 +329,7 @@ const primaryDetail = computed(() => {
   if (current.status === 'CANCELED' && current.execution_released === false && !current.pending_message_id) return { key: 'release', label: '确认执行已停止', run: () => confirmExecutionStopped() }
   if (!current.current_session_id && !current.pending_message_id) return { key: 'start', label: '启动任务', run: () => action('start') }
   if (canFinish.value) return { key: 'confirm', label: '确认完成', run: () => action('confirm') }
-  if (current.pending_message_id) return { key: 'retry', label: '核对并重试', run: () => action('retry-submission') }
+  if (current.pending_message_id && !isDsh.value) return { key: 'retry', label: '核对并重试', run: () => action('retry-submission') }
   return { key: 'refresh', label: '刷新状态', run: () => load() }
 })
 function onDetailCommand(command: string | number) {
@@ -339,7 +357,7 @@ async function loadRepo(id: string) {
 async function loadChanges() {
   if (!task.value?.current_session_id) return
   const id = String(route.params.id)
-  const sessionId = task.value.current_session_id
+  const sessionId = selectedSession.value || task.value.current_session_id
   const mode = changeMode.value
   // 快速切换模式时取消上一个请求：只有当前请求能写数据、错误与加载态。
   diffRequest?.abort()
@@ -349,7 +367,10 @@ async function loadChanges() {
   // 读取有界等待与失败提示：长时间无响应时给出可读错误，而不是永久停留在加载态。
   const deadline = window.setTimeout(() => controller.abort(), 20000)
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE ?? ''}/api/tasks/${encodeURIComponent(id)}/opencode/${encodeURIComponent(sessionId)}/vcs/diff?mode=${mode}`, { signal: controller.signal })
+    const path = isDsh.value
+      ? `/api/tasks/${encodeURIComponent(id)}/workbench/${encodeURIComponent(sessionId)}/diff?native_session_id=${encodeURIComponent(selectedSessionBinding.value?.native_session_id || '')}&mode=${mode}`
+      : `/api/tasks/${encodeURIComponent(id)}/opencode/${encodeURIComponent(sessionId)}/vcs/diff?mode=${mode}`
+    const response = await fetch(`${import.meta.env.VITE_API_BASE ?? ''}${path}`, { signal: controller.signal })
     const data = await response.json()
     if (diffRequest !== controller) return
     if (!response.ok) throw new Error(data.detail || '代码变更读取失败')
@@ -369,6 +390,7 @@ async function loadChanges() {
 }
 async function openChanges() { showChanges.value = true; await loadChanges() }
 const selectedSessionBinding = computed(() => binding.value?.sessions.find(item => item.id === selectedSession.value))
+const isDsh = computed(() => (selectedSessionBinding.value?.runtime_engine || binding.value?.runtime.runtime_engine) === 'dsh')
 const workspaceUiError = computed(() => {
   if (!selectedSession.value) return ''
   return selectedSessionBinding.value?.workspace_ui_error || binding.value?.runtime.workspace_ui_error || ''
@@ -411,7 +433,14 @@ async function loadTask(id: string) {
 }
 async function action(name: string) {
   busy.value = true
-  try { task.value = await api.taskAction(String(route.params.id), name); selectedSession.value = task.value.current_session_id || ''; await load() }
+  try {
+    if (isDsh.value && selectedSessionBinding.value?.native_session_id && ['stop', 'stop-current', 'confirm', 'continue', 'restart', 'reconnect'].includes(name)) {
+      await request(`/api/tasks/${encodeURIComponent(String(route.params.id))}/workbench/${encodeURIComponent(selectedSession.value)}/action`, { method: 'POST', body: JSON.stringify({ action: name, native_session_id: selectedSessionBinding.value.native_session_id }) })
+    } else { task.value = await api.taskAction(String(route.params.id), name) }
+    await loadRequest?.promise
+    selectedSession.value = ''
+    await load()
+  }
   catch (reason) { error.value = reason instanceof Error ? reason.message : '操作失败' }
   finally { busy.value = false }
 }
@@ -425,13 +454,13 @@ async function confirmExecutionStopped() {
   finally { busy.value = false }
 }
 async function reconnect() { await action('reconnect'); frameKey.value++ }
-watch(() => route.params.id, () => { selectedSession.value = ''; reviewJob.value = null; connectTaskEvents(); showEvents.value = false; void load() }, { immediate: true })
+watch(() => route.params.id, () => { clearTimeout(reviewTimer); selectedSession.value = ''; reviewJob.value = null; connectTaskEvents(); showEvents.value = false; void load() }, { immediate: true })
 onMounted(() => {
   window.addEventListener('message', workspaceReady)
   timer = setInterval(() => { now.value = Date.now() }, 1000)
   void listEmployees().then(items => { owners.value = items }).catch(() => { owners.value = [] })
 })
-onBeforeUnmount(() => { window.removeEventListener('message', workspaceReady); clearInterval(timer); diffRequest?.abort(); closeEvents() })
+onBeforeUnmount(() => { detailAlive = false; clearTimeout(reviewTimer); window.removeEventListener('message', workspaceReady); clearInterval(timer); diffRequest?.abort(); closeEvents() })
 </script>
 
 <style scoped>

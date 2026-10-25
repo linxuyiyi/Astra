@@ -305,7 +305,8 @@ async def test_chat_and_embedding_route_types_cannot_be_used_as_speech():
     assert route["model"] == "voice"
 
 
-async def test_worker_main_model_cannot_resolve_asr_route():
+@pytest.mark.parametrize("runtime_engine", ["opencode", "dsh"])
+async def test_worker_main_model_cannot_resolve_asr_route(runtime_engine):
     from app.gateway.models import GatewayPool, GatewayRoute
     from app.runtime.worker_health import _desired_model
 
@@ -317,8 +318,12 @@ async def test_worker_main_model_cannot_resolve_asr_route():
         model = f"000-asr-{suffix}"
         session.add(GatewayRoute(id=f"asr-{suffix}", model=model, model_type="ASR", pool_id=pool.id))
         await session.commit()
-        desired = await _desired_model(session, SimpleNamespace(model_name=model))
+        desired = await _desired_model(
+            session, SimpleNamespace(model_name=model, runtime_engine=runtime_engine)
+        )
         assert desired["resolved"] is False
         assert "未匹配" in desired["error"]
-        automatic = await _desired_model(session, SimpleNamespace(model_name=""))
+        automatic = await _desired_model(
+            session, SimpleNamespace(model_name="", runtime_engine=runtime_engine)
+        )
         assert automatic["route"] != model

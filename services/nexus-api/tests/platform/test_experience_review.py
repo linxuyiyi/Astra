@@ -25,6 +25,25 @@ from app.runtime.experience_review.schemas import Candidate, TraceEvent, TraceRe
 from app.runtime.experience_review.trace_segmenter import segment_events
 
 
+def test_celery_review_result_is_serializable_and_excludes_lease(monkeypatch):
+    from kombu.serialization import dumps
+
+    from app.runtime import celery_app as adapter
+
+    job = ExperienceReviewJob(id="review-result", task_id="task-result", status="NO_FINDINGS")
+    job.lease_token = "private-review-lease"
+
+    def completed(coroutine):
+        coroutine.close()
+        return job
+
+    monkeypatch.setattr(adapter, "run_async", completed)
+    result = adapter.experience_review_process.run(job.id)
+    _, _, body = dumps(result, serializer="json")
+    assert result == {"job_id": job.id, "status": "NO_FINDINGS"}
+    assert "private-review-lease" not in body
+
+
 def _trace() -> TraceResult:
     events = [
         TraceEvent(

@@ -1,0 +1,40 @@
+{
+  "linux": {
+    "passed": 1310,
+    "skipped": 6,
+    "seconds": 158.24,
+    "real_redis": true
+  },
+  "mac_targeted": {
+    "passed": 221,
+    "seconds": 31.4
+  },
+  "restart_api_regression": {
+    "passed": 7
+  },
+  "ruff_mac": true,
+  "ruff_linux": true,
+  "web_typecheck": true,
+  "web_build": true,
+  "openspec_strict_validate": true,
+  "openspec_tasks_complete": 8,
+  "openspec_tasks_total": 12,
+  "production_cutover": false,
+  "screenshots": {
+    "workbench-completed-2560x1440.jpg": {
+      "width": 2560,
+      "height": 1440,
+      "mime_type": "image/jpeg"
+    },
+    "same-session-continue-2560x1440.jpg": {
+      "width": 2560,
+      "height": 1440,
+      "mime_type": "image/jpeg"
+    },
+    "explicit-restart-new-session.jpg": {
+      "width": 2560,
+      "height": 1440,
+      "mime_type": "image/jpeg"
+    }
+  }
+}

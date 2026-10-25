@@ -149,9 +149,14 @@ def agent_wheel() -> tuple[str, bytes]:
         "app/worker_gateway/__init__.py",
         "app/worker_gateway/protocol.py",
         "app/worker_gateway/heartbeat.py",
+        "app/runtime/__init__.py",
+        "app/runtime/redaction.py",
     ]
-    names.extend(f"app/worker_agent/{path.name}" for path in sorted((app_root / "worker_agent").glob("*.py")))
+    names.extend(str(path.relative_to(app_root.parent))
+                 for path in sorted((app_root / "worker_agent").rglob("*.py")))
     files = sorted((name, (app_root.parent / name).read_bytes()) for name in set(names))
+    files.append(("app/worker_agent/dsh_acp/dependency-lock.json",
+                  (app_root.parents[2] / "ops/runtime/dsh/package-lock.json").read_bytes()))
     info = f"{dist}.dist-info"
     metadata = (
         "Metadata-Version: 2.1\n"
@@ -161,6 +166,10 @@ def agent_wheel() -> tuple[str, bytes]:
         "Requires-Python: >=3.11\n"
         "Requires-Dist: httpx>=0.27,<1\n"
         "Requires-Dist: websockets>=12\n"
+        "Provides-Extra: dsh\n"
+        "Requires-Dist: agent-client-protocol==0.8.1; extra == 'dsh'\n"
+        "Requires-Dist: psutil==7.2.2; extra == 'dsh'\n"
+        "Requires-Dist: PyYAML>=6,<7; extra == 'dsh'\n"
     ).encode()
     wheel_meta = b"Wheel-Version: 1.0\nGenerator: nexus-provision\nRoot-Is-Purelib: true\nTag: py3-none-any\n"
     files.extend([(f"{info}/METADATA", metadata), (f"{info}/WHEEL", wheel_meta)])

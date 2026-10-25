@@ -1,0 +1,16 @@
+[
+  {
+    "slot": "a",
+    "job_id": "xrj_0434ee8619114a358ebaf5c7289f0510",
+    "source_sha256_match": true,
+    "message_count": 11,
+    "independent_count_match": true
+  },
+  {
+    "slot": "b",
+    "job_id": "xrj_0c7b621f706c48c487a5202af0eff728",
+    "source_sha256_match": true,
+    "message_count": 11,
+    "independent_count_match": true
+  }
+]

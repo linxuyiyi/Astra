@@ -1,0 +1,36 @@
+{
+  "packages": [
+    {
+      "file": "kernel-lt-5.15.223-1.el8.elrepo.x86_64.rpm",
+      "sha256": "ce2f20bce275cb613ff76f8cc52299a5f5b4df25dd81c3899422b6af5d796915",
+      "rpm_checksig_exit": 0,
+      "rpm_checksig_output": "kernel-downloads/kernel-lt-5.15.223-1.el8.elrepo.x86_64.rpm: digests signatures OK"
+    },
+    {
+      "file": "kernel-lt-core-5.15.223-1.el8.elrepo.x86_64.rpm",
+      "sha256": "b1d2005969592d3693acda49b7f8a903fbcad636a34ffd5e055ef42125f84210",
+      "rpm_checksig_exit": 0,
+      "rpm_checksig_output": "kernel-downloads/kernel-lt-core-5.15.223-1.el8.elrepo.x86_64.rpm: digests signatures OK"
+    },
+    {
+      "file": "kernel-lt-modules-5.15.223-1.el8.elrepo.x86_64.rpm",
+      "sha256": "90e020b21da848587a04d26105c865c221e5ffac34b7f04a0e726f082e7e3e27",
+      "rpm_checksig_exit": 0,
+      "rpm_checksig_output": "kernel-downloads/kernel-lt-modules-5.15.223-1.el8.elrepo.x86_64.rpm: digests signatures OK"
+    }
+  ],
+  "public_keys": [
+    {
+      "file": "RPM-GPG-KEY-elrepo.org",
+      "sha256": "3ff72dc42e94c16844e87090026af35184e459c6a516d3ebcae2a77b896fdd57"
+    },
+    {
+      "file": "RPM-GPG-KEY-v2-elrepo.org",
+      "sha256": "60789f228816a932251de2a3935f91829245366a465af183a9aa719b7693b494"
+    }
+  ],
+  "official_repository": "https://elrepo.org/linux/kernel/el8/x86_64/RPMS/",
+  "official_v2_key": "https://elrepo.org/RPM-GPG-KEY-v2-elrepo.org",
+  "verified_v2_fingerprint": "B8A7 5587 4DA2 40C9 DAC4 E715 5160 0989 EAA3 1D4A",
+  "initial_legacy_key_check": "NOKEY; did not install until official v2 key verified all signatures"
+}

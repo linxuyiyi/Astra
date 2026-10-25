@@ -1,0 +1,14 @@
+{
+  "published": {
+    "id": "KNOW_4A95036E5C0E4870B83D",
+    "title": "【QA·DSH】核对 seeded HEAD，并分栏记录仓库红测和合成对照",
+    "status": "published",
+    "verification_status": "verified",
+    "space_id": "SPACE_AF500E3D93444E508E1F",
+    "source_task_id": "T-20261025-96E997",
+    "content_md": "## 触发条件\nQA 验收任务声称旧实现存在“按输入最后一行取状态”缺陷，要求在未修改旧代码上先跑红测；但 seeded HEAD 可能是另一版有缺陷代码，未必等于任务描述的字面实现。\n\n## 原做法的问题\n直接把仓库红测失败全部归因于“取最后一行”，或把临时写的 last-row 控制脚本当作仓库旧基线，都会让失败证据与真实 HEAD 脱节。本任务初始 worktree 的旧实现实际是 `total=len(rows)` 且按 `status == \"passed\"` 统计，既未按 `(run_id, case_id)` 分组，也未按 `event_time` 取最新，并不是字面的 last-row 实现。\n\n## 实际改动\n先读取 worktree 中的 `result_summary.py`，并用 `git show HEAD:result_summary.py` 核对同一基线；再运行固定业务期望的 pytest，保留真实失败输出。由于仓库旧代码与任务描述的字面缺陷不同，另跑一个明确标注 `CONTROL ONLY`、not repository code 的 `summarize_last_row` 脚本，只用于展示 last-row bug class，不替代仓库红测。修复后对同一套测试跑绿。\n\n## 改变前后的可定位差异\n- 仓库旧代码红测：`12 failed, 1 passed`，唯一通过的是空输入；失败覆盖最小反例、洗牌、双向平局、跨 run/跨 case、6 个排列。\n- 独立 last-row 控制：最小反例 actual `{total:1, passed:0}` vs expected `{total:1, passed:1}` -> FAIL；洗牌用例同样 FAIL。该控制脚本退出码 0 仅表示脚本执行成功，不表示业务断言通过。\n- 修复后同一套 13 个测试：`13 passed`，退出码 0。\n\n## 验证方式\n源码读取与 `git show HEAD` 输出一致；红测 pytest 退出码 1 与失败汇总一致；控制脚本明确标注非仓库代码并输出 actual/expected；修复后同套测试退出码 0。报告的“旧实现缺陷”应以 seeded HEAD 的真实源码和仓库红测为准，控制实验只补充错误形态。\n\n## 与已有经验的关系\n相对 `KNOW_A394DEFC1CA34211826F` 的 event_time 去重方法，本条新增的是验收流程中的基线核对与证据分栏：该既有经验虽提到旧基线和小写 `passed`，但没有规定在任务描述与 seeded HEAD 不一致时如何分别呈现仓库红测和合成控制。\n\n## 未覆盖边界\n控制实验不能证明仓库旧实现就是 last-row；片段未展示每个断言的全部 actual/expected，也未提供独立复跑或远端 push 审计，因此不能据此扩大为对推送状态或所有失败根因的结论。\n\n## 本轮独立验收补充（2026-10-25）\n\n本条已由验收方通过独立 SSH 复跑首任务 worktree 的 13 项测试，并以单独脚本检查 7 个固定业务期望边界和 6 种互异时间排列，全部通过；另以 git show 核对 seeded HEAD 与朴素 last-row 控制的差别。原生 DSH 文件 SHA 与 API、复盘冻结摘要一致，原生 165 个事件对应 33 条消息，未把事件数当消息数。\n\n证据：本仓库 docs/reviews/nexus-dsh-collaboration-20261025/evidence/first-independent.json 与 first-native-crosscheck.json。该验证仅支持隔离 QA 的基线核对与报告方法，不扩展为公司生产、不同输入格式或任意系统的通过结论。\n"
+  },
+  "rejected_id": "KNOW_BDC326F6F9954A88847A",
+  "reason": "chronology differs from native evidence; retained rejected, not published",
+  "review_method": "independent SSH source/tests, native/API/frozen digest crosscheck; trusted human QA review through existing API"
+}

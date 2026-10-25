@@ -1,0 +1,8 @@
+{
+  "platform": {
+    "kernel": "5.15.223-1.el8.elrepo.x86_64",
+    "machine": "x86_64",
+    "base_commit": "2187c520f8a883d282c106c8b25fba90e85b74c4"
+  },
+  "new_knowledge_id": "KNOW_4A95036E5C0E4870B83D"
+}

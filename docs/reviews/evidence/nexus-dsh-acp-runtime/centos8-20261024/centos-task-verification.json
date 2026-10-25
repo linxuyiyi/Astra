@@ -1,0 +1,17 @@
+{
+  "task_id": "T-20261024-C8618B",
+  "binding_id": "dsh_2f661fe42f5f4c9a8c3229c691f905b8",
+  "native_session_id": "fd0ae2f8-a811-48ab-89d7-a9e28cb4a139",
+  "two_turns_same_session": true,
+  "task_before_confirm": "WAITING",
+  "worker_count_before_confirm": 1,
+  "confirmation_http": 200,
+  "task_after_confirm": "SUCCEEDED",
+  "worker_count_after_confirm": 0,
+  "repository_id_preserved": true,
+  "workspace": "/root/agentwork/nexus-dsh-qa-20261024/.astra-tasks/dsh-centos8-worker/T-20261024-C8618B-env-3",
+  "fixture_check": "authenticated SSH direct filesystem read",
+  "workbench_file_http": 503,
+  "workbench_file_error": "openat2 ENOSYS on kernel 4.18",
+  "workbench_diff": "UNVERIFIED_FILE_CHANNEL_UNAVAILABLE"
+}

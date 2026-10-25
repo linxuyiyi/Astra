@@ -1,0 +1,258 @@
+[
+  {
+    "celery_task_id": "b04ab0ee-37c8-4fb4-9bbd-7d93f1dd3d28",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_07f5f6abe5e74d13803c487c7fb4c077",
+      "status": "ANALYZING"
+    }
+  },
+  {
+    "celery_task_id": "41442070-b7f9-423a-9567-aaec20d53a5b",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_07f5f6abe5e74d13803c487c7fb4c077",
+      "status": "ANALYZING"
+    }
+  },
+  {
+    "celery_task_id": "32db3023-ae52-424e-aa39-049f7f2a9073",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_07f5f6abe5e74d13803c487c7fb4c077",
+      "status": "ANALYZING"
+    }
+  },
+  {
+    "celery_task_id": "191b8021-68e4-43da-8140-e2f18e43bb4f",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_07f5f6abe5e74d13803c487c7fb4c077",
+      "status": "NO_FINDINGS"
+    }
+  },
+  {
+    "celery_task_id": "83f04303-ec13-4eed-8dfa-33ef8e17421b",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "0764f82b-d2db-44fb-b0e2-7e2cd7c63f09",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "193b65c5-40b3-4e5e-ae34-2b9bcc4319a4",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "c2d2b38b-3df9-4d40-93d8-eba556f7f27a",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "fd0d94eb-ddc0-4497-9db1-68c1926126ca",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "c519238f-df73-472f-84ba-d68ac92ba0e8",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "ff6679cb-1a93-40a2-b090-fbfef56648bd",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "1ff36131-be44-45f4-ae60-5e5545594836",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "218568a7-c6be-4741-b0ec-e77656573650",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "0c639a91-0954-4d08-b93b-143c25c7891c",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "7c4a2d8c-c45c-4a01-bf44-663acbf1958d",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "4cb21a1f-4ba2-4266-bdb5-62220fcb614a",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "5fca4957-cbd2-40d0-b127-c29bc3a48bb8",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "4d35d8f7-be4a-4ade-b74a-6073fcd5fa70",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "36ebaec4-e978-4c34-9b5a-33991414ab5a",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "cacda8e9-084e-4de0-aa70-2ddc1133f80e",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "32b78c14-c13a-4240-af5e-460ece80fb9d",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "d1923b27-0154-446f-bdc5-877bc59d65ea",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "cf3a8a65-2912-4dd8-93fc-32019a4dc203",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_f6fb4ad4a0d8499ea067cb9484f192a2",
+      "status": "ANALYZING"
+    }
+  },
+  {
+    "celery_task_id": "47fe54c5-025b-4cf4-8459-fa463df3f35a",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_f6fb4ad4a0d8499ea067cb9484f192a2",
+      "status": "ANALYZING"
+    }
+  },
+  {
+    "celery_task_id": "875d6c85-01b1-4c46-a3ce-4ce3535999bc",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_f6fb4ad4a0d8499ea067cb9484f192a2",
+      "status": "SUCCEEDED"
+    }
+  },
+  {
+    "celery_task_id": "45537f1a-d188-4a8a-a328-fd7d8157bc22",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_2a9e956a225e4363a2367177f5b8c04b",
+      "status": "ANALYZING"
+    }
+  },
+  {
+    "celery_task_id": "67f6e3a7-fea3-46f0-ba8d-30f90e022b1b",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_2a9e956a225e4363a2367177f5b8c04b",
+      "status": "ANALYZING"
+    }
+  },
+  {
+    "celery_task_id": "5c70d5c8-29ee-48b4-a1c3-ea671c4aea89",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_2a9e956a225e4363a2367177f5b8c04b",
+      "status": "ANALYZING"
+    }
+  },
+  {
+    "celery_task_id": "efdae2a4-55dd-4023-b453-560bc31eab77",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_2a9e956a225e4363a2367177f5b8c04b",
+      "status": "ANALYZING"
+    }
+  },
+  {
+    "celery_task_id": "5fbcb3ef-c28f-442f-9439-717a636ba0d5",
+    "status": "SUCCESS",
+    "result": {
+      "job_id": "xrj_2a9e956a225e4363a2367177f5b8c04b",
+      "status": "NO_FINDINGS"
+    }
+  },
+  {
+    "celery_task_id": "5dff3873-a2f5-4939-a833-17ba3dca7c55",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "d6ab0a76-43f0-4148-8a47-36101793cc2d",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "2ea918ba-b2b9-4bb8-83b8-f590a073c35f",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "a8372dea-593f-4a1b-b81e-c898b0d6fa00",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "569360f0-799b-4b9f-b763-a0c754d907ac",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "e62cab37-29cd-44e3-9cce-a75d24644f23",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "84d9acad-52a4-41c6-9d35-cb0f8b3e496f",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "1b021c2b-a798-4c33-a01c-35e423d644a6",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "05d88d2f-1cbd-4072-9696-c945dd002208",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "ac4c636f-75b8-4614-b816-1ec78083e42f",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "d5c50ee3-a597-472e-815b-906f7f7279d1",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "1ea29773-d561-4d43-90cd-28b3bd131297",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "e932e2cb-a0a4-44fe-93bb-8a9c38d2491d",
+    "status": "SUCCESS",
+    "result": null
+  },
+  {
+    "celery_task_id": "77c6a8c4-0563-4c23-ba6c-c1726b28b5c6",
+    "status": "SUCCESS",
+    "result": null
+  }
+]

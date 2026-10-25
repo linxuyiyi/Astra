@@ -1,0 +1,32 @@
+{
+  "agent-service": {
+    "pid": 16014,
+    "create_time": "1792937022.001",
+    "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/agent-service"
+  },
+  "api": {
+    "pid": 16036,
+    "create_time": "1792937023.603",
+    "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/nexus-api"
+  },
+  "task-mcp": {
+    "pid": 16040,
+    "create_time": "1792937024.553",
+    "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/nexus-api"
+  },
+  "library-mcp": {
+    "pid": 16047,
+    "create_time": "1792937025.176",
+    "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/nexus-api"
+  },
+  "celery-worker": {
+    "pid": 16048,
+    "create_time": "1792937025.179",
+    "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/nexus-api"
+  },
+  "celery-beat": {
+    "pid": 16049,
+    "create_time": "1792937025.181",
+    "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/nexus-api"
+  }
+}

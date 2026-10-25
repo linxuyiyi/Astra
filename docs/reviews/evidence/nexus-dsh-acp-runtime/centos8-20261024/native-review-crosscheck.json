@@ -1,0 +1,20 @@
+[
+  {
+    "task_id": "T-20261024-C8618B",
+    "job_id": "xrj_329030300857489d9370c4869c1f9847",
+    "sha256_match": true,
+    "message_count_match": true,
+    "message_count": 12,
+    "status": "SUCCEEDED",
+    "zero_reason": "shadow_mode"
+  },
+  {
+    "task_id": "T-20261024-C83CA2",
+    "job_id": "xrj_57b21ba20dcd41aeb99451db632cb800",
+    "sha256_match": true,
+    "message_count_match": true,
+    "message_count": 21,
+    "status": "SUCCEEDED",
+    "zero_reason": "shadow_mode"
+  }
+]

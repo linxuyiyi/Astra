@@ -1,0 +1,21 @@
+{
+  "kernel": "5.15.223-1.el8.elrepo.x86_64",
+  "old_kernel_image_preserved": true,
+  "removed_credentials_and_private_config": [
+    "bash-check/dsh-home/.credentials.yaml",
+    "dsh-config.json",
+    "gateway-key",
+    "probe-full/dsh-home/.credentials.yaml",
+    "probe-kernel515/dsh-home/.credentials.yaml",
+    "probe-protocol/dsh-home/.credentials.yaml",
+    "worker-credentials.json",
+    "worker-state/dsh_2f661fe42f5f4c9a8c3229c691f905b8/.credentials.yaml",
+    "worker-state/dsh_ab72039374dd44a7937e78fef183fd47/.credentials.yaml"
+  ],
+  "actual_gateway_key_and_worker_token_residual_matches": [],
+  "scanned_generated_files": 101,
+  "remaining_qa_processes_excluding_current_verifier_ancestors": [],
+  "retained_root_mode": "0o700",
+  "retained": "fixed runtime, source, fixture repositories, private native histories and non-sensitive metadata",
+  "ssh_configuration_changed_by_this_cleanup": false
+}

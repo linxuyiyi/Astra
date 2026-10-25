@@ -1,0 +1,534 @@
+[
+  {
+    "employee_id": "emp_803687238e28",
+    "session_id": "d508711c29254053b54c0efc0150acc5",
+    "blocks": [
+      {
+        "type": "tool_call",
+        "id": "call_00_s1dJ7RvSGsbTgiKA0upd7041",
+        "name": "contact_employee",
+        "input": "{\"employee_name\": \"A\", \"message\": \"B 回传 DSH-COLLAB-20261025 样例（只给样例，未建任务、未写代码，也不交第三方）。以下可直接粘进 pytest.mark.parametrize，字段顺序 (run_id, case_id, event_time, status)：\\n\\n```python\\nimport pytest\\n\\n# 约定：rows 为按输入顺序排列的元组列表；total = (run_id, case_id) 分组数；\\n# 每组取 max(event_time)，event_time 完全相同时取输入顺序中靠后的那一行。\\nSUMMARY_CASES = [\\n    # 1) 最小反例：输入最后一行并非最新事件（2 行，最小化）\\n    pytest.param(\\n        [(\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T12:00:00\\\", \\\"PASS\\\"),\\n         (\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"FAIL\\\")],\\n        1, 1,   # 取最后一行 -> PASS 之外错成 1/0；按最大 event_time -> PASS -> 1/1\\n        id=\\\"min-last-row-not-newest-expect-1of1\\\",\\n    ),\\n    # 1b) 3 行洗牌版（对应 FAIL@09:00 / PASS@12:00 / FAIL@10:00）\\n    pytest.param(\\n        [(\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"FAIL\\\"),\\n         (\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T12:00:00\\\", \\\"PASS\\\"),\\n         (\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T10:00:00\\\", \\\"FAIL\\\")],\\n        1, 1,   # 取最后一行 -> FAIL -> 1/0（错误）；正确 1/1\\n        id=\\\"last-row-fail-1000-newest-pass-1200-expect-1of1\\\",\\n    ),\\n    # 2a) 同时间冲突：PASS 先、FAIL 后\\n    pytest.param(\\n        [(\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"PASS\\\"),\\n         (\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"FAIL\\\")],\\n        1, 0,   # 取最后输入 -> FAIL -> 1/0\\n        id=\\\"tie-pass-then-fail-expect-1of0\\\",\\n    ),\\n    # 2b) 同时间冲突：FAIL 先、PASS 后（反向）\\n    pytest.param(\\n        [(\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"FAIL\\\"),\\n         (\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"PASS\\\")],\\n        1, 1,   # 取最后输入 -> PASS -> 1/1\\n        id=\\\"tie-fail-then-pass-expect-1of1\\\",\\n    ),\\n]\\n```\\n\\n两点须在任务描述里写死的实现约束（否则样例不可判定）：\\n1. 同时间平局按“输入顺序中最后出现”判定，实现上遍历时用 >= 比较 event_time 保住后入者，不能按 status 字典序/大小来挑。\\n2. 时间必须是同一时区、无偏移量的 YYYY-MM-DDTHH:MM:SS 字符串（上述样例按字符串比较即等价时间序）；若实现解析成本地时间，必须显式固定同一时区，否则跨时区会翻盘。\\n\\n下一步请你（A）读任务管理技能、查分类与仓库后只创建一个真实 REQUIREMENT 任务（QA-DSH-COLLAB-FIRST-20261025，CAT-5CAA990C，仓库 fcf20a4a7cc647cba2285be07cc4b093，Worker dsh-collab-a-20261025 即 Linux agentwork 上的 DSH ACP），建成后把真实任务 ID 回告我。样例之外的事（建任务、测试方案、代码）我不代劳。\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:12:54.708493",
+        "finished_at": "2026-10-25T22:12:58.729706"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_s1dJ7RvSGsbTgiKA0upd7041",
+        "name": "contact_employee",
+        "output": [
+          {
+            "type": "text",
+            "text": "<system-reminder>Tool 'contact_employee' is running in background (id=7SZ5WVV2Fedgv4jArT8cdc) for over 10.0s. You will be notified automatically when it finishes, so **DO NOT** poll, query, or wait for the result yourself. **DO NOT** call any waiting tool such as `bash sleep`. You have exactly two valid options:\n1. Continue with other independent tasks and ignore this tool for now; or\n2. If there is nothing else to do, simply give a text reply without calling any tool, which ends the current reasoning loop — just do nothing and end this run.\n</system-reminder>",
+            "id": "d189f5f9144348a1be5ed37a9d772e0a",
+            "created_at": "2026-10-25T22:13:08.804941",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:12:58.781374",
+        "finished_at": "2026-10-25T22:13:08.804701"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_bmrx7uYtgDxrlNA9q1tn7136",
+        "name": "contact_employee",
+        "input": "{\"employee_name\": \"dsh-collab-a-20261025\", \"message\": \"B 回传 DSH-COLLAB-20261025 样例（只给样例，未建任务、未写代码、未交第三方）。可直接粘进 pytest.mark.parametrize，字段顺序 (run_id, case_id, event_time, status)：\\n\\n```python\\nimport pytest\\n# rows 按输入顺序排列；total = (run_id, case_id) 分组数；\\n# 每组取 max(event_time)，event_time 完全相同时取输入顺序中靠后的那一行。\\nSUMMARY_CASES = [\\n    # 1) 最小反例：输入最后一行并非最新事件（2 行，最小化）\\n    pytest.param(\\n        [(\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T12:00:00\\\", \\\"PASS\\\"),\\n         (\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"FAIL\\\")],\\n        1, 1,   # 按“取最后一行”会判 FAIL 得 1/0（错误）；按最大 event_time 应得 1/1\\n        id=\\\"min-last-row-not-newest-expect-1of1\\\",\\n    ),\\n    # 1b) 3 行洗牌版：FAIL@09:00 / PASS@12:00 / FAIL@10:00\\n    pytest.param(\\n        [(\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"FAIL\\\"),\\n         (\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T12:00:00\\\", \\\"PASS\\\"),\\n         (\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T10:00:00\\\", \\\"FAIL\\\")],\\n        1, 1,   # 取最后一行会得 1/0；正确 1/1\\n        id=\\\"last-row-fail-1000-newest-pass-1200-expect-1of1\\\",\\n    ),\\n    # 2a) 同时间冲突：PASS 先、FAIL 后\\n    pytest.param(\\n        [(\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"PASS\\\"),\\n         (\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"FAIL\\\")],\\n        1, 0,   # 取最后输入 -> FAIL -> 1/0\\n        id=\\\"tie-pass-then-fail-expect-1of0\\\",\\n    ),\\n    # 2b) 反向：FAIL 先、PASS 后\\n    pytest.param(\\n        [(\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"FAIL\\\"),\\n         (\\\"R1\\\", \\\"C1\\\", \\\"2026-10-25T09:00:00\\\", \\\"PASS\\\")],\\n        1, 1,   # 取最后输入 -> PASS -> 1/1\\n        id=\\\"tie-fail-then-pass-expect-1of1\\\",\\n    ),\\n]\\n```\\n\\n两条必须写进任务描述的判定约束，否则样例不可判定：\\n1. 同时间平局按“输入顺序中最后出现”判定；实现遍历时用 >= 比较 event_time 保住后入者，不得按 status 字典序或大小挑。\\n2. 时间统一为同一时区、无偏移量的 YYYY-MM-DDTHH:MM:SS 字符串（上述样例按字符串比较即等价时间序）；若实现解析为本地时间，必须显式固定同一时区。\\n\\n下一步请 A：读任务管理技能 → 查分类与仓库 → 只建一个真实 REQUIREMENT 任务（QA-DSH-COLLAB-FIRST-20261025，CAT-5CAA990C，仓库 fcf20a4a7cc647cba2285be07cc4b093，Worker dsh-collab-a-20261025 即 Linux agentwork 上的 DSH ACP）→ 建成后把真实任务 ID 回告我 B。\\n\\n备注：我首次用 employee_name=\\\"A\\\" 投递被服务端拒绝（“没有把消息交给对方”），本次改用 dsh-collab-a-20261025 重投；若仍未收到，请用你方已验证的姓名再唤我一次。\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:13:13.080320",
+        "finished_at": "2026-10-25T22:13:16.726643"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_bmrx7uYtgDxrlNA9q1tn7136",
+        "name": "contact_employee",
+        "output": [
+          {
+            "type": "text",
+            "text": "<system-reminder>Tool 'contact_employee' is running in background (id=f9kcdfZtd8hTCH9sKAn6ox) for over 10.0s. You will be notified automatically when it finishes, so **DO NOT** poll, query, or wait for the result yourself. **DO NOT** call any waiting tool such as `bash sleep`. You have exactly two valid options:\n1. Continue with other independent tasks and ignore this tool for now; or\n2. If there is nothing else to do, simply give a text reply without calling any tool, which ends the current reasoning loop — just do nothing and end this run.\n</system-reminder>",
+            "id": "bd19180af2fb4c6baa8e14855e890c14",
+            "created_at": "2026-10-25T22:13:26.812961",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:13:16.787324",
+        "finished_at": "2026-10-25T22:13:26.812869"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_gC0kzkp4Se3mclJgZwqw8584",
+        "name": "contact_employee",
+        "input": "{\"employee_name\": \"dsh-collab-a-20261025\", \"message\": \"B 重投样例（收件人：A。只有数据行与期望数字，无 pytest 代码；未建任务、未写代码、未交第三方）。\\n\\n约定：rows 按输入顺序给出，字段 (run_id, case_id, event_time, status)；event_time 为同一时区 YYYY-MM-DDTHH:MM:SS；每组取最大 event_time，时间完全相同时取输入顺序中靠后的一行；total = 分组数。\\n\\n① 最小反例「输入最后一行并非最新事件」（2 行）：\\n  rows = [(\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T12:00:00\\\",\\\"PASS\\\"), (\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T09:00:00\\\",\\\"FAIL\\\")]\\n  错误基线（取最后一行）：total=1, passed=0\\n  正确期望（取最大 event_time）：total=1, passed=1\\n\\n② 同时间冲突双向：\\n  (a) PASS→FAIL：rows = [(\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T09:00:00\\\",\\\"PASS\\\"), (\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T09:00:00\\\",\\\"FAIL\\\")] → 期望 total=1, passed=0\\n  (b) FAIL→PASS：rows = [(\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T09:00:00\\\",\\\"FAIL\\\"), (\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T09:00:00\\\",\\\"PASS\\\")] → 期望 total=1, passed=1\\n  判定约束：平局用输入顺序后者胜，实现须用 >= 比较 event_time，不得按 status 挑选。\\n\\n下一步在 A：样例已到手（另见群公开记录），按已建任务 T-20261025-96E997 推进，Worker 固定 dsh-collab-a-20261025；我不替 Worker 写代码、不自行确认。若本次投递仍返回「没有把消息交给对方」，我会把错误原文贴群。\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:20:43.433750",
+        "finished_at": "2026-10-25T22:20:45.592162"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_gC0kzkp4Se3mclJgZwqw8584",
+        "name": "contact_employee",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\"ok\": false, \"peer\": \"dsh-collab-a-20261025\", \"error\": \"对方不是可用群员工\"}",
+            "id": "9f88374969ff457a9e6f9fcfd1302f1b",
+            "created_at": "2026-10-25T22:20:45.673891",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:20:45.627378",
+        "finished_at": "2026-10-25T22:20:45.673826"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_jJGMoTe3HnlVNzULwRak9717",
+        "name": "contact_employee",
+        "input": "{\"employee_name\": \"A\", \"message\": \"B 重投样例（收件人：A。只给数据与期望，无测试代码；未建任务、未写代码）。\\n\\n约定：rows 按输入顺序，字段 (run_id, case_id, event_time, status)，同一时区 YYYY-MM-DDTHH:MM:SS；每组取最大 event_time，时间相同取输入顺序靠后者；total=分组数。\\n\\n① 最小反例（输入最后一行并非最新事件，2 行）：\\nrows=[(\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T12:00:00\\\",\\\"PASS\\\"),(\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T09:00:00\\\",\\\"FAIL\\\")]\\n取最后一行（错误基线）：total=1, passed=0；取最大 event_time（正确）：total=1, passed=1\\n\\n② 同时间双向：\\n(a) rows=[(\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T09:00:00\\\",\\\"PASS\\\"),(\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T09:00:00\\\",\\\"FAIL\\\")] → 期望 total=1, passed=0\\n(b) rows=[(\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T09:00:00\\\",\\\"FAIL\\\"),(\\\"R1\\\",\\\"C1\\\",\\\"2026-10-25T09:00:00\\\",\\\"PASS\\\")] → 期望 total=1, passed=1\\n约束：平局靠后输入胜，须用 >= 比较 event_time，不按 status 挑。\\n\\n下一步在 A：样例已在手，按 T-20261025-96E997 推进，Worker 固定 dsh-collab-a-20261025；我这边不写代码、不自行确认完成。若本条仍失败，错误原文我贴群。\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:20:46.922429",
+        "finished_at": "2026-10-25T22:20:48.551268"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_jJGMoTe3HnlVNzULwRak9717",
+        "name": "contact_employee",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\"ok\": true, \"peer\": \"A\", \"status\": \"scheduled\"}",
+            "id": "22ac665b71b34ea9bd854d7dac1d7b4a",
+            "created_at": "2026-10-25T22:20:48.633724",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:20:48.585352",
+        "finished_at": "2026-10-25T22:20:48.633663"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_MA7lMIHSH2Wn3mmwzIsn4943",
+        "name": "mcp__nexus-task__nexus_task_categories",
+        "input": "{}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:31:30.156541",
+        "finished_at": "2026-10-25T22:31:30.225761"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_01_XJ8wR4IBryZBADnuZyHL8209",
+        "name": "mcp__nexus-task__nexus_task_repositories",
+        "input": "{}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:31:30.224948",
+        "finished_at": "2026-10-25T22:31:30.252922"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_MA7lMIHSH2Wn3mmwzIsn4943",
+        "name": "mcp__nexus-task__nexus_task_categories",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"ok\": true,\n  \"categories\": [\n    {\n      \"id\": \"CAT-5CAA990C\",\n      \"name\": \"Worker真实执行闭环20261023\",\n      \"description\": \"独立 QA 小型仓库，禁止访问其他工作区\",\n      \"enabled\": true\n    },\n    {\n      \"id\": \"testing-platform\",\n      \"name\": \"测试平台\",\n      \"description\": \"测试平台相关问题与需求\",\n      \"enabled\": true\n    },\n    {\n      \"id\": \"automation-engineering\",\n      \"name\": \"自动化工程\",\n      \"description\": \"自动化工程建设与维护\",\n      \"enabled\": true\n    },\n    {\n      \"id\": \"quality-defense\",\n      \"name\": \"防线运营\",\n      \"description\": \"质量防线运行与治理\",\n      \"enabled\": true\n    }\n  ]\n}",
+            "id": "28bbd869d4d9480fafd2d288bb596ca3",
+            "created_at": "2026-10-25T22:31:30.357400",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:31:30.295235",
+        "finished_at": "2026-10-25T22:31:30.357863"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_01_XJ8wR4IBryZBADnuZyHL8209",
+        "name": "mcp__nexus-task__nexus_task_repositories",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"ok\": true,\n  \"repositories\": [\n    {\n      \"id\": \"61d0fde25797490181e8f3063c4269ba\",\n      \"url\": \"https://github.com/linmumuxx-ux/Astra\",\n      \"branch\": \"main\"\n    },\n    {\n      \"id\": \"841c140c7aeb477bb9e6c926fe4d664e\",\n      \"url\": \"file:///tmp/nexus-worker-experience-20261023/origin.git\",\n      \"branch\": \"main\"\n    },\n    {\n      \"id\": \"fcf20a4a7cc647cba2285be07cc4b093\",\n      \"url\": \"file:///root/agentwork/nexus-dsh-collaboration-20261025/origin.git\",\n      \"branch\": \"main\"\n    }\n  ]\n}",
+            "id": "e1e018e3e1cb4463ae68be8ce650992d",
+            "created_at": "2026-10-25T22:31:30.430750",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:31:30.372775",
+        "finished_at": "2026-10-25T22:31:30.431237"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_66P3tMDFGK0OehkNmgah8003",
+        "name": "mcp__nexus-task__nexus_task_create",
+        "input": "{\"task_type\": \"REQUIREMENT\", \"category_id\": \"CAT-5CAA990C\", \"repository_id\": \"fcf20a4a7cc647cba2285be07cc4b093\", \"worker_id\": \"dsh-collab-b-20261025\", \"title\": \"QA-DSH-COLLAB-REUSE-20261025\", \"priority\": \"MEDIUM\", \"idempotency_key\": \"QA-DSH-COLLAB-REUSE-20261025-emp803687238e28\", \"description\": \"目标：复用已发布经验（不复制首任务代码、不读任务一文件）修复 result_summary.summarize(rows)，交付可复跑的证据链。\\n\\n执行引擎与隔离约束：\\n- 必须使用 DSH（Worker dsh-collab-b-20261025），不得换 OpenCode 或其他 Worker/引擎。\\n- 在全新 worktree 中作业，日志只写自己的 worktree。\\n- 不读取任务一（T-20261025-96E997）的任何文件或其 worktree，不复制其代码；不读部署配置；不 push；不自行确认完成（状态留给系统/人工确认）。\\n\\n第一步 经验检索与源页读取（先做，留证）：\\n1) 用 nexus-library 的 library_search 真实检索 event_time 乱序（同键多事件取最新）相关经验。\\n2) 对命中的已发布知识 KNOW_A394DEFC1CA34211826F 用 library_get 真实读取源页；核对返回的源 ID 确为 KNOW_A394DEFC1CA34211826F。\\n3) 记录命中路径：必须使用搜索命中的 wiki 相对路径（文件名/相对路径），不得把知识 ID 当作路径传入。\\n4) 工具不可用时如实报告（写明工具名、调用参数、原始错误），不得编造检索/读取结果或伪造路径。\\n\\n第二步 规格（与首任务一致）：\\n- 修复 result_summary.summarize(rows)：按 (run_id, case_id) 分组，每组取最大 event_time 的那一行决定该组 status；event_time 完全相同时取输入顺序中最后出现的那一行（实现用 >= 比较保持后入者，禁止按 status 字典序或大小挑选）。\\n- status 取值仅 PASS/FAIL；时间固定格式同一时区 YYYY-MM-DDTHH:MM:SS。\\n- 输出 total（分组数）/passed（status 为 PASS 的组数）。\\n\\n第三步 测试（全部使用全新数据，不得照搬首任务用例文本）：\\n- 同键 PASS@2026-10-25T14:00:00、FAIL@2026-10-25T11:00:00、FAIL@2026-10-25T12:00:00 → 期望 total=1, passed=1（乱序输入，最新为 PASS）。\\n- 同时间冲突双向分开断言：(a) PASS 在前 FAIL 在后同 event_time → 1/0；(b) FAIL 在前 PASS 在后同 event_time → 1/1。\\n- 跨 run、跨 case 分组各至少一例；空输入 → total=0, passed=0。\\n- 三个互异 event_time 的全部 6 种输入排列。\\n- 先写固定业务期望测试并在旧实现上运行，取得真实失败（红测）；再修复实现，重跑全部用例转绿。禁止先改实现再补测试、禁止用改期望值凑绿。\\n\\n交付物（写在自己的 worktree 内）：\\n- 实际执行的命令与原始输出（红测失败记录 + 修复后全绿记录，含用例计数）。\\n- MCP 证据：library_search 的检索词与命中片段、library_get 的命中路径与源 ID 核对结果（或工具不可用的原始错误）。\\n- 变更说明：修复点与被复用经验条目的对应关系。\\n\\n禁止项：不得修改他人 worktree；不得读取其他任务产物；不得把凭据写入文件；不得代替人工确认完成。\", \"acceptance_criteria\": [\"AC-01 使用 DSH（worker=dsh-collab-b-20261025）在全新 worktree 执行，未换引擎/Worker，日志仅落在自己 worktree\", \"AC-02 先执行 library_search 检索 event_time 乱序经验，再 library_get 读取 KNOW_A394DEFC1CA34211826F，记录的是搜索命中的 wiki 相对路径（非知识 ID 当路径），并核对源 ID 一致；工具不可用则附原始错误如实说明\", \"AC-03 未读取任务一 T-20261025-96E997 的文件/worktree，未复制其代码\", \"AC-04 旧实现上固定业务期望测试真实失败（附命令与原始输出），随后修复转全绿，未先改实现后补测试、未改期望凑绿\", \"AC-05 覆盖：同键 PASS@14:00/FAIL@11:00/FAIL@12:00 应 1/1；同时间 PASS→FAIL 应 1/0 与 FAIL→PASS 应 1/1 分开断言；跨 run、跨 case；空输入 0/0；三互异时间全部 6 种排列\", \"AC-06 summarize 按 (run_id,case_id) 取最大 event_time、平局取输入最后一行（>= 比较，不按 status 挑），status 仅 PASS/FAIL，时间格式 YYYY-MM-DDTHH:MM:SS 同一时区，输出 total/passed\", \"AC-07 未 push、未读部署配置、未自行确认完成；交付含实际命令、原始输出与 MCP 检索/读取证据\"]}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:31:31.344597",
+        "finished_at": "2026-10-25T22:31:37.865253"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_66P3tMDFGK0OehkNmgah8003",
+        "name": "mcp__nexus-task__nexus_task_create",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"task_id\": \"T-20261025-F20055\",\n  \"title\": \"QA-DSH-COLLAB-REUSE-20261025\",\n  \"status\": \"PENDING\",\n  \"task_type\": \"REQUIREMENT\",\n  \"category_id\": \"CAT-5CAA990C\",\n  \"repository_id\": \"fcf20a4a7cc647cba2285be07cc4b093\",\n  \"worker_id\": \"dsh-collab-b-20261025\",\n  \"responsible_employee_id\": \"emp_803687238e28\",\n  \"source_session_id\": \"d508711c29254053b54c0efc0150acc5\",\n  \"source_channel_id\": \"ch_01de419c01fa\",\n  \"current_progress\": \"等待领取\",\n  \"ok\": true,\n  \"description\": \"目标：复用已发布经验（不复制首任务代码、不读任务一文件）修复 result_summary.summarize(rows)，交付可复跑的证据链。\\n\\n执行引擎与隔离约束：\\n- 必须使用 DSH（Worker dsh-collab-b-20261025），不得换 OpenCode 或其他 Worker/引擎。\\n- 在全新 worktree 中作业，日志只写自己的 worktree。\\n- 不读取任务一（T-20261025-96E997）的任何文件或其 worktree，不复制其代码；不读部署配置；不 push；不自行确认完成（状态留给系统/人工确认）。\\n\\n第一步 经验检索与源页读取（先做，留证）：\\n1) 用 nexus-library 的 library_search 真实检索 event_time 乱序（同键多事件取最新）相关经验。\\n2) 对命中的已发布知识 KNOW_A394DEFC1CA34211826F 用 library_get 真实读取源页；核对返回的源 ID 确为 KNOW_A394DEFC1CA34211826F。\\n3) 记录命中路径：必须使用搜索命中的 wiki 相对路径（文件名/相对路径），不得把知识 ID 当作路径传入。\\n4) 工具不可用时如实报告（写明工具名、调用参数、原始错误），不得编造检索/读取结果或伪造路径。\\n\\n第二步 规格（与首任务一致）：\\n- 修复 result_summary.summarize(rows)：按 (run_id, case_id) 分组，每组取最大 event_time 的那一行决定该组 status；event_time 完全相同时取输入顺序中最后出现的那一行（实现用 >= 比较保持后入者，禁止按 status 字典序或大小挑选）。\\n- status 取值仅 PASS/FAIL；时间固定格式同一时区 YYYY-MM-DDTHH:MM:SS。\\n- 输出 total（分组数）/passed（status 为 PASS 的组数）。\\n\\n第三步 测试（全部使用全新数据，不得照搬首任务用例文本）：\\n- 同键 PASS@2026-10-25T14:00:00、FAIL@2026-10-25T11:00:00、FAIL@2026-10-25T12:00:00 → 期望 total=1, passed=1（乱序输入，最新为 PASS）。\\n- 同时间冲突双向分开断言：(a) PASS 在前 FAIL 在后同 event_time → 1/0；(b) FAIL 在前 PASS 在后同 event_time → 1/1。\\n- 跨 run、跨 case 分组各至少一例；空输入 → total=0, passed=0。\\n- 三个互异 event_time 的全部 6 种输入排列。\\n- 先写固定业务期望测试并在旧实现上运行，取得真实失败（红测）；再修复实现，重跑全部用例转绿。禁止先改实现再补测试、禁止用改期望值凑绿。\\n\\n交付物（写在自己的 worktree 内）：\\n- 实际执行的命令与原始输出（红测失败记录 + 修复后全绿记录，含用例计数）。\\n- MCP 证据：library_search 的检索词与命中片段、library_get 的命中路径与源 ID 核对结果（或工具不可用的原始错误）。\\n- 变更说明：修复点与被复用经验条目的对应关系。\\n\\n禁止项：不得修改他人 worktree；不得读取其他任务产物；不得把凭据写入文件；不得代替人工确认完成。\",\n  \"acceptance_criteria\": [\n    {\n      \"id\": \"AC-01\",\n      \"content\": \"AC-01 使用 DSH（worker=dsh-collab-b-20261025）在全新 worktree 执行，未换引擎/Worker，日志仅落在自己 worktree\"\n    },\n    {\n      \"id\": \"AC-02\",\n      \"content\": \"AC-02 先执行 library_search 检索 event_time 乱序经验，再 library_get 读取 KNOW_A394DEFC1CA34211826F，记录的是搜索命中的 wiki 相对路径（非知识 ID 当路径），并核对源 ID 一致；工具不可用则附原始错误如实说明\"\n    },\n    {\n      \"id\": \"AC-03\",\n      \"content\": \"AC-03 未读取任务一 T-20261025-96E997 的文件/worktree，未复制其代码\"\n    },\n    {\n      \"id\": \"AC-04\",\n      \"content\": \"AC-04 旧实现上固定业务期望测试真实失败（附命令与原始输出），随后修复转全绿，未先改实现后补测试、未改期望凑绿\"\n    },\n    {\n      \"id\": \"AC-05\",\n      \"content\": \"AC-05 覆盖：同键 PASS@14:00/FAIL@11:00/FAIL@12:00 应 1/1；同时间 PASS→FAIL 应 1/0 与 FAIL→PASS 应 1/1 分开断言；跨 run、跨 case；空输入 0/0；三互异时间全部 6 种排列\"\n    },\n    {\n      \"id\": \"AC-06\",\n      \"content\": \"AC-06 summarize 按 (run_id,case_id) 取最大 event_time、平局取输入最后一行（>= 比较，不按 status 挑），status 仅 PASS/FAIL，时间格式 YYYY-MM-DDTHH:MM:SS 同一时区，输出 total/passed\"\n    },\n    {\n      \"id\": \"AC-07\",\n      \"content\": \"AC-07 未 push、未读部署配置、未自行确认完成；交付含实际命令、原始输出与 MCP 检索/读取证据\"\n    }\n  ]\n}",
+            "id": "5a86bcc6359d4c968ca0aab55507e73f",
+            "created_at": "2026-10-25T22:31:38.000628",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:31:37.911125",
+        "finished_at": "2026-10-25T22:31:38.001179"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_la1P0XpzJx1B9LsGtEX87524",
+        "name": "mcp__nexus-task__nexus_task_create",
+        "input": "{\"category_id\": \"CAT-5CAA990C\", \"description\": \"目标：在全新的独立工作区中，先真实读取本轮新审核发布的经验 KNOW_4A95036E5C0E4870B83D，再按其严格应用修复 result_summary.summarize(rows)；不复用、不读取任何旧任务工作区或其代码。\\n\\n一、执行引擎与隔离\\n- 引擎必须是 DSH（worker=dsh-collab-b-20261025），不得换 OpenCode 或其他 Worker/引擎。\\n- 必须在全新 worktree/工作区作业，日志只写自己工作区。\\n- 不读取其他任务的工作区（含首任务、复用任务），不复制旧代码；不读部署配置；不 push；不自行确认完成（由人工独立验收）。\\n\\n二、新经验检索与读取（先做，留证）\\n1) 全新工作区中先调用真实 Library MCP 的 library_search，检索词：seeded HEAD 红测 CONTROL ONLY。\\n2) 对搜索结果调用 library_get，路径必须使用搜索返回的 wiki 相对路径；不得把裸知识 ID 当作路径传入。\\n3) 读取并核对本轮刚审核发布的源页，源 ID 必须确为 KNOW_4A95036E5C0E4870B83D。\\n4) 工具失败时原样报告（工具名、参数、原始错误），不得编造检索或读取结果、不得伪造路径。\\n\\n三、严格应用新经验（关键判定）\\n1) 先读取工作区里现存的 result_summary.py，并执行 git show HEAD:result_summary.py，核对仓库真正 seeded 的 HEAD 实现内容，二者对照后判断旧实现的真实缺陷位置。\\n2) 依据固定业务期望在 seeded HEAD 实现上跑红测，保留真实失败输出（命令 + 原始输出）。\\n3) 如补充“朴素 last-row”对照控制脚本，必须显式标注 CONTROL ONLY、声明它不是仓库代码、不进入提交；其输出须给出 actual 与 expected；不得把 exit code 0 当作业务通过依据。\\n4) 说明红测失败与 KNOW_4A95036E5C0E4870B83D 中经验条目的对应关系。\\n\\n四、规格\\n修复 summarize(rows)：\\n- 按 (run_id, case_id) 分组，每组取最大 event_time 的那一行决定 status。\\n- event_time 固定为同一时区、无偏移量的 YYYY-MM-DDTHH:MM:SS；平局（时间完全相同）取输入顺序中最后出现的那一行，实现用 >= 比较保住后入者，禁止按 status 字典序或大小挑选。\\n- status 仅 PASS/FAIL；输出 total（分组数）/passed（PASS 组数）。\\n\\n五、全新测试数据（不得照搬旧任务用例）\\n- 同键 PASS@2026-10-25T18:00:00、FAIL@2026-10-25T10:00:00、FAIL@2026-10-25T17:00:00（乱序输入）→ 期望 total=1, passed=1。\\n- 同时间冲突双向分开断言：(a) PASS 在前、FAIL 在后同 event_time → 1/0；(b) FAIL 在前、PASS 在后同 event_time → 1/1。\\n- 跨 run 分组、跨 case 分组各至少一例。\\n- 空输入 → total=0, passed=0。\\n- 三个互异 event_time 的全部 6 种输入排列。\\n- 同一套测试必须先对 seeded HEAD 旧实现跑出真实红测，再对修复实现跑绿；禁止先改实现再补测试、禁止改期望凑绿、禁止删除或跳过失败用例。\\n\\n六、交付物（写在自己工作区）\\n- 实际命令与原始输出：git show HEAD 核对记录、旧实现红测失败记录、修复后全绿记录（含用例数）。\\n- 新知识证据：library_search 检索词与命中片段、library_get 使用的 wiki 相对路径与返回源 ID 核对结果（或工具失败的原始错误）。\\n- 变更说明：修复点与 KNOW_4A95036E5C0E4870B83D 经验的对应关系，以及 CONTROL ONLY 脚本（若有）的 actual/expected 输出。\", \"acceptance_criteria\": [\"AC-01 引擎为 DSH（worker=dsh-collab-b-20261025），在全新工作区执行，未换 Worker/引擎，日志仅落自己工作区\", \"AC-02 先真实调用 Library MCP library_search（检索词含 seeded HEAD 红测 CONTROL ONLY），再 library_get 使用搜索返回的 wiki 相对路径读取，核对源 ID 为 KNOW_4A95036E5C0E4870B83D；未用裸知识 ID 当路径；工具失败附原始错误\", \"AC-03 未读取其他任务工作区、未复制旧代码、未读部署配置\", \"AC-04 已读取 result_summary.py 与 git show HEAD:result_summary.py 并核对真正 seeded HEAD；固定业务期望旧实现红测有真实失败原始输出\", \"AC-05 若有 last-row 对照脚本，明确标 CONTROL ONLY、声明非仓库代码、输出 actual/expected，且未以 exit0 作为业务通过\", \"AC-06 修复后 summarize 按 (run_id,case_id) 取最大固定同区 YYYY-MM-DDTHH:MM:SS event_time，平局取输入最后一行（>= 比较，不按 status 选），仅 PASS/FAIL，输出 total/passed\", \"AC-07 全新数据覆盖：PASS@18:00/FAIL@10:00/FAIL@17:00 应 1/1；同时间双向分别断言 1/0 与 1/1；跨 run、跨 case；空输入 0/0；三互异时间 6 排列；同一套测试修前红修后绿\", \"AC-08 交付真实命令输出与新知识读取证据；未 push、未自行确认完成，留待人工独立验收\"], \"idempotency_key\": \"QA-DSH-COLLAB-NEW-EXPERIENCE-20261025-emp803687238e28\", \"priority\": \"MEDIUM\", \"repository_id\": \"fcf20a4a7cc647cba2285be07cc4b093\", \"task_type\": \"REQUIREMENT\", \"title\": \"QA-DSH-COLLAB-NEW-EXPERIENCE-20261025\", \"worker_id\": \"dsh-collab-b-20261025\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:54:24.334845",
+        "finished_at": "2026-10-25T22:54:31.531124"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_la1P0XpzJx1B9LsGtEX87524",
+        "name": "mcp__nexus-task__nexus_task_create",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"task_id\": \"T-20261025-AF090B\",\n  \"title\": \"QA-DSH-COLLAB-NEW-EXPERIENCE-20261025\",\n  \"status\": \"PENDING\",\n  \"task_type\": \"REQUIREMENT\",\n  \"category_id\": \"CAT-5CAA990C\",\n  \"repository_id\": \"fcf20a4a7cc647cba2285be07cc4b093\",\n  \"worker_id\": \"dsh-collab-b-20261025\",\n  \"responsible_employee_id\": \"emp_803687238e28\",\n  \"source_session_id\": \"d508711c29254053b54c0efc0150acc5\",\n  \"source_channel_id\": \"ch_01de419c01fa\",\n  \"current_progress\": \"等待领取\",\n  \"ok\": true,\n  \"description\": \"目标：在全新的独立工作区中，先真实读取本轮新审核发布的经验 KNOW_4A95036E5C0E4870B83D，再按其严格应用修复 result_summary.summarize(rows)；不复用、不读取任何旧任务工作区或其代码。\\n\\n一、执行引擎与隔离\\n- 引擎必须是 DSH（worker=dsh-collab-b-20261025），不得换 OpenCode 或其他 Worker/引擎。\\n- 必须在全新 worktree/工作区作业，日志只写自己工作区。\\n- 不读取其他任务的工作区（含首任务、复用任务），不复制旧代码；不读部署配置；不 push；不自行确认完成（由人工独立验收）。\\n\\n二、新经验检索与读取（先做，留证）\\n1) 全新工作区中先调用真实 Library MCP 的 library_search，检索词：seeded HEAD 红测 CONTROL ONLY。\\n2) 对搜索结果调用 library_get，路径必须使用搜索返回的 wiki 相对路径；不得把裸知识 ID 当作路径传入。\\n3) 读取并核对本轮刚审核发布的源页，源 ID 必须确为 KNOW_4A95036E5C0E4870B83D。\\n4) 工具失败时原样报告（工具名、参数、原始错误），不得编造检索或读取结果、不得伪造路径。\\n\\n三、严格应用新经验（关键判定）\\n1) 先读取工作区里现存的 result_summary.py，并执行 git show HEAD:result_summary.py，核对仓库真正 seeded 的 HEAD 实现内容，二者对照后判断旧实现的真实缺陷位置。\\n2) 依据固定业务期望在 seeded HEAD 实现上跑红测，保留真实失败输出（命令 + 原始输出）。\\n3) 如补充“朴素 last-row”对照控制脚本，必须显式标注 CONTROL ONLY、声明它不是仓库代码、不进入提交；其输出须给出 actual 与 expected；不得把 exit code 0 当作业务通过依据。\\n4) 说明红测失败与 KNOW_4A95036E5C0E4870B83D 中经验条目的对应关系。\\n\\n四、规格\\n修复 summarize(rows)：\\n- 按 (run_id, case_id) 分组，每组取最大 event_time 的那一行决定 status。\\n- event_time 固定为同一时区、无偏移量的 YYYY-MM-DDTHH:MM:SS；平局（时间完全相同）取输入顺序中最后出现的那一行，实现用 >= 比较保住后入者，禁止按 status 字典序或大小挑选。\\n- status 仅 PASS/FAIL；输出 total（分组数）/passed（PASS 组数）。\\n\\n五、全新测试数据（不得照搬旧任务用例）\\n- 同键 PASS@2026-10-25T18:00:00、FAIL@2026-10-25T10:00:00、FAIL@2026-10-25T17:00:00（乱序输入）→ 期望 total=1, passed=1。\\n- 同时间冲突双向分开断言：(a) PASS 在前、FAIL 在后同 event_time → 1/0；(b) FAIL 在前、PASS 在后同 event_time → 1/1。\\n- 跨 run 分组、跨 case 分组各至少一例。\\n- 空输入 → total=0, passed=0。\\n- 三个互异 event_time 的全部 6 种输入排列。\\n- 同一套测试必须先对 seeded HEAD 旧实现跑出真实红测，再对修复实现跑绿；禁止先改实现再补测试、禁止改期望凑绿、禁止删除或跳过失败用例。\\n\\n六、交付物（写在自己工作区）\\n- 实际命令与原始输出：git show HEAD 核对记录、旧实现红测失败记录、修复后全绿记录（含用例数）。\\n- 新知识证据：library_search 检索词与命中片段、library_get 使用的 wiki 相对路径与返回源 ID 核对结果（或工具失败的原始错误）。\\n- 变更说明：修复点与 KNOW_4A95036E5C0E4870B83D 经验的对应关系，以及 CONTROL ONLY 脚本（若有）的 actual/expected 输出。\",\n  \"acceptance_criteria\": [\n    {\n      \"id\": \"AC-01\",\n      \"content\": \"AC-01 引擎为 DSH（worker=dsh-collab-b-20261025），在全新工作区执行，未换 Worker/引擎，日志仅落自己工作区\"\n    },\n    {\n      \"id\": \"AC-02\",\n      \"content\": \"AC-02 先真实调用 Library MCP library_search（检索词含 seeded HEAD 红测 CONTROL ONLY），再 library_get 使用搜索返回的 wiki 相对路径读取，核对源 ID 为 KNOW_4A95036E5C0E4870B83D；未用裸知识 ID 当路径；工具失败附原始错误\"\n    },\n    {\n      \"id\": \"AC-03\",\n      \"content\": \"AC-03 未读取其他任务工作区、未复制旧代码、未读部署配置\"\n    },\n    {\n      \"id\": \"AC-04\",\n      \"content\": \"AC-04 已读取 result_summary.py 与 git show HEAD:result_summary.py 并核对真正 seeded HEAD；固定业务期望旧实现红测有真实失败原始输出\"\n    },\n    {\n      \"id\": \"AC-05\",\n      \"content\": \"AC-05 若有 last-row 对照脚本，明确标 CONTROL ONLY、声明非仓库代码、输出 actual/expected，且未以 exit0 作为业务通过\"\n    },\n    {\n      \"id\": \"AC-06\",\n      \"content\": \"AC-06 修复后 summarize 按 (run_id,case_id) 取最大固定同区 YYYY-MM-DDTHH:MM:SS event_time，平局取输入最后一行（>= 比较，不按 status 选），仅 PASS/FAIL，输出 total/passed\"\n    },\n    {\n      \"id\": \"AC-07\",\n      \"content\": \"AC-07 全新数据覆盖：PASS@18:00/FAIL@10:00/FAIL@17:00 应 1/1；同时间双向分别断言 1/0 与 1/1；跨 run、跨 case；空输入 0/0；三互异时间 6 排列；同一套测试修前红修后绿\"\n    },\n    {\n      \"id\": \"AC-08\",\n      \"content\": \"AC-08 交付真实命令输出与新知识读取证据；未 push、未自行确认完成，留待人工独立验收\"\n    }\n  ]\n}",
+            "id": "804b00b2687945e992cbda966d714e37",
+            "created_at": "2026-10-25T22:54:31.685918",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:54:31.597365",
+        "finished_at": "2026-10-25T22:54:31.686396"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_SDfF0j8hgAMV7thSOi238838",
+        "name": "mcp__nexus-task__nexus_task_summary",
+        "input": "{\"task_id\": \"T-20261025-F20055\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T23:01:35.444834",
+        "finished_at": "2026-10-25T23:01:35.590110"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_01_B79xac2mrYVPZG67ujTX0959",
+        "name": "mcp__nexus-task__nexus_task_summary",
+        "input": "{\"task_id\": \"T-20261025-AF090B\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T23:01:35.589333",
+        "finished_at": "2026-10-25T23:01:35.672393"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_SDfF0j8hgAMV7thSOi238838",
+        "name": "mcp__nexus-task__nexus_task_summary",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"ok\": true,\n  \"task_id\": \"T-20261025-F20055\",\n  \"status\": \"SUCCEEDED\",\n  \"current_progress\": \"任务已人工确认完成\",\n  \"task_url\": \"/tasks/T-20261025-F20055\",\n  \"review\": {\n    \"id\": \"xrj_07f5f6abe5e74d13803c487c7fb4c077\",\n    \"status\": \"NO_FINDINGS\",\n    \"phase\": \"REDUCE\",\n    \"zero_reason\": \"no_findings\",\n    \"candidate_count\": 0\n  },\n  \"candidates\": [],\n  \"hint\": \"复盘与候选审核是独立状态；候选未发布前不能当作正式经验\"\n}",
+            "id": "eb63817b002a49639042722ac45185d3",
+            "created_at": "2026-10-25T23:01:35.784781",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T23:01:35.714385",
+        "finished_at": "2026-10-25T23:01:35.785226"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_01_B79xac2mrYVPZG67ujTX0959",
+        "name": "mcp__nexus-task__nexus_task_summary",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"ok\": true,\n  \"task_id\": \"T-20261025-AF090B\",\n  \"status\": \"SUCCEEDED\",\n  \"current_progress\": \"任务已人工确认完成\",\n  \"task_url\": \"/tasks/T-20261025-AF090B\",\n  \"review\": {\n    \"id\": \"xrj_2a9e956a225e4363a2367177f5b8c04b\",\n    \"status\": \"NO_FINDINGS\",\n    \"phase\": \"REDUCE\",\n    \"zero_reason\": \"no_findings\",\n    \"candidate_count\": 0\n  },\n  \"candidates\": [],\n  \"hint\": \"复盘与候选审核是独立状态；候选未发布前不能当作正式经验\"\n}",
+            "id": "67cfdcfe426b49269d3988b587e841ed",
+            "created_at": "2026-10-25T23:01:35.859025",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T23:01:35.801049",
+        "finished_at": "2026-10-25T23:01:35.859537"
+      }
+    ]
+  },
+  {
+    "employee_id": "emp_90d1baf5766d",
+    "session_id": "5aec457cd9534d7aa6d4b2c6fd18afce",
+    "blocks": [
+      {
+        "type": "tool_call",
+        "id": "call_00_uMQ9fWBkxagkCTacApql1788",
+        "name": "contact_employee",
+        "input": "{\"employee_name\": \"B\", \"message\": \"B，这是 DSH-COLLAB-20261025 隔离验收。按流程我先向你索要样例，请用 contact_employee 把样例直接交还给我（A），不要建任务、不要写代码、也不要把样例交别人。\\n\\n需要两组样例：\\n1. 「输入最后一行并非最新事件」的最小反例：rows 输入（字段 run_id/case_id/event_time/status，event_time 用 YYYY-MM-DDTHH:MM:SS 同一天同时区）+ 按「取最后一行」会得到的错误结果 + 按 (run_id,case_id) 选最大 event_time 应得的正确 total/passed。\\n2. 同时间冲突的双向样例：同一 (run_id,case_id) 的 event_time 完全相同时，(a) 按输入顺序 PASS→FAIL（取最后输入应判 FAIL，1/0）；(b) 反向 FAIL→PASS（取最后输入应判 PASS，1/1）。两组都要给输入行顺序和期望 total/passed。\\n\\n样例只要能直接粘进 pytest 参数化的形式即可。收到后我会读任务管理技能、查分类与仓库，只创建一个真实任务（QA-DSH-COLLAB-FIRST-20261025，REQUIREMENT，CAT-5CAA990C，仓库 fcf20a4a7cc647cba2285be07cc4b093，Worker dsh-collab-a-20261025，Linux agentwork 上的 DSH ACP，不换 OpenCode 或其他 Worker）。下一步：你回传样例 → 我建任务并向你报告真实任务 ID。\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:12:41.210335",
+        "finished_at": "2026-10-25T22:12:43.264263"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_uMQ9fWBkxagkCTacApql1788",
+        "name": "contact_employee",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\"ok\": true, \"peer\": \"B\", \"status\": \"scheduled\"}",
+            "id": "9449e615a2bf449fab24be5378357493",
+            "created_at": "2026-10-25T22:12:43.366993",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:12:43.314139",
+        "finished_at": "2026-10-25T22:12:43.366925"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_01_rIFpya84XvQCidwnies62743",
+        "name": "contact_employee",
+        "input": "{\"employee_name\": \"B\", \"message\": \"B，DSH-COLLAB-20261025 重跑一次索样例环节（数据库锁已修复、Worker 已健康）。请只用 contact_employee 把样例交还给我 A（收件人是 A / dsh-collab-a-20261025），不要建任务、不要写测试代码、不要交第三方。\\n\\n只要两项简短内容：①「输入最后一行并非最新事件」的最小 2 行反例（rows 按输入顺序 + 期望 total/passed）；②同时间冲突双向样例（PASS→FAIL 应 1/0、FAIL→PASS 应 1/1）。每项就是数据行和期望数字，不用给 pytest 代码。\\n\\n若投递仍返回「没有把消息交给对方」，请把错误原文回我，我按可用渠道再唤你。下一步：你回传 → 我读任务管理技能、核对分类 CAT-5CAA990C 与仓库 fcf20a4a7cc647cba2285be07cc4b093，只建一个 QA-DSH-COLLAB-FIRST-20261025（REQUIREMENT，Worker 固定 dsh-collab-a-20261025）→ 建成后把真实任务 ID 回告你。\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:20:21.210889",
+        "finished_at": "2026-10-25T22:20:22.892320"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_02_QMujTdPwBg2LmHqQHRoU8308",
+        "name": "mcp__nexus-task__nexus_task_categories",
+        "input": "{}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:20:22.891530",
+        "finished_at": "2026-10-25T22:20:22.956220"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_03_Ug0RrEHljmQXd1fnyP6q8900",
+        "name": "mcp__nexus-task__nexus_task_repositories",
+        "input": "{}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:20:22.955259",
+        "finished_at": "2026-10-25T22:20:22.979969"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_01_rIFpya84XvQCidwnies62743",
+        "name": "contact_employee",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\"ok\": true, \"peer\": \"B\", \"status\": \"scheduled\"}",
+            "id": "319dab8174454901814ee86a3e036674",
+            "created_at": "2026-10-25T22:20:23.153518",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:20:23.075009",
+        "finished_at": "2026-10-25T22:20:23.153467"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_02_QMujTdPwBg2LmHqQHRoU8308",
+        "name": "mcp__nexus-task__nexus_task_categories",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"ok\": true,\n  \"categories\": [\n    {\n      \"id\": \"CAT-5CAA990C\",\n      \"name\": \"Worker真实执行闭环20261023\",\n      \"description\": \"独立 QA 小型仓库，禁止访问其他工作区\",\n      \"enabled\": true\n    },\n    {\n      \"id\": \"testing-platform\",\n      \"name\": \"测试平台\",\n      \"description\": \"测试平台相关问题与需求\",\n      \"enabled\": true\n    },\n    {\n      \"id\": \"automation-engineering\",\n      \"name\": \"自动化工程\",\n      \"description\": \"自动化工程建设与维护\",\n      \"enabled\": true\n    },\n    {\n      \"id\": \"quality-defense\",\n      \"name\": \"防线运营\",\n      \"description\": \"质量防线运行与治理\",\n      \"enabled\": true\n    }\n  ]\n}",
+            "id": "1cb88ace6a1a4f1a881aea3367fc8233",
+            "created_at": "2026-10-25T22:20:23.254866",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:20:23.170040",
+        "finished_at": "2026-10-25T22:20:23.255336"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_03_Ug0RrEHljmQXd1fnyP6q8900",
+        "name": "mcp__nexus-task__nexus_task_repositories",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"ok\": true,\n  \"repositories\": [\n    {\n      \"id\": \"61d0fde25797490181e8f3063c4269ba\",\n      \"url\": \"https://github.com/linmumuxx-ux/Astra\",\n      \"branch\": \"main\"\n    },\n    {\n      \"id\": \"841c140c7aeb477bb9e6c926fe4d664e\",\n      \"url\": \"file:///tmp/nexus-worker-experience-20261023/origin.git\",\n      \"branch\": \"main\"\n    },\n    {\n      \"id\": \"fcf20a4a7cc647cba2285be07cc4b093\",\n      \"url\": \"file:///root/agentwork/nexus-dsh-collaboration-20261025/origin.git\",\n      \"branch\": \"main\"\n    }\n  ]\n}",
+            "id": "09168059fb8642a1a42f589ebf9e6dd4",
+            "created_at": "2026-10-25T22:20:23.329844",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:20:23.274102",
+        "finished_at": "2026-10-25T22:20:23.330278"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_9ySUKn5rrkbdhpIHwfdO9247",
+        "name": "mcp__nexus-task__nexus_task_create",
+        "input": "{\"task_type\": \"REQUIREMENT\", \"category_id\": \"CAT-5CAA990C\", \"title\": \"QA-DSH-COLLAB-FIRST-20261025\", \"repository_id\": \"fcf20a4a7cc647cba2285be07cc4b093\", \"worker_id\": \"dsh-collab-a-20261025\", \"priority\": \"MEDIUM\", \"description\": \"DSH-COLLAB-20261025 隔离验收：在仓库 fcf20a4a7cc647cba2285be07cc4b093 中修复 result_summary.summarize(rows)，并用固定业务期望测试证明修复。\\n\\n执行引擎约束（硬性）：必须用 Worker dsh-collab-a-20261025（Linux agentwork 上的 DSH ACP）。禁止改用 OpenCode 或任何其他 Worker/引擎；若该 Worker 不可用，如实报告并停下，不要替换。\\n\\n第 0 步 经验检索（必须真实执行，不得虚构结果）：\\n1) 用 nexus-library 的 library_search 检索\\\"event_time 乱序 / 取最后一行并非最新事件\\\"相关经验；\\n2) 用 library_get 真实读取已发布源页 KNOW_A394DEFC1CA34211826F；\\n3) 在报告中核对源 ID 是否与 KNOW_A394DEFC1CA34211826F 一致，并记录命中路径（search → get → 源 ID 校验）；若工具不可用或页面缺失，如实报告\\\"不可用/未命中\\\"，不得编造。\\n\\n第 1 步 需求：result_summary.summarize(rows) 现状缺陷是按输入最后一行取状态，导致\\\"输入最后一行并非最新事件\\\"时判错。\\n修复规则：\\n- 按 (run_id, case_id) 分组；\\n- 每组取 event_time 最大的那一行；event_time 完全相同时取输入顺序中最后出现的那一行（遍历比较用 >= 保住后入者；禁止按 status 字典序/大小挑）；\\n- status 取值仅 PASS / FAIL；输出 total（分组数）/ passed（最终 status 为 PASS 的组数）；\\n- 时间统一同一时区、无偏移量的 \\\"YYYY-MM-DDTHH:MM:SS\\\"，字符串比较即等价时间序；若解析为时间对象必须显式固定同一时区。\\n\\n第 2 步 红测：先写固定业务期望的 pytest（业务期望写死在测试里，不读实现），在未修改的旧代码上运行并保留真实失败输出（须体现\\\"取最后一行\\\"导致的错误判定）。\\n\\n第 3 步 修复后跑绿：同一套测试全部通过，并保留真实输出。\\n\\n必须覆盖的用例（rows 字段顺序 run_id, case_id, event_time, status）：\\n1) 最小反例 2 行：[(R1,C1,2026-10-25T12:00:00,PASS), (R1,C1,2026-10-25T09:00:00,FAIL)] → total=1, passed=1（旧实现得 1/0）；\\n2) FAIL@09:00 / PASS@12:00 / FAIL@10:00 三行洗牌 → 1/1；\\n3) 同时间平局 PASS→FAIL（同为 2026-10-25T09:00:00，PASS 先）→ 1/0；\\n4) 同时间平局 FAIL→PASS（反向）→ 1/1；\\n5) 跨 run（R1、R2 各一条）与跨 case（R1/C1、R1/C2）分组互不干扰；\\n6) 空输入 → total=0, passed=0；\\n7) 三个互异 event_time 的 6 种输入排列全部参数化覆盖，期望结果一致。\\n\\n工作区与纪律：\\n- 只在自己的新任务 worktree 内改动与写日志；日志只落该 worktree；\\n- 不 push；不读部署配置、不读其他任务的工作区或产物；\\n- 完成后不要自行确认任务完成（由系统/人类确认）。\\n\\n验收标准：\\n1) 报告中给出 library_search 关键词、library_get 读取的源 ID（须为 KNOW_A394DEFC1CA34211826F）与命中路径，或如实说明工具不可用；\\n2) 旧代码红测的真实失败输出（含失败用例 id 与实际/期望值）；\\n3) 修复后同一测试集全部通过的真实输出，覆盖上述 7 类用例（含 6 排列）；\\n4) 改动仅限 worktree 内 result_summary.summarize 及其测试，未 push、未改部署配置、未触碰其他任务；\\n5) 明确说明执行引擎为 dsh-collab-a-20261025（DSH ACP），未换引擎。\", \"acceptance_criteria\": [\"报告含 library_search 检索记录 + library_get 读取源页 KNOW_A394DEFC1CA34211826F 的源ID核对与命中路径，或如实说明不可用\", \"旧代码上固定业务期望红测的真实失败输出（体现按最后一行取值的错误）\", \"修复后同一测试集真实全绿输出，覆盖最小反例、09:00/12:00/10:00 洗牌、同时间双向平局、跨run/跨case、空输入、三互异时间全6排列\", \"改动仅在自身新任务 worktree 内，日志只写该 worktree，未 push、未读部署配置或其他任务\", \"执行引擎为 Worker dsh-collab-a-20261025（Linux agentwork 上的 DSH ACP），未替换为 OpenCode 或其他 Worker\", \"未自行确认任务完成\"]}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:20:25.117343",
+        "finished_at": "2026-10-25T22:20:31.882638"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_9ySUKn5rrkbdhpIHwfdO9247",
+        "name": "mcp__nexus-task__nexus_task_create",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"task_id\": \"T-20261025-96E997\",\n  \"title\": \"QA-DSH-COLLAB-FIRST-20261025\",\n  \"status\": \"PENDING\",\n  \"task_type\": \"REQUIREMENT\",\n  \"category_id\": \"CAT-5CAA990C\",\n  \"repository_id\": \"fcf20a4a7cc647cba2285be07cc4b093\",\n  \"worker_id\": \"dsh-collab-a-20261025\",\n  \"responsible_employee_id\": \"emp_90d1baf5766d\",\n  \"source_session_id\": \"5aec457cd9534d7aa6d4b2c6fd18afce\",\n  \"source_channel_id\": \"ch_01de419c01fa\",\n  \"current_progress\": \"等待领取\",\n  \"ok\": true,\n  \"description\": \"DSH-COLLAB-20261025 隔离验收：在仓库 fcf20a4a7cc647cba2285be07cc4b093 中修复 result_summary.summarize(rows)，并用固定业务期望测试证明修复。\\n\\n执行引擎约束（硬性）：必须用 Worker dsh-collab-a-20261025（Linux agentwork 上的 DSH ACP）。禁止改用 OpenCode 或任何其他 Worker/引擎；若该 Worker 不可用，如实报告并停下，不要替换。\\n\\n第 0 步 经验检索（必须真实执行，不得虚构结果）：\\n1) 用 nexus-library 的 library_search 检索\\\"event_time 乱序 / 取最后一行并非最新事件\\\"相关经验；\\n2) 用 library_get 真实读取已发布源页 KNOW_A394DEFC1CA34211826F；\\n3) 在报告中核对源 ID 是否与 KNOW_A394DEFC1CA34211826F 一致，并记录命中路径（search → get → 源 ID 校验）；若工具不可用或页面缺失，如实报告\\\"不可用/未命中\\\"，不得编造。\\n\\n第 1 步 需求：result_summary.summarize(rows) 现状缺陷是按输入最后一行取状态，导致\\\"输入最后一行并非最新事件\\\"时判错。\\n修复规则：\\n- 按 (run_id, case_id) 分组；\\n- 每组取 event_time 最大的那一行；event_time 完全相同时取输入顺序中最后出现的那一行（遍历比较用 >= 保住后入者；禁止按 status 字典序/大小挑）；\\n- status 取值仅 PASS / FAIL；输出 total（分组数）/ passed（最终 status 为 PASS 的组数）；\\n- 时间统一同一时区、无偏移量的 \\\"YYYY-MM-DDTHH:MM:SS\\\"，字符串比较即等价时间序；若解析为时间对象必须显式固定同一时区。\\n\\n第 2 步 红测：先写固定业务期望的 pytest（业务期望写死在测试里，不读实现），在未修改的旧代码上运行并保留真实失败输出（须体现\\\"取最后一行\\\"导致的错误判定）。\\n\\n第 3 步 修复后跑绿：同一套测试全部通过，并保留真实输出。\\n\\n必须覆盖的用例（rows 字段顺序 run_id, case_id, event_time, status）：\\n1) 最小反例 2 行：[(R1,C1,2026-10-25T12:00:00,PASS), (R1,C1,2026-10-25T09:00:00,FAIL)] → total=1, passed=1（旧实现得 1/0）；\\n2) FAIL@09:00 / PASS@12:00 / FAIL@10:00 三行洗牌 → 1/1；\\n3) 同时间平局 PASS→FAIL（同为 2026-10-25T09:00:00，PASS 先）→ 1/0；\\n4) 同时间平局 FAIL→PASS（反向）→ 1/1；\\n5) 跨 run（R1、R2 各一条）与跨 case（R1/C1、R1/C2）分组互不干扰；\\n6) 空输入 → total=0, passed=0；\\n7) 三个互异 event_time 的 6 种输入排列全部参数化覆盖，期望结果一致。\\n\\n工作区与纪律：\\n- 只在自己的新任务 worktree 内改动与写日志；日志只落该 worktree；\\n- 不 push；不读部署配置、不读其他任务的工作区或产物；\\n- 完成后不要自行确认任务完成（由系统/人类确认）。\\n\\n验收标准：\\n1) 报告中给出 library_search 关键词、library_get 读取的源 ID（须为 KNOW_A394DEFC1CA34211826F）与命中路径，或如实说明工具不可用；\\n2) 旧代码红测的真实失败输出（含失败用例 id 与实际/期望值）；\\n3) 修复后同一测试集全部通过的真实输出，覆盖上述 7 类用例（含 6 排列）；\\n4) 改动仅限 worktree 内 result_summary.summarize 及其测试，未 push、未改部署配置、未触碰其他任务；\\n5) 明确说明执行引擎为 dsh-collab-a-20261025（DSH ACP），未换引擎。\",\n  \"acceptance_criteria\": [\n    {\n      \"id\": \"AC-01\",\n      \"content\": \"报告含 library_search 检索记录 + library_get 读取源页 KNOW_A394DEFC1CA34211826F 的源ID核对与命中路径，或如实说明不可用\"\n    },\n    {\n      \"id\": \"AC-02\",\n      \"content\": \"旧代码上固定业务期望红测的真实失败输出（体现按最后一行取值的错误）\"\n    },\n    {\n      \"id\": \"AC-03\",\n      \"content\": \"修复后同一测试集真实全绿输出，覆盖最小反例、09:00/12:00/10:00 洗牌、同时间双向平局、跨run/跨case、空输入、三互异时间全6排列\"\n    },\n    {\n      \"id\": \"AC-04\",\n      \"content\": \"改动仅在自身新任务 worktree 内，日志只写该 worktree，未 push、未读部署配置或其他任务\"\n    },\n    {\n      \"id\": \"AC-05\",\n      \"content\": \"执行引擎为 Worker dsh-collab-a-20261025（Linux agentwork 上的 DSH ACP），未替换为 OpenCode 或其他 Worker\"\n    },\n    {\n      \"id\": \"AC-06\",\n      \"content\": \"未自行确认任务完成\"\n    }\n  ]\n}",
+            "id": "ed9aff6be9a249e2943083c80b2f11dd",
+            "created_at": "2026-10-25T22:20:32.135508",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:20:31.933931",
+        "finished_at": "2026-10-25T22:20:32.136065"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_oQHNuPNyI2KFRWGVAYFH9953",
+        "name": "contact_employee",
+        "input": "{\"employee_name\": \"B\", \"message\": \"B，你上一轮样例我已在群公开记录中取到（两项反例 + 同时间双向 + 两条判定约束），未替你改写任何内容。投递说明：我这侧用 contact_employee 发给你的消息服务端均返回 ok=true/scheduled，说明 A→B 通道正常；你 B→A 返回「没有把消息交给对方」是反向通道问题，样例落群即可，我不再要求你重投。\\n\\n已完成的下一步（仅一个任务）：读任务管理技能 → 核对分类 CAT-5CAA990C（Worker真实执行闭环20261023，enabled）与仓库 fcf20a4a7cc647cba2285be07cc4b093（file:///root/agentwork/nexus-dsh-collaboration-20261025/origin.git）→ 创建真实任务：\\n\\ntask_id = T-20261025-96E997\\ntitle = QA-DSH-COLLAB-FIRST-20261025，task_type = REQUIREMENT，status = PENDING（等待领取）\\ncategory_id = CAT-5CAA990C，repository_id = fcf20a4a7cc647cba2285be07cc4b093，worker_id = dsh-collab-a-20261025（DSH ACP，未换引擎）\\n\\n任务描述已写入：先用 library_search 检索 event_time 乱序经验、再 library_get 真实读取 KNOW_A394DEFC1CA34211826F 并核对源 ID 与命中路径（不可用则如实报告）；仅在自身新 worktree 修复 summarize(rows)，(run_id,case_id) 取最大 event_time、同时间取最后输入、>= 比较不按 status 挑；红测（固定业务期望、跑旧代码取真实失败）→ 修复 → 绿测；覆盖最小反例、09:00/12:00/10:00 应 1/1、同时间 PASS→FAIL 1/0 与 FAIL→PASS 1/1、跨 run/跨 case、空输入、三互异时间全 6 排列；日志只落自己 worktree、不 push、不读部署配置或其他任务、不自行确认完成。\\n\\n下一步：我不再插手 Worker 执行，等系统任务通知后先查该任务再决定；后续进展我会按 T-20261025-96E997 向你同步。\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:20:33.466905",
+        "finished_at": "2026-10-25T22:20:36.302444"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_oQHNuPNyI2KFRWGVAYFH9953",
+        "name": "contact_employee",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\"ok\": true, \"peer\": \"B\", \"status\": \"scheduled\"}",
+            "id": "b4a4fcc9dd174692b21dce7e260fc237",
+            "created_at": "2026-10-25T22:20:36.601220",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:20:36.356818",
+        "finished_at": "2026-10-25T22:20:36.601148"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_P909bycflRC3odH28xHq3677",
+        "name": "mcp__nexus-task__nexus_task_get",
+        "input": "{\"task_id\": \"T-20261025-96E997\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:20:52.509677",
+        "finished_at": "2026-10-25T22:20:52.617170"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_P909bycflRC3odH28xHq3677",
+        "name": "mcp__nexus-task__nexus_task_get",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"task_id\": \"T-20261025-96E997\",\n  \"title\": \"QA-DSH-COLLAB-FIRST-20261025\",\n  \"status\": \"PENDING\",\n  \"task_type\": \"REQUIREMENT\",\n  \"category_id\": \"CAT-5CAA990C\",\n  \"repository_id\": \"fcf20a4a7cc647cba2285be07cc4b093\",\n  \"worker_id\": \"dsh-collab-a-20261025\",\n  \"responsible_employee_id\": \"emp_90d1baf5766d\",\n  \"source_session_id\": \"5aec457cd9534d7aa6d4b2c6fd18afce\",\n  \"source_channel_id\": \"ch_01de419c01fa\",\n  \"current_progress\": \"等待领取\",\n  \"ok\": true,\n  \"description\": \"DSH-COLLAB-20261025 隔离验收：在仓库 fcf20a4a7cc647cba2285be07cc4b093 中修复 result_summary.summarize(rows)，并用固定业务期望测试证明修复。\\n\\n执行引擎约束（硬性）：必须用 Worker dsh-collab-a-20261025（Linux agentwork 上的 DSH ACP）。禁止改用 OpenCode 或任何其他 Worker/引擎；若该 Worker 不可用，如实报告并停下，不要替换。\\n\\n第 0 步 经验检索（必须真实执行，不得虚构结果）：\\n1) 用 nexus-library 的 library_search 检索\\\"event_time 乱序 / 取最后一行并非最新事件\\\"相关经验；\\n2) 用 library_get 真实读取已发布源页 KNOW_A394DEFC1CA34211826F；\\n3) 在报告中核对源 ID 是否与 KNOW_A394DEFC1CA34211826F 一致，并记录命中路径（search → get → 源 ID 校验）；若工具不可用或页面缺失，如实报告\\\"不可用/未命中\\\"，不得编造。\\n\\n第 1 步 需求：result_summary.summarize(rows) 现状缺陷是按输入最后一行取状态，导致\\\"输入最后一行并非最新事件\\\"时判错。\\n修复规则：\\n- 按 (run_id, case_id) 分组；\\n- 每组取 event_time 最大的那一行；event_time 完全相同时取输入顺序中最后出现的那一行（遍历比较用 >= 保住后入者；禁止按 status 字典序/大小挑）；\\n- status 取值仅 PASS / FAIL；输出 total（分组数）/ passed（最终 status 为 PASS 的组数）；\\n- 时间统一同一时区、无偏移量的 \\\"YYYY-MM-DDTHH:MM:SS\\\"，字符串比较即等价时间序；若解析为时间对象必须显式固定同一时区。\\n\\n第 2 步 红测：先写固定业务期望的 pytest（业务期望写死在测试里，不读实现），在未修改的旧代码上运行并保留真实失败输出（须体现\\\"取最后一行\\\"导致的错误判定）。\\n\\n第 3 步 修复后跑绿：同一套测试全部通过，并保留真实输出。\\n\\n必须覆盖的用例（rows 字段顺序 run_id, case_id, event_time, status）：\\n1) 最小反例 2 行：[(R1,C1,2026-10-25T12:00:00,PASS), (R1,C1,2026-10-25T09:00:00,FAIL)] → total=1, passed=1（旧实现得 1/0）；\\n2) FAIL@09:00 / PASS@12:00 / FAIL@10:00 三行洗牌 → 1/1；\\n3) 同时间平局 PASS→FAIL（同为 2026-10-25T09:00:00，PASS 先）→ 1/0；\\n4) 同时间平局 FAIL→PASS（反向）→ 1/1；\\n5) 跨 run（R1、R2 各一条）与跨 case（R1/C1、R1/C2）分组互不干扰；\\n6) 空输入 → total=0, passed=0；\\n7) 三个互异 event_time 的 6 种输入排列全部参数化覆盖，期望结果一致。\\n\\n工作区与纪律：\\n- 只在自己的新任务 worktree 内改动与写日志；日志只落该 worktree；\\n- 不 push；不读部署配置、不读其他任务的工作区或产物；\\n- 完成后不要自行确认任务完成（由系统/人类确认）。\\n\\n验收标准：\\n1) 报告中给出 library_search 关键词、library_get 读取的源 ID（须为 KNOW_A394DEFC1CA34211826F）与命中路径，或如实说明工具不可用；\\n2) 旧代码红测的真实失败输出（含失败用例 id 与实际/期望值）；\\n3) 修复后同一测试集全部通过的真实输出，覆盖上述 7 类用例（含 6 排列）；\\n4) 改动仅限 worktree 内 result_summary.summarize 及其测试，未 push、未改部署配置、未触碰其他任务；\\n5) 明确说明执行引擎为 dsh-collab-a-20261025（DSH ACP），未换引擎。\",\n  \"acceptance_criteria\": [\n    {\n      \"id\": \"AC-01\",\n      \"content\": \"报告含 library_search 检索记录 + library_get 读取源页 KNOW_A394DEFC1CA34211826F 的源ID核对与命中路径，或如实说明不可用\"\n    },\n    {\n      \"id\": \"AC-02\",\n      \"content\": \"旧代码上固定业务期望红测的真实失败输出（体现按最后一行取值的错误）\"\n    },\n    {\n      \"id\": \"AC-03\",\n      \"content\": \"修复后同一测试集真实全绿输出，覆盖最小反例、09:00/12:00/10:00 洗牌、同时间双向平局、跨run/跨case、空输入、三互异时间全6排列\"\n    },\n    {\n      \"id\": \"AC-04\",\n      \"content\": \"改动仅在自身新任务 worktree 内，日志只写该 worktree，未 push、未读部署配置或其他任务\"\n    },\n    {\n      \"id\": \"AC-05\",\n      \"content\": \"执行引擎为 Worker dsh-collab-a-20261025（Linux agentwork 上的 DSH ACP），未替换为 OpenCode 或其他 Worker\"\n    },\n    {\n      \"id\": \"AC-06\",\n      \"content\": \"未自行确认任务完成\"\n    }\n  ]\n}",
+            "id": "fdf2d90f16f64f139ca34e7419e8b0b8",
+            "created_at": "2026-10-25T22:20:52.713680",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:20:52.653349",
+        "finished_at": "2026-10-25T22:20:52.714242"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_HygwufuW7QwF0Ia7GZ1f1729",
+        "name": "mcp__nexus-task__nexus_task_start",
+        "input": "{\"task_id\": \"T-20261025-96E997\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:20:55.166863",
+        "finished_at": "2026-10-25T22:20:55.257665"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_HygwufuW7QwF0Ia7GZ1f1729",
+        "name": "mcp__nexus-task__nexus_task_start",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"ok\": false,\n  \"error\": \"DSH 必须使用 Worker Gateway\",\n  \"task_id\": \"T-20261025-96E997\",\n  \"status\": \"PENDING\"\n}",
+            "id": "d50d0a1358ba4cf6826287e7c2461340",
+            "created_at": "2026-10-25T22:20:55.420230",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:20:55.290141",
+        "finished_at": "2026-10-25T22:20:55.420665"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_ec2TR4GOcBGPOnmQFbhe9005",
+        "name": "contact_employee",
+        "input": "{\"employee_name\": \"B\", \"message\": \"B，样例与寻址结论收到，不需要你再重投：反向通道已恢复，A 用姓名 \\\"A\\\" 可寻址，dsh-collab-a-20261025 不是有效联系人名，我记下了。\\n\\n同步当前真实状态（T-20261025-96E997）：刚查 nexus_task_get，status 仍为 PENDING /「等待领取」，worker_id = dsh-collab-a-20261025，分类与仓库与要求一致。我尝试 nexus_task_start 被服务端拒绝：{\\\"ok\\\": false, \\\"error\\\": \\\"DSH 必须使用 Worker Gateway\\\", \\\"status\\\": \\\"PENDING\\\"}——即该 DSH Worker 由 Worker Gateway 领取执行，我方不手工启动，也不换引擎、不改派其他 Worker。任务本身未受影响。\\n\\n下一步（我负责）：等系统任务通知后先 nexus_task_get 再决定，按 AC-01~AC-06 核对 Worker 交付（library_search/library_get 命中路径与源 ID、红测真实失败、修复后全绿、7 类用例含 6 排列、未 push）。有实质进展或异常我再同步给你；不需要你介入执行。\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T22:20:56.502239",
+        "finished_at": "2026-10-25T22:20:58.226342"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_ec2TR4GOcBGPOnmQFbhe9005",
+        "name": "contact_employee",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\"ok\": false, \"peer\": \"B\", \"error\": \"同事交流已达到轮次上限\"}",
+            "id": "4ea0da21e9c64f37b0da8447d7a93d77",
+            "created_at": "2026-10-25T22:20:58.320616",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T22:20:58.272900",
+        "finished_at": "2026-10-25T22:20:58.320547"
+      },
+      {
+        "type": "tool_call",
+        "id": "call_00_FJ3xaVzG1h2fgjsiKQNj3703",
+        "name": "mcp__nexus-task__nexus_task_summary",
+        "input": "{\"task_id\": \"T-20261025-96E997\"}",
+        "state": "finished",
+        "created_at": "2026-10-25T23:00:08.989686",
+        "finished_at": "2026-10-25T23:00:09.087116"
+      },
+      {
+        "type": "tool_result",
+        "id": "call_00_FJ3xaVzG1h2fgjsiKQNj3703",
+        "name": "mcp__nexus-task__nexus_task_summary",
+        "output": [
+          {
+            "type": "text",
+            "text": "{\n  \"ok\": true,\n  \"task_id\": \"T-20261025-96E997\",\n  \"status\": \"SUCCEEDED\",\n  \"current_progress\": \"任务已人工确认完成\",\n  \"task_url\": \"/tasks/T-20261025-96E997\",\n  \"review\": {\n    \"id\": \"xrj_f6fb4ad4a0d8499ea067cb9484f192a2\",\n    \"status\": \"SUCCEEDED\",\n    \"phase\": \"WRITING\",\n    \"zero_reason\": null,\n    \"candidate_count\": 2\n  },\n  \"candidates\": [\n    {\n      \"id\": \"KNOW_4A95036E5C0E4870B83D\",\n      \"title\": \"【QA·DSH】核对 seeded HEAD，并分栏记录仓库红测和合成对照\",\n      \"status\": \"published\",\n      \"verification_status\": \"verified\",\n      \"summary\": \"当任务描述称旧实现按输入最后一行取状态时，不能假定 seeded HEAD 就是字面 last-row 实现。应先读取源码和 git show HEAD 确认真实基线，再跑固定业务期望测试；若仓库旧代码是另一种缺陷，仓库红测照实报告，另设明确标注为非仓库代码的控制实验展示 last-row 错误形态，二者不得互相替代。\",\n      \"url\": \"/library?knowledge=KNOW_4A95036E5C0E4870B83D\"\n    },\n    {\n      \"id\": \"KNOW_BDC326F6F9954A88847A\",\n      \"title\": \"library_get 读取源页应使用检索返回的 wiki 相对路径，而非裸源 ID\",\n      \"status\": \"rejected\",\n      \"verification_status\": \"unverified\",\n      \"summary\": \"当 library_search 命中知识源页后，直接用 frontmatter 中的 KNOW 源 ID 调 library_get 会被拒绝；实际可用参数是 search 返回的 wiki/ 下 Markdown 相对路径。把裸 ID 只用于源 ID 校验，可避免把“参数格式错误”误报为“页面缺失”。\",\n      \"url\": \"/library?knowledge=KNOW_BDC326F6F9954A88847A\"\n    }\n  ],\n  \"hint\": \"复盘与候选审核是独立状态；候选未发布前不能当作正式经验\"\n}",
+            "id": "f9099c045f794b2688e88a4045b65bda",
+            "created_at": "2026-10-25T23:00:09.181864",
+            "finished_at": null
+          }
+        ],
+        "state": "success",
+        "created_at": "2026-10-25T23:00:09.115412",
+        "finished_at": "2026-10-25T23:00:09.182453"
+      }
+    ]
+  }
+]

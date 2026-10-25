@@ -35,6 +35,14 @@
           <ElOption v-for="item in store.categories" :key="item.id" :value="item.id" :label="item.name" />
         </ElSelect>
       </ElFormItem>
+      <ElFormItem v-if="!task" label="代码仓库" prop="repository_id">
+        <ElSelect v-model="form.repository_id" clearable filterable :loading="repositoriesLoading" placeholder="选择任务代码仓库">
+          <ElOption v-for="item in repositories" :key="item.id" :value="item.id" :label="`${item.url} · ${item.branch}`" />
+        </ElSelect>
+        <ElAlert v-if="repositoriesError" class="form-message" type="error" :closable="false" :title="repositoriesError">
+          <ElButton text @click="loadRepositories">重试</ElButton>
+        </ElAlert>
+      </ElFormItem>
       <ElFormItem label="优先级" prop="priority">
         <ElSelect v-model="form.priority">
           <ElOption v-for="item in priorities" :key="item" :value="item" :label="priorityLabel(item)" />
@@ -119,7 +127,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElDivider, ElDrawer, ElForm, ElFormItem, ElInput, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSpace, ElTag, ElText, ElUpload } from 'element-plus'
 import type { FormInstance, FormRules, UploadFile, UploadFiles, UploadUserFile } from 'element-plus'
 import { api } from '@/api/client'
-import type { Task, TaskPriority, TaskType } from '@/api/types'
+import type { CodeRepository, Task, TaskPriority, TaskType } from '@/api/types'
 import { listEmployees } from '../../api'
 import type { Employee as NexusEmployee } from '../../types'
 import { confirmDialog } from '@/composables/useConfirm'
@@ -131,6 +139,9 @@ const props = defineProps<{ open: boolean; task?: Task | null }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'created', id: string): void; (e: 'saved', id: string): void }>()
 const store = useAstraStore()
 const owners = ref<NexusEmployee[]>([])
+const repositories = ref<CodeRepository[]>([])
+const repositoriesLoading = ref(false)
+const repositoriesError = ref('')
 
 const formRef = ref<FormInstance | null>(null)
 const submitting = ref(false)
@@ -146,6 +157,7 @@ const form = reactive({
   title: props.task?.title ?? '',
   task_type: (props.task?.task_type ?? 'ISSUE') as TaskType,
   category_id: props.task?.category_id ?? '',
+  repository_id: props.task?.repository_id ?? '',
   priority: (props.task?.priority ?? 'MEDIUM') as TaskPriority,
   description: props.task?.description ?? '',
   criteria: criteriaFrom(props.task),
@@ -159,6 +171,7 @@ function currentDraft(): TaskDraftSnapshot {
     title: form.title,
     task_type: form.task_type,
     category_id: form.category_id,
+    repository_id: form.repository_id,
     priority: form.priority,
     description: form.description,
     criteria: form.criteria.map((item) => item.content),
@@ -189,8 +202,17 @@ watch(() => store.categories.map((item) => item.id).join('\0'), () => syncBaseli
 onMounted(async () => {
   await nextTick()
   syncBaseline()
+  if (!props.task) void loadRepositories()
   owners.value = await listEmployees().catch(() => [])
 })
+
+async function loadRepositories() {
+  repositoriesLoading.value = true
+  repositoriesError.value = ''
+  try { repositories.value = await api.repositories() }
+  catch (error) { repositoriesError.value = error instanceof Error ? error.message : '仓库列表加载失败' }
+  finally { repositoriesLoading.value = false }
+}
 
 const compatibleEmployees = computed(() => store.employees.filter((item) => item.enabled && item.task_types.includes(form.task_type) && item.category_ids.includes(form.category_id)))
 watch(() => [form.task_type, form.category_id], () => {
@@ -265,6 +287,7 @@ async function submit() {
       title: form.title,
       task_type: form.task_type,
       category_id: form.category_id,
+      repository_id: form.repository_id || null,
       priority: form.priority,
       description: form.description,
       acceptance_criteria,

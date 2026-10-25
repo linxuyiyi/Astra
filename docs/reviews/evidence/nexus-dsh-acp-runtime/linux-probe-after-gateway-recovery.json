@@ -1,0 +1,143 @@
+{
+  "started_at": "2026-10-23T18:04:08.260675+00:00",
+  "platform": {
+    "system": "Linux",
+    "machine": "aarch64",
+    "libc": [
+      "glibc",
+      "2.39"
+    ],
+    "python": "3.12.3"
+  },
+  "expected_versions": {
+    "dsh": "0.2.1-rc.2",
+    "agent_client_protocol": "0.8.1"
+  },
+  "model_alias": "deepseek-flash",
+  "gateway_url": "http://127.0.0.1:18541/v1",
+  "checks": {
+    "installation": {
+      "status": "PASS",
+      "dsh": "0.2.1-rc.2",
+      "agent_client_protocol": "0.8.1",
+      "dependency_count": 618,
+      "lock_sha256": "28baa120aa63691494beb36c7a84cfb2c5baa5df20bb68a4ce43b99e1290791a",
+      "installed_versions_sha256": "4483c28f243b9877ede44b09295c550efec4f788947ceccdd012245f88550ffc"
+    },
+    "gateway_catalog": {
+      "status": "PASS",
+      "http_status": 200,
+      "alias_present": true
+    },
+    "initialize": {
+      "status": "PASS",
+      "protocol_version": 1
+    },
+    "new_session": {
+      "status": "PASS"
+    },
+    "model_selection": {
+      "status": "PASS",
+      "provider": "nexus-gateway",
+      "alias": "deepseek-flash"
+    },
+    "first_turn": {
+      "status": "PASS",
+      "stop_reason": "end_turn"
+    },
+    "second_turn": {
+      "status": "FAIL",
+      "reason": "RequestError"
+    },
+    "mcp": {
+      "status": "UNVERIFIED"
+    },
+    "resume": {
+      "status": "UNVERIFIED"
+    },
+    "resume_turn": {
+      "status": "UNVERIFIED"
+    },
+    "cancel": {
+      "status": "UNVERIFIED"
+    },
+    "native_trace": {
+      "status": "UNVERIFIED"
+    },
+    "permission": {
+      "status": "UNVERIFIED"
+    },
+    "disconnect_recovery": {
+      "status": "UNVERIFIED"
+    },
+    "long_session": {
+      "status": "UNVERIFIED"
+    },
+    "reasoning": {
+      "status": "UNVERIFIED"
+    },
+    "token_usage": {
+      "status": "UNVERIFIED"
+    },
+    "rate_limit": {
+      "status": "UNVERIFIED"
+    },
+    "cleanup": {
+      "status": "PASS",
+      "owned_process_group_stopped": true
+    }
+  },
+  "production_cutover": false,
+  "source_files": {
+    "services/nexus-api/app/worker_agent/dsh_acp/__init__.py": "1e2d0abdbfc0ce4bd83d1686b4e7021dd55ed651a999f35cf75863f98840122c",
+    "services/nexus-api/app/worker_agent/dsh_acp/commands.py": "712900d4976960fc300760fc0f11ed900f598641a40b8f7b6c0d0e985708e39e",
+    "services/nexus-api/app/worker_agent/dsh_acp/driver.py": "6c8564122c232f57bfb9a81f00f0f060215b8916ef4bc9ee83fa099e5da3e9b5",
+    "services/nexus-api/app/worker_agent/dsh_acp/preflight.py": "89e9448b4831dce77deaee7b459297e287230b627703f7cdf715319d63674003",
+    "services/nexus-api/app/worker_agent/dsh_acp/process.py": "f575f86f127d0e7e95f6462620883aae57cfd4654c15b283828e3b53475cc969",
+    "services/nexus-api/app/worker_agent/dsh_acp/profile.py": "751a8bc87e5ad890e7dcc96693eed1ff953fb2e4bb826a17fca676911316b73e",
+    "services/nexus-api/app/worker_agent/dsh_acp/skills.py": "d817e9e52452258e96f8a589a7df5c8fa050a8c5c7a381825c49917cc7c361c9",
+    "services/nexus-api/app/worker_agent/dsh_acp/trace.py": "b8394237476c01bc402df311841628b785eb1a1370bb22af79876041d455e191",
+    "tools/e2e/dsh_acp_probe.py": "8579aa2e2713a044284d691347f11356b99b6916149855e058426f1b25d556e2",
+    "tools/e2e/dsh_probe_mcp.py": "f992f01f901f40d97c62ce1faa50a36945009341f2b13393576207db6985a16f",
+    "services/nexus-api/app/worker_agent/process_env.py": "5903b0c52b90787640f14daaf7101e64239f00b85767b7f7bfe0cf46d51dfde3",
+    "ops/runtime/dsh/package.json": "f719db6e87f27231151f0be9467de1e057e099d5be64b32cb03e6c3c23708c92",
+    "ops/runtime/dsh/package-lock.json": "28baa120aa63691494beb36c7a84cfb2c5baa5df20bb68a4ce43b99e1290791a",
+    "ops/runtime/dsh/requirements.txt": "cc6ecdca5de5d892bc808fbafdae7df02e039b419158e9ae9cf21191a36d1fee"
+  },
+  "source_sha256": "168b837f823d802b4caea37674684614ff47dc42002f6dedbda4a37d75e949c0",
+  "installation": {
+    "dsh": "0.2.1-rc.2",
+    "agent_client_protocol": "0.8.1",
+    "dependency_count": 618,
+    "lock_sha256": "28baa120aa63691494beb36c7a84cfb2c5baa5df20bb68a4ce43b99e1290791a",
+    "installed_versions_sha256": "4483c28f243b9877ede44b09295c550efec4f788947ceccdd012245f88550ffc"
+  },
+  "profile_sha256": "ed88ef62dc18abe39ba6afea62f458d87af0398a66c84995691a9dd1268c1744",
+  "agent_capabilities": {
+    "loadSession": false,
+    "mcpCapabilities": {
+      "http": true,
+      "sse": false
+    },
+    "promptCapabilities": {
+      "audio": false,
+      "embeddedContext": false,
+      "image": false
+    },
+    "sessionCapabilities": {
+      "list": {},
+      "resume": {}
+    }
+  },
+  "native_session_id": "15cc94a4-c61d-43b9-811a-0dc9273c2ddd",
+  "online_update_counts": {
+    "agent_thought_chunk": 1,
+    "usage_update": 2,
+    "tool_call": 1,
+    "tool_call_update": 1,
+    "agent_message_chunk": 1
+  },
+  "tool_call_count": 1,
+  "finished_at": "2026-10-23T18:04:11.719686+00:00",
+  "overall": "FAIL"
+}

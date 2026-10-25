@@ -1,0 +1,157 @@
+{
+  "checks": [
+    {
+      "name": "late_then_early",
+      "expected": {
+        "total": 1,
+        "passed": 1
+      },
+      "new": {
+        "total": 1,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "early_then_late",
+      "expected": {
+        "total": 1,
+        "passed": 0
+      },
+      "new": {
+        "total": 1,
+        "passed": 0
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "tie_forward",
+      "expected": {
+        "total": 1,
+        "passed": 0
+      },
+      "new": {
+        "total": 1,
+        "passed": 0
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 0
+      },
+      "passed": true
+    },
+    {
+      "name": "tie_reverse",
+      "expected": {
+        "total": 1,
+        "passed": 1
+      },
+      "new": {
+        "total": 1,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 1,
+        "passed": 1
+      },
+      "passed": true
+    },
+    {
+      "name": "different_run",
+      "expected": {
+        "total": 2,
+        "passed": 1
+      },
+      "new": {
+        "total": 2,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 2,
+        "passed": 1
+      },
+      "passed": true
+    },
+    {
+      "name": "different_case",
+      "expected": {
+        "total": 2,
+        "passed": 1
+      },
+      "new": {
+        "total": 2,
+        "passed": 1
+      },
+      "old": {
+        "total": 2,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 2,
+        "passed": 1
+      },
+      "passed": true
+    },
+    {
+      "name": "empty",
+      "expected": {
+        "total": 0,
+        "passed": 0
+      },
+      "new": {
+        "total": 0,
+        "passed": 0
+      },
+      "old": {
+        "total": 0,
+        "passed": 0
+      },
+      "naive_arrival_order": {
+        "total": 0,
+        "passed": 0
+      },
+      "passed": true
+    }
+  ],
+  "all_checks_passed": true,
+  "unique_time_permutations_passed": 6,
+  "worker_test_command": [
+    "/root/agentwork/nexus-dsh-qa-20261024/venv/bin/python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
+  "worker_tests_returncode": 0,
+  "worker_tests_output": ".............                                                            [100%]\n13 passed in 0.02s\n",
+  "git_diff": "diff --git a/result_summary.py b/result_summary.py\nindex 4c4f8ae..34785c5 100644\n--- a/result_summary.py\n+++ b/result_summary.py\n@@ -1,2 +1,16 @@\n def summarize(rows):\n-    return {\"total\": len(rows), \"passed\": sum(row[\"status\"] == \"passed\" for row in rows)}\n+    latest_by_key = {}\n+    for row in rows:\n+        key = (row[\"run_id\"], row[\"case_id\"])\n+        current = latest_by_key.get(key)\n+        # Event times are same-timezone fixed-format strings, so >= is time order.\n+        # >= also keeps the last input row when event_time ties.\n+        if current is None or row[\"event_time\"] >= current[\"event_time\"]:\n+            latest_by_key[key] = row\n+\n+    return {\n+        \"total\": len(latest_by_key),\n+        \"passed\": sum(\n+            row[\"status\"] == \"PASS\" for row in latest_by_key.values()\n+        ),\n+    }\n",
+  "git_status": " M result_summary.py\n?? __pycache__/\n?? logs/\n?? test_result_summary.py\n",
+  "head": "2187c520f8a883d282c106c8b25fba90e85b74c4"
+}

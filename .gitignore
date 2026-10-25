@@ -39,6 +39,7 @@ services/nexus-api/chat-island/node_modules/
 # （public/nexus-chat 是聊天岛产物，dist 是 web 的最终静态资源）
 
 web/workspace-ui/node_modules/
+ops/runtime/dsh/node_modules/
 web/workspace-ui/upstream/**/node_modules/
 
 # 运行时锁文件

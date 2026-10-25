@@ -102,6 +102,13 @@ async def desired_equipment(
         "skills": _desired_skills(environment, resolved),
         "mcp": _desired_mcp(environment, resolved),
     }
+    if environment.runtime_engine == "dsh":
+        from app.worker_agent.dsh_acp.profile import ACP_VERSION, DSH_VERSION
+        payload.pop("opencode")
+        payload["runtime_engine"] = "dsh"
+        payload["dsh"] = {"version": DSH_VERSION, "acp": ACP_VERSION}
+        payload["model"]["name"] = payload["model"].get("route") or ""
+        payload["mcp"] = {"items": list(environment.mcp_refs or [])}
     payload["revision"] = _revision(payload)
     return payload
 
@@ -119,6 +126,15 @@ async def probe_equipment(
 
     resolved = settings or get_settings()
     instance = worker_instance if worker_instance is not None else await _worker_instance(environment)
+    if environment.runtime_engine == "dsh":
+        from app.runtime.worker_transport import WorkerCommandTransport
+        try:
+            result = await WorkerCommandTransport(environment_id=environment.id).run_command("dsh_health", {})
+            return {"runtime_engine": "dsh", "dsh": result, "repository": result.get("repository", {}),
+                    "source": "worker", "worker_agent_version": WORKER_AGENT_VERSION,
+                    "error": result.get("error")}
+        except Exception:
+            return {"runtime_engine": "dsh", "error": "DSH Worker 固定装配或 Gateway 检查失败"}
     expected = _expected_payload(desired)
     if instance is not None and instance.status == "online":
         try:
@@ -164,6 +180,17 @@ def health_status(
         return EnvironmentStatus.UNAVAILABLE
     if not isinstance(desired, dict):
         return EnvironmentStatus.UNAVAILABLE
+    if desired.get("runtime_engine") == "dsh":
+        dsh = observation.get("dsh", {})
+        expected = {str(x.get("name")) for x in (desired.get("mcp") or {}).get("items", [])}
+        ready = (dsh.get("healthy") is True and dsh.get("protocol_initialized") is True
+                 and dsh.get("file_channel_verified") is True
+                 and (desired.get("model") or {}).get("route") in dsh.get("models", [])
+                 and all(dsh.get("skill_hashes", {}).get(x["name"], {}).get("SKILL.md") == x["fullfile_hash"]
+                    for x in (desired.get("skills") or {}).get("items", []))
+                 and expected == set(dsh.get("mcp_names", []))
+                 and _matches_repository(desired, observation))
+        return EnvironmentStatus.AVAILABLE if ready else EnvironmentStatus.UNAVAILABLE
     for key in REQUIRED_SECTIONS:
         section = observation.get(key)
         if not isinstance(section, dict) or section.get("status") != HEALTHY:
@@ -264,6 +291,14 @@ def equipment_rows(
     want = desired if isinstance(desired, dict) else {}
     seen = observation if isinstance(observation, dict) else {}
     snapshot = deployed_snapshot if isinstance(deployed_snapshot, dict) else {}
+    if want.get("runtime_engine") == "dsh":
+        dsh = seen.get("dsh", {})
+        ready = health_status(seen, want) == EnvironmentStatus.AVAILABLE
+        return [{"key": "dsh", "label": "DSH ACP", "configured": True,
+                 "deployed": bool(dsh.get("dsh")), "verified": ready,
+                 "desired_revision": (want.get("dsh") or {}).get("version"),
+                 "actual_revision": dsh.get("dsh"), "error": seen.get("error"),
+                 "detail": "固定装配、文件通道、Gateway 模型目录和仓库核对"}, _git_row(want, seen, snapshot)]
     return [
         _opencode_row(want, seen, snapshot),
         _worker_agent_row(want, seen, snapshot),
@@ -325,7 +360,8 @@ async def _desired_model(
         )
     )
     configured = _text(environment.model_name)
-    route = route_model_id(configured) if configured else (str(enabled[0]) if enabled else "")
+    route = (configured if environment.runtime_engine == "dsh" else
+             route_model_id(configured) if configured else (str(enabled[0]) if enabled else ""))
     resolved = bool(route) and route in enabled
     error = None
     if not route:

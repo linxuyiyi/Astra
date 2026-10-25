@@ -1,0 +1,106 @@
+{
+  "local_stack": [
+    {
+      "name": "agent-service",
+      "pid": 16014,
+      "pgid": 16014,
+      "create_time": 1792937022.000555,
+      "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/agent-service",
+      "identity_verified": true
+    },
+    {
+      "name": "api",
+      "pid": 19103,
+      "pgid": 19103,
+      "create_time": 1792937949.041648,
+      "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    {
+      "name": "task-mcp",
+      "pid": 16040,
+      "pgid": 16040,
+      "create_time": 1792937024.552621,
+      "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    {
+      "name": "library-mcp",
+      "pid": 16047,
+      "pgid": 16047,
+      "create_time": 1792937025.17648,
+      "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    {
+      "name": "celery-worker",
+      "pid": 21977,
+      "pgid": 21977,
+      "create_time": 1792939006.234264,
+      "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    {
+      "name": "celery-beat",
+      "pid": 16049,
+      "pgid": 16049,
+      "create_time": 1792937025.180615,
+      "cwd": "/Users/niuniu/.codex/worktrees/dsh-collaboration-e2e/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    {
+      "name": "relay",
+      "pid": 16137,
+      "pgid": 16137,
+      "create_time": 1792937113.923737,
+      "cwd": "/private/tmp/nexus-dsh-collaboration-20261025",
+      "identity_verified": true
+    }
+  ],
+  "remote": {
+    "workers": [
+      {
+        "slot": "a",
+        "pid": 59652,
+        "pgid": 59652,
+        "create_time": 1792937234.56,
+        "cwd": "/root/agentwork/nexus-dsh-collaboration-20261025/source/services/nexus-api",
+        "identity_verified": true,
+        "children": [],
+        "bindings": [
+          {
+            "id": "dsh_5d80ad94f622483ba352c0491ecd820b",
+            "state": "succeeded",
+            "owner": null
+          }
+        ]
+      },
+      {
+        "slot": "b",
+        "pid": 59653,
+        "pgid": 59653,
+        "create_time": 1792937234.57,
+        "cwd": "/root/agentwork/nexus-dsh-collaboration-20261025/source/services/nexus-api",
+        "identity_verified": true,
+        "children": [],
+        "bindings": [
+          {
+            "id": "dsh_fb005b3c25404a748539a3ceeacbf37b",
+            "state": "succeeded",
+            "owner": null
+          },
+          {
+            "id": "dsh_7e1a9bb255d2468e954112fc53ac23aa",
+            "state": "succeeded",
+            "owner": null
+          }
+        ]
+      }
+    ],
+    "owned_active_children": [],
+    "original_worker_pids_present": [
+      15164,
+      15165
+    ]
+  }
+}

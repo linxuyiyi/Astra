@@ -119,6 +119,8 @@ class DataChannel:
             except ValueError as exc:
                 raise WorkerGatewayError("invalid_message", "上传正文无效") from exc
         elif stored is None:
+            if command.name == "dsh_submit":
+                raise WorkerGatewayError("unknown_command", "DSH 待受理正文已失效，不能重播")
             stored = encoded_body(command.payload or {}).decode("utf-8")
         now = utcnow()
         await self._require_current_attempt(session, command)

@@ -1,0 +1,6 @@
+{
+  "services/nexus-api/app/worker_agent/dsh_acp/driver.py": "50c930d64bfd780a1c4a58ed84ada93caf0f41f639d483e1385ae77c57197b0b",
+  "services/nexus-api/app/runtime/dsh_client.py": "bb89a98f55780a1652920a995e406b062ae187256b750ad62fa1062e9d0ce7d5",
+  "services/nexus-api/tests/dsh/test_driver.py": "4ad519f0ce8c0472a54eb26f6c6e06df6978986a39d4146336ceedab6aff0fb6",
+  "services/nexus-api/tests/dsh/test_runtime_integration.py": "b39a1f4ecc81e7cc74288f1d3edd41da26f2574d2fcc1aad5b8434dbd19a5b3f"
+}

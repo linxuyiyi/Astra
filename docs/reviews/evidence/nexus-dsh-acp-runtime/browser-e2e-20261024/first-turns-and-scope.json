@@ -1,0 +1,26 @@
+{
+  "a": {
+    "task_id": "T-20261024-DC8958",
+    "binding_id": "dsh_6d20cdde3ba041038dfc99a677854c8e",
+    "native_session_id": "9c1a050d-b4ad-428d-81e4-94487918e3cb",
+    "task_status": "WAITING",
+    "waiting_reason": "EXECUTION_RESULT_REVIEW",
+    "worker_count": 1,
+    "turn_start_count": 1,
+    "sha256": "6df5f168e7dd987c00b70b34fc4f55460033e2e7546db11e0c8a51102d4a573b",
+    "complete": true,
+    "cross_task_binding_http": 404
+  },
+  "b": {
+    "task_id": "T-20261024-2AA586",
+    "binding_id": "dsh_20099ff398ef4c95b0a278df267ade4c",
+    "native_session_id": "a18d46ff-5ccb-4d4b-9aa8-110f57c746d2",
+    "task_status": "WAITING",
+    "waiting_reason": "EXECUTION_RESULT_REVIEW",
+    "worker_count": 1,
+    "turn_start_count": 1,
+    "sha256": "331b66d7c126cb678f36e599d0f9720ccfab4c66027872236bba0178de0cea51",
+    "complete": true,
+    "cross_task_binding_http": 404
+  }
+}

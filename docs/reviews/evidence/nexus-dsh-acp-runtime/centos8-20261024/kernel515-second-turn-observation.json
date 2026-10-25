@@ -1,0 +1,18 @@
+{
+  "task_state": {
+    "status": "WAITING",
+    "waiting_reason": "EXECUTION_RESULT_REVIEW",
+    "connection": "CONNECTED",
+    "pending_submission": null,
+    "binding_id": "dsh_ab72039374dd44a7937e78fef183fd47",
+    "session_status": "SUCCEEDED"
+  },
+  "snapshot_state": "succeeded",
+  "native_session_id": "d0bbf6b4-978a-455b-b664-3b7852bbcf78",
+  "permissions": [],
+  "file_http": 200,
+  "file_body": {
+    "path": "kernel515-continue.txt",
+    "content": "KERNEL515_CONTINUE_OK"
+  }
+}

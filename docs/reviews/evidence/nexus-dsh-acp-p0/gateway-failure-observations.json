@@ -1,0 +1,172 @@
+[
+  {
+    "case": "mac-deepseek-circuit",
+    "started_at": "2026-10-23T15:09:11.193277+00:00",
+    "model_alias": "deepseek-flash",
+    "overall": "FAIL",
+    "checks": {
+      "installation": {
+        "status": "PASS",
+        "dsh": "0.2.1-rc.2",
+        "agent_client_protocol": "0.8.1",
+        "dependency_count": 615,
+        "lock_sha256": "28baa120aa63691494beb36c7a84cfb2c5baa5df20bb68a4ce43b99e1290791a",
+        "installed_versions_sha256": "2f6c3fcefecd68b96f4f93a9719f5efd15209cd2d793f2e9a6ec5105b602802d"
+      },
+      "gateway_catalog": {
+        "status": "PASS",
+        "http_status": 200,
+        "alias_present": true
+      },
+      "initialize": {
+        "status": "PASS",
+        "protocol_version": 1
+      },
+      "new_session": {
+        "status": "PASS"
+      },
+      "model_selection": {
+        "status": "PASS",
+        "provider": "nexus-gateway",
+        "alias": "deepseek-flash"
+      },
+      "first_turn": {
+        "status": "PASS",
+        "stop_reason": "end_turn"
+      },
+      "second_turn": {
+        "status": "PASS",
+        "stop_reason": "end_turn"
+      },
+      "mcp": {
+        "status": "PASS",
+        "real_echo_calls": 2
+      },
+      "resume": {
+        "status": "PASS",
+        "same_native_session": true
+      },
+      "resume_turn": {
+        "status": "FAIL",
+        "reason": "RequestError"
+      },
+      "cancel": {
+        "status": "UNVERIFIED"
+      },
+      "native_trace": {
+        "status": "UNVERIFIED"
+      },
+      "permission": {
+        "status": "UNVERIFIED"
+      },
+      "disconnect_recovery": {
+        "status": "UNVERIFIED"
+      },
+      "long_session": {
+        "status": "UNVERIFIED"
+      },
+      "reasoning": {
+        "status": "UNVERIFIED"
+      },
+      "token_usage": {
+        "status": "UNVERIFIED"
+      },
+      "rate_limit": {
+        "status": "UNVERIFIED"
+      }
+    },
+    "native_trace_sha256": "4e33ffb3a0fdb05a39fbcb9fbd568128137b02fba0e6697e7d33fa0e9b4b0915",
+    "source_scope": "本轮较早的探针版本，不能替代最终源码成功验证",
+    "failure": {
+      "native_error_code": "SERVER",
+      "http_status": 503,
+      "gateway_code": "NO_ELIGIBLE_NODE",
+      "eligibility": {
+        "CIRCUIT_OPEN": 1
+      }
+    }
+  },
+  {
+    "case": "mac-qwen-unavailable",
+    "started_at": "2026-10-23T15:09:56.935240+00:00",
+    "model_alias": "qwen2.5:3b",
+    "overall": "FAIL",
+    "checks": {
+      "installation": {
+        "status": "PASS",
+        "dsh": "0.2.1-rc.2",
+        "agent_client_protocol": "0.8.1",
+        "dependency_count": 615,
+        "lock_sha256": "28baa120aa63691494beb36c7a84cfb2c5baa5df20bb68a4ce43b99e1290791a",
+        "installed_versions_sha256": "2f6c3fcefecd68b96f4f93a9719f5efd15209cd2d793f2e9a6ec5105b602802d"
+      },
+      "gateway_catalog": {
+        "status": "PASS",
+        "http_status": 200,
+        "alias_present": true
+      },
+      "initialize": {
+        "status": "PASS",
+        "protocol_version": 1
+      },
+      "new_session": {
+        "status": "PASS"
+      },
+      "model_selection": {
+        "status": "PASS",
+        "provider": "nexus-gateway",
+        "alias": "qwen2.5:3b"
+      },
+      "first_turn": {
+        "status": "FAIL",
+        "reason": "RequestError"
+      },
+      "second_turn": {
+        "status": "UNVERIFIED"
+      },
+      "mcp": {
+        "status": "UNVERIFIED"
+      },
+      "resume": {
+        "status": "UNVERIFIED"
+      },
+      "resume_turn": {
+        "status": "UNVERIFIED"
+      },
+      "cancel": {
+        "status": "UNVERIFIED"
+      },
+      "native_trace": {
+        "status": "UNVERIFIED"
+      },
+      "permission": {
+        "status": "UNVERIFIED"
+      },
+      "disconnect_recovery": {
+        "status": "UNVERIFIED"
+      },
+      "long_session": {
+        "status": "UNVERIFIED"
+      },
+      "reasoning": {
+        "status": "UNVERIFIED"
+      },
+      "token_usage": {
+        "status": "UNVERIFIED"
+      },
+      "rate_limit": {
+        "status": "UNVERIFIED"
+      }
+    },
+    "native_trace_sha256": "88844192513be2292b09adb3f6c9b15b8d94cc5b9aa16c0900d60cd7a2893705",
+    "source_scope": "本轮较早的探针版本，不能替代最终源码成功验证",
+    "failure": {
+      "native_error_code": "SERVER",
+      "http_status": 503,
+      "gateway_code": "NO_ELIGIBLE_NODE",
+      "eligibility": {
+        "HEALTH_UNHEALTHY": 1
+      }
+    }
+  }
+]

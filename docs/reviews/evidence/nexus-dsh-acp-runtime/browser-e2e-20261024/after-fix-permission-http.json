@@ -1,0 +1,28 @@
+{
+  "permission_id": "878d6365fbcf471abbb2c6950d920805",
+  "native_session_id": "a18d46ff-5ccb-4d4b-9aa8-110f57c746d2",
+  "raw_input": {
+    "command": "printf E2E_B_DENIED > /root/agentwork/nexus-dsh-browser-e2e-20261024/approval-fixtures/denied-b-after-fix.txt",
+    "description": "Write independent approval-denial retest marker",
+    "justification": "Disposable E2E marker",
+    "sandbox_permissions": "danger-full-access"
+  },
+  "checks": [
+    {
+      "check": "cross_task",
+      "http": 409,
+      "body": {
+        "detail": "审批已过期或不属于当前 Session"
+      },
+      "original_permission_still_pending": true
+    },
+    {
+      "check": "invalid_option",
+      "http": 409,
+      "body": {
+        "detail": "只支持本次允许或本次拒绝"
+      },
+      "original_permission_still_pending": true
+    }
+  ]
+}

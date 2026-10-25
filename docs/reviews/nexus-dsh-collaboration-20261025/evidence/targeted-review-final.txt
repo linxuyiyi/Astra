@@ -1,0 +1,90 @@
+........................................................................ [ 60%]
+...............................................                          [100%]
+=============================== warnings summary ===============================
+tests/platform/test_experience_review.py::test_celery_review_result_is_serializable_and_excludes_lease
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py: 36 warnings
+tests/dsh/test_acp_safety.py: 9 warnings
+tests/dsh/test_driver.py: 12 warnings
+tests/dsh/test_probe_reporting.py: 1 warning
+tests/dsh/test_runtime_integration.py: 10 warnings
+tests/dsh/test_trace_review.py: 5 warnings
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/platform/test_experience_review.py: 36 warnings
+tests/dsh/test_acp_safety.py: 9 warnings
+tests/dsh/test_driver.py: 12 warnings
+tests/dsh/test_probe_reporting.py: 1 warning
+tests/dsh/test_runtime_integration.py: 10 warnings
+tests/dsh/test_trace_review.py: 5 warnings
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py: 36 warnings
+tests/dsh/test_acp_safety.py: 9 warnings
+tests/dsh/test_driver.py: 12 warnings
+tests/dsh/test_probe_reporting.py: 1 warning
+tests/dsh/test_runtime_integration.py: 10 warnings
+tests/dsh/test_trace_review.py: 5 warnings
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/platform/test_experience_review.py: 36 warnings
+tests/dsh/test_acp_safety.py: 9 warnings
+tests/dsh/test_driver.py: 12 warnings
+tests/dsh/test_probe_reporting.py: 1 warning
+tests/dsh/test_runtime_integration.py: 10 warnings
+tests/dsh/test_trace_review.py: 5 warnings
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/platform/test_experience_review.py: 36 warnings
+tests/dsh/test_acp_safety.py: 9 warnings
+tests/dsh/test_driver.py: 12 warnings
+tests/dsh/test_probe_reporting.py: 1 warning
+tests/dsh/test_runtime_integration.py: 10 warnings
+tests/dsh/test_trace_review.py: 5 warnings
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py: 36 warnings
+tests/dsh/test_acp_safety.py: 9 warnings
+tests/dsh/test_driver.py: 12 warnings
+tests/dsh/test_probe_reporting.py: 1 warning
+tests/dsh/test_runtime_integration.py: 10 warnings
+tests/dsh/test_trace_review.py: 5 warnings
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/platform/test_experience_review.py: 36 warnings
+tests/dsh/test_acp_safety.py: 9 warnings
+tests/dsh/test_driver.py: 12 warnings
+tests/dsh/test_probe_reporting.py: 1 warning
+tests/dsh/test_runtime_integration.py: 10 warnings
+tests/dsh/test_trace_review.py: 5 warnings
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/platform/test_experience_review.py: 36 warnings
+tests/dsh/test_acp_safety.py: 9 warnings
+tests/dsh/test_driver.py: 12 warnings
+tests/dsh/test_probe_reporting.py: 1 warning
+tests/dsh/test_runtime_integration.py: 10 warnings
+tests/dsh/test_trace_review.py: 5 warnings
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/platform/test_experience_review.py: 36 warnings
+tests/dsh/test_acp_safety.py: 9 warnings
+tests/dsh/test_driver.py: 12 warnings
+tests/dsh/test_probe_reporting.py: 1 warning
+tests/dsh/test_runtime_integration.py: 10 warnings
+tests/dsh/test_trace_review.py: 5 warnings
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+119 passed, 658 warnings in 11.64s

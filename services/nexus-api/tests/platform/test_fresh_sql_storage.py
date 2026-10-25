@@ -178,3 +178,41 @@ def test_local_auth_cleanup_preserves_business_owner_ids(tmp_path):
             "old-uid",
             "owner",
         )
+
+
+def test_released_init_upgrade_preserves_opencode_binding(tmp_path):
+    database = tmp_path / "released.db"
+    initial = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "0001_init"], cwd=SERVICE,
+        env={**os.environ, "ASTRA_DATABASE_URL": f"sqlite+aiosqlite:///{database}"},
+        text=True, capture_output=True, timeout=30,
+    )
+    assert initial.returncode == 0, initial.stderr
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO t_nexus_opencode_execution_environments "
+            "(id,employee_id,mode,name,description,port,opencode_server_port,opencode_path,"
+            "workspace_root,status,status_detail,labels,created_at,updated_at) "
+            "VALUES (1,'worker','LINUX_REMOTE','原环境','',22,4096,'opencode',"
+            "'/agentwork','READY','{}','{}','2026-10-23','2026-10-23')"
+        )
+        connection.execute(
+            "INSERT INTO t_nexus_runtime_sessions "
+            "(id,task_id,employee_id,workspace,environment,status,tool_usage,usage_by_day,"
+            "model_usage,created_at,total_tokens) VALUES "
+            "('ses_original','task','worker','/agentwork/task','{}','SUCCEEDED','{}','{}',"
+            "'{}','2026-10-23',123)"
+        )
+    outcome = upgrade(database)
+    assert outcome.returncode == 0, outcome.stderr
+    with sqlite3.connect(database) as connection:
+        assert connection.execute(
+            "SELECT runtime_engine FROM t_nexus_opencode_execution_environments WHERE id=1"
+        ).fetchone() == ("opencode",)
+        assert connection.execute(
+            "SELECT id,native_session_id,runtime_engine,fencing_token,status,total_tokens,workspace "
+            "FROM t_nexus_runtime_sessions"
+        ).fetchone() == (
+            "ses_original", "ses_original", "opencode", 0, "SUCCEEDED", 123, "/agentwork/task"
+        )
+    assert upgrade(database).returncode == 0

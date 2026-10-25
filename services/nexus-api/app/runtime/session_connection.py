@@ -225,7 +225,9 @@ async def prepare_workspace(task: Task, environment, *, reuse_existing: bool = T
 
 
 async def _prepare_worker_workspace(environment, *, root: str, target: str, reuse_existing: bool) -> None:
-    client = WorkerOpenCodeClient(get_settings(), environment_id=environment.id)
+    from app.runtime.worker_transport import WorkerCommandTransport
+    client = (WorkerCommandTransport(environment_id=environment.id) if environment.runtime_engine == "dsh"
+              else WorkerOpenCodeClient(get_settings(), environment_id=environment.id))
     await client.run_command(
         "prepare_workspace",
         {"root": root, "target": target, "reuse_existing": reuse_existing},

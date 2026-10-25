@@ -1,0 +1,111 @@
+{
+  "checked_at_utc": "2026-10-24T12:04:31.200752+00:00",
+  "preview_retained": true,
+  "local": {
+    "redis": {
+      "pid": 4993,
+      "create_time": 1792838519.85111,
+      "cwd": "/private/tmp/nexus-dsh-browser-e2e-20261024",
+      "identity_verified": true
+    },
+    "api": {
+      "pid": 5797,
+      "create_time": 1792840568.73272,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "review": {
+      "pid": 5986,
+      "create_time": 1792841869.831709,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api",
+      "identity_verified": true
+    },
+    "relay": {
+      "pid": 5000,
+      "create_time": 1792838544.699074,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra",
+      "identity_verified": true
+    }
+  },
+  "tasks": {
+    "a": {
+      "task_id": "T-20261024-DC8958",
+      "status": "SUCCEEDED",
+      "repository_id": "b2dd3cc328394995ae303fa99a1df105",
+      "worker_count": 0,
+      "worker_status": "IDLE",
+      "auto_claim": false,
+      "auto_execute": false,
+      "url": "http://127.0.0.1:18641/tasks/T-20261024-DC8958"
+    },
+    "b": {
+      "task_id": "T-20261024-2AA586",
+      "status": "SUCCEEDED",
+      "repository_id": "b2dd3cc328394995ae303fa99a1df105",
+      "worker_count": 0,
+      "worker_status": "IDLE",
+      "auto_claim": false,
+      "auto_execute": false,
+      "url": "http://127.0.0.1:18641/tasks/T-20261024-2AA586"
+    }
+  },
+  "seconds_after_fixture_stop_confirmation": 143.6775450706482,
+  "preserved_gateway": {
+    "pid": 93965,
+    "create_time": 1792717367.142531,
+    "cwd": "/Users/niuniu/.codex/worktrees/nexus-interaction-fixes/Astra/services/nexus-api",
+    "models_http": 200
+  },
+  "local_private_modes": {
+    "nexus-dsh-browser-e2e-20261024": "0o700",
+    "server-env.json": "0o600",
+    "worker-credentials.json": "0o600"
+  },
+  "remote": {
+    "platform": {
+      "system": "Linux-5.15.223-1.el8.elrepo.x86_64-x86_64-with-glibc2.28",
+      "kernel": "5.15.223-1.el8.elrepo.x86_64",
+      "machine": "x86_64",
+      "glibc": "2.28",
+      "python": "3.11.15",
+      "node": "v22.23.3"
+    },
+    "workers": {
+      "a": {
+        "pid": 15164,
+        "create_time": 1792840574.67,
+        "cwd": "/root/agentwork/nexus-dsh-qa-20261024/source/services/nexus-api",
+        "identity_verified": true
+      },
+      "b": {
+        "pid": 15165,
+        "create_time": 1792840574.67,
+        "cwd": "/root/agentwork/nexus-dsh-qa-20261024/source/services/nexus-api",
+        "identity_verified": true
+      }
+    },
+    "private_modes": {
+      ".": "0o700",
+      "gateway-key": "0o600",
+      "a/worker-credentials.json": "0o600",
+      "a/dsh-config.json": "0o600",
+      "a/worker-state": "0o700",
+      "b/worker-credentials.json": "0o600",
+      "b/dsh-config.json": "0o600",
+      "b/worker-state": "0o700"
+    },
+    "source_sha256": {
+      "services/nexus-api/app/worker_agent/dsh_acp/driver.py": "50c930d64bfd780a1c4a58ed84ada93caf0f41f639d483e1385ae77c57197b0b",
+      "services/nexus-api/app/runtime/dsh_client.py": "bb89a98f55780a1652920a995e406b062ae187256b750ad62fa1062e9d0ce7d5",
+      "services/nexus-api/tests/dsh/test_driver.py": "4ad519f0ce8c0472a54eb26f6c6e06df6978986a39d4146336ceedab6aff0fb6",
+      "services/nexus-api/tests/dsh/test_runtime_integration.py": "b39a1f4ecc81e7cc74288f1d3edd41da26f2574d2fcc1aad5b8434dbd19a5b3f"
+    }
+  },
+  "source_commit": "ee024b6e236456a35bd5d77623fe7058822c8a4d",
+  "frontend_sha256": {
+    "services/nexus-api/web/dist/index.html": "b24a84e97e271297b9ecd1aabf0851c811dab472ce76a3f5814f9d647957b1e0",
+    "services/nexus-api/web/dist/assets/index-CjGQq1st.js": "8c84274edbf1ad7bc367dbfe7dae21bd9dffb21bb78f3ede2e62c7ee7377756d",
+    "services/nexus-api/web/dist/assets/index-CRbxKJSl.css": "6ba1dedbcdfe75892daaddd8dd446ca5a71d0fc8b5b6d9444fa6197d7a937644"
+  },
+  "served_frontend_matches_commit": true
+}

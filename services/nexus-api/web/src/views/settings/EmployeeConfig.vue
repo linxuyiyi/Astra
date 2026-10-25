@@ -229,7 +229,7 @@
               <ElFormItem label="编程工具">
                 <ElSelect v-model="form.environment.coding_tool" class="worker-config-control">
                   <ElOption value="opencode" label="OpenCode" />
-                  <ElOption value="deepseek-harness" label="DeepSeek Harness（未接入）" disabled />
+                  <ElOption value="dsh" label="DSH ACP（试用）" :disabled="form.environment.mode !== 'LINUX_REMOTE'" />
                 </ElSelect>
               </ElFormItem>
               <ElFormItem label="编程模型">
@@ -239,9 +239,9 @@
           </div>
         </ElCollapseItem>
 
-        <ElCollapseItem title="高级设置（OpenCode 路径与端口）" name="advanced">
+        <ElCollapseItem v-if="form.environment.coding_tool === 'opencode'" title="高级设置（OpenCode 路径与端口）" name="advanced">
           <div class="config-grid">
-            <ElFormItem label="OpenCode 可执行文件" prop="environment.opencode_path">
+            <ElFormItem v-if="form.environment.coding_tool === 'opencode'" label="OpenCode 可执行文件" prop="environment.opencode_path">
               <ElInput v-model.trim="form.environment.opencode_path" :placeholder="form.environment.mode === 'LOCAL' ? 'opencode' : '/usr/local/bin/opencode'" />
             </ElFormItem>
             <ElFormItem label="OpenCode Server 端口" prop="environment.opencode_server_port">
@@ -306,7 +306,7 @@ import { isMaintenanceActive } from '@/features/workers/presentation'
 import { employeeDisplayName } from '@/utils/format'
 import type { Employee as DigitalEmployee } from '@/types'
 
-type CodingTool = 'opencode' | 'deepseek-harness'
+type CodingTool = 'opencode' | 'dsh'
 
 const props = withDefaults(defineProps<{
   employee: Employee | null
@@ -399,7 +399,7 @@ const formRules = computed<FormRules>(() => ({
   'environment.host': [{ required: true, message: '请输入服务器地址', trigger: 'blur' }],
   'environment.port': [{ required: true, message: '请输入服务器端口', trigger: 'blur' }, { validator: portValidator, trigger: 'blur' }],
   'environment.username': [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  'environment.ssh_password': [{ required: props.creating || !props.employee?.execution_environment?.has_ssh_password, message: '请输入 SSH 密码', trigger: 'blur' }],
+  'environment.ssh_password': [{ required: form.environment.coding_tool !== 'dsh' && (props.creating || !props.employee?.execution_environment?.has_ssh_password), message: '请输入 SSH 密码', trigger: 'blur' }],
 }))
 
 function defaultCategoryId() {
@@ -433,7 +433,7 @@ function fill(employee?: Employee) {
           repository_url: environment.repository_url ?? '',
           repository_branch: environment.repository_branch ?? environment.branch ?? 'main',
           repository_token: '',
-          coding_tool: 'opencode',
+          coding_tool: (environment.runtime_engine || 'opencode') as CodingTool,
         }
       : emptyEnvironment(),
   })
@@ -493,6 +493,7 @@ function environmentPayload(repositoryId: string | null) {
   const remote = form.environment.mode === 'LINUX_REMOTE'
   return {
     mode: form.environment.mode,
+    runtime_engine: form.environment.coding_tool,
     name: form.worker_name.trim(),
     description: form.description,
     host: remote ? form.environment.host.trim() || null : null,
@@ -530,6 +531,7 @@ function normalizedEnvironment(value: Record<string, unknown> | ReturnType<typeo
   const data = value as Record<string, unknown>
   return {
     mode: data.mode,
+    runtime_engine: data.runtime_engine ?? data.coding_tool ?? 'opencode',
     name: data.name ?? '',
     description: data.description ?? '',
     host: data.host ?? null,

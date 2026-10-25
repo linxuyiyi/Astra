@@ -7,6 +7,7 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from threading import Event as ThreadEvent
 
 import pytest
 from fastapi import HTTPException
@@ -217,6 +218,32 @@ def test_peer_http_response_matches_committed_delivery(setup):
     assert response.json()["scheduled"] is True
     page = wait_done(owner, cid)
     assert sum(item["text"] == "唯一联系反例" for item in page["items"]) == 1
+
+
+def test_peer_delivery_wait_does_not_block_runtime_writer(setup, monkeypatch):
+    app, owner, _, _, _ = setup
+    loop = owner.portal.call(asyncio.get_running_loop)
+    with connect() as db:
+        db.execute(text("UPDATE t_nexus_channel_members SET agentscope_session_id='group-session' "
+                        "WHERE employee_id='dev'"))
+        db.commit()
+
+    def waiting_delivery(*args):
+        # 同步目录写入等待锁时，异步 Runtime writer 必须仍能释放锁。
+        writer_finished = ThreadEvent()
+        loop.call_soon_threadsafe(writer_finished.set)
+        if not writer_finished.wait(1):
+            raise RuntimeError("联系投递阻塞了 Runtime writer 所在的事件循环")
+        return {"scheduled": True, "sender_name": "小牛码"}
+
+    monkeypatch.setattr(app.state.collaboration, "request_peer", waiting_delivery)
+    response = owner.get(
+        "/api/v1/peers/resolve",
+        headers={"X-Nexus-Internal-Key": "test-internal-key"},
+        params={"session_id": "group-session", "name": "小掌柜", "message": "并发联系"},
+    )
+    assert response.status_code == 200
+    assert response.json()["scheduled"] is True
 
 
 def test_temporary_uid_and_group_membership_boundary(setup):

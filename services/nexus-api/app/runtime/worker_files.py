@@ -133,7 +133,7 @@ async def worker_git(environment, workspace: str, args: tuple[str, ...]) -> tupl
 
 
 async def worker_upload(environment, workspace: str, filename: str, content: bytes) -> str:
-    client = WorkerOpenCodeClient(environment_id=environment.id)
+    client = _client(environment)
     request_id = f"upl_{uuid4().hex}"
     payload = {
         "workspace": workspace,
@@ -157,8 +157,15 @@ async def worker_upload(environment, workspace: str, filename: str, content: byt
     return path
 
 
+def _client(environment):
+    if getattr(environment, "runtime_engine", "opencode") == "dsh":
+        from app.runtime.worker_transport import WorkerCommandTransport
+        return WorkerCommandTransport(environment_id=environment.id)
+    return WorkerOpenCodeClient(environment_id=environment.id)
+
+
 async def _run(environment, name: str, payload: dict[str, Any]) -> dict[str, Any]:
-    client = WorkerOpenCodeClient(environment_id=environment.id)
+    client = _client(environment)
     try:
         return await client.run_command(name, payload)
     except WorkerCommandError as exc:

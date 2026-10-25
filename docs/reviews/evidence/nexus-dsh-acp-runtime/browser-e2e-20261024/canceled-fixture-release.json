@@ -1,0 +1,64 @@
+{
+  "case": "unconfirmed canceled fixtures retain occupancy until explicit execution-stop confirmation",
+  "before": {
+    "a": {
+      "id": "T-20261024-C1DBEB",
+      "status": "CANCELED",
+      "current_session_id": null,
+      "pending_message_id": null,
+      "pending_attempt": 0,
+      "claimed_at": null,
+      "started_at": null,
+      "execution_stop_confirmed_at": null
+    },
+    "b": {
+      "id": "T-20261024-451761",
+      "status": "CANCELED",
+      "current_session_id": null,
+      "pending_message_id": null,
+      "pending_attempt": 0,
+      "claimed_at": null,
+      "started_at": null,
+      "execution_stop_confirmed_at": null
+    }
+  },
+  "remote": {
+    "a": {
+      "task_id": "T-20261024-C1DBEB",
+      "remote_binding_count": 0
+    },
+    "b": {
+      "task_id": "T-20261024-451761",
+      "remote_binding_count": 0
+    }
+  },
+  "after": {
+    "a": {
+      "task": {
+        "id": "T-20261024-C1DBEB",
+        "status": "CANCELED",
+        "current_session_id": null,
+        "execution_stop_confirmed_at": "2026-10-24 12:02:07.575186",
+        "execution_stop_attempt": 0,
+        "execution_stop_operator": "centos8-browser-e2e"
+      },
+      "worker_count": 0,
+      "worker_status": "IDLE",
+      "confirmation_http": 200
+    },
+    "b": {
+      "task": {
+        "id": "T-20261024-451761",
+        "status": "CANCELED",
+        "current_session_id": null,
+        "execution_stop_confirmed_at": "2026-10-24 12:02:07.587201",
+        "execution_stop_attempt": 0,
+        "execution_stop_operator": "centos8-browser-e2e"
+      },
+      "worker_count": 0,
+      "worker_status": "IDLE",
+      "confirmation_http": 200
+    }
+  },
+  "confirmed_at_epoch": 1792843327.592324
+}

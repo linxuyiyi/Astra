@@ -1,0 +1,142 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_peer_delivery_wait_does_not_block_runtime_writer _____________
+
+setup = (<fastapi.applications.FastAPI object at 0x10c86b4d0>, <starlette.testclient.TestClient object at 0x10cb9cec0>, 'owner', 'ch_0535ed4dcb4c', <tests.nexus.test_collaboration.FakeAgentService object at 0x10cb9cd70>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c7a5f30>
+
+    def test_peer_delivery_wait_does_not_block_runtime_writer(setup, monkeypatch):
+        app, owner, _, _, _ = setup
+        loop = owner.portal.call(asyncio.get_running_loop)
+        with connect() as db:
+            db.execute(text("UPDATE t_nexus_channel_members SET agentscope_session_id='group-session' "
+                            "WHERE employee_id='dev'"))
+            db.commit()
+
+        def waiting_delivery(*args):
+            # 同步目录写入等待锁时，异步 Runtime writer 必须仍能释放锁。
+            writer_finished = ThreadEvent()
+            loop.call_soon_threadsafe(writer_finished.set)
+            if not writer_finished.wait(1):
+                raise RuntimeError("联系投递阻塞了 Runtime writer 所在的事件循环")
+            return {"scheduled": True, "sender_name": "小牛码"}
+
+        monkeypatch.setattr(app.state.collaboration, "request_peer", waiting_delivery)
+>       response = owner.get(
+            "/api/v1/peers/resolve",
+            headers={"X-Nexus-Internal-Key": "test-internal-key"},
+            params={"session_id": "group-session", "name": "小掌柜", "message": "并发联系"},
+        )
+
+tests/nexus/test_collaboration.py:240:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/httpx2/_client.py:1112: in get
+    return self.request(
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/httpx2/_client.py:796: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/httpx2/_client.py:993: in send
+    raise exc
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/httpx2/_client.py:987: in send
+    response.read()
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/httpx2/_models.py:877: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/httpx2/_models.py:893: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/httpx2/_models.py:948: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/httpx2/_client.py:143: in __iter__
+    yield from self._stream
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py:627: in close
+    self.__exit__(None, None, None)
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py:619: in __exit__
+    raise exc
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py:604: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+nexus_api/auth.py:67: in __call__
+    await self.app(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/fastapi/routing.py:2811: in app
+    await route.handle(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/fastapi/routing.py:1330: in handle
+    await super().handle(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+../../../../nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+nexus_api/main.py:3014: in resolve_peer
+    return request.app.state.collaboration.request_peer(session_id, target_name, message, execution_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = ('group-session', '小掌柜', '并发联系', '')
+writer_finished = <threading.Event at 0x10cc48640: set>
+
+    def waiting_delivery(*args):
+        # 同步目录写入等待锁时，异步 Runtime writer 必须仍能释放锁。
+        writer_finished = ThreadEvent()
+        loop.call_soon_threadsafe(writer_finished.set)
+        if not writer_finished.wait(1):
+>           raise RuntimeError("联系投递阻塞了 Runtime writer 所在的事件循环")
+E           RuntimeError: 联系投递阻塞了 Runtime writer 所在的事件循环
+
+tests/nexus/test_collaboration.py:236: RuntimeError
+=============================== warnings summary ===============================
+tests/nexus/test_collaboration.py::test_peer_delivery_wait_does_not_block_runtime_writer
+  /Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/nexus/test_collaboration.py::test_peer_delivery_wait_does_not_block_runtime_writer
+1 failed, 1 warning in 1.69s

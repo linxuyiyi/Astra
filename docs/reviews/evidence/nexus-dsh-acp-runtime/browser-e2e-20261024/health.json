@@ -1,0 +1,16 @@
+{
+  "a": {
+    "operation_state": "SUCCEEDED",
+    "worker_status": "AVAILABLE",
+    "file_channel_verified": true,
+    "current_task_count": 0,
+    "worker_id": "dsh-e2e-a-20261024"
+  },
+  "b": {
+    "operation_state": "SUCCEEDED",
+    "worker_status": "AVAILABLE",
+    "file_channel_verified": true,
+    "current_task_count": 0,
+    "worker_id": "dsh-e2e-b-20261024"
+  }
+}

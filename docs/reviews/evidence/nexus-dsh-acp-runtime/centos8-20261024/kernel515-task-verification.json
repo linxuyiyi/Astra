@@ -1,0 +1,64 @@
+{
+  "task_id": "T-20261024-C83CA2",
+  "binding_id": "dsh_ab72039374dd44a7937e78fef183fd47",
+  "native_session_id": "d0bbf6b4-978a-455b-b664-3b7852bbcf78",
+  "workspace": "/root/agentwork/nexus-dsh-qa-20261024/.astra-tasks/dsh-centos8-worker/T-20261024-C83CA2-env-3",
+  "two_turns_and_stop_continue_same_native_session": true,
+  "final_file": {
+    "path": "kernel515-final.txt",
+    "content": "KERNEL515_FINAL_OK"
+  },
+  "permissions_at_end": 0,
+  "task_before_confirm": "WAITING",
+  "waiting_reason_before_confirm": "EXECUTION_RESULT_REVIEW",
+  "worker_count_before_confirm": 1,
+  "confirmation_http": 200,
+  "task_after_confirm": "SUCCEEDED",
+  "worker_count_after_confirm": 0,
+  "repository_id_preserved": true,
+  "trace": {
+    "session_id": "d0bbf6b4-978a-455b-b664-3b7852bbcf78",
+    "format": "dsh-v4-jsonl",
+    "next_cursor": 100,
+    "event_count": 120,
+    "event_types": {
+      "permission/preset": 1,
+      "sandbox/mode": 1,
+      "approval/policy": 1,
+      "agent/inbox/spliced": 8,
+      "turn/start": 4,
+      "step/start": 14,
+      "system/message": 1,
+      "user/message": 5,
+      "request/header": 2,
+      "request/context": 1,
+      "session/title": 1,
+      "assistant/message": 14,
+      "tool/call": 13,
+      "job/registered": 11,
+      "job/settled": 11,
+      "tool/result": 13,
+      "step/end": 14,
+      "turn/end": 4,
+      "session/end-seed": 1
+    },
+    "sha256": "ee87f2037bbbb2969a966191fefea7affce9865657c61c0ddf8b44eb778d8911",
+    "complete": true,
+    "unsettled_turns": [],
+    "native_usage_records": 14,
+    "native_usage_totals": {
+      "inputTokens": 3651,
+      "outputTokens": 4725,
+      "totalTokens": 130104,
+      "cacheReadTokens": 121728
+    },
+    "projected_tools": {
+      "bash": 11,
+      "read": 2
+    },
+    "projected_tool_failures": 1,
+    "all_pages_sha256_match": true,
+    "last_next_cursor": null
+  },
+  "verification_channel": "Nexus Worker Gateway + HTTP workbench API; no new browser run"
+}

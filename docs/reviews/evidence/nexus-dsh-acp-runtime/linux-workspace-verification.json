@@ -1,0 +1,72 @@
+{
+  "platform": {
+    "system": "Linux",
+    "machine": "aarch64",
+    "libc": [
+      "glibc",
+      "2.39"
+    ],
+    "kernel": "6.8.0-142-generic",
+    "python": "3.12.3",
+    "node": "v22.23.3"
+  },
+  "workers": [
+    {
+      "worker": 1,
+      "bindings": [
+        {
+          "id": "dsh_81a62b3e9ade48158e5c94b94c855aff",
+          "task_id": "dsh-qa-task-1",
+          "native_id": "fb7dae5a-c7d3-4f1d-b74f-c8c9b1d3b445",
+          "workspace": "/tmp/nexus-dsh-integration-20261024/.astra-tasks/dsh-qa-1/dsh-qa-task-1-env-1",
+          "state": "succeeded",
+          "fence": 8,
+          "profile_hash": "f38ed936c2ef6c24ed939a43ef0183e0cde3884eb36682f0abf7b203ec266918",
+          "assembly_hash": "ab94416b6de55f26bcfeef690bc9734d9118c8271de32ffedc3d10054db445eb",
+          "host_disposed": 1
+        },
+        {
+          "id": "dsh_70dae022c43d43e8bd4401c8747bcf0e",
+          "task_id": "T-20261023-4D7D03",
+          "native_id": "8533b3df-0c50-4c02-af71-7bf9f60ed3f4",
+          "workspace": "/tmp/nexus-dsh-integration-20261024/.astra-tasks/dsh-qa-1/T-20261023-4D7D03-env-1",
+          "state": "stopped",
+          "fence": 2,
+          "profile_hash": "b72c4d65ac89d4bd15813cd4a01b9fd327c2a29060cc7aaf7d5b7987244b3299",
+          "assembly_hash": "08da925fa38be671643af065401d59f88d4ee792b4da19498f99756578eb5a96",
+          "host_disposed": 1
+        }
+      ],
+      "acceptance_file_exists": true,
+      "acceptance_content_matches": true,
+      "foreign_acceptance_file_exists": false,
+      "cancel_started_exists": true,
+      "cancel_late_exists": false,
+      "elapsed_since_cancel_started": 1774.9863424301147
+    },
+    {
+      "worker": 2,
+      "bindings": [
+        {
+          "id": "dsh_f0d33dd1872d454aa6ca5f0ba507336d",
+          "task_id": "dsh-qa-task-2",
+          "native_id": "0b355ae3-3047-4628-aa17-4038f45fa8f3",
+          "workspace": "/tmp/nexus-dsh-integration-20261024/.astra-tasks/dsh-qa-2/dsh-qa-task-2-env-2",
+          "state": "succeeded",
+          "fence": 2,
+          "profile_hash": "a8891c8f826f4dd1c2d0991c5072b26a3b3ce607d2d7f39d6b007acb18402150",
+          "assembly_hash": "c92f1e7d27e25e0b60e08703bd83d0cabf108c2ef3c3db505c7c76d3b2096d7e",
+          "host_disposed": 1
+        }
+      ],
+      "acceptance_file_exists": true,
+      "acceptance_content_matches": true,
+      "foreign_acceptance_file_exists": false,
+      "cancel_started_exists": false,
+      "cancel_late_exists": false,
+      "elapsed_since_cancel_started": null
+    }
+  ],
+  "verified_at": 1792778157.715037,
+  "approval_allow_exact_effect": true
+}

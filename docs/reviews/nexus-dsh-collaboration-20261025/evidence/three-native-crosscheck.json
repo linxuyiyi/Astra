@@ -1,0 +1,529 @@
+[
+  {
+    "task_id": "T-20261025-96E997",
+    "binding_id": "dsh_5d80ad94f622483ba352c0491ecd820b",
+    "native_session_id": "0f184139-06f6-488c-83d2-c901a6650d91",
+    "file_count": 1,
+    "sha256": "81ba9d2bbf8984cb5f26bbe1efcc14cc4e0cf8cd03017363788002263026cc8a",
+    "event_count": 165,
+    "event_types": {
+      "permission/preset": 1,
+      "sandbox/mode": 1,
+      "approval/policy": 1,
+      "agent/inbox/spliced": 2,
+      "turn/start": 1,
+      "step/start": 20,
+      "system/message": 1,
+      "user/message": 2,
+      "request/header": 1,
+      "request/context": 1,
+      "session/title": 1,
+      "assistant/message": 20,
+      "tool/call": 27,
+      "job/registered": 18,
+      "job/settled": 18,
+      "tool/result": 27,
+      "step/end": 20,
+      "todo/write": 2,
+      "turn/end": 1
+    },
+    "message_count": 33,
+    "binding_state": "succeeded",
+    "owner_released": true,
+    "receipts": [
+      {
+        "binding_id": "dsh_5d80ad94f622483ba352c0491ecd820b",
+        "submission_id": "msg_173713d3a0009a4a9f470eb80e",
+        "fence": 1,
+        "generation": 1,
+        "state": "succeeded"
+      }
+    ],
+    "tools": [
+      {
+        "name": "bash",
+        "call_id": "call_00_IIaOtW8czBi5Pl0pBqmD2750"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_01_oeQHNcUk9qV5jLr0hCUC2219"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_RkYaFkdZUZuFh6JDnsgc7986"
+      },
+      {
+        "name": "read",
+        "call_id": "call_01_JwKRz23TytarVIdsX16v3580"
+      },
+      {
+        "name": "mcp__nexus-library__library_search",
+        "call_id": "call_00_MycqSUPsQFu4twrUBLSi9224"
+      },
+      {
+        "result_for": "mcp__nexus-library__library_search",
+        "failed": false,
+        "knowledge_source_id_seen": false,
+        "wiki_content_returned": false
+      },
+      {
+        "name": "bash",
+        "call_id": "call_01_fyadHqM5Z2sd1eJrjRPD5805"
+      },
+      {
+        "name": "mcp__nexus-library__library_get",
+        "call_id": "call_00_YX2CV1nO6NugH3376ppz1280"
+      },
+      {
+        "result_for": "mcp__nexus-library__library_get",
+        "failed": false,
+        "knowledge_source_id_seen": true,
+        "wiki_content_returned": true
+      },
+      {
+        "name": "mcp__nexus-library__library_get",
+        "call_id": "call_01_CIYyl85ljTQkCGNBy5Fw4567"
+      },
+      {
+        "result_for": "mcp__nexus-library__library_get",
+        "failed": true,
+        "knowledge_source_id_seen": false,
+        "wiki_content_returned": false
+      },
+      {
+        "name": "mcp__nexus-library__library_get",
+        "call_id": "call_00_2GlbTfUqdeh32K9waarL1014"
+      },
+      {
+        "result_for": "mcp__nexus-library__library_get",
+        "failed": false,
+        "knowledge_source_id_seen": true,
+        "wiki_content_returned": true
+      },
+      {
+        "name": "bash",
+        "call_id": "call_01_z7UNy7uAWN8qgP6qYZmy6043"
+      },
+      {
+        "name": "todo_write",
+        "call_id": "call_00_Y1kYFBKWhQJttTqSi2Zn7189"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_01_BuSe8Xf1JFP2QBrDEoXM7829"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_DgCmulwp0EX41BR03cie7906"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_01_w32rKZMNKO99sfADRJxB4664"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_FxbFYvgvRLvJyT7o4NCd1964"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_gEyb47OqOnQWxeTJOGkA2823"
+      },
+      {
+        "name": "write",
+        "call_id": "call_00_ZWFoesKPSywW1gyFU6lu3951"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_MGqMNbNefZqmtjm041Vz3656"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_yUS90xIY6hrNl7QO83rY0400"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_FQi7etipTtzh4DEgEz219679"
+      },
+      {
+        "name": "edit",
+        "call_id": "call_00_KmPE72OZUknot0AJKsOC8060"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_MDIq2L7XM5VNeBDmtHL46909"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_nUk0Xm7XSRMbLjtTiRFG3503"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_BD4R2Iz5rTAx6Nu02igk5332"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_jaheYjrXEMKSCyWzyIq25800"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_2QmVfkZ6q7Tk7UWaQGXY9946"
+      },
+      {
+        "name": "todo_write",
+        "call_id": "call_01_ZRYUmFnC5zfhZUAsuxe71505"
+      }
+    ],
+    "knowledge_source_seen": true,
+    "expected_knowledge_id": "KNOW_A394DEFC1CA34211826F",
+    "api_hash_matches": true,
+    "review_hash_matches": true,
+    "review_message_count": 33,
+    "review_status": "SUCCEEDED",
+    "zero_reason": null
+  },
+  {
+    "task_id": "T-20261025-F20055",
+    "binding_id": "dsh_fb005b3c25404a748539a3ceeacbf37b",
+    "native_session_id": "f8e947a7-2681-4a4a-a817-624ea9e6a903",
+    "file_count": 1,
+    "sha256": "34437015315ff7a0077cdd5fd67d66cf55509eae845b0b965116361cf028646a",
+    "event_count": 132,
+    "event_types": {
+      "permission/preset": 1,
+      "sandbox/mode": 1,
+      "approval/policy": 1,
+      "agent/inbox/spliced": 2,
+      "turn/start": 1,
+      "step/start": 19,
+      "system/message": 1,
+      "user/message": 2,
+      "request/header": 1,
+      "request/context": 1,
+      "session/title": 1,
+      "assistant/message": 19,
+      "tool/call": 21,
+      "job/registered": 9,
+      "job/settled": 9,
+      "tool/result": 21,
+      "step/end": 19,
+      "todo/write": 2,
+      "turn/end": 1
+    },
+    "message_count": 23,
+    "binding_state": "succeeded",
+    "owner_released": true,
+    "receipts": [
+      {
+        "binding_id": "dsh_fb005b3c25404a748539a3ceeacbf37b",
+        "submission_id": "msg_173796fb4000e2c938b8a90103",
+        "fence": 1,
+        "generation": 1,
+        "state": "succeeded"
+      }
+    ],
+    "tools": [
+      {
+        "name": "bash",
+        "call_id": "call_00_m7OHCachFe7aY3Zj4eve6857"
+      },
+      {
+        "name": "read",
+        "call_id": "call_00_13kJTvCIopnT8AzwtS3S0050"
+      },
+      {
+        "name": "read",
+        "call_id": "call_01_AaI6aOm6QAGNHUQOOvWv0111"
+      },
+      {
+        "name": "todo_write",
+        "call_id": "call_00_HUVj2LRSb80jY2mSKWTu6638"
+      },
+      {
+        "name": "mcp__nexus-library__library_search",
+        "call_id": "call_01_QJlHLBS9V8tDiJ4FLrom8762"
+      },
+      {
+        "result_for": "mcp__nexus-library__library_search",
+        "failed": false,
+        "knowledge_source_id_seen": false,
+        "wiki_content_returned": false
+      },
+      {
+        "name": "mcp__nexus-library__library_get",
+        "call_id": "call_00_4fQMKvla46RFGkRhf2nY3857"
+      },
+      {
+        "result_for": "mcp__nexus-library__library_get",
+        "failed": false,
+        "knowledge_source_id_seen": true,
+        "wiki_content_returned": true
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_XBacc164DOmvZUHVx7G93982"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_XWBp3cFulkzJ1kzW4XQq9429"
+      },
+      {
+        "name": "write",
+        "call_id": "call_00_pU4YEek1vYT1Odhpaxl87886"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_yQPVt4gS7rON7KkmTH5m5639"
+      },
+      {
+        "name": "edit",
+        "call_id": "call_00_L4kCg5NxqKf5wWetGLnZ4137"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_X51wTMZVCOIrswBgfyRQ6974"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_adOGHHVBu6JFzFhqE6oa1095"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_Bs3cYdsIhenqlvmet90T1459"
+      },
+      {
+        "name": "write",
+        "call_id": "call_00_ET_dHh05B06yFrLgllXmpRR8103"
+      },
+      {
+        "name": "write",
+        "call_id": "call_00_ADRxDPjyXnacBy3jw2g15923"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_JGWamgWz2JRPT7b91DCe7185"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_jDp6x2WbB1Y7uBazv6S41500"
+      },
+      {
+        "name": "read",
+        "call_id": "call_00_ET_7pQobIjjEXeFYRKcJT9U0655"
+      },
+      {
+        "name": "read",
+        "call_id": "call_01_ET_Djoy1d32LDIRkUgRK9kh8931"
+      },
+      {
+        "name": "todo_write",
+        "call_id": "call_00_bojH8QWbTbhg9Oh92y3v6208"
+      }
+    ],
+    "knowledge_source_seen": true,
+    "expected_knowledge_id": "KNOW_A394DEFC1CA34211826F",
+    "api_hash_matches": true,
+    "review_hash_matches": true,
+    "review_message_count": 23,
+    "review_status": "NO_FINDINGS",
+    "zero_reason": "no_findings"
+  },
+  {
+    "task_id": "T-20261025-AF090B",
+    "binding_id": "dsh_7e1a9bb255d2468e954112fc53ac23aa",
+    "native_session_id": "3bb42264-acbb-45c3-b0b8-ba3843550cd9",
+    "file_count": 1,
+    "sha256": "85a3c66bcda450d2334dd745b35ec1932e206472b3ed5f4800ce7d3651788eed",
+    "event_count": 168,
+    "event_types": {
+      "permission/preset": 1,
+      "sandbox/mode": 1,
+      "approval/policy": 1,
+      "agent/inbox/spliced": 2,
+      "turn/start": 1,
+      "step/start": 23,
+      "system/message": 1,
+      "user/message": 2,
+      "request/header": 1,
+      "request/context": 1,
+      "session/title": 1,
+      "assistant/message": 23,
+      "tool/call": 30,
+      "tool/result": 30,
+      "job/registered": 13,
+      "job/settled": 13,
+      "step/end": 23,
+      "turn/end": 1
+    },
+    "message_count": 32,
+    "binding_state": "succeeded",
+    "owner_released": true,
+    "receipts": [
+      {
+        "binding_id": "dsh_7e1a9bb255d2468e954112fc53ac23aa",
+        "submission_id": "msg_1738e68e1000d2d59cc7d78a05",
+        "fence": 1,
+        "generation": 1,
+        "state": "succeeded"
+      }
+    ],
+    "tools": [
+      {
+        "name": "mcp__nexus-library__library_search",
+        "call_id": "call_00_jbUXFa5qKF1HeASG3RRJ2402"
+      },
+      {
+        "result_for": "mcp__nexus-library__library_search",
+        "failed": false,
+        "knowledge_source_id_seen": false,
+        "wiki_content_returned": false
+      },
+      {
+        "name": "bash",
+        "call_id": "call_01_9dQSJ1h1kzTpuGVdECUF3825"
+      },
+      {
+        "name": "mcp__nexus-library__library_get",
+        "call_id": "call_00_NmTjLp8iTdUII9DZIyir9576"
+      },
+      {
+        "result_for": "mcp__nexus-library__library_get",
+        "failed": false,
+        "knowledge_source_id_seen": true,
+        "wiki_content_returned": true
+      },
+      {
+        "name": "bash",
+        "call_id": "call_01_KA3n82MRTS0ioYTm0f0v1696"
+      },
+      {
+        "name": "mcp__nexus-library__library_get",
+        "call_id": "call_00_FRiLeqwUsqgf3z18SquH9089"
+      },
+      {
+        "result_for": "mcp__nexus-library__library_get",
+        "failed": false,
+        "knowledge_source_id_seen": false,
+        "wiki_content_returned": true
+      },
+      {
+        "name": "bash",
+        "call_id": "call_01_DhZHSLVtM0OUBbp8KbIe6085"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_5ZSgszimrmbu16vOVFWi6004"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_xxQIejZaPyWitovVGkhn2758"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_NHVs75GofTMoRrhZpPBE2925"
+      },
+      {
+        "name": "mcp__nexus-library__library_get",
+        "call_id": "call_00_BE15mK51TbORKtKieIn28763"
+      },
+      {
+        "result_for": "mcp__nexus-library__library_get",
+        "failed": false,
+        "knowledge_source_id_seen": true,
+        "wiki_content_returned": true
+      },
+      {
+        "name": "mcp__nexus-library__library_get",
+        "call_id": "call_01_tzLEYrY0wWy8AgHNm0rv3858"
+      },
+      {
+        "result_for": "mcp__nexus-library__library_get",
+        "failed": false,
+        "knowledge_source_id_seen": true,
+        "wiki_content_returned": true
+      },
+      {
+        "name": "write",
+        "call_id": "call_00_KAkZ7gSdE3xTqAciTsSG4223"
+      },
+      {
+        "name": "write",
+        "call_id": "call_01_RDzaH9dtkNLZULFgg9MJ8664"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_iLWo701EfWm6TA7qD0pq7346"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_mQoTapGTlmYEHnuJlNBj7689"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_vEC4IOdbwjqF7rx71yut0270"
+      },
+      {
+        "name": "write",
+        "call_id": "call_00_mOA2EapsRDlRmJV9sUf04703"
+      },
+      {
+        "name": "read",
+        "call_id": "call_00_HvNxFpbUKExsnnsxo92P8062"
+      },
+      {
+        "name": "write",
+        "call_id": "call_00_hJOGcr2HF1uMtAniBkEu7944"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_iRW4vuYgj0qH3Sa3eBM62889"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_fUmrZxEltilX18t9yWyJ6691"
+      },
+      {
+        "name": "write",
+        "call_id": "call_00_LprnBIQbzqfBfF5CaGEu8172"
+      },
+      {
+        "name": "write",
+        "call_id": "call_00_E3H8IA3GrjqLmkcKBxqv8206"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_otMmleMdyjiFFaNPmWGf6740"
+      },
+      {
+        "name": "grep",
+        "call_id": "call_01_foAaD24MWEV4PKu1li0C2653"
+      },
+      {
+        "name": "bash",
+        "call_id": "call_00_89Xi21BUhR9aXGd8mxAW7578"
+      },
+      {
+        "name": "edit",
+        "call_id": "call_00_jcqgpG673sw30AI6hYzX9660"
+      },
+      {
+        "name": "read",
+        "call_id": "call_00_A6TYc1PTyKNF5Bf1Xmiy4895"
+      },
+      {
+        "name": "read",
+        "call_id": "call_01_aZxSFGcbTdYQOOvNVygm7068"
+      },
+      {
+        "name": "read",
+        "call_id": "call_02_2wlcYkyCv61OWRJTM61J2162"
+      }
+    ],
+    "knowledge_source_seen": true,
+    "expected_knowledge_id": "KNOW_4A95036E5C0E4870B83D",
+    "api_hash_matches": true,
+    "review_hash_matches": true,
+    "review_message_count": 32,
+    "review_status": "ANALYZING",
+    "zero_reason": null
+  }
+]

@@ -96,8 +96,6 @@
           />
         </ElMain>
       </ElContainer>
-
-      <KnowledgeUsageSummary :summary="usage" />
     </ElMain>
 
     <KnowledgeEditorDialog :open="editorOpen" :directories="directoryOptions" :saving="editorSaving" :error="editorError" :editing="editorEditing" :initial-content="editorInitialContent" :initial-title="editorInitialTitle" :initial-space-id="editorInitialSpaceId" @close="editorOpen = false" @save="saveKnowledge" />
@@ -165,7 +163,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElAlert, ElAside, ElButton, ElCard, ElContainer, ElEmpty, ElMain } from 'element-plus'
 import { api } from '@/api/client'
-import type { KnowledgeDetail, KnowledgeListItem, KnowledgePage, KnowledgeSpace, KnowledgeUsageRecord, LibraryPermissions, LibraryStats as LibraryStatsData, LibraryUsageSummary, LibraryServiceStatus, RelatedTask } from '@/api/types'
+import type { KnowledgeDetail, KnowledgeListItem, KnowledgePage, KnowledgeSpace, KnowledgeUsageRecord, LibraryPermissions, LibraryStats as LibraryStatsData, LibraryServiceStatus, RelatedTask } from '@/api/types'
 import AstraDialog from '@/components/astra/AstraDialog.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
@@ -174,7 +172,6 @@ import KnowledgeDetailDialog from '@/views/library/KnowledgeDetailDialog.vue'
 import KnowledgeEditorDialog from '@/views/library/KnowledgeEditorDialog.vue'
 import KnowledgeList from '@/views/library/KnowledgeList.vue'
 import KnowledgeSpacePanel from '@/views/library/KnowledgeSpacePanel.vue'
-import KnowledgeUsageSummary from '@/views/library/KnowledgeUsageSummary.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -182,7 +179,6 @@ const emptyPage = (): KnowledgePage => ({ items: [], total: 0, page: 1, page_siz
 const stats = ref<LibraryStatsData | null>(null)
 const permissions = ref<LibraryPermissions | null>(null)
 const spaces = ref<KnowledgeSpace[]>([])
-const usage = ref<LibraryUsageSummary | null>(null)
 const serviceStatus = ref<LibraryServiceStatus | null>(null)
 const serviceError = ref('')
 const resyncing = ref(false)
@@ -314,8 +310,8 @@ function onListSearch(value: string) {
 async function loadAll() {
   pageError.value = ''
   try {
-    const [permissionValue, statsValue, spacesValue, usageValue] = await Promise.all([api.libraryPermissions(), api.libraryStats(), api.librarySpaces(), api.libraryUsageSummary(7)])
-    permissions.value = permissionValue; stats.value = statsValue; spaces.value = normalizeSpaces(spacesValue); usage.value = usageValue
+    const [permissionValue, statsValue, spacesValue] = await Promise.all([api.libraryPermissions(), api.libraryStats(), api.librarySpaces()])
+    permissions.value = permissionValue; stats.value = statsValue; spaces.value = normalizeSpaces(spacesValue)
     await loadList()
   } catch (error) { pageError.value = message(error, '数字图书馆加载失败') }
 }
@@ -331,8 +327,8 @@ async function loadList() {
   } catch (error) { notify(message(error, '知识列表加载失败'), 'error'); page.value = emptyPage() } finally { listLoading.value = false }
 }
 async function refreshOverview() {
-  const [statsValue, spacesValue, usageValue] = await Promise.all([api.libraryStats(), api.librarySpaces(), api.libraryUsageSummary(7)])
-  stats.value = statsValue; spaces.value = normalizeSpaces(spacesValue); usage.value = usageValue
+  const [statsValue, spacesValue] = await Promise.all([api.libraryStats(), api.librarySpaces()])
+  stats.value = statsValue; spaces.value = normalizeSpaces(spacesValue)
 }
 function applyStat(value: string) {
   if (value === 'spaces') { statsActive.value = value; return }

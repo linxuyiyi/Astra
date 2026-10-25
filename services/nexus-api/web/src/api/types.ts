@@ -347,21 +347,6 @@ export interface KnowledgePage {
   pages: number
 }
 
-export interface UsageTopKnowledge {
-  resource_id: string
-  title: string
-  reference_count: number
-}
-
-export interface LibraryUsageSummary {
-  days: number
-  total_references: number
-  used_resources: number
-  feedback_count: number
-  top_knowledge: UsageTopKnowledge[]
-  trend: Array<{ date: string; reference_count: number }>
-}
-
 export interface RelatedTask {
   id: string
   title: string

@@ -18,7 +18,6 @@ import type {
   LibraryPermissions,
   Metrics,
   LibraryStats,
-  LibraryUsageSummary,
   LibraryServiceStatus,
   RelatedTask,
   Task,
@@ -154,5 +153,4 @@ export const api = {
   helpfulLibraryKnowledge: (id: string) =>
     request<{ created: boolean; helpful_count: number }>(`/api/library/knowledge/${id}/helpful`, { method: 'POST' }),
   libraryRelatedTasks: (id: string) => request<RelatedTask[]>(`/api/library/knowledge/${id}/related-tasks`),
-  libraryUsageSummary: (days = 7) => request<LibraryUsageSummary>(`/api/library/usage/summary?days=${days}`),
 }

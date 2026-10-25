@@ -46,31 +46,16 @@ async def test_worker_and_admin_protocol_auth_without_cookie(monkeypatch):
         invalid = await client.get("/api/worker-gateway/data/no-such-request/request", headers=headers)
         assert invalid.status_code == 401
         assert invalid.json()["detail"]["code"] == "unauthorized"
-        assert (await client.get("/api/agent-workers")).status_code == 401
+        assert (await client.get("/api/agent-workers")).status_code == 200
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("spoof", [False, True])
-async def test_maintenance_uses_login_uid_without_legacy_identity(monkeypatch, spoof):
-    from datetime import UTC, datetime, timedelta
+async def test_maintenance_records_temporary_uid(monkeypatch, spoof):
     from uuid import uuid4
 
-    from sqlalchemy import text
-
-    from nexus_api.auth import digest
-
-    uid, token = "qa-" + uuid4().hex, uuid4().hex
+    uid = "qa-" + uuid4().hex
     async with SessionLocal() as db:
-        await db.execute(
-            text("""INSERT INTO t_nexus_users
-            (id,username,display_name,password_hash,permissions_json,enabled,created_at)
-            VALUES (:u,:u,:u,'fixture','["*"]',1,:n)"""),
-            {"u": uid, "n": datetime.now(UTC).isoformat()},
-        )
-        await db.execute(
-            text("INSERT INTO t_nexus_auth_sessions VALUES (:t,:u,:e)"),
-            {"t": digest(token), "u": uid, "e": (datetime.now(UTC) + timedelta(days=1)).isoformat()},
-        )
         worker = AgentWorker(id=uid, name="QA", role="test")
         db.add(worker)
         await db.flush()
@@ -78,9 +63,9 @@ async def test_maintenance_uses_login_uid_without_legacy_identity(monkeypatch, s
         db.add(environment)
         await db.commit()
         environment_id = environment.id
-    headers = {"Cookie": "nexus_session=" + token + ("; nexus_uid=forged" if spoof else "")}
+    headers = {"X-Owner-Id": uid}
     if spoof:
-        headers.update({"X-Verified-UID": "forged", "X-Owner-Id": "forged"})
+        headers.update({"X-Verified-UID": "forged", "Cookie": "nexus_session=obsolete"})
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=create_service()), base_url="http://test"
     ) as client:
@@ -94,16 +79,6 @@ async def test_maintenance_uses_login_uid_without_legacy_identity(monkeypatch, s
         assert (
             await client.post(f"/api/agent-workers/{environment_id}/maintenance", json={"action": "check"})
         ).status_code == 401
-        async with SessionLocal() as db:
-            await db.execute(
-                text("UPDATE t_nexus_users SET permissions_json='[\"chat\"]' WHERE id=:u"), {"u": uid}
-            )
-            await db.commit()
-        assert (
-            await client.post(
-                f"/api/agent-workers/{environment_id}/maintenance", json={"action": "check"}, headers=headers
-            )
-        ).status_code == 403
 
 
 @pytest.mark.asyncio
@@ -128,7 +103,7 @@ async def test_task_wake_lookup_authenticates_as_service(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_library_audit_identity_uses_authenticated_account():
+async def test_library_audit_identity_records_temporary_uid():
     from tests.nexus.clients import session_headers
 
     headers = session_headers("qa-library-reviewer")
@@ -143,7 +118,7 @@ async def test_library_audit_identity_uses_authenticated_account():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("spoof", [False, True])
-async def test_stop_release_uses_login_and_exposes_canonical_occupancy(spoof):
+async def test_stop_release_uses_temporary_uid_and_exposes_canonical_occupancy(spoof):
     from datetime import UTC, datetime
     from uuid import uuid4
 

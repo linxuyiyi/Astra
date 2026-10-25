@@ -10,6 +10,7 @@ const baseUrl=process.env.UI_BASE_URL || 'http://127.0.0.1:15184';
 const browser=await chromium.launch({headless:true});
 try {
 const context=await browser.newContext({viewport:{width:1440,height:900}});
+await context.addInitScript(() => localStorage.setItem('nexus_owner_id', 'qa'));
 const page=await context.newPage(); page.setDefaultTimeout(8000); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
 const long='https://example.com/'+ 'LongToken'.repeat(700);
 const emp={id:'e1',name:'星河',domain:'质量工程',description:long,instructions:long,avatar:'🤖',enabled:true,knowledge:['k'.repeat(400)],skills:['s'.repeat(400)],mcps:['m'.repeat(400)],tools:[],agentscope_agent_id:'a1',mailbox_session_id:'s1'};
@@ -22,7 +23,7 @@ await context.route('**/api/**',async r=>{
  const u=new URL(r.request().url()),p=u.pathname; if(!p.startsWith('/api/'))return r.continue(); let body={};
  if(r.request().method()!=='GET')mutations.push({path:p,method:r.request().method()});
  if(p.endsWith('/events')||p.includes('/events/stream'))return r.fulfill({contentType:'text/event-stream',body:': connected\n\n'});
- if(p==='/api/v1/auth/session')body={uid:'qa',display_name:'QA'};
+ if(p==='/api/v1/me')body={uid:'qa'};
  else if(p==='/api/v1/runtime')body={reachable:true,agentscope_version:'2.0.10'};
  else if(p==='/api/v1/nebula/snapshot')body=snap;
  else if(p==='/api/v1/employees')body={items:[emp]};

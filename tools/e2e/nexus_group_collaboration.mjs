@@ -1,29 +1,20 @@
-/** 两个独立 Chromium 进程验收真实服务；配置 NEXUS_E2E_URL/USERNAME/PASSWORD。
- * NEXUS_PLAYWRIGHT_MODULE 可指向预装 playwright，NEXUS_E2E_EVIDENCE 指定证据目录。
- * NEXUS_E2E_OWNER_REGISTER=1 时使用独立新账号作为群主，保证可重复验收。 */
+/** 两个独立 Chromium 进程验收真实服务；使用临时 UID，不创建账号。 */
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 const { chromium } = await import(process.env.NEXUS_PLAYWRIGHT_MODULE || 'playwright');
 const base = process.env.NEXUS_E2E_URL;
-const ownerRegister = process.env.NEXUS_E2E_OWNER_REGISTER === '1';
-const ownerName = process.env.NEXUS_E2E_OWNER_USERNAME
-  || (ownerRegister ? `owner_${Date.now()}` : process.env.NEXUS_E2E_USERNAME);
-const ownerPassword = process.env.NEXUS_E2E_OWNER_PASSWORD
-  || (ownerRegister ? `Owner-${crypto.randomUUID()}` : process.env.NEXUS_E2E_PASSWORD);
-assert(base && ownerName && ownerPassword);
+const ownerUid = process.env.NEXUS_E2E_OWNER_UID || `owner_${Date.now()}`;
+assert(base);
 const evidence = process.env.NEXUS_E2E_EVIDENCE || '/tmp/nexus-group-browser';
 await fs.mkdir(evidence, { recursive: true });
 const browsers = await Promise.all([chromium.launch({ headless: true }), chromium.launch({ headless: true })]);
 const [owner, other] = await Promise.all(browsers.map(b => b.newPage({ viewport: { width: 1440, height: 900 } })));
 const errors = []; for (const p of [owner, other]) p.on('pageerror', e => errors.push(e.message));
 const report = {};
-async function login(page, name, password, register = false) {
+async function enterUid(page, uid) {
   await page.goto(`${base}/chat`);
-  if (register) await page.getByRole('button', { name: '创建账号', exact: true }).click();
-  await page.locator('input[autocomplete=username]').fill(name);
-  await page.locator('input[type=password]').fill(password);
-  if (register) await page.locator('input[autocomplete=name]').fill('李四');
-  await page.getByRole('button', { name: register ? '注册并登录' : '登录', exact: true }).click();
+  await page.getByPlaceholder('输入之前使用的 UID').fill(uid);
+  await page.getByRole('button', { name: '进入', exact: true }).click();
   await page.getByRole('button', { name: '新建群组', exact: true }).waitFor({ timeout: 20000 });
 }
 async function frame(page) { const f = page.frameLocator('iframe[title="Nexus 对话"]'); await f.locator('textarea').waitFor(); return f; }
@@ -47,8 +38,8 @@ async function waitInvite(page) {
   throw new Error('邀请链接未生成');
 }
 try {
-  await login(owner, ownerName, ownerPassword, ownerRegister);
-  await login(other, `human_${Date.now()}`, `Browser-${crypto.randomUUID()}`, true);
+  await enterUid(owner, ownerUid);
+  await enterUid(other, `human_${Date.now()}`);
   const before = new URL(owner.url()).searchParams.get('group') || '';
   await owner.getByRole('button', { name: '新建群组', exact: true }).click();
   const dialog = owner.getByRole('dialog');

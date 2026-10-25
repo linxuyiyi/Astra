@@ -248,23 +248,11 @@ settings = Table(
     Column("value", CONTENT, nullable=False),
 )
 
-users = Table(
-    "t_nexus_users",
+identity_profiles = Table(
+    "t_nexus_identity_profiles",
     Base.metadata,
     Column("id", identifier(64), primary_key=True),
-    Column("username", identifier(64), nullable=False, unique=True),
     Column("display_name", identifier(64), nullable=False),
-    Column("password_hash", identifier(255), nullable=False),
-    Column("permissions_json", CONTENT, nullable=False),
-    Column("enabled", Integer, nullable=False, server_default=text("1")),
-    Column("created_at", identifier(40), nullable=False),
-)
-auth_sessions = Table(
-    "t_nexus_auth_sessions",
-    Base.metadata,
-    Column("token_hash", identifier(64), primary_key=True),
-    Column("user_id", identifier(64), nullable=False),
-    Column("expires_at", identifier(40), nullable=False),
 )
 group_invites = Table(
     "t_nexus_group_invites",

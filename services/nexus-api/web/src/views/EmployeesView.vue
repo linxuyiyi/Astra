@@ -2,12 +2,10 @@
   <section class="admin-page" data-testid="employees-page">
     <SettingsHeaderActions>
       <ElButton :icon="RefreshCw" :loading="loading" data-testid="employees-refresh" @click="reload">刷新</ElButton>
-      <ElButton v-if="canManage" type="primary" :icon="Plus" data-testid="employees-create" @click="openCreate">新建数字员工</ElButton>
+      <ElButton type="primary" :icon="Plus" data-testid="employees-create" @click="openCreate">新建数字员工</ElButton>
     </SettingsHeaderActions>
 
-    <ElEmpty v-if="!canManage" description="需要平台管理权限" :image-size="80" style="padding: 48px 0;" />
 
-    <template v-else>
       <ElAlert v-if="loadError" type="error" show-icon :closable="false" :title="loadError" data-testid="employees-error">
         <ElButton type="primary" data-testid="employees-retry" @click="reload">重试</ElButton>
       </ElAlert>
@@ -151,7 +149,6 @@
         data-testid="employees-pagination"
       />
     </div>
-    </template>
 
     <!-- 查看详情 Drawer -->
     <ElDrawer v-model="viewDrawerOpen" title="员工档案详情" size="520px" :close-on-click-modal="true">
@@ -285,14 +282,13 @@ import {
 } from "element-plus";
 import EmployeeDrawer from "../components/EmployeeDrawer.vue";
 import SettingsHeaderActions from "./settings/SettingsHeaderActions.vue";
-import { canManagePlatform, deleteEmployee, getKnowledge, getMcps, getSkills, getTools, listEmployees, saveEmployee } from "../api";
+import { deleteEmployee, getKnowledge, getMcps, getSkills, getTools, listEmployees, saveEmployee } from "../api";
 import { gatewayApi, type GatewayRoute } from "../api/gateway";
 import type { Employee, ResourceCatalog } from "../types";
 import { TABLE_MAX_HEIGHT } from "../utils/table";
 import { formatToolLabel, isMcpTool } from "../utils/tools";
 
 const router = useRouter();
-const canManage = computed(() => canManagePlatform());
 const employees = ref<Employee[]>([]);
 const query = ref("");
 const statusFilter = ref("");
@@ -378,7 +374,7 @@ function syncDetail(employee: Employee) {
 }
 
 async function reload() {
-  if (!canManage.value) return;
+
   loading.value = true;
   loadError.value = "";
   try {
@@ -472,7 +468,7 @@ async function reloadCatalogs() {
 }
 
 onMounted(async () => {
-  if (!canManage.value) return;
+
   await reloadCatalogs();
   try {
     routes.value = (await gatewayApi.routes()).filter((item) => item.enabled && item.model_type === 'CHAT');

@@ -197,9 +197,10 @@ def test_me_ignores_query_uid(client):
         assert anonymous.get("/api/v1/me?uid=u1", headers={"X-Verified-UID": "u1"}).status_code == 401
 
 
-def test_me_rejects_browser_uid_cookie(client):
+def test_me_records_temporary_browser_uid_cookie(client):
     found = client.get("/api/v1/me", headers={"Cookie": "nexus_uid=somebody"})
-    assert found.status_code == 401
+    assert found.status_code == 200
+    assert found.json() == {"uid": "somebody"}
 
 
 def test_parallel_private_creates_share_one_row(client):

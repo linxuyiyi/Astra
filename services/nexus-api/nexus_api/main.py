@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text as sql_text
 
 from .agentscope import PINNED_VERSION, AgentScopeClient, AgentScopeError
-from .auth import install_auth, session_user
+from .auth import install_identity, require_user
 from .capability import inspect_employee
 from .collaboration import Collaboration
 from .db import connect, employee_from_row, init_schema, message_from_row, new_id, utcnow
@@ -976,7 +976,7 @@ def claim_private_session(connection, conversation_id: str, session_id: str, wor
 
 
 def require_owner(request: Request) -> str:
-    return session_user(request)["uid"]
+    return require_user(request)["uid"]
 
 
 def create_app() -> FastAPI:
@@ -1001,7 +1001,7 @@ def create_app() -> FastAPI:
             await app.state.agentscope.aclose()
 
     app = FastAPI(title="Nexus", version="1.4.8", lifespan=lifespan)
-    install_auth(app)
+    install_identity(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],

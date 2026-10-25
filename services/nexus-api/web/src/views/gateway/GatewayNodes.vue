@@ -6,7 +6,7 @@
 
     <GatewayHeaderActions>
       <ElButton :loading="loading" :icon="RefreshCw" data-testid="gateway-nodes-refresh" @click="load">刷新</ElButton>
-      <ElButton v-if="canManage" type="primary" :icon="Plus" data-testid="gateway-node-create" @click="openCreate">新增节点</ElButton>
+      <ElButton type="primary" :icon="Plus" data-testid="gateway-node-create" @click="openCreate">新增节点</ElButton>
     </GatewayHeaderActions>
 
     <div class="admin-page__toolbar" role="search" aria-label="节点筛选" data-testid="gateway-nodes-filter">
@@ -113,7 +113,6 @@
 import { Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { canManagePlatform } from '@/api'
 import { ElAlert, ElButton, ElCard, ElInput, ElOption, ElPagination, ElSelect, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import {
   gatewayApi,
@@ -130,7 +129,6 @@ import GatewayNodeDrawer from '@/views/gateway/GatewayNodeDrawer.vue'
 import GatewayNodeTable from '@/views/gateway/GatewayNodeTable.vue'
 
 const router = useRouter()
-const canManage = computed(() => canManagePlatform())
 const nodes = ref<GatewayNode[]>([])
 const pools = ref<GatewayPool[]>([])
 const instances = ref<GatewayInstance[]>([])

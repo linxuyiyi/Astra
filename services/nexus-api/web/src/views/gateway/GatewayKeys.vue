@@ -6,7 +6,7 @@
 
     <GatewayHeaderActions>
       <ElButton :loading="loading" :icon="RefreshCw" data-testid="gateway-keys-refresh" @click="load">刷新</ElButton>
-      <ElButton v-if="canManage" type="primary" :icon="Plus" data-testid="gateway-keys-create" @click="openCreate">新增 Key</ElButton>
+      <ElButton type="primary" :icon="Plus" data-testid="gateway-keys-create" @click="openCreate">新增 Key</ElButton>
     </GatewayHeaderActions>
 
     <div class="admin-page__toolbar" role="search" aria-label="Key 筛选" data-testid="gateway-keys-filter">
@@ -175,7 +175,6 @@
 <script setup lang="ts">
 import { Copy, Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { canManagePlatform } from '@/api'
 import {
   ElAlert,
   ElButton,
@@ -213,7 +212,6 @@ import {
 } from '@/utils/gateway'
 import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
-const canManage = computed(() => canManagePlatform())
 const keys = ref<GatewayKey[]>([])
 const loading = ref(false)
 const error = ref('')

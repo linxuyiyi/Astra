@@ -11,14 +11,12 @@
         </div>
         <div class="admin-card__actions">
           <ElButton :icon="RefreshCw" :loading="store.loading" data-testid="task-refresh" @click="store.refresh()">刷新</ElButton>
-          <ElButton v-if="canManage" type="primary" :icon="Plus" data-testid="task-create" @click="createOpen = true">创建任务</ElButton>
+          <ElButton type="primary" :icon="Plus" data-testid="task-create" @click="createOpen = true">创建任务</ElButton>
         </div>
       </div>
     </template>
 
-    <ElEmpty v-if="!canManage" description="需要平台管理权限" :image-size="80" style="padding: 48px 0;" />
-
-    <InterventionPanel v-else-if="view === 'interventions'" />
+    <InterventionPanel v-if="view === 'interventions'" />
 
     <div v-else class="admin-page">
       <div class="admin-page__toolbar" role="search" aria-label="任务筛选">
@@ -86,7 +84,7 @@
           </ElEmpty>
           <ElEmpty v-else-if="!store.loading" :image-size="72" :description="store.tasks.length ? '暂无符合条件的任务' : '暂无任务'">
             <ElButton v-if="store.tasks.length" @click="resetFilters">清除筛选</ElButton>
-            <ElButton v-else-if="canManage" type="primary" :icon="Plus" @click="createOpen = true">创建任务</ElButton>
+            <ElButton v-else type="primary" :icon="Plus" @click="createOpen = true">创建任务</ElButton>
           </ElEmpty>
         </template>
       </ElTable>
@@ -134,7 +132,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ElButton, ElCard, ElDialog, ElEmpty, ElInput, ElOption, ElPagination, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn, ElTag, ElText, vLoading } from 'element-plus'
 import { api } from '@/api/client'
 import type { Task, TaskPriority, TaskStatus } from '@/api/types'
-import { canManagePlatform, listEmployees } from '../api'
+import { listEmployees } from '../api'
 import type { Employee as NexusEmployee } from '../types'
 import RowMenu, { type RowMenuItem } from '@/components/astra/RowMenu.vue'
 import RuntimeStatusBadge from '@/components/runtime/RuntimeStatusBadge.vue'
@@ -152,7 +150,6 @@ import { employeeDisplayName, platformCopy, priorityLabel, taskTypeLabel } from 
 import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
 const store = useAstraStore()
-const canManage = computed(() => canManagePlatform())
 const route = useRoute()
 const router = useRouter()
 const createOpen = ref(route.query.create === '1')

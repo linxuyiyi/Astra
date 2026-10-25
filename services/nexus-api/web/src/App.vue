@@ -19,15 +19,11 @@
       </span>
     </header>
     <main class="page">
-      <el-card v-if="identity === 'ask'" class="auth-card">
-        <h2>{{ authMode === 'login' ? '登录 Nexus' : '创建 Nexus 账号' }}</h2>
-        <el-form label-position="top" @submit.prevent="submitLogin">
-          <el-form-item label="用户名"><el-input v-model="username" autocomplete="username" /></el-form-item>
-          <el-form-item label="密码"><el-input v-model="password" type="password" show-password :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'" placeholder="至少 10 位" /></el-form-item>
-          <el-form-item v-if="authMode === 'register'" label="姓名"><el-input v-model="displayName" autocomplete="name" /></el-form-item>
-          <el-alert v-if="authError" :title="authError" type="error" :closable="false" />
-          <el-button type="primary" native-type="submit" :loading="authBusy" style="margin-top:16px">{{ authMode === 'login' ? '登录' : '注册并登录' }}</el-button>
-          <el-button @click="authMode = authMode === 'login' ? 'register' : 'login'">{{ authMode === 'login' ? '创建账号' : '已有账号' }}</el-button>
+      <el-card v-if="identity === 'ask'" class="uid-card">
+        <el-form label-position="top" @submit.prevent="submitUid">
+          <el-form-item label="临时 UID"><el-input v-model="uid" maxlength="64" placeholder="输入之前使用的 UID" /></el-form-item>
+          <el-alert v-if="identityError" :title="identityError" type="error" :closable="false" />
+          <el-button type="primary" native-type="submit">进入</el-button>
         </el-form>
       </el-card>
       <router-view v-else-if="identity === 'ready'" />
@@ -41,7 +37,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import AstraConfirmHost from "@/components/astra/AstraConfirmHost.vue";
 import { useAstraStore } from "@/stores/astra";
-import { canManagePlatform, getRuntime, resolveOwner, signIn } from "./api";
+import { getRuntime, resolveOwner, saveOwnerId } from "./api";
 import { getVisibleNavItems } from "./navigation";
 import type { RuntimeStatus } from "./types";
 
@@ -51,12 +47,8 @@ const navItems = computed(() => getVisibleNavItems(route.path));
 
 const runtime = ref<RuntimeStatus | null>(null);
 const identity = ref<"loading" | "ready" | "ask">("loading");
-const username = ref("");
-const password = ref("");
-const displayName = ref("");
-const authMode = ref<"login" | "register">("login");
-const authBusy = ref(false);
-const authError = ref("");
+const uid = ref("");
+const identityError = ref("");
 const banner = computed(() => {
   if (!runtime.value) return "正在检查 AgentScope";
   if (runtime.value.reachable) return `AgentScope ${runtime.value.agentscope_version} 已连接`;
@@ -64,11 +56,14 @@ const banner = computed(() => {
   return `AgentScope ${runtime.value.agentscope_version} 未连接`;
 });
 
-async function submitLogin() {
-  authBusy.value = true; authError.value = "";
-  try { await signIn(authMode.value, username.value, password.value, displayName.value); location.reload(); }
-  catch (error) { authError.value = error instanceof Error ? error.message : "登录失败"; }
-  finally { authBusy.value = false; }
+function submitUid() {
+  try {
+    saveOwnerId(uid.value);
+    identity.value = "ready";
+    if (!store.lastUpdated) void store.refresh();
+  } catch (error) {
+    identityError.value = error instanceof Error ? error.message : "UID 无效";
+  }
 }
 
 async function refreshRuntime() {
@@ -88,7 +83,7 @@ onMounted(async () => {
   } catch {
     identity.value = "ask";
   }
-  if (identity.value === "ready" && canManagePlatform() && !store.lastUpdated) void store.refresh();
+  if (identity.value === "ready" && !store.lastUpdated) void store.refresh();
   await refreshRuntime();
   runtimeTimer = window.setInterval(refreshRuntime, 15_000);
 });
@@ -100,7 +95,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .brand { text-decoration: none; color: inherit; }
-.auth-card { width:min(420px, calc(100% - 32px)); margin:64px auto; color:var(--astra-text-primary); }
+.uid-card { width:min(420px, calc(100% - 32px)); margin:64px auto; color:var(--astra-text-primary); }
 .app--nebula {
   padding: 0;
   gap: 0;

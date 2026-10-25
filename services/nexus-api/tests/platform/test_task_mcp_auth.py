@@ -43,14 +43,6 @@ async def test_middleware_does_not_trust_employee_header_alone(monkeypatch):
     with connect() as db:
         db.execute(
             text(
-                """INSERT INTO t_nexus_users
-                (id,username,display_name,password_hash,permissions_json,enabled,created_at)
-                VALUES ('u9','u9','u9','fixture','[\"task:execute\"]',1,:t)"""
-            ),
-            {"t": now},
-        )
-        db.execute(
-            text(
                 """INSERT INTO t_nexus_employees
                 (id,name,domain,description,instructions,avatar,enabled,knowledge_json,
                  skills_json,tools_json,created_at,updated_at)

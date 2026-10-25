@@ -143,3 +143,38 @@ def test_incomplete_current_schema_is_not_silently_accepted(tmp_path):
     outcome = upgrade(database)
     assert outcome.returncode != 0
     assert "新的空数据库" in outcome.stderr
+
+
+def test_local_auth_cleanup_preserves_business_owner_ids(tmp_path):
+    database = tmp_path / "local-auth.db"
+    first = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "0003_gateway_speech"],
+        cwd=SERVICE,
+        env={**os.environ, "ASTRA_DATABASE_URL": f"sqlite+aiosqlite:///{database}"},
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    assert first.returncode == 0, first.stderr
+    with sqlite3.connect(database) as connection:
+        connection.execute("""INSERT INTO t_nexus_users
+            (id,username,display_name,password_hash,permissions_json,enabled,created_at)
+            VALUES ('old-uid','local','临时用户','removed-secret','["*"]',1,'2026-10-24')""")
+        connection.execute("INSERT INTO t_nexus_auth_sessions VALUES ('old-token','old-uid','2999-01-01')")
+        connection.execute("""INSERT INTO t_nexus_conversations
+            (id,employee_id,owner_id,name,created_at,updated_at)
+            VALUES ('conv-retained','emp','old-uid','保留','2026-10-24','2026-10-24')""")
+        connection.execute("""INSERT INTO t_nexus_channel_members
+            (channel_id,member_type,member_id,role)
+            VALUES ('group-retained','human','old-uid','owner')""")
+    result = upgrade(database)
+    assert result.returncode == 0, result.stderr
+    with sqlite3.connect(database) as connection:
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        assert not {"t_nexus_users", "t_nexus_auth_sessions"} & tables
+        assert connection.execute("SELECT * FROM t_nexus_identity_profiles").fetchall() == []
+        assert connection.execute("SELECT owner_id FROM t_nexus_conversations").fetchone() == ("old-uid",)
+        assert connection.execute("SELECT member_id,role FROM t_nexus_channel_members").fetchone() == (
+            "old-uid",
+            "owner",
+        )

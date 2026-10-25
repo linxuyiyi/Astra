@@ -2,12 +2,10 @@
   <section class="admin-page worker-page" data-testid="employee-list-page">
     <SettingsHeaderActions>
       <ElButton :icon="RefreshCw" :loading="store.loading || healthLoading" data-testid="employee-refresh" @click="refreshAll">刷新</ElButton>
-      <ElButton v-if="canManage" type="primary" :icon="Plus" data-testid="employee-create" @click="beginCreate">新建 Agent Worker</ElButton>
+      <ElButton type="primary" :icon="Plus" data-testid="employee-create" @click="beginCreate">新建 Agent Worker</ElButton>
     </SettingsHeaderActions>
 
-    <ElEmpty v-if="!canManage" description="需要平台管理权限" :image-size="80" style="padding: 48px 0;" />
 
-    <template v-else>
     <div class="admin-page__toolbar" role="search" aria-label="Agent Worker 筛选" data-testid="employee-filter">
       <div class="admin-page__filters">
         <ElSelect v-model="digitalEmployee" class="admin-page__select" data-testid="employee-filter-digital" aria-label="数字员工" placeholder="数字员工：全部" clearable filterable>
@@ -122,7 +120,7 @@
             <ElButton :icon="RefreshCw" @click="refreshAll">重新加载</ElButton>
           </ElEmpty>
           <ElEmpty v-else-if="!store.loading && !healthLoading" :image-size="72" :description="store.employees.length ? '没有匹配的 Agent Worker' : '暂无 Agent Worker'">
-            <ElButton v-if="!store.employees.length && canManage" type="primary" :icon="Plus" @click="beginCreate">新建 Agent Worker</ElButton>
+            <ElButton v-if="!store.employees.length" type="primary" :icon="Plus" @click="beginCreate">新建 Agent Worker</ElButton>
           </ElEmpty>
         </template>
       </ElTable>
@@ -139,7 +137,7 @@
         data-testid="employee-pagination"
       />
     </div>
-    </template>
+
 
     <EmployeeConfigModal
       :open="modalOpen"
@@ -179,12 +177,10 @@ import {
 import { useAstraStore } from '@/stores/astra'
 import { TABLE_MAX_HEIGHT } from '@/utils/table'
 import SettingsHeaderActions from '@/views/settings/SettingsHeaderActions.vue'
-import { canManagePlatform } from '@/api'
 
 type WorkerRowView = WorkerRow & { digital: DigitalEmployee | null }
 
 const store = useAstraStore()
-const canManage = computed(() => canManagePlatform())
 const route = useRoute()
 const router = useRouter()
 const query = ref('')
@@ -375,7 +371,7 @@ onBeforeUnmount(() => {
   healthController = null
 })
 onMounted(async () => {
-  if (!canManage.value) return
+
   const editId = typeof route.query.edit === 'string' ? route.query.edit : ''
   const create = route.query.create === '1'
   await loadDigitalEmployees()

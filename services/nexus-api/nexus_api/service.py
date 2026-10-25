@@ -33,7 +33,7 @@ from app.main import lifespan as platform_lifespan
 from app.worker_gateway.routes import router as worker_gateway_router
 
 from .agentscope_proxy import router as agentscope_proxy_router
-from .auth import has_permission, require_user
+from .auth import require_user
 from .main import create_app as create_chat_app
 from .nebula import router as nebula_router
 
@@ -42,13 +42,13 @@ API_PREFIXES = ("api/", "v1/", "agentscope-api/", "docs", "redoc", "openapi.json
 
 
 def session_maintenance_actor(request: Request) -> str:
-    """统一服务使用 Nexus 登录会话，客户端身份头不参与审计。"""
+    """统一服务记录临时 UID；公司登录接入后使用公司身份。"""
     return require_user(request)["uid"]
 
 
 def session_library_principal(request: Request) -> LibraryPrincipal:
     user = require_user(request)
-    return LibraryPrincipal(user_id=user["uid"], role="admin" if has_permission(user, "*") else "viewer")
+    return LibraryPrincipal(user_id=user["uid"], role="admin")
 
 
 def _include_platform(app: FastAPI) -> None:

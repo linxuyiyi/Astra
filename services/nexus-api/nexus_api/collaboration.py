@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
-from .auth import digest, has_permission, require_internal, session_user, user_payload
+from .auth import digest, require_internal, require_user
 from .db import connect, employee_from_row, new_id, utcnow
 from .db_models import group_events
 from .sql import upsert_record
@@ -191,11 +191,13 @@ def channel_payload(db, channel_id, uid):
         {"c": channel_id},
     ).mappings():
         if row["member_type"] == "human":
-            source = one(db, "SELECT display_name,enabled FROM t_nexus_users WHERE id=:i", i=row["member_id"])
+            source = one(
+                db, "SELECT display_name FROM t_nexus_identity_profiles WHERE id=:i", i=row["member_id"]
+            )
             name, avatar, online = (
                 (source or {}).get("display_name", "未知用户"),
                 "👤",
-                bool(source and source["enabled"] and row["last_seen"] > cutoff),
+                bool(source and row["last_seen"] > cutoff),
             )
         else:
             source = one(
@@ -361,7 +363,7 @@ class Collaboration:
 
         @app.get("/api/v1/channels")
         def list_channels(request: Request):
-            uid = session_user(request)["uid"]
+            uid = require_user(request)["uid"]
             with connect() as db:
                 ids = (
                     db.execute(
@@ -378,7 +380,7 @@ class Collaboration:
 
         @app.post("/api/v1/channels", status_code=201)
         def create_channel(body: GroupBody, request: Request):
-            user = session_user(request)
+            user = require_user(request)
             with connect() as db:
                 staff = [self.load_employee(db, e) for e in dict.fromkeys(body.member_ids)]
                 cid = new_id("ch")
@@ -410,8 +412,7 @@ class Collaboration:
 
         @app.get("/api/v1/channels/unclaimed")
         def unclaimed(request: Request):
-            if not has_permission(session_user(request), "*"):
-                raise HTTPException(403, "需要平台管理权限")
+            require_user(request)
             with connect() as db:
                 return {
                     "items": [
@@ -426,9 +427,7 @@ class Collaboration:
 
         @app.post("/api/v1/channels/{channel_id}/claim")
         def claim(channel_id: str, request: Request):
-            user = session_user(request)
-            if not has_permission(user, "*"):
-                raise HTTPException(403, "需要平台管理权限")
+            user = require_user(request)
             with connect() as db:
                 lock_channel(db, channel_id)
                 if one(
@@ -451,7 +450,7 @@ class Collaboration:
 
         @app.patch("/api/v1/channels/{channel_id}")
         def update_channel(channel_id: str, body: GroupBody, request: Request):
-            user = session_user(request)
+            user = require_user(request)
             with connect() as db:
                 lock_channel(db, channel_id)
                 member(db, channel_id, user["uid"], True)
@@ -500,13 +499,13 @@ class Collaboration:
         @app.get("/api/v1/channels/{channel_id}/members")
         def list_members(channel_id: str, request: Request):
             with connect() as db:
-                return channel_payload(db, channel_id, session_user(request)["uid"])
+                return channel_payload(db, channel_id, require_user(request)["uid"])
 
         @app.post("/api/v1/channels/{channel_id}/invitations")
         def invite(channel_id: str, request: Request):
             import secrets
 
-            user = session_user(request)
+            user = require_user(request)
             with connect() as db:
                 lock_channel(db, channel_id)
                 member(db, channel_id, user["uid"], True)
@@ -529,7 +528,7 @@ class Collaboration:
 
         @app.post("/api/v1/channels/join")
         def join(body: JoinBody, request: Request):
-            user = session_user(request)
+            user = require_user(request)
             with connect() as db:
                 invitation = one(
                     db, "SELECT * FROM t_nexus_group_invites WHERE token_hash=:t", t=digest(body.token)
@@ -579,10 +578,10 @@ class Collaboration:
 
         @app.post("/api/v1/channels/{channel_id}/leave")
         def leave(channel_id: str, request: Request):
-            return remove_human(channel_id, session_user(request)["uid"], request, True)
+            return remove_human(channel_id, require_user(request)["uid"], request, True)
 
         def remove_human(cid, uid, request, leaving=False):
-            user = session_user(request)
+            user = require_user(request)
             with connect() as db:
                 lock_channel(db, cid)
                 own = member(db, cid, user["uid"], not leaving)
@@ -591,7 +590,9 @@ class Collaboration:
                     raise HTTPException(409, "群主须先转让群组")
                 if not leaving and target["role"] == "admin" and own["role"] != "owner":
                     raise HTTPException(403, "只有群主可移除管理员")
-                name = one(db, "SELECT display_name FROM t_nexus_users WHERE id=:u", u=uid)["display_name"]
+                name = one(db, "SELECT display_name FROM t_nexus_identity_profiles WHERE id=:u", u=uid)[
+                    "display_name"
+                ]
                 db.execute(
                     text(
                         """UPDATE t_nexus_channel_members SET membership_active=0 WHERE channel_id=:c AND
@@ -619,7 +620,7 @@ class Collaboration:
 
         @app.patch("/api/v1/channels/{channel_id}/humans/{user_id}")
         def role(channel_id: str, user_id: str, body: RoleBody, request: Request):
-            user = session_user(request)
+            user = require_user(request)
             with connect() as db:
                 lock_channel(db, channel_id)
                 own = member(db, channel_id, user["uid"], True)
@@ -639,7 +640,7 @@ class Collaboration:
 
         @app.post("/api/v1/channels/{channel_id}/transfer/{user_id}")
         def transfer(channel_id: str, user_id: str, request: Request):
-            uid = session_user(request)["uid"]
+            uid = require_user(request)["uid"]
             with connect() as db:
                 lock_channel(db, channel_id)
                 if member(db, channel_id, uid)["role"] != "owner" or uid == user_id:
@@ -665,7 +666,7 @@ class Collaboration:
 
         @app.post("/api/v1/channels/{channel_id}/read")
         def read(channel_id: str, body: ReadBody, request: Request):
-            uid = session_user(request)["uid"]
+            uid = require_user(request)["uid"]
             with connect() as db:
                 member(db, channel_id, uid)
                 bound = one(db, "SELECT next_seq FROM t_nexus_channels WHERE id=:c", c=channel_id)["next_seq"]
@@ -684,7 +685,7 @@ class Collaboration:
         def history(channel_id: str, request: Request, before: int = 0, limit: int = 50):
             if not 1 <= limit <= 100 or before < 0:
                 raise HTTPException(422, "分页参数无效")
-            uid = session_user(request)["uid"]
+            uid = require_user(request)["uid"]
             with connect() as db:
                 cursor = (
                     one(
@@ -716,7 +717,7 @@ class Collaboration:
 
         @app.post("/api/v1/channels/{channel_id}/messages")
         def send(channel_id: str, body: SendBody, request: Request):
-            user = session_user(request)
+            user = require_user(request)
             with connect() as db:
                 lock_channel(db, channel_id)
                 member(db, channel_id, user["uid"])
@@ -742,7 +743,7 @@ class Collaboration:
                 humans = (
                     db.execute(
                         text("""SELECT u.display_name FROM t_nexus_channel_members m JOIN
-                            t_nexus_users u ON u.id=m.member_id WHERE m.channel_id=:c AND
+                            t_nexus_identity_profiles u ON u.id=m.member_id WHERE m.channel_id=:c AND
                             m.member_type='human' AND membership_active=1"""),
                         {"c": channel_id},
                     )
@@ -833,7 +834,7 @@ class Collaboration:
 
         @app.post("/api/v1/channels/{channel_id}/interrupt")
         def interrupt(channel_id: str, request: Request):
-            uid = session_user(request)["uid"]
+            uid = require_user(request)["uid"]
             with connect() as db:
                 lock_channel(db, channel_id)
                 member(db, channel_id, uid)
@@ -853,7 +854,7 @@ class Collaboration:
 
         @app.get("/api/v1/channels/{channel_id}/events")
         async def events(channel_id: str, request: Request, after: int = 0):
-            uid = session_user(request)["uid"]
+            uid = require_user(request)["uid"]
             with connect() as db:
                 member(db, channel_id, uid)
 
@@ -862,8 +863,7 @@ class Collaboration:
                 heartbeat = 0
                 while not await request.is_disconnected():
                     try:
-                        # 会话撤销和成员退出同时作用于既有 SSE。
-                        session_user(request)
+                        # 成员退出同时作用于既有 SSE。
                         with connect() as db:
                             member(db, channel_id, uid)
                             rows = (
@@ -879,7 +879,6 @@ class Collaboration:
                             )
                             if heartbeat % 50 == 0:
                                 await acquire_channel_lock(db, channel_id)
-                                session_user(request)
                                 member(db, channel_id, uid)
                                 db.execute(
                                     text(
@@ -948,20 +947,12 @@ class Collaboration:
                 binding = {"employee_id": private["employee_id"], "channel_id": ""}
                 initiator_id = private["owner_id"]
                 discussion = {"id": "private:" + private["id"], "generation": 0}
-            user = one(db, "SELECT * FROM t_nexus_users WHERE id=:u AND enabled=1", u=initiator_id)
-            if not user:
-                raise HTTPException(403, "发起者已停用或身份未验证")
-            user = user_payload(user)
             employee = self.load_employee(db, binding["employee_id"])
             if not employee["enabled"]:
                 raise HTTPException(403, "员工已禁用")
-            allowed = [
-                name
-                for name in employee["tools"]
-                if name == "contact_employee" or has_permission(user, f"tool:{name}")
-            ]
-            task_allowed = "task-management" in employee["skills"] and has_permission(user, "task:execute")
-            mcp_refs = [ref for ref in employee["mcps"] if has_permission(user, "mcp:" + ref)]
+            allowed = list(employee["tools"])
+            task_allowed = "task-management" in employee["skills"]
+            mcp_refs = employee["mcps"]
             mcp_names = {}
             for ref in mcp_refs:
                 record = one(db, "SELECT runtime_name FROM t_nexus_mcps WHERE id=:i AND enabled=1", i=ref)
@@ -986,7 +977,7 @@ class Collaboration:
                     {
                         "i": new_id("audit"),
                         "c": binding["channel_id"],
-                        "u": user["uid"],
+                        "u": initiator_id,
                         "a": f"tool:{tool_name}"[:64],
                         "x": employee["id"],
                         "t": utcnow(),
@@ -1000,7 +991,7 @@ class Collaboration:
                 "skill_viewer": skill_viewer,
                 "task_allowed": task_allowed,
                 "task_mcp_url": __import__("nexus_api.task_skill", fromlist=["task_mcp_url"]).task_mcp_url(),
-                "initiator_id": user["uid"],
+                "initiator_id": initiator_id,
                 "discussion_id": discussion["id"],
                 "generation": discussion["generation"],
             }

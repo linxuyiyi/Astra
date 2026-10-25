@@ -110,13 +110,10 @@ class FakeAgentService:
         data["running"] = False
 
 
-def register(client, username):
-    result = client.post(
-        "/api/v1/auth/register",
-        json={"username": username, "password": "test-secret-123", "display_name": username},
-    )
-    assert result.status_code == 201, result.text
-    return result.json()["uid"]
+def record_uid(client, username):
+    client.cookies.set("nexus_uid", username)
+    assert client.get("/api/v1/me").json()["uid"] == username
+    return username
 
 
 def add_staff():
@@ -156,7 +153,7 @@ def setup(monkeypatch):
     fake = FakeAgentService()
     with TestClient(app) as owner:
         app.state.agentscope = fake
-        uid = register(owner, "owner")
+        uid = record_uid(owner, "owner")
         add_staff()
         group = owner.post("/api/v1/channels", json={"name": "研发协作", "member_ids": ["dev", "qa"]}).json()
         yield app, owner, uid, group["id"], fake
@@ -185,19 +182,13 @@ def join(owner, other, cid):
     assert response.status_code == 200, response.text
 
 
-def test_identity_cannot_be_claimed_by_headers_or_cookie(setup):
-    app, owner, uid, cid, _ = setup
+def test_temporary_uid_and_group_membership_boundary(setup):
+    app, _, uid, cid, _ = setup
     outsider = TestClient(app)
-    assert (
-        outsider.get(
-            f"/api/v1/channels/{cid}/messages",
-            headers={"X-Owner-Id": uid, "X-Verified-UID": uid, "Cookie": f"nexus_uid={uid}"},
-        ).status_code
-        == 401
-    )
-    outsider_uid = register(outsider, "outsider")
-    assert outsider_uid != uid
-    assert outsider.get(f"/api/v1/channels/{cid}/messages", headers={"X-Owner-Id": uid}).status_code == 403
+    assert outsider.get(f"/api/v1/channels/{cid}/messages").status_code == 401
+    # UID 只是临时标识；明确允许恢复同一个 UID，并非认证凭据。
+    assert outsider.get(f"/api/v1/channels/{cid}/messages", headers={"X-Owner-Id": uid}).status_code == 200
+    record_uid(outsider, "outsider")
     assert outsider.get(f"/api/v1/channels/{cid}/timeline/native").status_code == 403
     assert (
         outsider.post(
@@ -207,13 +198,12 @@ def test_identity_cannot_be_claimed_by_headers_or_cookie(setup):
         == 422
     )
     assert outsider.get("/api/v1/internal/group-policy?session_id=x").status_code == 401
-    assert outsider.get("/agentscope-api/agent/").status_code in {403, 404}
 
 
 def test_lifecycle_permissions_invite_read_leave_and_revocation(setup):
     app, owner, uid, cid, _ = setup
     other = TestClient(app)
-    other_uid = register(other, "colleague")
+    other_uid = record_uid(other, "colleague")
     join(owner, other, cid)
     assert other.post(f"/api/v1/channels/{cid}/invitations").status_code == 403
     assert other.patch(f"/api/v1/channels/{cid}/humans/{uid}", json={"role": "admin"}).status_code == 403
@@ -272,7 +262,7 @@ def test_no_mentions_and_single_mention(setup):
 def test_humans_concurrent_idempotent_paginated_and_no_model_calls(setup):
     app, owner, _, cid, fake = setup
     other = TestClient(app)
-    register(other, "colleague")
+    record_uid(other, "colleague")
     join(owner, other, cid)
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(
@@ -315,7 +305,7 @@ def test_new_message_interrupts_and_replaces_goal(setup):
 def test_tool_policy_checks_human_and_employee_and_retired_binding(setup):
     app, owner, _, cid, _ = setup
     other = TestClient(app)
-    uid = register(other, "colleague")
+    record_uid(other, "colleague")
     join(owner, other, cid)
     send(other, cid, "@小掌柜 测试")
     wait_done(other, cid)
@@ -347,17 +337,8 @@ def test_tool_policy_checks_human_and_employee_and_retired_binding(setup):
         )
         db.commit()
     policy = app.state.collaboration.policy(sid)
-    assert policy["allowed_tools"] == ["contact_employee"]
-    assert not policy["task_allowed"]
-    with pytest.raises(HTTPException) as error:
-        app.state.collaboration.policy(sid, "Bash", policy["discussion_id"])
-    assert error.value.status_code == 403
-    assert (
-        owner.patch(
-            f"/api/v1/users/{uid}/permissions", json={"permissions": ["chat", "task:execute", "tool:Bash"]}
-        ).status_code
-        == 200
-    )
+    assert policy["allowed_tools"] == ["Bash", "contact_employee"]
+    assert policy["task_allowed"]
     assert app.state.collaboration.policy(sid, "Bash", policy["discussion_id"])["task_allowed"]
     assert (
         owner.patch(f"/api/v1/channels/{cid}", json={"name": "群组", "member_ids": ["dev"]}).status_code
@@ -388,7 +369,7 @@ def test_routing_suppresses_human_chatter_and_limits_followup():
 def test_attachment_access_is_revoked_with_membership(setup):
     app, owner, _, cid, _ = setup
     other = TestClient(app)
-    register(other, "colleague")
+    record_uid(other, "colleague")
     join(owner, other, cid)
     attachment = owner.post(
         "/api/v1/attachments", files={"file": ("report.txt", b"group-only-report", "text/plain")}
@@ -403,19 +384,20 @@ def test_attachment_access_is_revoked_with_membership(setup):
     assert other.get(f"/api/v1/attachments/{attachment['id']}").status_code == 404
 
 
-def test_config_management_is_not_granted_to_chat_users(setup):
-    app, _, _, _, _ = setup
-    other = TestClient(app)
-    register(other, "colleague")
-    for path in ["config/skills", "config/mcps", "config/mcps/example/sync"]:
-        assert other.post(f"/api/v1/{path}", json={}).status_code == 403
-    assert other.get("/api/v1/config/mcps").status_code == 403
+def test_local_account_and_permission_routes_are_removed(setup):
+    app, owner, _, _, _ = setup
+    paths = set(app.openapi()["paths"])
+    assert not any(path.startswith("/api/v1/auth/") for path in paths)
+    assert not any(path.startswith("/api/v1/users") for path in paths)
+    for path in ["auth/register", "auth/login", "auth/logout", "users/owner/permissions"]:
+        assert owner.post(f"/api/v1/{path}", json={}).status_code == 404
+    assert owner.get("/api/v1/users").status_code == 404
 
 
 def test_different_humans_employee_requests_are_queued_independently(setup):
     app, owner, _, cid, fake = setup
     other = TestClient(app)
-    register(other, "colleague")
+    record_uid(other, "colleague")
     join(owner, other, cid)
     fake.delay = 0.2
     first = send(owner, cid, "@小掌柜 说明测试范围").json()["discussion_id"]
@@ -438,7 +420,7 @@ def test_different_humans_employee_requests_are_queued_independently(setup):
 def test_existing_sse_connection_stops_when_human_leaves(setup):
     app, owner, _, cid, _ = setup
     other = TestClient(app)
-    register(other, "colleague")
+    record_uid(other, "colleague")
     join(owner, other, cid)
 
     def leave():
@@ -591,7 +573,7 @@ def test_unconfirmed_stop_keeps_lease_for_recovery(monkeypatch, setup):
 def test_tool_policy_requires_user_grant_and_matching_mcp_ref(setup):
     app, owner, _, cid, _ = setup
     other = TestClient(app)
-    uid = register(other, "colleague")
+    record_uid(other, "colleague")
     join(owner, other, cid)
     send(other, cid, "@小掌柜 测试")
     done = wait_done(other, cid)
@@ -629,20 +611,10 @@ def test_tool_policy_requires_user_grant_and_matching_mcp_ref(setup):
         db.commit()
     tool = "mcp__demo__lookup"
     discussion_id = done["channel"]["discussion"]["id"]
-    with pytest.raises(HTTPException) as error:
-        app.state.collaboration.policy(sid, tool, discussion_id, "mcp-demo")
-    assert error.value.status_code == 403
     with pytest.raises(HTTPException):
         app.state.collaboration.policy(sid, tool, discussion_id, "mcp-other")
     with pytest.raises(HTTPException):
         app.state.collaboration.policy(sid, tool, discussion_id, "")
-    assert (
-        owner.patch(
-            f"/api/v1/users/{uid}/permissions",
-            json={"permissions": ["chat", "mcp:mcp-demo"]},
-        ).status_code
-        == 200
-    )
     policy = app.state.collaboration.policy(sid, tool, discussion_id, "mcp-demo")
     assert policy["mcp_refs"] == {"mcp-demo": "demo"}
     with pytest.raises(HTTPException):

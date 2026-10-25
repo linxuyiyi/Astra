@@ -47,10 +47,8 @@ def isolated_sql_database(monkeypatch):
 
 
 def account(client, name):
-    response = client.post(
-        "/api/v1/auth/register", json={"username": name, "password": "mysql-test-password"}
-    )
-    assert response.status_code == 201, response.text
+    client.cookies.set("nexus_uid", name)
+    assert client.get("/api/v1/me").status_code == 200
 
 
 def test_one_use_invitation_cannot_join_two_humans():

@@ -6,7 +6,7 @@
 
     <GatewayHeaderActions>
       <ElButton :loading="loading" :icon="RefreshCw" data-testid="gateway-routes-refresh" @click="load">刷新</ElButton>
-      <ElButton v-if="canManage" type="primary" :icon="Plus" data-testid="gateway-route-create" @click="openRouteCreate">新增路由</ElButton>
+      <ElButton type="primary" :icon="Plus" data-testid="gateway-route-create" @click="openRouteCreate">新增路由</ElButton>
     </GatewayHeaderActions>
 
     <ElForm label-position="top" class="admin-page__toolbar" data-testid="speech-input-config">
@@ -184,7 +184,6 @@
 <script setup lang="ts">
 import { Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { canManagePlatform } from '@/api'
 import {
   ElAlert,
   ElButton,
@@ -214,7 +213,6 @@ import { notify } from '@/composables/useToast'
 import { errorMessage } from '@/utils/gateway'
 import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
-const canManage = computed(() => canManagePlatform())
 const pools = ref<GatewayPool[]>([])
 const routes = ref<GatewayRoute[]>([])
 const loading = ref(false)
@@ -379,7 +377,7 @@ function openRouteEdit(route: GatewayRoute) {
     target_model: route.target_model ?? '',
     pool_id: route.pool_id,
     description: route.description,
-   
+
     enabled: route.enabled,
   })
   routeError.value = ''

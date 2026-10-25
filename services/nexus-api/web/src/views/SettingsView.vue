@@ -23,8 +23,7 @@
               <div id="settings-header-actions" class="settings-header-actions" />
             </div>
           </template>
-          <ElEmpty v-if="!canManage" description="需要平台管理权限" :image-size="80" style="padding: 48px 0;" />
-          <RouterView v-else />
+          <RouterView />
         </ElCard>
       </ElMain>
     </ElContainer>
@@ -35,11 +34,9 @@
 import { Bot, Boxes, Calendar, Plug, Sparkles, Tags, Users } from "lucide-vue-next";
 import { computed } from "vue";
 import { RouterView, useRoute } from "vue-router";
-import { ElAside, ElCard, ElContainer, ElEmpty, ElMain, ElMenu, ElMenuItem } from "element-plus";
-import { canManagePlatform } from "@/api";
+import { ElAside, ElCard, ElContainer, ElMain, ElMenu, ElMenuItem } from "element-plus";
 
 const route = useRoute();
-const canManage = computed(() => canManagePlatform());
 const menuItems = [
   { id: "employees", label: "数字员工管理", path: "/settings/employees", icon: Users },
   { id: "workers", label: "Agent Worker", path: "/settings/workers", icon: Bot },

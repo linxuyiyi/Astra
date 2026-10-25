@@ -111,7 +111,7 @@ def body(employee, **overrides):
 
 def test_two_owners_and_untrusted_identity(schedules):
     client, employee, store, calls = schedules
-    a = {"X-Verified-UID": "alice", "X-Owner-Id": "bob", "X-User-ID": "injected"}
+    a = {"X-Verified-UID": "bob", "X-Owner-Id": "alice", "X-User-ID": "injected"}
     b = {"X-Owner-Id": "bob"}
     created = client.post("/api/v1/schedules?uid=bob", headers=a, json=body(employee))
     assert created.status_code == 201, created.text

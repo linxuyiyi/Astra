@@ -4,7 +4,6 @@ import json
 
 from sqlalchemy import text
 
-from .auth import has_permission, user_payload
 from .db import connect
 
 
@@ -30,13 +29,6 @@ def authorize_group_task(session_id: str, employee_id: str, channel_id: str, dis
             )
             if channel_id or not private or private["employee_id"] != employee_id:
                 raise PermissionError("调用来源不存在")
-            user = (
-                db.execute(
-                    text("SELECT * FROM t_nexus_users WHERE id=:u AND enabled=1"), {"u": private["owner_id"]}
-                )
-                .mappings()
-                .first()
-            )
             employee = (
                 db.execute(
                     text("SELECT enabled,skills_json FROM t_nexus_employees WHERE id=:e"), {"e": employee_id}
@@ -45,14 +37,12 @@ def authorize_group_task(session_id: str, employee_id: str, channel_id: str, dis
                 .first()
             )
             if (
-                not user
-                or not has_permission(user_payload(user), "task:execute")
-                or not employee
+                not employee
                 or not employee["enabled"]
                 or "task-management" not in json.loads(employee["skills_json"])
             ):
-                raise PermissionError("用户或员工没有任务权限")
-            return user["id"]
+                raise PermissionError("员工岗位没有任务能力")
+            return private["owner_id"]
         if not binding["membership_active"]:
             raise PermissionError("员工已移出群组")
         if binding["employee_id"] != employee_id or binding["channel_id"] != channel_id:
@@ -73,9 +63,9 @@ def authorize_group_task(session_id: str, employee_id: str, channel_id: str, dis
             raise PermissionError("群讨论已结束")
         user = (
             db.execute(
-                text("""SELECT u.* FROM t_nexus_users u JOIN t_nexus_channel_members m
-            ON m.member_type='human' AND membership_active=1 AND m.member_id=u.id
-            WHERE m.channel_id=:c AND u.id=:u AND u.enabled=1"""),
+                text("""SELECT m.member_id FROM t_nexus_channel_members m
+            WHERE m.member_type='human' AND m.membership_active=1
+            AND m.channel_id=:c AND m.member_id=:u"""),
                 {"c": channel_id, "u": discussion["initiator_id"]},
             )
             .mappings()
@@ -88,12 +78,12 @@ def authorize_group_task(session_id: str, employee_id: str, channel_id: str, dis
             .mappings()
             .first()
         )
-        if not user or not has_permission(user_payload(user), "task:execute"):
-            raise PermissionError("发起者无任务操作权限")
+        if not user:
+            raise PermissionError("发起者已不在群组")
         if (
             not employee
             or not employee["enabled"]
             or "task-management" not in json.loads(employee["skills_json"])
         ):
             raise PermissionError("员工岗位没有任务能力")
-        return user["id"]
+        return user["member_id"]

@@ -10,12 +10,11 @@
         </div>
         <div class="admin-card__actions">
           <ElButton :icon="RefreshCw" :loading="loading" data-testid="schedules-refresh" @click="reload">刷新</ElButton>
-          <ElButton v-if="canManage" type="primary" :icon="Plus" data-testid="schedules-create" @click="openCreate">新建日程</ElButton>
+          <ElButton type="primary" :icon="Plus" data-testid="schedules-create" @click="openCreate">新建日程</ElButton>
         </div>
       </div>
     </template>
-    <ElEmpty v-if="!canManage" description="需要平台管理权限" :image-size="80" style="padding: 48px 0;" />
-    <div v-else class="admin-page">
+    <div class="admin-page">
       <div class="admin-page__toolbar" role="search" aria-label="日程筛选">
         <div class="admin-page__filters">
           <ElSelect v-model="employeeFilter" class="admin-page__select" clearable placeholder="员工：全部" aria-label="日程员工" @change="applySearch">
@@ -59,7 +58,7 @@
           </ElEmpty>
           <ElEmpty v-else-if="!loading" :image-size="72" :description="hasFilters ? '没有找到符合条件的日程' : '暂无日程'">
             <ElButton v-if="hasFilters" @click="resetFilters">清除筛选</ElButton>
-            <ElButton v-else-if="canManage" type="primary" :icon="Plus" @click="openCreate">新建日程</ElButton>
+            <ElButton v-else type="primary" :icon="Plus" @click="openCreate">新建日程</ElButton>
           </ElEmpty>
         </template>
       </ElTable>
@@ -126,14 +125,13 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElAlert, ElButton, ElCard, ElDialog, ElDrawer, ElEmpty, ElForm, ElFormItem, ElInput, ElInputNumber, ElOption, ElPagination, ElSelect, ElSwitch, ElTable, ElTableColumn, ElText } from 'element-plus';
 import { Plus, RefreshCw, RotateCcw, Search } from 'lucide-vue-next';
-import { canManagePlatform, currentUid, deleteSchedule, listEmployees, listSchedules, saveSchedule, scheduleMessages, scheduleSessions, toggleSchedule, type EmployeeSchedule, type ScheduleInput, type ScheduleMessages, type ScheduleSession } from '@/api';
+import { currentUid, deleteSchedule, listEmployees, listSchedules, saveSchedule, scheduleMessages, scheduleSessions, toggleSchedule, type EmployeeSchedule, type ScheduleInput, type ScheduleMessages, type ScheduleSession } from '@/api';
 import type { Employee } from '@/types';
 import RowMenu from '@/components/astra/RowMenu.vue';
 import SemanticTag from '@/components/astra/SemanticTag.vue';
 import { confirmDialog } from '@/composables/useConfirm';
 import { TABLE_MAX_HEIGHT } from '@/utils/table';
 
-const canManage = computed(() => canManagePlatform());
 const rows = ref<EmployeeSchedule[]>([]), choices = ref<Employee[]>([]);
 const loading = ref(false), error = ref(''), page = ref(1), pageSize = ref(20), total = ref(0), busy = ref('');
 const employeeOptions = ref<{ id: string; name: string }[]>([]);
@@ -161,7 +159,7 @@ const activeSession = ref(''), messagePage = ref<ScheduleMessages | null>(null),
 const reason = (e: unknown) => e instanceof Error ? e.message : String(e);
 let listGeneration = 0, historyGeneration = 0, messageGeneration = 0;
 async function reload() {
-  if (!canManage.value) return;
+
   const generation = ++listGeneration;
   loading.value = true; error.value = '';
   try {
@@ -258,7 +256,7 @@ function scheduleTime(cron: string): string {
 }
 function displayTime(value: string) { if (!value) return '—'; const utc = /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}Z`; return new Date(utc).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }); }
 onMounted(() => {
-  if (canManage.value) void reload();
+  void reload();
 });
 </script>
 

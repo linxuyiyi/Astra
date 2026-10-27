@@ -50,6 +50,11 @@ class FakeAgentService:
         return "0-0"
 
     async def trigger_inputs(self, agent_id, sid, inputs):
+        # 官方 AgentScope 2.0.10 Msg.validate_role_content 的 HTTP 边界：
+        # user 只允许 text/data；不能让宽松替身掩盖实际 /chat/ 422。
+        for message in inputs:
+            if message.get("role") == "user":
+                assert all(block["type"] in {"text", "data"} for block in message.get("content", []))
         assert not self.sessions[sid]["running"], "旧运行尚未释放"
         self.calls.append((agent_id, inputs))
         mid = new_id("reply")
@@ -181,6 +186,93 @@ def join(owner, other, cid):
     invitation = owner.post(f"/api/v1/channels/{cid}/invitations").json()
     response = other.post("/api/v1/channels/join", json={"token": invitation["token"]})
     assert response.status_code == 200, response.text
+
+
+def assistance_event(cid, sid, initiator):
+    from sqlalchemy.orm import Session
+
+    from app.models import Event, Task, TaskWakeOutbox
+    from app.models import utcnow as db_now
+
+    with connect() as db:
+        with Session(bind=db) as session:
+            session.add(Task(
+                id="T-ASSIST", title="协助任务", task_type="ISSUE", status="WAITING",
+                responsible_employee_id="dev", source_channel_id=cid, source_session_id=sid,
+                waiting_reason="HITL_QUESTION",
+            ))
+            session.flush()
+            session.add(Event(
+                task_id="T-ASSIST", event_type="group_task_requested", message="来源审计",
+                detail={"initiator_id": initiator},
+            ))
+            event = Event(task_id="T-ASSIST", event_type="TASK_WAITING", message="Worker 请求协助")
+            session.add(event)
+            session.flush()
+            event_id = event.id
+            session.add(TaskWakeOutbox(
+                event_id=event_id, task_id="T-ASSIST", responsible_employee_id="dev",
+                source_session_id=sid, status="pending", next_retry_at=db_now(),
+                hint="请调用 nexus_task_get 和 nexus_task_assistance 先处理 T-ASSIST",
+            ))
+            session.commit()
+        db.commit()
+    return event_id
+
+
+@pytest.mark.parametrize("revoked", [False, True])
+def test_worker_assistance_starts_new_authorized_employee_discussion(setup, monkeypatch, revoked):
+    _, owner, uid, cid, fake = setup
+    send(owner, cid, "@小牛码 你好")
+    old = wait_done(owner, cid)["channel"]["discussion"]
+    original_calls = len(fake.calls)
+
+    async def attach(*args, **kwargs):
+        pass  # 这里只替换外部 AgentScope 资源安装，讨论、身份与队列使用真实实现。
+
+    monkeypatch.setattr("nexus_api.task_skill.attach_task_capability", attach)
+    with connect() as db:
+        sid = db.execute(text("""SELECT agentscope_session_id FROM t_nexus_channel_members
+            WHERE channel_id=:c AND employee_id='dev'"""), {"c": cid}).scalar()
+        db.execute(text("UPDATE t_nexus_employees SET skills_json='[\"task-management\"]' WHERE id='dev'"))
+        if revoked:
+            db.execute(text("""UPDATE t_nexus_channel_members SET membership_active=0
+                WHERE channel_id=:c AND member_type='human' AND member_id=:u"""), {"c": cid, "u": uid})
+        db.commit()
+    event_id = assistance_event(cid, sid, uid)
+    headers = {"X-Nexus-Internal-Key": "test-internal-key"}
+    for duplicate in (False, True):
+        result = owner.post("/api/v1/internal/group-task-event", headers=headers, json={"event_id": event_id})
+        assert result.status_code == 200, result.text
+        assert result.json()["duplicate"] is duplicate
+        if not duplicate:
+            assert result.json()["assistance_scheduled"] is not revoked
+    with connect() as db:
+        rows = list(db.execute(text("SELECT * FROM t_nexus_discussions WHERE channel_id=:c"),
+                               {"c": cid}).mappings())
+    if revoked:
+        assert len(rows) == 1 and len(fake.calls) == original_calls
+    else:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            page = owner.get(f"/api/v1/channels/{cid}/messages").json()
+            discussion = page["channel"]["discussion"]
+            if discussion["id"] != old["id"] and discussion["state"] == "completed":
+                break
+            time.sleep(0.03)
+        else:
+            raise AssertionError(f"任务协助讨论没有完成：{page}")
+        assert len(fake.calls) == original_calls + 1
+        assert fake.calls[-1][0] == "agent-dev"
+        hints = [m for m in fake.calls[-1][1] if m.get("metadata", {}).get("source") == "nexus-task"]
+        assert any("nexus_task_assistance" in b["text"] for m in hints for b in m["content"])
+        notice = next(x for x in page["items"] if x["id"] == f"task_event_{event_id}")
+        assert "nexus_task_assistance" not in notice["text"]
+        with connect() as db:
+            current = db.execute(text("SELECT * FROM t_nexus_discussions WHERE id=:i"),
+                                 {"i": discussion["id"]}).mappings().one()
+        assert current["initiator_id"] == uid
+        assert json.loads(current["participants_json"]) == ["dev"]
 
 
 def test_peer_http_response_matches_committed_delivery(setup):

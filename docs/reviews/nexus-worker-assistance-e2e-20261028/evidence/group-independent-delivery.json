@@ -1,0 +1,13 @@
+{
+  "at": 1793120902.0158284,
+  "task_id": "T-20261027-5456F9",
+  "native_session_id": "ses_e81ab9117ffeYOIdjWnsUH2EOt",
+  "question_id": "que_17e547423001uW4tuev6nEWc8M",
+  "path": "/tmp/nexus-assistance-e2e-20261028/opencode/.astra-tasks/assist-opencode-20261028/T-20261027-5456F9-env-1/group-delivery.json",
+  "delivery": {
+    "group_region": "qa-group-north-61",
+    "engine": "opencode"
+  },
+  "sha256": "0ec4afc42509f877eda416c264d6c1fe9b04f1e99c9d00f40bd1338cc6f581cf",
+  "independent_assertion": "passed"
+}

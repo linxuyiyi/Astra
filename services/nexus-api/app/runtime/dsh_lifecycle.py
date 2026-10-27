@@ -26,6 +26,7 @@ from app.runtime.runtime_context import (
 )
 from app.runtime.session_connection import prepare_workspace, resolve_runtime_session_environment
 from app.runtime.session_state import SessionState
+from app.runtime.wake_outbox import record_assistance_requests
 from app.runtime.workspace_changes import workspace_head_commit
 
 
@@ -192,11 +193,20 @@ class DshLifecycle:
         await self.runtime.apply_session_state(task, session_state(result))
         return task
 
-    async def send(self, task_id: str, text: str, *, expected_binding_id: str):
+    async def send(
+        self, task_id: str, text: str, *, expected_binding_id: str,
+        expected_submission_id: str | None = None,
+        expected_source: tuple[str, str] | None = None,
+    ):
         task = await self.runtime.lock_task(task_id)
         binding = await self.binding(task)
         if not binding or binding.id != expected_binding_id or binding.runtime_engine != "dsh":
             raise self.error("Session 已切换，请刷新后再发送")
+        if expected_submission_id is not None and task.last_message_id != expected_submission_id:
+            raise self.error("当前回合已变化，请重新查询求助")
+        if (expected_source is not None
+                and (task.responsible_employee_id, task.source_session_id) != expected_source):
+            raise self.error("任务来源已变化")
         if task.status in {TaskStatus.SUCCEEDED.value, TaskStatus.CANCELED.value}:
             raise self.error("任务已结束")
         from app.runtime.lifecycle import _cancel_active
@@ -219,6 +229,8 @@ class DshLifecycle:
             or binding.fencing_token != fence
             or task.pending_message_id
             or _cancel_active(task)
+            or (expected_source is not None
+                and (task.responsible_employee_id, task.source_session_id) != expected_source)
         ):
             raise self.error("发送期间当前轮已变化")
         task.pending_message_id = f"sub_{uuid4().hex}"
@@ -292,7 +304,10 @@ class DshLifecycle:
             return await self.stop(
                 task_id, cancel_task=False, expected_binding_id=binding_id, reason="timeout"
             )
-        await self.runtime.apply_session_state(task, session_state(result))
+        await record_assistance_requests(self.db, task, [
+            f"permission:{item['id']}" for item in result.get("permissions", [])
+        ])
+        await self.runtime.apply_session_state(task, state)
         return task
 
     async def stop(

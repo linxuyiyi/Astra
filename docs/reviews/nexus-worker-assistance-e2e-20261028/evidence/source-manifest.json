@@ -1,0 +1,30 @@
+{
+  "at": 1793121318.046674,
+  "branch": "v1.4.8",
+  "head": "5ae0401b700e879a14f8e7ed9e84f80f681e603b",
+  "worktree_uncommitted": true,
+  "files": {
+    "openspec/changes/nexus-employee-worker-assistance/.openspec.yaml": "89901217d56bdfb49c20b541962dc5db50e8161beb30e5c2cae1d189e5d53eb5",
+    "openspec/changes/nexus-employee-worker-assistance/design.md": "756054e43774418d6fb84bb0e59eead176e62a82e481f0124bf42e564fc9dae0",
+    "openspec/changes/nexus-employee-worker-assistance/proposal.md": "8b006b9e51dcf483ba470ed440dd40ff59efcb4697d7eaa47513daf26b9ee8cb",
+    "openspec/changes/nexus-employee-worker-assistance/specs/nexus-worker-assistance/spec.md": "33905a57e33d1c26be9a4e4e40d35e76d7cb8965e002a559485137173e59f80a",
+    "openspec/changes/nexus-employee-worker-assistance/tasks.md": "f7829c6324f4d8abc3378217c4ce1106f345e1e54a1f4d66490400f7ee32fb89",
+    "openspec/changes/nexus-employee-worker-assistance/verification.md": "0461a5982ad6550f217864327ebfe04243f40e339e5484b3bf726efdc79dcf3c",
+    "services/agent-service/skills/task-management/SKILL.md": "e34d45726c618c0391661558acd07e839831304e397bb6ef621294b75cd67d04",
+    "services/nexus-api/app/executors/opencode_prompt.py": "c9e64ea9b10f0b1bcf0e576e34bbca3489ba38f1acdc1c5fa57a48ff383d3c8a",
+    "services/nexus-api/app/runtime/assistance.py": "531172a9c76917b5b1a0074300a87a12337792225ca8e8b5761d2bb54d80804d",
+    "services/nexus-api/app/runtime/dsh_lifecycle.py": "786e45ea89977fb926dff6c5e311d0ee11cf00d0b7adc1ccb4b543d2e86f2f68",
+    "services/nexus-api/app/runtime/lifecycle.py": "5ea03799dcaaed400fb3a2a4fd592d58d641f26b26b3facf00495644dd2457ba",
+    "services/nexus-api/app/runtime/wake_outbox.py": "656dc0349fb85561b40d64e63528dad17ad2cc15e8dc93565ef8e628e1e16960",
+    "services/nexus-api/app/task_mcp.py": "91f3ee86f5056c9cbb1627e819c5dd5339bd2302ac894c792f82ddd50b4b8be9",
+    "services/nexus-api/app/task_tools.py": "a5a165d3a6e34e31d7a705ca378092dff3bf5205fb2b5f8215e1d6ddfffa88b2",
+    "services/nexus-api/nexus_api/collaboration.py": "9b42aa459a7fb1a32672f02124462d93416bc7007603f4c910f906153555156c",
+    "services/nexus-api/nexus_api/main.py": "6424c233ebe188e04629bc6894ccc9f88f592c3c2aa419c0eb53b7fb08a586c6",
+    "services/nexus-api/nexus_api/task_skill.py": "5b6e60819d1c0055649186c749627abffa23f124af33e58f37cdd84a05c0c513",
+    "services/nexus-api/tests/dsh/test_worker_assistance.py": "20fc1106b22fe98f594c12f8b81bf5310587569f492d6bf98da1994c12644b6e",
+    "services/nexus-api/tests/nexus/test_api.py": "63adf39b075beb347165e49adb38bd35d51f632291f3ca06d38ff4d3417d4250",
+    "services/nexus-api/tests/nexus/test_collaboration.py": "7c9b65f67db978bf26a9bd077a5ddd8a39ff5946f8925dd13a6dc6d65e006763",
+    "services/nexus-api/tests/nexus/test_task_capability.py": "2f33efbfcd9c97ffda01607cba39d6a9b526c4bf7cf7ed22ae107b5f278ef6af",
+    "services/nexus-api/tests/platform/test_worker_assistance.py": "a4cb148cc43b16341abbf49a1107b566ee59944b107522aa306ceea085699b38"
+  }
+}

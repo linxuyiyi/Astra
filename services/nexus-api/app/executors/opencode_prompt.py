@@ -101,15 +101,18 @@ def build_task_prompt(
     )
 
     intervention_instructions = """
-当任务必须询问使用者、等待业务答案或需要操作授权时，必须使用 OpenCode 原生 question Tool
-或 Permission；收到回答或授权后继续当前 Session。
+当任务需要业务答案或操作授权时，必须使用 OpenCode 原生提问工具（question）或权限申请（permission）。
+请求由责任数字员工先处理；确实需要人补充信息时由员工在来源对话询问。
+收到回答或授权后继续当前执行会话，不要求人进入 AgentWork。
 不要用文本标记、自定义 JSON 或约定字符串伪装成人工阻塞状态。
 """
 
     if runtime_engine == "dsh":
         intervention_instructions = """
-工具操作授权使用 ACP 原生权限申请。业务问题通过已登记的 Task MCP 请求人工介入，
-等待真实业务答案后继续同一 Session；若工具尚未装配，应在最终回复中如实提出问题。
+工具操作授权使用 ACP 原生权限申请，由责任数字员工先判断是否已获授权。
+需要业务答案时，在正常回合回复中明确提出问题、必要背景和选项；责任数字员工读取后
+能答就直接答，缺信息时在来源对话询问人，再把真实答案续传同一执行会话。
+不要要求人去 AgentWork 回复，不要调用未装配的 Task MCP 求助工具。
 不要用文本标记、自定义 JSON 或约定字符串伪装成人工阻塞状态。
 """
     engine_label = "DSH" if runtime_engine == "dsh" else "OpenCode"

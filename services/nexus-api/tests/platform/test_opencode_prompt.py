@@ -60,7 +60,7 @@ def test_requirement_runtime_prompt_uses_task_prompt_only():
     assert "任务类型：\n需求" in prompt
     assert "REQUIREMENT_CATEGORY_PROMPT_MARKER" in prompt
     assert "ISSUE_CATEGORY_PROMPT_MARKER" not in prompt
-    assert "OpenCode 原生 question Tool" in prompt
+    assert "OpenCode 原生提问工具" in prompt
     assert "不要输出 Nexus 专用 JSON 协议" in prompt
     assert "完成任务后，请在最终回复中简洁说明" in prompt
     assert "ASTRA_RESULT_JSON:" not in prompt

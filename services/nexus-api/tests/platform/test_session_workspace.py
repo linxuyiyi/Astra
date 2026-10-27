@@ -361,7 +361,7 @@ async def test_child_session_question_projects_task_waiting(runtime):
     await r.service.refresh("T1")
 
     assert r.task.status == "WAITING"
-    with pytest.raises(RuntimeStateError, match="Session 树"):
+    with pytest.raises(RuntimeStateError, match="执行会话及其子会话"):
         await r.service.send("T1", {"parts": [{"type": "text", "text": "should block"}]})
 
 

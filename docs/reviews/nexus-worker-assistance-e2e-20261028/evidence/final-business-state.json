@@ -1,0 +1,292 @@
+{
+  "at": 1793121173.57701,
+  "tasks": [
+    {
+      "id": "T-20261027-1907AD",
+      "title": "QA-ASSIST-DSH-AUTO",
+      "status": "SUCCEEDED",
+      "current_session_id": "dsh_b1f2283aabf944fc9759107fe8d7394e",
+      "confirmed_at": "2026-10-27 16:44:06.295955",
+      "finished_at": "2026-10-27 16:44:06.296010",
+      "waiting_reason": null
+    },
+    {
+      "id": "T-20261027-AD1948",
+      "title": "QA-ASSIST-OPENCODE-AUTO",
+      "status": "SUCCEEDED",
+      "current_session_id": "ses_e81c25c67ffepDTyqImymegN3F",
+      "confirmed_at": "2026-10-27 16:44:48.520480",
+      "finished_at": "2026-10-27 16:44:48.520526",
+      "waiting_reason": null
+    },
+    {
+      "id": "T-20261027-316E5A",
+      "title": "QA-ASSIST-DSH-HUMAN",
+      "status": "SUCCEEDED",
+      "current_session_id": "dsh_33dbee199fa2454b8a436d2606de34bf",
+      "confirmed_at": "2026-10-27 16:53:16.677687",
+      "finished_at": "2026-10-27 16:53:16.677710",
+      "waiting_reason": null
+    },
+    {
+      "id": "T-20261027-CC81DD",
+      "title": "QA-ASSIST-OPENCODE-HUMAN",
+      "status": "SUCCEEDED",
+      "current_session_id": "ses_e81bf25f5ffebsMgoFEpwy80ne",
+      "confirmed_at": "2026-10-27 16:53:15.923115",
+      "finished_at": "2026-10-27 16:53:15.923179",
+      "waiting_reason": null
+    },
+    {
+      "id": "T-20261027-7E034B",
+      "title": "QA-ASSIST-DSH-GROUP-PERMISSION",
+      "status": "CANCELED",
+      "current_session_id": "dsh_433e77b35ed146e29de08ff008c54a3c",
+      "confirmed_at": null,
+      "finished_at": "2026-10-27 16:58:36.404847",
+      "waiting_reason": null
+    },
+    {
+      "id": "T-20261027-0BD234",
+      "title": "QA-ASSIST-DSH-GROUP-PERMISSION-RETEST",
+      "status": "SUCCEEDED",
+      "current_session_id": "dsh_517b23327d624bcd9ba0c7b9ab11faa1",
+      "confirmed_at": "2026-10-27 17:07:32.260579",
+      "finished_at": "2026-10-27 17:07:32.260626",
+      "waiting_reason": null
+    },
+    {
+      "id": "T-20261027-5456F9",
+      "title": "QA-ASSIST-OPENCODE-GROUP-HUMAN",
+      "status": "SUCCEEDED",
+      "current_session_id": "ses_e81ab9117ffeYOIdjWnsUH2EOt",
+      "confirmed_at": "2026-10-27 17:11:24.300793",
+      "finished_at": "2026-10-27 17:11:24.300824",
+      "waiting_reason": null
+    }
+  ],
+  "sessions": [
+    {
+      "id": "dsh_b1f2283aabf944fc9759107fe8d7394e",
+      "task_id": "T-20261027-1907AD",
+      "status": "SUCCEEDED",
+      "terminal_reason": "completed",
+      "runtime_engine": "dsh",
+      "native_session_id": "bae16a18-7acf-4662-b725-dfdf793487de",
+      "superseded_by": null
+    },
+    {
+      "id": "ses_e81c25c67ffepDTyqImymegN3F",
+      "task_id": "T-20261027-AD1948",
+      "status": "SUCCEEDED",
+      "terminal_reason": "completed",
+      "runtime_engine": "opencode",
+      "native_session_id": "ses_e81c25c67ffepDTyqImymegN3F",
+      "superseded_by": null
+    },
+    {
+      "id": "dsh_33dbee199fa2454b8a436d2606de34bf",
+      "task_id": "T-20261027-316E5A",
+      "status": "SUCCEEDED",
+      "terminal_reason": "completed",
+      "runtime_engine": "dsh",
+      "native_session_id": "3c848285-f7fa-4f6a-a4e6-6dc7cd39e975",
+      "superseded_by": null
+    },
+    {
+      "id": "ses_e81bf25f5ffebsMgoFEpwy80ne",
+      "task_id": "T-20261027-CC81DD",
+      "status": "SUCCEEDED",
+      "terminal_reason": "completed",
+      "runtime_engine": "opencode",
+      "native_session_id": "ses_e81bf25f5ffebsMgoFEpwy80ne",
+      "superseded_by": null
+    },
+    {
+      "id": "dsh_433e77b35ed146e29de08ff008c54a3c",
+      "task_id": "T-20261027-7E034B",
+      "status": "INTERRUPTED",
+      "terminal_reason": "aborted",
+      "runtime_engine": "dsh",
+      "native_session_id": "8914bd83-9e90-4873-b0e0-9454e2173523",
+      "superseded_by": null
+    },
+    {
+      "id": "dsh_517b23327d624bcd9ba0c7b9ab11faa1",
+      "task_id": "T-20261027-0BD234",
+      "status": "SUCCEEDED",
+      "terminal_reason": "completed",
+      "runtime_engine": "dsh",
+      "native_session_id": "9228544d-740a-4860-a5da-66486e570e87",
+      "superseded_by": null
+    },
+    {
+      "id": "ses_e81aca349ffez4HDi5UGxqFOkf",
+      "task_id": "T-20261027-5456F9",
+      "status": "INTERRUPTED",
+      "terminal_reason": "incomplete",
+      "runtime_engine": "opencode",
+      "native_session_id": "ses_e81aca349ffez4HDi5UGxqFOkf",
+      "superseded_by": "ses_e81ab9117ffeYOIdjWnsUH2EOt"
+    },
+    {
+      "id": "ses_e81ab9117ffeYOIdjWnsUH2EOt",
+      "task_id": "T-20261027-5456F9",
+      "status": "SUCCEEDED",
+      "terminal_reason": "completed",
+      "runtime_engine": "opencode",
+      "native_session_id": "ses_e81ab9117ffeYOIdjWnsUH2EOt",
+      "superseded_by": null
+    }
+  ],
+  "workers": [
+    {
+      "id": "assist-opencode-20261028",
+      "current_task_count": 0,
+      "status": "IDLE"
+    },
+    {
+      "id": "assist-dsh-20261028",
+      "current_task_count": 0,
+      "status": "IDLE"
+    }
+  ],
+  "events": [
+    {
+      "id": 59,
+      "task_id": "T-20261027-7E034B",
+      "event_type": "TASK_CANCELED",
+      "message": "任务状态从 WAITING 变更为 CANCELED",
+      "detail": "{\"from\": \"WAITING\", \"to\": \"CANCELED\"}",
+      "created_at": "2026-10-27 16:58:36.407543"
+    },
+    {
+      "id": 23,
+      "task_id": "T-20261027-1907AD",
+      "event_type": "TASK_SUCCEEDED",
+      "message": "任务状态从 WAITING 变更为 SUCCEEDED",
+      "detail": "{\"from\": \"WAITING\", \"to\": \"SUCCEEDED\"}",
+      "created_at": "2026-10-27 16:44:06.297238"
+    },
+    {
+      "id": 24,
+      "task_id": "T-20261027-AD1948",
+      "event_type": "TASK_SUCCEEDED",
+      "message": "任务状态从 WAITING 变更为 SUCCEEDED",
+      "detail": "{\"from\": \"WAITING\", \"to\": \"SUCCEEDED\"}",
+      "created_at": "2026-10-27 16:44:48.521370"
+    },
+    {
+      "id": 50,
+      "task_id": "T-20261027-CC81DD",
+      "event_type": "TASK_SUCCEEDED",
+      "message": "任务状态从 WAITING 变更为 SUCCEEDED",
+      "detail": "{\"from\": \"WAITING\", \"to\": \"SUCCEEDED\"}",
+      "created_at": "2026-10-27 16:53:15.924683"
+    },
+    {
+      "id": 51,
+      "task_id": "T-20261027-316E5A",
+      "event_type": "TASK_SUCCEEDED",
+      "message": "任务状态从 WAITING 变更为 SUCCEEDED",
+      "detail": "{\"from\": \"WAITING\", \"to\": \"SUCCEEDED\"}",
+      "created_at": "2026-10-27 16:53:16.678371"
+    },
+    {
+      "id": 78,
+      "task_id": "T-20261027-0BD234",
+      "event_type": "TASK_SUCCEEDED",
+      "message": "任务状态从 WAITING 变更为 SUCCEEDED",
+      "detail": "{\"from\": \"WAITING\", \"to\": \"SUCCEEDED\"}",
+      "created_at": "2026-10-27 17:07:32.261201"
+    },
+    {
+      "id": 89,
+      "task_id": "T-20261027-5456F9",
+      "event_type": "TASK_SUCCEEDED",
+      "message": "任务状态从 WAITING 变更为 SUCCEEDED",
+      "detail": "{\"from\": \"WAITING\", \"to\": \"SUCCEEDED\"}",
+      "created_at": "2026-10-27 17:11:24.302931"
+    },
+    {
+      "id": 14,
+      "task_id": "T-20261027-AD1948",
+      "event_type": "WORKER_ASSISTANCE_REPLIED",
+      "message": "责任员工已回复 Worker 求助",
+      "detail": "{\"session_id\": \"ses_e81c25c67ffepDTyqImymegN3F\", \"request_id\": \"que_17e3db250001zSGsDcRMbVRZS8\", \"kind\": \"question\", \"responsible_employee_id\": \"emp_93bddd287f55\"}",
+      "created_at": "2026-10-27 16:42:21.981456"
+    },
+    {
+      "id": 19,
+      "task_id": "T-20261027-AD1948",
+      "event_type": "WORKER_ASSISTANCE_REPLIED",
+      "message": "责任员工已回复 Worker 求助",
+      "detail": "{\"session_id\": \"ses_e81c25c67ffepDTyqImymegN3F\", \"request_id\": \"per_17e3dd8c8001WM7bLEnupRIZxW\", \"kind\": \"permission\", \"responsible_employee_id\": \"emp_93bddd287f55\"}",
+      "created_at": "2026-10-27 16:42:31.498021"
+    },
+    {
+      "id": 39,
+      "task_id": "T-20261027-CC81DD",
+      "event_type": "WORKER_ASSISTANCE_REPLIED",
+      "message": "责任员工已回复 Worker 求助",
+      "detail": "{\"session_id\": \"ses_e81bf25f5ffebsMgoFEpwy80ne\", \"request_id\": \"que_17e40e61f001BUjo93nrsTE15q\", \"kind\": \"question\", \"responsible_employee_id\": \"emp_93bddd287f55\"}",
+      "created_at": "2026-10-27 16:48:53.391537"
+    },
+    {
+      "id": 42,
+      "task_id": "T-20261027-CC81DD",
+      "event_type": "WORKER_ASSISTANCE_REPLIED",
+      "message": "责任员工已回复 Worker 求助",
+      "detail": "{\"session_id\": \"ses_e81bf25f5ffebsMgoFEpwy80ne\", \"request_id\": \"per_17e43cf46001qs4ZV9qz3fHflp\", \"kind\": \"permission\", \"responsible_employee_id\": \"emp_93bddd287f55\"}",
+      "created_at": "2026-10-27 16:49:02.619010"
+    },
+    {
+      "id": 65,
+      "task_id": "T-20261027-0BD234",
+      "event_type": "WORKER_ASSISTANCE_REPLIED",
+      "message": "责任员工已回复 Worker 求助",
+      "detail": "{\"session_id\": \"dsh_517b23327d624bcd9ba0c7b9ab11faa1\", \"request_id\": \"340f964844834d4eac7859bc519f133b\", \"kind\": \"permission\", \"responsible_employee_id\": \"emp_80456a620619\"}",
+      "created_at": "2026-10-27 16:59:04.722490"
+    },
+    {
+      "id": 73,
+      "task_id": "T-20261027-5456F9",
+      "event_type": "WORKER_ASSISTANCE_REPLIED",
+      "message": "责任员工已回复 Worker 求助",
+      "detail": "{\"session_id\": \"ses_e81aca349ffez4HDi5UGxqFOkf\", \"request_id\": \"per_17e536645001WgDjoJv5uKVoDY\", \"kind\": \"permission\", \"responsible_employee_id\": \"emp_93bddd287f55\"}",
+      "created_at": "2026-10-27 17:06:05.450608"
+    },
+    {
+      "id": 79,
+      "task_id": "T-20261027-5456F9",
+      "event_type": "WORKER_ASSISTANCE_REPLIED",
+      "message": "责任员工已回复 Worker 求助",
+      "detail": "{\"session_id\": \"ses_e81ab9117ffeYOIdjWnsUH2EOt\", \"request_id\": \"que_17e547423001uW4tuev6nEWc8M\", \"kind\": \"question\", \"responsible_employee_id\": \"emp_93bddd287f55\"}",
+      "created_at": "2026-10-27 17:07:53.677199"
+    },
+    {
+      "id": 82,
+      "task_id": "T-20261027-5456F9",
+      "event_type": "WORKER_ASSISTANCE_REPLIED",
+      "message": "责任员工已回复 Worker 求助",
+      "detail": "{\"session_id\": \"ses_e81ab9117ffeYOIdjWnsUH2EOt\", \"request_id\": \"per_17e55304f001YEXSEAxuiOkXov\", \"kind\": \"permission\", \"responsible_employee_id\": \"emp_93bddd287f55\"}",
+      "created_at": "2026-10-27 17:08:06.743017"
+    },
+    {
+      "id": 85,
+      "task_id": "T-20261027-5456F9",
+      "event_type": "WORKER_ASSISTANCE_REPLIED",
+      "message": "责任员工已回复 Worker 求助",
+      "detail": "{\"session_id\": \"ses_e81ab9117ffeYOIdjWnsUH2EOt\", \"request_id\": \"per_17e55697f001B8bP10FJRbwSPC\", \"kind\": \"permission\", \"responsible_employee_id\": \"emp_93bddd287f55\"}",
+      "created_at": "2026-10-27 17:08:18.153686"
+    },
+    {
+      "id": 56,
+      "task_id": "T-20261027-7E034B",
+      "event_type": "WORKER_ASSISTANCE_REQUESTED",
+      "message": "Worker 有新的求助请求，请责任员工先处理",
+      "detail": "{\"session_id\": \"dsh_433e77b35ed146e29de08ff008c54a3c\", \"request_ids\": [\"permission:fa78cbe87f0a4e5eb2cbab450e9b6ffa\"]}",
+      "created_at": "2026-10-27 16:54:39.520259"
+    }
+  ]
+}

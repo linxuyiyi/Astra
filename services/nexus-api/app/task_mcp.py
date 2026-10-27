@@ -87,6 +87,9 @@ def build_mcp_server() -> MCPServer:
         description="Agent Worker 查询和控制自己负责的工程任务。",
         instructions=(
             "工程执行才创建任务。收到任务状态提示后先调用 nexus_task_get。"
+            "等待状态先查 nexus_task_assistance；能根据已有上下文回答就调用 nexus_task_reply，"
+            "DSH 回合文本通过 nexus_task_input 续答。无法确定或需要新授权时在原对话询问人，"
+            "取得明确答案后回传，不要求人去 AgentWork 操作。"
             "总结和候选经验只读。非法操作会返回 ok=false，不要改口说已经成功。"
         ),
     )
@@ -218,6 +221,33 @@ def build_mcp_server() -> MCPServer:
     async def nexus_task_intervene(task_id: str, reason: str) -> dict[str, Any]:
         """把任务转为等待人工处理，并记下原因。"""
         return await _call("intervene", task_id=task_id, reason=reason)
+
+    @server.tool(name="nexus_task_assistance", structured_output=True)
+    async def nexus_task_assistance(task_id: str, cursor: int = 0) -> dict[str, Any]:
+        """查询任务执行端的问题、权限和执行输出；next_cursor 非空时继续分页读取。"""
+        return await _call("assistance", task_id=task_id, cursor=cursor)
+
+    @server.tool(name="nexus_task_reply", structured_output=True)
+    async def nexus_task_reply(
+        task_id: str, expected_session_id: str, request_id: str,
+        kind: Literal["question", "permission"], answers: list[list[str]] | None = None,
+        decision: str | None = None,
+    ) -> dict[str, Any]:
+        """回复查询所得请求。问题按顺序传 answers；权限选一次性 decision，不能编造授权。"""
+        return await _call(
+            "reply", task_id=task_id, expected_session_id=expected_session_id,
+            request_id=request_id, kind=kind, answers=answers, decision=decision,
+        )
+
+    @server.tool(name="nexus_task_input", structured_output=True)
+    async def nexus_task_input(
+        task_id: str, expected_session_id: str, expected_submission_id: str, text: str,
+    ) -> dict[str, Any]:
+        """依据求助查询返回的执行会话和回合标识，向 DSH 同一会话续答业务问题。"""
+        return await _call(
+            "input", task_id=task_id, expected_session_id=expected_session_id,
+            expected_submission_id=expected_submission_id, text=text,
+        )
 
     @server.tool(name="nexus_task_confirm", structured_output=True)
     async def nexus_task_confirm(task_id: str) -> dict[str, Any]:

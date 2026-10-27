@@ -41,6 +41,7 @@ def task_mcp_headers(
         "X-Nexus-Conversation-Id": conversation_id,
         "X-Nexus-Channel-Id": channel_id,
         "X-Nexus-Discussion-Id": discussion_id,
+        "X-Nexus-Task-Capability-Version": "worker-assistance-v1",
     }
     key = os.environ.get("NEXUS_TASK_MCP_KEY", "").strip()
     if key:
@@ -58,6 +59,7 @@ async def attach_task_capability(
     conversation_id: str = "",
     channel_id: str = "",
     discussion_id: str = "",
+    strict: bool = False,
 ) -> None:
     if TASK_SKILL_ID not in (employee.get("skills") or []):
         return
@@ -79,6 +81,8 @@ async def attach_task_capability(
             ),
         )
     except AgentScopeError as exc:
+        if strict:
+            raise
         logger.warning("任务技能或 MCP 未挂上：%s", exc.detail)
 
 

@@ -10,6 +10,7 @@ from app.config.settings import get_settings
 from app.domain import PRIORITY_WEIGHT, EmployeeStatus, TaskStatus
 from app.event_bus import event_bus
 from app.models import AgentWorker, Event, Task
+from app.runtime.presentation import TASK_STATUS
 from app.runtime.wake_outbox import record_wake
 from app.schemas import TaskCreate, TaskUpdate
 from app.state_machine import TaskStateMachine
@@ -182,7 +183,9 @@ class TaskService:
             task,
             event_type,
             "work",
-            message or f"任务状态从 {previous.value} 变更为 {target.value}",
+            message or (
+                f"任务状态从{TASK_STATUS[previous.value]['label']}变更为{TASK_STATUS[target.value]['label']}"
+            ),
             {"from": previous.value, "to": target.value, **(detail or {})},
         )
         await record_wake(self.session, task, event, previous, target)

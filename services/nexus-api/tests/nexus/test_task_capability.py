@@ -122,3 +122,28 @@ def test_rotated_key_replaces_mcp_and_skill_revokes_by_stored_name(monkeypatch):
             )
 
     asyncio.run(scenario())
+
+
+def test_assistance_capability_replaces_old_mcp_schema_and_uploads_skill(monkeypatch):
+    from nexus_api.task_skill import attach_task_capability, task_mcp_headers
+
+    async def scenario():
+        app, skills, mcps, deleted = _workspace()
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                     base_url="http://agentscope.test") as http:
+            client = AgentScopeClient("http://agentscope.test", "nexus", http)
+            employee = {"id": "emp_1", "agentscope_agent_id": "agt_1", "skills": ["task-management"]}
+            old_headers = task_mcp_headers("emp_1", "private", conversation_id="conv_1")
+            old_headers.pop("X-Nexus-Task-Capability-Version")
+            await client.add_workspace_mcp(
+                "agt_1", "private", url="http://task.test/mcp", headers=old_headers,
+            )
+            await attach_task_capability(client, employee, "private", conversation_id="conv_1", strict=True)
+            headers = mcps[("agt_1", "private")]["mcp_config"]["headers"]
+            assert headers["X-Nexus-Task-Capability-Version"] == "worker-assistance-v1"
+            assert ("mcp", "nexus-task", "private") in deleted
+            assert skills["agt_1"]["name"] == "任务管理"
+
+    monkeypatch.setenv("NEXUS_TASK_MCP_KEY", "test-key")
+    monkeypatch.setenv("NEXUS_TASK_MCP_URL", "http://task.test/mcp")
+    asyncio.run(scenario())

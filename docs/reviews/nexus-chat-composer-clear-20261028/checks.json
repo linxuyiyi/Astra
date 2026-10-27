@@ -1,0 +1,19 @@
+{
+  "source": "services/nexus-api/chat-island/src/components/chat/ChatContent.tsx",
+  "sha256": "88969353fe4ae5ac417ec7c90bfa9f6c7422ed805492b4ac5b464ab56b25430b",
+  "tests": {
+    "passed": 17,
+    "failed": 0
+  },
+  "type_check": "passed",
+  "build": "passed; output in /tmp/nexus-composer-build-20261028",
+  "fixture_ports_after_cleanup": {
+    "18845": {
+      "listening": false
+    },
+    "18846": {
+      "listening": false
+    }
+  },
+  "company_deployment": "not changed"
+}

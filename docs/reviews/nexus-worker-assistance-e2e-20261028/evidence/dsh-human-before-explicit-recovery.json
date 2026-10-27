@@ -1,0 +1,16 @@
+{
+  "task": {
+    "id": "T-20261027-316E5A",
+    "status": "RUNNING",
+    "waiting_reason": "TRANSPORT_RECOVERY",
+    "current_session_id": "dsh_33dbee199fa2454b8a436d2606de34bf",
+    "last_message_id": "sub_ae415e4a6fe34b7b8d2b41fe50fcf089",
+    "workspace": "/tmp/nexus-assistance-e2e-20261028/dsh/.astra-tasks/assist-dsh-20261028/T-20261027-316E5A-env-2"
+  },
+  "binding": {
+    "id": "dsh_33dbee199fa2454b8a436d2606de34bf",
+    "native_session_id": "3c848285-f7fa-4f6a-a4e6-6dc7cd39e975",
+    "status": "UNKNOWN"
+  },
+  "observed_native_error": "503 NO_ELIGIBLE_NODE CIRCUIT_OPEN; turn/end error, file written before error"
+}

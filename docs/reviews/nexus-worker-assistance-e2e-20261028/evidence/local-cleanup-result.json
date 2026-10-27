@@ -1,0 +1,72 @@
+{
+  "at": 1793121192.141682,
+  "owned": {
+    "relay": {
+      "pid": 51154,
+      "identity_checked": true,
+      "release_result": "drop"
+    },
+    "beat": {
+      "pid": 49658,
+      "identity_checked": true,
+      "release_result": "drop"
+    },
+    "celery": {
+      "pid": 49657,
+      "identity_checked": true,
+      "release_result": "drop"
+    },
+    "task-mcp": {
+      "pid": 51178,
+      "identity_checked": true,
+      "release_result": "drop"
+    },
+    "library-mcp": {
+      "pid": 49162,
+      "identity_checked": true,
+      "release_result": "drop"
+    },
+    "api": {
+      "pid": 51153,
+      "identity_checked": true,
+      "release_result": "drop"
+    },
+    "agent": {
+      "pid": 49136,
+      "identity_checked": true,
+      "release_result": "drop"
+    },
+    "redis": {
+      "pid": 49134,
+      "identity_checked": true,
+      "release_result": "drop"
+    }
+  },
+  "protected_processes_unchanged": {
+    "5797": {
+      "pid": 5797,
+      "create_time": 1792840568.73272,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api"
+    },
+    "33082": {
+      "pid": 33082,
+      "create_time": 1793011276.396673,
+      "cwd": "/Users/niuniu/\u7a0b\u5e8f/Astra/services/agent-service"
+    },
+    "35693": {
+      "pid": 35693,
+      "create_time": 1793015549.618067,
+      "cwd": "/Users/niuniu/\u7a0b\u5e8f/Astra/services/nexus-api"
+    },
+    "35694": {
+      "pid": 35694,
+      "create_time": 1793015549.622648,
+      "cwd": "/Users/niuniu/\u7a0b\u5e8f/Astra/services/nexus-api"
+    },
+    "94344": {
+      "pid": 94344,
+      "create_time": 1792889590.131768,
+      "cwd": "/Users/niuniu/\u7a0b\u5e8f/Astra/services/nexus-api"
+    }
+  }
+}

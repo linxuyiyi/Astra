@@ -1,0 +1,36 @@
+[
+  {
+    "case": "opencode-human",
+    "id": "T-20261027-CC81DD",
+    "status": "WAITING",
+    "current_session_id": "ses_e81bf25f5ffebsMgoFEpwy80ne",
+    "workspace": "/tmp/nexus-assistance-e2e-20261028/opencode/.astra-tasks/assist-opencode-20261028/T-20261027-CC81DD-env-1",
+    "task_status": "WAITING",
+    "session_status": "SUCCEEDED",
+    "native_session_id": "ses_e81bf25f5ffebsMgoFEpwy80ne",
+    "engine": "opencode",
+    "expected": "qa-opencode-human-west-29",
+    "delivery": {
+      "release_region": "qa-opencode-human-west-29",
+      "engine": "opencode"
+    },
+    "sha256": "7607abb32c53f6a6076fc64725a9b1f1ed207e6dd313f434367e3a7b219f5561"
+  },
+  {
+    "case": "dsh-human",
+    "id": "T-20261027-316E5A",
+    "status": "WAITING",
+    "current_session_id": "dsh_33dbee199fa2454b8a436d2606de34bf",
+    "workspace": "/tmp/nexus-assistance-e2e-20261028/dsh/.astra-tasks/assist-dsh-20261028/T-20261027-316E5A-env-2",
+    "task_status": "WAITING",
+    "session_status": "SUCCEEDED",
+    "native_session_id": "3c848285-f7fa-4f6a-a4e6-6dc7cd39e975",
+    "engine": "dsh",
+    "expected": "qa-dsh-human-west-83",
+    "delivery": {
+      "release_region": "qa-dsh-human-west-83",
+      "engine": "dsh"
+    },
+    "sha256": "3a399ee1f5fa2f8284c91f315f3cb9cd8e0013c2be6da3f4833526b118139f72"
+  }
+]

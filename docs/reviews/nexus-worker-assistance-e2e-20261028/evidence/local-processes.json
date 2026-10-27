@@ -1,0 +1,58 @@
+{
+  "redis": {
+    "pid": 49134,
+    "pgid": 49134,
+    "create_time": "1793118987.353",
+    "cwd": "/private/tmp/nexus-assistance-e2e-20261028",
+    "port": 18879
+  },
+  "agent": {
+    "pid": 49136,
+    "pgid": 49136,
+    "create_time": "1793118988.172",
+    "cwd": "/Users/niuniu/程序/Astra/services/agent-service",
+    "port": 18800
+  },
+  "library-mcp": {
+    "pid": 49162,
+    "pgid": 49162,
+    "create_time": "1793119035.688",
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+    "port": 18812
+  },
+  "celery": {
+    "pid": 49657,
+    "pgid": 49657,
+    "create_time": "1793119642.737",
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+    "port": null
+  },
+  "beat": {
+    "pid": 49658,
+    "pgid": 49658,
+    "create_time": "1793119643.148",
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+    "port": null
+  },
+  "api": {
+    "pid": 51153,
+    "pgid": 51153,
+    "create_time": "1793121011.371",
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+    "port": 18841
+  },
+  "relay": {
+    "pid": 51154,
+    "pgid": 51154,
+    "create_time": "1793121012.247",
+    "cwd": "/private/tmp/nexus-assistance-e2e-20261028",
+    "port": null
+  },
+  "task-mcp": {
+    "pid": 51178,
+    "pgid": 51178,
+    "create_time": "1793121029.954",
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+    "port": 18802
+  }
+}

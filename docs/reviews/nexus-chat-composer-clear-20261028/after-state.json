@@ -1,0 +1,1 @@
+{"first-before": {"accepted": true, "text": "输入框残留复现：第一条消息。", "sending": true}, "first-after": {"accepted": true, "text": "修复验证：等待回复时输入框应为空。", "sending": true}, "reject-after": {"accepted": false, "text": "发送失败时必须保留这条草稿。", "sending": false}, "slow-after": {"accepted": true, "text": "慢请求中的已发送消息。", "sending": true}}

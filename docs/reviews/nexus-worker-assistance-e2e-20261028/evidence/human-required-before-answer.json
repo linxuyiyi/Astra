@@ -1,0 +1,18 @@
+[
+  {
+    "case": "opencode-human",
+    "id": "T-20261027-CC81DD",
+    "status": "WAITING",
+    "workspace": "/tmp/nexus-assistance-e2e-20261028/opencode/.astra-tasks/assist-opencode-20261028/T-20261027-CC81DD-env-1",
+    "current_session_id": "ses_e81bf25f5ffebsMgoFEpwy80ne",
+    "delivery_exists_before_human_reply": false
+  },
+  {
+    "case": "dsh-human",
+    "id": "T-20261027-316E5A",
+    "status": "WAITING",
+    "workspace": "/tmp/nexus-assistance-e2e-20261028/dsh/.astra-tasks/assist-dsh-20261028/T-20261027-316E5A-env-2",
+    "current_session_id": "dsh_33dbee199fa2454b8a436d2606de34bf",
+    "delivery_exists_before_human_reply": false
+  }
+]

@@ -2195,7 +2195,8 @@ def create_app() -> FastAPI:
         return {"sync": await sync_bound(request, connection, "mcps", mcp_id)}
 
     @app.get("/api/v1/internal/wake-target")
-    def wake_target(
+    async def wake_target(
+        request: Request,
         employee_id: str,
         session_id: str = "",
         connection=Depends(database),
@@ -2223,6 +2224,18 @@ def create_app() -> FastAPI:
             target = employee["mailbox_session_id"]
             if not target:
                 raise HTTPException(status_code=404, detail="员工还没有邮箱")
+        conversation = connection.execute(
+            sql_text("SELECT id FROM t_nexus_conversations "
+                     "WHERE employee_id=:e AND agentscope_session_id=:s"),
+            {"e": employee_id, "s": target},
+        ).mappings().first()
+        if conversation and "task-management" in employee["skills"]:
+            try:
+                await attach_task_capability(
+                    client_of(request), employee, target, conversation_id=conversation["id"], strict=True,
+                )
+            except AgentScopeError as exc:
+                raise HTTPException(503, "任务求助能力尚未更新，稍后重试唤醒") from exc
         return {"agent_id": agent_id, "session_id": target}
 
     @app.get("/api/v1/internal/mailbox")

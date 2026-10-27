@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.domain import TaskStatus
-from app.models import Base, Task, TaskWakeOutbox
+from app.models import Base, Event, Task, TaskWakeOutbox
 from app.runtime.task_wakeup import HttpWakeSender, WakePermanent, WakeRetry, deliver_pending, retry_delay
 from app.services import TaskService
 from tests.platform.test_runtime import new_task
@@ -34,6 +34,18 @@ class RecordingSender:
         if self.error:
             raise self.error
         self.sent.append(row.task_id)
+
+
+async def test_waiting_notification_is_chinese_without_changing_status_codes(session):
+    task = await TaskService(session).create(new_task(responsible_employee_id="emp_1"))
+    await TaskService(session).transition(task, TaskStatus.WAITING)
+    event = await session.scalar(select(Event).where(Event.event_type == "TASK_WAITING"))
+    row = await session.scalar(select(TaskWakeOutbox))
+    assert event.message == "任务状态从待执行变更为等待人工或外部条件"
+    assert event.detail == {"from": "PENDING", "to": "WAITING"}
+    assert "状态变为等待人工或外部条件" in row.hint
+    assert "WAITING" not in row.hint
+    assert task.status == "WAITING"
 
 
 async def test_delivery_marks_row_without_changing_task_status(session):

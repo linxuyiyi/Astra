@@ -59,7 +59,7 @@ class RuntimeProjection:
     def runtime_status_label(self):
         if self.__tablename__ == "t_nexus_tasks":
             return TASK_STATUS[self.status]["label"]
-        return EMPLOYEE_LABELS.get(self.status, self.status)
+        return EMPLOYEE_LABELS.get(self.status, "未知状态")
 
     @property
     def runtime_detail(self):

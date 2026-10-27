@@ -1,0 +1,27 @@
+{
+  "5797": {
+    "pid": 5797,
+    "create_time": 1792840568.73272,
+    "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api"
+  },
+  "33082": {
+    "pid": 33082,
+    "create_time": 1793011276.396673,
+    "cwd": "/Users/niuniu/程序/Astra/services/agent-service"
+  },
+  "35693": {
+    "pid": 35693,
+    "create_time": 1793015549.618067,
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api"
+  },
+  "35694": {
+    "pid": 35694,
+    "create_time": 1793015549.622648,
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api"
+  },
+  "94344": {
+    "pid": 94344,
+    "create_time": 1792889590.131768,
+    "cwd": "/Users/niuniu/程序/Astra/services/nexus-api"
+  }
+}

@@ -265,87 +265,86 @@ const ChatContentComponent: React.FC<ChatContentProps> = ({
 				</MessageScrollerProvider>
 			)}
 
-			{loading ? null : (
-				<div className="relative min-w-full max-w-full w-full">
-					<FlipCard
-						visible={toConfirmedToolCalls.length > 0 || footerSlot !== null}
-						className="absolute bottom-full left-0 right-0 mb-2 z-50"
-					>
-						{toConfirmedToolCalls.length > 0 ? (
-							<ConfirmCard
-								key={`${toConfirmedToolCalls[0].replyId}:${toConfirmedToolCalls[0].toolCall.id}`}
-								toolCall={toConfirmedToolCalls[0].toolCall}
-								onUserConfirm={(confirm, rules) =>
-									onUserConfirm(
-										toConfirmedToolCalls[0].toolCall,
-										confirm,
-										toConfirmedToolCalls[0].replyId,
-										rules,
-									)
-								}
+			{/* 绑定更新和历史加载期间保留输入框实例，避免恢复已发送的旧草稿。 */}
+			<div className="relative min-w-full max-w-full w-full">
+				<FlipCard
+					visible={toConfirmedToolCalls.length > 0 || footerSlot !== null}
+					className="absolute bottom-full left-0 right-0 mb-2 z-50"
+				>
+					{toConfirmedToolCalls.length > 0 ? (
+						<ConfirmCard
+							key={`${toConfirmedToolCalls[0].replyId}:${toConfirmedToolCalls[0].toolCall.id}`}
+							toolCall={toConfirmedToolCalls[0].toolCall}
+							onUserConfirm={(confirm, rules) =>
+								onUserConfirm(
+									toConfirmedToolCalls[0].toolCall,
+									confirm,
+									toConfirmedToolCalls[0].replyId,
+									rules,
+								)
+							}
+						/>
+					) : (
+						footerSlot
+					)}
+				</FlipCard>
+				<TextInput
+					className="min-w-full max-w-full w-full"
+					onSend={onSend}
+					disabled={disabled || loading}
+					autoComplete={autoComplete}
+					allowedInputTypes={allowedInputTypes}
+					fileProcessor={fileProcessor}
+					phase={phase}
+					onInterrupt={onInterrupt}
+					voiceState={voiceState}
+					onVoiceToggle={onVoiceToggle}
+					voiceDisabled={voiceDisabled}
+					headerSlot={
+						<div className="flex w-full items-center justify-between px-2 py-1 text-sm text-muted-foreground">
+							<WorkingDirectoryDialog
+								agentId={agentId}
+								sessionId={sessionId}
+								value={cwd}
+								onChange={onCwdChange}
 							/>
-						) : (
-							footerSlot
-						)}
-					</FlipCard>
-					<TextInput
-						className="min-w-full max-w-full w-full"
-						onSend={onSend}
-						disabled={disabled}
-						autoComplete={autoComplete}
-						allowedInputTypes={allowedInputTypes}
-						fileProcessor={fileProcessor}
-						phase={phase}
-						onInterrupt={onInterrupt}
-						voiceState={voiceState}
-						onVoiceToggle={onVoiceToggle}
-						voiceDisabled={voiceDisabled}
-						headerSlot={
-							<div className="flex w-full items-center justify-between px-2 py-1 text-sm text-muted-foreground">
-								<WorkingDirectoryDialog
-									agentId={agentId}
-									sessionId={sessionId}
-									value={cwd}
-									onChange={onCwdChange}
-								/>
-								{git && (
-									<Button
-										className="font-mono"
-										variant="secondary"
-										size="sm"
-										onClick={() => void onRefreshGit?.()}
-										title={t('workdir.gitTooltip', {
-											staged: git.staged,
-											unstaged: git.unstaged,
-											untracked: git.untracked,
-										})}
-									>
-										<GitBranch />
-										{/* A detached HEAD has no branch to name, so
-										    fall back to the commit it sits on. The
-										    server sends no git at all when it has
-										    neither. */}
-										{git.branch ?? git.head?.slice(0, 7)}
-										{git.ahead !== null && git.ahead > 0 && (
-											<span className="text-xs">↑{git.ahead}</span>
-										)}
-										{git.behind !== null && git.behind > 0 && (
-											<span className="text-xs">↓{git.behind}</span>
-										)}
-										{/* Renders nothing when both are zero, so a
-										    clean tree shows just the branch. */}
-										<DiffStats
-											className="text-xs font-mono"
-											insertions={git.insertions}
-											deletions={git.deletions}
-										/>
-									</Button>
-								)}
-							</div>
-						}
-					/>
-				</div>
-			)}
+							{git && (
+								<Button
+									className="font-mono"
+									variant="secondary"
+									size="sm"
+									onClick={() => void onRefreshGit?.()}
+									title={t('workdir.gitTooltip', {
+										staged: git.staged,
+										unstaged: git.unstaged,
+										untracked: git.untracked,
+									})}
+								>
+									<GitBranch />
+									{/* A detached HEAD has no branch to name, so
+									    fall back to the commit it sits on. The
+									    server sends no git at all when it has
+									    neither. */}
+									{git.branch ?? git.head?.slice(0, 7)}
+									{git.ahead !== null && git.ahead > 0 && (
+										<span className="text-xs">↑{git.ahead}</span>
+									)}
+									{git.behind !== null && git.behind > 0 && (
+										<span className="text-xs">↓{git.behind}</span>
+									)}
+									{/* Renders nothing when both are zero, so a
+									    clean tree shows just the branch. */}
+									<DiffStats
+										className="text-xs font-mono"
+										insertions={git.insertions}
+										deletions={git.deletions}
+									/>
+								</Button>
+							)}
+						</div>
+					}
+				/>
+			</div>
 		</div>
 	);
 };

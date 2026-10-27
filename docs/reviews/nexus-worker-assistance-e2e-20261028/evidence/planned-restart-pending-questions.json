@@ -1,0 +1,67 @@
+{
+  "tasks": [
+    {
+      "before": {
+        "id": "T-20261027-1907AD",
+        "status": "SUCCEEDED",
+        "current_session_id": "dsh_b1f2283aabf944fc9759107fe8d7394e",
+        "last_message_id": "sub_de3047bd3692426ab9c13e24b1278ded"
+      },
+      "after": {
+        "id": "T-20261027-1907AD",
+        "status": "SUCCEEDED",
+        "current_session_id": "dsh_b1f2283aabf944fc9759107fe8d7394e",
+        "last_message_id": "sub_de3047bd3692426ab9c13e24b1278ded",
+        "human_required_reason": null
+      }
+    },
+    {
+      "before": {
+        "id": "T-20261027-316E5A",
+        "status": "WAITING",
+        "current_session_id": "dsh_33dbee199fa2454b8a436d2606de34bf",
+        "last_message_id": "msg_17e401b2c000316a380a53ee92"
+      },
+      "after": {
+        "id": "T-20261027-316E5A",
+        "status": "WAITING",
+        "current_session_id": "dsh_33dbee199fa2454b8a436d2606de34bf",
+        "last_message_id": "msg_17e401b2c000316a380a53ee92",
+        "human_required_reason": "执行结束，待确认"
+      }
+    },
+    {
+      "before": {
+        "id": "T-20261027-AD1948",
+        "status": "SUCCEEDED",
+        "current_session_id": "ses_e81c25c67ffepDTyqImymegN3F",
+        "last_message_id": "msg_17e3da183000e778f43c785c13"
+      },
+      "after": {
+        "id": "T-20261027-AD1948",
+        "status": "SUCCEEDED",
+        "current_session_id": "ses_e81c25c67ffepDTyqImymegN3F",
+        "last_message_id": "msg_17e3da183000e778f43c785c13",
+        "human_required_reason": null
+      }
+    },
+    {
+      "before": {
+        "id": "T-20261027-CC81DD",
+        "status": "WAITING",
+        "current_session_id": "ses_e81bf25f5ffebsMgoFEpwy80ne",
+        "last_message_id": "msg_17e40d7fb000891e878500b0b6"
+      },
+      "after": {
+        "id": "T-20261027-CC81DD",
+        "status": "WAITING",
+        "current_session_id": "ses_e81bf25f5ffebsMgoFEpwy80ne",
+        "last_message_id": "msg_17e40d7fb000891e878500b0b6",
+        "human_required_reason": "等待数字员工处理问题或权限请求"
+      }
+    }
+  ],
+  "opencode_pending_question_ids": [
+    "que_17e40e61f001BUjo93nrsTE15q"
+  ]
+}

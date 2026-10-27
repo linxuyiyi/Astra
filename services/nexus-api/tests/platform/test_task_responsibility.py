@@ -8,6 +8,7 @@ from app.domain import RuntimeSessionStatus, TaskStatus
 from app.models import AgentWorker, Base, Event, RuntimeSession, Task, TaskWakeOutbox
 from app.runtime.lifecycle import RuntimeService
 from app.runtime.opencode_model import direct_model, gateway_model, route_model_id
+from app.runtime.presentation import TASK_STATUS
 from app.schemas import TaskCreate
 from app.services import TaskService
 from app.task_tools import TaskTools
@@ -27,6 +28,28 @@ async def session():
 
 def _create(**overrides) -> TaskCreate:
     return new_task(**overrides)
+
+
+@pytest.mark.parametrize("state", list(TaskStatus))
+async def test_employee_task_results_supply_chinese_labels_and_original_codes(session, state):
+    from app.task_tools import nexus_employee_id
+
+    task = await TaskService(session).create(_create(responsible_employee_id="emp_1"))
+    task.status = state.value
+    await session.commit()
+    token = nexus_employee_id.set("emp_1")
+    try:
+        tools = TaskTools(session)
+        listed = await tools.list()
+        responses = [listed["tasks"][0]]
+        for method in (tools.get, tools.logs, tools.result, tools.summary):
+            responses.append(await method(task.id))
+        responses.append(tools._refuse(task, "测试拒绝"))
+        for result in responses:
+            assert result["status"] == state.value
+            assert result["runtime_status_label"] == TASK_STATUS[state.value]["label"]
+    finally:
+        nexus_employee_id.reset(token)
 
 
 async def test_same_idempotency_key_returns_the_existing_task(session):

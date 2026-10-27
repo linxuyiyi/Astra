@@ -1,0 +1,90 @@
+{
+  "native_session_id": "9228544d-740a-4860-a5da-66486e570e87",
+  "sha256": "91a647e65c9a4aab771f4f7efa84a45bf8f9db75db3fafb1f583890a23526db3",
+  "events": [
+    {
+      "type": "approval/asked",
+      "seq": 15,
+      "time": 1793120341194,
+      "data": {
+        "id": "aa734453-59cd-4d39-96aa-6c5677b8ba2c",
+        "toolName": "bash",
+        "callId": "call_00_AriHh0DyjmpkL8RWQ9sQ2113",
+        "reason": "escalate sandbox to danger-full-access: 只打印固定标记的 ACP 一次性审批验证"
+      }
+    },
+    {
+      "type": "approval/decided",
+      "seq": 16,
+      "time": 1793120344729,
+      "data": {
+        "id": "aa734453-59cd-4d39-96aa-6c5677b8ba2c",
+        "outcome": "allowed-once"
+      }
+    },
+    {
+      "type": "job/settled",
+      "seq": 18,
+      "time": 1793120344846,
+      "data": {
+        "jobId": "bash-c8ddd0e2e3a94671",
+        "owner": "9228544d-740a-4860-a5da-66486e570e87",
+        "kind": "bash",
+        "label": "printf ACP_PERMISSION_E2E_OK",
+        "startedAt": 1793120344783,
+        "toolCall": {
+          "callId": "call_00_AriHh0DyjmpkL8RWQ9sQ2113",
+          "rootCallId": "call_00_AriHh0DyjmpkL8RWQ9sQ2113"
+        },
+        "finishedAt": 1793120344846,
+        "status": "completed",
+        "cause": "producer",
+        "producerReported": true,
+        "detail": "exit code: 0"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 19,
+      "time": 1793120344852,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "call_00_AriHh0DyjmpkL8RWQ9sQ2113"
+          },
+          "toolCallId": "call_00_AriHh0DyjmpkL8RWQ9sQ2113",
+          "content": [
+            {
+              "type": "text",
+              "text": "ACP_PERMISSION_E2E_OK"
+            }
+          ],
+          "isError": false,
+          "id": "7b256de1-d846-430a-a9c6-5d57c44f89b2"
+        },
+        "meta": {
+          "cwd": "/tmp/nexus-assistance-e2e-20261028/dsh/.astra-tasks/assist-dsh-20261028/T-20261027-0BD234-env-2"
+        }
+      },
+      "sourceEventSeqs": [
+        14
+      ],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "turn/end",
+      "seq": 24,
+      "time": 1793120347600,
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}

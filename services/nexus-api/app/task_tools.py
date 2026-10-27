@@ -375,6 +375,7 @@ class TaskTools:
             "ok": True,
             "task_id": task.id,
             "status": task.status,
+            "runtime_status_label": task.runtime_status_label,
             "events": [
                 {"id": item.id, "event_type": item.event_type, "message": item.message, "detail": item.detail}
                 for item in rows
@@ -389,6 +390,7 @@ class TaskTools:
             "ok": True,
             "task_id": task.id,
             "status": task.status,
+            "runtime_status_label": task.runtime_status_label,
             "current_progress": task.current_progress,
             "failure_reason": task.failure_reason,
             "workspace": task.workspace,
@@ -430,6 +432,7 @@ class TaskTools:
             "ok": True,
             "task_id": task.id,
             "status": task.status,
+            "runtime_status_label": task.runtime_status_label,
             "current_progress": task.current_progress,
             "task_url": f"/tasks/{task.id}",
             "review": None
@@ -468,6 +471,62 @@ class TaskTools:
         await self.session.commit()
         await self.session.refresh(task)
         return self._ok(task)
+
+    def _assistance(self):
+        from app.runtime.assistance import WorkerAssistance
+
+        return WorkerAssistance(
+            RuntimeService(self.session), employee_id=_text(nexus_employee_id.get()),
+            source_session_id=_text(nexus_session_id.get()),
+        )
+
+    async def assistance(self, task_id: str, cursor: int = 0) -> dict[str, Any]:
+        task = await self._owned(task_id)
+        if isinstance(task, dict):
+            return task
+        try:
+            return await self._assistance().read(task_id, cursor=cursor)
+        except (RuntimeStateError, ValueError) as exc:
+            return await self._runtime_failure(task_id, str(exc))
+        except Exception as exc:
+            return await self._runtime_failure(task_id, **self._assistance_error(exc))
+
+    async def reply(
+        self, task_id: str, expected_session_id: str, request_id: str, kind: str,
+        answers: list[list[str]] | None = None, decision: str | None = None,
+    ) -> dict[str, Any]:
+        task = await self._owned(task_id)
+        if isinstance(task, dict):
+            return task
+        if not expected_session_id or not request_id:
+            return self._refuse(task, "必须提供查询得到的执行会话和请求标识")
+        try:
+            return await self._assistance().reply(
+                task_id, expected_session_id=expected_session_id, request_id=request_id,
+                kind=kind, answers=answers, decision=decision,
+            )
+        except (RuntimeStateError, ValueError) as exc:
+            return await self._runtime_failure(task_id, str(exc))
+        except Exception as exc:
+            return await self._runtime_failure(task_id, **self._assistance_error(exc))
+
+    async def input(
+        self, task_id: str, expected_session_id: str, expected_submission_id: str, text: str,
+    ) -> dict[str, Any]:
+        task = await self._owned(task_id)
+        if isinstance(task, dict):
+            return task
+        if not expected_session_id or not expected_submission_id:
+            return self._refuse(task, "必须提供查询得到的执行会话和回合标识")
+        return await self._runtime(task, lambda: self._assistance().input(
+            task_id, expected_session_id=expected_session_id,
+            expected_submission_id=expected_submission_id, text=text,
+        ))
+
+    @staticmethod
+    def _assistance_error(exc):
+        failure = classify_runtime_error(exc)
+        return {"reason": failure["error"], "failure_code": failure["failure_code"], "hint": failure["hint"]}
 
     async def confirm(self, task_id: str) -> dict[str, Any]:
         task = await self._owned(task_id)
@@ -552,7 +611,10 @@ class TaskTools:
         failure_code: str | None = None,
         hint: str | None = None,
     ) -> dict[str, Any]:
-        body = {"ok": False, "error": error, "task_id": task.id, "status": task.status}
+        body = {
+            "ok": False, "error": error, "task_id": task.id,
+            "status": task.status, "runtime_status_label": task.runtime_status_label,
+        }
         if failure_code:
             body["failure_code"] = failure_code
         if hint:
@@ -564,6 +626,7 @@ class TaskTools:
             "task_id": task.id,
             "title": task.title,
             "status": task.status,
+            "runtime_status_label": task.runtime_status_label,
             "task_type": task.task_type,
             "category_id": task.category_id,
             "repository_id": task.repository_id,

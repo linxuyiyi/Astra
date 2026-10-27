@@ -1,0 +1,35 @@
+{
+  "branch": "v1.4.8",
+  "build_checkout": "/Users/niuniu/.codex/worktrees/publish-worker-assistance/Astra",
+  "source_matches_main_checkout": true,
+  "chat_public_equals_dist": true,
+  "chat_files": 316,
+  "entrypoints_and_index_assets": {
+    "services/nexus-api/web/public/nexus-chat/index.html": "ad7f7e67f6f5e0aded4e3b628702815c1c37372627184b1e1a6b01860859e1c4",
+    "services/nexus-api/web/public/nexus-chat/assets/index-BPOEM-So.css": "58dfc84449bc03e3f2af1ea131345c1c3165345e6c8c15b0061f9fc7913f674f",
+    "services/nexus-api/web/public/nexus-chat/assets/index-D8DzUojY.js": "97edab168a8abb6b8d685405a9f38b59fcc40ffd012c63b2395e07a992256da4",
+    "services/nexus-api/web/dist/index.html": "35a7ebeed833da4eb654629bf43b9a23fc419fc4338037e03cf59b9eb90853cf",
+    "services/nexus-api/web/dist/agentscope-ui/index.html": "69d92314b0f511883d6a11ef00366873e6051d5636c39dc763453e121d38e772",
+    "services/nexus-api/web/dist/assets/index-D-ZgHDqc.js": "052520e03bece60b92161aba1ebbded46338d0c8e7958eff0cce0266db536cf7",
+    "services/nexus-api/web/dist/assets/index-poDNwBm4.css": "1568c3d1fb28647b954b7b65727e0c88975e120641898c5a726b2a1a730524cb",
+    "services/nexus-api/web/dist/nexus-chat/index.html": "ad7f7e67f6f5e0aded4e3b628702815c1c37372627184b1e1a6b01860859e1c4",
+    "services/nexus-api/web/dist/nexus-chat/assets/index-BPOEM-So.css": "58dfc84449bc03e3f2af1ea131345c1c3165345e6c8c15b0061f9fc7913f674f",
+    "services/nexus-api/web/dist/nexus-chat/assets/index-D8DzUojY.js": "97edab168a8abb6b8d685405a9f38b59fcc40ffd012c63b2395e07a992256da4",
+    "services/nexus-api/web/dist/agentscope-ui/assets/index-DWT_a0-j.js": "0c38ee33be59c8edb1b45b0c42309212fa017177aa8c03bb001b62ac7c6e97f0",
+    "services/nexus-api/web/dist/agentscope-ui/assets/index-BpoEJNXH.css": "3311bfbec5149049217d7142658f6fe7d1c0270b806c47f228c26ac01faabeff",
+    "services/nexus-api/web/dist/opencode-workspace/1.18.35/index.html": "b513e24640cc30939637ba4764458fbf5caaea40879b5a06a058803bc72c3d93",
+    "services/nexus-api/web/dist/opencode-workspace/1.18.35/assets/index-v-pf0UBp.js": "a77786bdfde176adee23d7e92bcb379866243c29a59ca5bdc7fe653b92ada55d",
+    "services/nexus-api/web/dist/opencode-workspace/1.18.35/assets/index-ps7knGWE.css": "e0c927c24b349ca35669097fc8a5f8b701d84062ebb3e0851a3426dc1d0d7e75",
+    "services/nexus-api/web/dist/opencode-workspace/1.18.35/assets/index-BPuvp5_E.js": "6d13846d4d43e40d97312e7558bc110dd7089f8cf46983c7cd0bfab5d0e91ddd",
+    "services/nexus-api/web/dist/opencode-workspace/1.18.35/assets/index-GGAIvKVQ.css": "fd8996d5c7e394834c896431fe2ce2f343e3ed3f1a50766aaf863114810b9680"
+  },
+  "verification": {
+    "backend_passed": 502,
+    "backend_skipped": 6,
+    "chat_tests_passed": 17,
+    "web_tests_passed": 30,
+    "ruff": "passed",
+    "chat_build": "passed",
+    "web_build": "passed"
+  }
+}

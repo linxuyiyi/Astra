@@ -1,0 +1,8 @@
+{
+  "at": 1793121174.0830247,
+  "stopped": {
+    "opencode-server": true,
+    "opencode-worker": true,
+    "dsh-worker": true
+  }
+}

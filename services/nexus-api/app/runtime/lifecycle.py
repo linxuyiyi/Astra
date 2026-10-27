@@ -66,7 +66,7 @@ from app.runtime.session_connection import (
 )
 from app.runtime.session_state import SessionState, derive_session_state
 from app.runtime.submission import body_fetched_at, get_attempt, mark_body_fetched, put_attempt
-from app.runtime.wake_outbox import record_wake
+from app.runtime.wake_outbox import record_assistance_requests, record_wake
 from app.runtime.worker_channel import read_worker_channel
 from app.runtime.workspace_changes import workspace_head_commit
 from app.runtime.workspace_files import materialize_task_attachments
@@ -89,7 +89,7 @@ def _confirm_blocked(session_status: str) -> str:
     if session_status == RuntimeSessionStatus.RUNNING.value:
         return "Session 仍在执行，请先停止当前回复"
     if session_status == RuntimeSessionStatus.WAITING.value:
-        return "仍有问题或权限请求，请先在 Workspace 处理"
+        return "仍有问题或权限请求，请先通过责任数字员工处理"
     if session_status == RuntimeSessionStatus.UNKNOWN.value:
         return "连接异常，状态待确认，不能确认任务完成"
     return "当前轮尚未正常结束，不能确认任务完成"
@@ -212,7 +212,7 @@ def _cancel_closes_task(task: Task) -> bool:
     return bool(record.get("close"))
 
 
-_QUESTION_REASON = "请在 Workspace 回答问题或权限请求"
+_QUESTION_REASON = "等待数字员工处理问题或权限请求"
 _RECOVERY_REASON = {
     SessionTerminalReason.ASSISTANT_ERROR.value: "OpenCode 返回执行错误，可在 Workspace 继续",
     SessionTerminalReason.NO_REPLY.value: "当前轮无回复，可在 Workspace 继续",
@@ -949,7 +949,9 @@ class RuntimeService:
             allowed_sessions = await session_tree(client, Path(workspace), submitted_session)
             pending = await client.questions(Path(workspace)) + await client.permissions(Path(workspace))
             if any(item.get("sessionID") in allowed_sessions for item in pending):
-                raise RuntimeStateError("请先在 Workspace 回答当前 Session 树中的问题或权限请求")
+                raise RuntimeStateError(
+                    "请先通过责任数字员工回答当前执行会话及其子会话中的问题或处理权限请求"
+                )
 
         # Short transaction: revalidate the binding and reserve this submission.
         task = await self.lock_task(task_id)
@@ -1899,14 +1901,20 @@ class RuntimeService:
         state = derive_session_state(
             messages=messages,
             server_status=status,
-            has_pending_question=has_pending,
-            has_pending_permission=False,
+            has_pending_question=any(item.get("sessionID") in allowed_sessions for item in questions),
+            has_pending_permission=any(item.get("sessionID") in allowed_sessions for item in permissions),
             pending_ack=False,
             turn_anchor_id=task.last_message_id,
             turn_started_at=task.turn_started_at,
             timed_out=timed_out,
             grace_seconds=get_settings().opencode_no_reply_grace_seconds,
         )
+        if state.status == RuntimeSessionStatus.WAITING.value:
+            await record_assistance_requests(self.session, task, [
+                f"{kind}:{item['id']}"
+                for kind, items in (("question", questions), ("permission", permissions))
+                for item in items if item.get("sessionID") in allowed_sessions
+            ])
         await self.apply_session_state(task, state)
         return task
 
@@ -1970,7 +1978,7 @@ class RuntimeService:
                     raise RuntimeStateError("Session 仍在执行，请先停止当前回复")
             pending = await client.questions(directory) + await client.permissions(directory)
             if any(item.get("sessionID") in allowed for item in pending):
-                raise RuntimeStateError("仍有问题或权限请求，请先在 Workspace 处理")
+                raise RuntimeStateError("仍有问题或权限请求，请先通过责任数字员工处理")
             messages, count = await self._collect_final_usage(client, directory, session_id)
             # Capture the native root outcome before taking the Task lock. Usage
             # includes descendants; they must never determine the root's result.

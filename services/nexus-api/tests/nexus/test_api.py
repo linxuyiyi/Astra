@@ -381,6 +381,39 @@ def test_wake_target_uses_mailbox_and_rejects_foreign_session(client):
     assert foreign.status_code == 404
 
 
+@pytest.mark.parametrize("unavailable", [False, True])
+def test_private_task_wake_refreshes_assistance_before_delivery(client, monkeypatch, unavailable):
+    from nexus_api.db import connect
+
+    employee = client.post(
+        "/api/v1/employees", json=employee_body(skills=["task-management"]),
+    ).json()["employee"]
+    conversation = client.post(f"/api/v1/employees/{employee['id']}/conversations",
+                               json={"name": "求助来源"}).json()
+    with connect() as db:
+        db.execute(sql_text("UPDATE t_nexus_employees SET agentscope_agent_id='agent-task' WHERE id=:i"),
+                   {"i": employee["id"]})
+        db.execute(
+            sql_text("UPDATE t_nexus_conversations SET agentscope_session_id='session-task' WHERE id=:i"),
+            {"i": conversation["id"]},
+        )
+        db.commit()
+    calls = []
+
+    async def attach(_client, staff, sid, **kwargs):
+        calls.append((staff["id"], sid, kwargs))
+        if unavailable:
+            raise AgentScopeError("unavailable")
+
+    monkeypatch.setattr("nexus_api.main.attach_task_capability", attach)
+    response = client.get("/api/v1/internal/wake-target",
+                          params={"employee_id": employee["id"], "session_id": "session-task"})
+    assert response.status_code == (503 if unavailable else 200), response.text
+    assert calls == [
+        (employee["id"], "session-task", {"conversation_id": conversation["id"], "strict": True}),
+    ]
+
+
 def test_new_knowledge_and_tools_are_rejected_when_catalog_is_unavailable(client):
     assert client.get("/api/v1/knowledge").json() == {"available": False, "items": []}
     assert client.get("/api/v1/tools").json() == {"available": False, "items": []}

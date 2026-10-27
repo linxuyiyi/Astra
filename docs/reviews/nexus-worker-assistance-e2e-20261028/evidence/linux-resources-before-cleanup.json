@@ -1,0 +1,78 @@
+{
+  "at": 1793121173.9714026,
+  "bindings": [
+    {
+      "id": "dsh_b1f2283aabf944fc9759107fe8d7394e",
+      "task_id": "T-20261027-1907AD",
+      "native_id": "bae16a18-7acf-4662-b725-dfdf793487de",
+      "state": "succeeded",
+      "stop_reason": "end_turn",
+      "submission_id": "sub_de3047bd3692426ab9c13e24b1278ded",
+      "owner": null
+    },
+    {
+      "id": "dsh_33dbee199fa2454b8a436d2606de34bf",
+      "task_id": "T-20261027-316E5A",
+      "native_id": "3c848285-f7fa-4f6a-a4e6-6dc7cd39e975",
+      "state": "succeeded",
+      "stop_reason": "end_turn",
+      "submission_id": "sub_40df996640194ec7b49799c5e0ca8f28",
+      "owner": null
+    },
+    {
+      "id": "dsh_433e77b35ed146e29de08ff008c54a3c",
+      "task_id": "T-20261027-7E034B",
+      "native_id": "8914bd83-9e90-4873-b0e0-9454e2173523",
+      "state": "stopped",
+      "stop_reason": "cancelled",
+      "submission_id": "msg_17e48dec00008e63ef8a68c45b",
+      "owner": null
+    },
+    {
+      "id": "dsh_517b23327d624bcd9ba0c7b9ab11faa1",
+      "task_id": "T-20261027-0BD234",
+      "native_id": "9228544d-740a-4860-a5da-66486e570e87",
+      "state": "succeeded",
+      "stop_reason": "end_turn",
+      "submission_id": "msg_17e4cffcf00020f14e344a17c6",
+      "owner": null
+    }
+  ],
+  "owned_processes": {
+    "opencode-server": {
+      "pid": 588226,
+      "pgid": 588226,
+      "cwd": "/tmp/nexus-assistance-e2e-20261028/opencode/repo",
+      "original_create_time": 1793119186.28,
+      "observed_create_time": 1793119185.28,
+      "kernel_start_ticks": "46338928",
+      "command_sha256": "9c7d4d113b2c11d580107b1f400bad8217bb97ecdc8c2c497171cfc99e44fa9a",
+      "children_before": []
+    },
+    "opencode-worker": {
+      "pid": 588227,
+      "pgid": 588227,
+      "cwd": "/tmp/nexus-assistance-e2e-20261028/source/services/nexus-api",
+      "original_create_time": 1793119186.28,
+      "observed_create_time": 1793119185.28,
+      "kernel_start_ticks": "46338928",
+      "command_sha256": "db7085ee7181d25a41d6d8a0b22ec761a4e507d4658c5d413f54c15984cb0c03",
+      "children_before": []
+    },
+    "dsh-worker": {
+      "pid": 588228,
+      "pgid": 588228,
+      "cwd": "/tmp/nexus-assistance-e2e-20261028/source/services/nexus-api",
+      "original_create_time": 1793119186.29,
+      "observed_create_time": 1793119185.29,
+      "kernel_start_ticks": "46338929",
+      "command_sha256": "db7085ee7181d25a41d6d8a0b22ec761a4e507d4658c5d413f54c15984cb0c03",
+      "children_before": []
+    }
+  },
+  "identity_note": "All original psutil creation timestamps differ by exactly 1 second after guest wall-clock correction; exact command, dedicated cwd, pgid and Worker instance verified. Kernel start ticks rechecked immediately before signaling.",
+  "assertions": {
+    "all_dsh_owners_released": true,
+    "worker_children_zero": true
+  }
+}

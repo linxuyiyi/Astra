@@ -26,6 +26,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { PlatformTask } from '../platform'
+import { runtimeStatusLabel } from '../features/runtime/status'
 
 const props = defineProps<{
   tasks: PlatformTask[]
@@ -33,15 +34,6 @@ const props = defineProps<{
   hideResponsible?: boolean
   emptyText?: string
 }>()
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: '待启动',
-  RUNNING: '执行中',
-  WAITING: '等待处理',
-  SUCCEEDED: '已完成',
-  FAILED: '执行失败',
-  CANCELED: '已取消',
-}
 
 const active = computed(() => props.tasks.filter((task) => !isHistory(task)).slice().sort(byRank))
 const history = computed(() => props.tasks.filter((task) => isHistory(task)).slice().sort((a, b) => a.title.localeCompare(b.title, 'zh')))
@@ -63,7 +55,7 @@ function rank(task: PlatformTask) {
 }
 
 function statusText(task: PlatformTask) {
-  return task.runtime_status_label || STATUS_LABEL[task.status] || task.status
+  return runtimeStatusLabel(task.status, task.runtime_status_label)
 }
 
 function tone(task: PlatformTask) {

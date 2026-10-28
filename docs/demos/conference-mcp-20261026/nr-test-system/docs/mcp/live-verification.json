@@ -1,0 +1,311 @@
+{
+  "timestamp": "2026-10-26T11:20:53.858243+00:00",
+  "api_base_url": "http://127.0.0.1:8000/api/v1",
+  "protocol_version": "2025-11-25",
+  "server_info": {
+    "name": "nr-product-version",
+    "title": "NR 产品版本查询",
+    "version": "0.1.0",
+    "description": "按关键字、产品与状态检索产品版本，并查看版本详情。",
+    "website_url": null,
+    "icons": null
+  },
+  "tools": [
+    {
+      "name": "list_versions",
+      "description": "查询产品版本列表。支持关键字搜索、按产品名/状态筛选与分页；返回 count、page、page_size、results，字段与既有 HTTP API 一致。",
+      "input_schema": {
+        "properties": {
+          "search": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "关键字，匹配产品名或版本号（对应 HTTP search 参数）",
+            "title": "Search"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "产品名精确匹配（忽略大小写，对应 HTTP product_name 参数）",
+            "title": "Product Name"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "版本状态，只能是 DRAFT、RELEASED、ARCHIVED",
+            "title": "Status"
+          },
+          "page": {
+            "default": 1,
+            "description": "页码，从 1 开始",
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 20,
+            "description": "每页条数，1..100",
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "title": "list_versionsArguments"
+      },
+      "annotations": {
+        "title": null,
+        "read_only_hint": true,
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": true
+      }
+    },
+    {
+      "name": "get_version",
+      "description": "按版本 UUID 查询单个产品版本的完整详情，字段与既有 HTTP 详情接口一致。",
+      "input_schema": {
+        "properties": {
+          "version_id": {
+            "description": "产品版本 UUID，例如 11111111-1111-4111-8111-111111111111",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_id"
+        ],
+        "type": "object",
+        "title": "get_versionArguments"
+      },
+      "annotations": {
+        "title": null,
+        "read_only_hint": true,
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": true
+      }
+    }
+  ],
+  "calls": [
+    {
+      "tool": "list_versions",
+      "arguments": {
+        "search": "NR",
+        "page": 1,
+        "page_size": 2
+      },
+      "is_error": false,
+      "structured_content": {
+        "count": 4,
+        "page": 1,
+        "page_size": 2,
+        "results": [
+          {
+            "id": "d3d82e3d-2910-4942-b8dd-d35997082e26",
+            "product_name": "NR 其他产品",
+            "version": "v2.0.0",
+            "status": "ARCHIVED",
+            "release_date": null,
+            "description": "MCP 联调样例：其他产品归档版本",
+            "is_default": false,
+            "created_by_name": "mcp_verify",
+            "updated_by_name": "mcp_verify",
+            "created_at": "2026-10-26T19:19:09.947338+08:00",
+            "updated_at": "2026-10-26T19:19:09.947363+08:00"
+          },
+          {
+            "id": "4ee62e32-9cea-41f7-89bc-c1117b5d708c",
+            "product_name": "NR 测试套件",
+            "version": "v1.3.0",
+            "status": "DRAFT",
+            "release_date": null,
+            "description": "MCP 联调样例：草稿版本",
+            "is_default": false,
+            "created_by_name": "mcp_verify",
+            "updated_by_name": "mcp_verify",
+            "created_at": "2026-10-26T19:19:09.838675+08:00",
+            "updated_at": "2026-10-26T19:19:09.838692+08:00"
+          }
+        ]
+      },
+      "direct_http": {
+        "count": 4,
+        "page": 1,
+        "page_size": 2,
+        "results": [
+          {
+            "id": "d3d82e3d-2910-4942-b8dd-d35997082e26",
+            "product_name": "NR 其他产品",
+            "version": "v2.0.0",
+            "status": "ARCHIVED",
+            "release_date": null,
+            "description": "MCP 联调样例：其他产品归档版本",
+            "is_default": false,
+            "created_by_name": "mcp_verify",
+            "updated_by_name": "mcp_verify",
+            "created_at": "2026-10-26T19:19:09.947338+08:00",
+            "updated_at": "2026-10-26T19:19:09.947363+08:00"
+          },
+          {
+            "id": "4ee62e32-9cea-41f7-89bc-c1117b5d708c",
+            "product_name": "NR 测试套件",
+            "version": "v1.3.0",
+            "status": "DRAFT",
+            "release_date": null,
+            "description": "MCP 联调样例：草稿版本",
+            "is_default": false,
+            "created_by_name": "mcp_verify",
+            "updated_by_name": "mcp_verify",
+            "created_at": "2026-10-26T19:19:09.838675+08:00",
+            "updated_at": "2026-10-26T19:19:09.838692+08:00"
+          }
+        ]
+      },
+      "matches_direct_http": true
+    },
+    {
+      "tool": "list_versions",
+      "arguments": {
+        "product_name": "NR 测试套件",
+        "status": "RELEASED",
+        "page": 1,
+        "page_size": 20
+      },
+      "is_error": false,
+      "structured_content": {
+        "count": 2,
+        "page": 1,
+        "page_size": 20,
+        "results": [
+          {
+            "id": "a4d78c72-3b33-4f6a-84d4-29435f88dfca",
+            "product_name": "NR 测试套件",
+            "version": "v1.2.1",
+            "status": "RELEASED",
+            "release_date": null,
+            "description": "MCP 联调样例：补丁版本",
+            "is_default": false,
+            "created_by_name": "mcp_verify",
+            "updated_by_name": "mcp_verify",
+            "created_at": "2026-10-26T19:19:09.734158+08:00",
+            "updated_at": "2026-10-26T19:19:09.734172+08:00"
+          },
+          {
+            "id": "9a7693a0-c69f-44d4-a21c-bf9dd2432d5a",
+            "product_name": "NR 测试套件",
+            "version": "v1.2.0",
+            "status": "RELEASED",
+            "release_date": null,
+            "description": "MCP 联调样例：已发布版本",
+            "is_default": false,
+            "created_by_name": "mcp_verify",
+            "updated_by_name": "mcp_verify",
+            "created_at": "2026-10-26T19:19:09.636362+08:00",
+            "updated_at": "2026-10-26T19:19:09.636372+08:00"
+          }
+        ]
+      },
+      "direct_http": {
+        "count": 2,
+        "page": 1,
+        "page_size": 20,
+        "results": [
+          {
+            "id": "a4d78c72-3b33-4f6a-84d4-29435f88dfca",
+            "product_name": "NR 测试套件",
+            "version": "v1.2.1",
+            "status": "RELEASED",
+            "release_date": null,
+            "description": "MCP 联调样例：补丁版本",
+            "is_default": false,
+            "created_by_name": "mcp_verify",
+            "updated_by_name": "mcp_verify",
+            "created_at": "2026-10-26T19:19:09.734158+08:00",
+            "updated_at": "2026-10-26T19:19:09.734172+08:00"
+          },
+          {
+            "id": "9a7693a0-c69f-44d4-a21c-bf9dd2432d5a",
+            "product_name": "NR 测试套件",
+            "version": "v1.2.0",
+            "status": "RELEASED",
+            "release_date": null,
+            "description": "MCP 联调样例：已发布版本",
+            "is_default": false,
+            "created_by_name": "mcp_verify",
+            "updated_by_name": "mcp_verify",
+            "created_at": "2026-10-26T19:19:09.636362+08:00",
+            "updated_at": "2026-10-26T19:19:09.636372+08:00"
+          }
+        ]
+      },
+      "matches_direct_http": true
+    },
+    {
+      "tool": "get_version",
+      "arguments": {
+        "version_id": "d3d82e3d-2910-4942-b8dd-d35997082e26"
+      },
+      "is_error": false,
+      "structured_content": {
+        "id": "d3d82e3d-2910-4942-b8dd-d35997082e26",
+        "product_name": "NR 其他产品",
+        "version": "v2.0.0",
+        "status": "ARCHIVED",
+        "release_date": null,
+        "description": "MCP 联调样例：其他产品归档版本",
+        "is_default": false,
+        "created_by_name": "mcp_verify",
+        "updated_by_name": "mcp_verify",
+        "created_at": "2026-10-26T19:19:09.947338+08:00",
+        "updated_at": "2026-10-26T19:19:09.947363+08:00"
+      },
+      "direct_http": {
+        "id": "d3d82e3d-2910-4942-b8dd-d35997082e26",
+        "product_name": "NR 其他产品",
+        "version": "v2.0.0",
+        "status": "ARCHIVED",
+        "release_date": null,
+        "description": "MCP 联调样例：其他产品归档版本",
+        "is_default": false,
+        "created_by_name": "mcp_verify",
+        "updated_by_name": "mcp_verify",
+        "created_at": "2026-10-26T19:19:09.947338+08:00",
+        "updated_at": "2026-10-26T19:19:09.947363+08:00"
+      },
+      "matches_direct_http": true
+    },
+    {
+      "tool": "list_versions",
+      "arguments": {
+        "page": 0
+      },
+      "is_error": true,
+      "error": {
+        "code": "validation_error",
+        "message": "page 必须是大于等于 1 的整数",
+        "details": {
+          "page": "必须为 >= 1 的整数"
+        }
+      }
+    }
+  ]
+}

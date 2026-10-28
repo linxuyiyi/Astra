@@ -1,0 +1,2166 @@
+From 350207a78603035c060f038d5456835cb4f228ff Mon Sep 17 00:00:00 2001
+From: Nexus Conference Demo <nexus-demo@localhost>
+Date: Mon, 26 Oct 2026 19:21:37 +0800
+Subject: [PATCH] feat: add read-only product version query MCP
+
+---
+ docs/mcp/live-verification.json               | 311 ++++++++++++++++++
+ docs/mcp/live-verification.md                 | 137 ++++++++
+ docs/mcp/version-query-mcp.md                 |  91 +++++
+ test_system_mcp/.env.example                  |   8 +
+ test_system_mcp/README.md                     | 165 ++++++++++
+ test_system_mcp/pyproject.toml                |  44 +++
+ test_system_mcp/scripts/live_mcp_check.py     | 274 +++++++++++++++
+ .../src/nr_version_mcp/__init__.py            |   3 +
+ .../src/nr_version_mcp/__main__.py            |  13 +
+ test_system_mcp/src/nr_version_mcp/client.py  | 189 +++++++++++
+ test_system_mcp/src/nr_version_mcp/config.py  |  59 ++++
+ test_system_mcp/src/nr_version_mcp/errors.py  |  42 +++
+ test_system_mcp/src/nr_version_mcp/server.py  | 115 +++++++
+ test_system_mcp/src/nr_version_mcp/service.py | 123 +++++++
+ test_system_mcp/tests/test_client.py          | 198 +++++++++++
+ test_system_mcp/tests/test_config.py          |  63 ++++
+ test_system_mcp/tests/test_service.py         | 125 +++++++
+ test_system_mcp/tests/test_tools.py           |  54 +++
+ 18 files changed, 2014 insertions(+)
+ create mode 100644 docs/mcp/live-verification.json
+ create mode 100644 docs/mcp/live-verification.md
+ create mode 100644 docs/mcp/version-query-mcp.md
+ create mode 100644 test_system_mcp/.env.example
+ create mode 100644 test_system_mcp/README.md
+ create mode 100644 test_system_mcp/pyproject.toml
+ create mode 100644 test_system_mcp/scripts/live_mcp_check.py
+ create mode 100644 test_system_mcp/src/nr_version_mcp/__init__.py
+ create mode 100644 test_system_mcp/src/nr_version_mcp/__main__.py
+ create mode 100644 test_system_mcp/src/nr_version_mcp/client.py
+ create mode 100644 test_system_mcp/src/nr_version_mcp/config.py
+ create mode 100644 test_system_mcp/src/nr_version_mcp/errors.py
+ create mode 100644 test_system_mcp/src/nr_version_mcp/server.py
+ create mode 100644 test_system_mcp/src/nr_version_mcp/service.py
+ create mode 100644 test_system_mcp/tests/test_client.py
+ create mode 100644 test_system_mcp/tests/test_config.py
+ create mode 100644 test_system_mcp/tests/test_service.py
+ create mode 100644 test_system_mcp/tests/test_tools.py
+
+diff --git a/docs/mcp/live-verification.json b/docs/mcp/live-verification.json
+new file mode 100644
+index 0000000..fa9fbcf
+--- /dev/null
++++ b/docs/mcp/live-verification.json
+@@ -0,0 +1,311 @@
++{
++  "timestamp": "2026-10-26T11:20:53.858243+00:00",
++  "api_base_url": "http://127.0.0.1:8000/api/v1",
++  "protocol_version": "2025-11-25",
++  "server_info": {
++    "name": "nr-product-version",
++    "title": "NR 产品版本查询",
++    "version": "0.1.0",
++    "description": "按关键字、产品与状态检索产品版本，并查看版本详情。",
++    "website_url": null,
++    "icons": null
++  },
++  "tools": [
++    {
++      "name": "list_versions",
++      "description": "查询产品版本列表。支持关键字搜索、按产品名/状态筛选与分页；返回 count、page、page_size、results，字段与既有 HTTP API 一致。",
++      "input_schema": {
++        "properties": {
++          "search": {
++            "anyOf": [
++              {
++                "type": "string"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "default": null,
++            "description": "关键字，匹配产品名或版本号（对应 HTTP search 参数）",
++            "title": "Search"
++          },
++          "product_name": {
++            "anyOf": [
++              {
++                "type": "string"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "default": null,
++            "description": "产品名精确匹配（忽略大小写，对应 HTTP product_name 参数）",
++            "title": "Product Name"
++          },
++          "status": {
++            "anyOf": [
++              {
++                "type": "string"
++              },
++              {
++                "type": "null"
++              }
++            ],
++            "default": null,
++            "description": "版本状态，只能是 DRAFT、RELEASED、ARCHIVED",
++            "title": "Status"
++          },
++          "page": {
++            "default": 1,
++            "description": "页码，从 1 开始",
++            "title": "Page",
++            "type": "integer"
++          },
++          "page_size": {
++            "default": 20,
++            "description": "每页条数，1..100",
++            "title": "Page Size",
++            "type": "integer"
++          }
++        },
++        "type": "object",
++        "title": "list_versionsArguments"
++      },
++      "annotations": {
++        "title": null,
++        "read_only_hint": true,
++        "destructive_hint": false,
++        "idempotent_hint": true,
++        "open_world_hint": true
++      }
++    },
++    {
++      "name": "get_version",
++      "description": "按版本 UUID 查询单个产品版本的完整详情，字段与既有 HTTP 详情接口一致。",
++      "input_schema": {
++        "properties": {
++          "version_id": {
++            "description": "产品版本 UUID，例如 11111111-1111-4111-8111-111111111111",
++            "title": "Version Id",
++            "type": "string"
++          }
++        },
++        "required": [
++          "version_id"
++        ],
++        "type": "object",
++        "title": "get_versionArguments"
++      },
++      "annotations": {
++        "title": null,
++        "read_only_hint": true,
++        "destructive_hint": false,
++        "idempotent_hint": true,
++        "open_world_hint": true
++      }
++    }
++  ],
++  "calls": [
++    {
++      "tool": "list_versions",
++      "arguments": {
++        "search": "NR",
++        "page": 1,
++        "page_size": 2
++      },
++      "is_error": false,
++      "structured_content": {
++        "count": 4,
++        "page": 1,
++        "page_size": 2,
++        "results": [
++          {
++            "id": "d3d82e3d-2910-4942-b8dd-d35997082e26",
++            "product_name": "NR 其他产品",
++            "version": "v2.0.0",
++            "status": "ARCHIVED",
++            "release_date": null,
++            "description": "MCP 联调样例：其他产品归档版本",
++            "is_default": false,
++            "created_by_name": "mcp_verify",
++            "updated_by_name": "mcp_verify",
++            "created_at": "2026-10-26T19:19:09.947338+08:00",
++            "updated_at": "2026-10-26T19:19:09.947363+08:00"
++          },
++          {
++            "id": "4ee62e32-9cea-41f7-89bc-c1117b5d708c",
++            "product_name": "NR 测试套件",
++            "version": "v1.3.0",
++            "status": "DRAFT",
++            "release_date": null,
++            "description": "MCP 联调样例：草稿版本",
++            "is_default": false,
++            "created_by_name": "mcp_verify",
++            "updated_by_name": "mcp_verify",
++            "created_at": "2026-10-26T19:19:09.838675+08:00",
++            "updated_at": "2026-10-26T19:19:09.838692+08:00"
++          }
++        ]
++      },
++      "direct_http": {
++        "count": 4,
++        "page": 1,
++        "page_size": 2,
++        "results": [
++          {
++            "id": "d3d82e3d-2910-4942-b8dd-d35997082e26",
++            "product_name": "NR 其他产品",
++            "version": "v2.0.0",
++            "status": "ARCHIVED",
++            "release_date": null,
++            "description": "MCP 联调样例：其他产品归档版本",
++            "is_default": false,
++            "created_by_name": "mcp_verify",
++            "updated_by_name": "mcp_verify",
++            "created_at": "2026-10-26T19:19:09.947338+08:00",
++            "updated_at": "2026-10-26T19:19:09.947363+08:00"
++          },
++          {
++            "id": "4ee62e32-9cea-41f7-89bc-c1117b5d708c",
++            "product_name": "NR 测试套件",
++            "version": "v1.3.0",
++            "status": "DRAFT",
++            "release_date": null,
++            "description": "MCP 联调样例：草稿版本",
++            "is_default": false,
++            "created_by_name": "mcp_verify",
++            "updated_by_name": "mcp_verify",
++            "created_at": "2026-10-26T19:19:09.838675+08:00",
++            "updated_at": "2026-10-26T19:19:09.838692+08:00"
++          }
++        ]
++      },
++      "matches_direct_http": true
++    },
++    {
++      "tool": "list_versions",
++      "arguments": {
++        "product_name": "NR 测试套件",
++        "status": "RELEASED",
++        "page": 1,
++        "page_size": 20
++      },
++      "is_error": false,
++      "structured_content": {
++        "count": 2,
++        "page": 1,
++        "page_size": 20,
++        "results": [
++          {
++            "id": "a4d78c72-3b33-4f6a-84d4-29435f88dfca",
++            "product_name": "NR 测试套件",
++            "version": "v1.2.1",
++            "status": "RELEASED",
++            "release_date": null,
++            "description": "MCP 联调样例：补丁版本",
++            "is_default": false,
++            "created_by_name": "mcp_verify",
++            "updated_by_name": "mcp_verify",
++            "created_at": "2026-10-26T19:19:09.734158+08:00",
++            "updated_at": "2026-10-26T19:19:09.734172+08:00"
++          },
++          {
++            "id": "9a7693a0-c69f-44d4-a21c-bf9dd2432d5a",
++            "product_name": "NR 测试套件",
++            "version": "v1.2.0",
++            "status": "RELEASED",
++            "release_date": null,
++            "description": "MCP 联调样例：已发布版本",
++            "is_default": false,
++            "created_by_name": "mcp_verify",
++            "updated_by_name": "mcp_verify",
++            "created_at": "2026-10-26T19:19:09.636362+08:00",
++            "updated_at": "2026-10-26T19:19:09.636372+08:00"
++          }
++        ]
++      },
++      "direct_http": {
++        "count": 2,
++        "page": 1,
++        "page_size": 20,
++        "results": [
++          {
++            "id": "a4d78c72-3b33-4f6a-84d4-29435f88dfca",
++            "product_name": "NR 测试套件",
++            "version": "v1.2.1",
++            "status": "RELEASED",
++            "release_date": null,
++            "description": "MCP 联调样例：补丁版本",
++            "is_default": false,
++            "created_by_name": "mcp_verify",
++            "updated_by_name": "mcp_verify",
++            "created_at": "2026-10-26T19:19:09.734158+08:00",
++            "updated_at": "2026-10-26T19:19:09.734172+08:00"
++          },
++          {
++            "id": "9a7693a0-c69f-44d4-a21c-bf9dd2432d5a",
++            "product_name": "NR 测试套件",
++            "version": "v1.2.0",
++            "status": "RELEASED",
++            "release_date": null,
++            "description": "MCP 联调样例：已发布版本",
++            "is_default": false,
++            "created_by_name": "mcp_verify",
++            "updated_by_name": "mcp_verify",
++            "created_at": "2026-10-26T19:19:09.636362+08:00",
++            "updated_at": "2026-10-26T19:19:09.636372+08:00"
++          }
++        ]
++      },
++      "matches_direct_http": true
++    },
++    {
++      "tool": "get_version",
++      "arguments": {
++        "version_id": "d3d82e3d-2910-4942-b8dd-d35997082e26"
++      },
++      "is_error": false,
++      "structured_content": {
++        "id": "d3d82e3d-2910-4942-b8dd-d35997082e26",
++        "product_name": "NR 其他产品",
++        "version": "v2.0.0",
++        "status": "ARCHIVED",
++        "release_date": null,
++        "description": "MCP 联调样例：其他产品归档版本",
++        "is_default": false,
++        "created_by_name": "mcp_verify",
++        "updated_by_name": "mcp_verify",
++        "created_at": "2026-10-26T19:19:09.947338+08:00",
++        "updated_at": "2026-10-26T19:19:09.947363+08:00"
++      },
++      "direct_http": {
++        "id": "d3d82e3d-2910-4942-b8dd-d35997082e26",
++        "product_name": "NR 其他产品",
++        "version": "v2.0.0",
++        "status": "ARCHIVED",
++        "release_date": null,
++        "description": "MCP 联调样例：其他产品归档版本",
++        "is_default": false,
++        "created_by_name": "mcp_verify",
++        "updated_by_name": "mcp_verify",
++        "created_at": "2026-10-26T19:19:09.947338+08:00",
++        "updated_at": "2026-10-26T19:19:09.947363+08:00"
++      },
++      "matches_direct_http": true
++    },
++    {
++      "tool": "list_versions",
++      "arguments": {
++        "page": 0
++      },
++      "is_error": true,
++      "error": {
++        "code": "validation_error",
++        "message": "page 必须是大于等于 1 的整数",
++        "details": {
++          "page": "必须为 >= 1 的整数"
++        }
++      }
++    }
++  ]
++}
+diff --git a/docs/mcp/live-verification.md b/docs/mcp/live-verification.md
+new file mode 100644
+index 0000000..e63cec8
+--- /dev/null
++++ b/docs/mcp/live-verification.md
+@@ -0,0 +1,137 @@
++# 产品版本查询 MCP 真实协议验证记录
++
++- 任务：T-20261026-149C47
++- 执行时间：2026-10-26T11:20:53Z
++- 环境：本地开发环境 `http://127.0.0.1:8000/api/v1`
++- 后端：本仓库 Django 5.2 + DRF，SQLite 隔离库（`.runtime/mcp-live/db.sqlite3`）
++- MCP：`nr-product-version` 0.1.0，stdio 传输
++- 协议版本：`2025-11-25`
++- 原始记录：[`live-verification.json`](live-verification.json)
++
++## 验证方式
++
++使用真实 MCP 客户端 `mcp.client.stdio.stdio_client` + `ClientSession`：
++
++1. 通过既有 `/api/v1/auth/login/` 获取真实 Session，Cookie 仅保存在内存并通过子进程环境变量
++   注入 MCP Server；未打印、未写入文件。
++2. 通过既有版本 API 准备 4 条本地联调数据（2 个产品、3 种状态）。
++3. 完成 MCP `initialize` 握手并 `tools/list`。
++4. 依次调用 `list_versions` 搜索、筛选分页、`get_version` 详情与一个非法参数错误分支。
++5. 对每次成功调用，用同一会话直接请求对应 HTTP API，并比较返回 JSON 是否完全一致。
++
++复现命令（使用本地测试账号，不要把真实凭据写入文件）：
++
++```bash
++cd test_system_mcp
++NR_MCP_API_BASE_URL=http://127.0.0.1:8000/api/v1 \
++NR_MCP_TEST_USERNAME=... \
++NR_MCP_TEST_PASSWORD=... \
++uv run python scripts/live_mcp_check.py \
++  --output ../docs/mcp/live-verification.json
++```
++
++## 握手与工具发现
++
++```json
++{
++  "protocol_version": "2025-11-25",
++  "server_info": {
++    "name": "nr-product-version",
++    "title": "NR 产品版本查询",
++    "version": "0.1.0"
++  }
++}
++```
++
++发现工具：`list_versions`、`get_version`。两者均标注
++`read_only_hint=true`、`destructive_hint=false`、`idempotent_hint=true`。
++
++## 工具调用结果
++
++### 1. 搜索 + 分页
++
++调用参数：`{"search": "NR", "page": 1, "page_size": 2}`
++
++真实输出摘要：
++
++```json
++{
++  "count": 4,
++  "page": 1,
++  "page_size": 2,
++  "results": [
++    {
++      "product_name": "NR 其他产品",
++      "version": "v2.0.0",
++      "status": "ARCHIVED"
++    },
++    {
++      "product_name": "NR 测试套件",
++      "version": "v1.3.0",
++      "status": "DRAFT"
++    }
++  ]
++}
++```
++
++与直接 HTTP 调用 `GET /api/v1/system/versions/?search=NR&page=1&page_size=2` 的完整 JSON
++比较：**一致**。
++
++### 2. 筛选 + 分页元信息
++
++调用参数：
++
++```json
++{"product_name": "NR 测试套件", "status": "RELEASED", "page": 1, "page_size": 20}
++```
++
++真实输出摘要：
++
++```json
++{
++  "count": 2,
++  "page": 1,
++  "page_size": 20,
++  "results": [
++    {"version": "v1.2.1", "status": "RELEASED"},
++    {"version": "v1.2.0", "status": "RELEASED"}
++  ]
++}
++```
++
++与直接 HTTP 调用比较：**一致**。
++
++### 3. 版本详情
++
++调用参数：`{"version_id": "d3d82e3d-2910-4942-b8dd-d35997082e26"}`
++
++真实输出字段：
++
++```text
++id, product_name, version, status, release_date, description,
++is_default, created_by_name, updated_by_name, created_at, updated_at
++```
++
++与直接 HTTP 调用 `GET /api/v1/system/versions/{uuid}/` 比较：**一致**。
++
++### 4. 错误分支
++
++调用参数：`{"page": 0}`
++
++真实返回 `isError=true`，文本为：
++
++```json
++{
++  "code": "validation_error",
++  "message": "page 必须是大于等于 1 的整数",
++  "details": {"page": "必须为 >= 1 的整数"}
++}
++```
++
++## 结论
++
++- 真实 MCP 客户端握手成功，协议版本 `2025-11-25`。
++- 两个只读工具可被真实调用。
++- 搜索、筛选、分页与详情输出均与既有 HTTP API 完全一致。
++- 非法参数在本地被拒绝，未发起上游请求。
++- 验证过程未写入、未打印任何会话 Cookie。
+diff --git a/docs/mcp/version-query-mcp.md b/docs/mcp/version-query-mcp.md
+new file mode 100644
+index 0000000..9613e4c
+--- /dev/null
++++ b/docs/mcp/version-query-mcp.md
+@@ -0,0 +1,91 @@
++# 实施简报：NR 测试系统产品版本查询 MCP
++
++- 任务编号：T-20261026-149C47
++- 日期：2026-10-26
++- 类型：测试平台需求（新功能）
++
++## 人工确认结论（开发前）
++
++开发开始前已通过 OpenCode 原生提问与用户确认访问范围，结论如下：
++
++| 确认项 | 用户结论 |
++|---|---|
++| 环境 / API 基地址 | 本地开发环境 `http://127.0.0.1:8000`（API 前缀 `/api/v1`） |
++| 可访问产品与版本范围 | 全部产品 / 版本，只读 |
++| 认证数据来源与使用方式 | 通过环境变量注入既有会话 Cookie，只读；MCP 不登录、不写入、不落盘凭据 |
++
++由此确定：
++
++- MCP 只暴露查询类工具，不提供创建、修改、归档或删除能力。
++- 复用现有 `GET /api/v1/system/versions/` 与 `GET /api/v1/system/versions/{id}/`，不新增后端接口。
++- 复用 Session + CSRF 认证与 `system.version.view` 权限；MCP 只转发会话，不提升权限。
++- 基地址与会话均来自环境变量，仓库内不出现真实凭据。
++
++## 目标与价值
++
++- 用户：日常测试与排查人员。
++- 当前问题：产品版本需要登录网页手工检索，缺少可供 MCP 客户端直接调用的查询入口。
++- 可观察结果：MCP 客户端可搜索、筛选、分页获取版本列表，并按版本标识获取完整详情。
++
++## 验收场景
++
++### Scenario: 关键字搜索版本列表
++
++- **GIVEN** 后端已存在多个产品版本且会话具备 `system.version.view`
++- **WHEN** MCP 客户端调用 `list_versions(search="NR")`
++- **THEN** 返回与直接调用 `GET /api/v1/system/versions/?search=NR` 一致的 `count/page/page_size/results`
++
++### Scenario: 筛选与分页
++
++- **GIVEN** 不同产品、不同状态的版本数据
++- **WHEN** 客户端传入 `product_name`、`status`、`page`、`page_size`
++- **THEN** 结果只包含匹配项，并返回分页元信息；非法页码/每页条数在本地被拒绝
++
++### Scenario: 版本详情
++
++- **GIVEN** 已知一个版本 UUID
++- **WHEN** 客户端调用 `get_version(version_id=...)`
++- **THEN** 返回与直接调用详情接口一致的完整字段
++
++### Scenario: 错误分支
++
++- **GIVEN** 会话缺失、无权限、版本不存在、上游不可用或参数非法
++- **WHEN** 客户端调用工具
++- **THEN** 返回稳定错误码与中文说明，不泄露栈信息与凭据
++
++## 范围
++
++- 范围内：新增独立 MCP 工程、只读 HTTP 客户端、两个 MCP 工具、自动化测试、真实 MCP 协议验证、使用说明。
++- 范围外：任何后端接口新增/修改、写操作、凭据管理服务、生产部署、远端推送。
++
++## 关键设计
++
++- 目录：根目录新增 `test_system_mcp/`，Python 3.12，官方 MCP Python SDK（stdio 传输）+ `httpx`。
++- 工具：
++  - `list_versions(search?, product_name?, status?, page?, page_size?)`
++  - `get_version(version_id)`，`version_id` 为版本 UUID
++- HTTP：`NR_MCP_API_BASE_URL` 默认 `http://127.0.0.1:8000/api/v1`；
++  `NR_MCP_SESSION_COOKIE` 注入 `Cookie` 请求头；超时 `NR_MCP_TIMEOUT_SECONDS` 默认 15。
++- 参数校验：`page >= 1`、`1 <= page_size <= 100`、`status ∈ {DRAFT, RELEASED, ARCHIVED}`、`version_id` 为 UUID。
++- 错误映射：配置缺失、参数错误、401、403、404、400、超时/网络、上游异常，均转为结构化工具错误。
++- 测试：`pytest` + `httpx.MockTransport` 覆盖四类能力与错误分支；另提供真实 MCP 客户端脚本做端到端验证。
++
++## 可验证步骤
++
++- [x] 先写失败测试（RED）
++- [x] 实现最小行为并通过目标测试（GREEN）
++- [x] 运行完整 pytest 与 Ruff
++- [x] 使用本地 Django + 真实会话完成 MCP 握手与工具调用
++- [x] 记录真实输出到 `docs/mcp/live-verification.md`
++
++## 未知项与决策点
++
++- 仓库当前没有既有 MCP 工程，因此按仓库 Python 工程约定新建 `test_system_mcp/`；若后续出现统一 MCP 规范，需要迁移。
++- 真实联调使用本地 SQLite 开发库，仅用于验证，不改动 MySQL 或远端 schema。
++
++## 验证结果
++
++- 自动化测试：53 个用例通过（搜索、筛选、分页、详情、配置、参数边界、401/403/404/400/429/5xx、超时、网络、非法响应）。
++- Ruff：`check` 与 `format --check` 通过。
++- 真实 MCP：stdio 握手成功（协议 `2025-11-25`），`list_versions` 搜索/筛选分页与 `get_version` 详情均与直接 HTTP API 返回一致，非法 `page` 返回结构化 `validation_error`。
++- 证据：[`live-verification.md`](live-verification.md) 与 [`live-verification.json`](live-verification.json)。
+diff --git a/test_system_mcp/.env.example b/test_system_mcp/.env.example
+new file mode 100644
+index 0000000..e9e63e0
+--- /dev/null
++++ b/test_system_mcp/.env.example
+@@ -0,0 +1,8 @@
++# 既有 HTTP API 基地址（包含 /api/v1）
++NR_MCP_API_BASE_URL=http://127.0.0.1:8000/api/v1
++
++# 从浏览器或登录接口获取的既有会话 Cookie，只读使用；不要提交真实值
++NR_MCP_SESSION_COOKIE=sessionid=<replace-with-real-session>
++
++# 可选，默认 15 秒
++NR_MCP_TIMEOUT_SECONDS=15
+diff --git a/test_system_mcp/README.md b/test_system_mcp/README.md
+new file mode 100644
+index 0000000..b04e563
+--- /dev/null
++++ b/test_system_mcp/README.md
+@@ -0,0 +1,165 @@
++# NR 产品版本查询 MCP
++
++面向日常测试与排查的**只读** MCP 服务。它复用 NR 测试系统既有的 HTTP API、Session 认证与
++权限模型，不新增后端接口，不提供任何写操作。
++
++- 传输：stdio
++- 实现：Python 3.12 + 官方 MCP Python SDK 2.x + httpx
++- 上游接口：
++  - `GET /api/v1/system/versions/`（列表、搜索、筛选、分页）
++  - `GET /api/v1/system/versions/{uuid}/`（详情）
++- 权限：沿用登录会话的 `system.version.view`
++
++## 工具清单
++
++### `list_versions`
++
++查询产品版本列表，返回与 HTTP API 一致的分页结构。
++
++| 参数 | 类型 | 必填 | 默认 | 说明 |
++|---|---|---|---|---|
++| `search` | string | 否 | - | 关键字，匹配产品名或版本号 |
++| `product_name` | string | 否 | - | 产品名精确匹配（忽略大小写） |
++| `status` | string | 否 | - | `DRAFT` / `RELEASED` / `ARCHIVED` |
++| `page` | integer | 否 | `1` | 页码，必须 `>= 1` |
++| `page_size` | integer | 否 | `20` | 每页条数，必须 `1..100` |
++
++返回：
++
++```json
++{
++  "count": 4,
++  "page": 1,
++  "page_size": 2,
++  "results": []
++}
++```
++
++### `get_version`
++
++按版本 UUID 查询单个版本的完整详情。
++
++| 参数 | 类型 | 必填 | 说明 |
++|---|---|---|---|
++| `version_id` | string | 是 | 产品版本 UUID |
++
++返回字段：`id`、`product_name`、`version`、`status`、`release_date`、`description`、
++`is_default`、`created_by_name`、`updated_by_name`、`created_at`、`updated_at`。
++
++## 认证配置
++
++MCP 侧不登录、不硬编码凭据、不扩大权限，只把既有会话 Cookie 原样转发给上游 API。
++
++| 环境变量 | 必填 | 默认 | 说明 |
++|---|---|---|---|
++| `NR_MCP_API_BASE_URL` | 否 | `http://127.0.0.1:8000/api/v1` | 既有 API 基地址，需包含 `/api/v1` |
++| `NR_MCP_SESSION_COOKIE` | 是 | - | 既有会话 Cookie，只读使用，例如 `sessionid=...` |
++| `NR_MCP_TIMEOUT_SECONDS` | 否 | `15` | 上游请求超时秒数 |
++
++获取会话的方式与现有平台一致（例如通过 `/api/v1/auth/login/` 登录，或从已登录浏览器会话
++复制 `sessionid`）。**不要**把真实 Cookie 写入仓库、文档或提交记录。只读工具均为 `GET`，
++无需携带 CSRF Token；写操作本服务不提供。
++
++## 运行
++
++使用 `uv`（与仓库 Python 工程约定一致）：
++
++```bash
++cd test_system_mcp
++uv sync --extra dev
++NR_MCP_API_BASE_URL=http://127.0.0.1:8000/api/v1 \
++NR_MCP_SESSION_COOKIE='sessionid=...' \
++uv run nr-version-mcp
++```
++
++没有 `uv` 时：
++
++```bash
++cd test_system_mcp
++python -m venv .venv
++.venv/bin/pip install -e '.[dev]'
++NR_MCP_API_BASE_URL=http://127.0.0.1:8000/api/v1 \
++NR_MCP_SESSION_COOKIE='sessionid=...' \
++.venv/bin/python -m nr_version_mcp
++```
++
++### MCP 客户端配置示例
++
++```json
++{
++  "mcpServers": {
++    "nr-product-version": {
++      "command": "uv",
++      "args": [
++        "run",
++        "--project",
++        "/absolute/path/to/repo/test_system_mcp",
++        "nr-version-mcp"
++      ],
++      "env": {
++        "NR_MCP_API_BASE_URL": "http://127.0.0.1:8000/api/v1",
++        "NR_MCP_SESSION_COOKIE": "sessionid=<从既有登录会话注入>"
++      }
++    }
++  }
++}
++```
++
++## 示例调用
++
++```json
++{"name": "list_versions", "arguments": {"search": "NR", "page": 1, "page_size": 20}}
++```
++
++```json
++{"name": "list_versions", "arguments": {"product_name": "NR 测试套件", "status": "RELEASED"}}
++```
++
++```json
++{"name": "get_version", "arguments": {"version_id": "11111111-1111-4111-8111-111111111111"}}
++```
++
++## 错误处理
++
++工具错误以 MCP `isError` 返回，文本为 JSON，包含稳定 `code`、中文 `message` 和 `details`。
++
++| `code` | 触发条件 |
++|---|---|
++| `configuration_error` | 缺少会话 Cookie、基地址或超时配置非法 |
++| `validation_error` | 页码/每页条数/状态/UUID 非法，或上游返回 400 |
++| `unauthenticated` | 上游 401，会话无效或过期 |
++| `forbidden` | 上游 403，缺少 `system.version.view` |
++| `not_found` | 上游 404，版本不存在 |
++| `upstream_timeout` | 请求上游超时 |
++| `upstream_unavailable` | 无法连接上游 |
++| `upstream_rate_limited` | 上游 429 |
++| `upstream_invalid_response` | 上游响应无法解析或分页结构不完整 |
++| `upstream_error` | 上游 5xx 或其他失败 |
++
++## 测试
++
++```bash
++cd test_system_mcp
++uv run pytest
++uv run ruff check .
++uv run ruff format --check .
++```
++
++真实 MCP 协议联调（本地 Django + 真实会话）见
++[`../docs/mcp/live-verification.md`](../docs/mcp/live-verification.md)。联调脚本：
++
++```bash
++NR_MCP_API_BASE_URL=http://127.0.0.1:8000/api/v1 \
++NR_MCP_TEST_USERNAME=... \
++NR_MCP_TEST_PASSWORD=... \
++uv run python scripts/live_mcp_check.py --output ../docs/mcp/live-verification.json
++```
++
++脚本在内存中登录获取会话，只通过子进程环境变量传递 Cookie，不打印、不落盘。
++
++## 边界
++
++- 只读：仅 `GET`，无创建、修改、归档、删除工具。
++- 不新增/修改后端接口、数据库 schema 或权限。
++- 详情按 UUID 查询；按版本号检索请使用 `list_versions` 的 `search`。
++- API 基地址必须包含 `/api/v1`。
+diff --git a/test_system_mcp/pyproject.toml b/test_system_mcp/pyproject.toml
+new file mode 100644
+index 0000000..45d3f52
+--- /dev/null
++++ b/test_system_mcp/pyproject.toml
+@@ -0,0 +1,44 @@
++[project]
++name = "nr-version-mcp"
++version = "0.1.0"
++description = "NR 测试系统产品版本查询 MCP（只读）"
++readme = "README.md"
++requires-python = ">=3.12,<3.15"
++dependencies = [
++  "httpx>=0.28,<1",
++  "mcp>=2,<3",
++]
++
++[project.optional-dependencies]
++dev = [
++  "pytest>=8,<10",
++  "ruff>=0.12,<1",
++]
++
++[project.scripts]
++nr-version-mcp = "nr_version_mcp.__main__:main"
++
++[build-system]
++requires = ["hatchling"]
++build-backend = "hatchling.build"
++
++[tool.hatch.build.targets.wheel]
++packages = ["src/nr_version_mcp"]
++
++[tool.pytest.ini_options]
++pythonpath = ["src"]
++python_files = ["test_*.py"]
++addopts = "-ra --strict-markers"
++markers = [
++  "live: 需要真实 Django 服务与真实会话的端到端测试",
++]
++
++[tool.ruff]
++line-length = 100
++target-version = "py312"
++
++[tool.ruff.lint]
++select = ["E", "F", "I", "B", "UP", "SIM"]
++
++[tool.ruff.format]
++quote-style = "double"
+diff --git a/test_system_mcp/scripts/live_mcp_check.py b/test_system_mcp/scripts/live_mcp_check.py
+new file mode 100644
+index 0000000..f7ff74f
+--- /dev/null
++++ b/test_system_mcp/scripts/live_mcp_check.py
+@@ -0,0 +1,274 @@
++"""真实 MCP 协议联调：登录本地 Django、准备数据、stdio 握手并调用工具。
++
++会话 Cookie 只在内存与子进程环境变量中传递，不打印、不落盘。
++凭据通过本地环境变量 NR_MCP_TEST_USERNAME / NR_MCP_TEST_PASSWORD 提供。
++"""
++
++from __future__ import annotations
++
++import argparse
++import asyncio
++import json
++import logging
++import os
++import sys
++from datetime import UTC, datetime
++from pathlib import Path
++from typing import Any
++
++import httpx
++from mcp import ClientSession
++from mcp.client.stdio import StdioServerParameters, stdio_client
++
++PROJECT_DIR = Path(__file__).resolve().parents[1]
++SOURCE_DIR = PROJECT_DIR / "src"
++DEFAULT_API_BASE_URL = "http://127.0.0.1:8000/api/v1"
++
++FIXTURES = [
++    {
++        "product_name": "NR 测试套件",
++        "version": "v1.2.0",
++        "status": "RELEASED",
++        "description": "MCP 联调样例：已发布版本",
++    },
++    {
++        "product_name": "NR 测试套件",
++        "version": "v1.2.1",
++        "status": "RELEASED",
++        "description": "MCP 联调样例：补丁版本",
++    },
++    {
++        "product_name": "NR 测试套件",
++        "version": "v1.3.0",
++        "status": "DRAFT",
++        "description": "MCP 联调样例：草稿版本",
++    },
++    {
++        "product_name": "NR 其他产品",
++        "version": "v2.0.0",
++        "status": "ARCHIVED",
++        "description": "MCP 联调样例：其他产品归档版本",
++    },
++]
++
++
++def _csrf_headers(http: httpx.AsyncClient) -> dict[str, str]:
++    token = http.cookies.get("csrftoken")
++    return {"X-CSRFToken": token} if token else {}
++
++
++async def _login(http: httpx.AsyncClient, username: str, password: str) -> str:
++    csrf_response = await http.get("auth/csrf/")
++    csrf_response.raise_for_status()
++    csrf_token = csrf_response.json()["csrf_token"]
++    login_response = await http.post(
++        "auth/login/",
++        json={"username": username, "password": password},
++        headers={"X-CSRFToken": csrf_token},
++    )
++    login_response.raise_for_status()
++    session_id = http.cookies.get("sessionid")
++    if not session_id:
++        raise RuntimeError("登录成功但未获得 sessionid Cookie")
++    return session_id
++
++
++async def _ensure_fixtures(http: httpx.AsyncClient) -> None:
++    for fixture in FIXTURES:
++        response = await http.get(
++            "system/versions/",
++            params={"product_name": fixture["product_name"], "page_size": 100},
++        )
++        response.raise_for_status()
++        existing_versions = {item["version"] for item in response.json().get("results", [])}
++        if fixture["version"] in existing_versions:
++            continue
++        created = await http.post(
++            "system/versions/",
++            json=fixture,
++            headers=_csrf_headers(http),
++        )
++        created.raise_for_status()
++
++
++def _structured(result: Any) -> dict[str, Any]:
++    if result.structured_content is not None:
++        return result.structured_content
++    return json.loads(result.content[0].text)
++
++
++def _error_payload(result: Any) -> dict[str, Any]:
++    text = result.content[0].text if result.content else ""
++    try:
++        return json.loads(text)
++    except ValueError:
++        pass
++    start = text.find("{")
++    end = text.rfind("}")
++    if start != -1 and end > start:
++        try:
++            return json.loads(text[start : end + 1])
++        except ValueError:
++            pass
++    return {"raw": text}
++
++
++async def _call(
++    session: ClientSession,
++    http: httpx.AsyncClient,
++    *,
++    tool: str,
++    arguments: dict[str, Any],
++    direct_path: str,
++    direct_params: dict[str, Any] | None = None,
++) -> dict[str, Any]:
++    result = await session.call_tool(tool, arguments)
++    record: dict[str, Any] = {
++        "tool": tool,
++        "arguments": arguments,
++        "is_error": bool(result.is_error),
++    }
++    if result.is_error:
++        record["error"] = _error_payload(result)
++        return record
++
++    structured = _structured(result)
++    record["structured_content"] = structured
++    direct = await http.get(direct_path, params=direct_params or {})
++    direct.raise_for_status()
++    record["direct_http"] = direct.json()
++    record["matches_direct_http"] = structured == record["direct_http"]
++    return record
++
++
++async def run(output_path: Path | None, seed: bool) -> dict[str, Any]:
++    api_base_url = os.getenv("NR_MCP_API_BASE_URL", DEFAULT_API_BASE_URL).rstrip("/")
++    username = os.getenv("NR_MCP_TEST_USERNAME")
++    password = os.getenv("NR_MCP_TEST_PASSWORD")
++
++    async with httpx.AsyncClient(base_url=f"{api_base_url}/", timeout=15) as http:
++        if username and password:
++            session_id = await _login(http, username, password)
++            if seed:
++                await _ensure_fixtures(http)
++            cookie_header = f"sessionid={session_id}"
++        else:
++            cookie_header = os.getenv("NR_MCP_SESSION_COOKIE", "")
++            if not cookie_header:
++                raise RuntimeError(
++                    "需要 NR_MCP_SESSION_COOKIE，或本地测试用 "
++                    "NR_MCP_TEST_USERNAME / NR_MCP_TEST_PASSWORD"
++                )
++
++        env = dict(os.environ)
++        env["NR_MCP_API_BASE_URL"] = api_base_url
++        env["NR_MCP_SESSION_COOKIE"] = cookie_header
++        env["PYTHONPATH"] = os.pathsep.join([str(SOURCE_DIR), env.get("PYTHONPATH", "")]).strip(
++            os.pathsep
++        )
++
++        params = StdioServerParameters(
++            command=sys.executable,
++            args=["-m", "nr_version_mcp"],
++            env=env,
++            cwd=str(PROJECT_DIR),
++        )
++
++        async with (
++            stdio_client(params) as (read_stream, write_stream),
++            ClientSession(read_stream, write_stream) as session,
++        ):
++            initialized = await session.initialize()
++            tools = await session.list_tools()
++
++            list_call = await _call(
++                session,
++                http,
++                tool="list_versions",
++                arguments={"search": "NR", "page": 1, "page_size": 2},
++                direct_path="system/versions/",
++                direct_params={"search": "NR", "page": 1, "page_size": 2},
++            )
++
++            filter_call = await _call(
++                session,
++                http,
++                tool="list_versions",
++                arguments={
++                    "product_name": "NR 测试套件",
++                    "status": "RELEASED",
++                    "page": 1,
++                    "page_size": 20,
++                },
++                direct_path="system/versions/",
++                direct_params={
++                    "product_name": "NR 测试套件",
++                    "status": "RELEASED",
++                    "page": 1,
++                    "page_size": 20,
++                },
++            )
++
++            results = _structured(
++                await session.call_tool(
++                    "list_versions",
++                    {"search": "NR", "page": 1, "page_size": 2},
++                )
++            )
++            version_id = results["results"][0]["id"]
++            detail_call = await _call(
++                session,
++                http,
++                tool="get_version",
++                arguments={"version_id": version_id},
++                direct_path=f"system/versions/{version_id}/",
++            )
++
++            error_result = await session.call_tool("list_versions", {"page": 0})
++            error_call = {
++                "tool": "list_versions",
++                "arguments": {"page": 0},
++                "is_error": bool(error_result.is_error),
++                "error": _error_payload(error_result),
++            }
++
++            return {
++                "timestamp": datetime.now(UTC).isoformat(),
++                "api_base_url": api_base_url,
++                "protocol_version": initialized.protocol_version,
++                "server_info": initialized.server_info.model_dump(mode="json"),
++                "tools": [
++                    {
++                        "name": tool.name,
++                        "description": tool.description,
++                        "input_schema": tool.input_schema,
++                        "annotations": (
++                            tool.annotations.model_dump(mode="json") if tool.annotations else None
++                        ),
++                    }
++                    for tool in tools.tools
++                ],
++                "calls": [list_call, filter_call, detail_call, error_call],
++            }
++
++
++def main() -> None:
++    logging.getLogger("httpx").setLevel(logging.WARNING)
++    logging.getLogger("httpcore").setLevel(logging.WARNING)
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--output", type=Path, default=None)
++    parser.add_argument("--no-seed", action="store_true")
++    args = parser.parse_args()
++
++    record = asyncio.run(run(args.output, seed=not args.no_seed))
++    text = json.dumps(record, ensure_ascii=False, indent=2)
++    if args.output:
++        args.output.parent.mkdir(parents=True, exist_ok=True)
++        args.output.write_text(text + "\n", encoding="utf-8")
++        print(f"写入真实调用记录：{args.output}")
++    else:
++        print(text)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/test_system_mcp/src/nr_version_mcp/__init__.py b/test_system_mcp/src/nr_version_mcp/__init__.py
+new file mode 100644
+index 0000000..6e33c44
+--- /dev/null
++++ b/test_system_mcp/src/nr_version_mcp/__init__.py
+@@ -0,0 +1,3 @@
++"""NR 测试系统产品版本查询 MCP。"""
++
++__version__ = "0.1.0"
+diff --git a/test_system_mcp/src/nr_version_mcp/__main__.py b/test_system_mcp/src/nr_version_mcp/__main__.py
+new file mode 100644
+index 0000000..6e1e2e0
+--- /dev/null
++++ b/test_system_mcp/src/nr_version_mcp/__main__.py
+@@ -0,0 +1,13 @@
++import logging
++
++from .server import mcp
++
++
++def main() -> None:
++    logging.getLogger("httpx").setLevel(logging.WARNING)
++    logging.getLogger("httpcore").setLevel(logging.WARNING)
++    mcp.run("stdio")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/test_system_mcp/src/nr_version_mcp/client.py b/test_system_mcp/src/nr_version_mcp/client.py
+new file mode 100644
+index 0000000..4f4ff2a
+--- /dev/null
++++ b/test_system_mcp/src/nr_version_mcp/client.py
+@@ -0,0 +1,189 @@
++from __future__ import annotations
++
++from typing import Any
++
++import httpx
++
++from .errors import ApiError
++
++LIST_PATH = "system/versions/"
++DETAIL_PATH = "system/versions/{version_id}/"
++
++_ERROR_MESSAGES = {
++    400: "请求参数校验失败",
++    401: "会话无效或已过期，请更新 NR_MCP_SESSION_COOKIE",
++    403: "当前会话无权查看产品版本（需要 system.version.view）",
++    429: "版本接口限流，请稍后重试",
++}
++
++
++def _error_code(status_code: int) -> str:
++    if status_code == 400:
++        return "validation_error"
++    if status_code == 401:
++        return "unauthenticated"
++    if status_code == 403:
++        return "forbidden"
++    if status_code == 404:
++        return "not_found"
++    if status_code == 429:
++        return "upstream_rate_limited"
++    return "upstream_error"
++
++
++class VersionApiClient:
++    """复用既有版本 HTTP API 的只读客户端。"""
++
++    def __init__(
++        self,
++        base_url: str,
++        session_cookie: str,
++        timeout_seconds: float = 15.0,
++        *,
++        transport: httpx.BaseTransport | None = None,
++    ):
++        self._base_url = base_url.rstrip("/")
++        self._timeout_seconds = timeout_seconds
++        self._client = httpx.Client(
++            base_url=f"{self._base_url}/",
++            timeout=timeout_seconds,
++            headers={
++                "Accept": "application/json",
++                "Cookie": session_cookie,
++            },
++            transport=transport,
++        )
++
++    def __repr__(self) -> str:
++        return (
++            "VersionApiClient("
++            f"base_url={self._base_url!r}, timeout_seconds={self._timeout_seconds!r}"
++            ")"
++        )
++
++    def close(self) -> None:
++        self._client.close()
++
++    def list_versions(
++        self,
++        *,
++        search: str | None = None,
++        product_name: str | None = None,
++        status: str | None = None,
++        page: int = 1,
++        page_size: int = 20,
++    ) -> dict[str, Any]:
++        params: dict[str, Any] = {"page": page, "page_size": page_size}
++        if search:
++            params["search"] = search
++        if product_name:
++            params["product_name"] = product_name
++        if status:
++            params["status"] = status
++
++        payload = self._get(
++            LIST_PATH,
++            params=params,
++            not_found_message="页码超出范围或没有匹配的版本",
++        )
++        self._ensure_page_payload(payload)
++        return payload
++
++    def get_version(self, version_id: str) -> dict[str, Any]:
++        payload = self._get(DETAIL_PATH.format(version_id=version_id))
++        if not payload.get("id"):
++            raise ApiError(
++                "upstream_invalid_response",
++                "版本接口返回的详情结构不完整",
++                {},
++            )
++        return payload
++
++    def _get(
++        self,
++        path: str,
++        params: dict[str, Any] | None = None,
++        *,
++        not_found_message: str = "请求的产品版本不存在",
++    ) -> dict[str, Any]:
++        try:
++            response = self._client.get(path, params=params)
++        except httpx.TimeoutException as exc:
++            raise ApiError(
++                "upstream_timeout",
++                "访问版本接口超时，请稍后重试",
++                {},
++            ) from exc
++        except httpx.RequestError as exc:
++            raise ApiError(
++                "upstream_unavailable",
++                "无法连接版本接口，请检查 API 基地址与网络",
++                {},
++            ) from exc
++
++        if response.status_code >= 400:
++            self._raise_for_response(response, not_found_message=not_found_message)
++
++        try:
++            payload = response.json()
++        except ValueError as exc:
++            raise ApiError(
++                "upstream_invalid_response",
++                "版本接口返回了无法解析的响应",
++                {},
++            ) from exc
++
++        if not isinstance(payload, dict):
++            raise ApiError(
++                "upstream_invalid_response",
++                "版本接口返回的响应结构不合法",
++                {},
++            )
++        return payload
++
++    def _raise_for_response(
++        self,
++        response: httpx.Response,
++        *,
++        not_found_message: str,
++    ) -> None:
++        status_code = response.status_code
++        try:
++            payload = response.json()
++        except ValueError:
++            payload = {}
++        if not isinstance(payload, dict):
++            payload = {}
++
++        details: dict[str, Any] = {}
++        if status_code == 400:
++            upstream_details = payload.get("details")
++            if isinstance(upstream_details, dict):
++                details = upstream_details
++
++        if status_code >= 500:
++            message = "版本接口暂时不可用，请稍后重试"
++        elif status_code == 404:
++            message = not_found_message
++        else:
++            message = _ERROR_MESSAGES.get(status_code, "版本接口请求失败")
++
++        raise ApiError(
++            _error_code(status_code),
++            message,
++            details,
++            status=status_code,
++        )
++
++    @staticmethod
++    def _ensure_page_payload(payload: dict[str, Any]) -> None:
++        valid_ints = []
++        for key in ("count", "page", "page_size"):
++            value = payload.get(key)
++            valid_ints.append(isinstance(value, int) and not isinstance(value, bool))
++        if not all(valid_ints) or not isinstance(payload.get("results"), list):
++            raise ApiError(
++                "upstream_invalid_response",
++                "版本接口返回的分页结构不完整",
++                {},
++            )
+diff --git a/test_system_mcp/src/nr_version_mcp/config.py b/test_system_mcp/src/nr_version_mcp/config.py
+new file mode 100644
+index 0000000..515d98f
+--- /dev/null
++++ b/test_system_mcp/src/nr_version_mcp/config.py
+@@ -0,0 +1,59 @@
++from __future__ import annotations
++
++import os
++from dataclasses import dataclass, field
++from urllib.parse import urlparse
++
++DEFAULT_API_BASE_URL = "http://127.0.0.1:8000/api/v1"
++DEFAULT_TIMEOUT_SECONDS = 15.0
++SESSION_COOKIE_ENV = "NR_MCP_SESSION_COOKIE"
++API_BASE_URL_ENV = "NR_MCP_API_BASE_URL"
++TIMEOUT_ENV = "NR_MCP_TIMEOUT_SECONDS"
++
++
++class ConfigurationError(Exception):
++    """MCP 运行配置缺失或不合法。"""
++
++    code = "configuration_error"
++
++    def __init__(self, message: str):
++        super().__init__(message)
++        self.message = message
++
++
++@dataclass(frozen=True)
++class Settings:
++    api_base_url: str
++    session_cookie: str = field(repr=False)
++    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
++
++    @classmethod
++    def from_env(cls, environ: dict[str, str] | None = None) -> Settings:
++        env = os.environ if environ is None else environ
++        raw_base_url = (env.get(API_BASE_URL_ENV) or DEFAULT_API_BASE_URL).strip()
++        base_url = raw_base_url.rstrip("/")
++        parsed = urlparse(base_url)
++        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
++            raise ConfigurationError(
++                f"{API_BASE_URL_ENV} 必须是合法的 http(s) 基地址，当前为 {raw_base_url!r}"
++            )
++
++        session_cookie = (env.get(SESSION_COOKIE_ENV) or "").strip()
++        if not session_cookie:
++            raise ConfigurationError(
++                f"缺少 {SESSION_COOKIE_ENV}，请注入既有会话 Cookie（只读），例如 sessionid=..."
++            )
++
++        raw_timeout = (env.get(TIMEOUT_ENV) or str(DEFAULT_TIMEOUT_SECONDS)).strip()
++        try:
++            timeout_seconds = float(raw_timeout)
++        except ValueError as exc:
++            raise ConfigurationError(f"{TIMEOUT_ENV} 必须是数字，当前为 {raw_timeout!r}") from exc
++        if timeout_seconds <= 0:
++            raise ConfigurationError(f"{TIMEOUT_ENV} 必须大于 0，当前为 {timeout_seconds}")
++
++        return cls(
++            api_base_url=base_url,
++            session_cookie=session_cookie,
++            timeout_seconds=timeout_seconds,
++        )
+diff --git a/test_system_mcp/src/nr_version_mcp/errors.py b/test_system_mcp/src/nr_version_mcp/errors.py
+new file mode 100644
+index 0000000..c72fb4a
+--- /dev/null
++++ b/test_system_mcp/src/nr_version_mcp/errors.py
+@@ -0,0 +1,42 @@
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from typing import Any
++
++
++@dataclass
++class ApiError(Exception):
++    """转发既有 HTTP API 失败时使用的稳定错误。"""
++
++    code: str
++    message: str
++    details: dict[str, Any] = field(default_factory=dict)
++    status: int | None = None
++
++    def __str__(self) -> str:
++        return self.message
++
++    def to_dict(self) -> dict[str, Any]:
++        payload: dict[str, Any] = {
++            "code": self.code,
++            "message": self.message,
++            "details": self.details,
++        }
++        if self.status is not None:
++            payload["upstream_status"] = self.status
++        return payload
++
++
++@dataclass
++class ToolInputError(Exception):
++    """工具参数在本地校验失败。"""
++
++    message: str
++    details: dict[str, Any] = field(default_factory=dict)
++    code: str = "validation_error"
++
++    def __str__(self) -> str:
++        return self.message
++
++    def to_dict(self) -> dict[str, Any]:
++        return {"code": self.code, "message": self.message, "details": self.details}
+diff --git a/test_system_mcp/src/nr_version_mcp/server.py b/test_system_mcp/src/nr_version_mcp/server.py
+new file mode 100644
+index 0000000..c86a2ce
+--- /dev/null
++++ b/test_system_mcp/src/nr_version_mcp/server.py
+@@ -0,0 +1,115 @@
++import json
++from typing import Annotated, Any
++
++from mcp.server.mcpserver import MCPServer
++from mcp.server.mcpserver.exceptions import ToolError
++from mcp.types import ToolAnnotations
++from pydantic import Field
++
++from .client import VersionApiClient
++from .config import ConfigurationError, Settings
++from .errors import ApiError, ToolInputError
++from .service import VersionQueryService
++
++INSTRUCTIONS = (
++    "NR 测试系统产品版本查询 MCP，只读。"
++    "复用既有 /api/v1/system/versions/ 接口与 Session 认证；"
++    "不提供任何创建、修改、归档或删除能力。"
++)
++
++READ_ONLY_ANNOTATIONS = ToolAnnotations(
++    readOnlyHint=True,
++    destructiveHint=False,
++    idempotentHint=True,
++    openWorldHint=True,
++)
++
++mcp = MCPServer(
++    name="nr-product-version",
++    title="NR 产品版本查询",
++    description="按关键字、产品与状态检索产品版本，并查看版本详情。",
++    instructions=INSTRUCTIONS,
++    version="0.1.0",
++)
++
++
++def _run(operation):
++    settings = Settings.from_env()
++    client = VersionApiClient(
++        base_url=settings.api_base_url,
++        session_cookie=settings.session_cookie,
++        timeout_seconds=settings.timeout_seconds,
++    )
++    try:
++        return operation(VersionQueryService(client))
++    finally:
++        client.close()
++
++
++def _to_error_payload(exc: Exception) -> dict[str, Any]:
++    if isinstance(exc, (ApiError, ToolInputError)):
++        return exc.to_dict()
++    return {
++        "code": getattr(exc, "code", "internal_error"),
++        "message": str(exc),
++        "details": {},
++    }
++
++
++def _raise_tool_error(exc: Exception) -> None:
++    raise ToolError(json.dumps(_to_error_payload(exc), ensure_ascii=False)) from exc
++
++
++@mcp.tool(
++    name="list_versions",
++    description=(
++        "查询产品版本列表。支持关键字搜索、按产品名/状态筛选与分页；"
++        "返回 count、page、page_size、results，字段与既有 HTTP API 一致。"
++    ),
++    annotations=READ_ONLY_ANNOTATIONS,
++)
++def list_versions(
++    search: Annotated[
++        str | None,
++        Field(description="关键字，匹配产品名或版本号（对应 HTTP search 参数）"),
++    ] = None,
++    product_name: Annotated[
++        str | None,
++        Field(description="产品名精确匹配（忽略大小写，对应 HTTP product_name 参数）"),
++    ] = None,
++    status: Annotated[
++        str | None,
++        Field(description="版本状态，只能是 DRAFT、RELEASED、ARCHIVED"),
++    ] = None,
++    page: Annotated[int, Field(description="页码，从 1 开始")] = 1,
++    page_size: Annotated[int, Field(description="每页条数，1..100")] = 20,
++) -> dict[str, Any]:
++    try:
++        return _run(
++            lambda service: service.list_versions(
++                search=search,
++                product_name=product_name,
++                status=status,
++                page=page,
++                page_size=page_size,
++            )
++        )
++    except (ToolInputError, ApiError, ConfigurationError) as exc:
++        _raise_tool_error(exc)
++
++
++@mcp.tool(
++    name="get_version",
++    description=("按版本 UUID 查询单个产品版本的完整详情，字段与既有 HTTP 详情接口一致。"),
++    annotations=READ_ONLY_ANNOTATIONS,
++)
++def get_version(
++    version_id: Annotated[
++        str,
++        Field(description="产品版本 UUID，例如 11111111-1111-4111-8111-111111111111"),
++    ],
++) -> dict[str, Any]:
++    try:
++        return _run(lambda service: service.get_version(version_id))
++    except (ToolInputError, ApiError, ConfigurationError) as exc:
++        _raise_tool_error(exc)
+diff --git a/test_system_mcp/src/nr_version_mcp/service.py b/test_system_mcp/src/nr_version_mcp/service.py
+new file mode 100644
+index 0000000..4836348
+--- /dev/null
++++ b/test_system_mcp/src/nr_version_mcp/service.py
+@@ -0,0 +1,123 @@
++from __future__ import annotations
++
++import uuid
++from typing import Any, Protocol
++
++from .errors import ToolInputError
++
++VALID_STATUSES = frozenset({"DRAFT", "RELEASED", "ARCHIVED"})
++MAX_PAGE_SIZE = 100
++
++
++class VersionApi(Protocol):
++    def list_versions(
++        self,
++        *,
++        search: str | None = None,
++        product_name: str | None = None,
++        status: str | None = None,
++        page: int = 1,
++        page_size: int = 20,
++    ) -> dict[str, Any]: ...
++
++    def get_version(self, version_id: str) -> dict[str, Any]: ...
++
++
++def _validate_page(page: int) -> int:
++    if isinstance(page, bool) or not isinstance(page, int) or page < 1:
++        raise ToolInputError(
++            "page 必须是大于等于 1 的整数",
++            {"page": "必须为 >= 1 的整数"},
++        )
++    return page
++
++
++def _validate_page_size(page_size: int) -> int:
++    if (
++        isinstance(page_size, bool)
++        or not isinstance(page_size, int)
++        or page_size < 1
++        or page_size > MAX_PAGE_SIZE
++    ):
++        raise ToolInputError(
++            f"page_size 必须是 1 到 {MAX_PAGE_SIZE} 之间的整数",
++            {"page_size": f"必须为 1..{MAX_PAGE_SIZE} 的整数"},
++        )
++    return page_size
++
++
++def _validate_optional_text(value: str | None, field: str) -> str | None:
++    if value is None:
++        return None
++    if not isinstance(value, str):
++        raise ToolInputError(
++            f"{field} 必须是字符串",
++            {field: "必须为字符串"},
++        )
++    if not value.strip():
++        return None
++    return value
++
++
++def _validate_status(status: str | None) -> str | None:
++    if status is None:
++        return None
++    if not isinstance(status, str):
++        raise ToolInputError(
++            "status 必须是字符串",
++            {"status": "必须为字符串"},
++        )
++    if not status.strip():
++        return None
++    if status not in VALID_STATUSES:
++        raise ToolInputError(
++            "status 只支持 DRAFT、RELEASED、ARCHIVED",
++            {"status": f"必须是 {sorted(VALID_STATUSES)} 之一"},
++        )
++    return status
++
++
++def validate_version_id(value: str) -> str:
++    if not isinstance(value, str) or not value.strip():
++        raise ToolInputError(
++            "version_id 必须是非空 UUID 字符串",
++            {"version_id": "必须为 UUID"},
++        )
++    try:
++        parsed = uuid.UUID(value.strip())
++    except (ValueError, AttributeError) as exc:
++        raise ToolInputError(
++            "version_id 必须是合法的 UUID",
++            {"version_id": "必须为 UUID"},
++        ) from exc
++    return str(parsed)
++
++
++class VersionQueryService:
++    """对 MCP 工具输入做本地校验，再委托只读 HTTP 客户端。"""
++
++    def __init__(self, api: VersionApi):
++        self._api = api
++
++    def list_versions(
++        self,
++        *,
++        search: str | None = None,
++        product_name: str | None = None,
++        status: str | None = None,
++        page: int = 1,
++        page_size: int = 20,
++    ) -> dict[str, Any]:
++        normalized_product_name = _validate_optional_text(product_name, "product_name")
++        return self._api.list_versions(
++            search=_validate_optional_text(search, "search"),
++            product_name=(
++                normalized_product_name.strip() if normalized_product_name is not None else None
++            ),
++            status=_validate_status(status),
++            page=_validate_page(page),
++            page_size=_validate_page_size(page_size),
++        )
++
++    def get_version(self, version_id: str) -> dict[str, Any]:
++        return self._api.get_version(validate_version_id(version_id))
+diff --git a/test_system_mcp/tests/test_client.py b/test_system_mcp/tests/test_client.py
+new file mode 100644
+index 0000000..7eaf809
+--- /dev/null
++++ b/test_system_mcp/tests/test_client.py
+@@ -0,0 +1,198 @@
++import httpx
++import pytest
++
++from nr_version_mcp.client import VersionApiClient
++from nr_version_mcp.errors import ApiError
++
++VERSION_ID = "11111111-1111-4111-8111-111111111111"
++
++PAGE_PAYLOAD = {
++    "count": 1,
++    "page": 2,
++    "page_size": 10,
++    "results": [
++        {
++            "id": VERSION_ID,
++            "product_name": "NR 测试套件",
++            "version": "v1.2.0",
++            "status": "RELEASED",
++        }
++    ],
++}
++
++
++def make_client(handler):
++    return VersionApiClient(
++        base_url="http://api.test/api/v1",
++        session_cookie="sessionid=test-session",
++        timeout_seconds=5,
++        transport=httpx.MockTransport(handler),
++    )
++
++
++def test_list_versions_forwards_search_filter_and_pagination():
++    captured = {}
++
++    def handler(request):
++        captured["url"] = request.url
++        captured["cookie"] = request.headers.get("cookie")
++        return httpx.Response(200, json=PAGE_PAYLOAD)
++
++    result = make_client(handler).list_versions(
++        search="NR",
++        product_name="NR 测试套件",
++        status="RELEASED",
++        page=2,
++        page_size=10,
++    )
++
++    assert result == PAGE_PAYLOAD
++    assert captured["url"].path == "/api/v1/system/versions/"
++    assert captured["url"].params["search"] == "NR"
++    assert captured["url"].params["product_name"] == "NR 测试套件"
++    assert captured["url"].params["status"] == "RELEASED"
++    assert captured["url"].params["page"] == "2"
++    assert captured["url"].params["page_size"] == "10"
++    assert captured["cookie"] == "sessionid=test-session"
++
++
++def test_list_versions_omits_empty_optional_params():
++    captured = {}
++
++    def handler(request):
++        captured["url"] = request.url
++        return httpx.Response(200, json=PAGE_PAYLOAD)
++
++    make_client(handler).list_versions(search="", product_name="", status="", page=1, page_size=20)
++
++    assert "search" not in captured["url"].params
++    assert "product_name" not in captured["url"].params
++    assert "status" not in captured["url"].params
++    assert captured["url"].params["page"] == "1"
++    assert captured["url"].params["page_size"] == "20"
++
++
++def test_get_version_uses_version_identifier_path():
++    captured = {}
++
++    def handler(request):
++        captured["url"] = request.url
++        return httpx.Response(200, json={"id": VERSION_ID, "product_name": "NR"})
++
++    result = make_client(handler).get_version(VERSION_ID)
++
++    assert result["id"] == VERSION_ID
++    assert captured["url"].path == f"/api/v1/system/versions/{VERSION_ID}/"
++
++
++@pytest.mark.parametrize(
++    ("status_code", "expected_code"),
++    [
++        (400, "validation_error"),
++        (401, "unauthenticated"),
++        (403, "forbidden"),
++        (404, "not_found"),
++        (429, "upstream_rate_limited"),
++        (500, "upstream_error"),
++    ],
++)
++def test_http_errors_are_mapped_to_stable_codes(status_code, expected_code):
++    def handler(request):
++        return httpx.Response(
++            status_code,
++            json={"code": "upstream", "message": "upstream failure", "details": {"field": "x"}},
++        )
++
++    with pytest.raises(ApiError) as exc_info:
++        make_client(handler).get_version(VERSION_ID)
++
++    error = exc_info.value
++    assert error.code == expected_code
++    assert error.status == status_code
++    assert error.message
++    assert "test-session" not in str(error)
++
++
++def test_list_404_uses_page_or_filter_specific_message():
++    def handler(request):
++        return httpx.Response(404, json={"code": "not_found", "message": "not found"})
++
++    with pytest.raises(ApiError) as exc_info:
++        make_client(handler).list_versions(page=99, page_size=20)
++
++    assert exc_info.value.code == "not_found"
++    assert "页码" in exc_info.value.message
++
++
++def test_detail_404_uses_version_specific_message():
++    def handler(request):
++        return httpx.Response(404, json={"code": "not_found", "message": "not found"})
++
++    with pytest.raises(ApiError) as exc_info:
++        make_client(handler).get_version(VERSION_ID)
++
++    assert exc_info.value.code == "not_found"
++    assert "产品版本不存在" in exc_info.value.message
++
++
++def test_validation_error_keeps_upstream_details():
++    def handler(request):
++        return httpx.Response(
++            400,
++            json={
++                "code": "validation_error",
++                "message": "请求参数校验失败",
++                "details": {"page": ["页码无效"]},
++            },
++        )
++
++    with pytest.raises(ApiError) as exc_info:
++        make_client(handler).list_versions(page=1, page_size=20)
++
++    assert exc_info.value.details == {"page": ["页码无效"]}
++
++
++def test_timeout_is_mapped_to_upstream_timeout():
++    def handler(request):
++        raise httpx.ReadTimeout("timed out", request=request)
++
++    with pytest.raises(ApiError) as exc_info:
++        make_client(handler).list_versions(page=1, page_size=20)
++
++    assert exc_info.value.code == "upstream_timeout"
++
++
++def test_connection_error_is_mapped_to_upstream_unavailable():
++    def handler(request):
++        raise httpx.ConnectError("refused", request=request)
++
++    with pytest.raises(ApiError) as exc_info:
++        make_client(handler).list_versions(page=1, page_size=20)
++
++    assert exc_info.value.code == "upstream_unavailable"
++
++
++def test_invalid_json_is_mapped_to_upstream_invalid_response():
++    def handler(request):
++        return httpx.Response(200, text="<html>not json</html>")
++
++    with pytest.raises(ApiError) as exc_info:
++        make_client(handler).list_versions(page=1, page_size=20)
++
++    assert exc_info.value.code == "upstream_invalid_response"
++
++
++def test_list_payload_missing_pagination_fields_is_rejected():
++    def handler(request):
++        return httpx.Response(200, json={"count": 0, "results": []})
++
++    with pytest.raises(ApiError) as exc_info:
++        make_client(handler).list_versions(page=1, page_size=20)
++
++    assert exc_info.value.code == "upstream_invalid_response"
++
++
++def test_repr_does_not_expose_session_cookie():
++    client = make_client(lambda request: httpx.Response(200, json=PAGE_PAYLOAD))
++
++    assert "test-session" not in repr(client)
+diff --git a/test_system_mcp/tests/test_config.py b/test_system_mcp/tests/test_config.py
+new file mode 100644
+index 0000000..fe1ef59
+--- /dev/null
++++ b/test_system_mcp/tests/test_config.py
+@@ -0,0 +1,63 @@
++import pytest
++
++from nr_version_mcp.config import (
++    API_BASE_URL_ENV,
++    SESSION_COOKIE_ENV,
++    TIMEOUT_ENV,
++    ConfigurationError,
++    Settings,
++)
++
++
++def test_settings_defaults():
++    settings = Settings.from_env({SESSION_COOKIE_ENV: "sessionid=abc"})
++
++    assert settings.api_base_url == "http://127.0.0.1:8000/api/v1"
++    assert settings.timeout_seconds == 15.0
++
++
++def test_settings_normalizes_trailing_slash():
++    settings = Settings.from_env(
++        {
++            API_BASE_URL_ENV: "https://nr.example.test/api/v1/",
++            SESSION_COOKIE_ENV: "sessionid=abc",
++            TIMEOUT_ENV: "7.5",
++        }
++    )
++
++    assert settings.api_base_url == "https://nr.example.test/api/v1"
++    assert settings.timeout_seconds == 7.5
++
++
++def test_missing_session_cookie_is_configuration_error():
++    with pytest.raises(ConfigurationError) as exc_info:
++        Settings.from_env({})
++
++    assert SESSION_COOKIE_ENV in exc_info.value.message
++
++
++def test_invalid_base_url_is_configuration_error():
++    with pytest.raises(ConfigurationError):
++        Settings.from_env(
++            {
++                API_BASE_URL_ENV: "ftp://example.test/api",
++                SESSION_COOKIE_ENV: "sessionid=abc",
++            }
++        )
++
++
++@pytest.mark.parametrize("timeout", ["0", "-1", "abc"])
++def test_invalid_timeout_is_configuration_error(timeout):
++    with pytest.raises(ConfigurationError):
++        Settings.from_env(
++            {
++                SESSION_COOKIE_ENV: "sessionid=abc",
++                TIMEOUT_ENV: timeout,
++            }
++        )
++
++
++def test_settings_repr_does_not_expose_cookie():
++    settings = Settings.from_env({SESSION_COOKIE_ENV: "sessionid=super-secret"})
++
++    assert "super-secret" not in repr(settings)
+diff --git a/test_system_mcp/tests/test_service.py b/test_system_mcp/tests/test_service.py
+new file mode 100644
+index 0000000..76e9c77
+--- /dev/null
++++ b/test_system_mcp/tests/test_service.py
+@@ -0,0 +1,125 @@
++import pytest
++
++from nr_version_mcp.errors import ToolInputError
++from nr_version_mcp.service import VersionQueryService, validate_version_id
++
++
++class FakeApiClient:
++    def __init__(self):
++        self.list_calls = []
++        self.detail_calls = []
++
++    def list_versions(self, **kwargs):
++        self.list_calls.append(kwargs)
++        return {
++            "count": 0,
++            "page": kwargs["page"],
++            "page_size": kwargs["page_size"],
++            "results": [],
++        }
++
++    def get_version(self, version_id):
++        self.detail_calls.append(version_id)
++        return {"id": version_id, "product_name": "NR"}
++
++
++def test_list_versions_uses_defaults_and_passes_filters():
++    api = FakeApiClient()
++    service = VersionQueryService(api)
++
++    result = service.list_versions(
++        search="NR",
++        product_name="NR 套件",
++        status="RELEASED",
++        page=2,
++        page_size=50,
++    )
++
++    assert api.list_calls == [
++        {
++            "search": "NR",
++            "product_name": "NR 套件",
++            "status": "RELEASED",
++            "page": 2,
++            "page_size": 50,
++        }
++    ]
++    assert result["page"] == 2
++
++
++def test_list_versions_defaults_are_applied():
++    api = FakeApiClient()
++    service = VersionQueryService(api)
++
++    service.list_versions()
++
++    assert api.list_calls == [
++        {"search": None, "product_name": None, "status": None, "page": 1, "page_size": 20}
++    ]
++
++
++@pytest.mark.parametrize("page", [0, -1, 1.5, True, "1"])
++def test_invalid_page_is_rejected_before_upstream_call(page):
++    api = FakeApiClient()
++    service = VersionQueryService(api)
++
++    with pytest.raises(ToolInputError) as exc_info:
++        service.list_versions(page=page)
++
++    assert exc_info.value.code == "validation_error"
++    assert "page" in exc_info.value.details
++    assert api.list_calls == []
++
++
++@pytest.mark.parametrize("page_size", [0, -5, 101, 20.5, False, "20"])
++def test_invalid_page_size_is_rejected_before_upstream_call(page_size):
++    api = FakeApiClient()
++    service = VersionQueryService(api)
++
++    with pytest.raises(ToolInputError) as exc_info:
++        service.list_versions(page_size=page_size)
++
++    assert exc_info.value.code == "validation_error"
++    assert "page_size" in exc_info.value.details
++    assert api.list_calls == []
++
++
++@pytest.mark.parametrize("status", ["UNKNOWN", "released", 1])
++def test_invalid_status_is_rejected_before_upstream_call(status):
++    api = FakeApiClient()
++    service = VersionQueryService(api)
++
++    with pytest.raises(ToolInputError) as exc_info:
++        service.list_versions(status=status)
++
++    assert exc_info.value.code == "validation_error"
++    assert "status" in exc_info.value.details
++    assert api.list_calls == []
++
++
++@pytest.mark.parametrize("status", ["", "   "])
++def test_empty_status_is_treated_as_no_filter(status):
++    api = FakeApiClient()
++    service = VersionQueryService(api)
++
++    service.list_versions(status=status)
++
++    assert api.list_calls[0]["status"] is None
++
++
++@pytest.mark.parametrize("value", ["", "not-a-uuid", "123", None, 42])
++def test_invalid_version_id_is_rejected(value):
++    with pytest.raises(ToolInputError) as exc_info:
++        validate_version_id(value)
++
++    assert exc_info.value.code == "validation_error"
++    assert "version_id" in exc_info.value.details
++
++
++def test_version_id_is_normalized_to_lowercase_uuid():
++    api = FakeApiClient()
++    service = VersionQueryService(api)
++
++    service.get_version("AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA")
++
++    assert api.detail_calls == ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]
+diff --git a/test_system_mcp/tests/test_tools.py b/test_system_mcp/tests/test_tools.py
+new file mode 100644
+index 0000000..e1f0499
+--- /dev/null
++++ b/test_system_mcp/tests/test_tools.py
+@@ -0,0 +1,54 @@
++import asyncio
++import json
++
++import pytest
++from mcp.server.mcpserver.exceptions import ToolError
++
++from nr_version_mcp import server
++
++
++def _tool_payload(exc_info) -> dict:
++    return json.loads(str(exc_info.value))
++
++
++def test_missing_session_cookie_returns_configuration_error(monkeypatch):
++    monkeypatch.delenv("NR_MCP_SESSION_COOKIE", raising=False)
++
++    with pytest.raises(ToolError) as exc_info:
++        server.list_versions()
++
++    payload = _tool_payload(exc_info)
++    assert payload["code"] == "configuration_error"
++    assert "NR_MCP_SESSION_COOKIE" in payload["message"]
++
++
++def test_invalid_page_returns_structured_validation_error(monkeypatch):
++    monkeypatch.setenv("NR_MCP_SESSION_COOKIE", "sessionid=test-session")
++
++    with pytest.raises(ToolError) as exc_info:
++        server.list_versions(page=0)
++
++    payload = _tool_payload(exc_info)
++    assert payload["code"] == "validation_error"
++    assert "page" in payload["details"]
++    assert "test-session" not in str(exc_info.value)
++
++
++def test_invalid_version_id_returns_structured_validation_error(monkeypatch):
++    monkeypatch.setenv("NR_MCP_SESSION_COOKIE", "sessionid=test-session")
++
++    with pytest.raises(ToolError) as exc_info:
++        server.get_version("not-a-uuid")
++
++    payload = _tool_payload(exc_info)
++    assert payload["code"] == "validation_error"
++    assert "version_id" in payload["details"]
++
++
++def test_all_tools_are_marked_read_only():
++    tools = asyncio.run(server.mcp.list_tools())
++
++    assert {tool.name for tool in tools} == {"list_versions", "get_version"}
++    for tool in tools:
++        assert tool.annotations.read_only_hint is True
++        assert tool.annotations.destructive_hint is False

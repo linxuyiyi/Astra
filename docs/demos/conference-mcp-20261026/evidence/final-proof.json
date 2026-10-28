@@ -1,0 +1,20 @@
+{
+  "task_id": "T-20261026-149C47",
+  "task_status": "SUCCEEDED",
+  "execution_released": true,
+  "worker_id": "conference-mcp-worker-20261026",
+  "worker_status": "IDLE",
+  "worker_occupied_task": null,
+  "review_status": "SUCCEEDED",
+  "candidate_count": 3,
+  "published_knowledge_id": "KNOW_7A7393D709224365AD90",
+  "published_status": "published",
+  "verification_status": "verified",
+  "sync_status": "synced",
+  "source_path": "raw/sources/astra/knowledge/KNOW_7A7393D709224365AD90.md",
+  "employee_messages": 2,
+  "commit": "350207a78603035c060f038d5456835cb4f228ff",
+  "pushed": false,
+  "worker_current_task_count": 0,
+  "final_rechecked_at": "2026-10-26T12:06:22.607168+00:00"
+}

@@ -1,0 +1,127 @@
+[
+  {
+    "clip": "01-demand",
+    "duration": 6,
+    "caption": "向数字员工交办产品版本查询 MCP 开发",
+    "stage": "01 / 需求交办"
+  },
+  {
+    "clip": "02-send",
+    "duration": 2,
+    "caption": "发送需求，交由数字员工受理",
+    "stage": "01 / 需求交办",
+    "source_end": 0.3
+  },
+  {
+    "clip": "02-send",
+    "duration": 6,
+    "caption": "数字员工主动建单，关联当前对话",
+    "stage": "02 / 主动建单",
+    "source_start": 0.3,
+    "source_end": 1
+  },
+  {
+    "clip": "03-auto-task",
+    "duration": 5,
+    "caption": "AgentWorker 自动接纳，进入独立工作区",
+    "stage": "03 / Worker 执行",
+    "source_start": 0,
+    "source_end": 1
+  },
+  {
+    "clip": "04-worker-accept",
+    "duration": 1,
+    "source_start": 0,
+    "source_end": 0.13,
+    "caption": "点击任务，进入同一任务工作区",
+    "stage": "03 / Worker 执行"
+  },
+  {
+    "clip": "05-human-question",
+    "duration": 2,
+    "caption": "原生提问：确认访问环境与范围",
+    "stage": "04 / 人工确认",
+    "caption_position": "top"
+  },
+  {
+    "clip": "06-confirm-environment",
+    "duration": 2,
+    "caption": "选择本地隔离演示环境",
+    "stage": "04 / 人工确认",
+    "caption_position": "top",
+    "source_start": 0.15
+  },
+  {
+    "clip": "07-confirm-readonly",
+    "duration": 2,
+    "caption": "仅查询演示产品与版本",
+    "stage": "04 / 人工确认",
+    "caption_position": "top"
+  },
+  {
+    "clip": "08-confirm-auth",
+    "duration": 2,
+    "caption": "会话 Cookie 通过环境变量注入",
+    "stage": "04 / 人工确认",
+    "caption_position": "top"
+  },
+  {
+    "clip": "09-submit-confirmation",
+    "duration": 2,
+    "caption": "提交确认，继续同一任务和 Session",
+    "stage": "04 / 人工确认",
+    "caption_position": "top"
+  },
+  {
+    "clip": "11-mcp-code",
+    "duration": 4,
+    "caption": "实现 MCP 工具，复用已有 HTTP API",
+    "stage": "05 / 开发与验证",
+    "source_start": 0.25,
+    "source_end": 1
+  },
+  {
+    "clip": "23-report-final-scroll",
+    "duration": 6,
+    "caption": "53 项 MCP 测试、9 项 API 回归通过\n真实 MCP 调用与 HTTP 结果一致",
+    "stage": "05 / 开发与验证",
+    "source_start": 0,
+    "source_end": 0.5,
+    "note": "执行记录回看 · 等待已剪辑"
+  },
+  {
+    "clip": "23-report-final-scroll",
+    "duration": 6,
+    "caption": "代码提交：350207a7\n仅本地提交，未推送远端",
+    "stage": "06 / 提交代码",
+    "source_start": 0.5,
+    "source_end": 1,
+    "note": "执行记录回看 · 等待已剪辑"
+  },
+  {
+    "clip": "16-employee-completion",
+    "duration": 4,
+    "caption": "完成事件自动唤醒数字员工，主动回复",
+    "stage": "07 / 完成回报"
+  },
+  {
+    "clip": "17-task-complete-card",
+    "duration": 3,
+    "caption": "任务状态：已完成",
+    "stage": "07 / 完成回报"
+  },
+  {
+    "clip": "18-publish-experience",
+    "duration": 3,
+    "caption": "后台复盘生成候选，审核后发布",
+    "stage": "08 / 经验沉淀",
+    "caption_position": "top"
+  },
+  {
+    "clip": "20-library-open",
+    "duration": 4,
+    "caption": "经验已发布、已验证，并关联来源任务",
+    "stage": "08 / 经验沉淀",
+    "note": "真实页面回看 · 等待已剪辑"
+  }
+]

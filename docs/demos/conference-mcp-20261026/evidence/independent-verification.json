@@ -1,0 +1,32 @@
+{
+  "task_id": "T-20261026-149C47",
+  "session_id": "ses_e8826d641ffen4XzCS49w167og",
+  "real_mcp": {
+    "passed": true,
+    "protocol_version": "2025-11-25",
+    "tool_count": 2,
+    "matched_http_calls": 3,
+    "invalid_page_rejected": true,
+    "credentials_logged": false
+  },
+  "mcp-tests": {
+    "passed": true,
+    "output_file": "independent-mcp-tests.txt"
+  },
+  "version-api-tests": {
+    "passed": true,
+    "output_file": "independent-version-api-tests.txt"
+  },
+  "mcp-ruff": {
+    "passed": true,
+    "output_file": "independent-mcp-ruff.txt"
+  },
+  "django-check": {
+    "passed": true,
+    "output_file": "independent-django-check.txt"
+  },
+  "git-context": {
+    "passed": true,
+    "output_file": "independent-git-context.txt"
+  }
+}

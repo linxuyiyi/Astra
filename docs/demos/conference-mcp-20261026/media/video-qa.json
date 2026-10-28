@@ -1,0 +1,35 @@
+{
+  "duration_seconds": 60,
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "decode_passed": true,
+  "audio_seconds": 60,
+  "subtitles_burned_in": true,
+  "local_crops": 0,
+  "caption_and_voice_employee_name": "数字员工",
+  "reviewed_frames_seconds": [
+    2,
+    7.5,
+    10,
+    16,
+    19.1,
+    23,
+    28.5,
+    32.5,
+    35,
+    39,
+    43.5,
+    48,
+    52,
+    54,
+    57,
+    59.7
+  ],
+  "continuous_record_review": "23-report-final-scroll",
+  "source_recording_fps_note": "Original and supplementary real page sampling; encoded at 30 fps",
+  "bytes": 3886652,
+  "sha256": "657c62d2fb5737f71612179f32b540d4fe217b7918efce7e1e3ce34416a0e747"
+}

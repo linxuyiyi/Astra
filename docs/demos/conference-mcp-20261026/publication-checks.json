@@ -1,0 +1,18 @@
+{
+  "mcp_original_patch_files_verified": 18,
+  "mcp_tree_matches_original_patch": true,
+  "video_sha256_matches_reviewed_v2": true,
+  "video_sha256": "657c62d2fb5737f71612179f32b540d4fe217b7918efce7e1e3ce34416a0e747",
+  "archive_crc_passed": true,
+  "text_files_scanned_including_archive": 47,
+  "credential_pattern_findings": [],
+  "mcp_ruff": "passed",
+  "mcp_tests_runtime": "local macOS Python 3.14, mcp 2.1.1, httpx 0.28.1",
+  "historical_linux_verification": "See evidence/independent-verification.json; production and live Django verification were not rerun for this publication",
+  "original_astra_branch": "v1.4.8",
+  "original_astra_head": "4e2044913048f4bb3034022ba10b2553e88190e1",
+  "mcp_tests_passed": 53,
+  "mcp_tests_warning": "pytest-asyncio uses deprecated Python event-loop policy; 1 warning",
+  "mcp_format_check": "passed",
+  "patch_mail_signature_removed_for_whitespace_check": true
+}

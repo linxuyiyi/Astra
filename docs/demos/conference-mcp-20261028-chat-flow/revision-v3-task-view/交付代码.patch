@@ -1,0 +1,1749 @@
+diff --git a/mcp_server/README.md b/mcp_server/README.md
+new file mode 100644
+index 0000000..a9858d6
+--- /dev/null
++++ b/mcp_server/README.md
+@@ -0,0 +1,135 @@
++# NR 产品版本查询 MCP
++
++供 NR 测试系统测试人员使用的只读 MCP 服务。它通过现有 HTTP API 查询产品版本，
++不新增或修改后端接口，不执行任何写操作。
++
++## 能力与工具
++
++| 能力 | 工具 | 说明 |
++|---|---|---|
++| 版本搜索 | `search_product_versions` | 关键字匹配产品名或版本号（API `search`） |
++| 筛选 | `search_product_versions` | `product_name`、`status`、`release_date_from/to` |
++| 分页 | `search_product_versions` | `page` 从 1 开始，`page_size` 默认 20、最大 100；响应含 `count/page/page_size/results` |
++| 版本详情 | `get_product_version` | 按版本 UUID 返回完整版本信息 |
++
++两个工具都声明为只读（`readOnlyHint=true`）。
++
++现有 HTTP API 原生只支持 `search`、`product_name`、单个 `status`：
++`test_system_server/apps/versions/api/views.py`。因此：
++
++- 请求多个状态，或使用发布日期筛选时，MCP 会分状态读取匹配分页并在本地聚合，
++  响应中标记 `client_side_filtering: true`；
++- 聚合读取受 `NR_MAX_FETCH_PAGES` 保护（默认 50 页 × 100 条）；
++- `release_date_from/to` 使用 `YYYY-MM-DD`，包含边界；无发布日期的版本在日期筛选下会被排除。
++
++## 默认版本状态范围
++
++业务用户已于 2026-10-28 确认：调用方未显式指定 `status` 时，**默认仅查询
++`RELEASED`（已发布）**。草稿和归档版本不会出现在默认结果中。
++
++该默认值可通过环境变量覆盖，调用方显式传 `status` 时始终以调用方为准：
++
++```bash
++# 默认：仅已发布
++NR_DEFAULT_STATUSES=RELEASED
++
++# 示例：已发布 + 草稿
++NR_DEFAULT_STATUSES=RELEASED,DRAFT
++```
++
++支持的状态：`DRAFT`、`RELEASED`、`ARCHIVED`。
++
++## 配置
++
++| 环境变量 | 必填 | 默认值 | 说明 |
++|---|---|---|---|
++| `NR_SESSION_COOKIE` | 是 | 无 | 登录会话 Cookie。可传完整 Cookie 头，或只传 sessionid 值 |
++| `NR_SESSION_COOKIE_NAME` | 否 | `sessionid` | 只传 Cookie 值时使用的名称 |
++| `NR_API_BASE_URL` | 否 | `http://127.0.0.1:8000/api/v1` | 只允许回环地址 |
++| `NR_DEFAULT_STATUSES` | 否 | `RELEASED` | 未显式传 status 时的默认状态范围 |
++| `NR_REQUEST_TIMEOUT` | 否 | `15` | HTTP 超时秒数 |
++| `NR_MAX_PAGE_SIZE` | 否 | `100` | 单页最大条数 |
++| `NR_MAX_FETCH_PAGES` | 否 | `50` | 本地聚合时每个状态的最大读取页数 |
++
++安全边界：
++
++- 鉴权 Cookie **只从环境变量读取**，不写入仓库、不打印到日志或工具错误；
++- `NR_API_BASE_URL` 仅允许 `127.0.0.1`、`localhost`、`::1`，其他地址（含生产域名）
++  会在配置阶段被拒绝；
++- 客户端设置 `trust_env=False`，不经过系统代理，避免 Cookie 被转发到外部；
++- 仅使用 GET，不发送任何写请求。
++
++## 安装与启动
++
++```bash
++python3 -m venv .venv
++.venv/bin/pip install -e "mcp_server[dev]"
++
++NR_SESSION_COOKIE="sessionid=<从本地登录获得>" \
++  .venv/bin/python -m nr_version_mcp
++```
++
++上面的命令以 stdio 方式启动 MCP。客户端配置示例：
++
++```json
++{
++  "mcp": {
++    "nr-product-version": {
++      "type": "local",
++      "command": ["/absolute/path/to/.venv/bin/python", "-m", "nr_version_mcp"],
++      "environment": {
++        "NR_API_BASE_URL": "http://127.0.0.1:8000/api/v1",
++        "NR_DEFAULT_STATUSES": "RELEASED"
++      },
++      "enabled": true
++    }
++  }
++}
++```
++
++`NR_SESSION_COOKIE` 应由启动 MCP 的进程环境注入，不要写进仓库中的配置文件。
++
++## 本地演示环境
++
++演示只使用 SQLite 与现有 Django 代码，不修改后端接口。
++
++```bash
++# 1. 安装演示依赖
++.venv/bin/pip install -e "mcp_server[demo]"
++
++# 2. 初始化本地 SQLite 演示库（.runtime 已被 .gitignore 忽略）
++mkdir -p .runtime
++DATABASE_ENGINE=sqlite SQLITE_PATH=.runtime/demo.sqlite3 \
++  .venv/bin/python test_system_server/manage.py migrate
++
++# 3. 写入演示版本与演示用户（密码只从环境变量读取）
++NR_DEMO_USERNAME=demo NR_DEMO_PASSWORD="<本地演示密码>" \
++  .venv/bin/python mcp_server/demo/seed_demo.py
++
++# 4. 启动本地演示服务
++DATABASE_ENGINE=sqlite SQLITE_PATH=.runtime/demo.sqlite3 \
++  .venv/bin/python test_system_server/manage.py runserver 127.0.0.1:8000
++
++# 5. 另一个终端：通过真实 MCP stdio 调用验证四个能力
++NR_DEMO_USERNAME=demo NR_DEMO_PASSWORD="<本地演示密码>" \
++  .venv/bin/python mcp_server/demo/verify_demo.py
++```
++
++`verify_demo.py` 在内存中完成登录，把 sessionid 通过子进程环境变量传给 MCP，
++只输出脱敏后的查询结果，不输出 Cookie。
++
++## 测试
++
++```bash
++cd mcp_server
++../.venv/bin/pytest -q
++../.venv/bin/ruff check .
++```
++
++测试覆盖：
++
++- 默认状态、配置覆盖与回环地址限制；
++- 关键字、产品名、状态、日期筛选和分页参数；
++- 多状态聚合与结果过多保护；
++- 401/404/连接失败/非法响应映射；
++- 通过真实 MCP stdio 会话调用搜索与详情，验证 Cookie 注入、只读工具声明和错误脱敏。
+diff --git a/mcp_server/demo/seed_demo.py b/mcp_server/demo/seed_demo.py
+new file mode 100644
+index 0000000..f3d3590
+--- /dev/null
++++ b/mcp_server/demo/seed_demo.py
+@@ -0,0 +1,105 @@
++from __future__ import annotations
++
++import os
++import sys
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parents[2]
++SERVER_DIR = REPO_ROOT / "test_system_server"
++
++DEMO_VERSIONS = [
++    {
++        "product_name": "NR 测试套件",
++        "version": "v1.2.0",
++        "status": "RELEASED",
++        "release_date": "2026-06-01",
++        "description": "当前稳定版本",
++        "is_default": True,
++    },
++    {
++        "product_name": "NR 测试套件",
++        "version": "v1.1.0",
++        "status": "RELEASED",
++        "release_date": "2026-03-01",
++        "description": "上一稳定版本",
++        "is_default": False,
++    },
++    {
++        "product_name": "NR 测试套件",
++        "version": "v2.0.0-beta",
++        "status": "DRAFT",
++        "release_date": None,
++        "description": "开发中的下一版本",
++        "is_default": False,
++    },
++    {
++        "product_name": "NR 测试套件",
++        "version": "v0.9.0",
++        "status": "ARCHIVED",
++        "release_date": "2025-12-01",
++        "description": "已归档的历史版本",
++        "is_default": False,
++    },
++    {
++        "product_name": "其他产品",
++        "version": "v3.1.0",
++        "status": "RELEASED",
++        "release_date": "2026-08-01",
++        "description": "其他产品的稳定版本",
++        "is_default": True,
++    },
++]
++
++
++def main() -> None:
++    sys.path.insert(0, str(SERVER_DIR))
++    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
++    os.environ.setdefault("DATABASE_ENGINE", "sqlite")
++    os.environ.setdefault("SQLITE_PATH", str(REPO_ROOT / ".runtime" / "demo.sqlite3"))
++
++    import django
++
++    django.setup()
++
++    from apps.versions.models import ProductVersion
++    from apps.versions.services import normalize_key
++
++    for spec in DEMO_VERSIONS:
++        product_key = normalize_key(spec["product_name"])
++        version_key = normalize_key(spec["version"])
++        ProductVersion.objects.update_or_create(
++            product_key=product_key,
++            version_key=version_key,
++            defaults={
++                "product_name": spec["product_name"],
++                "version": spec["version"],
++                "status": spec["status"],
++                "release_date": spec["release_date"],
++                "description": spec["description"],
++                "is_default": spec["is_default"],
++                "default_key": product_key if spec["is_default"] else None,
++            },
++        )
++
++    username = (os.getenv("NR_DEMO_USERNAME") or "").strip()
++    password = os.getenv("NR_DEMO_PASSWORD") or ""
++    if username and password:
++        from django.contrib.auth import get_user_model
++
++        user_model = get_user_model()
++        user, created = user_model.objects.get_or_create(
++            username=username,
++            defaults={"email": f"{username}@example.com", "is_staff": True, "is_superuser": True},
++        )
++        user.is_staff = True
++        user.is_superuser = True
++        user.is_active = True
++        user.set_password(password)
++        user.save()
++        print(f"demo user {'created' if created else 'updated'}: {username}")
++
++    print(f"seeded {len(DEMO_VERSIONS)} demo versions into {os.environ['SQLITE_PATH']}")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/mcp_server/demo/verify_demo.py b/mcp_server/demo/verify_demo.py
+new file mode 100644
+index 0000000..46004ac
+--- /dev/null
++++ b/mcp_server/demo/verify_demo.py
+@@ -0,0 +1,170 @@
++from __future__ import annotations
++
++import asyncio
++import json
++import logging
++import os
++import sys
++from pathlib import Path
++from typing import Any
++
++import httpx
++from mcp import ClientSession
++from mcp.client.stdio import StdioServerParameters, stdio_client
++
++REPO_ROOT = Path(__file__).resolve().parents[2]
++SRC_DIR = REPO_ROOT / "mcp_server" / "src"
++DEFAULT_BASE_URL = "http://127.0.0.1:8000/api/v1"
++
++
++def login() -> tuple[str, str]:
++    base_url = (os.getenv("NR_API_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
++    username = (os.getenv("NR_DEMO_USERNAME") or "").strip()
++    password = os.getenv("NR_DEMO_PASSWORD") or ""
++    if not username or not password:
++        raise SystemExit("演示验证需要设置 NR_DEMO_USERNAME 与 NR_DEMO_PASSWORD")
++
++    with httpx.Client(base_url=f"{base_url}/", timeout=10, trust_env=False) as client:
++        csrf_response = client.get("auth/csrf/")
++        csrf_response.raise_for_status()
++        csrf_token = client.cookies.get("csrftoken")
++        if not csrf_token:
++            raise SystemExit("未能从本地演示服务获取 CSRF Cookie")
++        login_response = client.post(
++            "auth/login/",
++            json={"username": username, "password": password},
++            headers={"X-CSRFToken": csrf_token},
++        )
++        if login_response.status_code != 200:
++            raise SystemExit(f"登录本地演示服务失败：HTTP {login_response.status_code}")
++        session_id = client.cookies.get("sessionid")
++        if not session_id:
++            raise SystemExit("登录成功但未获得 sessionid Cookie")
++    return base_url, session_id
++
++
++async def call_tools(base_url: str, session_id: str) -> dict[str, Any]:
++    env = {
++        "PATH": os.environ.get("PATH", ""),
++        "PYTHONPATH": str(SRC_DIR),
++        "NR_API_BASE_URL": base_url,
++        "NR_SESSION_COOKIE": f"sessionid={session_id}",
++        "NR_DEFAULT_STATUSES": os.getenv("NR_DEFAULT_STATUSES", "RELEASED"),
++    }
++    params = StdioServerParameters(
++        command=sys.executable,
++        args=["-m", "nr_version_mcp"],
++        env=env,
++        cwd=str(REPO_ROOT),
++    )
++    async with stdio_client(params) as (read, write):
++        async with ClientSession(read, write) as session:
++            await session.initialize()
++            tools = await session.list_tools()
++            search = await session.call_tool(
++                "search_product_versions",
++                {
++                    "keyword": os.getenv("NR_DEMO_KEYWORD", "v1"),
++                    "product_name": os.getenv("NR_DEMO_PRODUCT", "NR 测试套件"),
++                    "page": 1,
++                    "page_size": 1,
++                },
++            )
++            if search.isError:
++                raise SystemExit(f"search_product_versions 调用失败：{search.content[0].text}")
++            search_payload = search.structuredContent or {}
++            results = search_payload.get("results") or []
++            if not results:
++                raise SystemExit("搜索没有返回结果，无法继续验证版本详情")
++
++            filtered = await session.call_tool(
++                "search_product_versions",
++                {
++                    "product_name": os.getenv("NR_DEMO_PRODUCT", "NR 测试套件"),
++                    "release_date_from": "2026-01-01",
++                    "release_date_to": "2026-12-31",
++                    "page": 2,
++                    "page_size": 1,
++                },
++            )
++            if filtered.isError:
++                raise SystemExit(f"日期筛选调用失败：{filtered.content[0].text}")
++
++            detail = await session.call_tool(
++                "get_product_version", {"version_id": results[0]["id"]}
++            )
++            if detail.isError:
++                raise SystemExit(f"get_product_version 调用失败：{detail.content[0].text}")
++            return {
++                "tools": [tool.name for tool in tools.tools],
++                "search": search_payload,
++                "filtered": filtered.structuredContent or {},
++                "detail": detail.structuredContent or {},
++            }
++
++
++def main() -> None:
++    logging.getLogger("httpx").setLevel(logging.WARNING)
++    base_url, session_id = login()
++    payload = asyncio.run(call_tools(base_url, session_id))
++    search = payload["search"]
++    statuses = {item["status"] for item in search["results"]}
++    print("MCP tools:", ", ".join(payload["tools"]))
++    print(
++        "search:",
++        json.dumps(
++            {
++                "count": search["count"],
++                "page": search["page"],
++                "page_size": search["page_size"],
++                "applied_statuses": search["applied_statuses"],
++                "client_side_filtering": search["client_side_filtering"],
++                "versions": [
++                    {
++                        "id": item["id"],
++                        "product_name": item["product_name"],
++                        "version": item["version"],
++                        "status": item["status"],
++                    }
++                    for item in search["results"]
++                ],
++            },
++            ensure_ascii=False,
++        ),
++    )
++    filtered = payload["filtered"]
++    print(
++        "date filter:",
++        json.dumps(
++            {
++                "count": filtered["count"],
++                "page": filtered["page"],
++                "page_size": filtered["page_size"],
++                "applied_statuses": filtered["applied_statuses"],
++                "client_side_filtering": filtered["client_side_filtering"],
++                "applied_release_date": filtered["applied_release_date"],
++                "versions": [item["version"] for item in filtered["results"]],
++            },
++            ensure_ascii=False,
++        ),
++    )
++    print(
++        "detail:",
++        json.dumps(
++            {
++                "id": payload["detail"]["id"],
++                "product_name": payload["detail"]["product_name"],
++                "version": payload["detail"]["version"],
++                "status": payload["detail"]["status"],
++                "description": payload["detail"]["description"],
++            },
++            ensure_ascii=False,
++        ),
++    )
++    if statuses - set(search["applied_statuses"]):
++        raise SystemExit(f"返回了非预期状态：{sorted(statuses - set(search['applied_statuses']))}")
++    print("demo verification passed")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/mcp_server/pyproject.toml b/mcp_server/pyproject.toml
+new file mode 100644
+index 0000000..044ca1d
+--- /dev/null
++++ b/mcp_server/pyproject.toml
+@@ -0,0 +1,41 @@
++[project]
++name = "nr-version-mcp"
++version = "0.1.0"
++description = "NR 测试系统产品版本查询 MCP"
++requires-python = ">=3.10"
++dependencies = [
++  "mcp>=1.30,<2",
++  "httpx>=0.27,<1",
++]
++
++[project.optional-dependencies]
++dev = [
++  "pytest>=8,<9",
++  "ruff>=0.12,<1",
++]
++demo = [
++  "celery[redis]>=5.6.3,<5.7",
++  "django>=5.2,<5.3",
++  "djangorestframework>=3.16,<3.17",
++]
++
++[project.scripts]
++nr-version-mcp = "nr_version_mcp.__main__:main"
++
++[build-system]
++requires = ["hatchling"]
++build-backend = "hatchling.build"
++
++[tool.hatch.build.targets.wheel]
++packages = ["src/nr_version_mcp"]
++
++[tool.pytest.ini_options]
++pythonpath = ["src"]
++testpaths = ["tests"]
++
++[tool.ruff]
++line-length = 100
++target-version = "py310"
++
++[tool.ruff.lint]
++select = ["E", "F", "I", "B", "UP"]
+diff --git a/mcp_server/src/nr_version_mcp/__init__.py b/mcp_server/src/nr_version_mcp/__init__.py
+new file mode 100644
+index 0000000..6e33c44
+--- /dev/null
++++ b/mcp_server/src/nr_version_mcp/__init__.py
+@@ -0,0 +1,3 @@
++"""NR 测试系统产品版本查询 MCP。"""
++
++__version__ = "0.1.0"
+diff --git a/mcp_server/src/nr_version_mcp/__main__.py b/mcp_server/src/nr_version_mcp/__main__.py
+new file mode 100644
+index 0000000..5dac8b8
+--- /dev/null
++++ b/mcp_server/src/nr_version_mcp/__main__.py
+@@ -0,0 +1,11 @@
++from __future__ import annotations
++
++from .server import mcp
++
++
++def main() -> None:
++    mcp.run()
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/mcp_server/src/nr_version_mcp/client.py b/mcp_server/src/nr_version_mcp/client.py
+new file mode 100644
+index 0000000..d87207b
+--- /dev/null
++++ b/mcp_server/src/nr_version_mcp/client.py
+@@ -0,0 +1,321 @@
++from __future__ import annotations
++
++import datetime as dt
++import uuid
++from collections.abc import Sequence
++from typing import Any
++
++import httpx
++
++from .config import STATUS_CHOICES, Settings
++
++USER_AGENT = "nr-version-mcp/0.1.0"
++
++
++class VersionApiError(RuntimeError):
++    """版本查询服务返回的可解释错误。"""
++
++    def __init__(self, code: str, message: str, *, status_code: int | None = None) -> None:
++        super().__init__(message)
++        self.code = code
++        self.message = message
++        self.status_code = status_code
++
++    def as_text(self) -> str:
++        return f"{self.code}: {self.message}"
++
++
++def _clean_text(value: str | None) -> str | None:
++    if value is None:
++        return None
++    text = value.strip()
++    return text or None
++
++
++def _checked_page(value: int, *, name: str) -> int:
++    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
++        raise VersionApiError("invalid_argument", f"{name} 必须是大于 0 的整数")
++    return value
++
++
++def _checked_page_size(value: int, *, maximum: int) -> int:
++    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
++        raise VersionApiError("invalid_argument", "page_size 必须是大于 0 的整数")
++    if value > maximum:
++        raise VersionApiError("invalid_argument", f"page_size 不能超过 {maximum}")
++    return value
++
++
++def _parse_statuses(value: Sequence[str] | str | None) -> tuple[str, ...] | None:
++    if value is None:
++        return None
++    if isinstance(value, str):
++        parts: Sequence[str] = [value]
++    else:
++        parts = value
++    statuses: list[str] = []
++    for part in parts:
++        if not isinstance(part, str):
++            raise VersionApiError("invalid_argument", "status 只能是字符串或字符串列表")
++        for item in part.split(","):
++            status = item.strip().upper()
++            if not status:
++                continue
++            if status not in STATUS_CHOICES:
++                raise VersionApiError(
++                    "invalid_argument",
++                    f"未知版本状态 {item!r}，可选值：{', '.join(STATUS_CHOICES)}",
++                )
++            if status not in statuses:
++                statuses.append(status)
++    return tuple(statuses) or None
++
++
++def _parse_date(value: str | None, *, name: str) -> dt.date | None:
++    text = _clean_text(value)
++    if text is None:
++        return None
++    try:
++        return dt.date.fromisoformat(text)
++    except ValueError as exc:
++        raise VersionApiError("invalid_argument", f"{name} 必须是 YYYY-MM-DD 格式的日期") from exc
++
++
++def _timestamp(value: Any) -> float:
++    if not isinstance(value, str) or not value:
++        return 0.0
++    try:
++        return dt.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
++    except ValueError:
++        return 0.0
++
++
++def _payload_error(response: httpx.Response) -> VersionApiError:
++    payload: Any = None
++    try:
++        payload = response.json()
++    except ValueError:
++        payload = None
++    code = "request_error"
++    message = "版本查询服务返回错误"
++    if isinstance(payload, dict):
++        code = str(payload.get("code") or code)
++        message = str(payload.get("message") or message)
++    elif response.status_code == 401:
++        code, message = "unauthenticated", "会话 Cookie 无效或已过期"
++    elif response.status_code == 403:
++        code, message = "forbidden", "没有查询产品版本的权限"
++    elif response.status_code == 404:
++        code, message = "not_found", "请求的资源不存在"
++    return VersionApiError(code, message, status_code=response.status_code)
++
++
++class ProductVersionClient:
++    """只读访问 NR 版本 HTTP API 的客户端。"""
++
++    def __init__(self, settings: Settings, *, transport: httpx.BaseTransport | None = None) -> None:
++        self._settings = settings
++        self._client = httpx.Client(
++            base_url=f"{settings.base_url}/",
++            headers={
++                "Accept": "application/json",
++                "Cookie": settings.session_cookie,
++                "User-Agent": USER_AGENT,
++            },
++            timeout=settings.timeout,
++            transport=transport,
++            trust_env=False,
++        )
++
++    def __enter__(self) -> ProductVersionClient:
++        return self
++
++    def __exit__(self, *exc_info: object) -> None:
++        self.close()
++
++    def close(self) -> None:
++        self._client.close()
++
++    def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
++        try:
++            response = self._client.get(path, params=params)
++        except httpx.HTTPError as exc:
++            raise VersionApiError(
++                "connection_error",
++                "无法连接版本查询服务，请确认 127.0.0.1:8000 本地演示服务已启动",
++            ) from exc
++        if response.status_code >= 400:
++            raise _payload_error(response)
++        try:
++            payload = response.json()
++        except ValueError as exc:
++            raise VersionApiError("invalid_response", "版本查询服务返回了非 JSON 响应") from exc
++        if not isinstance(payload, dict):
++            raise VersionApiError("invalid_response", "版本查询服务返回的数据结构不正确")
++        return payload
++
++    def _normalise_page(self, payload: dict[str, Any], *, requested_page: int) -> dict[str, Any]:
++        count = payload.get("count")
++        results = payload.get("results")
++        if isinstance(count, bool) or not isinstance(count, int) or not isinstance(results, list):
++            raise VersionApiError("invalid_response", "版本查询服务分页结构不正确")
++        page = payload.get("page")
++        page_size = payload.get("page_size")
++        return {
++            "count": count,
++            "page": page if isinstance(page, int) else requested_page,
++            "page_size": page_size if isinstance(page_size, int) else len(results),
++            "results": results,
++        }
++
++    def _base_params(
++        self,
++        *,
++        keyword: str | None,
++        product_name: str | None,
++        status: str | None,
++    ) -> dict[str, Any]:
++        params: dict[str, Any] = {}
++        if keyword:
++            params["search"] = keyword
++        if product_name:
++            params["product_name"] = product_name
++        if status:
++            params["status"] = status
++        return params
++
++    def search(
++        self,
++        *,
++        keyword: str | None = None,
++        product_name: str | None = None,
++        statuses: Sequence[str] | str | None = None,
++        release_date_from: str | None = None,
++        release_date_to: str | None = None,
++        page: int = 1,
++        page_size: int = 20,
++    ) -> dict[str, Any]:
++        page = _checked_page(page, name="page")
++        page_size = _checked_page_size(page_size, maximum=self._settings.max_page_size)
++        keyword = _clean_text(keyword)
++        product_name = _clean_text(product_name)
++        effective_statuses = _parse_statuses(statuses) or self._settings.default_statuses
++        start = _parse_date(release_date_from, name="release_date_from")
++        end = _parse_date(release_date_to, name="release_date_to")
++        if start and end and start > end:
++            raise VersionApiError("invalid_argument", "release_date_from 不能晚于 release_date_to")
++
++        if len(effective_statuses) == 1 and start is None and end is None:
++            params = self._base_params(
++                keyword=keyword, product_name=product_name, status=effective_statuses[0]
++            )
++            params.update({"page": page, "page_size": page_size})
++            payload = self._get("system/versions/", params=params)
++            result = self._normalise_page(payload, requested_page=page)
++            result.update(
++                {
++                    "applied_statuses": list(effective_statuses),
++                    "client_side_filtering": False,
++                }
++            )
++            return result
++
++        return self._search_aggregated(
++            keyword=keyword,
++            product_name=product_name,
++            statuses=effective_statuses,
++            start=start,
++            end=end,
++            page=page,
++            page_size=page_size,
++        )
++
++    def _search_aggregated(
++        self,
++        *,
++        keyword: str | None,
++        product_name: str | None,
++        statuses: tuple[str, ...],
++        start: dt.date | None,
++        end: dt.date | None,
++        page: int,
++        page_size: int,
++    ) -> dict[str, Any]:
++        fetch_size = self._settings.max_page_size
++        collected: list[dict[str, Any]] = []
++        for status in statuses:
++            params = self._base_params(keyword=keyword, product_name=product_name, status=status)
++            params.update({"page": 1, "page_size": fetch_size})
++            fetched_pages = 0
++            while True:
++                payload = self._get("system/versions/", params=params)
++                page_data = self._normalise_page(payload, requested_page=params["page"])
++                fetched_pages += 1
++                collected.extend(item for item in page_data["results"] if isinstance(item, dict))
++                if not page_data["results"]:
++                    break
++                if fetched_pages * fetch_size >= page_data["count"]:
++                    break
++                if fetched_pages >= self._settings.max_fetch_pages:
++                    raise VersionApiError(
++                        "result_too_large",
++                        "多状态或日期筛选需要读取的结果过多，请缩小产品、关键字或时间范围",
++                    )
++                params["page"] = fetched_pages + 1
++
++        unique: dict[str, dict[str, Any]] = {}
++        for item in collected:
++            key = str(item.get("id") or "")
++            if not key:
++                key = f"{item.get('product_name')}|{item.get('version')}|{item.get('status')}"
++            unique[key] = item
++
++        items = list(unique.values())
++        if start or end:
++            filtered: list[dict[str, Any]] = []
++            for item in items:
++                raw_date = item.get("release_date")
++                if not isinstance(raw_date, str) or not raw_date:
++                    continue
++                try:
++                    released = dt.date.fromisoformat(raw_date)
++                except ValueError:
++                    continue
++                if start and released < start:
++                    continue
++                if end and released > end:
++                    continue
++                filtered.append(item)
++            items = filtered
++
++        items.sort(
++            key=lambda item: (
++                _timestamp(item.get("updated_at")),
++                str(item.get("id") or ""),
++            ),
++            reverse=True,
++        )
++        total = len(items)
++        offset = (page - 1) * page_size
++        return {
++            "count": total,
++            "page": page,
++            "page_size": page_size,
++            "results": items[offset : offset + page_size],
++            "applied_statuses": list(statuses),
++            "client_side_filtering": True,
++            "applied_release_date": {
++                "from": start.isoformat() if start else None,
++                "to": end.isoformat() if end else None,
++            },
++        }
++
++    def get(self, version_id: str) -> dict[str, Any]:
++        text = _clean_text(version_id)
++        if text is None:
++            raise VersionApiError("invalid_argument", "version_id 不能为空")
++        try:
++            canonical = str(uuid.UUID(text))
++        except ValueError as exc:
++            raise VersionApiError("invalid_argument", "version_id 必须是合法的 UUID") from exc
++        return self._get(f"system/versions/{canonical}/")
+diff --git a/mcp_server/src/nr_version_mcp/config.py b/mcp_server/src/nr_version_mcp/config.py
+new file mode 100644
+index 0000000..1a132be
+--- /dev/null
++++ b/mcp_server/src/nr_version_mcp/config.py
+@@ -0,0 +1,124 @@
++from __future__ import annotations
++
++import os
++from collections.abc import Mapping
++from dataclasses import dataclass, field
++from urllib.parse import urlsplit
++
++STATUS_CHOICES = ("DRAFT", "RELEASED", "ARCHIVED")
++DEFAULT_BASE_URL = "http://127.0.0.1:8000/api/v1"
++DEFAULT_STATUSES = ("RELEASED",)
++LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
++
++
++class ConfigError(ValueError):
++    """配置缺失或不满足安全边界。"""
++
++
++@dataclass(frozen=True)
++class Settings:
++    base_url: str
++    session_cookie: str = field(repr=False)
++    default_statuses: tuple[str, ...] = DEFAULT_STATUSES
++    timeout: float = 15.0
++    max_page_size: int = 100
++    max_fetch_pages: int = 50
++
++
++def parse_statuses(value: str | None, *, source: str) -> tuple[str, ...]:
++    raw = (value or "").strip()
++    if not raw:
++        raise ConfigError(f"{source} 不能为空，可选值：{', '.join(STATUS_CHOICES)}")
++    statuses: list[str] = []
++    for part in raw.split(","):
++        status = part.strip().upper()
++        if not status:
++            continue
++        if status not in STATUS_CHOICES:
++            raise ConfigError(
++                f"{source} 包含未知状态 {part!r}，可选值：{', '.join(STATUS_CHOICES)}"
++            )
++        if status not in statuses:
++            statuses.append(status)
++    if not statuses:
++        raise ConfigError(f"{source} 不能为空，可选值：{', '.join(STATUS_CHOICES)}")
++    return tuple(statuses)
++
++
++def _loopback_base_url(raw: str) -> str:
++    value = raw.strip().rstrip("/")
++    parts = urlsplit(value)
++    if parts.scheme not in {"http", "https"}:
++        raise ConfigError("NR_API_BASE_URL 必须使用 http 或 https")
++    if parts.hostname not in LOOPBACK_HOSTS:
++        raise ConfigError(
++            "NR_API_BASE_URL 只允许本机回环地址（127.0.0.1、localhost 或 ::1），禁止访问生产环境"
++        )
++    if parts.query or parts.fragment:
++        raise ConfigError("NR_API_BASE_URL 不能包含查询参数或片段")
++    if not parts.path:
++        raise ConfigError("NR_API_BASE_URL 必须包含 API 路径，例如 /api/v1")
++    return value
++
++
++def _session_cookie(raw: str, cookie_name: str) -> str:
++    value = raw.strip()
++    if not value:
++        raise ConfigError("必须通过环境变量 NR_SESSION_COOKIE 注入登录 Cookie")
++    if "\r" in value or "\n" in value:
++        raise ConfigError("NR_SESSION_COOKIE 不能包含换行符")
++    if "=" not in value:
++        value = f"{cookie_name}={value}"
++    return value
++
++
++def _positive_float(raw: str | None, *, name: str, default: float) -> float:
++    if raw is None or not raw.strip():
++        return default
++    try:
++        value = float(raw)
++    except ValueError as exc:
++        raise ConfigError(f"{name} 必须是数字") from exc
++    if value <= 0:
++        raise ConfigError(f"{name} 必须大于 0")
++    return value
++
++
++def _positive_int(raw: str | None, *, name: str, default: int) -> int:
++    if raw is None or not raw.strip():
++        return default
++    try:
++        value = int(raw)
++    except ValueError as exc:
++        raise ConfigError(f"{name} 必须是整数") from exc
++    if value <= 0:
++        raise ConfigError(f"{name} 必须大于 0")
++    return value
++
++
++def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
++    env = os.environ if environ is None else environ
++    base_url = _loopback_base_url(env.get("NR_API_BASE_URL", DEFAULT_BASE_URL))
++    cookie_name = (env.get("NR_SESSION_COOKIE_NAME") or "sessionid").strip()
++    if not cookie_name or "=" in cookie_name or ";" in cookie_name:
++        raise ConfigError("NR_SESSION_COOKIE_NAME 必须是合法的 Cookie 名称")
++    session_cookie = _session_cookie(env.get("NR_SESSION_COOKIE", ""), cookie_name)
++    raw_default_statuses = env.get("NR_DEFAULT_STATUSES")
++    if raw_default_statuses and raw_default_statuses.strip():
++        default_statuses = parse_statuses(raw_default_statuses, source="NR_DEFAULT_STATUSES")
++    else:
++        default_statuses = DEFAULT_STATUSES
++    return Settings(
++        base_url=base_url,
++        session_cookie=session_cookie,
++        default_statuses=default_statuses,
++        timeout=_positive_float(
++            env.get("NR_REQUEST_TIMEOUT"), name="NR_REQUEST_TIMEOUT", default=15.0
++        ),
++        max_page_size=_positive_int(
++            env.get("NR_MAX_PAGE_SIZE"), name="NR_MAX_PAGE_SIZE", default=100
++        ),
++        max_fetch_pages=_positive_int(
++            env.get("NR_MAX_FETCH_PAGES"), name="NR_MAX_FETCH_PAGES", default=50
++        ),
++    )
+diff --git a/mcp_server/src/nr_version_mcp/server.py b/mcp_server/src/nr_version_mcp/server.py
+new file mode 100644
+index 0000000..c04f61f
+--- /dev/null
++++ b/mcp_server/src/nr_version_mcp/server.py
+@@ -0,0 +1,121 @@
++from __future__ import annotations
++
++from collections.abc import Callable
++from typing import Any
++
++from mcp.server.fastmcp import FastMCP
++from mcp.server.fastmcp.exceptions import ToolError
++from mcp.types import ToolAnnotations
++
++from .client import ProductVersionClient, VersionApiError
++from .config import ConfigError, load_settings
++
++INSTRUCTIONS = """
++只读查询 NR 测试系统的产品版本。所有能力复用 127.0.0.1:8000/api/v1 的现有 HTTP API，
++不会创建、修改或删除任何数据。
++
++- 搜索与筛选：search_product_versions 支持关键字、产品名、版本状态和发布日期范围；
++- 分页：page 从 1 开始，page_size 最大 100，响应包含 count/page/page_size；
++- 详情：get_product_version 使用列表返回的版本 UUID 获取完整信息。
++
++调用方未指定 status 时使用部署配置的默认状态范围（默认仅 RELEASED，可用
++NR_DEFAULT_STATUSES 覆盖）。现有 HTTP API 只支持单个 status 与关键字/产品名筛选，
++因此多状态和发布日期筛选由 MCP 在读取后本地聚合，并会在响应中标记
++client_side_filtering=true。
++""".strip()
++
++READ_ONLY = ToolAnnotations(
++    readOnlyHint=True,
++    destructiveHint=False,
++    idempotentHint=True,
++    openWorldHint=False,
++)
++
++ClientFactory = Callable[[], ProductVersionClient]
++
++
++def _coerce_status(status: list[str] | str | None) -> list[str] | None:
++    if status is None:
++        return None
++    if isinstance(status, str):
++        return [status]
++    return status
++
++
++def create_server(client_factory: ClientFactory | None = None) -> FastMCP:
++    factory: ClientFactory = client_factory or (lambda: ProductVersionClient(load_settings()))
++    server = FastMCP(
++        name="nr-product-version-query",
++        instructions=INSTRUCTIONS,
++        log_level="WARNING",
++    )
++
++    @server.tool(
++        name="search_product_versions",
++        description=(
++            "按关键字、产品名、版本状态和发布日期范围搜索产品版本，返回分页结果。"
++            "status 省略时使用部署默认状态范围；page 从 1 开始，page_size 最大 100。"
++        ),
++        annotations=READ_ONLY,
++    )
++    def search_product_versions(
++        keyword: str | None = None,
++        product_name: str | None = None,
++        status: list[str] | str | None = None,
++        release_date_from: str | None = None,
++        release_date_to: str | None = None,
++        page: int = 1,
++        page_size: int = 20,
++    ) -> dict[str, Any]:
++        """搜索产品版本。
++
++        Args:
++            keyword: 版本号或名称关键字，对应 API 的 search 参数。
++            product_name: 精确的产品名称，对应 API 的 product_name 参数。
++            status: 版本状态，可选 DRAFT、RELEASED、ARCHIVED；可传单个值或列表。
++            release_date_from: 发布日期下限，格式 YYYY-MM-DD，包含当天。
++            release_date_to: 发布日期上限，格式 YYYY-MM-DD，包含当天。
++            page: 页码，从 1 开始。
++            page_size: 每页条数，最大 100。
++        """
++        try:
++            with factory() as client:
++                return client.search(
++                    keyword=keyword,
++                    product_name=product_name,
++                    statuses=_coerce_status(status),
++                    release_date_from=release_date_from,
++                    release_date_to=release_date_to,
++                    page=page,
++                    page_size=page_size,
++                )
++        except (ConfigError, VersionApiError) as exc:
++            raise ToolError(_error_text(exc)) from exc
++
++    @server.tool(
++        name="get_product_version",
++        description="按版本 UUID 查询单个产品版本的完整信息。",
++        annotations=READ_ONLY,
++    )
++    def get_product_version(version_id: str) -> dict[str, Any]:
++        """获取产品版本详情。
++
++        Args:
++            version_id: 版本 UUID，可从 search_product_versions 的结果中获取。
++        """
++        try:
++            with factory() as client:
++                return client.get(version_id)
++        except (ConfigError, VersionApiError) as exc:
++            raise ToolError(_error_text(exc)) from exc
++
++    return server
++
++
++def _error_text(exc: ConfigError | VersionApiError) -> str:
++    if isinstance(exc, VersionApiError):
++        return exc.as_text()
++    return f"config_error: {exc}"
++
++
++mcp = create_server()
+diff --git a/mcp_server/tests/conftest.py b/mcp_server/tests/conftest.py
+new file mode 100644
+index 0000000..b29f7cd
+--- /dev/null
++++ b/mcp_server/tests/conftest.py
+@@ -0,0 +1,179 @@
++from __future__ import annotations
++
++import json
++import threading
++from dataclasses import dataclass
++from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from typing import Any
++from urllib.parse import parse_qs, urlparse
++
++import pytest
++
++DEMO_VERSIONS: list[dict[str, Any]] = [
++    {
++        "id": "11111111-1111-4111-8111-111111111111",
++        "product_name": "NR 测试套件",
++        "version": "v1.2.0",
++        "status": "RELEASED",
++        "release_date": "2026-06-01",
++        "description": "稳定版本",
++        "is_default": True,
++        "created_by_name": "demo",
++        "updated_by_name": "demo",
++        "created_at": "2026-05-01T08:00:00Z",
++        "updated_at": "2026-06-02T08:00:00Z",
++    },
++    {
++        "id": "22222222-2222-4222-8222-222222222222",
++        "product_name": "NR 测试套件",
++        "version": "v1.1.0",
++        "status": "RELEASED",
++        "release_date": "2026-03-01",
++        "description": "上一稳定版本",
++        "is_default": False,
++        "created_by_name": "demo",
++        "updated_by_name": "demo",
++        "created_at": "2026-02-01T08:00:00Z",
++        "updated_at": "2026-03-02T08:00:00Z",
++    },
++    {
++        "id": "33333333-3333-4333-8333-333333333333",
++        "product_name": "NR 测试套件",
++        "version": "v2.0.0-beta",
++        "status": "DRAFT",
++        "release_date": None,
++        "description": "开发中版本",
++        "is_default": False,
++        "created_by_name": "demo",
++        "updated_by_name": "demo",
++        "created_at": "2026-08-01T08:00:00Z",
++        "updated_at": "2026-09-01T08:00:00Z",
++    },
++    {
++        "id": "44444444-4444-4444-8444-444444444444",
++        "product_name": "NR 测试套件",
++        "version": "v0.9.0",
++        "status": "ARCHIVED",
++        "release_date": "2025-12-01",
++        "description": "历史版本",
++        "is_default": False,
++        "created_by_name": "demo",
++        "updated_by_name": "demo",
++        "created_at": "2025-11-01T08:00:00Z",
++        "updated_at": "2025-12-02T08:00:00Z",
++    },
++    {
++        "id": "55555555-5555-4555-8555-555555555555",
++        "product_name": "其他产品",
++        "version": "v3.1.0",
++        "status": "RELEASED",
++        "release_date": "2026-08-01",
++        "description": "其他产品的稳定版本",
++        "is_default": True,
++        "created_by_name": "demo",
++        "updated_by_name": "demo",
++        "created_at": "2026-07-01T08:00:00Z",
++        "updated_at": "2026-08-02T08:00:00Z",
++    },
++]
++
++
++@dataclass
++class FakeApi:
++    base_url: str
++    expected_cookie: str
++    versions: list[dict[str, Any]]
++    requests: list[dict[str, Any]]
++
++
++class _Handler(BaseHTTPRequestHandler):
++    api: FakeApi
++
++    def do_GET(self) -> None:  # noqa: N802
++        self.api.requests.append({"path": self.path, "cookie": self.headers.get("Cookie")})
++        if self.headers.get("Cookie") != self.api.expected_cookie:
++            self._send(401, {"code": "unauthenticated", "message": "请先登录"})
++            return
++
++        parsed = urlparse(self.path)
++        prefix = "/api/v1/system/versions/"
++        if parsed.path == prefix:
++            query = parse_qs(parsed.query)
++            self._list(query)
++            return
++        if parsed.path.startswith(prefix) and parsed.path.endswith("/"):
++            version_id = parsed.path[len(prefix) : -1]
++            for item in self.api.versions:
++                if item["id"] == version_id:
++                    self._send(200, item)
++                    return
++            self._send(404, {"code": "not_found", "message": "请求的资源不存在"})
++            return
++        self._send(404, {"code": "not_found", "message": "请求的资源不存在"})
++
++    def _list(self, query: dict[str, list[str]]) -> None:
++        items = list(self.api.versions)
++        search = query.get("search", [""])[0]
++        product_name = query.get("product_name", [""])[0]
++        status = query.get("status", [""])[0]
++        if search:
++            items = [
++                item
++                for item in items
++                if search.lower() in item["product_name"].lower()
++                or search.lower() in item["version"].lower()
++            ]
++        if product_name:
++            items = [item for item in items if item["product_name"] == product_name]
++        if status:
++            items = [item for item in items if item["status"] == status]
++        items.sort(key=lambda item: item["updated_at"], reverse=True)
++        page = int(query.get("page", ["1"])[0])
++        page_size = int(query.get("page_size", ["20"])[0])
++        offset = (page - 1) * page_size
++        self._send(
++            200,
++            {
++                "count": len(items),
++                "page": page,
++                "page_size": page_size,
++                "results": items[offset : offset + page_size],
++            },
++        )
++
++    def _send(self, status: int, payload: dict[str, Any]) -> None:
++        body = json.dumps(payload).encode("utf-8")
++        self.send_response(status)
++        self.send_header("Content-Type", "application/json; charset=utf-8")
++        self.send_header("Content-Length", str(len(body)))
++        self.end_headers()
++        self.wfile.write(body)
++
++    def log_message(self, *args: Any) -> None:
++        return
++
++
++@pytest.fixture
++def fake_api() -> FakeApi:
++    api = FakeApi(
++        base_url="http://127.0.0.1:8000/api/v1",
++        expected_cookie="sessionid=test-session",
++        versions=[dict(item) for item in DEMO_VERSIONS],
++        requests=[],
++    )
++
++    class Handler(_Handler):
++        pass
++
++    Handler.api = api
++    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
++    thread = threading.Thread(target=server.serve_forever, daemon=True)
++    thread.start()
++    port = server.server_address[1]
++    api.base_url = f"http://127.0.0.1:{port}/api/v1"
++    try:
++        yield api
++    finally:
++        server.shutdown()
++        server.server_close()
++        thread.join(timeout=5)
+diff --git a/mcp_server/tests/test_client.py b/mcp_server/tests/test_client.py
+new file mode 100644
+index 0000000..4de278a
+--- /dev/null
++++ b/mcp_server/tests/test_client.py
+@@ -0,0 +1,246 @@
++from __future__ import annotations
++
++import json
++from typing import Any
++from urllib.parse import parse_qs, urlparse
++
++import httpx
++import pytest
++
++from nr_version_mcp.client import ProductVersionClient, VersionApiError
++from nr_version_mcp.config import Settings
++
++COOKIE = "sessionid=test-session"
++
++
++def _settings(**overrides: Any) -> Settings:
++    values: dict[str, Any] = {
++        "base_url": "http://127.0.0.1:8000/api/v1",
++        "session_cookie": COOKIE,
++    }
++    values.update(overrides)
++    return Settings(**values)
++
++
++def _client(handler: Any, **overrides: Any) -> ProductVersionClient:
++    return ProductVersionClient(_settings(**overrides), transport=httpx.MockTransport(handler))
++
++
++def _page(
++    results: list[dict[str, Any]], *, count: int | None = None, page: int = 1, page_size: int = 20
++) -> dict[str, Any]:
++    return {
++        "count": len(results) if count is None else count,
++        "page": page,
++        "page_size": page_size,
++        "results": results,
++    }
++
++
++def _item(version_id: str, *, status: str = "RELEASED", updated_at: str = "2026-06-02T08:00:00Z"):
++    return {
++        "id": version_id,
++        "product_name": "NR 测试套件",
++        "version": "v1.2.0",
++        "status": status,
++        "release_date": "2026-06-01",
++        "description": "稳定版本",
++        "is_default": True,
++        "created_by_name": "demo",
++        "updated_by_name": "demo",
++        "created_at": "2026-05-01T08:00:00Z",
++        "updated_at": updated_at,
++    }
++
++
++def test_search_uses_default_status_and_forwards_pagination() -> None:
++    captured: list[httpx.Request] = []
++
++    def handler(request: httpx.Request) -> httpx.Response:
++        captured.append(request)
++        return httpx.Response(200, json=_page([_item("11111111-1111-4111-8111-111111111111")]))
++
++    with _client(handler) as client:
++        result = client.search(keyword="1.2", product_name="NR 测试套件", page=2, page_size=10)
++
++    request = captured[0]
++    query = parse_qs(urlparse(str(request.url)).query)
++    assert request.headers["Cookie"] == COOKIE
++    assert request.url.path == "/api/v1/system/versions/"
++    assert query == {
++        "search": ["1.2"],
++        "product_name": ["NR 测试套件"],
++        "status": ["RELEASED"],
++        "page": ["2"],
++        "page_size": ["10"],
++    }
++    assert result["count"] == 1
++    assert result["applied_statuses"] == ["RELEASED"]
++    assert result["client_side_filtering"] is False
++
++
++def test_explicit_status_overrides_default() -> None:
++    captured: list[httpx.Request] = []
++
++    def handler(request: httpx.Request) -> httpx.Response:
++        captured.append(request)
++        return httpx.Response(200, json=_page([]))
++
++    with _client(handler) as client:
++        client.search(statuses=["ARCHIVED"])
++
++    query = parse_qs(urlparse(str(captured[0].url)).query)
++    assert query["status"] == ["ARCHIVED"]
++
++
++def test_multiple_statuses_are_aggregated_and_paginated_locally() -> None:
++    captured: list[str] = []
++    all_items = [
++        _item("11111111-1111-4111-8111-111111111111", status="RELEASED"),
++        _item("33333333-3333-4333-8333-333333333333", status="DRAFT"),
++    ]
++
++    def handler(request: httpx.Request) -> httpx.Response:
++        query = parse_qs(urlparse(str(request.url)).query)
++        captured.append(query["status"][0])
++        status = query["status"][0]
++        results = [item for item in all_items if item["status"] == status]
++        return httpx.Response(200, json=_page(results))
++
++    with _client(handler) as client:
++        result = client.search(statuses=["RELEASED", "DRAFT"], page=1, page_size=1)
++
++    assert captured == ["RELEASED", "DRAFT"]
++    assert result["count"] == 2
++    assert result["page"] == 1
++    assert result["page_size"] == 1
++    assert len(result["results"]) == 1
++    assert result["client_side_filtering"] is True
++    assert result["applied_statuses"] == ["RELEASED", "DRAFT"]
++
++
++def test_date_filter_is_applied_client_side() -> None:
++    items = [
++        _item("11111111-1111-4111-8111-111111111111"),
++        {**_item("22222222-2222-4222-8222-222222222222"), "release_date": "2025-01-01"},
++        {**_item("33333333-3333-4333-8333-333333333333"), "release_date": None},
++    ]
++
++    def handler(request: httpx.Request) -> httpx.Response:
++        return httpx.Response(200, json=_page(items))
++
++    with _client(handler) as client:
++        result = client.search(release_date_from="2026-01-01", release_date_to="2026-12-31")
++
++    assert result["client_side_filtering"] is True
++    assert result["count"] == 1
++    assert result["results"][0]["id"] == "11111111-1111-4111-8111-111111111111"
++    assert result["applied_release_date"] == {"from": "2026-01-01", "to": "2026-12-31"}
++
++
++def test_get_returns_full_version_detail() -> None:
++    version = _item("11111111-1111-4111-8111-111111111111")
++    captured: list[httpx.Request] = []
++
++    def handler(request: httpx.Request) -> httpx.Response:
++        captured.append(request)
++        return httpx.Response(200, json=version)
++
++    with _client(handler) as client:
++        result = client.get("11111111-1111-4111-8111-111111111111")
++
++    assert captured[0].url.path == ("/api/v1/system/versions/11111111-1111-4111-8111-111111111111/")
++    assert result["description"] == "稳定版本"
++    assert result["status"] == "RELEASED"
++
++
++def test_unauthorized_maps_to_explicit_error() -> None:
++    def handler(request: httpx.Request) -> httpx.Response:
++        return httpx.Response(401, json={"code": "unauthenticated", "message": "请先登录"})
++
++    with _client(handler) as client:
++        with pytest.raises(VersionApiError) as excinfo:
++            client.search()
++
++    assert excinfo.value.code == "unauthenticated"
++    assert excinfo.value.status_code == 401
++    assert COOKIE not in excinfo.value.as_text()
++
++
++def test_not_found_detail_maps_to_error() -> None:
++    def handler(request: httpx.Request) -> httpx.Response:
++        return httpx.Response(404, json={"code": "not_found", "message": "请求的资源不存在"})
++
++    with _client(handler) as client:
++        with pytest.raises(VersionApiError) as excinfo:
++            client.get("11111111-1111-4111-8111-111111111111")
++
++    assert excinfo.value.code == "not_found"
++
++
++def test_connection_failure_maps_to_error() -> None:
++    def handler(request: httpx.Request) -> httpx.Response:
++        raise httpx.ConnectError("connection refused", request=request)
++
++    with _client(handler) as client:
++        with pytest.raises(VersionApiError) as excinfo:
++            client.search()
++
++    assert excinfo.value.code == "connection_error"
++    assert "127.0.0.1:8000" in excinfo.value.message
++
++
++def test_invalid_arguments_are_rejected_before_request() -> None:
++    def handler(request: httpx.Request) -> httpx.Response:
++        raise AssertionError("不应发出请求")
++
++    with _client(handler) as client:
++        with pytest.raises(VersionApiError, match="page_size"):
++            client.search(page_size=101)
++        with pytest.raises(VersionApiError, match="release_date_from"):
++            client.search(release_date_from="2026-13-01")
++        with pytest.raises(VersionApiError, match="未知版本状态"):
++            client.search(statuses=["UNKNOWN"])
++        with pytest.raises(VersionApiError, match="version_id"):
++            client.get("not-a-uuid")
++
++
++def test_invalid_response_shape_is_rejected() -> None:
++    def handler(request: httpx.Request) -> httpx.Response:
++        return httpx.Response(200, json={"items": []})
++
++    with _client(handler) as client:
++        with pytest.raises(VersionApiError) as excinfo:
++            client.search()
++
++    assert excinfo.value.code == "invalid_response"
++
++
++def test_multiple_status_fetch_guard_raises_when_too_large() -> None:
++    def handler(request: httpx.Request) -> httpx.Response:
++        page = parse_qs(urlparse(str(request.url)).query)["page"][0]
++        return httpx.Response(
++            200,
++            json=_page(
++                [_item(f"11111111-1111-4111-8111-{page.zfill(12)}")],
++                count=1000,
++                page=int(page),
++                page_size=100,
++            ),
++        )
++
++    with _client(handler, max_fetch_pages=2) as client:
++        with pytest.raises(VersionApiError) as excinfo:
++            client.search(statuses=["RELEASED", "DRAFT"])
++
++    assert excinfo.value.code == "result_too_large"
++
++
++def test_response_payload_is_not_logged() -> None:
++    def handler(request: httpx.Request) -> httpx.Response:
++        return httpx.Response(200, content=json.dumps(_page([])).encode())
++
++    with _client(handler) as client:
++        result = client.search()
++
++    assert result["count"] == 0
+diff --git a/mcp_server/tests/test_config.py b/mcp_server/tests/test_config.py
+new file mode 100644
+index 0000000..d5aed6e
+--- /dev/null
++++ b/mcp_server/tests/test_config.py
+@@ -0,0 +1,72 @@
++from __future__ import annotations
++
++import pytest
++
++from nr_version_mcp.config import ConfigError, Settings, load_settings
++
++
++def _env(**overrides: str) -> dict[str, str]:
++    env = {
++        "NR_API_BASE_URL": "http://127.0.0.1:8000/api/v1",
++        "NR_SESSION_COOKIE": "sessionid=secret-value",
++    }
++    env.update(overrides)
++    return env
++
++
++def test_default_status_scope_is_released() -> None:
++    settings = load_settings(_env())
++
++    assert settings.default_statuses == ("RELEASED",)
++    assert settings.base_url == "http://127.0.0.1:8000/api/v1"
++
++
++def test_default_statuses_can_be_overridden() -> None:
++    settings = load_settings(_env(NR_DEFAULT_STATUSES="RELEASED, draft"))
++
++    assert settings.default_statuses == ("RELEASED", "DRAFT")
++
++
++def test_base_url_must_be_loopback() -> None:
++    with pytest.raises(ConfigError, match="回环"):
++        load_settings(_env(NR_API_BASE_URL="https://nr.example.com/api/v1"))
++
++    with pytest.raises(ConfigError, match="回环"):
++        load_settings(_env(NR_API_BASE_URL="http://10.0.0.8:8000/api/v1"))
++
++
++def test_cookie_is_required() -> None:
++    with pytest.raises(ConfigError, match="NR_SESSION_COOKIE"):
++        load_settings(_env(NR_SESSION_COOKIE=""))
++
++
++def test_bare_cookie_value_uses_configured_cookie_name() -> None:
++    settings = load_settings(_env(NR_SESSION_COOKIE="abc123", NR_SESSION_COOKIE_NAME="sessionid"))
++
++    assert settings.session_cookie == "sessionid=abc123"
++
++
++def test_full_cookie_header_is_preserved_and_hidden_from_repr() -> None:
++    settings = load_settings(_env(NR_SESSION_COOKIE="sessionid=abc123; theme=dark"))
++
++    assert settings.session_cookie == "sessionid=abc123; theme=dark"
++    assert "abc123" not in repr(settings)
++
++
++def test_cookie_rejects_newlines() -> None:
++    with pytest.raises(ConfigError, match="换行"):
++        load_settings(_env(NR_SESSION_COOKIE="sessionid=abc\nInjected: value"))
++
++
++def test_invalid_default_status_is_rejected() -> None:
++    with pytest.raises(ConfigError, match="未知状态"):
++        load_settings(_env(NR_DEFAULT_STATUSES="RELEASED,UNKNOWN"))
++
++
++def test_settings_repr_never_exposes_cookie() -> None:
++    settings = Settings(
++        base_url="http://127.0.0.1:8000/api/v1",
++        session_cookie="sessionid=top-secret",
++    )
++
++    assert "top-secret" not in repr(settings)
+diff --git a/mcp_server/tests/test_mcp_server.py b/mcp_server/tests/test_mcp_server.py
+new file mode 100644
+index 0000000..7f92c0b
+--- /dev/null
++++ b/mcp_server/tests/test_mcp_server.py
+@@ -0,0 +1,143 @@
++from __future__ import annotations
++
++import asyncio
++import os
++import sys
++from pathlib import Path
++from typing import Any
++
++from mcp import ClientSession
++from mcp.client.stdio import StdioServerParameters, stdio_client
++
++SRC_DIR = Path(__file__).resolve().parents[1] / "src"
++
++
++def _server_params(fake_api: Any, **env_overrides: str) -> StdioServerParameters:
++    env = {
++        "PATH": os.environ.get("PATH", ""),
++        "PYTHONPATH": str(SRC_DIR),
++        "NR_API_BASE_URL": fake_api.base_url,
++        "NR_SESSION_COOKIE": fake_api.expected_cookie,
++    }
++    env.update(env_overrides)
++    return StdioServerParameters(
++        command=sys.executable,
++        args=["-m", "nr_version_mcp"],
++        env=env,
++        cwd=str(SRC_DIR.parent),
++    )
++
++
++def _run(coro: Any) -> Any:
++    return asyncio.run(coro)
++
++
++def test_mcp_lists_read_only_tools(fake_api: Any) -> None:
++    async def scenario() -> None:
++        async with stdio_client(_server_params(fake_api)) as (read, write):
++            async with ClientSession(read, write) as session:
++                await session.initialize()
++                tools = await session.list_tools()
++
++        by_name = {tool.name: tool for tool in tools.tools}
++        assert set(by_name) == {"search_product_versions", "get_product_version"}
++        for tool in by_name.values():
++            assert tool.annotations is not None
++            assert tool.annotations.readOnlyHint is True
++
++    _run(scenario())
++
++
++def test_mcp_search_uses_default_status_and_pagination(fake_api: Any) -> None:
++    async def scenario() -> dict[str, Any]:
++        async with stdio_client(_server_params(fake_api)) as (read, write):
++            async with ClientSession(read, write) as session:
++                await session.initialize()
++                result = await session.call_tool(
++                    "search_product_versions",
++                    {"keyword": "NR", "page": 1, "page_size": 1},
++                )
++        assert result.isError is False
++        assert result.structuredContent is not None
++        return result.structuredContent
++
++    payload = _run(scenario())
++
++    assert payload["count"] == 2
++    assert payload["page"] == 1
++    assert payload["page_size"] == 1
++    assert len(payload["results"]) == 1
++    assert payload["results"][0]["status"] == "RELEASED"
++    assert payload["applied_statuses"] == ["RELEASED"]
++    assert fake_api.requests[-1]["cookie"] == fake_api.expected_cookie
++
++
++def test_mcp_detail_and_filter_capabilities(fake_api: Any) -> None:
++    async def scenario() -> tuple[dict[str, Any], dict[str, Any]]:
++        async with stdio_client(_server_params(fake_api)) as (read, write):
++            async with ClientSession(read, write) as session:
++                await session.initialize()
++                search = await session.call_tool(
++                    "search_product_versions",
++                    {"status": ["ARCHIVED"], "product_name": "NR 测试套件"},
++                )
++                detail = await session.call_tool(
++                    "get_product_version",
++                    {"version_id": "11111111-1111-4111-8111-111111111111"},
++                )
++        assert search.isError is False and detail.isError is False
++        return search.structuredContent, detail.structuredContent
++
++    search_payload, detail_payload = _run(scenario())
++
++    assert search_payload["applied_statuses"] == ["ARCHIVED"]
++    assert [item["version"] for item in search_payload["results"]] == ["v0.9.0"]
++    assert detail_payload["version"] == "v1.2.0"
++    assert detail_payload["description"] == "稳定版本"
++
++
++def test_mcp_reports_not_found_without_leaking_cookie(fake_api: Any) -> None:
++    async def scenario() -> Any:
++        async with stdio_client(_server_params(fake_api)) as (read, write):
++            async with ClientSession(read, write) as session:
++                await session.initialize()
++                return await session.call_tool(
++                    "get_product_version",
++                    {"version_id": "99999999-9999-4999-8999-999999999999"},
++                )
++
++    result = _run(scenario())
++
++    assert result.isError is True
++    text = result.content[0].text
++    assert "not_found" in text
++    assert fake_api.expected_cookie not in text
++
++
++def test_mcp_rejects_missing_cookie(fake_api: Any) -> None:
++    async def scenario() -> Any:
++        params = _server_params(fake_api, NR_SESSION_COOKIE="")
++        async with stdio_client(params) as (read, write):
++            async with ClientSession(read, write) as session:
++                await session.initialize()
++                return await session.call_tool("search_product_versions", {})
++
++    result = _run(scenario())
++
++    assert result.isError is True
++    assert "config_error" in result.content[0].text
++
++
++def test_mcp_rejects_non_loopback_base_url(fake_api: Any) -> None:
++    async def scenario() -> Any:
++        params = _server_params(fake_api, NR_API_BASE_URL="https://nr.example.com/api/v1")
++        async with stdio_client(params) as (read, write):
++            async with ClientSession(read, write) as session:
++                await session.initialize()
++                return await session.call_tool("search_product_versions", {})
++
++    result = _run(scenario())
++
++    assert result.isError is True
++    assert "回环" in result.content[0].text
++    assert fake_api.requests == []

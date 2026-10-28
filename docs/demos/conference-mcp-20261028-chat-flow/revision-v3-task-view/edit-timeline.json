@@ -1,0 +1,220 @@
+[
+  {
+    "clip": "01-demand",
+    "duration": 3,
+    "caption": "在私聊中提出 MCP 开发需求",
+    "stage": "01 / 提出需求"
+  },
+  {
+    "clip": "02-send",
+    "duration": 5,
+    "caption": "数字员工受理需求",
+    "stage": "01 / 提出需求",
+    "source_end": 0.65
+  },
+  {
+    "clip": "03-auto-task",
+    "duration": 7,
+    "caption": "创建开发任务，AgentWorker 自动接手",
+    "stage": "02 / 创建任务"
+  },
+  {
+    "clip": "04-employee-asks-human",
+    "duration": 12,
+    "caption": "默认查询哪些版本？\n数字员工向用户确认",
+    "stage": "03 / 咨询用户"
+  },
+  {
+    "clip": "05-human-answer-input",
+    "duration": 4,
+    "caption": "选择 A：默认只查已发布版本",
+    "stage": "04 / 反馈决定"
+  },
+  {
+    "clip": "06-human-answer-send",
+    "duration": 8,
+    "caption": "数字员工转达决定，原任务继续执行",
+    "stage": "04 / 反馈决定"
+  },
+  {
+    "clip": "19-task-entry-from-chat",
+    "duration": 1.5,
+    "caption": "打开任务，查看执行详情",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "dissolve"
+  },
+  {
+    "clip": "20-open-task-workspace",
+    "duration": 0.5,
+    "caption": "打开任务，查看执行详情",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut",
+    "source_end": 1
+  },
+  {
+    "clip": "21-open-task-information",
+    "duration": 1,
+    "caption": "查看责任员工、执行 Worker 和代码版本",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut",
+    "source_end": 0.6
+  },
+  {
+    "clip": "22-task-information",
+    "duration": 5.5,
+    "caption": "查看责任员工、执行 Worker 和代码版本",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "23-task-session-identity",
+    "duration": 2,
+    "caption": "任务编号与执行会话对应，过程可追溯",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "36-task-native-session-visible",
+    "duration": 3,
+    "caption": "任务编号与执行会话对应，过程可追溯",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "24-task-close-info",
+    "duration": 1,
+    "caption": "查看本次任务的执行记录",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "25-task-validation-and-commits",
+    "duration": 1.5,
+    "caption": "查看本次任务的执行记录",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "26-task-test-results",
+    "duration": 3,
+    "caption": "27 项单测通过",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "27-task-local-commits",
+    "duration": 3.5,
+    "caption": "查看本地提交记录",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "28-task-open-code-menu",
+    "duration": 0.5,
+    "caption": "在任务中展开实际代码变更",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "29-task-code-changes",
+    "duration": 1,
+    "caption": "在任务中展开实际代码变更",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "30-task-code-diff",
+    "duration": 2,
+    "caption": "在任务中展开实际代码变更",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "31-task-mcp-tools",
+    "duration": 1,
+    "caption": "查看 MCP 工具定义与实现",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "32-task-tool-implementation",
+    "duration": 2,
+    "caption": "查看 MCP 工具定义与实现",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "33-task-close-code",
+    "duration": 0.5,
+    "caption": "回到私聊，确认任务完成",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "34-task-return-to-chat",
+    "duration": 0.5,
+    "caption": "回到私聊，确认任务完成",
+    "stage": "05 / 任务与执行",
+    "note": "执行记录回看 · 浏览已加速",
+    "transition": "cut"
+  },
+  {
+    "clip": "35-chat-completion-after-task-review",
+    "duration": 4,
+    "caption": "回到私聊，确认任务完成",
+    "stage": "06 / 确认完成",
+    "source_end": 0.4,
+    "note": "执行记录回看 · 私聊验收已完成",
+    "transition": "cut"
+  },
+  {
+    "clip": "35-chat-completion-after-task-review",
+    "duration": 6,
+    "caption": "任务已完成，Worker 当前空闲",
+    "stage": "06 / 确认完成",
+    "source_start": 0.4,
+    "note": "执行记录回看 · 私聊验收已完成",
+    "transition": "cut"
+  },
+  {
+    "clip": "18-completion-to-library",
+    "duration": 3,
+    "caption": "系统复盘，生成经验候选",
+    "stage": "07 / 经验沉淀",
+    "note": "执行记录回看 · 进入经验审核"
+  },
+  {
+    "clip": "14-open-reviewed-experience",
+    "duration": 2,
+    "caption": "核对证据，审核经验",
+    "stage": "07 / 经验沉淀"
+  },
+  {
+    "clip": "15-publish-experience",
+    "duration": 2,
+    "caption": "审核后发布到数字图书馆",
+    "stage": "07 / 经验沉淀"
+  },
+  {
+    "clip": "16-published-experience",
+    "duration": 4,
+    "caption": "经验关联原任务，来源可追溯",
+    "stage": "07 / 经验沉淀"
+  }
+]

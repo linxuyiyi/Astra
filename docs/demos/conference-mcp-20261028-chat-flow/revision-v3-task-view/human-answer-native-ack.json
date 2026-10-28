@@ -1,0 +1,29 @@
+{
+  "task_id": "T-20261028-2298D2",
+  "source_session_id": "a5e33c22364e4538b75f332d52c28c9e",
+  "native_session_id": "ses_e7d09fe61ffefYMD8ds6QB4aEz",
+  "original_question_id": "que_182f66a0b001OFEcn39RYJfyQO",
+  "actual_user_choice": "A: RELEASED",
+  "employee_native_question_replies": [
+    {
+      "request": {
+        "task_id": "T-20261028-2298D2",
+        "expected_session_id": "ses_e7d09fe61ffefYMD8ds6QB4aEz",
+        "request_id": "que_182f66a0b001OFEcn39RYJfyQO",
+        "kind": "question",
+        "answers": [
+          [
+            "仅已发布 RELEASED（推荐）"
+          ]
+        ]
+      },
+      "result": {
+        "ok": true,
+        "accepted": true,
+        "task_id": "T-20261028-2298D2",
+        "refresh_required": false
+      }
+    }
+  ],
+  "workspace_answer_used": false
+}

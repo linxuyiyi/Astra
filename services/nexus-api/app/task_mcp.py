@@ -18,6 +18,8 @@ from app.task_tools import (
     nexus_conversation_id,
     nexus_discussion_id,
     nexus_employee_id,
+    nexus_schedule_agent_id,
+    nexus_schedule_user_id,
     nexus_session_id,
 )
 
@@ -50,18 +52,29 @@ class NexusIdentityMiddleware(BaseHTTPMiddleware):
             employee = authenticate_mcp(request.headers, get_settings())
         except PermissionError:
             return JSONResponse({"ok": False, "error": "未授权"}, status_code=401)
-        from nexus_api.group_task_auth import authorize_group_task
+        from nexus_api.group_task_auth import authorize_task_source
 
         try:
-            actor = authorize_group_task(
+            actor = await authorize_task_source(
                 request.headers.get("x-nexus-session-id", ""),
                 employee,
                 request.headers.get("x-nexus-channel-id", ""),
                 request.headers.get("x-nexus-discussion-id", ""),
+                request.headers.get("x-nexus-schedule-user-id", ""),
+                request.headers.get("x-nexus-schedule-agent-id", ""),
+                request.headers.get("x-nexus-conversation-id", ""),
             )
         except PermissionError:
             return JSONResponse({"ok": False, "error": "群调用未授权"}, status_code=403)
         tokens = [
+            (
+                nexus_schedule_user_id,
+                nexus_schedule_user_id.set(request.headers.get("x-nexus-schedule-user-id", "")),
+            ),
+            (
+                nexus_schedule_agent_id,
+                nexus_schedule_agent_id.set(request.headers.get("x-nexus-schedule-agent-id", "")),
+            ),
             (nexus_discussion_id, nexus_discussion_id.set(request.headers.get("x-nexus-discussion-id", ""))),
             (nexus_actor_id, nexus_actor_id.set(actor)),
             (nexus_employee_id, nexus_employee_id.set(employee)),
@@ -96,14 +109,17 @@ def build_mcp_server() -> MCPServer:
 
     async def _call(name: str, **kwargs):
         if nexus_session_id.get():
-            from nexus_api.group_task_auth import authorize_group_task
+            from nexus_api.group_task_auth import authorize_task_source
 
             try:
-                authorize_group_task(
+                await authorize_task_source(
                     nexus_session_id.get(),
                     nexus_employee_id.get(),
                     nexus_channel_id.get(),
                     nexus_discussion_id.get(),
+                    nexus_schedule_user_id.get(),
+                    nexus_schedule_agent_id.get(),
+                    nexus_conversation_id.get(),
                 )
             except PermissionError:
                 return {"ok": False, "error": "群调用未授权"}

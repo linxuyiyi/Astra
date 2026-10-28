@@ -87,3 +87,43 @@ def authorize_group_task(session_id: str, employee_id: str, channel_id: str, dis
         ):
             raise PermissionError("员工岗位没有任务能力")
         return user["member_id"]
+
+
+async def authorize_task_source(
+    session_id: str,
+    employee_id: str,
+    channel_id: str,
+    discussion_id: str = "",
+    schedule_user_id: str = "",
+    schedule_agent_id: str = "",
+    conversation_id: str = "",
+) -> str:
+    """日程没有聊天绑定，向 Nexus 按官方来源重验，不能退回私聊身份。"""
+    if not schedule_user_id and not schedule_agent_id:
+        return authorize_group_task(session_id, employee_id, channel_id, discussion_id)
+    if channel_id or discussion_id or conversation_id or not schedule_user_id or not schedule_agent_id:
+        raise PermissionError("日程调用来源无效")
+    import httpx
+
+    from app.config.settings import get_settings
+
+    from .auth import internal_headers
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(
+                f"{get_settings().nexus_api_base.rstrip('/')}/api/v1/internal/schedule-sessions/policy",
+                headers=internal_headers(),
+                params={"user_id": schedule_user_id, "agent_id": schedule_agent_id, "session_id": session_id},
+            )
+        response.raise_for_status()
+        policy = response.json()
+        if (
+            not isinstance(policy, dict)
+            or policy.get("employee_id") != employee_id
+            or not policy.get("task_allowed")
+        ):
+            raise PermissionError("日程员工没有任务权限")
+        return schedule_user_id
+    except (httpx.HTTPError, ValueError) as exc:
+        raise PermissionError("日程调用来源验证失败") from exc

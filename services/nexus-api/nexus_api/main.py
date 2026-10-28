@@ -3316,6 +3316,9 @@ def create_app() -> FastAPI:
 
     app.include_router(schedule_router(require_owner, model_for))
     app.include_router(internal_schedule_router(model_for))
+    from .schedule_resources import schedule_resources_router
+
+    app.include_router(schedule_resources_router())
     return app
 
 

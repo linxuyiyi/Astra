@@ -28,6 +28,8 @@ from app.services import TaskService
 from app.state_machine import InvalidTransition
 
 nexus_employee_id: ContextVar[str] = ContextVar("nexus_employee_id", default="")
+nexus_schedule_user_id: ContextVar[str] = ContextVar("nexus_schedule_user_id", default="")
+nexus_schedule_agent_id: ContextVar[str] = ContextVar("nexus_schedule_agent_id", default="")
 nexus_session_id: ContextVar[str] = ContextVar("nexus_session_id", default="")
 nexus_conversation_id: ContextVar[str] = ContextVar("nexus_conversation_id", default="")
 nexus_discussion_id: ContextVar[str] = ContextVar("nexus_discussion_id", default="")
@@ -258,6 +260,8 @@ class TaskTools:
             query = query.where(Task.source_channel_id == nexus_channel_id.get())
         elif nexus_conversation_id.get():
             query = query.where(Task.source_conversation_id == nexus_conversation_id.get())
+        elif nexus_schedule_user_id.get():
+            query = query.where(Task.source_session_id == nexus_session_id.get())
         elif _text(source_channel_id):
             query = query.where(Task.source_channel_id == _text(source_channel_id))
         if status:
@@ -581,6 +585,8 @@ class TaskTools:
         if task is None or (task.responsible_employee_id or "") != actor:
             return {"ok": False, "error": "任务不存在"}
         if nexus_channel_id.get() and task.source_channel_id != nexus_channel_id.get():
+            return {"ok": False, "error": "任务不存在"}
+        if nexus_schedule_user_id.get() and task.source_session_id != nexus_session_id.get():
             return {"ok": False, "error": "任务不存在"}
         if nexus_conversation_id.get() and task.source_conversation_id != nexus_conversation_id.get():
             return {"ok": False, "error": "任务不存在"}

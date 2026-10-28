@@ -29,7 +29,10 @@ Agent Service 使用官方 `ResourceAccessPolicyBase` 扩展点，只向该命�
 - 启停遵循官方 reconcile，可能约 60 秒后生效；一个部署只能有一个 timer owner。
 - 已有日程保存创建时的模型配置快照。员工改路由后需重新创建日程。
 - 禁用/删除员工前应先暂停/删除关联日程，当前不跨安排者自动级联。
-- 官方新建的日程工作区独立于私聊；本次未自动复制私聊的 Skill/MCP/知识库绑定。日程可使用基础 Agent 指令、官方默认工作区能力与网关模型；依赖额外员工资源的安排需后续单独接入和验收。
+- 日程工作区独立于私聊。固定 2.0.10 的本地 manager 在 PER_SESSION 下仍共用员工物理目录，因此使用 `ScheduleWorkspaceManager` 仅对日程按安排者、员工和 workspace_id 派生独立目录及缓存键；旧共用目录中的工作文件不会自动搬入日程目录。每次运行在官方运行锁获取前调用 Nexus 内部准备接口，复用员工资源同步器安装/收回当前 Skill 和 MCP；装配时应用共用的员工工具权限并激活现存工具组。知识库绑定仍未在本次接入，模型配置仍为日程创建时的快照。
+- 准备接口从官方 ScheduleOrigin、日程记录、安排者身份和员工绑定验证来源；库安装只调整资源库读取 owner，Session 和工作区仍属于安排者。普通聊天沿用原流程。
+- 准备失败不调用模型，交由官方装配错误记录写入 ERROR 和 finished_at；中断请求跳过资源准备。不会自动重放历史卡住的执行。
+- 日程 Task MCP 使用本次 Session 与日程身份，在连接和工具调用时重新验证来源及任务权限；不借用私聊/群聊身份，任务查询和操作限制在当前执行 Session。无原人类聊天入口的日程任务，向人求助的投递闭环未在本次验收。
 - 连续上下文的会话数不等于执行次数；页面不推测执行成功、失败或下次运行时间。执行内容从官方消息读取，仅展示文本块，过滤内部 HintBlock/思考块。
 - 上游官方列表尚未提供分页；Nexus 在读取当前用户上游记录后筛选、分页，浏览器只收到一页。当前不承诺大规模上游查询性能。
 
@@ -41,13 +44,15 @@ MCP 走官方 REST 创建，官方 `source` 为 `USER`、没有 `source_session_
 
 ## 部署
 
-无需数据库 migration。更新 Agent Service 的 `agent_service.py`、`schedule_access.py` 并重启，以加载官方资源访问策略；更新 Nexus 和前端构建；加载新的 Nginx 模板使 `/agentscope-api/` 经过 Nexus。Nexus 与 Agent Service 的 `NEXUS_AGENTSCOPE_USER_ID` 必须一致。
+无需数据库 migration。资源准备修复需要一并更新 Nexus、Task MCP 和 Agent Service（包括新增的 `schedule_resources.py`、`schedule_workspace.py` 及 `group_security.py`），并重启对应进程；Nexus 与 Agent Service 的 `NEXUS_AGENTSCOPE_USER_ID` 必须一致，服务间密钥及 Task MCP 的 Nexus 回调地址需正确配置。已有前端/Nginx 安装方式保持不变。
 
 运行针对性验证：
 
 ```bash
 cd services/nexus-api
-PYTHONPATH="$PWD" .venv/bin/pytest tests/nexus/test_schedules.py tests/nexus/test_agentscope_proxy.py tests/platform/test_deploy_nginx_config.py
+PYTHONPATH="$PWD" .venv/bin/pytest tests/nexus/test_schedule_resources.py tests/nexus/test_schedules.py tests/nexus/test_resources.py tests/platform/test_task_mcp_auth.py tests/platform/test_task_responsibility.py
 cd ../agent-service
-PYTHONPATH="$PWD" .venv-agentscope/bin/python -m pytest tests/test_schedule_access.py
+PYTHONPATH="$PWD" .venv-agentscope/bin/python -m pytest tests/test_schedule_access.py tests/test_schedule_resources.py tests/test_schedule_resources_runtime.py
 ```
+
+真实链路回归使用官方 2.0.10 SQL、scheduler、inbox、Agent 和本地 HTTP MCP 测试服务，模型为确定性桩；验证独立/连续会话、库 Skill/MCP、任务工具测试端点、失败终态、恢复及运行锁释放。它不替代真实供应商、生产 MySQL/Redis、Linux、多副本 timer owner 或 Wetask 业务验收。

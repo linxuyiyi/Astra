@@ -545,3 +545,26 @@ async def test_summary_is_registered_as_a_readonly_task_tool():
     tools = {t.name: t for t in await build_mcp_server().list_tools()}
     assert "nexus_task_summary" in tools
     assert set(tools["nexus_task_summary"].input_schema["properties"]) == {"task_id"}
+
+
+async def test_schedule_task_access_stays_in_its_execution_session(session):
+    from app.task_tools import nexus_employee_id, nexus_schedule_user_id, nexus_session_id
+
+    own = await TaskService(session).create(
+        _create(responsible_employee_id="emp_1", source_session_id="ses_1")
+    )
+    foreign = await TaskService(session).create(
+        _create(responsible_employee_id="emp_1", source_session_id="ses_2")
+    )
+    tokens = [(nexus_employee_id, nexus_employee_id.set("emp_1")),
+              (nexus_schedule_user_id, nexus_schedule_user_id.set("nexus-schedule-" + "a" * 64)),
+              (nexus_session_id, nexus_session_id.set("ses_1"))]
+    try:
+        tools = TaskTools(session)
+        listed = await tools.list()
+        assert [task["task_id"] for task in listed["tasks"]] == [own.id]
+        assert (await tools.get(own.id))["ok"] is True
+        assert (await tools.get(foreign.id)) == {"ok": False, "error": "任务不存在"}
+    finally:
+        for variable, token in reversed(tokens):
+            variable.reset(token)

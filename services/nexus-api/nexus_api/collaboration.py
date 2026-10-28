@@ -18,6 +18,7 @@ from .auth import digest, require_internal, require_user
 from .db import connect, employee_from_row, new_id, utcnow
 from .db_models import group_events
 from .sql import upsert_record
+from .tool_policy import employee_tool_policy, require_employee_tool
 
 logger = logging.getLogger("nexus.groups")
 MAX_TURNS = 6
@@ -1038,29 +1039,8 @@ class Collaboration:
                 initiator_id = private["owner_id"]
                 discussion = {"id": "private:" + private["id"], "generation": 0}
             employee = self.load_employee(db, binding["employee_id"])
-            if not employee["enabled"]:
-                raise HTTPException(403, "员工已禁用")
-            allowed = list(employee["tools"])
-            task_allowed = "task-management" in employee["skills"]
-            mcp_refs = employee["mcps"]
-            mcp_names = {}
-            for ref in mcp_refs:
-                record = one(db, "SELECT runtime_name FROM t_nexus_mcps WHERE id=:i AND enabled=1", i=ref)
-                mcp_names[ref] = record["runtime_name"] if record else ""
-            skill_viewer = bool(employee["skills"])
-            if tool_name == "Skill" and skill_viewer:
-                allowed.append("Skill")
-            if (
-                tool_name
-                and tool_name not in allowed
-                and not (
-                    mcp_ref == "__task__"
-                    and tool_name.startswith("mcp__nexus-task__nexus_task_")
-                    and task_allowed
-                )
-                and mcp_ref not in mcp_refs
-            ):
-                raise HTTPException(403, "用户权限与员工岗位权限不允许该工具")
+            tools_policy = employee_tool_policy(db, employee)
+            require_employee_tool(tools_policy, tool_name, mcp_ref)
             if tool_name:
                 db.execute(
                     text("INSERT INTO t_nexus_group_audit VALUES (:i,:c,:u,:a,:x,:t)"),
@@ -1076,11 +1056,7 @@ class Collaboration:
                 db.commit()
             return {
                 "managed": True,
-                "allowed_tools": allowed,
-                "mcp_refs": mcp_names,
-                "skill_viewer": skill_viewer,
-                "task_allowed": task_allowed,
-                "task_mcp_url": __import__("nexus_api.task_skill", fromlist=["task_mcp_url"]).task_mcp_url(),
+                **tools_policy,
                 "initiator_id": initiator_id,
                 "discussion_id": discussion["id"],
                 "generation": discussion["generation"],

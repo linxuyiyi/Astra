@@ -429,7 +429,6 @@ def main() -> None:
     from schedule_access import ScheduleResourceAccessPolicy
     from agentscope.app.workspace_manager import (
         IsolationPolicy,
-        LocalWorkspaceManager,
     )
     from agentscope.message import HintBlock, Msg
     from agentscope.permission import PermissionBehavior, PermissionDecision
@@ -455,7 +454,11 @@ def main() -> None:
     from group_security import AgentServiceKeyMiddleware, headers as service_headers, secure_group_toolkit, install_run_context
     nexus_api = os.environ.get("NEXUS_API_BASE", "http://127.0.0.1:18120").rstrip("/")
     peer_toolkit = secure_group_toolkit(without_team_and_task_tools(get_toolkit, mailbox_lookup), nexus_api)
+    from schedule_resources import install_schedule_preparation, register_schedule_resources, schedule_toolkit
+
     install_run_context(chat_service.ChatService)
+    install_schedule_preparation(chat_service.ChatService, nexus_api)
+    peer_toolkit = schedule_toolkit(peer_toolkit)
     chat_service.get_toolkit = peer_toolkit
     realtime_service.get_toolkit = peer_toolkit
 
@@ -469,7 +472,9 @@ def main() -> None:
 
     storage = create_storage()
     message_bus = RedisMessageBus(host=host, port=port, db=redis_db, password=password)
-    workspace_manager = LocalWorkspaceManager(
+    from schedule_workspace import ScheduleWorkspaceManager
+
+    workspace_manager = ScheduleWorkspaceManager(
         basedir=workspace_dir,
         isolation=IsolationPolicy.PER_SESSION,
     )
@@ -555,6 +560,7 @@ def main() -> None:
         mcp_hubs=[GitHubMCPHub(api_token=os.environ.get("AGENTSCOPE_GITHUB_TOKEN") or None)],
         skill_hubs=[ClawSkillHub(api_token=os.environ.get("AGENTSCOPE_CLAWHUB_TOKEN") or None)],
     )
+    register_schedule_resources(app)
     app.add_middleware(AgentServiceKeyMiddleware)
     guard_lifespan(app)
     listen_host = os.environ.get("AGENTSCOPE_HOST", "0.0.0.0")

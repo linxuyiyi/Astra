@@ -96,3 +96,30 @@ async def test_middleware_does_not_trust_employee_header_alone(monkeypatch):
         assert nexus_employee_id.get() == ""
     finally:
         get_settings.cache_clear()
+
+
+async def test_schedule_task_identity_requires_official_policy_and_current_capability(monkeypatch):
+    from nexus_api.group_task_auth import authorize_task_source
+
+    calls = []
+    state = {"task_allowed": True, "employee_id": "emp-schedule"}
+
+    async def policy(_self, method, url, **kwargs):
+        calls.append(kwargs)
+        return httpx.Response(200, json=state, request=httpx.Request(method, url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "request", policy)
+    user = "nexus-schedule-" + "a" * 64
+    assert await authorize_task_source("schedule-session", "emp-schedule", "", "", user, "agent") == user
+    assert calls[0]["params"]["session_id"] == "schedule-session"
+    state["task_allowed"] = False
+    with pytest.raises(PermissionError):
+        await authorize_task_source("schedule-session", "emp-schedule", "", "", user, "agent")
+    state["task_allowed"] = True
+    with pytest.raises(PermissionError):
+        await authorize_task_source("schedule-session", "other-employee", "", "", user, "agent")
+    with pytest.raises(PermissionError):
+        await authorize_task_source("schedule-session", "emp-schedule", "forged-channel", "", user, "agent")
+    with pytest.raises(PermissionError):
+        await authorize_task_source("schedule-session", "emp-schedule", "", "", user, "")
+    assert len(calls) == 3

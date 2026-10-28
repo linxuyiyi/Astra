@@ -48,15 +48,28 @@ class AgentServiceKeyMiddleware:
 
 def secure_group_toolkit(factory, nexus_api, policy_loader=None):
     async def load(session_id, tool_name="", fence="", mcp_ref=""):
+        from schedule_resources import schedule_run
+
+        context = schedule_run.get()
         if policy_loader:
             return await policy_loader(session_id, tool_name, fence, mcp_ref)
         async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(f"{nexus_api}/api/v1/internal/group-policy", params={
-                "session_id":session_id,"tool_name":tool_name,"execution_id":fence,"mcp_ref":mcp_ref}, headers=headers())
+            if context:
+                response = await client.get(f"{nexus_api}/api/v1/internal/schedule-sessions/policy", params={
+                    "session_id": session_id, "user_id": context.user_id, "agent_id": context.agent_id,
+                    "tool_name": tool_name, "mcp_ref": mcp_ref}, headers=headers())
+            else:
+                response = await client.get(f"{nexus_api}/api/v1/internal/group-policy", params={
+                    "session_id":session_id,"tool_name":tool_name,"execution_id":fence,"mcp_ref":mcp_ref}, headers=headers())
         response.raise_for_status()
         return response.json()
 
     async def assembled(**kwargs):
+        from schedule_resources import schedule_run
+
+        context = schedule_run.get()
+        if context and context.interrupt:
+            return await factory(**kwargs)
         sid = kwargs["session_record"].id
         fence = execution_id.get()
         policy = await load(sid, fence=fence)

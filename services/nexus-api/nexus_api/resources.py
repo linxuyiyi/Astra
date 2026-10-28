@@ -739,7 +739,13 @@ def _retire_skill_name(connection, skill_id: str, name: str) -> None:
     for employee in all_employees(connection):
         if skill_id not in (employee.get("skills") or []):
             continue
-        for session_id in employee_session_ids(connection, employee):
+        # 官方日程会话不登记聊天绑定，但实际安装记录也必须收到改名回收待办。
+        installed_sessions = connection.execute(
+            sql_text("""SELECT session_id FROM t_nexus_resource_sync
+                WHERE employee_id=:e AND resource_type='skill' AND resource_id=:r"""),
+            {"e": employee["id"], "r": skill_id},
+        ).scalars().all()
+        for session_id in dict.fromkeys([*employee_session_ids(connection, employee), *installed_sessions]):
             _set_sync(
                 connection,
                 "skill",
@@ -1394,11 +1400,8 @@ async def _sync_one_session(
                 session_id,
                 external_skill_installs,
             )
-            for item in external_skill_installs:
-                record = external_skills.get(item, {})
-                name = _skill_record_name(record, item)
-                if name and name in detail:
-                    failures.append(f"{name} 未装入：{detail}")
+            if detail:
+                failures.append(f"技能库技能未装入：{detail}")
         except AgentScopeError as exc:
             failures.append(f"技能库技能未装入：{exc.detail}")
 

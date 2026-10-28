@@ -1,0 +1,122 @@
+{
+  "数字员工-MCP开发闭环-私聊确认版-80秒.mp4": {
+    "sha256": "3645c989e597f74fbf1771d863059dd790fcd53ffa45580009b51877d3b089ab",
+    "bytes": 6051834
+  },
+  "subtitles.srt": {
+    "sha256": "dafbda23cf5841a4b4dd28d0b7d9e98f356a2c9f8eae1d9fb91606cf3e17de4a",
+    "bytes": 1185
+  },
+  "讲解词.txt": {
+    "sha256": "5a23aae66caf520a2d3cdaa2a1cd705695a1f200c3fe20674fe4955dadf2a84c",
+    "bytes": 1164
+  },
+  "narration.wav": {
+    "sha256": "08e2ead1e76683bf8a3f4a1f09eb5b36a386dcada8008cbf4221284cc6946ff0",
+    "bytes": 7680078
+  },
+  "交付说明.md": {
+    "sha256": "7209c21c86e4c770eb6080dec748e43ac2c0b8a2e76cf84681a3ad962d1c58c4",
+    "bytes": 3659
+  },
+  "场景设计.md": {
+    "sha256": "c7b22f7dc5d0adf5597fbcda66577b27d69b833000005b073e0703fd9c4493e2",
+    "bytes": 1205
+  },
+  "edit-timeline.json": {
+    "sha256": "0d75474f87114726d59e6fb0f66c5b532f7391b2c1cd534bb8ba8df246338b6f",
+    "bytes": 2846
+  },
+  "video-qa.json": {
+    "sha256": "d91a43532c890c80825ffc8d90ec3f9ee68fe0f3e599eb806b1f2972bfb86bad",
+    "bytes": 627
+  },
+  "video-contact-sheet.jpg": {
+    "sha256": "c7e4bb74acfe31ee9851d95ff398e122ab94d34dae9ef6779cac07a7b4d24627",
+    "bytes": 326421
+  },
+  "reviewed-experience.md": {
+    "sha256": "f322c5172c3af0aaa4b23f2e02c37c152a5d676069740ccea733d450a2d458b3",
+    "bytes": 3659
+  },
+  "交付代码.patch": {
+    "sha256": "3e258ffc3f813389dd00a4bc7abd929077786abd3e501bf94030ebd9a6e7a9bb",
+    "bytes": 62669
+  },
+  "final-proof.json": {
+    "sha256": "0087b3b8455f47a8d215e98b3549c074d03853ba542b0ea6d4cdeef299e5b65e",
+    "bytes": 656
+  },
+  "human-answer-native-ack.json": {
+    "sha256": "136308ca19632722a107daaee35bc9511dfc63bf4509764f734a15e23db36f94",
+    "bytes": 808
+  },
+  "independent-live-mcp.json": {
+    "sha256": "d082c7df8178114ffc0c8344961fddc78280cd0326f870fd3b9cb09310eb3468",
+    "bytes": 365
+  },
+  "independent-test.txt": {
+    "sha256": "ded84ca623a057862c3f6b10052efc057bc1e05fb7a7f81e1696f13e8b926860",
+    "bytes": 99
+  },
+  "independent-ruff.txt": {
+    "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "bytes": 19
+  },
+  "independent-format.txt": {
+    "sha256": "cfe5c6461b42a90595a492aed11f2c8e6eb98b7c4caf2cc9f47e3333185e3f33",
+    "bytes": 27
+  },
+  "delivery/mcp_server/pyproject.toml": {
+    "sha256": "fb99ebf3d296960060dc84cbe6186ef39af0ec246a835f309c410c9731e9058a",
+    "bytes": 761
+  },
+  "delivery/mcp_server/README.md": {
+    "sha256": "f80dd007e437c02406115b75799ea5922d0ad5079827c6ace9f5503246022ed5",
+    "bytes": 4996
+  },
+  "delivery/mcp_server/demo/verify_demo.py": {
+    "sha256": "ffd22619de9694c583587b8365dba699f0bae7ace6836b70cbc38e30be0b7ccf",
+    "bytes": 6406
+  },
+  "delivery/mcp_server/demo/seed_demo.py": {
+    "sha256": "89ec3787e6aa6116c1d73a3b009ca65506c484b04f6acff1c1e2ede56d7f26b2",
+    "bytes": 3252
+  },
+  "delivery/mcp_server/tests/conftest.py": {
+    "sha256": "de85462ae203952a0cd7340b4eb128e26a0e5e8001355cb1e9b7332de56914fb",
+    "bytes": 5926
+  },
+  "delivery/mcp_server/tests/test_mcp_server.py": {
+    "sha256": "df3fd1f32b5da27ee1d29eecb53acb184f6f1e31d519885c3275532b743fc44d",
+    "bytes": 5313
+  },
+  "delivery/mcp_server/tests/test_config.py": {
+    "sha256": "e40725e4daee4929fe285445b5f3c2bed0f0d08e44e1f67711f7f1c24b3ace98",
+    "bytes": 2300
+  },
+  "delivery/mcp_server/tests/test_client.py": {
+    "sha256": "05632e187cbc35608518989db4c9cf3192347ff528a8fff5a99310742c41d246",
+    "bytes": 8579
+  },
+  "delivery/mcp_server/src/nr_version_mcp/server.py": {
+    "sha256": "781e214c1e496b7c54dd25126121f0d9f95e2c8e604d816949d73d7370912297",
+    "bytes": 4438
+  },
+  "delivery/mcp_server/src/nr_version_mcp/config.py": {
+    "sha256": "66072a4216f27c6a199f937fc030d019e52c21a2ab75fa6c16df54c923d05e80",
+    "bytes": 4511
+  },
+  "delivery/mcp_server/src/nr_version_mcp/client.py": {
+    "sha256": "b1f4a21443201ee605d7e0a28b032bc65601d2a648a373620485499d0e4b9367",
+    "bytes": 11734
+  },
+  "delivery/mcp_server/src/nr_version_mcp/__init__.py": {
+    "sha256": "e5c52e54bbd4ed4680391cef0265ce1942ce155c8e80d698956dd28d1cd60067",
+    "bytes": 70
+  },
+  "delivery/mcp_server/src/nr_version_mcp/__main__.py": {
+    "sha256": "7d6a83ed0fbac569feed703653eaf89582cb60bf8845e4232ffb0174b91a43a7",
+    "bytes": 136
+  }
+}

@@ -1,0 +1,97 @@
+[
+  {
+    "clip": "01-demand",
+    "duration": 4,
+    "caption": "在私聊交办产品版本查询 MCP 开发",
+    "stage": "01 / 需求交办"
+  },
+  {
+    "clip": "02-send",
+    "duration": 5,
+    "caption": "发送需求，由数字员工受理",
+    "stage": "01 / 需求交办",
+    "source_end": 0.65
+  },
+  {
+    "clip": "03-auto-task",
+    "duration": 10,
+    "caption": "数字员工主动建单，AgentWorker 自动接纳",
+    "stage": "02 / 自动交办"
+  },
+  {
+    "clip": "04-employee-asks-human",
+    "duration": 12,
+    "caption": "默认查询范围需要判断\n数字员工在原私聊主动询问并给出建议",
+    "stage": "03 / 私聊咨询"
+  },
+  {
+    "clip": "05-human-answer-input",
+    "duration": 4,
+    "caption": "用户在私聊选择 A：默认仅查询已发布版本",
+    "stage": "04 / 回复与续办"
+  },
+  {
+    "clip": "06-human-answer-send",
+    "duration": 8,
+    "caption": "数字员工核对当前请求，将决定回传同一 Worker",
+    "stage": "04 / 回复与续办"
+  },
+  {
+    "clip": "10-delivery-tests-to-commit",
+    "duration": 9,
+    "caption": "27 项单测通过，真实 MCP 调用与 HTTP 结果一致",
+    "stage": "05 / 开发与验证",
+    "source_end": 0.58,
+    "note": "真实交付回报 · 开发与等待已剪辑"
+  },
+  {
+    "clip": "10-delivery-tests-to-commit",
+    "duration": 9,
+    "caption": "本地提交：747c96e、ea85e34\n数字员工在私聊回报测试与提交证据",
+    "stage": "06 / 代码提交",
+    "source_start": 0.58,
+    "note": "真实交付回报 · 开发与等待已剪辑"
+  },
+  {
+    "clip": "17-acceptance-to-completion-visible",
+    "duration": 4,
+    "caption": "独立核验通过，在原私聊确认验收",
+    "stage": "07 / 私聊验收",
+    "source_end": 0.4444444444444444,
+    "note": "执行记录回看 · 私聊验收已完成"
+  },
+  {
+    "clip": "17-acceptance-to-completion-visible",
+    "duration": 5,
+    "caption": "数字员工确认任务完成，Worker 占用释放",
+    "stage": "07 / 私聊验收",
+    "source_end": 1,
+    "source_start": 0.4444444444444444,
+    "note": "执行记录回看 · 私聊验收已完成"
+  },
+  {
+    "clip": "18-completion-to-library",
+    "duration": 3,
+    "caption": "后台复盘生成经验候选",
+    "stage": "08 / 经验沉淀",
+    "note": "执行记录回看 · 进入经验审核"
+  },
+  {
+    "clip": "14-open-reviewed-experience",
+    "duration": 2,
+    "caption": "核对证据、审核经验",
+    "stage": "08 / 经验沉淀"
+  },
+  {
+    "clip": "15-publish-experience",
+    "duration": 2,
+    "caption": "发布经过审核的任务经验",
+    "stage": "08 / 经验沉淀"
+  },
+  {
+    "clip": "16-published-experience",
+    "duration": 3,
+    "caption": "经验已发布，关联原任务与执行证据",
+    "stage": "08 / 经验沉淀"
+  }
+]

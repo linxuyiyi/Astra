@@ -1,0 +1,21 @@
+{
+  "task_id": "T-20261028-2298D2",
+  "status": "SUCCEEDED",
+  "execution_released": true,
+  "native_session_id": "ses_e7d09fe61ffefYMD8ds6QB4aEz",
+  "worker_status": "IDLE",
+  "worker_current_task_count": 0,
+  "commits": [
+    "747c96e",
+    "ea85e34ecc2e3cdaeb3a9122f24fb3fbfaac60f4"
+  ],
+  "human_reply_through_employee": true,
+  "workspace_answer_used": false,
+  "code_pushed_from_worker": false,
+  "static_bundle_matches_main_checkout": true,
+  "experience_id": "KNOW_802941B8D38945059603",
+  "experience_status": "published",
+  "experience_sync_status": "synced",
+  "review_job_status": "SUCCEEDED",
+  "knowledge_verification_status": "unverified"
+}

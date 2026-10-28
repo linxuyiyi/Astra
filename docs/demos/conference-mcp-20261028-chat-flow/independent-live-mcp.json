@@ -1,0 +1,14 @@
+{
+  "protocol_version": "2025-11-25",
+  "passed": true,
+  "tool_names": [
+    "search_product_versions",
+    "get_product_version"
+  ],
+  "default_only_released": true,
+  "search_matches_direct_http": true,
+  "detail_matches_direct_http": true,
+  "date_filter_and_pagination_passed": true,
+  "credentials_logged": false,
+  "temporary_django_service_stopped": true
+}

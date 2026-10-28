@@ -134,6 +134,7 @@ async function requestClose() {
       title: '放弃未保存的分类修改？',
       message: '分类的提示词与排序尚未保存，关闭后将无法恢复。',
       confirmLabel: '放弃并关闭',
+      cancelLabel: '继续编辑',
       danger: true,
     })
     if (!confirmed) return

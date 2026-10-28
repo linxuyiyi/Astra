@@ -1,0 +1,96 @@
+{
+  "owned": {
+    "web": {
+      "identity_before": {
+        "pgid": 58483,
+        "cwd": "/Users/niuniu/.codex/worktrees/publish-worker-assistance/Astra/services/nexus-api/web",
+        "create_time": "1793145630.072"
+      },
+      "release_result": "drop",
+      "listener_after": false
+    },
+    "api": {
+      "identity_before": {
+        "pgid": 59001,
+        "cwd": "/Users/niuniu/.codex/worktrees/publish-worker-assistance/Astra/services/nexus-api",
+        "create_time": "1793146196.907"
+      },
+      "release_result": "drop",
+      "listener_after": false
+    },
+    "agent": {
+      "identity_before": {
+        "pgid": 58469,
+        "cwd": "/Users/niuniu/.codex/worktrees/publish-worker-assistance/Astra/services/agent-service",
+        "create_time": "1793145629.058"
+      },
+      "release_result": "drop",
+      "listener_after": false
+    },
+    "redis": {
+      "identity_before": {
+        "pgid": 58466,
+        "cwd": "/private/tmp/nexus-ux-audit-20261028",
+        "create_time": "1793145628.549"
+      },
+      "release_result": "drop",
+      "listener_after": false
+    }
+  },
+  "protected_before": {
+    "35694": {
+      "pgid": 35694,
+      "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+      "create_time": "1793015549.623"
+    },
+    "33082": {
+      "pgid": 33082,
+      "cwd": "/Users/niuniu/程序/Astra/services/agent-service",
+      "create_time": "1793011276.397"
+    },
+    "35693": {
+      "pgid": 35693,
+      "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+      "create_time": "1793015549.618"
+    },
+    "94344": {
+      "pgid": 94344,
+      "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+      "create_time": "1792889590.132"
+    },
+    "5797": {
+      "pgid": 5797,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api",
+      "create_time": "1792840568.733"
+    }
+  },
+  "protected_after": {
+    "35694": {
+      "pgid": 35694,
+      "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+      "create_time": "1793015549.623"
+    },
+    "33082": {
+      "pgid": 33082,
+      "cwd": "/Users/niuniu/程序/Astra/services/agent-service",
+      "create_time": "1793011276.397"
+    },
+    "35693": {
+      "pgid": 35693,
+      "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+      "create_time": "1793015549.618"
+    },
+    "94344": {
+      "pgid": 94344,
+      "cwd": "/Users/niuniu/程序/Astra/services/nexus-api",
+      "create_time": "1792889590.132"
+    },
+    "5797": {
+      "pgid": 5797,
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-dsh-acp/Astra/services/nexus-api",
+      "create_time": "1792840568.733"
+    }
+  },
+  "protected_unchanged": true,
+  "workers_started": false
+}

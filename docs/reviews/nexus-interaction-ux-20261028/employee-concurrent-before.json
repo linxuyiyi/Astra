@@ -1,0 +1,18 @@
+[
+  {
+    "case": "employee-save-concurrent-before",
+    "method": "PATCH",
+    "path": "/api/v1/employees/emp_93bddd287f55",
+    "at": 1793146986.470206,
+    "fault_injected": true,
+    "status": 503
+  },
+  {
+    "case": "employee-save-concurrent-before",
+    "method": "PATCH",
+    "path": "/api/v1/employees/emp_93bddd287f55",
+    "at": 1793146986.483403,
+    "fault_injected": true,
+    "status": 503
+  }
+]

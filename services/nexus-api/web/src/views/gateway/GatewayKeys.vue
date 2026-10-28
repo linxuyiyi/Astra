@@ -173,6 +173,7 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeRouteLeave } from 'vue-router'
 import { Copy, Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
@@ -371,7 +372,8 @@ async function submit() {
 }
 
 async function requestClose() {
-  if (saving.value) return
+  if (!drawerOpen.value) return true
+  if (saving.value) return false
   if (dirty.value) {
     const confirmed = await confirmDialog({
       title: '放弃未保存修改',
@@ -380,10 +382,12 @@ async function requestClose() {
       cancelLabel: '继续编辑',
       danger: true,
     })
-    if (!confirmed) return
+    if (!confirmed) return false
   }
   drawerOpen.value = false
+  return true
 }
+onBeforeRouteLeave(() => requestClose())
 
 function closePlaintext() {
   createdKey.value = null

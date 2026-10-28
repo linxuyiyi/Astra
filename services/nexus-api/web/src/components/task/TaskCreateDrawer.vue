@@ -122,6 +122,7 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeRouteLeave } from 'vue-router'
 import { ArrowDown, ArrowUp, Paperclip, Plus, Trash2 } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElDivider, ElDrawer, ElForm, ElFormItem, ElInput, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSpace, ElTag, ElText, ElUpload } from 'element-plus'
@@ -224,18 +225,22 @@ const createDirty = computed(() => openedSnapshot.value !== '' && taskDraftSnaps
 // 创建表单是草稿：遮罩点击与 ESC 不关闭，只走显式取消/关闭，且有未保存内容时先二次确认。
 // before-close 不调用 done()，关闭始终由父级把 open 置为 false 驱动。
 async function requestClose() {
-  if (submitting.value) return
+  if (!props.open) return true
+  if (submitting.value) return false
   if (createDirty.value) {
     const confirmed = await confirmDialog({
       title: props.task ? '放弃未保存的修改？' : '放弃未保存的任务草稿？',
       message: props.task ? '任务修改尚未提交，关闭后将无法恢复。' : '创建任务的内容尚未提交，关闭后将无法恢复。',
       confirmLabel: '放弃并关闭',
+      cancelLabel: '继续编辑',
       danger: true,
     })
-    if (!confirmed) return
+    if (!confirmed) return false
   }
   emit('close')
+  return true
 }
+onBeforeRouteLeave(() => requestClose())
 
 function addCriterion() { form.criteria.push({ key: safeUUID(), content: '' }) }
 function removeCriterion(index: number) { form.criteria.splice(index, 1) }

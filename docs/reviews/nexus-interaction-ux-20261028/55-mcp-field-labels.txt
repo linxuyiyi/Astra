@@ -1,0 +1,13 @@
+Browser tab: 3, Title: "Nexus v1.4.8", URL: "http://127.0.0.1:18854/settings/mcps".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 3, 10, 20, 24-25
++				43 text * 名称
++				44 text * 连接地址
++				45 container
++					46 text field (settable) Description: 请求头 1 名称, ID: el-id-8959-887
++					47 text field (settable) Description: 请求头 1 值, ID: el-id-8959-888
++					48 button 移除请求头 1
++					49 button 添加请求头
++						50 text 添加请求头
++		51 text 有未保存修改
+The focused UI element is 49 button 添加请求头

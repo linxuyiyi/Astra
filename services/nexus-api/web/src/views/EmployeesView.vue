@@ -241,6 +241,8 @@
     <!-- 编辑/创建 Drawer -->
     <EmployeeDrawer
       :open="drawerOpen"
+      :saving="saving"
+      :error="saveError"
       :employee="editing"
       :catalogs="catalogs"
       :routes="routes"
@@ -298,6 +300,8 @@ const loading = ref(false);
 const loadError = ref("");
 
 const drawerOpen = ref(false);
+const saving = ref(false);
+const saveError = ref("");
 const editing = ref<Employee | null>(null);
 
 const viewDrawerOpen = ref(false);
@@ -387,11 +391,13 @@ async function reload() {
 }
 
 function openCreate() {
+  saveError.value = "";
   editing.value = null;
   drawerOpen.value = true;
 }
 
 function openEdit(employee: Employee) {
+  saveError.value = "";
   editing.value = employee;
   drawerOpen.value = true;
 }
@@ -417,12 +423,16 @@ function askDelete(employee: Employee) {
 }
 
 async function save(body: Omit<Employee, "id" | "agentscope_agent_id" | "mailbox_session_id">) {
+  if (saving.value) return;
   if (!body.name || !body.domain || !body.description || !body.instructions) {
     ElMessage.warning("请完善必填信息");
     return;
   }
+  saving.value = true;
+  saveError.value = "";
+  const employeeId = editing.value?.id;
   try {
-    const result = await saveEmployee(body, editing.value?.id);
+    const result = await saveEmployee(body, employeeId);
     drawerOpen.value = false;
     await reload();
     const sync = result.sync;
@@ -432,7 +442,9 @@ async function save(body: Omit<Employee, "id" | "agentscope_agent_id" | "mailbox
       ElMessage.success(result.agentscope.ok ? "员工已保存，并同步到 AgentScope" : `员工已保存。${result.agentscope.detail}`);
     }
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "保存失败");
+    saveError.value = error instanceof Error ? error.message : "保存失败";
+  } finally {
+    saving.value = false;
   }
 }
 

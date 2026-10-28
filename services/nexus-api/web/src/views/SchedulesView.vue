@@ -68,12 +68,12 @@
       </div>
     </div>
 
-    <ElDialog v-model="formOpen" :title="editing ? '编辑日程' : '新建日程'" width="min(560px, 95vw)" :close-on-click-modal="false">
+    <ElDialog v-model="formOpen" class="nexus-scroll-dialog" align-center :title="editing ? '编辑日程' : '新建日程'" width="min(560px, 95vw)" :close-on-click-modal="false" :before-close="closeForm">
       <ElAlert v-if="formError" :title="formError" type="error" :closable="false" show-icon />
-      <ElForm label-position="top" @submit.prevent="save">
+      <ElForm label-position="top" :disabled="saving" @submit.prevent="save">
         <ElFormItem label="日程名称" required><ElInput v-model="form.name" maxlength="120" placeholder="例如：工作日晨间简报" /></ElFormItem>
         <ElFormItem label="数字员工" required>
-          <ElSelect v-model="employeeId" :disabled="!!editing" placeholder="选择数字员工" style="width: 100%">
+          <ElSelect v-model="employeeId" :disabled="!!editing || saving" placeholder="选择数字员工" style="width: 100%">
             <ElOption v-for="employee in choices" :key="employee.id" :value="employee.id" :label="employee.name" :disabled="!employee.enabled || !employee.agentscope_agent_id" />
           </ElSelect>
         </ElFormItem>
@@ -82,7 +82,7 @@
           <ElFormItem label="重复频率"><ElSelect v-model="frequency" aria-label="重复频率">
             <ElOption v-for="option in frequencies" :key="option.value" v-bind="option" />
           </ElSelect></ElFormItem>
-          <ElFormItem v-if="frequency !== 'custom'" label="执行时间"><ElInput v-model="time" type="time" aria-label="执行时间" /></ElFormItem>
+          <ElFormItem v-if="frequency !== 'custom'" label="执行时间"><ElInput v-model="time" type="time" :disabled="saving" aria-label="执行时间" /></ElFormItem>
         </div>
         <ElFormItem v-if="frequency === 'weekly'" label="星期"><ElSelect v-model="weekday"><ElOption v-for="(day, index) in weekdays" :key="day" :label="day" :value="index" /></ElSelect></ElFormItem>
         <ElFormItem v-if="frequency === 'monthly'" label="每月日期"><ElInputNumber v-model="monthDay" :min="1" :max="31" /><small>没有该日期的月份不执行。</small></ElFormItem>
@@ -92,7 +92,7 @@
         <ElFormItem label="启用"><ElSwitch v-model="form.enabled" /></ElFormItem>
       </ElForm>
       <p class="schedule-note">日程只对你可见，其他人可独立安排同一员工。使用员工已绑定的模型路由；路由变化后需重新创建日程。启停可能需要约 60 秒，禁用员工前请先暂停日程。</p>
-      <template #footer><ElButton @click="formOpen = false">取消</ElButton><ElButton type="primary" :loading="saving" @click="save">保存日程</ElButton></template>
+      <template #footer><ElText v-if="formGuard.dirty.value" type="warning">有未保存修改</ElText><ElButton :disabled="saving" @click="closeForm">取消</ElButton><ElButton type="primary" :loading="saving" @click="save">保存日程</ElButton></template>
     </ElDialog>
 
     <ElDrawer v-model="historyOpen" :title="`执行记录 · ${selected?.data.name || ''}`" size="min(700px, 96vw)">
@@ -123,6 +123,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import { onBeforeRouteLeave } from 'vue-router';
+import { useFormGuard } from '@/composables/useFormGuard';
 import { ElAlert, ElButton, ElCard, ElDialog, ElDrawer, ElEmpty, ElForm, ElFormItem, ElInput, ElInputNumber, ElOption, ElPagination, ElSelect, ElSwitch, ElTable, ElTableColumn, ElText } from 'element-plus';
 import { Plus, RefreshCw, RotateCcw, Search } from 'lucide-vue-next';
 import { currentUid, deleteSchedule, listEmployees, listSchedules, saveSchedule, scheduleMessages, scheduleSessions, toggleSchedule, type EmployeeSchedule, type ScheduleInput, type ScheduleMessages, type ScheduleSession } from '@/api';
@@ -152,6 +154,15 @@ const form = reactive(defaults());
 const frequency = ref('weekdays'), time = ref('09:00'), weekday = ref(1), monthDay = ref(1);
 const frequencies = [{ value: 'daily', label: '每天' }, { value: 'weekdays', label: '工作日（周一至周五）' }, { value: 'weekly', label: '每周' }, { value: 'monthly', label: '每月' }, { value: 'custom', label: '自定义 Cron' }];
 const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+const formGuard = useFormGuard({
+  isOpen: () => formOpen.value, isSaving: () => saving.value,
+  snapshot: () => JSON.stringify({ form, employeeId: employeeId.value, frequency: frequency.value,
+    time: time.value, weekday: weekday.value, monthDay: monthDay.value }),
+  confirmDiscard: () => confirmDialog({ title: '放弃未保存的日程修改？',
+    message: '日程名称、安排内容和执行时间尚未保存，关闭后将无法恢复。', confirmLabel: '放弃并关闭', cancelLabel: '继续编辑', danger: true }),
+});
+async function closeForm() { if (await formGuard.canClose()) formOpen.value = false; }
+onBeforeRouteLeave(() => formGuard.canClose());
 const timezones = ['Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Tokyo', 'UTC', 'Europe/London', 'America/New_York', 'America/Los_Angeles'];
 const historyOpen = ref(false), selected = ref<EmployeeSchedule | null>(null), historyLoading = ref(false), historyError = ref('');
 const sessions = ref<ScheduleSession[]>([]), historyPage = ref(1), historyPageSize = ref(20), historyTotal = ref(0);
@@ -177,7 +188,8 @@ async function reload() {
 async function loadChoices() { choices.value = await listEmployees(); }
 async function openCreate() {
   editing.value = null; employeeId.value = ''; Object.assign(form, defaults());
-  frequency.value = 'weekdays'; time.value = '09:00'; formError.value = ''; formOpen.value = true;
+  frequency.value = 'weekdays'; time.value = '09:00'; weekday.value = 1; monthDay.value = 1;
+  formError.value = ''; formOpen.value = true; formGuard.capture();
   try { await loadChoices(); } catch (e) { formError.value = reason(e); }
 }
 async function openEdit(row: EmployeeSchedule) {
@@ -185,7 +197,7 @@ async function openEdit(row: EmployeeSchedule) {
     name: row.data.name, description: row.data.description, cron_expression: row.data.cron_expression,
     timezone: row.data.timezone, stateful: row.data.stateful, enabled: row.data.enabled,
   });
-  frequency.value = 'custom'; formError.value = ''; formOpen.value = true;
+  frequency.value = 'custom'; formError.value = ''; formOpen.value = true; formGuard.capture();
   try { await loadChoices(); } catch (e) { formError.value = reason(e); }
 }
 async function save() {

@@ -138,6 +138,7 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeRouteLeave } from 'vue-router'
 import { Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
@@ -308,7 +309,8 @@ async function submitPool() {
 }
 
 async function requestPoolClose() {
-  if (saving.value) return
+  if (!poolDrawerOpen.value) return true
+  if (saving.value) return false
   if (poolDirty.value) {
     const confirmed = await confirmDialog({
       title: '放弃未保存修改',
@@ -317,10 +319,12 @@ async function requestPoolClose() {
       cancelLabel: '继续编辑',
       danger: true,
     })
-    if (!confirmed) return
+    if (!confirmed) return false
   }
   poolDrawerOpen.value = false
+  return true
 }
+onBeforeRouteLeave(() => requestPoolClose())
 
 async function removePool(pool: GatewayPool) {
   const confirmed = await confirmDialog({

@@ -93,6 +93,7 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeRouteLeave } from 'vue-router'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { Upload } from 'lucide-vue-next'
@@ -171,17 +172,20 @@ watch(() => props.open, (open) => {
 }, { immediate: true })
 
 async function requestClose() {
-  if (props.saving) return
+  if (!props.open) return true
+  if (props.saving) return false
   if (dirty.value) {
     const confirmed = await confirmDialog(
       isEdit.value
-        ? { title: '放弃未保存的知识修改？', message: '对该知识的修改尚未保存，关闭后将无法恢复。', confirmLabel: '放弃并关闭', danger: true }
-        : { title: '放弃未保存的知识草稿？', message: '编辑内容尚未保存，关闭后将无法恢复。', confirmLabel: '放弃并关闭', danger: true },
+        ? { title: '放弃未保存的知识修改？', message: '对该知识的修改尚未保存，关闭后将无法恢复。', confirmLabel: '放弃并关闭', cancelLabel: '继续编辑', danger: true }
+        : { title: '放弃未保存的知识草稿？', message: '编辑内容尚未保存，关闭后将无法恢复。', confirmLabel: '放弃并关闭', cancelLabel: '继续编辑', danger: true },
     )
-    if (!confirmed) return
+    if (!confirmed) return false
   }
   emit('close')
+  return true
 }
+onBeforeRouteLeave(() => requestClose())
 
 async function submit() {
   if (props.saving) return

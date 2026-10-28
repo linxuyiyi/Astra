@@ -1,0 +1,21 @@
+{
+  "case": "employee-save-before",
+  "requests": [
+    {
+      "case": "employee-save-before",
+      "method": "PATCH",
+      "path": "/api/v1/employees/emp_93bddd287f55",
+      "at": 1793146274.9866161,
+      "fault_injected": true,
+      "status": 503
+    },
+    {
+      "case": "employee-save-before",
+      "method": "PATCH",
+      "path": "/api/v1/employees/emp_93bddd287f55",
+      "at": 1793146281.535756,
+      "fault_injected": true,
+      "status": 503
+    }
+  ]
+}

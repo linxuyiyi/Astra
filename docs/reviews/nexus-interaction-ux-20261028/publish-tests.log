@@ -1,0 +1,49 @@
+
+> nexus-web@1.4.8 test
+> node --test tests/*.test.ts
+
+✔ mergeMessages dedupes by id and keeps an unconfirmed local message in time order (1.316375ms)
+✔ a sent message is inserted after existing history, not before it (0.07175ms)
+✔ mergeMessages does not duplicate the same server message arriving twice (0.049666ms)
+✔ mergeMessages keeps two identical messages that the user really sent twice (0.063709ms)
+✔ mergeMessages replaces the optimistic message when the server echoes the same id (1.507ms)
+✔ streamCursor only accepts numeric replay cursors (0.119875ms)
+✔ maxCursor keeps the newest replay cursor across reconnects (0.103917ms)
+✔ selection and reload guards reject stale async work (0.069916ms)
+✔ replayed events are ignored by the per-member seen set (0.693167ms)
+✔ a delayed timeline response cannot overwrite a newer one (0.296292ms)
+✔ untouched and reverted forms close without a prompt (1.083333ms)
+✔ continuing editing preserves nested resource content (0.119916ms)
+✔ explicit discard allows closing a changed form (0.073958ms)
+✔ saving blocks close even when the form is untouched (0.05725ms)
+✔ repeated close actions share a single pending confirmation (0.598916ms)
+✔ an old confirmation cannot close a newly initialized form (0.111041ms)
+✔ saving that starts during confirmation still blocks closing (0.085083ms)
+✔ unproject round-trips a screen point on the target plane (1.896084ms)
+✔ dragging keeps the pressed screen point fixed while the camera rotates (0.363166ms)
+✔ reset clears the temporary orbit pivot (0.204417ms)
+✔ hash32 and collaborationKey are deterministic (0.885208ms)
+✔ task status changes do not move galaxies, workers or satellites (13.25525ms)
+✔ galaxy color follows business state instead of decorative palette (0.111ms)
+✔ only owned workers orbit a galaxy and queued satellites cap at five (0.221625ms)
+✔ opening the create drawer stays uncategorized and clean (1.502292ms)
+✔ an edit after the baseline stays dirty (0.556791ms)
+✔ empty and null employee ids compare as the same untouched value (0.082875ms)
+✔ current tasks follow authoritative occupancy references, including released-state edge cases (1.920667ms)
+✔ initial offline, unknown health and pending equipment do not block deploy (0.270833ms)
+✔ real occupancy blocks restart/deploy but not disable (0.220375ms)
+✔ health abnormalities are not treated as occupancy (0.14425ms)
+✔ active maintenance blocks actions while interrupted keeps restore/check available (0.132167ms)
+✔ runtime info and neutral tones map to progress and neutral (0.926ms)
+✔ semantic tones already in the target vocabulary pass through (0.169125ms)
+✔ neutral renders with the shared gray class instead of info blue (0.117958ms)
+✔ colored semantics keep Element Plus type colors and no override class (0.994709ms)
+✔ records and probe logs agree on failure, success, cancellation and interruption colors (0.105958ms)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 37
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 228.585791

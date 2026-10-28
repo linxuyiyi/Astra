@@ -1,0 +1,41 @@
+{
+  "source_commit": "fa5e98ff30907c3ba8769cb9467682049cf8c585",
+  "ui": "http://127.0.0.1:18854",
+  "api": "http://127.0.0.1:18851",
+  "agent_service": "http://127.0.0.1:18850",
+  "database": "isolated SQLite backup; copied QA fixtures; no company data writes",
+  "workers": "not started",
+  "runtime": "真实源码服务与浏览器；慢响应和 503 使用私有 ASGI 故障注入，正常请求转发真实 API",
+  "processes": {
+    "redis": {
+      "pid": 58466,
+      "pgid": 58466,
+      "create_time": "1793145628.549",
+      "cwd": "/private/tmp/nexus-ux-audit-20261028",
+      "port": 18889
+    },
+    "agent": {
+      "pid": 58469,
+      "pgid": 58469,
+      "create_time": "1793145629.058",
+      "cwd": "/Users/niuniu/.codex/worktrees/publish-worker-assistance/Astra/services/agent-service",
+      "port": 18850
+    },
+    "api": {
+      "pid": 59001,
+      "pgid": 59001,
+      "create_time": "1793146196.907",
+      "cwd": "/Users/niuniu/.codex/worktrees/publish-worker-assistance/Astra/services/nexus-api",
+      "port": 18851
+    },
+    "web": {
+      "pid": 58483,
+      "pgid": 58483,
+      "create_time": "1793145630.072",
+      "cwd": "/Users/niuniu/.codex/worktrees/publish-worker-assistance/Astra/services/nexus-api/web",
+      "port": 18854
+    }
+  },
+  "branch": "codex/interaction-ux-fixes",
+  "cleaned_up": true
+}

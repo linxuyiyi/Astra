@@ -1,0 +1,31 @@
+Browser tab: 3, Title: "Nexus v1.4.8", URL: "http://127.0.0.1:18854/settings/skills".
+1 AXWebArea Nexus v1.4.8, URL: 127.0.0.1:18854/settings/skills
+	2 container 新增技能
+		4 container
+			5 heading 新增技能, Value: 2, ID: el-id-8959-824
+				6 text 新增技能
+			7 button 关闭此对话框
+		8 container
+			9 container el-id-8959-835
+				20 text * SKILL.md
+			11 text entry area (settable) *SKILL.md, ID: el-id-8959-837, Value: ---
+name: 新技能
+description: ""
+---
+
+# 新技能
+
+
+			12 text 资源文件
+			13 button 添加文件
+				14 text 添加文件
+			21 text field (settable) Description: 资源文件 1 路径, ID: el-id-8959-839
+			22 button 移除资源文件 1
+			23 text entry area (settable) Description: 资源文件 1 内容, ID: el-id-8959-840
+			16 container
+				17 switch (settable, boolean) Description: 启用, Value: 1, ID: el-id-8959-838
+		24 text 有未保存修改
+		18 button 取消
+		19 button 保存技能
+
+The focused UI element is 13 button 添加文件

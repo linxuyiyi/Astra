@@ -108,8 +108,8 @@
       />
     </div>
 
-    <ElDrawer v-model="editorOpen" :title="editing ? '编辑 MCP' : '新增 MCP'" size="680px" :close-on-click-modal="false">
-      <ElForm label-position="top" @submit.prevent="submitMcp">
+    <ElDrawer v-model="editorOpen" :title="editing ? '编辑 MCP' : '新增 MCP'" size="680px" :close-on-click-modal="false" :before-close="closeEditor">
+      <ElForm label-position="top" :disabled="saving" @submit.prevent="submitMcp">
         <div class="pair">
           <ElFormItem label="名称" required>
             <ElInput v-model="form.name" maxlength="64" placeholder="例如：发布系统 MCP" />
@@ -129,9 +129,9 @@
         <ElFormItem label="请求头">
           <div class="headers">
             <div v-for="(header, index) in form.headers" :key="index" class="header-row">
-              <ElInput v-model="header.key" placeholder="Header 名称" />
-              <ElInput v-model="header.value" placeholder="Header 值（非敏感）" />
-              <ElButton link type="danger" @click="form.headers.splice(index, 1)">移除</ElButton>
+              <ElInput v-model="header.key" :aria-label="`请求头 ${index + 1} 名称`" placeholder="请求头名称" />
+              <ElInput v-model="header.value" :aria-label="`请求头 ${index + 1} 值`" placeholder="请求头值（非敏感）" />
+              <ElButton link type="danger" :aria-label="`移除请求头 ${index + 1}`" @click="form.headers.splice(index, 1)">移除</ElButton>
             </div>
             <ElButton size="small" :icon="Plus" @click="form.headers.push({ key: '', value: '' })">添加请求头</ElButton>
           </div>
@@ -175,7 +175,8 @@
       </ElForm>
       <template #footer>
         <div class="drawer-footer">
-          <ElButton @click="editorOpen = false">取消</ElButton>
+          <ElTag v-if="editorGuard.dirty.value" type="warning">有未保存修改</ElTag>
+          <ElButton :disabled="saving" @click="closeEditor">取消</ElButton>
           <ElButton type="primary" :loading="saving" @click="submitMcp">保存 MCP</ElButton>
         </div>
       </template>
@@ -221,6 +222,8 @@
 <script setup lang="ts">
 import { PlugZap, Plus, RefreshCw, Search } from "lucide-vue-next";
 import { computed, onMounted, reactive, ref, watch } from "vue";
+import { onBeforeRouteLeave } from "vue-router";
+import { useFormGuard } from "../../composables/useFormGuard";
 import {
   ElAlert,
   ElButton,
@@ -291,6 +294,27 @@ const form = reactive({
   timeout: 30,
   enabled: true,
 });
+
+const editorGuard = useFormGuard({
+  isOpen: () => editorOpen.value, isSaving: () => saving.value,
+  snapshot: () => JSON.stringify({ form, clearToken: clearToken.value }),
+  confirmDiscard: () => confirmDialog({ title: "放弃未保存的 MCP 修改？",
+    message: "当前 MCP 配置尚未保存，关闭后将无法恢复。", confirmLabel: "放弃并关闭", cancelLabel: "继续编辑", danger: true }),
+});
+async function closeEditor() { if (await editorGuard.canClose()) editorOpen.value = false; }
+onBeforeRouteLeave(() => editorGuard.canClose());
+
+let testGeneration = 0;
+const testFingerprint = () => JSON.stringify({
+  mcp: editing.value?.id, url: form.url, headers: form.headers,
+  auth: form.auth_type, authHeader: form.auth_header, token: form.token,
+  clearToken: clearToken.value, timeout: form.timeout,
+});
+watch([editorOpen, testFingerprint], () => {
+  ++testGeneration;
+  testing.value = false;
+  testResult.value = null;
+}, { flush: "sync" });
 
 const detailOpen = ref(false);
 const viewing = ref<McpResource | null>(null);
@@ -371,6 +395,7 @@ function beginCreate() {
   editing.value = null;
   resetForm();
   editorOpen.value = true;
+  editorGuard.capture();
 }
 
 async function beginEdit(row: McpResource) {
@@ -391,6 +416,7 @@ async function beginEdit(row: McpResource) {
     testResult.value = null;
     saveError.value = "";
     editorOpen.value = true;
+    editorGuard.capture();
   } catch (reason) {
     notify(reason instanceof Error ? reason.message : "MCP 详情加载失败", "error");
   }
@@ -428,6 +454,8 @@ function writeBody(includeToken: boolean): McpWriteBody {
 }
 
 async function runTest() {
+  if (testing.value || saving.value) return;
+  const generation = ++testGeneration;
   testing.value = true;
   testResult.value = null;
   try {
@@ -440,11 +468,14 @@ async function runTest() {
     };
     if (editing.value) payload.id = editing.value.id;
     if (form.token) payload.token = form.token;
-    testResult.value = await testMcpDraft(payload);
+    const result = await testMcpDraft(payload);
+    if (generation === testGeneration && editorOpen.value) testResult.value = result;
   } catch (reason) {
-    testResult.value = { ok: false, tools: [], error: reason instanceof Error ? reason.message : "连接测试失败", elapsed_ms: 0 };
+    if (generation === testGeneration && editorOpen.value) {
+      testResult.value = { ok: false, tools: [], error: reason instanceof Error ? reason.message : "连接测试失败", elapsed_ms: 0 };
+    }
   } finally {
-    testing.value = false;
+    if (generation === testGeneration) testing.value = false;
   }
 }
 

@@ -47,6 +47,7 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeRouteLeave } from 'vue-router'
 import { computed, ref } from 'vue'
 import { ElButton, ElDrawer, ElSpace, ElTag } from 'element-plus'
 import type { Employee, TaskCategory } from '@/api/types'
@@ -76,18 +77,22 @@ const drawerTitle = computed(() =>
 // before-close never calls done(), so closing is always driven by the `open`
 // prop after the parent handled the emitted close event.
 async function requestClose() {
-  if (configRef.value?.saving) return
+  if (!props.open) return true
+  if (configRef.value?.saving) return false
   if (configRef.value?.getDirty()) {
     const confirmed = await confirmDialog({
       title: '放弃未保存的 Worker 配置？',
       message: '当前修改尚未保存，关闭后将无法恢复。',
       confirmLabel: '放弃并关闭',
+      cancelLabel: '继续编辑',
       danger: true,
     })
-    if (!confirmed) return
+    if (!confirmed) return false
   }
   emit('close')
+  return true
 }
+onBeforeRouteLeave(() => requestClose())
 
 function onSaved(id: string, deployRequested: boolean) {
   if (deployRequested) {

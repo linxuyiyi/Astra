@@ -182,6 +182,7 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeRouteLeave } from 'vue-router'
 import { Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
@@ -412,7 +413,8 @@ async function submitRoute() {
 }
 
 async function requestRouteClose() {
-  if (saving.value) return
+  if (!routeDrawerOpen.value) return true
+  if (saving.value) return false
   if (routeDirty.value) {
     const confirmed = await confirmDialog({
       title: '放弃未保存修改',
@@ -421,10 +423,12 @@ async function requestRouteClose() {
       cancelLabel: '继续编辑',
       danger: true,
     })
-    if (!confirmed) return
+    if (!confirmed) return false
   }
   routeDrawerOpen.value = false
+  return true
 }
+onBeforeRouteLeave(() => requestRouteClose())
 
 async function removeRoute(route: GatewayRoute) {
   const confirmed = await confirmDialog({

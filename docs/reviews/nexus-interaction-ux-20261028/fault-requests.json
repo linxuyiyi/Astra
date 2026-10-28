@@ -1,0 +1,93 @@
+{
+  "case": "employee-final-success-after",
+  "requests": [
+    {
+      "case": "employee-save-before",
+      "method": "PATCH",
+      "path": "/api/v1/employees/emp_93bddd287f55",
+      "at": 1793146274.9866161,
+      "fault_injected": true,
+      "status": 503
+    },
+    {
+      "case": "employee-save-before",
+      "method": "PATCH",
+      "path": "/api/v1/employees/emp_93bddd287f55",
+      "at": 1793146281.535756,
+      "fault_injected": true,
+      "status": 503
+    },
+    {
+      "case": "mcp-old-response-before",
+      "method": "POST",
+      "path": "/api/v1/config/mcps/test",
+      "at": 1793146376.4730382,
+      "fault_injected": true,
+      "status": 503
+    },
+    {
+      "case": "mcp-old-response-after",
+      "method": "POST",
+      "path": "/api/v1/config/mcps/test",
+      "at": 1793146747.271858,
+      "fault_injected": true,
+      "status": 503
+    },
+    {
+      "case": "mcp-inflight-after",
+      "method": "POST",
+      "path": "/api/v1/config/mcps/test",
+      "at": 1793146796.103246,
+      "fault_injected": true,
+      "status": 503
+    },
+    {
+      "case": "employee-save-concurrent-before",
+      "method": "PATCH",
+      "path": "/api/v1/employees/emp_93bddd287f55",
+      "at": 1793146986.470206,
+      "fault_injected": true,
+      "status": 503
+    },
+    {
+      "case": "employee-save-concurrent-before",
+      "method": "PATCH",
+      "path": "/api/v1/employees/emp_93bddd287f55",
+      "at": 1793146986.483403,
+      "fault_injected": true,
+      "status": 503
+    },
+    {
+      "case": "employee-save-concurrent-after",
+      "method": "PATCH",
+      "path": "/api/v1/employees/emp_93bddd287f55",
+      "at": 1793147008.602287,
+      "fault_injected": true,
+      "status": 503
+    },
+    {
+      "case": "employee-save-success-after",
+      "method": "PATCH",
+      "path": "/api/v1/employees/emp_93bddd287f55",
+      "at": 1793147101.929845,
+      "fault_injected": true,
+      "status": null
+    },
+    {
+      "case": "employee-footer-error-after",
+      "method": "PATCH",
+      "path": "/api/v1/employees/emp_93bddd287f55",
+      "at": 1793147168.8001869,
+      "fault_injected": true,
+      "status": 503
+    },
+    {
+      "case": "employee-final-success-after",
+      "method": "PATCH",
+      "path": "/api/v1/employees/emp_93bddd287f55",
+      "at": 1793147184.866059,
+      "fault_injected": true,
+      "status": null
+    }
+  ]
+}

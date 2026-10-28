@@ -1,6 +1,6 @@
 <template>
-  <el-drawer v-model="visible" append-to-body :title="employee ? '编辑数字员工' : '创建数字员工'" size="610px" :close-on-click-modal="false" @close="onClose">
-    <el-form ref="formRef" :model="form" :rules="rules" label-position="top" scroll-to-error @submit.prevent="submit">
+  <el-drawer :model-value="open" :before-close="requestClose" append-to-body :title="employee ? '编辑数字员工' : '创建数字员工'" size="610px" :close-on-click-modal="false">
+    <el-form ref="formRef" :disabled="saving" :model="form" :rules="rules" label-position="top" scroll-to-error @submit.prevent="submit">
       <div class="form-cap">身份与职责</div>
       <div class="pair">
         <el-form-item label="员工名称" prop="name">
@@ -38,7 +38,7 @@
           filterable
           :placeholder="catalogs.knowledge.available ? '选择知识库' : '当前无法读取知识库'"
           style="width: 100%"
-          :disabled="!catalogs.knowledge.available"
+          :disabled="saving || !catalogs.knowledge.available"
         >
           <el-option v-for="item in knowledgeOptions" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
@@ -52,7 +52,7 @@
           filterable
           :placeholder="skillOptions.length ? '选择技能' : '当前没有可选技能'"
           style="width: 100%"
-          :disabled="!skillOptions.length"
+          :disabled="saving || !skillOptions.length"
         >
           <el-option v-for="item in skillOptions" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
@@ -65,7 +65,7 @@
           filterable
           :placeholder="mcpOptions.length ? '选择 MCP' : '当前没有可选 MCP'"
           style="width: 100%"
-          :disabled="!mcpOptions.length"
+          :disabled="saving || !mcpOptions.length"
         >
           <el-option v-for="item in mcpOptions" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
@@ -78,18 +78,20 @@
           filterable
           :placeholder="catalogs.tools.available ? '选择工具' : '当前无法确认工具'"
           style="width: 100%"
-          :disabled="!catalogs.tools.available"
+          :disabled="saving || !catalogs.tools.available"
         >
           <el-option v-for="item in toolOptions" :key="item.id" :label="toolLabel(item)" :value="item.id" />
         </el-select>
       </el-form-item>
     </el-form>
     <template #footer>
+      <el-alert v-if="error" class="save-error" :title="error" type="error" show-icon :closable="false" />
       <div class="footer">
-        <el-switch v-model="form.enabled" active-text="启用此员工" />
+        <el-switch v-model="form.enabled" :disabled="saving" active-text="启用此员工" aria-label="启用此员工" />
         <div>
-          <el-button @click="emit('close')">取消</el-button>
-          <el-button type="primary" @click="submit">保存员工</el-button>
+          <el-tag v-if="guard.dirty.value" type="warning">有未保存修改</el-tag>
+          <el-button :disabled="saving" @click="requestClose">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="submit">保存员工</el-button>
         </div>
       </div>
     </template>
@@ -98,6 +100,9 @@
 
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from "vue";
+import { onBeforeRouteLeave } from "vue-router";
+import { confirmDialog } from "../composables/useConfirm";
+import { useFormGuard } from "../composables/useFormGuard";
 import type { FormInstance, FormRules } from "element-plus";
 import type { Employee, ResourceCatalog } from "../types";
 import type { GatewayRoute } from "../api/gateway";
@@ -161,6 +166,8 @@ const rules: FormRules = {
 
 const props = defineProps<{
   open: boolean;
+  saving: boolean;
+  error: string;
   employee: Employee | null;
   catalogs: {
     skills: ResourceCatalog;
@@ -193,28 +200,19 @@ const form = reactive({
   model_route_id: "",
 });
 
-const visible = ref(false);
-let openedAt = 0;
-watch(
-  () => props.open,
-  async (open) => {
-    if (!open) {
-      visible.value = false;
-      return;
-    }
-    await nextTick();
-    openedAt = Date.now();
-    visible.value = true;
-  },
-  { immediate: true },
-);
-function onClose() {
-  if (props.open && Date.now() - openedAt < 400) {
-    visible.value = true;
-    return;
-  }
-  if (props.open) emit("close");
+const guard = useFormGuard({
+  isOpen: () => props.open,
+  isSaving: () => props.saving,
+  snapshot: () => JSON.stringify(form),
+  confirmDiscard: () => confirmDialog({
+    title: "放弃未保存的员工修改？", message: "员工配置尚未保存，关闭后将无法恢复。",
+    confirmLabel: "放弃并关闭", cancelLabel: "继续编辑", danger: true,
+  }),
+});
+async function requestClose() {
+  if (await guard.canClose()) emit("close");
 }
+onBeforeRouteLeave(() => guard.canClose());
 
 const skillOptions = computed(() => optionsFor(props.catalogs.skills, form.skills));
 const mcpOptions = computed(() => optionsFor(props.catalogs.mcps, form.mcps));
@@ -227,6 +225,7 @@ const missingRoute = computed(
 watch(
   () => [props.open, props.employee] as const,
   () => {
+    if (!props.open) return;
     const employee = props.employee;
     form.name = employee?.name ?? "";
     form.domain = employee?.domain ?? "";
@@ -239,6 +238,7 @@ watch(
     form.mcps = [...(employee?.mcps ?? [])];
     form.tools = [...(employee?.tools ?? defaultTools())];
     form.model_route_id = employee?.model_route_id ?? "";
+    guard.capture();
     void nextTick(() => {
       formRef.value?.clearValidate();
     });
@@ -265,7 +265,7 @@ function defaultTools(): string[] {
 }
 
 async function submit() {
-  if (!formRef.value) return;
+  if (props.saving || !formRef.value) return;
   const valid = await formRef.value.validate().catch(() => false);
   if (!valid) return;
   emit("save", {
@@ -285,6 +285,7 @@ async function submit() {
 </script>
 
 <style scoped>
+.save-error { margin-bottom: 12px; text-align: left; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 </style>

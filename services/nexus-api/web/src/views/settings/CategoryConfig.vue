@@ -226,11 +226,14 @@ async function submitCategory(payload: TaskCategoryWrite) {
 // 抽屉内未保存的内容在离开配置中心时同样需要确认，避免整页导航绕过抽屉的关闭确认。
 // 判定复用抽屉自身的 dirty，而不是「抽屉是否打开」：没改过就不打扰用户。
 onBeforeRouteLeave(async () => {
+  if (!drawerOpen.value) return true
+  if (saving.value) return false
   if (!drawerRef.value?.getDirty()) return true
   const confirmed = await confirmDialog({
     title: '放弃未保存的分类修改？',
     message: '离开配置中心后未保存的分类修改将丢失。',
     confirmLabel: '放弃并离开',
+    cancelLabel: '继续编辑',
     danger: true,
   })
   return confirmed

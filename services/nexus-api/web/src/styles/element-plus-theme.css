@@ -135,4 +135,14 @@
 
 /* 长文本在编辑区内滚动，手动拖动也不撑出抽屉；不截断正文或提示词。 */
 .el-textarea__inner { max-height: max(320px, 46vh); overflow-y: auto; overflow-wrap: anywhere; }
+
+/* 长表单按需使用：正文在窗口内滚动，标题与操作按钮保持可见。 */
+.el-dialog.nexus-scroll-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+}
+.nexus-scroll-dialog > .el-dialog__body { min-height: 0; overflow-y: auto; }
+.nexus-scroll-dialog > .el-dialog__header,
+.nexus-scroll-dialog > .el-dialog__footer { flex-shrink: 0; }
 .el-form-item__content { min-width: 0; }

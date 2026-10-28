@@ -132,8 +132,8 @@
       />
     </div>
 
-    <ElDrawer v-model="editorOpen" :title="editing ? '编辑技能' : '新增技能'" size="720px" :close-on-click-modal="false">
-      <ElForm label-position="top" @submit.prevent="submitSkill">
+    <ElDrawer v-model="editorOpen" :title="editing ? '编辑技能' : '新增技能'" size="720px" :close-on-click-modal="false" :before-close="closeEditor">
+      <ElForm label-position="top" :disabled="saving" @submit.prevent="submitSkill">
         <ElFormItem label="SKILL.md" required>
           <ElInput v-model="skillMarkdown" type="textarea" :rows="16" class="code-editor" spellcheck="false" />
         </ElFormItem>
@@ -144,15 +144,16 @@
         <div v-if="!resourceFiles.length" class="muted file-empty">暂无资源文件</div>
         <div v-for="(file, index) in resourceFiles" :key="index" class="resource-file">
           <div class="resource-file__head">
-            <ElInput v-model="file.path" placeholder="相对路径，例如 references/check.md" />
-            <ElButton link type="danger" @click="removeResourceFile(index)">移除</ElButton>
+            <ElInput v-model="file.path" :aria-label="`资源文件 ${index + 1} 路径`" placeholder="相对路径，例如 references/check.md" />
+            <ElButton link type="danger" :aria-label="`移除资源文件 ${index + 1}`" @click="removeResourceFile(index)">移除</ElButton>
           </div>
           <ElInput
             v-model="file.content"
+            :aria-label="`资源文件 ${index + 1} 内容`"
             type="textarea"
             :rows="5"
             class="code-editor"
-            :disabled="file.encoding === 'base64'"
+            :disabled="saving || file.encoding === 'base64'"
             :placeholder="file.encoding === 'base64' ? '二进制文件，保持原内容' : '文件内容'"
           />
         </div>
@@ -163,7 +164,8 @@
       </ElForm>
       <template #footer>
         <div class="drawer-footer">
-          <ElButton @click="editorOpen = false">取消</ElButton>
+          <ElTag v-if="editorGuard.dirty.value" type="warning">有未保存修改</ElTag>
+          <ElButton :disabled="saving" @click="closeEditor">取消</ElButton>
           <ElButton type="primary" :loading="saving" @click="submitSkill">保存技能</ElButton>
         </div>
       </template>
@@ -222,6 +224,8 @@
 <script setup lang="ts">
 import { Plus, RefreshCw, Search, Upload } from "lucide-vue-next";
 import { computed, onMounted, reactive, ref, watch } from "vue";
+import { onBeforeRouteLeave } from "vue-router";
+import { useFormGuard } from "../../composables/useFormGuard";
 import {
   ElAlert,
   ElButton,
@@ -290,6 +294,15 @@ const formEnabled = ref(true);
 const saving = ref(false);
 const saveError = ref("");
 
+const editorGuard = useFormGuard({
+  isOpen: () => editorOpen.value, isSaving: () => saving.value,
+  snapshot: () => JSON.stringify({ markdown: skillMarkdown.value, files: resourceFiles.value, enabled: formEnabled.value }),
+  confirmDiscard: () => confirmDialog({ title: "放弃未保存的技能修改？",
+    message: "当前技能配置尚未保存，关闭后将无法恢复。", confirmLabel: "放弃并关闭", cancelLabel: "继续编辑", danger: true }),
+});
+async function closeEditor() { if (await editorGuard.canClose()) editorOpen.value = false; }
+onBeforeRouteLeave(() => editorGuard.canClose());
+
 const detailOpen = ref(false);
 const viewing = ref<SkillResource | null>(null);
 
@@ -356,6 +369,7 @@ function beginCreate() {
   formEnabled.value = true;
   saveError.value = "";
   editorOpen.value = true;
+  editorGuard.capture();
 }
 
 async function beginEdit(row: SkillResource) {
@@ -371,6 +385,7 @@ async function beginEdit(row: SkillResource) {
     }));
     formEnabled.value = skill.enabled;
     editorOpen.value = true;
+    editorGuard.capture();
   } catch (reason) {
     notify(reason instanceof Error ? reason.message : "技能详情加载失败", "error");
   }

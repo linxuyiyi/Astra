@@ -164,6 +164,7 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeRouteLeave } from 'vue-router'
 import { CheckCircle2, TriangleAlert, XCircle } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import {
@@ -503,14 +504,17 @@ async function finish() {
 }
 
 async function requestClose() {
-  if (busy.value) return
+  if (!props.open) return true
+  if (busy.value) return false
   if (dirty.value) {
     const confirmed = await confirmDialog({ title: '放弃未保存修改', message: '当前节点配置尚未保存完成，确认放弃并关闭窗口？', confirmLabel: '放弃并关闭', cancelLabel: '继续编辑', danger: true })
-    if (!confirmed) return
+    if (!confirmed) return false
   }
   if (createdInFlow.value) emit('saved')
   emit('close')
+  return true
 }
+onBeforeRouteLeave(() => requestClose())
 
 function tagType(tone: GatewayTone): 'success' | 'warning' | 'danger' | 'info' {
   if (tone === 'success') return 'success'

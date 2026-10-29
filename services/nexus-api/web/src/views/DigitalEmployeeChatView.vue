@@ -225,7 +225,7 @@ const filterOptions = [
 ];
 const selectedKey = ref("");
 const sessions = reactive<Record<string, ChatSessionState>>({});
-const asideOpen = ref(true);
+const asideOpen = ref(false);
 const groupDialogOpen = ref(false);
 const groupEditingId = ref<string | null>(null);
 const groupSaving = ref(false);

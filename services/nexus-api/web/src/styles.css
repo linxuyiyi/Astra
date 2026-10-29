@@ -206,3 +206,108 @@ button, input, textarea { font: inherit; }
 .chat-head__copy { flex: 1 1 140px; min-width: 0; }
 .chat-head__copy h2 { margin: 0 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-head__copy p { margin: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+
+/* chat-page shell S1–S5 — scoped; do not touch settings .content-shell .panel */
+.page > .chat-page {
+  /* S2: fill main area, cut floating outer pad feel */
+  margin: 0 -12px -20px;
+  width: calc(100% + 24px);
+  max-width: none;
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #edf2ee;
+}
+
+.chat-page .workspace {
+  /* S1: single workbench sheet */
+  gap: 0;
+  background: #ffffff;
+  min-height: 0;
+  height: 100%;
+}
+
+.chat-page .workspace > .panel {
+  /* S1: strip card chrome (radius / shadow / own border) */
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #ffffff;
+}
+
+.chat-page .workspace > .panel + .panel {
+  /* S1: weak 1px column rules */
+  border-left: 1px solid #edf2ee;
+}
+
+.chat-page .left-rail {
+  /* S3: no top pad — search row matches chat-head top line */
+  padding: 0 12px 16px;
+}
+.chat-page .aside {
+  /* S3: tabs flush with chat-head; body sections keep own padding */
+  padding: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.chat-page .chat-head {
+  /* S3: unified main top bar */
+  min-height: 56px;
+  align-items: center;
+  padding: 12px 16px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #edf2ee;
+  background: #ffffff;
+}
+
+.chat-page .right-tabs {
+  /* S3: same height / top line as chat-head */
+  min-height: 56px;
+  align-items: center;
+  padding: 12px 16px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #edf2ee;
+  background: #ffffff;
+}
+
+
+.chat-page .chat-search-row {
+  /* S3: same top band height as .chat-head */
+  min-height: 56px;
+  margin: 0 0 10px;
+  padding: 12px 0;
+  box-sizing: border-box;
+  align-items: center;
+}
+.chat-page .rail-item {
+  /* S5: quiet list rows — no thick chrome */
+  border-radius: 8px;
+  border: 0;
+  border-left: 3px solid transparent;
+  margin-bottom: 2px;
+  padding: 10px 8px 10px 6px;
+  background: transparent;
+}
+
+.chat-page .rail-item:hover {
+  background: #f5faf7;
+}
+
+.chat-page .rail-item.active {
+  /* S5: weak selected = light wash + left indicator */
+  background: #eef7f2;
+  border-left-color: #188b69;
+}
+
+@media (max-width: 1000px) {
+  .page > .chat-page {
+    margin: 0;
+    width: 100%;
+    border-radius: 0;
+  }
+  .chat-page .workspace > .panel + .panel {
+    border-left: 0;
+    border-top: 1px solid #edf2ee;
+  }
+}

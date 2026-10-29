@@ -262,10 +262,12 @@ button, input, textarea { font: inherit; }
 }
 
 .chat-page .right-tabs {
-  /* S3: same height / top line as chat-head */
+  /* S3 + T2: underline tabs flush with chat-head; not chip-like */
+  display: flex;
+  gap: 16px;
   min-height: 56px;
-  align-items: center;
-  padding: 12px 16px;
+  align-items: flex-end;
+  padding: 0 16px;
   box-sizing: border-box;
   border-bottom: 1px solid #edf2ee;
   background: #ffffff;

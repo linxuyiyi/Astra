@@ -8,14 +8,16 @@
             <el-button circle aria-label="新建群组" data-testid="chat-create-group" @click="openGroupDialog()">＋</el-button>
           </el-tooltip>
         </div>
-        <el-button text size="small" @click="joinDialogOpen = true">通过邀请加入群组</el-button>
-        <div class="chat-filters">
+        <button type="button" class="chat-join-link" @click="joinDialogOpen = true">通过邀请加入群组</button>
+        <div class="chat-filter-seg" role="tablist" aria-label="会话筛选">
           <button
             v-for="item in filterOptions"
             :key="item.value"
             type="button"
-            class="chip"
-            :class="{ sel: filter === item.value }"
+            role="tab"
+            class="chat-filter-seg__item"
+            :class="{ 'is-active': filter === item.value }"
+            :aria-selected="filter === item.value"
             @click="filter = item.value"
           >{{ item.label }}</button>
         </div>
@@ -72,13 +74,15 @@
       </article>
 
       <aside v-if="activeState && asideOpen" class="panel aside">
-        <div class="right-tabs">
+        <div class="right-tabs" role="tablist" aria-label="侧栏">
           <button
             v-for="item in rightTabs"
             :key="item.value"
-            class="chip"
-            :class="{ sel: activeState.tab === item.value }"
             type="button"
+            role="tab"
+            class="chat-aside-tab"
+            :class="{ 'is-active': activeState.tab === item.value }"
+            :aria-selected="activeState.tab === item.value"
             @click="activeState.tab = item.value"
           >{{ item.label }}</button>
         </div>
@@ -629,13 +633,83 @@ onBeforeUnmount(() => {
 .chat-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .chat-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .chat-search-row :deep(.el-input) { flex: 1; }
-.chat-filters { display: flex; gap: 6px; margin-bottom: 10px; }
+.chat-join-link {
+  display: inline-block;
+  margin: 0 0 10px 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #91a59a;
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.chat-join-link:hover { color: #188b69; }
+.chat-filter-seg {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 10px;
+  padding: 2px;
+  border: 1px solid #e5eee9;
+  border-radius: 8px;
+  background: #f5faf7;
+  gap: 0;
+}
+.chat-filter-seg__item {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: #6b8979;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.3;
+  cursor: pointer;
+  position: relative;
+}
+.chat-filter-seg__item + .chat-filter-seg__item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 1px;
+  background: #dde8e1;
+}
+.chat-filter-seg__item.is-active {
+  background: #ffffff;
+  color: #187956;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(24, 139, 105, 0.06);
+}
+.chat-filter-seg__item.is-active::before,
+.chat-filter-seg__item.is-active + .chat-filter-seg__item::before {
+  opacity: 0;
+}
+.chat-aside-tab {
+  border: 0;
+  background: transparent;
+  color: #6b8979;
+  padding: 8px 2px 10px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+}
+.chat-aside-tab.is-active {
+  color: #188b69;
+  font-weight: 600;
+  border-bottom-color: #188b69;
+}
 .chat-counts { margin: 0 0 8px 2px; font-size: 11px; }
 .chat-target { width: 100%; border: 0; background: transparent; text-align: left; }
 .chat-target__meta { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .chat-target__meta b, .chat-target__meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-head__actions { display: flex; flex: none; flex-wrap: wrap; gap: 8px; align-items: center; }
-.chip.sel { background: #e5f6ed; border-color: #aad8c2; color: #187956; }
 .unread-badge {
   flex: none;
   min-width: 18px;

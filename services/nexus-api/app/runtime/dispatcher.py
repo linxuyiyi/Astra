@@ -6,14 +6,11 @@ from sqlalchemy.orm import selectinload
 
 from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
 from app.event_bus import event_bus
-from app.models import AgentWorker, Task, WorkerMaintenanceOperation
+from app.models import AgentWorker, OpenCodeExecutionEnvironment, Task
 from app.runtime.capability import binding_names, dispatch_allowed
 from app.runtime.environment import environment_snapshot
-from app.runtime.maintenance import ACTIVE_STATES
+from app.runtime.maintenance import active_maintenance_exists
 from app.runtime.occupancy import occupying_exists, sync_employee_occupancy
-from app.runtime.repository import read_base_commit
-from app.runtime.worker_files import environment_uses_worker
-from app.runtime.workspace_changes import workspace_head_commit
 from app.services import TaskService
 
 
@@ -75,29 +72,28 @@ class Dispatcher:
         )
         if assigned:
             return assigned
-        maintained_environment_ids = set(
-            (
-                await self.session.scalars(
-                    select(WorkerMaintenanceOperation.environment_id).where(
-                        WorkerMaintenanceOperation.state.in_(ACTIVE_STATES)
-                    )
-                )
-            ).all()
-        )
-        candidates = (
-            (
-                await self.session.execute(
-                    select(Task)
-                    .where(Task.status == TaskStatus.PENDING, Task.claimed_at.is_(None))
-                    .order_by(Task.priority_weight.desc(), Task.created_at.asc())
-                    .with_for_update(skip_locked=True)
-                )
+        # Discover without locking the whole queue. Each candidate is rechecked
+        # with a current locking read in its own short transaction below.
+        candidate_ids = (
+            await self.session.scalars(
+                select(Task.id)
+                .where(Task.status == TaskStatus.PENDING, Task.claimed_at.is_(None))
+                .order_by(Task.priority_weight.desc(), Task.created_at.asc())
             )
-            .scalars()
-            .all()
-        )
-        for task in candidates:
+        ).all()
+        await self.session.commit()
+        for task_id in candidate_ids:
+            task = await self.session.scalar(
+                select(Task)
+                .where(Task.id == task_id, Task.status == TaskStatus.PENDING, Task.claimed_at.is_(None))
+                .with_for_update(skip_locked=True)
+                .execution_options(populate_existing=True)
+            )
+            if task is None:
+                await self.session.rollback()
+                continue
             if not task.repository_id:
+                await self.session.rollback()
                 continue
             if task.related_task_id:
                 parent = await self.session.get(Task, task.related_task_id)
@@ -109,11 +105,15 @@ class Dispatcher:
                     await self.session.commit()
                     continue
                 if parent is None or _parent_open(parent.status):
+                    await self.session.rollback()
                     continue
             conditions = [
                 AgentWorker.status == EmployeeStatus.IDLE,
                 AgentWorker.enabled.is_(True),
                 ~occupying_exists(AgentWorker.id),
+                AgentWorker.execution_environment.has(
+                    ~active_maintenance_exists(OpenCodeExecutionEnvironment.id)
+                ),
             ]
             if task.employee_id:
                 # 指定员工由人工分配，auto_claim 只约束无人认领的任务池。
@@ -127,56 +127,59 @@ class Dispatcher:
                         .options(selectinload(AgentWorker.execution_environment))
                         .where(*conditions)
                         .order_by(AgentWorker.id)
-                        .with_for_update(skip_locked=True)
                     )
                 )
                 .scalars()
                 .all()
             )
-            compatible = [
-                employee
-                for employee in employees
-                if employee.execution_environment
-                and employee.execution_environment.id not in maintained_environment_ids
-                and employee.execution_environment.status == EnvironmentStatus.AVAILABLE
-                and runtime_assignment_block(employee.execution_environment, task) is None
-                and task.task_type in employee.task_types
-                and task.category_id in employee.category_ids
-            ]
-            employee = compatible[0] if compatible else None
+            employee = None
+            for candidate in employees:
+                if (
+                    not candidate.execution_environment
+                    or candidate.execution_environment.status != EnvironmentStatus.AVAILABLE
+                    or runtime_assignment_block(candidate.execution_environment, task) is not None
+                    or task.task_type not in candidate.task_types
+                    or task.category_id not in candidate.category_ids
+                ):
+                    continue
+                employee = await self.session.scalar(
+                    select(AgentWorker)
+                    .options(selectinload(AgentWorker.execution_environment))
+                    .where(*conditions, AgentWorker.id == candidate.id)
+                    .with_for_update(skip_locked=True)
+                    .execution_options(populate_existing=True)
+                )
+                if employee is not None:
+                    break
             if not employee:
+                await self.session.rollback()
                 continue
             environment = employee.execution_environment
-            # Read the workspace before taking the shared maintenance lock so a
-            # remote Worker call never runs inside the environment-row lock.
-            snapshot = environment_snapshot(environment)
-            if await environment_uses_worker(environment):
-                head = await workspace_head_commit(environment, environment.workspace_root)
-                snapshot["base_commit"] = head or ""
-            else:
-                snapshot["base_commit"] = read_base_commit(environment.workspace_root)
             from fastapi import HTTPException
 
             from app.runtime.remote_provisioning import guard_environment_write
 
             try:
-                # The maintained-id query above is only a prefilter. Recheck the
-                # canonical maintenance fact under the shared environment lock
-                # immediately before assignment, then commit the assignment and
-                # release the row lock.
                 await guard_environment_write(self.session, environment)
                 from app.runtime.maintenance import scheduling_block
 
                 blocked = await scheduling_block(self.session, environment)
-                if blocked:
+                if (
+                    blocked
+                    or runtime_assignment_block(environment, task) is not None
+                    or task.task_type not in employee.task_types
+                    or task.category_id not in employee.category_ids
+                ):
                     await self.session.rollback()
                     return None
             except HTTPException:
                 await self.session.rollback()
                 return None
             task.employee_id = employee.id
-            task.base_commit = snapshot["base_commit"] or None
-            task.execution_environment_snapshot = snapshot
+            # Actual HEAD belongs to the prepared execution workspace; start()
+            # already reads it there, outside this assignment transaction.
+            task.base_commit = None
+            task.execution_environment_snapshot = environment_snapshot(environment)
             task.claimed_at = datetime.now(UTC)
             service = TaskService(self.session)
             await service.add_event(

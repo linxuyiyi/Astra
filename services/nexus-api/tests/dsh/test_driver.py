@@ -141,6 +141,33 @@ async def test_health_rejects_unusable_file_channel_before_gateway_or_native(rig
     assert closed.value.errno == errno.EBADF
 
 
+async def test_health_does_not_probe_model_gateway(rig, monkeypatch):
+    import httpx
+
+    from app.worker_agent import inspection
+    from app.worker_agent.dsh_acp import preflight
+
+    driver, _, _ = rig
+    calls = []
+    original_client = httpx.AsyncClient
+
+    def limited(request):
+        calls.append(request.url.path)
+        return httpx.Response(429, json={"error": "rate limited"})
+
+    monkeypatch.setattr(
+        httpx, "AsyncClient",
+        lambda **kwargs: original_client(transport=httpx.MockTransport(limited), **kwargs),
+    )
+    monkeypatch.setattr(preflight, "inspect_worker_file_channel", lambda *_: {"file_channel_verified": True})
+    monkeypatch.setattr(inspection, "_inspect_repository", lambda *_: {"status": "healthy"})
+    result = await driver.health()
+    assert result["healthy"] is True
+    assert result["protocol_initialized"] is True
+    assert result["models"] == ["qa"]
+    assert calls == []
+
+
 async def test_duplicate_different_gateway_request_ids_execute_once(rig):
     driver, _, prepare = rig
     data = await prepare_and_input(driver, prepare)

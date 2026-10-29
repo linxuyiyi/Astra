@@ -328,19 +328,18 @@ def test_skill_missing_is_reported_separately_from_content_revision():
 
 
 @pytest.mark.parametrize(
-    ("actual", "authenticated", "error"),
+    ("actual", "configured", "error"),
     [
-        ("nexus-gateway/other", False, "实际模型与期望模型不一致"),
-        ("nexus-gateway/route-1", False, "模型网关认证失败"),
+        ("nexus-gateway/other", True, "实际模型与期望模型不一致"),
+        ("nexus-gateway/route-1", False, "模型 provider 缺少网关地址或凭据"),
     ],
 )
-def test_model_mismatch_and_401_are_unverified(actual, authenticated, error):
+def test_model_mismatch_and_missing_configuration_are_unverified(actual, configured, error):
     desired = _desired()
     observation = _observation(desired)
     observation["model"] = {
         "status": "unhealthy",
-        "configured": True,
-        "authenticated": authenticated,
+        "configured": configured,
         "model": actual,
         "error": error,
     }
@@ -353,6 +352,19 @@ def test_model_mismatch_and_401_are_unverified(actual, authenticated, error):
     assert row["error"] == error
     assert any("模型" in item for item in row["diff"])
     assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
+
+
+def test_model_configuration_does_not_depend_on_gateway_authentication():
+    desired = _desired()
+    observation = _observation(desired)
+    observation["model"].pop("authenticated")
+    assert health_status(observation, desired) == EnvironmentStatus.AVAILABLE
+    desired["model"]["resolved"] = False
+    assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
+    model = next(
+        row for row in equipment_rows(desired, observation, _snapshot(desired)) if row["key"] == "model"
+    )
+    assert model["verified"] is False
 
 
 @pytest.mark.asyncio

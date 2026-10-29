@@ -1,0 +1,153 @@
+LATEST DETECTED DEADLOCK
+------------------------
+2026-10-29 22:58:04 0x16bc8f000
+*** (1) TRANSACTION:
+TRANSACTION 12342, ACTIVE 0 sec starting index read
+mysql tables in use 1, locked 1
+LOCK WAIT 7 lock struct(s), heap size 1128, 4 row lock(s)
+MySQL thread id 29, OS thread handle 6114635776, query id 1707 localhost 127.0.0.1 root executing
+SELECT t_nexus_worker_maintenance_operations.id
+FROM t_nexus_worker_maintenance_operations
+WHERE t_nexus_worker_maintenance_operations.environment_id = 1 AND t_nexus_worker_maintenance_operations.state IN ('QUEUED', 'PREFLIGHT', 'RUNNING', 'VERIFYING', 'INTERRUPTED')
+ LIMIT 1 FOR UPDATE
+
+*** (1) HOLDS THE LOCK(S):
+RECORD LOCKS space id 306 page no 4 n bits 72 index PRIMARY of table `nexus_state_audit_v5`.`t_nexus_opencode_execution_environments` trx id 12342 lock_mode X locks rec but not gap
+Record lock, heap no 2 PHYSICAL RECORD: n_fields 27; compact format; info bits 64
+ 0: len 4; hex 80000001; asc     ;;
+ 1: len 6; hex 000000003024; asc     0$;;
+ 2: len 7; hex 81000000ab015c; asc       \;;
+ 3: len 8; hex 61756469742d4531; asc audit-E1;;
+ 4: len 10; hex 61756469742d7265706f; asc audit-repo;;
+ 5: len 5; hex 4c4f43414c; asc LOCAL;;
+ 6: len 25; hex e69cace59cb0204167656e7420e5b7a5e4bd9ce78eafe5a283; asc        Agent             ;;
+ 7: len 0; hex ; asc ;;
+ 8: SQL NULL;
+ 9: len 4; hex 80000016; asc     ;;
+ 10: SQL NULL;
+ 11: SQL NULL;
+ 12: len 4; hex 80003710; asc   7 ;;
+ 13: len 8; hex 6f70656e636f6465; asc opencode;;
+ 14: SQL NULL;
+ 15: len 10; hex 2f746d702f6175646974; asc /tmp/audit;;
+ 16: SQL NULL;
+ 17: len 5; hex 0200000400; asc      ;;
+ 18: len 5; hex 0200000400; asc      ;;
+ 19: len 9; hex 415641494c41424c45; asc AVAILABLE;;
+ 20: len 3; hex 737368; asc ssh;;
+ 21: len 5; hex 0000000400; asc      ;;
+ 22: len 5; hex 0200000400; asc      ;;
+ 23: SQL NULL;
+ 24: len 8; hex 99bb3aee830a1747; asc   :    G;;
+ 25: len 8; hex 99bb3aee830a1748; asc   :    H;;
+ 26: len 8; hex 6f70656e636f6465; asc opencode;;
+
+
+*** (1) WAITING FOR THIS LOCK TO BE GRANTED:
+RECORD LOCKS space id 314 page no 4 n bits 72 index PRIMARY of table `nexus_state_audit_v5`.`t_nexus_worker_maintenance_operations` trx id 12342 lock_mode X locks rec but not gap waiting
+Record lock, heap no 2 PHYSICAL RECORD: n_fields 29; compact format; info bits 0
+ 0: len 8; hex 61756469742d6f70; asc audit-op;;
+ 1: len 6; hex 000000003032; asc     02;;
+ 2: len 7; hex 01000001d80151; asc       Q;;
+ 3: len 4; hex 80000001; asc     ;;
+ 4: len 5; hex 636865636b; asc check;;
+ 5: len 9; hex 535543434545444544; asc SUCCEEDED;;
+ 6: len 8; hex 66696e6973686564; asc finished;;
+ 7: len 3; hex 617069; asc api;;
+ 8: len 4; hex 80000001; asc     ;;
+ 9: SQL NULL;
+ 10: SQL NULL;
+ 11: len 1; hex 80; asc  ;;
+ 12: len 1; hex 80; asc  ;;
+ 13: len 1; hex 80; asc  ;;
+ 14: len 1; hex 80; asc  ;;
+ 15: len 5; hex 0000000400; asc      ;;
+ 16: len 5; hex 0000000400; asc      ;;
+ 17: len 5; hex 0000000400; asc      ;;
+ 18: SQL NULL;
+ 19: SQL NULL;
+ 20: SQL NULL;
+ 21: SQL NULL;
+ 22: SQL NULL;
+ 23: SQL NULL;
+ 24: len 8; hex 99bb3aee840ace21; asc   :    !;;
+ 25: SQL NULL;
+ 26: len 8; hex 99bb3aee840ad644; asc   :    D;;
+ 27: len 8; hex 99bb3aee840ace25; asc   :    %;;
+ 28: len 8; hex 99bb3aee840ad644; asc   :    D;;
+
+
+*** (2) TRANSACTION:
+TRANSACTION 12338, ACTIVE 0 sec starting index read
+mysql tables in use 1, locked 1
+LOCK WAIT 4 lock struct(s), heap size 1128, 2 row lock(s), undo log entries 1
+MySQL thread id 28, OS thread handle 6113521664, query id 1708 localhost 127.0.0.1 root updating
+UPDATE t_nexus_opencode_execution_environments SET last_checked_at='2026-10-29 14:58:04.710193', updated_at='2026-10-29 14:58:04.722354' WHERE t_nexus_opencode_execution_environments.id = 1
+
+*** (2) HOLDS THE LOCK(S):
+RECORD LOCKS space id 314 page no 4 n bits 72 index PRIMARY of table `nexus_state_audit_v5`.`t_nexus_worker_maintenance_operations` trx id 12338 lock_mode X locks rec but not gap
+Record lock, heap no 2 PHYSICAL RECORD: n_fields 29; compact format; info bits 0
+ 0: len 8; hex 61756469742d6f70; asc audit-op;;
+ 1: len 6; hex 000000003032; asc     02;;
+ 2: len 7; hex 01000001d80151; asc       Q;;
+ 3: len 4; hex 80000001; asc     ;;
+ 4: len 5; hex 636865636b; asc check;;
+ 5: len 9; hex 535543434545444544; asc SUCCEEDED;;
+ 6: len 8; hex 66696e6973686564; asc finished;;
+ 7: len 3; hex 617069; asc api;;
+ 8: len 4; hex 80000001; asc     ;;
+ 9: SQL NULL;
+ 10: SQL NULL;
+ 11: len 1; hex 80; asc  ;;
+ 12: len 1; hex 80; asc  ;;
+ 13: len 1; hex 80; asc  ;;
+ 14: len 1; hex 80; asc  ;;
+ 15: len 5; hex 0000000400; asc      ;;
+ 16: len 5; hex 0000000400; asc      ;;
+ 17: len 5; hex 0000000400; asc      ;;
+ 18: SQL NULL;
+ 19: SQL NULL;
+ 20: SQL NULL;
+ 21: SQL NULL;
+ 22: SQL NULL;
+ 23: SQL NULL;
+ 24: len 8; hex 99bb3aee840ace21; asc   :    !;;
+ 25: SQL NULL;
+ 26: len 8; hex 99bb3aee840ad644; asc   :    D;;
+ 27: len 8; hex 99bb3aee840ace25; asc   :    %;;
+ 28: len 8; hex 99bb3aee840ad644; asc   :    D;;
+
+
+*** (2) WAITING FOR THIS LOCK TO BE GRANTED:
+RECORD LOCKS space id 306 page no 4 n bits 72 index PRIMARY of table `nexus_state_audit_v5`.`t_nexus_opencode_execution_environments` trx id 12338 lock_mode X locks rec but not gap waiting
+Record lock, heap no 2 PHYSICAL RECORD: n_fields 27; compact format; info bits 64
+ 0: len 4; hex 80000001; asc     ;;
+ 1: len 6; hex 000000003024; asc     0$;;
+ 2: len 7; hex 81000000ab015c; asc       \;;
+ 3: len 8; hex 61756469742d4531; asc audit-E1;;
+ 4: len 10; hex 61756469742d7265706f; asc audit-repo;;
+ 5: len 5; hex 4c4f43414c; asc LOCAL;;
+ 6: len 25; hex e69cace59cb0204167656e7420e5b7a5e4bd9ce78eafe5a283; asc        Agent             ;;
+ 7: len 0; hex ; asc ;;
+ 8: SQL NULL;
+ 9: len 4; hex 80000016; asc     ;;
+ 10: SQL NULL;
+ 11: SQL NULL;
+ 12: len 4; hex 80003710; asc   7 ;;
+ 13: len 8; hex 6f70656e636f6465; asc opencode;;
+ 14: SQL NULL;
+ 15: len 10; hex 2f746d702f6175646974; asc /tmp/audit;;
+ 16: SQL NULL;
+ 17: len 5; hex 0200000400; asc      ;;
+ 18: len 5; hex 0200000400; asc      ;;
+ 19: len 9; hex 415641494c41424c45; asc AVAILABLE;;
+ 20: len 3; hex 737368; asc ssh;;
+ 21: len 5; hex 0000000400; asc      ;;
+ 22: len 5; hex 0200000400; asc      ;;
+ 23: SQL NULL;
+ 24: len 8; hex 99bb3aee830a1747; asc   :    G;;
+ 25: len 8; hex 99bb3aee830a1748; asc   :    H;;
+ 26: len 8; hex 6f70656e636f6465; asc opencode;;
+
+*** WE ROLL BACK TRANSACTION (2)
+------------

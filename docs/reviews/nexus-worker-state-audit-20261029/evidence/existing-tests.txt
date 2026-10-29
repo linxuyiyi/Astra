@@ -1,0 +1,12 @@
+基线：46bd6a629；运行目录：services/nexus-api
+
+命令一：.venv/bin/pytest -q tests/platform/test_session_state.py tests/platform/test_runtime.py tests/platform/test_worker_occupancy.py tests/platform/test_worker_maintenance_actor.py tests/platform/test_worker_gateway_faults.py tests/platform/test_worker_channel_review_fixes.py tests/platform/test_fresh_sql_storage.py
+结果：1 failed, 124 passed, 6 skipped, 1128 warnings in 45.23s
+失败：test_connect_start_health_uses_the_worker_channel
+原因：OpenCodeServerCapabilityError，测试客户端版本 1.18.35 不匹配当前唯一支持版本 1.18.33。
+
+命令二：.venv/bin/pytest -q --disable-warnings tests/platform/test_session_workspace.py tests/platform/test_recovery_supervisor.py tests/platform/test_worker_maintenance.py tests/platform/test_worker_phase2_faults.py
+结果：239 passed, 1 skipped, 2152 warnings in 42.62s
+
+现有测试合计：363 passed, 7 skipped, 1 failed。
+这是本轮工具输出的整理摘要，不是逐行原始日志。

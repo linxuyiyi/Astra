@@ -120,7 +120,6 @@ def inspect_runtime(
             local_config,
             expected_model,
             effective_confirmed=effective_confirmed,
-            secrets=secrets,
         ),
         "mcp": _inspect_mcp(base, workspace, mcp_expected, endpoints, secrets),
         "skills": _inspect_skills(base, workspace, skills_expected, secrets),
@@ -208,8 +207,8 @@ def _inspect_model(
     expected_model: str,
     *,
     effective_confirmed: bool,
-    secrets: set[str],
 ) -> dict[str, Any]:
+    """只核对生效模型与网关配置；网关可用性不属于 Worker 健康事实。"""
     effective = config if isinstance(config, dict) else {}
     local = local_config if isinstance(local_config, dict) else {}
     if not effective_confirmed:
@@ -217,7 +216,6 @@ def _inspect_model(
         return {
             "status": UNKNOWN,
             "configured": False,
-            "authenticated": False,
             "model": None,
             "error": "OpenCode 生效配置未确认，无法确认实际模型",
         }
@@ -227,7 +225,6 @@ def _inspect_model(
         return {
             "status": UNHEALTHY,
             "configured": False,
-            "authenticated": False,
             "model": None,
             "error": "生效配置未配置模型",
         }
@@ -235,7 +232,6 @@ def _inspect_model(
         return {
             "status": UNHEALTHY,
             "configured": True,
-            "authenticated": False,
             "model": actual,
             "error": "实际模型与期望模型不一致",
         }
@@ -247,7 +243,6 @@ def _inspect_model(
         return {
             "status": UNHEALTHY,
             "configured": False,
-            "authenticated": False,
             "model": actual,
             "error": "生效配置缺少模型 provider",
         }
@@ -255,52 +250,13 @@ def _inspect_model(
         return {
             "status": UNHEALTHY,
             "configured": False,
-            "authenticated": False,
             "model": actual,
             "error": "模型 provider 缺少网关地址或凭据",
         }
 
-    url = base_url.rstrip("/") + "/models"
-    try:
-        payload = _get_json(url, headers={"Authorization": f"Bearer {api_key}"})
-    except _ProbeError as exc:
-        if exc.http_status in {401, 403}:
-            return {
-                "status": UNHEALTHY,
-                "configured": True,
-                "authenticated": False,
-                "model": actual,
-                "error": "模型网关认证失败",
-            }
-        status = UNKNOWN if exc.http_status is None else UNHEALTHY
-        return {
-            "status": status,
-            "configured": True,
-            "authenticated": False,
-            "model": actual,
-            "error": _redact(f"模型网关探测失败：{exc.message}", secrets | {api_key}),
-        }
-    visible = _model_ids(payload)
-    if visible is None:
-        return {
-            "status": UNHEALTHY,
-            "configured": True,
-            "authenticated": True,
-            "model": actual,
-            "error": "模型网关返回结构无法识别",
-        }
-    if model_id not in visible:
-        return {
-            "status": UNHEALTHY,
-            "configured": True,
-            "authenticated": True,
-            "model": actual,
-            "error": "目标模型不在网关可见列表",
-        }
     return {
         "status": HEALTHY,
         "configured": True,
-        "authenticated": True,
         "model": actual,
         "error": None,
     }
@@ -703,26 +659,6 @@ def _text(value: Any) -> str:
     if not isinstance(value, str):
         return ""
     return value.strip()
-
-
-def _model_ids(payload: Any) -> set[str] | None:
-    if isinstance(payload, dict):
-        items = payload.get("data")
-        if items is None:
-            items = payload.get("models")
-    else:
-        items = payload
-    if not isinstance(items, list):
-        return None
-    found: set[str] = set()
-    for item in items:
-        if isinstance(item, dict):
-            value = item.get("id") or item.get("name")
-        else:
-            value = item
-        if isinstance(value, str) and value:
-            found.add(value)
-    return found
 
 
 def _version_key(value: str | None) -> str:

@@ -128,8 +128,7 @@ async def guard_environment_write(session, environment):
     if active is not None:
         await session.rollback()
         raise HTTPException(409, "远程环境正在维护，请等待完成或先取消当前操作")
-    # Re-read inside the lock so an identity-map copy cannot hide a new fact.
-    await session.refresh(environment)
+    # lock_environment_row already refreshed with a current locking read.
 
 
 def _wheel_digest(data: bytes) -> str:
@@ -1060,6 +1059,9 @@ fi
                     apply_desired=self.action in {"deploy", "update"},
                     mark_deployed=self.action in {"deploy", "update"},
                 )
+                if probe.get("skipped"):
+                    error = "员工存在占用任务，跳过部署后的可用性探测"
+                    probe = None
             except Exception as exc:
                 probe = None
                 error = f"部署完成但装备核验失败：{exc}"

@@ -1,0 +1,7 @@
+INFO  [alembic.runtime.migration] Context impl MySQLImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_init, Nexus 全新部署初始 schema；不提供历史库升级。
+INFO  [alembic.runtime.migration] Running upgrade 0001_init -> 0002_collaborative_groups, collaborative_groups
+INFO  [alembic.runtime.migration] Running upgrade 0002_collaborative_groups -> 0003_gateway_speech, 网关模型类型与语音输入路由；接在 collaborative_groups 之后。
+INFO  [alembic.runtime.migration] Running upgrade 0003_gateway_speech -> 0004_remove_local_auth, 删除误引入的本地账号系统；业务归属 ID 不变。
+INFO  [alembic.runtime.migration] Running upgrade 0004_remove_local_auth -> 0005_dsh_runtime, 为执行环境和 Session 增加显式引擎与最小原生绑定。

@@ -757,24 +757,21 @@ async def test_retry_submission_is_not_stale_when_bound_session_is_still_running
     assert not r.native.sent
 
 
-async def test_turn_without_assistant_reply_projects_failed(runtime):
+async def test_turn_without_assistant_reply_preserves_unknown(runtime):
     r = runtime
     await r.service.send("T1", {"messageID": "msg_client0001", "parts": [{"type": "text", "text": "go"}]})
     assert r.task.status == "RUNNING"
-    # OpenCode errored before persisting any assistant reply (e.g. unknown model or
-    # provider): only the user message exists and the session is idle. This must not
-    # stay RUNNING forever.
+    # A user message with no reply does not prove a model error or a stopped turn.
     r.native.state = "idle"
     r.native.sessions["ses_current"] = [
         {"info": {"id": "msg_client0001", "role": "user"}, "parts": []}
     ]
-    # Only an aged turn without any assistant reply is a real failure; a freshly
-    # submitted prompt stays RUNNING until the no-reply window elapses.
     r.task.turn_started_at = datetime.now(UTC) - timedelta(minutes=5)
     await r.session.commit()
     await r.service.refresh("T1")
-    assert r.task.status == "WAITING"
-    assert r.task.failure_reason
+    assert r.task.status == "RUNNING"
+    assert r.task.runtime_error
+    assert (await r.session.get(RuntimeSession, "ses_current")).status == "UNKNOWN"
 
 
 async def test_missing_session_never_creates_replacement(runtime):
@@ -2144,7 +2141,7 @@ async def test_idle_employee_heartbeat_does_not_require_on_demand_server(runtime
     assert employee.current_task_count == 0
 
 
-async def test_active_employee_heartbeat_releases_db_transaction_before_runtime_io(runtime, monkeypatch):
+async def test_active_employee_heartbeat_does_not_probe_runtime(runtime, monkeypatch):
     observations = []
 
     @asynccontextmanager
@@ -2158,7 +2155,7 @@ async def test_active_employee_heartbeat_releases_db_transaction_before_runtime_
 
     await runtime.service.refresh_employee_heartbeats()
 
-    assert observations == [(True, False)]
+    assert observations == []
 
 
 async def test_stop_can_force_cancel_local_session_when_no_runtime_listener(runtime, monkeypatch):
@@ -2567,9 +2564,9 @@ async def test_idle_without_reply_converges_after_grace(runtime):
     await r.session.commit()
     await r.service.refresh("T1")
     binding = await r.session.get(RuntimeSession, "ses_current")
-    assert binding.status == "FAILED"
+    assert binding.status == "UNKNOWN"
     assert binding.terminal_reason == "no_reply"
-    assert r.task.status == "WAITING"
+    assert r.task.status == "RUNNING"
 
 
 async def test_missing_anchor_keeps_task_status_and_records_transport_recovery(runtime):
@@ -2585,7 +2582,7 @@ async def test_missing_anchor_keeps_task_status_and_records_transport_recovery(r
     await r.session.commit()
     await r.service.refresh("T1")
     binding = await r.session.get(RuntimeSession, "ses_current")
-    assert binding.status == "INTERRUPTED"
+    assert binding.status == "UNKNOWN"
     assert binding.terminal_reason == "unconfirmed"
     assert r.task.status == "RUNNING"
     assert r.task.waiting_reason == "TRANSPORT_RECOVERY"
@@ -2914,7 +2911,7 @@ async def test_refresh_reads_later_pages_before_clearing_pending(runtime):
     await r.service.refresh("T1")
     await r.session.refresh(r.task)
     assert r.task.pending_message_id is None
-    assert r.task.runtime_error is None
+    assert "结果尚未确认" in r.task.runtime_error
 
 
 async def test_refresh_stops_at_the_message_page_bound(runtime):

@@ -229,11 +229,7 @@ def _task(task_id, **overrides):
 
 
 @pytest.mark.asyncio
-async def test_child_waits_until_the_parent_succeeds(session, monkeypatch):
-    async def uses(environment):
-        return getattr(environment, "worker_channel", None) == "worker"
-
-    monkeypatch.setattr("app.runtime.dispatcher.environment_uses_worker", uses)
+async def test_child_waits_until_the_parent_succeeds(session):
     session.add(_employee())
     session.add(_environment())
     session.add(_task("parent", status=TaskStatus.RUNNING))
@@ -249,11 +245,7 @@ async def test_child_waits_until_the_parent_succeeds(session, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_canceled_parent_skips_the_child_with_a_reason(session, monkeypatch):
-    async def uses(environment):
-        return getattr(environment, "worker_channel", None) == "worker"
-
-    monkeypatch.setattr("app.runtime.dispatcher.environment_uses_worker", uses)
+async def test_canceled_parent_skips_the_child_with_a_reason(session):
     session.add(_employee())
     session.add(_environment())
     session.add(_task("parent", status=TaskStatus.CANCELED))
@@ -268,23 +260,19 @@ async def test_canceled_parent_skips_the_child_with_a_reason(session, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_worker_base_commit_comes_from_the_worker(session, monkeypatch):
-    async def uses(_environment):
-        return True
-
+async def test_claim_defers_worker_head_read_until_workspace_preparation(session, monkeypatch):
     async def head(_environment, _workspace):
-        return "workerhead"
+        raise AssertionError("assignment must not wait for remote workspace HEAD")
 
-    monkeypatch.setattr("app.runtime.dispatcher.environment_uses_worker", uses)
-    monkeypatch.setattr("app.runtime.dispatcher.workspace_head_commit", head)
+    monkeypatch.setattr("app.runtime.workspace_changes.workspace_head_commit", head)
     session.add(_employee())
     session.add(_environment(worker_channel="worker", workspace_root="/srv/missing"))
     session.add(_task("T-worker"))
     await session.commit()
     claimed = await Dispatcher(session).claim_once()
     assert claimed is not None
-    assert claimed.base_commit == "workerhead"
-    assert claimed.execution_environment_snapshot["base_commit"] == "workerhead"
+    assert claimed.base_commit is None
+    assert "base_commit" not in claimed.execution_environment_snapshot
     assert claimed.execution_environment_snapshot["repository_id"] == "repo-1"
 
 

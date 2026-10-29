@@ -137,7 +137,7 @@ async def test_projection_writes_waiting_reason_without_closing_or_retrying(sess
     await session.commit()
     await service.apply_session_state(
         task,
-        SessionState(status="INTERRUPTED", terminal_reason="unconfirmed"),
+        SessionState(status="UNKNOWN", terminal_reason="unconfirmed"),
     )
     assert task.status == TaskStatus.RUNNING
     assert task.waiting_reason == "TRANSPORT_RECOVERY"
@@ -152,6 +152,9 @@ async def test_projection_writes_waiting_reason_without_closing_or_retrying(sess
 
 
 class _Idle:
+    def __init__(self, *, error_at=None):
+        self.error_at = error_at
+
     async def status(self, *_args):
         return "idle"
 
@@ -163,6 +166,18 @@ class _Idle:
 
     async def permissions(self, *_args):
         return []
+
+    async def messages_page(self, *_args, **_kwargs):
+        messages = []
+        if self.error_at is not None:
+            messages.append({
+                "info": {
+                    "id": "a1", "role": "assistant", "error": {"name": "APIError"},
+                    "time": {"completed": self.error_at.timestamp()},
+                },
+                "parts": [],
+            })
+        return {"messages": messages, "next_before": None}
 
 
 @pytest.mark.asyncio
@@ -185,7 +200,7 @@ async def test_recovered_transport_recomputes_waiting_reason(session):
     binding.status = "FAILED"
     binding.terminal_reason = "assistant_error"
     await session.commit()
-    refreshed = await RuntimeService(session).refresh(task.id, client=_Idle())
+    refreshed = await RuntimeService(session).refresh(task.id, client=_Idle(error_at=datetime.now(UTC)))
     assert refreshed.status == TaskStatus.WAITING
     assert refreshed.waiting_reason == "RETRY_EXHAUSTED"
 
@@ -241,8 +256,8 @@ async def test_recovered_refresh_keeps_finished_at(session):
     stored.finished_at = completed
     task.waiting_reason = "TRANSPORT_RECOVERY"
     await session.commit()
-    await service.refresh(task.id, client=_Idle())
-    await service.refresh(task.id, client=_Idle())
+    await service.refresh(task.id, client=_Idle(error_at=completed))
+    await service.refresh(task.id, client=_Idle(error_at=completed))
     assert stored.finished_at == completed
 
 
@@ -252,23 +267,23 @@ async def test_missing_transport_and_completed_set_waiting_reason(session):
     service = RuntimeService(session)
     await service.apply_session_state(
         task,
-        SessionState(status="FAILED", terminal_reason="session_missing"),
+        SessionState(status="UNKNOWN", terminal_reason="session_missing"),
     )
-    assert task.status == TaskStatus.WAITING
+    assert task.status == TaskStatus.RUNNING
     assert task.waiting_reason == "SESSION_MISSING"
     task.status = TaskStatus.RUNNING
     await session.commit()
     await service.apply_session_state(
         task,
-        SessionState(status="INTERRUPTED", terminal_reason="transport_unknown"),
+        SessionState(status="UNKNOWN", terminal_reason="transport_unknown"),
     )
-    assert task.status == TaskStatus.WAITING
+    assert task.status == TaskStatus.RUNNING
     assert task.waiting_reason == "TRANSPORT_RECOVERY"
     task.status = TaskStatus.RUNNING
     await session.commit()
     await service.apply_session_state(
         task,
-        SessionState(status="FAILED", terminal_reason="completed"),
+        SessionState(status="SUCCEEDED", terminal_reason="completed"),
     )
     assert task.status == TaskStatus.WAITING
     assert task.waiting_reason == "EXECUTION_RESULT_REVIEW"

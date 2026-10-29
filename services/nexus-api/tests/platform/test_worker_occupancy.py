@@ -208,8 +208,8 @@ async def test_heartbeat_does_not_clear_occupied_worker(session, monkeypatch):
     monkeypatch.setattr("app.runtime.lifecycle.connect", connect)
     healthy = await RuntimeService(session).refresh_employee_heartbeats()
     employee = await session.get(AgentWorker, "E1")
-    assert probes
-    assert healthy == ["E1"]
+    assert probes == []
+    assert healthy == []
     assert employee.current_task_count == 1
     assert employee.status == EmployeeStatus.WORKING
 

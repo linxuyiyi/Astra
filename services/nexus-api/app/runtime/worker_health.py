@@ -171,9 +171,9 @@ def health_status(
     observation: dict[str, Any],
     desired: dict[str, Any] | None = None,
 ) -> EnvironmentStatus:
-    """纯函数：只有全部必需环节真实 healthy 才是 AVAILABLE。
+    """纯函数：运行时与装备核对通过才是 AVAILABLE，模型只核对配置。
 
-    Worker Gateway 连接状态由 API 单独返回，不混入这里。
+    Worker Gateway 连接状态由 API 单独返回；模型网关可用性由网关观测。
     """
 
     if not isinstance(observation, dict) or observation.get("error"):
@@ -185,6 +185,7 @@ def health_status(
         expected = {str(x.get("name")) for x in (desired.get("mcp") or {}).get("items", [])}
         ready = (dsh.get("healthy") is True and dsh.get("protocol_initialized") is True
                  and dsh.get("file_channel_verified") is True
+                 and (desired.get("model") or {}).get("resolved") is not False
                  and (desired.get("model") or {}).get("route") in dsh.get("models", [])
                  and all(dsh.get("skill_hashes", {}).get(x["name"], {}).get("SKILL.md") == x["fullfile_hash"]
                     for x in (desired.get("skills") or {}).get("items", []))
@@ -220,9 +221,13 @@ def _matches_opencode(desired: dict[str, Any], observation: dict[str, Any]) -> b
 
 
 def _matches_model(desired: dict[str, Any], observation: dict[str, Any]) -> bool:
-    want = _text((desired.get("model") or {}).get("name"))
+    model = desired.get("model") or {}
+    want = _text(model.get("name"))
     section = _section(observation, "model")
-    return bool(want) and _text(section.get("model")) == want and section.get("authenticated") is True
+    return (
+        bool(want) and _text(section.get("model")) == want
+        and section.get("configured") is True and model.get("resolved") is not False
+    )
 
 
 def _matches_mcp(desired: dict[str, Any], observation: dict[str, Any]) -> bool:
@@ -709,10 +714,8 @@ def _model_row(
     actual = _text(section.get("model")) or deployed_model
     status = _status(section)
     deployed = bool(want) and deployed_model == want
-    verified = _tri_state(status, bool(want) and actual == want)
+    verified = _tri_state(status, _matches_model(desired, observation))
     diff = _version_diff("模型", want, actual, status)
-    if section.get("authenticated") is False and not diff:
-        diff.append("模型网关认证失败")
     desired_error = _text(model.get("error"))
     if desired_error and not diff:
         diff.append(desired_error)
@@ -726,7 +729,7 @@ def _model_row(
         actual_revision=actual or None,
         diff=diff,
         error=_text(section.get("error")) or desired_error or None,
-        detail=f"实际模型 {actual}" if actual else None,
+        detail=f"生效模型 {actual}（配置核对）" if actual else None,
     )
 
 

@@ -163,8 +163,8 @@ def test_equipment_mismatch_is_reported_without_secrets(tmp_path: Path, opencode
 
     assert result["opencode"]["status"] == "unhealthy"
     assert result["opencode"]["version"] == "1.18.34"
-    assert result["model"]["status"] == "unhealthy"
-    assert result["model"]["authenticated"] is False
+    assert result["model"]["status"] == "healthy"
+    assert result["model"]["configured"] is True
     assert result["model"]["model"] == "custom-relay/route-1"
     assert result["mcp"]["status"] == "unhealthy"
     assert result["mcp"]["connected"] is False
@@ -174,7 +174,7 @@ def test_equipment_mismatch_is_reported_without_secrets(tmp_path: Path, opencode
     assert result["repository"]["status"] == "healthy"
     assert result["repository"]["dirty"] is True
     assert result["repository"]["url"] == "https://example.test/org/repo.git"
-    assert state["models_auth"] == f"Bearer {CANARY}"
+    assert state["models_auth"] is None
 
     serialized = json.dumps(result, ensure_ascii=False)
     for secret in (CANARY, URL_USERINFO, URL_QUERY):
@@ -298,11 +298,34 @@ def test_expected_equipment_healthy_and_structure_is_stable(tmp_path: Path, open
     }
     for section in ("opencode", "model", "mcp", "skills", "repository"):
         assert result[section]["status"] == "healthy"
-    assert result["model"]["authenticated"] is True
+    assert result["model"]["configured"] is True
+    assert "authenticated" not in result["model"]
     assert result["mcp"]["missing"] == []
     assert result["skills"]["discovered"] == ["alpha", "beta"]
     assert result["repository"]["dirty"] is False
     assert result["repository"]["url"] == "https://example.test/org/repo.git"
+
+
+@pytest.mark.parametrize("gateway_status", [401, 429, 503])
+def test_gateway_failure_is_not_probed_by_worker_health(tmp_path, opencode_server, gateway_status):
+    state, base = opencode_server
+    state["models"] = (gateway_status, {"error": "temporarily unavailable"})
+    workspace = _repo(tmp_path / "ws", remote="https://example.test/org/repo.git")
+    result = inspect_runtime(base, str(workspace), expected_model="custom-relay/route-1")
+    assert result["model"]["status"] == "healthy"
+    assert result["model"]["configured"] is True
+    assert "/gateway/models" not in state["calls"]
+    assert "authenticated" not in result["model"]
+
+
+def test_missing_gateway_credentials_still_blocks_configuration(tmp_path, opencode_server):
+    state, base = opencode_server
+    state["config"][1]["provider"]["custom-relay"]["options"].pop("apiKey")
+    workspace = _repo(tmp_path / "ws", remote="https://example.test/org/repo.git")
+    result = inspect_runtime(base, str(workspace), expected_model="custom-relay/route-1")
+    assert result["model"]["status"] == "unhealthy"
+    assert result["model"]["configured"] is False
+    assert "/gateway/models" not in state["calls"]
 
 
 def test_payload_cannot_supply_paths_urls_or_shell(tmp_path: Path, opencode_server):

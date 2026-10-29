@@ -242,21 +242,14 @@ class DshAcpDriver:
             GatewayModel(self.config.gateway_url, alias, **spec)
         if not self.config.models:
             raise ValueError("DSH 没有登记 Gateway 模型")
-        import httpx
-
         from app.worker_agent.inspection import _inspect_repository
 
         key = self.config.key_file
         if key.is_symlink() or key.stat().st_mode & 0o077 or key.stat().st_uid != os.getuid():
             raise ValueError("Gateway 调用密钥文件权限无效")
         secret = key.read_text().strip()
-        async with httpx.AsyncClient(timeout=15) as client:
-            catalog = await client.get(
-                self.config.gateway_url.rstrip("/") + "/models",
-                headers={"Authorization": f"Bearer {secret}"},
-            )
-            catalog.raise_for_status()
-            enabled = {x["id"] for x in catalog.json().get("data", [])}
+        if not secret:
+            raise ValueError("Gateway 调用密钥未配置")
         skill_hashes = manifest(self.config.skills)
         # 包版本与 --version 都不能证明 ACP Host 的原生扩展可用。
         if time.monotonic() - self.protocol_checked_at > 300:
@@ -286,7 +279,7 @@ class DshAcpDriver:
             "healthy": True,
             "protocol_initialized": True,
             "skill_hashes": skill_hashes,
-            "models": sorted(enabled & self.config.models.keys()),
+            "models": sorted(self.config.models),
             "repository": repository,
             "mcp_names": sorted(str(x["name"]) for x in self.config.mcp_servers),
             **result,

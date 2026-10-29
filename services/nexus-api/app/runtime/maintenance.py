@@ -172,20 +172,18 @@ async def require_no_active_maintenance(session, environment_id: int | None) -> 
 async def lock_environment_row(session, environment: OpenCodeExecutionEnvironment) -> None:
     """Take the shared environment write lock without consulting maintenance."""
 
-    await session.refresh(environment)
     result = await session.execute(
         update(OpenCodeExecutionEnvironment)
         .where(
             OpenCodeExecutionEnvironment.id == environment.id,
-            OpenCodeExecutionEnvironment.status_detail == environment.status_detail,
-            OpenCodeExecutionEnvironment.status == environment.status,
         )
         .values(updated_at=OpenCodeExecutionEnvironment.updated_at)
         .execution_options(synchronize_session=False)
     )
     if result.rowcount != 1:
-        await session.refresh(environment)
-        raise HTTPException(409, "环境状态已变化，请刷新后重试")
+        raise HTTPException(404, "Worker 环境不存在")
+    # A plain refresh is still a snapshot read under MySQL REPEATABLE READ.
+    await session.refresh(environment, with_for_update=True)
 
 
 def _validate_action(environment: OpenCodeExecutionEnvironment, action: str) -> None:
@@ -262,7 +260,6 @@ async def submit_operation(
     environment = await session.scalar(
         select(OpenCodeExecutionEnvironment)
         .where(OpenCodeExecutionEnvironment.id == environment_id)
-        .with_for_update()
     )
     if environment is None:
         raise HTTPException(404, "Worker 环境不存在")
@@ -504,9 +501,28 @@ async def _finish_in_session(
 
     if state not in {*TERMINAL_STATES, MaintenanceState.INTERRUPTED.value}:
         raise ValueError("invalid terminal maintenance state")
-    now = datetime.now(UTC)
     if release_active is None:
         release_active = state != MaintenanceState.INTERRUPTED.value
+    # Match start/send's Employee -> Environment -> Operation order. Heartbeats
+    # only lock the employee; observation never acquires an employee lock later.
+    environment = None
+    if environment_id is not None and (environment_values is not None or event_message):
+        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
+        if environment is None:
+            return False
+    # Event.employee_id also takes an Employee lock through its foreign key.
+    event_employee_id = environment.employee_id if environment is not None and event_message else None
+    lock_employee_id = employee_id if employee_values is not None else event_employee_id
+    if lock_employee_id is not None:
+        from app.models import AgentWorker
+
+        await session.scalar(
+            select(AgentWorker.id).where(AgentWorker.id == lock_employee_id).with_for_update()
+        )
+    if environment is not None:
+        await lock_environment_row(session, environment)
+    # Waiting for the shared locks must not extend an already expired lease.
+    now = datetime.now(UTC)
     result = await session.execute(
         update(WorkerMaintenanceOperation)
         .where(
@@ -550,14 +566,9 @@ async def _finish_in_session(
             .values(**redact_data(employee_values, secrets))
         )
     if event_message:
-        employee_id = None
-        if environment_id is not None:
-            environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-            if environment is not None:
-                employee_id = environment.employee_id
         session.add(
             Event(
-                employee_id=employee_id,
+                employee_id=event_employee_id,
                 event_type="ENVIRONMENT_MAINTAINED",
                 phase="environment",
                 message=redact_text(event_message, secrets),
@@ -885,7 +896,6 @@ async def retry_operation(
     environment = await session.scalar(
         select(OpenCodeExecutionEnvironment)
         .where(OpenCodeExecutionEnvironment.id == operation.environment_id)
-        .with_for_update()
     )
     if environment is None:
         raise HTTPException(404, "Worker 环境不存在")
@@ -1416,6 +1426,7 @@ async def _run_reconcile(lease: OperationLease, operation: WorkerMaintenanceOper
             ).all()
         )
         if environment is not None:
+            occupied = await _occupancy_blockers(session, environment.employee_id)
             session.expunge(environment)
     if environment is None:
         await lease.finish(
@@ -1423,6 +1434,15 @@ async def _run_reconcile(lease: OperationLease, operation: WorkerMaintenanceOper
             stage="reconcile",
             error_code="environment_missing",
             error_message="Worker 环境不存在，无法核对",
+        )
+        return False
+
+    if occupied:
+        await lease.finish(
+            MaintenanceState.INTERRUPTED.value,
+            stage="reconcile",
+            error_code="occupied_task",
+            error_message="员工存在占用任务，待空闲后再核对维护",
         )
         return False
 
@@ -1473,6 +1493,14 @@ async def _run_reconcile(lease: OperationLease, operation: WorkerMaintenanceOper
         probe = await observe_environment(environment.id, persist=False)
     except Exception as exc:
         details["reasons"].append(f"full_probe_failed: {exc}")
+    if probe is not None and probe.get("skipped"):
+        await lease.finish(
+            MaintenanceState.INTERRUPTED.value,
+            stage="reconcile",
+            error_code="occupied_task",
+            error_message="员工存在占用任务，跳过可用性探测；待空闲后再核对维护",
+        )
+        return False
     if probe is not None:
         health_status_value = probe["status"]
         observation = probe["observation"] if isinstance(probe["observation"], dict) else {}
@@ -1664,12 +1692,14 @@ async def observe_environment(
     mark_deployed: bool = False,
     deployed_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Read-only probe followed by a short, revision-fenced persistence step.
+    """Idle-only probe followed by a short, revision-fenced persistence step.
 
     No DB transaction is held across network I/O. A fresh session re-reads the
     Worker epoch and environment revision before a conditional write. Callers
     that pass ``persist=False`` must apply ``values`` in their own fenced
     operation transaction (``lease.finish``); this function never writes then.
+    Occupied Workers return ``skipped`` without reading remote state. If work
+    starts during a background probe, the late observation is not persisted.
     """
 
     from app.runtime.worker_health import (
@@ -1685,6 +1715,13 @@ async def observe_environment(
         environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
         if environment is None:
             raise HTTPException(404, "Worker 环境不存在")
+        if await _occupancy_blockers(session, environment.employee_id):
+            return {
+                "stale": True,
+                "skipped": True,
+                "reason": "occupied_task",
+                "status": environment.status,
+            }
         worker = await session.scalar(
             select(WorkerInstance).where(WorkerInstance.environment_id == environment_id)
         )
@@ -1713,7 +1750,7 @@ async def observe_environment(
     # never be treated as current just because it is still in an identity map.
     async with SessionLocal() as session:
         current_worker = await session.scalar(
-            select(WorkerInstance).where(WorkerInstance.environment_id == environment_id).with_for_update()
+            select(WorkerInstance).where(WorkerInstance.environment_id == environment_id)
         )
         current_epoch = current_worker.epoch if current_worker is not None else None
         current_online = bool(current_worker is not None and current_worker.status == "online")
@@ -1800,8 +1837,18 @@ async def observe_environment(
             select(OpenCodeExecutionEnvironment)
             .where(OpenCodeExecutionEnvironment.id == environment_id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if current_environment is None:
+            return result
+        await lock_environment_row(session, current_environment)
+        if await _occupancy_blockers(session, current_environment.employee_id):
+            result.update(stale=True, skipped=True, reason="occupied_task")
+            await session.rollback()
+            return result
+        if current_environment.status != previous_status or current_environment.status_detail != previous:
+            result["stale"] = True
+            await session.rollback()
             return result
         active = await session.scalar(
             select(WorkerMaintenanceOperation.id)
@@ -1827,25 +1874,11 @@ async def observe_environment(
             await session.rollback()
             result["stale"] = True
             return result
-        conditions = [
-            OpenCodeExecutionEnvironment.id == environment_id,
-            OpenCodeExecutionEnvironment.status == previous_status,
-            OpenCodeExecutionEnvironment.status_detail == previous,
-            ~active_maintenance_exists(environment_id),
-        ]
-        if remote and current_epoch is not None:
-            conditions.append(
-                select(WorkerInstance.id)
-                .where(
-                    WorkerInstance.environment_id == environment_id,
-                    WorkerInstance.status == "online",
-                    WorkerInstance.epoch == current_epoch,
-                )
-                .exists()
-            )
+        # Environment, maintenance and epoch are already checked under their
+        # shared locks. Compare JSON as data above, not JSON-vs-SQL-string here.
         written = await session.execute(
             update(OpenCodeExecutionEnvironment)
-            .where(*conditions)
+            .where(OpenCodeExecutionEnvironment.id == environment_id)
             .values(**values)
             .execution_options(synchronize_session=False)
         )
@@ -1948,6 +1981,14 @@ async def _run_restore(lease: OperationLease, operation: WorkerMaintenanceOperat
 
     await lease.set_stage("restore")
     probe = await observe_environment(operation.environment_id, persist=False)
+    if probe.get("skipped"):
+        await lease.finish(
+            MaintenanceState.FAILED.value,
+            stage="restore_failed",
+            error_code="occupied_task",
+            error_message="员工存在占用任务，待空闲后再恢复调度",
+        )
+        return
     async with SessionLocal() as session:
         environment = await session.get(OpenCodeExecutionEnvironment, operation.environment_id)
         if environment is None:
@@ -2027,6 +2068,14 @@ async def _run_check(lease: OperationLease, operation: WorkerMaintenanceOperatio
         message="正在核对执行引擎、模型装配与 Git",
     )
     probe = await observe_environment(operation.environment_id, persist=False)
+    if probe.get("skipped"):
+        await lease.finish(
+            MaintenanceState.SUCCEEDED.value,
+            stage="skipped",
+            after_snapshot={"skipped": True, "reason": "occupied_task"},
+            event_message="员工存在占用任务，跳过可用性探测，保留原健康状态",
+        )
+        return
     for row in probe["equipment"]:
         await lease.event(
             event_type="step",
@@ -2447,7 +2496,7 @@ async def _schedulability_blockers(session, environment) -> list[dict[str, Any]]
                 "message": f"环境状态为 {environment.status}，禁止调度",
             }
         )
-    elif not fresh:
+    elif not fresh and not await _occupancy_blockers(session, environment.employee_id):
         blockers.append(
             {
                 "code": "health_stale",
@@ -2498,9 +2547,10 @@ async def environment_health(session, environment_id: int) -> dict[str, Any] | N
     latest = active or await latest_operation(session, environment_id)
     detail = environment.status_detail if isinstance(environment.status_detail, dict) else {}
     blockers = await _schedulability_blockers(session, environment)
-    fresh = health_is_fresh(environment, detail, worker.epoch if worker is not None else None)
     runtime_status = environment.status
-    if environment.status == EnvironmentStatus.AVAILABLE and not fresh:
+    if environment.status == EnvironmentStatus.AVAILABLE and any(
+        item["code"] == "health_stale" for item in blockers
+    ):
         runtime_status = EnvironmentStatus.UNKNOWN.value
     if environment.employee_id:
         task_ids = list(

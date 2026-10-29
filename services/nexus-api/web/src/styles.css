@@ -89,6 +89,8 @@ button, input, textarea { font: inherit; }
 .rail-item { display: flex; gap: 10px; align-items: center; padding: 11px 9px; border-radius: 13px; cursor: pointer; margin-bottom: 5px; }
 .rail-item.active, .rail-item:hover { background: #eaf6ee; }
 .chat { display: flex; flex-direction: column; overflow: hidden; min-height: 0; box-sizing: border-box; }
+.chat-messages { flex: 1; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 17px; }
+.chat-compose { padding: 12px 17px 16px; border-top: 1px solid #edf2ef; }
 .chat-head { min-width: 0; flex-wrap: wrap; padding: 16px 19px; display: flex; justify-content: space-between; gap: 13px; border-bottom: 1px solid #edf2ee; }
 .msg { display: flex; gap: 10px; max-width: 94%; }
 .msg.user { align-self: flex-end; flex-direction: row-reverse; }

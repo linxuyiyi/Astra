@@ -36,9 +36,10 @@
           <span class="avatar" :class="{ off: !target.enabled }">{{ target.avatar }}</span>
           <span class="chat-target__meta">
             <b>{{ target.name }}</b>
-            <small class="muted">{{ target.subtitle }}</small>
+            <small class="muted">{{ railSummary(target.key) || target.subtitle }}</small>
           </span>
-          <span v-if="target.kind === 'group'" class="tag">群组</span>
+          <span v-if="unreadOf(target.key)" class="unread-badge" :aria-label="`${unreadOf(target.key)} 条未读`">{{ unreadOf(target.key) > 99 ? '99+' : unreadOf(target.key) }}</span>
+          <span v-else-if="target.kind === 'group'" class="tag">群组</span>
         </button>
         <div v-if="!filteredTargets.length" class="muted" style="padding: 12px 4px">没有匹配的联系人或群组</div>
       </aside>
@@ -57,19 +58,16 @@
         </div>
         <div v-else class="chat-head"><h2>数字员工</h2></div>
 
-        <iframe
-          v-if="islandVisible && activeState?.status === 'ready'"
-          :key="`${selectedKey}:${islandRevision}`"
-          class="chat-island"
-          :src="islandSrc"
-          title="Nexus 对话"
-          allow="microphone"
+        <div v-if="directoryLoading || activeState?.status === 'loading'" class="muted" style="padding: 24px">正在读取会话…</div>
+        <ChatPanel
+          v-else-if="activeState && activeRuntime"
+          :key="selectedKey"
+          :state="activeState"
+          :target="activeTarget"
+          :runtime="activeRuntime"
+          @retry="selectTarget(selectedKey, { retry: true })"
         />
-        <div v-else-if="activeState?.status === 'error'" role="alert" style="padding: 24px">
-          <p>{{ activeState.error }}</p>
-          <el-button @click="selectTarget(selectedKey, { retry: true })">重试</el-button>
-        </div>
-        <div v-else-if="directoryLoading || activeState?.status === 'loading'" class="muted" style="padding: 24px">正在读取会话…</div>
+        <div v-else class="muted" style="padding: 24px">选择左侧联系人或群组开始对话</div>
 
       </article>
 
@@ -205,6 +203,9 @@ import TaskRail from "@/components/TaskRail.vue";
 import { listTasks, listWorkers, type PlatformTask, type PlatformWorker } from "@/platform";
 import type { Channel, Employee, ResourceCatalog } from "@/types";
 import { GroupChatAdapter, PrivateChatAdapter } from "@/features/chat/adapters";
+import { ChatRuntime, createSessionState } from "@/features/chat/ChatRuntime";
+import ChatPanel from "@/features/chat/components/ChatPanel.vue";
+import { shortText } from "@/features/chat/shortText";
 import type { ChatSessionState, ChatTarget } from "@/features/chat/types";
 import { selectionIsCurrent } from "@/features/chat/sessionState";
 
@@ -213,7 +214,6 @@ const router = useRouter();
 const employees = ref<Employee[]>([]);
 const directoryLoading = ref(true);
 const directoryError = ref("");
-const islandRevision = ref(0);
 const channels = ref<Channel[]>([]);
 const workers = ref<PlatformWorker[]>([]);
 const search = ref("");
@@ -296,20 +296,26 @@ const filteredTargets = computed(() => {
 
 const activeState = computed(() => (selectedKey.value ? sessions[selectedKey.value] : undefined));
 const activeTarget = computed(() => activeState.value?.target ?? null);
-const islandVisible = computed(() => {
-  const target = activeTarget.value;
-  if (!target) return false;
-  if (target.kind === "group") return Boolean(target.channel?.id);
-  return Boolean(activeState.value?.adapter?.conversationId);
-});
-const islandSrc = computed(() => {
-  const target = activeTarget.value;
-  if (target?.kind === "group" && target.channel) {
-    return `/nexus-chat/index.html?channel=${encodeURIComponent(target.channel.id)}`;
+const runtimes = new Map<string, ChatRuntime>();
+const activeRuntime = computed(() => (selectedKey.value ? runtimes.get(selectedKey.value) : undefined));
+
+function ensureRuntime(state: ChatSessionState) {
+  let runtime = runtimes.get(state.key);
+  if (!runtime) {
+    runtime = new ChatRuntime(state, () => selectedKey.value === state.key);
+    runtimes.set(state.key, runtime);
   }
-  const id = activeState.value?.adapter?.conversationId ?? "";
-  return `/nexus-chat/index.html?conversation=${encodeURIComponent(id)}`;
-});
+  return runtime;
+}
+
+function railSummary(key: string) {
+  return sessions[key]?.lastSummary || "";
+}
+
+function unreadOf(key: string) {
+  return sessions[key]?.unread || 0;
+}
+
 const rightTabs = computed(() => activeTarget.value?.kind === "group"
   ? [{ value: "tasks" as const, label: "任务" }, { value: "members" as const, label: "成员" }, { value: "materials" as const, label: "资料" }]
   : [{ value: "tasks" as const, label: "任务" }, { value: "materials" as const, label: "资料" }]);
@@ -339,23 +345,8 @@ function toolLabel(id: string) {
 
 
 
-function createState(target: ChatTarget): ChatSessionState {
-  return {
-    key: target.key,
-    target,
-    adapter: null,
-    status: "loading",
-    error: "",
-    tasks: [],
-    tasksLoading: false,
-    taskError: "",
-    taskGeneration: 0,
-    tab: "tasks",
-  };
-}
-
 function ensureState(target: ChatTarget) {
-  if (!sessions[target.key]) sessions[target.key] = createState(target);
+  if (!sessions[target.key]) sessions[target.key] = createSessionState(target);
   return sessions[target.key];
 }
 
@@ -367,12 +358,11 @@ async function prepareContact(state: ChatSessionState) {
   state.status = "loading";
   try {
     const conversation = await createConversation(employee.id);
-    state.adapter = new PrivateChatAdapter(employee, conversation);
-    state.status = "ready";
+    const adapter = new PrivateChatAdapter(employee, conversation);
     state.error = "";
+    ensureRuntime(state).bind(adapter);
   } catch (error) {
-    state.status = "error";
-    state.error = error instanceof Error ? error.message : "无法打开该联系人的会话";
+    ensureRuntime(state).setError(error);
   }
 }
 
@@ -399,7 +389,7 @@ async function loadTasks(state: ChatSessionState) {
   } catch (error) {
     if (state.taskGeneration !== generation || state.adapter !== adapter) return;
     state.tasks = [];
-    state.taskError = error instanceof Error ? error.message : "关联任务加载失败";
+    state.taskError = shortText(error, "关联任务加载失败");
   } finally {
     if (state.taskGeneration === generation) state.tasksLoading = false;
   }
@@ -416,18 +406,33 @@ async function selectTarget(key: string, options: { fromRoute?: boolean; retry?:
   const target = targets.value.find((item) => item.key === key);
   if (!target) return;
   if (!options.retry && !options.fromRoute && selectedKey.value === key && sessions[key]?.adapter) return;
+  const previousKey = selectedKey.value;
+  if (previousKey && previousKey !== key && sessions[previousKey]) {
+    // 切走时保留未读计数；进入时清零。
+  }
   const generation = ++selectionGeneration;
   selectedKey.value = key;
   localStorage.setItem("nexus_chat_last", key);
   if (!options.fromRoute) updateRoute(target);
   const state = ensureState(target);
+  const runtime = ensureRuntime(state);
+  if (options.retry) {
+    runtime.dispose();
+    state.adapter = null;
+    state.messages = [];
+    state.liveLines = [];
+    state.notice = "";
+  }
   if (!state.adapter) {
     if (target.kind === "contact") await ensurePrepared(state);
-    else if (target.channel) state.adapter = new GroupChatAdapter(target.channel, employees.value);
+    else if (target.channel) runtime.bind(new GroupChatAdapter(target.channel, employees.value));
+  } else if (options.retry && target.kind === "contact") {
+    await ensurePrepared(state);
   }
   if (!selectionIsCurrent(selectedKey.value, key, generation, selectionGeneration, disposed)) return;
   if (state.adapter) {
     state.status = "ready";
+    runtime.markRead();
     void loadTasks(state);
   }
 }
@@ -491,12 +496,11 @@ async function saveGroup() {
       existing.target = target;
       if (existing.adapter instanceof GroupChatAdapter) {
         existing.adapter.setChannel(target.channel, employees.value);
+        ensureRuntime(existing).bind(existing.adapter);
       } else {
-        existing.adapter = new GroupChatAdapter(target.channel, employees.value);
+        ensureRuntime(existing).bind(new GroupChatAdapter(target.channel, employees.value));
       }
-      existing.status = "ready";
       existing.error = "";
-      islandRevision.value += 1;
       void loadTasks(existing);
     } else {
       await selectTarget(key);
@@ -585,7 +589,7 @@ async function loadDirectory() {
       || "";
     if (initial) await selectTarget(initial, { fromRoute: Boolean(routeKey || type) });
   } catch (error) {
-    if (!disposed) directoryError.value = error instanceof Error ? error.message : "会话列表加载失败";
+    if (!disposed) directoryError.value = shortText(error, "会话列表加载失败");
   } finally {
     if (!disposed) directoryLoading.value = false;
   }
@@ -608,7 +612,9 @@ onBeforeUnmount(() => {
   selectionGeneration += 1;
   for (const state of Object.values(sessions)) {
     state.taskGeneration += 1;
+    runtimes.get(state.key)?.dispose();
   }
+  runtimes.clear();
   preparePromises.clear();
   window.clearInterval(taskTimer);
 });
@@ -619,7 +625,6 @@ onBeforeUnmount(() => {
 .member { flex-wrap:wrap; }
 .member-identity { flex:1; min-width:0; overflow-wrap:anywhere; }
 .chat-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.chat-island { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; background: var(--astra-bg-panel); }
 .chat-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .chat-search-row :deep(.el-input) { flex: 1; }
 .chat-filters { display: flex; gap: 6px; margin-bottom: 10px; }
@@ -629,4 +634,17 @@ onBeforeUnmount(() => {
 .chat-target__meta b, .chat-target__meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-head__actions { display: flex; flex: none; flex-wrap: wrap; gap: 8px; align-items: center; }
 .chip.sel { background: #e5f6ed; border-color: #aad8c2; color: #187956; }
+.unread-badge {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e45757;
+  color: #fff;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+}
+.panel.chat { display: flex; flex-direction: column; min-height: 0; }
 </style>

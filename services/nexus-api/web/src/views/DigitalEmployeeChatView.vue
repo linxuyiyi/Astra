@@ -8,14 +8,16 @@
             <el-button circle aria-label="新建群组" data-testid="chat-create-group" @click="openGroupDialog()">＋</el-button>
           </el-tooltip>
         </div>
-        <el-button text size="small" @click="joinDialogOpen = true">通过邀请加入群组</el-button>
-        <div class="chat-filters">
+        <button type="button" class="chat-join-link" @click="joinDialogOpen = true">通过邀请加入群组</button>
+        <div class="chat-filter-seg" role="tablist" aria-label="会话筛选">
           <button
             v-for="item in filterOptions"
             :key="item.value"
             type="button"
-            class="chip"
-            :class="{ sel: filter === item.value }"
+            role="tab"
+            class="chat-filter-seg__item"
+            :class="{ 'is-active': filter === item.value }"
+            :aria-selected="filter === item.value"
             @click="filter = item.value"
           >{{ item.label }}</button>
         </div>
@@ -37,9 +39,9 @@
           <span v-else class="avatar">{{ target.avatar }}</span>
           <span class="chat-target__meta">
             <b>{{ target.name }}</b>
-            <small class="muted">{{ target.subtitle }}</small>
+            <small class="muted">{{ railSummary(target.key) || target.subtitle }}</small>
           </span>
-          <span v-if="target.kind === 'group'" class="tag">群组</span>
+          <span v-if="unreadOf(target.key)" class="unread-badge" :aria-label="`${unreadOf(target.key)} 条未读`">{{ unreadOf(target.key) > 99 ? '99+' : unreadOf(target.key) }}</span>
         </button>
         <div v-if="!filteredTargets.length" class="muted" style="padding: 12px 4px">没有匹配的联系人或群组</div>
       </aside>
@@ -48,40 +50,50 @@
         <div v-if="activeTarget" class="chat-head">
           <div class="chat-head__copy">
             <h2 :title="activeTarget.name">{{ activeTarget.name }}</h2>
-            <p v-if="activeTarget.kind === 'group'" class="muted">{{ activeTarget.channel?.description }}</p>
+            <p v-if="activeTarget.kind === 'group' && activeTarget.channel?.description" class="chat-head__desc muted">{{ activeTarget.channel?.description }}</p>
             <p v-else-if="!activeTarget.enabled" class="muted">已禁用</p>
           </div>
           <div class="chat-head__actions">
-            <el-button v-if="activeTarget.kind === 'group' && canManage" size="small" @click="openGroupDialog(activeTarget.channel)">群组设置</el-button>
+            <el-dropdown
+              v-if="activeTarget.kind === 'group' && canManage"
+              trigger="click"
+              @command="onChatHeadCommand"
+            >
+              <button type="button" class="chat-head-more" aria-label="更多操作" data-testid="chat-head-more">⋯</button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="group-settings">群组设置</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
             <el-button @click="asideOpen = !asideOpen">{{ asideOpen ? "收起资料" : "查看资料" }}</el-button>
           </div>
         </div>
         <div v-else class="chat-head"><h2>数字员工</h2></div>
 
-        <iframe
-          v-if="islandVisible && activeState?.status === 'ready'"
-          :key="`${selectedKey}:${islandRevision}`"
-          class="chat-island"
-          :src="islandSrc"
-          title="Nexus 对话"
-          allow="microphone"
+        <div v-if="directoryLoading || activeState?.status === 'loading'" class="muted" style="padding: 24px">正在读取会话…</div>
+        <ChatPanel
+          v-else-if="activeState && activeRuntime"
+          :key="selectedKey"
+          :state="activeState"
+          :target="activeTarget"
+          :runtime="activeRuntime"
+          @retry="selectTarget(selectedKey, { retry: true })"
         />
-        <div v-else-if="activeState?.status === 'error'" role="alert" style="padding: 24px">
-          <p>{{ activeState.error }}</p>
-          <el-button @click="selectTarget(selectedKey, { retry: true })">重试</el-button>
-        </div>
-        <div v-else-if="directoryLoading || activeState?.status === 'loading'" class="muted" style="padding: 24px">正在读取会话…</div>
+        <div v-else class="muted" style="padding: 24px">选择左侧联系人或群组开始对话</div>
 
       </article>
 
       <aside v-if="activeState && asideOpen" class="panel aside">
-        <div class="right-tabs">
+        <div class="right-tabs" role="tablist" aria-label="侧栏">
           <button
             v-for="item in rightTabs"
             :key="item.value"
-            class="chip"
-            :class="{ sel: activeState.tab === item.value }"
             type="button"
+            role="tab"
+            class="chat-aside-tab"
+            :class="{ 'is-active': activeState.tab === item.value }"
+            :aria-selected="activeState.tab === item.value"
             @click="activeState.tab = item.value"
           >{{ item.label }}</button>
         </div>
@@ -127,16 +139,38 @@
           <div v-for="person in activeTarget.channel?.members || []" :key="`${person.member_type}:${person.member_id}`" class="member">
             <EmployeeAvatar v-if="person.member_type === 'employee'" :avatar="person.avatar" :size="36" />
             <span v-else class="avatar">{{ person.avatar }}</span>
-            <div class="member-identity"><b>{{ person.name }}{{ person.member_id === currentUid() ? '（你）' : '' }}</b>
-              <small class="muted">{{ person.member_type === 'employee' ? '数字员工' : `${roleLabels[person.role]} · ${person.online ? '在线' : '离线'}` }}</small>
+            <div class="member-identity">
+              <b class="member-name">{{ person.name }}{{ person.member_id === currentUid() ? '（你）' : '' }}</b>
+              <small class="member-role muted">{{ person.member_type === 'employee' ? '数字员工' : `${roleLabels[person.role]} · ${person.online ? '在线' : '离线'}` }}</small>
             </div>
-            <template v-if="person.member_type === 'human' && person.role !== 'owner' && canManage">
-              <el-select v-if="activeTarget.channel?.my_role === 'owner'" :model-value="person.role" size="small" style="width:88px" @change="(value: unknown) => setRole(person.member_id, String(value))">
-                <el-option label="管理员" value="admin" /><el-option label="成员" value="member" />
-              </el-select>
-              <el-button v-if="person.member_id !== currentUid()" text type="danger" size="small" @click="removeHuman(person.member_id)">移除</el-button>
-              <el-button v-if="activeTarget.channel?.my_role === 'owner'" text size="small" @click="transferOwner(person.member_id)">转让</el-button>
-            </template>
+            <el-dropdown
+              v-if="person.member_type === 'human' && person.role !== 'owner' && canManage"
+              trigger="click"
+              @command="onMemberCommand"
+            >
+              <button type="button" class="member-more" aria-label="成员操作" data-testid="member-more">⋯</button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item
+                    v-if="activeTarget.channel?.my_role === 'owner' && person.role !== 'admin'"
+                    :command="`role:admin:${person.member_id}`"
+                  >设为管理员</el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="activeTarget.channel?.my_role === 'owner' && person.role !== 'member'"
+                    :command="`role:member:${person.member_id}`"
+                  >设为成员</el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="person.member_id !== currentUid()"
+                    :command="`remove:${person.member_id}`"
+                    divided
+                  >移除</el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="activeTarget.channel?.my_role === 'owner'"
+                    :command="`transfer:${person.member_id}`"
+                  >转让群主</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
           <el-button v-if="activeTarget.channel?.my_role !== 'owner'" type="danger" plain size="small" @click="leaveGroup">退出群组</el-button>
 
@@ -208,6 +242,9 @@ import TaskRail from "@/components/TaskRail.vue";
 import { listTasks, listWorkers, type PlatformTask, type PlatformWorker } from "@/platform";
 import type { Channel, Employee, ResourceCatalog } from "@/types";
 import { GroupChatAdapter, PrivateChatAdapter } from "@/features/chat/adapters";
+import { ChatRuntime, createSessionState } from "@/features/chat/ChatRuntime";
+import ChatPanel from "@/features/chat/components/ChatPanel.vue";
+import { shortText } from "@/features/chat/shortText";
 import type { ChatSessionState, ChatTarget } from "@/features/chat/types";
 import { selectionIsCurrent } from "@/features/chat/sessionState";
 
@@ -216,7 +253,6 @@ const router = useRouter();
 const employees = ref<Employee[]>([]);
 const directoryLoading = ref(true);
 const directoryError = ref("");
-const islandRevision = ref(0);
 const channels = ref<Channel[]>([]);
 const workers = ref<PlatformWorker[]>([]);
 const search = ref("");
@@ -228,7 +264,7 @@ const filterOptions = [
 ];
 const selectedKey = ref("");
 const sessions = reactive<Record<string, ChatSessionState>>({});
-const asideOpen = ref(true);
+const asideOpen = ref(false);
 const groupDialogOpen = ref(false);
 const groupEditingId = ref<string | null>(null);
 const groupSaving = ref(false);
@@ -299,20 +335,26 @@ const filteredTargets = computed(() => {
 
 const activeState = computed(() => (selectedKey.value ? sessions[selectedKey.value] : undefined));
 const activeTarget = computed(() => activeState.value?.target ?? null);
-const islandVisible = computed(() => {
-  const target = activeTarget.value;
-  if (!target) return false;
-  if (target.kind === "group") return Boolean(target.channel?.id);
-  return Boolean(activeState.value?.adapter?.conversationId);
-});
-const islandSrc = computed(() => {
-  const target = activeTarget.value;
-  if (target?.kind === "group" && target.channel) {
-    return `/nexus-chat/index.html?channel=${encodeURIComponent(target.channel.id)}`;
+const runtimes = new Map<string, ChatRuntime>();
+const activeRuntime = computed(() => (selectedKey.value ? runtimes.get(selectedKey.value) : undefined));
+
+function ensureRuntime(state: ChatSessionState) {
+  let runtime = runtimes.get(state.key);
+  if (!runtime) {
+    runtime = new ChatRuntime(state, () => selectedKey.value === state.key);
+    runtimes.set(state.key, runtime);
   }
-  const id = activeState.value?.adapter?.conversationId ?? "";
-  return `/nexus-chat/index.html?conversation=${encodeURIComponent(id)}`;
-});
+  return runtime;
+}
+
+function railSummary(key: string) {
+  return sessions[key]?.lastSummary || "";
+}
+
+function unreadOf(key: string) {
+  return sessions[key]?.unread || 0;
+}
+
 const rightTabs = computed(() => activeTarget.value?.kind === "group"
   ? [{ value: "tasks" as const, label: "任务" }, { value: "members" as const, label: "成员" }, { value: "materials" as const, label: "资料" }]
   : [{ value: "tasks" as const, label: "任务" }, { value: "materials" as const, label: "资料" }]);
@@ -342,23 +384,8 @@ function toolLabel(id: string) {
 
 
 
-function createState(target: ChatTarget): ChatSessionState {
-  return {
-    key: target.key,
-    target,
-    adapter: null,
-    status: "loading",
-    error: "",
-    tasks: [],
-    tasksLoading: false,
-    taskError: "",
-    taskGeneration: 0,
-    tab: "tasks",
-  };
-}
-
 function ensureState(target: ChatTarget) {
-  if (!sessions[target.key]) sessions[target.key] = createState(target);
+  if (!sessions[target.key]) sessions[target.key] = createSessionState(target);
   return sessions[target.key];
 }
 
@@ -370,12 +397,11 @@ async function prepareContact(state: ChatSessionState) {
   state.status = "loading";
   try {
     const conversation = await createConversation(employee.id);
-    state.adapter = new PrivateChatAdapter(employee, conversation);
-    state.status = "ready";
+    const adapter = new PrivateChatAdapter(employee, conversation);
     state.error = "";
+    ensureRuntime(state).bind(adapter);
   } catch (error) {
-    state.status = "error";
-    state.error = error instanceof Error ? error.message : "无法打开该联系人的会话";
+    ensureRuntime(state).setError(error);
   }
 }
 
@@ -402,7 +428,7 @@ async function loadTasks(state: ChatSessionState) {
   } catch (error) {
     if (state.taskGeneration !== generation || state.adapter !== adapter) return;
     state.tasks = [];
-    state.taskError = error instanceof Error ? error.message : "关联任务加载失败";
+    state.taskError = shortText(error, "关联任务加载失败");
   } finally {
     if (state.taskGeneration === generation) state.tasksLoading = false;
   }
@@ -419,18 +445,35 @@ async function selectTarget(key: string, options: { fromRoute?: boolean; retry?:
   const target = targets.value.find((item) => item.key === key);
   if (!target) return;
   if (!options.retry && !options.fromRoute && selectedKey.value === key && sessions[key]?.adapter) return;
+  const previousKey = selectedKey.value;
+  if (previousKey && previousKey !== key && sessions[previousKey]) {
+    // 切走时保留未读计数；进入时清零。
+  }
   const generation = ++selectionGeneration;
   selectedKey.value = key;
   localStorage.setItem("nexus_chat_last", key);
   if (!options.fromRoute) updateRoute(target);
   const state = ensureState(target);
+  const runtime = ensureRuntime(state);
+  if (options.retry) {
+    runtime.dispose();
+    state.adapter = null;
+    state.messages = [];
+    state.liveLines = [];
+    state.notice = "";
+    state.failedSend = null;
+    state.noticeSource = "";
+  }
   if (!state.adapter) {
     if (target.kind === "contact") await ensurePrepared(state);
-    else if (target.channel) state.adapter = new GroupChatAdapter(target.channel, employees.value);
+    else if (target.channel) runtime.bind(new GroupChatAdapter(target.channel, employees.value));
+  } else if (options.retry && target.kind === "contact") {
+    await ensurePrepared(state);
   }
   if (!selectionIsCurrent(selectedKey.value, key, generation, selectionGeneration, disposed)) return;
   if (state.adapter) {
     state.status = "ready";
+    runtime.markRead();
     void loadTasks(state);
   }
 }
@@ -461,6 +504,20 @@ async function applyRouteTarget() {
 
 
 
+
+function onChatHeadCommand(command: string) {
+  if (command === "group-settings" && activeTarget.value?.kind === "group") {
+    openGroupDialog(activeTarget.value.channel);
+  }
+}
+
+function onMemberCommand(command: string | number) {
+  const raw = String(command);
+  const [action, a, b] = raw.split(":");
+  if (action === "role" && a && b) void setRole(b, a);
+  else if (action === "remove" && a) void removeHuman(a);
+  else if (action === "transfer" && a) void transferOwner(a);
+}
 
 function openGroupDialog(channel?: Channel) {
   groupEditingId.value = channel?.id ?? null;
@@ -494,12 +551,11 @@ async function saveGroup() {
       existing.target = target;
       if (existing.adapter instanceof GroupChatAdapter) {
         existing.adapter.setChannel(target.channel, employees.value);
+        ensureRuntime(existing).bind(existing.adapter);
       } else {
-        existing.adapter = new GroupChatAdapter(target.channel, employees.value);
+        ensureRuntime(existing).bind(new GroupChatAdapter(target.channel, employees.value));
       }
-      existing.status = "ready";
       existing.error = "";
-      islandRevision.value += 1;
       void loadTasks(existing);
     } else {
       await selectTarget(key);
@@ -588,7 +644,7 @@ async function loadDirectory() {
       || "";
     if (initial) await selectTarget(initial, { fromRoute: Boolean(routeKey || type) });
   } catch (error) {
-    if (!disposed) directoryError.value = error instanceof Error ? error.message : "会话列表加载失败";
+    if (!disposed) directoryError.value = shortText(error, "会话列表加载失败");
   } finally {
     if (!disposed) directoryLoading.value = false;
   }
@@ -611,7 +667,9 @@ onBeforeUnmount(() => {
   selectionGeneration += 1;
   for (const state of Object.values(sessions)) {
     state.taskGeneration += 1;
+    runtimes.get(state.key)?.dispose();
   }
+  runtimes.clear();
   preparePromises.clear();
   window.clearInterval(taskTimer);
 });
@@ -619,17 +677,138 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .member-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.member { flex-wrap:wrap; }
-.member-identity { flex:1; min-width:0; overflow-wrap:anywhere; }
+.member { flex-wrap:nowrap; }
+.member-identity { flex:1; min-width:0; overflow-wrap:anywhere; display:grid; gap:2px; }
+.member-name { font-size: 12px; font-weight: 600; line-height: 1.3; }
+.member-role { font-size: 10.5px; line-height: 1.35; }
+.member-more,
+.chat-head-more {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b8979;
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.member-more:hover,
+.chat-head-more:hover { background: #eef7f2; color: #188b69; }
 .chat-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.chat-island { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; background: var(--astra-bg-panel); }
 .chat-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .chat-search-row :deep(.el-input) { flex: 1; }
-.chat-filters { display: flex; gap: 6px; margin-bottom: 10px; }
+.chat-join-link {
+  display: inline-block;
+  margin: 0 0 10px 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #91a59a;
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.chat-join-link:hover { color: #188b69; }
+.chat-filter-seg {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 10px;
+  padding: 2px;
+  border: 1px solid #e5eee9;
+  border-radius: 8px;
+  background: #f5faf7;
+  gap: 0;
+}
+.chat-filter-seg__item {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: #6b8979;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.3;
+  cursor: pointer;
+  position: relative;
+}
+.chat-filter-seg__item + .chat-filter-seg__item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 1px;
+  background: #dde8e1;
+}
+.chat-filter-seg__item.is-active {
+  background: #ffffff;
+  color: #187956;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(24, 139, 105, 0.06);
+}
+.chat-filter-seg__item.is-active::before,
+.chat-filter-seg__item.is-active + .chat-filter-seg__item::before {
+  opacity: 0;
+}
+.chat-aside-tab {
+  border: 0;
+  background: transparent;
+  color: #6b8979;
+  padding: 8px 2px 10px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+}
+.chat-aside-tab.is-active {
+  color: #188b69;
+  font-weight: 600;
+  border-bottom-color: #188b69;
+}
 .chat-counts { margin: 0 0 8px 2px; font-size: 11px; }
 .chat-target { width: 100%; border: 0; background: transparent; text-align: left; }
 .chat-target__meta { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .chat-target__meta b, .chat-target__meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-head__actions { display: flex; flex: none; flex-wrap: wrap; gap: 8px; align-items: center; }
-.chip.sel { background: #e5f6ed; border-color: #aad8c2; color: #187956; }
+.chat-head__copy h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.chat-head__desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.chat-target__meta small {
+  font-size: 11px;
+  line-height: 1.35;
+}
+.unread-badge {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e45757;
+  color: #fff;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+}
+.panel.chat { display: flex; flex-direction: column; min-height: 0; }
 </style>

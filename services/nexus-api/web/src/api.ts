@@ -148,6 +148,14 @@ export async function sendConversation(id: string, text: string, attachmentIds: 
   );
 }
 
+export async function interruptConversation(id: string): Promise<void> {
+  await read(await fetch(`/api/v1/conversations/${id}/interrupt`, { method: "POST", headers: headers() }));
+}
+
+export async function interruptChannel(id: string): Promise<void> {
+  await read(await fetch(`/api/v1/channels/${id}/interrupt`, { method: "POST", headers: headers() }));
+}
+
 export async function listChannels(): Promise<Channel[]> {
   const payload = await read<{ items: Channel[] }>(await fetch("/api/v1/channels"));
   return payload.items;
@@ -173,6 +181,8 @@ export interface TimelineItem {
   text: string;
   kind: string;
   created_at: string;
+  finished_at?: string | null;
+  usage?: { input_tokens?: number; output_tokens?: number } | null;
   attachments?: Attachment[];
 }
 

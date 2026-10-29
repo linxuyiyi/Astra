@@ -692,9 +692,92 @@ onBeforeUnmount(() => window.removeEventListener("keydown", focusInput));
   max-height: 240px;
   overflow: auto;
 }
-.markdown :deep(p) { margin: 0 0 0.6em; }
+/* GFM inside bubbles: override .bubble pre-wrap so MD HTML does not keep source newlines as gaps. */
+.markdown {
+  white-space: normal;
+  overflow-x: auto;
+}
+.attach-preview.markdown {
+  white-space: normal;
+}
+.markdown :deep(p) { margin: 0 0 0.55em; }
 .markdown :deep(p:last-child) { margin-bottom: 0; }
-.markdown :deep(code) { font-family: ui-monospace, monospace; }
+.markdown :deep(h1),
+.markdown :deep(h2),
+.markdown :deep(h3),
+.markdown :deep(h4),
+.markdown :deep(h5),
+.markdown :deep(h6) {
+  margin: 0.7em 0 0.35em;
+  line-height: 1.35;
+  font-weight: 700;
+  color: var(--ink, #203830);
+}
+.markdown :deep(h1:first-child),
+.markdown :deep(h2:first-child),
+.markdown :deep(h3:first-child),
+.markdown :deep(h4:first-child),
+.markdown :deep(h5:first-child),
+.markdown :deep(h6:first-child) { margin-top: 0; }
+.markdown :deep(h1) { font-size: 1.28em; } /* ~16–18px in bubble */
+.markdown :deep(h2) { font-size: 1.16em; font-weight: 650; }
+.markdown :deep(h3) { font-size: 1.08em; font-weight: 650; }
+.markdown :deep(h4),
+.markdown :deep(h5),
+.markdown :deep(h6) { font-size: 1em; font-weight: 650; }
+.markdown :deep(ul),
+.markdown :deep(ol) {
+  margin: 0.35em 0 0.55em;
+  padding-left: 1.45em;
+}
+.markdown :deep(ul) { list-style: disc outside; }
+.markdown :deep(ol) { list-style: decimal outside; }
+.markdown :deep(li) { margin: 0.15em 0; }
+.markdown :deep(li > ul),
+.markdown :deep(li > ol) { margin: 0.15em 0; }
+.markdown :deep(a) {
+  color: #188b69;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.markdown :deep(a:hover) { color: #0f6e52; }
+.markdown :deep(blockquote) {
+  margin: 0.5em 0;
+  padding: 0.25em 0 0.25em 0.85em;
+  border-left: 3px solid #a6d4bb;
+  color: #5a7466;
+  background: transparent;
+}
+.markdown :deep(blockquote p) { margin: 0.25em 0; }
+.markdown :deep(table) {
+  border-collapse: collapse;
+  width: max-content;
+  max-width: 100%;
+  margin: 0.5em 0;
+  font-size: 0.92em;
+}
+.markdown :deep(th),
+.markdown :deep(td) {
+  border: 1px solid #c5d9cd;
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.markdown :deep(th) {
+  background: #eef6f1;
+  font-weight: 650;
+  color: var(--ink, #203830);
+}
+.markdown :deep(tr:nth-child(even) td) { background: #f7fbf8; }
+.markdown :deep(hr) {
+  border: 0;
+  border-top: 1px solid #d5eade;
+  margin: 0.75em 0;
+}
+.markdown :deep(code) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+}
 .markdown :deep(pre) {
   margin: 8px 0;
   padding: 8px 10px;
@@ -702,6 +785,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", focusInput));
   background: #eef6f1;
   overflow: auto;
   max-height: 280px;
+  white-space: pre;
+}
+.markdown :deep(pre code) {
+  font-size: 0.9em;
+  background: transparent;
 }
 .sent-attachment.image { display: flex; gap: 8px; align-items: center; }
 .sent-attachment img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; }

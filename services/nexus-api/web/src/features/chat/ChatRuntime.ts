@@ -78,7 +78,7 @@ export class ChatRuntime {
         if (event.lines.length) this.state.notice = "";
         if (!this.isActive() && event.lines.length) this.bumpUnread(1);
       } else if (event.type === "notice") {
-        this.state.notice = shortText(event.text, event.text);
+        this.state.notice = shortText(event.text);
       } else if (event.type === "finished") {
         this.state.phase = "idle";
         this.state.liveLines = [];
@@ -130,7 +130,7 @@ export class ChatRuntime {
       this.updateSummary();
       if (this.state.draft === sentDraft) this.state.draft = "";
       if (sameIds(this.state.draftFiles.map((item) => item.id), fileIds)) this.state.draftFiles = [];
-      if (result.notice) this.state.notice = shortText(result.notice, result.notice);
+      if (result.notice) this.state.notice = shortText(result.notice);
       this.state.phase = "streaming";
       this.ensureFollow();
       return true;
@@ -145,9 +145,17 @@ export class ChatRuntime {
   async stop(): Promise<void> {
     const adapter = this.state.adapter;
     if (!adapter) return;
+    const generation = this.state.generation;
     this.state.phase = "interrupting";
     try {
       await adapter.interrupt();
+      // 若终止事件丢失，10s 后松开 interrupting，避免停止按钮永久 loading。
+      window.setTimeout(() => {
+        if (this.state.generation !== generation) return;
+        if (this.state.phase === "interrupting") {
+          this.state.phase = this.state.liveLines.length ? "streaming" : "idle";
+        }
+      }, 10_000);
     } catch (error) {
       this.state.notice = shortText(error);
       this.state.phase = this.state.liveLines.length ? "streaming" : "idle";
@@ -176,6 +184,41 @@ export class ChatRuntime {
 
   removeDraftFile(id: string) {
     this.state.draftFiles = this.state.draftFiles.filter((item) => item.id !== id);
+  }
+
+
+  /**
+   * 壳内 HITL 选择：只更新 live/history 工具态，不另开 AgentWork/PR#12 通道。
+   * 允许 / 允许并记住 → allowed；拒绝 → finished。卡片随 state 离开 asking。
+   */
+  resolveHitl(toolId: string, choice: "yes" | "yes_with_rule" | "no") {
+    if (!toolId) return;
+    const next = choice === "no" ? "finished" : "allowed";
+    let touched = false;
+    this.state.liveLines = this.state.liveLines.map((line) => {
+      let changed = false;
+      const tools = line.tools.map((tool) => {
+        if (tool.id !== toolId || tool.state !== "asking") return tool;
+        changed = true;
+        touched = true;
+        return { ...tool, state: next };
+      });
+      return changed ? { ...line, tools } : line;
+    });
+    this.state.messages = this.state.messages.map((message) => {
+      const tools = message.tools;
+      if (!tools?.some((tool) => tool.id === toolId && tool.state === "asking")) return message;
+      touched = true;
+      return {
+        ...message,
+        tools: tools.map((tool) =>
+          tool.id === toolId && tool.state === "asking" ? { ...tool, state: next } : tool,
+        ),
+      };
+    });
+    if (touched && this.state.liveLines.every((line) => !line.tools.some((tool) => tool.state === "asking"))) {
+      // 无其它待确认时保持当前 phase；不强制 idle，避免打断仍在流式的文本。
+    }
   }
 
   setError(error: unknown) {

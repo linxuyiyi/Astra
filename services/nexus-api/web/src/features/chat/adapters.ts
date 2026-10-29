@@ -48,6 +48,36 @@ function fromTimeline(item: TimelineItem): ChatMessage {
   };
 }
 
+
+function applyRequireUserConfirm(tools: LiveTool[], event: Record<string, unknown>) {
+  const calls = Array.isArray(event.tool_calls) ? event.tool_calls : [];
+  for (const raw of calls) {
+    if (!raw || typeof raw !== "object") continue;
+    const call = raw as Record<string, unknown>;
+    const id = typeof call.id === "string" ? call.id : "";
+    if (!id) continue;
+    const card = ensureTool(tools, id, typeof call.name === "string" ? call.name : "");
+    if (typeof call.input === "string" && call.input && !card.input) card.input = call.input;
+    card.state = "asking";
+  }
+}
+
+function applyUserConfirmResult(tools: LiveTool[], event: Record<string, unknown>) {
+  const results = Array.isArray(event.confirm_results) ? event.confirm_results : [];
+  for (const raw of results) {
+    if (!raw || typeof raw !== "object") continue;
+    const result = raw as Record<string, unknown>;
+    const toolCall = result.tool_call && typeof result.tool_call === "object"
+      ? (result.tool_call as Record<string, unknown>)
+      : null;
+    const id = toolCall && typeof toolCall.id === "string" ? toolCall.id : "";
+    if (!id) continue;
+    const card = tools.find((item) => item.id === id);
+    if (!card || card.state !== "asking") continue;
+    card.state = result.confirmed ? "allowed" : "finished";
+  }
+}
+
 function ensureTool(tools: LiveTool[], id: string, name = "") {
   let card = tools.find((item) => item.id === id);
   if (!card) {
@@ -212,6 +242,23 @@ export class PrivateChatAdapter implements ChatAdapter {
               publishLive();
               return;
             }
+            if (event.type === "TOOL_CALL_END" && typeof event.tool_call_id === "string") {
+              // 参数收齐；若随后 REQUIRE_USER_CONFIRM 会把 state 打成 asking。
+              ensureTool(this.liveTools, event.tool_call_id);
+              publishLive();
+              return;
+            }
+            if (event.type === "REQUIRE_USER_CONFIRM") {
+              liveActive = true;
+              applyRequireUserConfirm(this.liveTools, event);
+              publishLive();
+              return;
+            }
+            if (event.type === "USER_CONFIRM_RESULT") {
+              applyUserConfirmResult(this.liveTools, event);
+              publishLive();
+              return;
+            }
             if (event.type === "TOOL_RESULT_START" && typeof event.tool_call_id === "string") {
               ensureTool(this.liveTools, event.tool_call_id).state = "done";
               publishLive();
@@ -349,13 +396,21 @@ export class GroupChatAdapter implements ChatAdapter {
       }
     };
 
+    // 对齐私聊 follow：同连接/重连保活，不因 quiet 或 120s 自退丢流。
     const followChannel = async () => {
-      try {
-        await readEventStream(`/api/v1/channels/${this.channel.id}/events`, signal, () => {
-          void reload();
-        });
-      } catch (error) {
-        if (!signal.aborted) emit({ type: "notice", text: error instanceof Error ? error.message : "事件流中断" });
+      for (let attempt = 0; attempt < 32; attempt += 1) {
+        if (signal.aborted) return;
+        try {
+          await readEventStream(`/api/v1/channels/${this.channel.id}/events`, signal, () => {
+            void reload();
+          });
+          if (signal.aborted) return;
+          await delay(400, signal);
+        } catch (error) {
+          if (signal.aborted) return;
+          emit({ type: "notice", text: error instanceof Error ? error.message : "事件流中断" });
+          await delay(1000, signal);
+        }
       }
     };
 
@@ -363,93 +418,139 @@ export class GroupChatAdapter implements ChatAdapter {
       const seen = this.memberSeen.get(employeeId) ?? new Set<string>();
       this.memberSeen.set(employeeId, seen);
       const cursor = { value: this.memberCursors.get(employeeId) ?? "" };
-      try {
-        const params = new URLSearchParams({ raw: "1" });
-        if (cursor.value) params.set("after", cursor.value);
-        await readEventStream(
-          `/api/v1/channels/${this.channel.id}/members/${employeeId}/stream?${params.toString()}`,
-          signal,
-          (event) => {
-            cursor.value = streamCursor(cursor.value, event.id);
-            this.memberCursors.set(employeeId, cursor.value);
-            if (typeof event.id === "string") {
-              if (seen.has(event.id)) return;
-              seen.add(event.id);
-            }
-            if (event.type === "REPLY_START") {
-              this.liveState.set(employeeId, {
-                employeeId,
-                name: this.speakerName(employeeId),
-                text: "",
-                tools: [],
-              });
-              publishLive();
-              return;
-            }
-            if (event.type === "TEXT_BLOCK_DELTA" && typeof event.delta === "string") {
-              const line = this.liveState.get(employeeId);
-              if (line) line.text += event.delta;
-              else this.liveState.set(employeeId, { employeeId, name: this.speakerName(employeeId), text: event.delta, tools: [] });
-              publishLive();
-              return;
-            }
-            if (event.type === "TOOL_CALL_START" && typeof event.tool_call_id === "string") {
-              const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
-              ensureTool(line.tools, event.tool_call_id, typeof event.tool_call_name === "string" ? event.tool_call_name : "");
-              this.liveState.set(employeeId, line);
-              publishLive();
-              return;
-            }
-            if (event.type === "TOOL_RESULT_TEXT_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
-              const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
-              ensureTool(line.tools, event.tool_call_id).output += event.delta;
-              this.liveState.set(employeeId, line);
-              publishLive();
-              return;
-            }
-            if (event.type === "REPLY_END" || event.type === "NEXUS_RUN_FINISHED") {
-              this.liveState.delete(employeeId);
-              publishLive();
-              void reload();
-              return;
-            }
-            if (event.type === "NEXUS_UPSTREAM_ERROR") {
-              emit({ type: "notice", text: String(event.detail ?? "事件流中断") });
-            }
-          },
-        );
-      } catch (error) {
-        if (!signal.aborted) emit({ type: "notice", text: error instanceof Error ? error.message : "事件流中断" });
+      for (let attempt = 0; attempt < 32; attempt += 1) {
+        if (signal.aborted) return;
+        try {
+          const params = new URLSearchParams({ raw: "1" });
+          if (cursor.value) params.set("after", cursor.value);
+          await readEventStream(
+            `/api/v1/channels/${this.channel.id}/members/${employeeId}/stream?${params.toString()}`,
+            signal,
+            (event) => {
+              cursor.value = streamCursor(cursor.value, event.id);
+              this.memberCursors.set(employeeId, cursor.value);
+              if (typeof event.id === "string") {
+                if (seen.has(event.id)) return;
+                seen.add(event.id);
+              }
+              if (event.type === "REPLY_START") {
+                this.liveState.set(employeeId, {
+                  employeeId,
+                  name: this.speakerName(employeeId),
+                  text: "",
+                  tools: [],
+                });
+                publishLive();
+                return;
+              }
+              if (event.type === "TEXT_BLOCK_DELTA" && typeof event.delta === "string") {
+                const line = this.liveState.get(employeeId);
+                if (line) line.text += event.delta;
+                else this.liveState.set(employeeId, { employeeId, name: this.speakerName(employeeId), text: event.delta, tools: [] });
+                publishLive();
+                return;
+              }
+              if (event.type === "TOOL_CALL_START" && typeof event.tool_call_id === "string") {
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                ensureTool(line.tools, event.tool_call_id, typeof event.tool_call_name === "string" ? event.tool_call_name : "");
+                this.liveState.set(employeeId, line);
+                publishLive();
+                return;
+              }
+              if (event.type === "TOOL_CALL_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                ensureTool(line.tools, event.tool_call_id).input += event.delta;
+                this.liveState.set(employeeId, line);
+                publishLive();
+                return;
+              }
+              if (event.type === "TOOL_CALL_END" && typeof event.tool_call_id === "string") {
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                ensureTool(line.tools, event.tool_call_id);
+                this.liveState.set(employeeId, line);
+                publishLive();
+                return;
+              }
+              if (event.type === "TOOL_RESULT_TEXT_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                ensureTool(line.tools, event.tool_call_id).output += event.delta;
+                this.liveState.set(employeeId, line);
+                publishLive();
+                return;
+              }
+              if (event.type === "TOOL_RESULT_START" && typeof event.tool_call_id === "string") {
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                ensureTool(line.tools, event.tool_call_id).state = "done";
+                this.liveState.set(employeeId, line);
+                publishLive();
+                return;
+              }
+              if (event.type === "REQUIRE_USER_CONFIRM") {
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                applyRequireUserConfirm(line.tools, event);
+                this.liveState.set(employeeId, line);
+                publishLive();
+                return;
+              }
+              if (event.type === "USER_CONFIRM_RESULT") {
+                const line = this.liveState.get(employeeId);
+                if (line) {
+                  applyUserConfirmResult(line.tools, event);
+                  publishLive();
+                }
+                return;
+              }
+              if (event.type === "REPLY_END" || event.type === "NEXUS_RUN_FINISHED") {
+                const reason = String(event.finished_reason ?? "");
+                if (reason === "error" || reason === "interrupted") {
+                  emit({ type: "notice", text: reason === "interrupted" ? "回复已中断" : "回复失败" });
+                }
+                this.liveState.delete(employeeId);
+                publishLive();
+                emit({ type: "finished" });
+                void reload();
+                // raw=1 下继续听下一轮，不退出 follow。
+                return;
+              }
+              if (event.type === "NEXUS_UPSTREAM_ERROR") {
+                emit({ type: "notice", text: String(event.detail ?? "事件流中断") });
+              }
+            },
+          );
+          if (signal.aborted) return;
+          await delay(400, signal);
+        } catch (error) {
+          if (signal.aborted) return;
+          emit({ type: "notice", text: error instanceof Error ? error.message : "事件流中断" });
+          await delay(1000, signal);
+        }
       }
     };
 
     void followChannel();
     const watching = new Set<string>();
-    const started = Date.now();
-    let quiet = 0;
-    while (!signal.aborted && Date.now() - started < 120_000) {
+    while (!signal.aborted) {
       let payload;
       try {
         payload = await channelMessages(this.channel.id);
-      } catch {
-        break;
+      } catch (error) {
+        if (signal.aborted) return;
+        emit({ type: "notice", text: error instanceof Error ? error.message : "事件流中断" });
+        await delay(1000, signal);
+        continue;
       }
       if (signal.aborted) return;
       this.channel.members = payload.members;
       if (payload.history_error) emit({ type: "notice", text: payload.history_error });
-      let opened = 0;
       for (const member of payload.members) {
         if (!member.agentscope_session_id || watching.has(member.employee_id)) continue;
         watching.add(member.employee_id);
-        opened += 1;
         void followMember(member.employee_id);
       }
-      if (opened) quiet = 0;
-      else quiet += 1;
-      if (quiet >= 3 && this.liveState.size === 0) break;
       await delay(1000, signal);
     }
   }
+
 }
 
 export function imageFile(type: string) {

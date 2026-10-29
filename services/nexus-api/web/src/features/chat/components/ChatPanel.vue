@@ -22,7 +22,7 @@
           <div class="muted">{{ senderLabel(message) }}</div>
           <div v-if="message.text" class="bubble markdown" v-html="renderMarkdown(message.text)" />
           <template v-for="tool in message.tools || []" :key="tool.id">
-            <HitlCard v-if="tool.state === 'asking'" :tool="asLiveTool(tool)" @confirm="onHitl" />
+            <HitlCard v-if="tool.state === 'asking'" :tool="asLiveTool(tool)" @confirm="(choice) => onHitl(tool.id, choice)" />
             <details v-else class="tool-card" :open="!shouldCollapse(tool.output || tool.input)">
               <summary>{{ tool.name || '工具' }} · {{ tool.state || 'done' }}</summary>
               <pre v-if="tool.input">{{ tool.input }}</pre>
@@ -78,7 +78,7 @@
           <div v-if="line.text" class="bubble markdown" v-html="renderMarkdown(line.text)" />
           <div v-else class="bubble muted streaming-placeholder">正在生成…</div>
           <template v-for="tool in line.tools" :key="tool.id">
-            <HitlCard v-if="tool.state === 'asking'" :tool="tool" @confirm="onHitl" />
+            <HitlCard v-if="tool.state === 'asking'" :tool="tool" @confirm="(choice) => onHitl(tool.id, choice)" />
             <details v-else class="tool-card" open>
               <summary>{{ tool.name || '工具' }} · {{ tool.state || 'running' }}</summary>
               <pre v-if="tool.input">{{ tool.input }}</pre>
@@ -275,8 +275,9 @@ function asLiveTool(tool: { id: string; name: string; input: string; output: str
   return { id: tool.id, name: tool.name, input: tool.input, output: tool.output, state: tool.state };
 }
 
-function onHitl(_choice: "yes" | "yes_with_rule" | "no") {
-  // 展示接线完成；真正放行仍走既有 HITL/PR#12 机制，此处不另开通道。
+function onHitl(toolId: string, choice: "yes" | "yes_with_rule" | "no") {
+  // 壳内接线：更新 asking→allowed/finished。真正放行仍走既有 HITL/PR#12，不另开通道。
+  props.runtime.resolveHitl(toolId, choice);
 }
 
 async function doSend() {

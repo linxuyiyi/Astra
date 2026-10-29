@@ -1,0 +1,4 @@
+{"mysql": "8.0.36", "isolation": "REPEATABLE-READ"}
+{"dispatcher": {"unrelated_pending_task_skipped": true, "other_worker_heartbeat": "1205"}}
+{"json_guard": {"plain_string_equal": 0, "cast_json_equal": 1, "time_noop_matched_rows": 1, "http_status": 409}}
+{"op_environment_lock_order": {"mysql_error_codes": ["1213"]}}

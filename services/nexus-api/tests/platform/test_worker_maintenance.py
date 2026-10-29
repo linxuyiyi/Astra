@@ -1529,6 +1529,38 @@ async def test_health_json_contract_and_stale_blocking():
 
 
 @pytest.mark.asyncio
+async def test_probe_age_does_not_downgrade_busy_worker_and_expires_when_idle():
+    checked_at = datetime.now(UTC) - timedelta(hours=1)
+    environment_id, employee_id = await make_environment(
+        status="AVAILABLE", last_checked_at=checked_at,
+        status_detail={"observed_at": checked_at.isoformat(), "observed_epoch": 1, "observed_online": True},
+    )
+    task_id = "task-" + uuid4().hex
+    async with SessionLocal() as db:
+        db.add(WorkerInstance(
+            id="wrk-age-" + uuid4().hex, environment_id=environment_id,
+            token_digest=gateway_key_digest("test-age-token"), status="online", epoch=1,
+        ))
+        db.add(Task(
+            id=task_id, title="long running", task_type="ISSUE", category_id="testing-platform",
+            employee_id=employee_id, status="RUNNING",
+        ))
+        await db.commit()
+        busy = await environment_health(db, environment_id)
+        assert busy["runtime_health"]["status"] == "AVAILABLE"
+        assert busy["runtime_health"]["last_checked_at"] == checked_at.isoformat()
+        assert any(item["code"] == "occupied_task" for item in busy["blocking"])
+        assert not any(item["code"] == "health_stale" for item in busy["blocking"])
+        assert busy["schedulable"] is False
+        task = await db.get(Task, task_id)
+        task.status = "SUCCEEDED"
+        await db.commit()
+        idle = await environment_health(db, environment_id)
+        assert idle["runtime_health"]["status"] == "UNKNOWN"
+        assert any(item["code"] == "health_stale" for item in idle["blocking"])
+
+
+@pytest.mark.asyncio
 async def test_stale_health_blocks_manual_task_start():
     environment_id, employee_id = await make_environment(
         status="AVAILABLE",
@@ -2128,7 +2160,7 @@ def _healthy_observation(desired):
         "model": {
             "status": "healthy",
             "model": desired["model"]["name"],
-            "authenticated": True,
+            "configured": True,
         },
         "mcp": {
             "status": "healthy",
@@ -2371,11 +2403,14 @@ async def test_latest_and_history_follow_last_attempt_time():
 
 @pytest.mark.asyncio
 async def test_dirty_git_diff_does_not_block_but_real_equipment_drift_does(monkeypatch):
+    from app.gateway.models import GatewayRoute
     from app.runtime.maintenance import _deployed_from_desired, _schedulability_blockers
     from app.runtime.worker_health import desired_equipment, equipment_rows
 
     environment_id, environment, _repo_id = await _repository_environment()
     async with SessionLocal() as db:
+        db.add(GatewayRoute(id="rt-test-model", model="test-model", pool_id="gp_default", enabled=True))
+        await db.commit()
         desired = await desired_equipment(db, environment)
     deployed = _deployed_from_desired(desired)
     observation = _healthy_observation(desired)

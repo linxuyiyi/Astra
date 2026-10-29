@@ -298,6 +298,7 @@ class RuntimeService:
         elif state.status in {
             RuntimeSessionStatus.RUNNING.value,
             RuntimeSessionStatus.WAITING.value,
+            RuntimeSessionStatus.UNKNOWN.value,
         }:
             # finished_at only ever holds the current terminal time.
             runtime_session.finished_at = None
@@ -377,12 +378,8 @@ class RuntimeService:
             # 通信失败不改 Task 状态。缺失和传输未知的原因在这里写。
             if state.terminal_reason == SessionTerminalReason.SESSION_MISSING.value:
                 task.waiting_reason = "SESSION_MISSING"
-            elif state.terminal_reason == SessionTerminalReason.TRANSPORT_UNKNOWN.value:
+            else:
                 task.waiting_reason = "TRANSPORT_RECOVERY"
-            await self.session.commit()
-            return
-        if state.terminal_reason == SessionTerminalReason.UNCONFIRMED.value:
-            task.waiting_reason = "TRANSPORT_RECOVERY"
             await self.session.commit()
             return
         previous_status = TaskStatus(task.status)
@@ -494,7 +491,7 @@ class RuntimeService:
                 status = await client.status(directory, session_id)
             except OpenCodeSessionNotFound:
                 return
-            if status not in {"busy", "retry"}:
+            if status == "idle":
                 return
             await asyncio.sleep(0.2)
         raise RuntimeStateError(message or "旧 Session 未在超时时间内停止，未创建新 Session")
@@ -1815,49 +1812,65 @@ class RuntimeService:
             else:
                 await self._project_session_state(task_snapshot, recovered)
             return task_snapshot
-        confirmed_terminal = (
-            binding and binding.terminal_reason != SessionTerminalReason.UNCONFIRMED.value
-        )
-        waiting_for_terminal = task_snapshot.status == TaskStatus.WAITING and binding and (
-            binding.status in {RuntimeSessionStatus.FAILED.value, RuntimeSessionStatus.INTERRUPTED.value}
-        )
-        if not canceling and settled and confirmed_terminal and waiting_for_terminal:
-            # unconfirmed is not a settled fact: a later transcript can still
-            # show that this same round actually finished. A confirmed terminal
-            # result replaces a stale transport-recovery reason through the
-            # same projection.
-            task_snapshot.runtime_connection = "CONNECTED"
-            task_snapshot.runtime_error = None
-            await self.apply_session_state(
-                task_snapshot,
-                SessionState(
-                    status=binding.status,
-                    terminal_reason=binding.terminal_reason,
-                    finish_reason=binding.finish_reason,
-                    finished_at=binding.finished_at,
-                ),
-            )
-            return task_snapshot
         turn_started = task_snapshot.turn_started_at
         task_status = task_snapshot.status
         await self.session.commit()
 
-        timed_out = False
+        timeout_error = None
         if (
-            status in {"busy", "retry"}
+            not canceling
+            and not task_snapshot.pending_message_id
+            and status in {"busy", "retry"}
             and not has_pending
             and task_status == TaskStatus.RUNNING
             and turn_started
         ):
             started = turn_started if turn_started.tzinfo else turn_started.replace(tzinfo=UTC)
             if (datetime.now(UTC) - started).total_seconds() >= get_settings().opencode_timeout_seconds:
-                await client.abort(directory, session_id)
-                timed_out = True
+                if await client.abort(directory, session_id):
+                    try:
+                        try:
+                            watched = await session_tree(client, directory, session_id)
+                        except OpenCodeSessionNotFound:
+                            watched = {session_id}
+                        for watched_id in sorted(watched):
+                            await self._wait_for_session_stop(
+                                client, directory, watched_id,
+                                message="执行已超时，停止尚未确认；继续核对原生状态",
+                            )
+                    except RuntimeStateError as exc:
+                        timeout_error = str(exc)
+                    else:
+                        messages, native_count = await self._collect_final_usage(
+                            client, directory, session_id
+                        )
+                        task = await self.lock_task(task_id)
+                        if (task.current_session_id != session_id or task.last_message_id != observed_anchor
+                                or task.turn_started_at != observed_turn or _task_result_concluded(task)):
+                            await self.session.rollback()
+                            return task
+                        if messages is not None:
+                            await self._update_session_usage(
+                                task, messages, native_session_count=native_count
+                            )
+                        task.runtime_connection = "CONNECTED"
+                        task.runtime_error = None
+                        await self.apply_session_state(
+                            task,
+                            SessionState(
+                                status=RuntimeSessionStatus.INTERRUPTED.value,
+                                terminal_reason=SessionTerminalReason.TIMEOUT.value,
+                            ),
+                        )
+                        return task
+                else:
+                    timeout_error = "执行已超时，原生停止请求未被受理；执行状态继续核对"
+                if timeout_error:
+                    status = await client.status(directory, session_id)
         if (
             not canceling
             and status in {"busy", "retry"}
             and not task_snapshot.pending_message_id
-            and not timed_out
         ):
             task = await self.lock_task(task_id)
             if (task.current_session_id != session_id or task.last_message_id != observed_anchor
@@ -1865,7 +1878,7 @@ class RuntimeService:
                 await self.session.rollback()
                 return task
             task.runtime_connection = "CONNECTED"
-            task.runtime_error = None
+            task.runtime_error = timeout_error
             observed = RuntimeSessionStatus.WAITING if has_pending else RuntimeSessionStatus.RUNNING
             await self.apply_session_state(task, SessionState(status=observed.value))
             return task
@@ -1879,6 +1892,11 @@ class RuntimeService:
                     )
                 except OpenCodeSessionNotFound:
                     continue
+            # The transcript and the initial status are independent native
+            # reads. Recheck before deriving a result from an old idle sample.
+            status = await client.status(directory, session_id)
+            questions = await client.questions(directory)
+            permissions = await client.permissions(directory)
         except MessageHistoryIncomplete:
             task = await self.lock_task(task_id)
             if task.current_session_id == session_id and not _task_result_concluded(task):
@@ -1898,7 +1916,7 @@ class RuntimeService:
                 task, "RUNTIME_CONNECTED", "runtime", "OpenCode Runtime 已连接", commit=False
             )
         task.runtime_connection = "CONNECTED"
-        task.runtime_error = None
+        task.runtime_error = timeout_error
         if _task_result_concluded(task):
             await self.session.commit()
             return task
@@ -1929,15 +1947,27 @@ class RuntimeService:
             pending_ack=False,
             turn_anchor_id=task.last_message_id,
             turn_started_at=task.turn_started_at,
-            timed_out=timed_out,
             grace_seconds=get_settings().opencode_no_reply_grace_seconds,
         )
+        binding = await self._runtime_session(task)
+        if (status == "idle" and state.status in {"RUNNING", "UNKNOWN"} and binding
+                and binding.status == RuntimeSessionStatus.INTERRUPTED.value
+                and binding.terminal_reason in {SessionTerminalReason.ABORTED.value,
+                                                SessionTerminalReason.TIMEOUT.value}):
+            # An explicitly confirmed stop remains a fact when history is still
+            # incomplete. We did reread it, so a later real result can supersede it.
+            state = SessionState(
+                status=binding.status, terminal_reason=binding.terminal_reason,
+                finished_at=binding.finished_at, last_message_id=state.last_message_id,
+            )
         if state.status == RuntimeSessionStatus.WAITING.value:
             await record_assistance_requests(self.session, task, [
                 f"{kind}:{item['id']}"
                 for kind, items in (("question", questions), ("permission", permissions))
                 for item in items if item.get("sessionID") in allowed_sessions
             ])
+        if state.status == RuntimeSessionStatus.UNKNOWN.value and not task.runtime_error:
+            task.runtime_error = "原生会话已空闲，但当前回合结果尚未确认；保留占用并继续核对"
         await self.apply_session_state(task, state)
         return task
 
@@ -2160,9 +2190,8 @@ class RuntimeService:
                 .where(AgentWorker.enabled.is_(True))
             )
         ).all()
-        # The initial SELECT starts a transaction. Close it before any network
-        # probe so no autoflushed employee UPDATE can remain locked while a later
-        # OpenCode health check stalls.
+        # Availability is checked by the idle-only equipment observer. This loop
+        # only projects occupancy and the last stored environment observation.
         await self.session.commit()
 
         healthy: list[str] = []
@@ -2171,60 +2200,26 @@ class RuntimeService:
             if not environment:
                 continue
 
-            occupying = await self.session.scalar(
-                select(Task.id).where(occupying_clause(employee.id)).limit(1)
+            fresh = await self.session.scalar(
+                select(AgentWorker).where(AgentWorker.id == employee.id)
+                .with_for_update().execution_options(populate_existing=True)
             )
-            await self.session.commit()
-
-            # Employee Serve is intentionally on-demand. No occupying task means an
-            # absent OpenCode listener is normal; rely on the last explicit
-            # environment check instead of marking the employee OFFLINE.
-            if occupying is None:
-                fresh = await self.session.get(AgentWorker, employee.id)
-                if fresh:
-                    await sync_employee_occupancy(self.session, fresh.id)
-                    if fresh.status not in {EmployeeStatus.PAUSED, EmployeeStatus.ERROR}:
-                        if environment.status == "AVAILABLE":
-                            fresh.status = EmployeeStatus.IDLE
-                            fresh.last_heartbeat = datetime.now(UTC)
-                            healthy.append(fresh.id)
-                        else:
-                            fresh.status = EmployeeStatus.OFFLINE
-                await self.session.commit()
-                continue
-
-            try:
-                # Active work expects a Serve. Start/recover it if necessary,
-                # then verify health without holding any database transaction.
-                async with connect(environment, start=True) as client:
-                    await client.health()
-                probe_error = None
-            except Exception as exc:
-                probe_error = exc
-
-            fresh = await self.session.get(AgentWorker, employee.id)
             if not fresh:
                 await self.session.rollback()
                 continue
             await sync_employee_occupancy(self.session, fresh.id)
-            current = await self.session.scalar(
-                select(Task).where(occupying_clause(fresh.id)).limit(1)
-            )
-            if probe_error is not None:
-                if fresh.status not in {EmployeeStatus.PAUSED, EmployeeStatus.ERROR}:
-                    fresh.status = EmployeeStatus.OFFLINE
+            if fresh.current_task_count:
+                # Do not probe or fabricate a heartbeat while a task owns this
+                # Worker. Session reconciliation and Worker connection heartbeats
+                # retain their own fact sources.
                 await self.session.commit()
                 continue
-
-            fresh.last_heartbeat = datetime.now(UTC)
-            healthy.append(fresh.id)
             if fresh.status not in {EmployeeStatus.PAUSED, EmployeeStatus.ERROR}:
-                fresh.status = (
-                    EmployeeStatus.WAIT_HUMAN
-                    if current and current.status == TaskStatus.WAITING
-                    else EmployeeStatus.WORKING
-                    if current
-                    else EmployeeStatus.IDLE
-                )
+                if environment.status == "AVAILABLE":
+                    fresh.status = EmployeeStatus.IDLE
+                    fresh.last_heartbeat = datetime.now(UTC)
+                    healthy.append(fresh.id)
+                else:
+                    fresh.status = EmployeeStatus.OFFLINE
             await self.session.commit()
         return healthy

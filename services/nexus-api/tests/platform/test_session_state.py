@@ -117,7 +117,7 @@ def test_aged_idle_incomplete_assistant_requires_recovery():
         turn_anchor_id="new",
         turn_started_at=NOW - timedelta(minutes=5),
     )
-    assert state.status == "INTERRUPTED"
+    assert state.status == "UNKNOWN"
     assert state.terminal_reason == "incomplete"
 
 
@@ -132,14 +132,14 @@ def test_just_submitted_without_reply_stays_running():
     assert state.status == "RUNNING"
 
 
-def test_aged_turn_without_reply_is_failed():
+def test_aged_turn_without_reply_is_unknown():
     state = derive(
         [user("u1")],
         server_status="idle",
         turn_started_at=NOW - timedelta(minutes=5),
         grace_seconds=15,
     )
-    assert state.status == "FAILED"
+    assert state.status == "UNKNOWN"
     assert state.terminal_reason == "no_reply"
 
 
@@ -175,7 +175,7 @@ def test_missing_anchor_converges_after_grace_without_inventing_success():
         server_status="idle",
         turn_started_at=NOW - timedelta(minutes=5),
     )
-    assert state.status == "INTERRUPTED"
+    assert state.status == "UNKNOWN"
     assert state.terminal_reason == "unconfirmed"
 
 
@@ -195,5 +195,5 @@ def test_aged_new_user_after_old_error_is_no_reply():
         turn_anchor_id="u1",
         turn_started_at=NOW - timedelta(minutes=5),
     )
-    assert state.status == "FAILED"
+    assert state.status == "UNKNOWN"
     assert state.terminal_reason == "no_reply"

@@ -1,0 +1,6 @@
+stale_idle: native=busy, session=INTERRUPTED/incomplete, task=WAITING
+.sticky_terminal: native transcript=completed, session=INTERRUPTED, history not reread
+.timeout: abort=False, native=busy, session=INTERRUPTED/timeout
+.heartbeat: another transaction committed PAUSED, stale probe overwrote it with WORKING
+.
+4 passed, 37 warnings in 0.90s

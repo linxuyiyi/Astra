@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.settings import Settings, get_settings
 from app.domain import EmployeeStatus
 from app.models import AgentWorker
+from app.runtime.occupancy import blocking_session_exists, occupying_exists
 
 
 async def heartbeat_active_employees(session: AsyncSession) -> list[str]:
@@ -22,10 +23,14 @@ async def mark_stale_employees_offline(session: AsyncSession, settings: Settings
                 select(AgentWorker).where(
                     AgentWorker.last_heartbeat.is_not(None),
                     AgentWorker.last_heartbeat < threshold,
+                    ~occupying_exists(AgentWorker.id),
+                    ~blocking_session_exists(AgentWorker.id),
                     AgentWorker.status.not_in(
                         [EmployeeStatus.OFFLINE, EmployeeStatus.PAUSED, EmployeeStatus.ERROR]
                     ),
                 )
+                .with_for_update(skip_locked=True)
+                .execution_options(populate_existing=True)
             )
         )
         .scalars()

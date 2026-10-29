@@ -152,10 +152,9 @@ def derive_session_state(
     if turn_anchor_id and not turn:
         if server_status == "idle" and _grace_elapsed(turn_started_at, now, grace_seconds):
             return SessionState(
-                status=RuntimeSessionStatus.INTERRUPTED.value,
+                status=RuntimeSessionStatus.UNKNOWN.value,
                 terminal_reason=SessionTerminalReason.UNCONFIRMED.value,
                 last_message_id=last_message_id,
-                finished_at=now,
             )
         return SessionState(
             status=RuntimeSessionStatus.RUNNING.value, last_message_id=last_message_id
@@ -191,23 +190,20 @@ def derive_session_state(
             )
         if server_status == "idle" and turn and _grace_elapsed(turn_started_at, now, grace_seconds):
             return SessionState(
-                status=RuntimeSessionStatus.INTERRUPTED.value,
+                status=RuntimeSessionStatus.UNKNOWN.value,
                 terminal_reason=SessionTerminalReason.INCOMPLETE.value,
                 last_message_id=last_message_id or assistant_info.get("id"),
-                finished_at=now,
             )
         return SessionState(
             status=RuntimeSessionStatus.RUNNING.value, last_message_id=last_message_id
         )
 
-    # No assistant reply in this turn. A turn only counts as ended without a
-    # reply once the native server is idle and the grace window has passed, so a
-    # just-submitted prompt is never mistaken for a failed one.
+    # Idle plus missing output is incomplete evidence, not a failed execution.
+    # The grace window only delays the unknown-result indication after submit.
     if server_status == "idle" and turn and _grace_elapsed(turn_started_at, now, grace_seconds):
         return SessionState(
-            status=RuntimeSessionStatus.FAILED.value,
+            status=RuntimeSessionStatus.UNKNOWN.value,
             terminal_reason=SessionTerminalReason.NO_REPLY.value,
             last_message_id=last_message_id,
-            finished_at=now,
         )
     return SessionState(status=RuntimeSessionStatus.RUNNING.value, last_message_id=last_message_id)

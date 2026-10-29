@@ -1,4 +1,4 @@
-"""单仓分配记下 base commit。未指定仓库不派单，占用中的 Worker 不被另一条任务领走。"""
+"""单仓分配保存配置快照，base commit 在工作区准备后读取。占用 Worker 不重复领单。"""
 
 import subprocess
 from datetime import UTC, datetime
@@ -92,10 +92,10 @@ def _commit(workspace) -> str:
 
 
 @pytest.mark.asyncio
-async def test_dispatch_stays_on_one_repository_and_records_the_base_commit(session, tmp_path):
+async def test_dispatch_stays_on_one_repository_and_defers_the_base_commit(session, tmp_path):
     workspace = tmp_path / "work"
     workspace.mkdir()
-    head = _commit(workspace)
+    _commit(workspace)
     session.add(_employee())
     session.add(_environment(str(workspace)))
     session.add(
@@ -126,8 +126,8 @@ async def test_dispatch_stays_on_one_repository_and_records_the_base_commit(sess
     claimed = await Dispatcher(session).claim_once()
     assert claimed is not None
     assert claimed.id == "T-same"
-    assert claimed.base_commit == head
-    assert claimed.execution_environment_snapshot["base_commit"] == head
+    assert claimed.base_commit is None
+    assert "base_commit" not in claimed.execution_environment_snapshot
     assert claimed.execution_environment_snapshot["capability_revision"] == binding_revision(["review"])
     assert claimed.execution_environment_snapshot["model_name"] == "nexus-gateway/demo"
     assert await Dispatcher(session).claim_once() is None

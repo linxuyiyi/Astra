@@ -25,32 +25,66 @@ test("degraded data never presents a normal idle/working employee; waiting overr
   );
   assert.equal(employeeState({ ...employee, enabled: false }, true), "offline");
 });
-test("three/six desks remain separate and focus stays in the visible office area", () => {
-  for (const count of [3, 6]) {
-    const stations = stationPositions(count);
-    assert.equal(new Set(stations.map((p) => `${p.x}:${p.y}`)).size, count);
+test("one to twelve stations fit the overview and the area beside the workbench", () => {
+  for (const count of [1, 3, 4, 6, 7, 9, 12]) {
     for (const [w, h] of [
       [1280, 720],
       [1920, 1080],
+      [1024, 768],
       [390, 844],
     ]) {
-      const overview = officeCamera(w!, h!, count);
-      for (const desk of stations) {
-        const x = overview.x + desk.x * overview.scale,
-          y = overview.y + desk.y * overview.scale;
-        assert.ok(x > 0 && x < w!);
-        assert.ok(y > overview.wallHeight && y < h! - 60);
-      }
-      for (let index = 0; index < count; index++) {
-        const focus = officeCamera(w!, h!, count, index),
-          desk = stations[index]!;
-        const x = focus.x + desk.x * focus.scale,
-          y = focus.y + desk.y * focus.scale;
-        assert.ok(x > 0 && x < (w! < 760 ? w! : w! - 365));
-        assert.ok(y > focus.wallHeight && y < (w! < 760 ? h! * 0.44 : h!));
+      const stations = stationPositions(count, w);
+      assert.equal(new Set(stations.map((p) => `${p.x}:${p.y}`)).size, count);
+      const overview = officeCamera(w, h, count);
+      assert.ok(
+        overview.scale <= 0.78,
+        "a small team must not fill the screen with oversized sprites",
+      );
+      for (const open of [false, true]) {
+        const view = officeCamera(w, h, count, open);
+        const right =
+          w - (open && w >= 760 ? Math.min(440, Math.max(365, w * 0.315)) : 0);
+        const bottom = h - 96;
+        if (w < 760)
+          assert.deepEqual(
+            view,
+            overview,
+            "the mobile sheet must not shrink the office",
+          );
+        assert.ok(
+          view.scale <= overview.scale,
+          "opening a workbench must never magnify an employee",
+        );
+        for (const station of stations) {
+          const x = view.x + station.x * view.scale;
+          const y = view.y + station.y * view.scale;
+          assert.ok(x - 175 * view.scale >= 0 && x + 175 * view.scale <= right);
+          assert.ok(y - 160 * view.scale >= view.wallHeight);
+          assert.ok(y + 140 * view.scale + 44 <= bottom);
+        }
       }
     }
   }
+});
+test("partial last rows remain centered and twelve employees have distinct accessible stations", () => {
+  for (const count of [4, 7, 10, 11, 12]) {
+    for (const w of [390, 1280]) {
+      const rows = Map.groupBy(
+        stationPositions(count, w),
+        (station) => station.y,
+      );
+      for (const stations of rows.values()) {
+        assert.equal((stations[0]!.x + stations.at(-1)!.x) / 2, 740);
+        for (let i = 1; i < stations.length; i++) {
+          assert.ok(
+            stations[i]!.x - stations[i - 1]!.x > 350,
+            "carpets and selection areas must not overlap",
+          );
+        }
+      }
+    }
+  }
+  assert.deepEqual(stationPositions(0), []);
 });
 test("human issues retain actual reason and unavailable connection is visible", () => {
   assert.equal(

@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT / "services/nexus-api"))
 
 def create_directory_database(directory: Path, count: int) -> Path:
     from app.sql_storage import connect, create_test_schema
+    from nexus_api.avatars import CATALOG
     from nexus_api.db_models import employees
 
     directory.mkdir(parents=True, exist_ok=True)
@@ -31,17 +32,20 @@ def create_directory_database(directory: Path, count: int) -> Path:
     create_test_schema(database)
     names = ["小牛马", "小鲁班", "小蒜鸟", "小橘子", "小青柠", "小满格"]
     roles = ["测试自动化工程师", "测试系统工程师", "防线运营人员"]
+    appearances = [f"robot-v1-{i}" for i in (0, 2, 4, 1, 3, 5)] + [
+        item["id"] for item in CATALOG["items"] if item["family"] == "pixel"
+    ]
     with connect(database) as connection:
         for index in range(count):
             role = roles[index % 3]
             connection.execute(
                 employees.insert().values(
                     id=f"office-e{index}",
-                    name=names[index],
+                    name=names[index] if index < len(names) else f"同事{index + 1:02}",
                     domain=role,
                     description=role,
                     instructions="办公室验收夹具，不调用模型",
-                    avatar=f"robot-v1-{[0, 2, 4, 1, 3, 5][index]}",
+                    avatar=appearances[index % len(appearances)],
                     enabled=1,
                     knowledge_json="[]",
                     skills_json="[]",
@@ -51,7 +55,7 @@ def create_directory_database(directory: Path, count: int) -> Path:
                     mailbox_session_id="",
                     capability_json="{}",
                     model_route_id="",
-                    created_at=f"2026-10-29T00:00:0{index}+00:00",
+                    created_at=f"2026-10-29T00:00:{index:02}+00:00",
                     updated_at="2026-10-29T00:00:00+00:00",
                 )
             )
@@ -172,7 +176,7 @@ def create_preview_app():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
-    parser.add_argument("--employees", type=int, choices=[0, 3, 6], default=3)
+    parser.add_argument("--employees", type=int, choices=[0, 3, 6, 12, 16], default=3)
     args = parser.parse_args()
     path = create_directory_database(args.directory.resolve(), args.employees)
     if args.employees:

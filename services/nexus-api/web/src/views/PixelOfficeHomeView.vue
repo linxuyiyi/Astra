@@ -83,7 +83,7 @@
       <div class="dock-divider" />
       <label class="employee-select"
         ><UsersRound :size="15" /><select
-          aria-label="定位数字员工"
+          aria-label="选择数字员工"
           :value="selectedId ?? ''"
           @change="onSelectEmployee"
         >
@@ -97,7 +97,7 @@
           </option>
         </select></label
       >
-      <div v-if="store.employees.length > 6" class="room-pager">
+      <div v-if="store.employees.length > OFFICE_ROOM_SIZE" class="room-pager">
         <button
           type="button"
           aria-label="上一间办公室"
@@ -147,7 +147,7 @@
       "
       class="office-guide"
     >
-      <span>点击工位，走近一位同事</span><small>点击空白返回全景</small>
+      <span>点击工位，查看同事的工作</span><small>点击空白关闭工作台</small>
     </div>
   </section>
 </template>
@@ -175,7 +175,10 @@ import {
 import OfficeScene from "../features/office/OfficeScene.vue";
 import EmployeeWorkbench from "../features/office/EmployeeWorkbench.vue";
 import { getEmployeeOffice } from "../features/office/api";
-import type { EmployeeOffice } from "../features/office/model";
+import {
+  OFFICE_ROOM_SIZE,
+  type EmployeeOffice,
+} from "../features/office/model";
 import { useNebulaStore } from "../features/nebula/stores/nebulaStore";
 import { getVisibleNavItems } from "../navigation";
 const store = useNebulaStore();
@@ -193,10 +196,13 @@ const reduceMotion = ref(false),
   hidden = ref(document.hidden);
 const flashes = ref<Record<string, boolean>>({});
 const roomCount = computed(() =>
-  Math.max(1, Math.ceil(store.employees.length / 6)),
+  Math.max(1, Math.ceil(store.employees.length / OFFICE_ROOM_SIZE)),
 );
 const visibleEmployees = computed(() =>
-  store.employees.slice((room.value - 1) * 6, room.value * 6),
+  store.employees.slice(
+    (room.value - 1) * OFFICE_ROOM_SIZE,
+    room.value * OFFICE_ROOM_SIZE,
+  ),
 );
 const selectedEmployee = computed(
   () => store.employees.find((e) => e.id === selectedId.value) ?? null,
@@ -224,7 +230,7 @@ function selectEmployee(id: string | null) {
   if (id) {
     const index = store.employees.findIndex((e) => e.id === id);
     if (index < 0) return;
-    room.value = Math.floor(index / 6) + 1;
+    room.value = Math.floor(index / OFFICE_ROOM_SIZE) + 1;
   }
   selectedId.value = id;
   void router.replace({ path: "/", query: id ? { employee: id } : {} });
@@ -320,7 +326,8 @@ watch(
       if (selectedId.value)
         room.value =
           Math.floor(
-            store.employees.findIndex((e) => e.id === selectedId.value) / 6,
+            store.employees.findIndex((e) => e.id === selectedId.value) /
+              OFFICE_ROOM_SIZE,
           ) + 1;
     }
   },

@@ -73,54 +73,65 @@ export function taskReason(task: NebulaTask): string {
     (task.status === "PENDING" ? "等待 Worker 调度" : "正在执行")
   );
 }
+export const OFFICE_ROOM_SIZE = 12;
+const NAMEPLATE_HEIGHT = 44;
+
 export function stationPositions(
   count: number,
+  width = 1280,
 ): Array<{ x: number; y: number }> {
-  const columns = Math.min(3, count);
-  return Array.from({ length: count }, (_, i) => ({
-    x: 740 + ((i % 3) - (columns - 1) / 2) * 405,
-    y: count > 3 ? 380 + Math.floor(i / 3) * 300 : 475,
-  }));
+  const preferredColumns =
+    count === 4 ? 2 : count === 9 ? 3 : count > 6 && width >= 760 ? 4 : 3;
+  const columns = Math.max(1, Math.min(count, preferredColumns));
+  return Array.from({ length: count }, (_, index) => {
+    const row = Math.floor(index / columns);
+    const rowCount = Math.min(columns, count - row * columns);
+    return {
+      x: 740 + ((index % columns) - (rowCount - 1) / 2) * 405,
+      y: 400 + row * (width < 760 ? 420 : 380),
+    };
+  });
 }
 
+/** 始终按整页工位布局；桌面工作台适配宽度，手机浮层不改变视角。 */
 export function officeCamera(
   width: number,
   height: number,
   count: number,
-  selectedIndex = -1,
+  workbenchOpen = false,
 ) {
   const mobile = width < 760;
   const wallHeight = mobile
     ? 112
     : Math.min(196, Math.max(112, height * 0.218));
   const panelWidth =
-    selectedIndex < 0 || mobile
-      ? 0
-      : Math.min(440, Math.max(365, width * 0.315));
+    workbenchOpen && !mobile ? Math.min(440, Math.max(365, width * 0.315)) : 0;
   const visibleWidth = width - panelWidth;
-  const visibleHeight = selectedIndex >= 0 && mobile ? height * 0.44 : height;
-  const floorHeight = Math.max(80, visibleHeight - wallHeight - 80);
-  const base = Math.max(
-    0.12,
+  const floorTop = wallHeight + 28;
+  const floorBottom = height - 96;
+  const floorHeight = Math.max(60, floorBottom - floorTop);
+  const positions = stationPositions(count, width);
+  const xs = positions.map((station) => station.x);
+  const ys = positions.map((station) => station.y);
+  const minX = count ? Math.min(...xs) : 740;
+  const maxX = count ? Math.max(...xs) : 740;
+  const minY = count ? Math.min(...ys) : 400;
+  const maxY = count ? Math.max(...ys) : 400;
+  // 预留地毯、气泡及姓名牌；姓名牌保留44px屏幕高度，不跟着像素素材缩小。
+  const scale = Math.max(
+    0.08,
     Math.min(
-      (width - 110) / 1240,
-      (height - wallHeight - 100) / (count > 3 ? 625 : 365),
+      mobile ? 0.6 : Math.min(0.78, width / 2000),
+      (visibleWidth - (mobile ? 32 : 112)) / (maxX - minX + 350),
+      (floorHeight - NAMEPLATE_HEIGHT) / (maxY - minY + 310),
     ),
   );
-  const station = stationPositions(count)[selectedIndex];
-  const scale = station
-    ? Math.min(
-        mobile ? 1 : base * 1.18,
-        Math.max(0.3, (visibleWidth - 70) / 400),
-        Math.max(0.2, floorHeight / 280),
-      )
-    : base;
-  const x = station?.x ?? 740;
-  const y = station ? station.y + 15 : count > 3 ? 550 : 490;
+  const contentHeight = (maxY - minY + 310) * scale + NAMEPLATE_HEIGHT;
   return {
     scale,
-    x: visibleWidth / 2 - x * scale,
-    y: wallHeight + floorHeight / 2 - y * scale,
+    x: visibleWidth / 2 - ((minX + maxX) / 2) * scale,
+    y: floorTop + (floorHeight - contentHeight) / 2 + (160 - minY) * scale,
     wallHeight,
+    labelScale: 1 / scale,
   };
 }

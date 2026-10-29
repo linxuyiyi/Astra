@@ -9,7 +9,7 @@
       <button
         class="close-button"
         type="button"
-        aria-label="返回办公室全景"
+        aria-label="关闭员工工作台"
         @click="$emit('close')"
       >
         <X :size="19" />

@@ -4,7 +4,7 @@
     class="office-scene"
     :class="{
       'reduce-motion': reducedMotion,
-      focused: !!selectedId,
+      'multiple-rows': employees.length > 3,
       'camera-ready': hasInteracted,
     }"
     @click.self="$emit('select', null)"
@@ -65,12 +65,12 @@
           class="station-hit"
           type="button"
           :aria-pressed="employee.id === selectedId"
-          :aria-label="`${employee.name}，${employee.domain || '数字员工'}，${STATE_TEXT[states[index]!]}，打开工作台`"
+          :aria-label="`${employee.name}，${employee.domain || '数字员工'}，${stationLabels[index]}，打开工作台`"
           @click.stop="$emit('select', employee.id)"
         >
           <span class="nameplate"
             ><b>{{ employee.name }}</b
-            ><small><i />{{ STATE_TEXT[states[index]!] }}</small></span
+            ><small><i />{{ stationLabels[index] }}</small></span
           >
         </button>
       </div>
@@ -140,7 +140,9 @@ watch(
     hasInteracted.value = true;
   },
 );
-const positions = computed(() => stationPositions(props.employees.length));
+const positions = computed(() =>
+  stationPositions(props.employees.length, width.value),
+);
 const degraded = computed(
   () =>
     props.snapshot?.degradedSources.some(
@@ -150,15 +152,25 @@ const degraded = computed(
 const states = computed(() =>
   props.employees.map((employee) => employeeState(employee, degraded.value)),
 );
+const stationLabels = computed(() =>
+  props.employees.map((employee, index) =>
+    props.flashes[employee.id] &&
+    ["idle", "working"].includes(states.value[index]!)
+      ? "任务完成"
+      : STATE_TEXT[states.value[index]!],
+  ),
+);
 const camera = computed(() =>
   officeCamera(
     width.value,
     height.value,
     props.employees.length,
-    props.employees.findIndex((e) => e.id === props.selectedId),
+    !!props.selectedId,
   ),
 );
 const worldStyle = computed(() => ({
+  "--label-scale": camera.value.labelScale,
+  "--scene-scale": camera.value.scale,
   transform: `translate(${camera.value.x}px, ${camera.value.y}px) scale(${camera.value.scale})`,
 }));
 function characterStyle(avatar: string) {
@@ -365,7 +377,7 @@ onBeforeUnmount(() => {
   transition: none;
 }
 .camera-ready .stations {
-  transition: transform 0.65s cubic-bezier(0.22, 0.8, 0.25, 1);
+  transition: transform 0.3s ease;
 }
 .station {
   position: absolute;
@@ -441,7 +453,7 @@ onBeforeUnmount(() => {
 .station-hit:hover,
 .station-hit:focus-visible,
 .selected .station-hit {
-  outline: 3px solid #3b8567;
+  outline: calc(2px * var(--label-scale)) solid #3b8567;
   outline-offset: 9px;
   background: #ffffff0d;
 }
@@ -449,26 +461,27 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 235px;
   left: 50%;
-  transform: translateX(-50%);
-  padding: 8px 16px;
+  transform: translateX(-50%) scale(var(--label-scale));
+  transform-origin: top center;
+  padding: 5px 9px;
   background: #fffdf0f2;
   border: 1px solid #aec4ad;
   box-shadow: 0 3px 0 #91aa8d70;
   white-space: nowrap;
-  max-width: 280px;
+  max-width: calc(280px * var(--scene-scale));
 }
 .nameplate b {
   display: block;
-  max-width: 245px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 800;
 }
 .nameplate small {
   display: block;
-  margin-top: 5px;
-  font-size: 11px;
+  margin-top: 3px;
+  font-size: 9px;
   color: #59725f;
 }
 .nameplate i {
@@ -481,6 +494,11 @@ onBeforeUnmount(() => {
 .attention {
   --state: #b56445;
 }
+.completed.working .nameplate,
+.completed.idle .nameplate {
+  background: #f1f8e8;
+  border-color: #65a279;
+}
 .unknown,
 .offline {
   --state: #89958b;
@@ -492,6 +510,8 @@ onBeforeUnmount(() => {
   position: absolute;
   left: 32px;
   top: -146px;
+  transform: scale(var(--label-scale));
+  transform-origin: bottom left;
   padding: 7px 10px;
   font-size: 12px;
   color: #9b4436;
@@ -499,6 +519,9 @@ onBeforeUnmount(() => {
   border-left: 5px solid #c96e58;
   box-shadow: 2px 3px 0 #8b4b3d66;
   white-space: nowrap;
+}
+.multiple-rows .speech {
+  display: none;
 }
 .speech.success {
   color: #347254;

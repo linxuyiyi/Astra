@@ -18,30 +18,21 @@
               ><small>保存后，办公室和聊天均使用这个角色</small></span
             >
           </div>
-          <div
-            v-for="family in avatarFamilies"
-            :key="family.id"
-            class="avatar-family"
-          >
-            <div class="avatar-family-label">{{ family.label }}</div>
-            <div class="avatar-options" role="group" :aria-label="family.label">
-              <button
-                v-for="item in avatars.filter(
-                  (item) => item.family === family.id,
-                )"
-                :key="item.id"
-                type="button"
-                :disabled="saving"
-                :aria-pressed="form.avatar === item.id"
-                :aria-label="`选择${item.label}`"
-                :class="{ selected: form.avatar === item.id }"
-                @click="form.avatar = item.id"
-              >
-                <EmployeeAvatar :avatar="item.id" :size="58" /><span>{{
-                  item.label
-                }}</span>
-              </button>
-            </div>
+          <div class="avatar-options" role="group" aria-label="可选员工形象">
+            <button
+              v-for="item in avatars"
+              :key="item.id"
+              type="button"
+              :disabled="saving"
+              :aria-pressed="form.avatar === item.id"
+              :aria-label="`选择${item.label}`"
+              :class="{ selected: form.avatar === item.id }"
+              @click="form.avatar = item.id"
+            >
+              <EmployeeAvatar :avatar="item.id" :size="58" /><span>{{
+                item.label
+              }}</span>
+            </button>
           </div>
           <p class="avatar-attribution">像素人物：BotPixel · MIT</p>
         </div>
@@ -218,10 +209,6 @@ const emit = defineEmits<{
 }>();
 
 const avatars = EMPLOYEE_APPEARANCES;
-const avatarFamilies = [
-  { id: "robot", label: "机器人员工" },
-  { id: "pixel", label: "像素同事 · BotPixel" },
-];
 const defaultInstructions = "收到消息后先判断能否直接回答；信息不足时追问；需要其他员工帮助时联系相应员工。";
 const form = reactive({
   name: "",
@@ -350,15 +337,6 @@ async function submit() {
   font-size: 11px;
   margin-top: 6px;
   color: #819078;
-}
-.avatar-family + .avatar-family {
-  margin-top: 17px;
-}
-.avatar-family-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: #6f8268;
-  margin-bottom: 10px;
 }
 .avatar-options {
   display: grid;

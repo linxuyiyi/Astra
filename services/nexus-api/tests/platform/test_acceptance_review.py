@@ -77,7 +77,7 @@ async def test_question_to_acceptance_wakes_for_the_new_result(runtime):
 
     await r.service.refresh("T1")
     assert r.task.status == "WAITING"
-    assert "回答问题" in (r.task.human_required_reason or "")
+    assert r.task.waiting_reason == "HITL_QUESTION"
     question_wakes = (
         await r.session.scalars(select(TaskWakeOutbox).where(TaskWakeOutbox.task_id == "T1"))
     ).all()

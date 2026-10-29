@@ -127,7 +127,7 @@
 
 <script setup lang="ts">
 import { Ban, Play, Plus, RefreshCw, RotateCcw, RotateCw, Search, Trash2 } from 'lucide-vue-next'
-import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ElButton, ElCard, ElDialog, ElEmpty, ElInput, ElOption, ElPagination, ElRadioButton, ElRadioGroup, ElSelect, ElTable, ElTableColumn, ElTag, ElText, vLoading } from 'element-plus'
 import { api } from '@/api/client'
@@ -185,7 +185,30 @@ watch(() => route.query.view, (value) => {
   view.value = value === 'interventions' ? 'interventions' : 'list'
 })
 
+let taskEvents: EventSource | null = null
+let disposed = false
+let refreshPending = false
+let eventRefresh: Promise<void> | null = null
+function refreshFromEvent() {
+  refreshPending = true
+  if (eventRefresh) return
+  eventRefresh = (async () => {
+    // An event during an existing snapshot request needs one fresh read afterwards.
+    await store.refresh()
+    while (refreshPending && !disposed) {
+      refreshPending = false
+      await store.refresh()
+    }
+  })().finally(() => { eventRefresh = null })
+}
+onUnmounted(() => { disposed = true; taskEvents?.close() })
 onMounted(async () => {
+  taskEvents = new EventSource('/api/events/stream')
+  taskEvents.addEventListener('connected', refreshFromEvent)
+  taskEvents.addEventListener('update', (message) => {
+    const data = JSON.parse((message as MessageEvent).data) as { type?: string }
+    if (data.type?.startsWith('TASK_') || data.type?.startsWith('RUNTIME_')) refreshFromEvent()
+  })
   await store.refresh()
   owners.value = await listEmployees().catch(() => [])
 })
@@ -253,10 +276,10 @@ function runCommand(task: Task, command: string) {
 }
 function taskObservation(task: Task): Task {
   if (task.runtime_connection === 'UNAVAILABLE' || task.session_status === 'UNKNOWN') {
-    return { ...task, runtime_state: 'WAITING', runtime_status_label: '连接异常', runtime_detail: task.runtime_error || '状态待确认' }
+    return { ...task, runtime_status_label: '连接异常', runtime_detail: task.runtime_error || '状态待确认' }
   }
   if (task.status === 'WAITING' && task.session_status === 'SUCCEEDED') {
-    return { ...task, runtime_status_label: '本轮已完成', runtime_detail: task.human_required_reason || '执行结束，待确认' }
+    return { ...task, runtime_status_label: '本轮已结束，待处理', runtime_detail: task.human_required_reason || '执行结束，待确认' }
   }
   if (task.status === 'WAITING' && (task.session_status === 'FAILED' || task.session_status === 'INTERRUPTED' || task.execution_error)) {
     return { ...task, runtime_status_label: '执行异常', runtime_detail: task.human_required_reason || '待恢复' }

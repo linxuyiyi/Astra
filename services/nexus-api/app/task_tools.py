@@ -19,6 +19,7 @@ from app.models import (
     ExperienceReviewJob,
     KnowledgeItem,
     OpenCodeExecutionEnvironment,
+    RuntimeSession,
     Task,
     TaskCategory,
 )
@@ -236,6 +237,7 @@ class TaskTools:
         task = await self._owned(task_id)
         if isinstance(task, dict):
             return task
+        await self._attach_session_facts([task])
         return self._ok(task)
 
     async def list(
@@ -269,6 +271,7 @@ class TaskTools:
         rows = (
             await self.session.scalars(query.order_by(Task.created_at.desc()).limit(max(1, min(limit, 50))))
         ).all()
+        await self._attach_session_facts(rows)
         return {"ok": True, "tasks": [self._brief(item) for item in rows]}
 
     async def update(
@@ -347,8 +350,11 @@ class TaskTools:
             return task
         if task.status != TaskStatus.WAITING.value:
             return self._refuse(task, "只有等待中的任务可以恢复")
-        restart = bool(task.current_session_id)
-        return await self._runtime(task, lambda: RuntimeService(self.session).start(task.id, restart=restart))
+        runtime = RuntimeService(self.session)
+        return await self._runtime(
+            task,
+            lambda: runtime.continue_task(task.id) if task.current_session_id else runtime.start(task.id),
+        )
 
     async def terminate(self, task_id: str) -> dict[str, Any]:
         task = await self._owned(task_id)
@@ -556,6 +562,8 @@ class TaskTools:
                 failure_code=failure["failure_code"],
                 hint=failure["hint"],
             )
+        # Mutations return the Task outcome; query get/assistance for Session facts.
+        updated.session_status = None
         return self._ok(updated)
 
     async def _runtime_failure(
@@ -627,6 +635,17 @@ class TaskTools:
             body["hint"] = hint
         return body
 
+    async def _attach_session_facts(self, tasks):
+        ids = [task.current_session_id for task in tasks if task.current_session_id]
+        bindings = {
+            item.id: item for item in (await self.session.scalars(
+                select(RuntimeSession).where(RuntimeSession.id.in_(ids))
+            )).all()
+        } if ids else {}
+        for task in tasks:
+            binding = bindings.get(task.current_session_id)
+            task.session_status = binding.status if binding else None
+
     def _brief(self, task: Task) -> dict[str, Any]:
         return {
             "task_id": task.id,
@@ -641,6 +660,10 @@ class TaskTools:
             "source_session_id": task.source_session_id,
             "source_channel_id": task.source_channel_id,
             "current_progress": task.current_progress,
+            "current_session_id": task.current_session_id,
+            "session_status": getattr(task, "session_status", None),
+            "waiting_reason": task.waiting_reason,
+            "human_required_reason": task.human_required_reason,
         }
 
 

@@ -21,6 +21,8 @@ description: 仅在明确查询或操作 Nexus 任务、需要 Worker 工程执�
 - `acceptance_criteria`：可以验收的结果
 
 同一会话里相同内容再次创建会返回已有任务，不要再造一条。
+收到同一工作的补充指令时，先查询原任务（编号未知时用 `nexus_task_list`），继续原 Task 和原执行会话。
+不要把“检视通过，继续 Commit”等后续工作改写成新任务；`nexus_task_update` 只改说明，不发送执行指令。
 
 ## 状态提示
 
@@ -45,7 +47,7 @@ description: 仅在明确查询或操作 Nexus 任务、需要 Worker 工程执�
 3. 权限使用 `kind="permission"` 和 `decision`：OpenCode 只选 `once` 或 `reject`；DSH
    使用当前请求的 `options` 中 `kind` 为 `allow_once` 或 `reject_once` 的 `optionId`。
    不能选永久放行，不能把待人授权的操作说成已有授权。
-4. DSH 在正常回合输出业务问题时，读原生 `output` 后判断。能答就调用 `nexus_task_input`，
+4. OpenCode / DSH 正常回合结束后，读原生 `output`，结合完整目标判断。有业务答案或补充执行指令且 `can_input=true` 时调用 `nexus_task_input`，
    传 `expected_session_id=session_id`、`expected_submission_id=submission_id` 和真实答案 `text`，
    在同一执行会话继续；没有业务问题或补充执行需要时不要自动续跑。
 5. 缺少信息或必须新获授权时，在当前来源私聊/群聊里说明任务、具体问题、选项和你的建议，
@@ -60,7 +62,10 @@ description: 仅在明确查询或操作 Nexus 任务、需要 Worker 工程执�
 执行结束等待验收时，从求助详情的原生输出核实执行结果后在原对话汇报。
 OpenCode 输出为脱敏摘要，包含摘要（`excerpt`）、状态（`status`）与退出码（`exit_code`），不能把截断摘要当成完整文件内容；
 输出不足时如实说明并在对话里商定后续核验，不要求人进入工作区或 Worker 页面。
-遵守原有任务确认规则，不把回复求助当成验收完成。
+数字员工保留 `nexus_task_confirm` 关单能力。核实完整业务目标和验收要求均已达成后可确认完成；
+`stop/end_turn`、Session 成功或阶段检视通过只表示本轮结束，不能单凭这些关单。
+若仍需等待检视、Commit 或其他约定工作，保留任务并按人的补充指令续答。
+`nexus_task_resume` 仅保留原绑定，不发送文本；实际执行指令走 `nexus_task_input`。
 
 ## 工具
 

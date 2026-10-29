@@ -138,7 +138,10 @@ def build_mcp_server() -> MCPServer:
         repository_id: str | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        """创建工程任务。相同会话和相同内容不会再建第二条。"""
+        """创建新的工程任务，相同会话和相同内容不会再建第二条。
+
+        同一工作的补充指令应查询原任务并使用 nexus_task_input，不要重新创建。
+        """
         return await _call(
             "create",
             task_type=task_type,
@@ -205,7 +208,7 @@ def build_mcp_server() -> MCPServer:
 
     @server.tool(name="nexus_task_resume", structured_output=True)
     async def nexus_task_resume(task_id: str) -> dict[str, Any]:
-        """从等待状态恢复任务。"""
+        """保留原 Task 和执行会话；补充执行指令使用 nexus_task_input，不会重新开始。"""
         return await _call("resume", task_id=task_id)
 
     @server.tool(name="nexus_task_terminate", structured_output=True)
@@ -259,7 +262,7 @@ def build_mcp_server() -> MCPServer:
     async def nexus_task_input(
         task_id: str, expected_session_id: str, expected_submission_id: str, text: str,
     ) -> dict[str, Any]:
-        """依据求助查询返回的执行会话和回合标识，向 DSH 同一会话续答业务问题。"""
+        """依据求助查询返回的执行会话和回合标识，向同一 OpenCode / DSH 会话发送补充执行指令，不新建任务。"""
         return await _call(
             "input", task_id=task_id, expected_session_id=expected_session_id,
             expected_submission_id=expected_submission_id, text=text,
@@ -267,7 +270,10 @@ def build_mcp_server() -> MCPServer:
 
     @server.tool(name="nexus_task_confirm", structured_output=True)
     async def nexus_task_confirm(task_id: str) -> dict[str, Any]:
-        """确认任务完成。只对执行中或等待确认的任务有效。"""
+        """确认整个业务任务完成，须核实完整目标与验收要求均已达成。
+
+        单轮结束或阶段检视通过不等于任务完成，有后续工作时使用 nexus_task_input。
+        """
         return await _call("confirm", task_id=task_id)
 
     return server

@@ -10,6 +10,7 @@ from app.runtime.experience_review.trace_normalizer import normalize_messages
 from app.runtime.lifecycle import RuntimeStateError, _cancel_record
 from app.runtime.redaction import redact_data
 from app.runtime.session_connection import connect, resolve_runtime_session_environment, session_tree
+from app.runtime.session_state import derive_session_state
 from app.services import TaskService
 
 
@@ -78,7 +79,6 @@ class WorkerAssistance:
                     for item in items if item.get("sessionID") in allowed
                 ]
                 messages = await self.runtime._all_messages(client, directory, session_id)
-                messages.sort(key=lambda item: item.get("info", {}).get("id", ""))
                 events = [
                     event.model_dump(mode="json")
                     for event in normalize_messages(messages, session_id)
@@ -87,7 +87,13 @@ class WorkerAssistance:
                 offset = max(0, cursor)
                 output = events[offset:offset + 40]
                 next_cursor = offset + len(output) if offset + len(output) < len(events) else None
-            can_input = False
+                state = derive_session_state(
+                    messages=messages, server_status=await client.status(directory, session_id),
+                    has_pending_question=any(x["kind"] == "question" for x in requests),
+                    has_pending_permission=any(x["kind"] == "permission" for x in requests),
+                    pending_ack=False, turn_anchor_id=anchor,
+                )
+                can_input = bool(anchor) and state.status == "SUCCEEDED"
         # 查询期间切换、停止或进入新回合，不能返回可执行的旧请求。
         current, _ = await self.context(task_id, session_id)
         if current.last_message_id != anchor:
@@ -175,12 +181,18 @@ class WorkerAssistance:
 
     async def input(self, task_id, *, expected_session_id, expected_submission_id, text):
         task, binding = await self.context(task_id, expected_session_id)
-        if binding.runtime_engine != "dsh" or not expected_submission_id:
-            raise RuntimeStateError("仅支持按当前 DSH 回合续答")
+        if not expected_submission_id:
+            raise RuntimeStateError("必须提供当前回合标识")
         if not text.strip() or len(text) > 100000:
             raise RuntimeStateError("续答不能为空或超过 100000 字符")
         if task.last_message_id != expected_submission_id:
             raise RuntimeStateError("当前回合已变化，请重新查询求助")
+        if binding.runtime_engine == "opencode":
+            return await self.runtime.send(
+                task_id, {"parts": [{"type": "text", "text": text}]},
+                expected_session_id=binding.id, expected_submission_id=expected_submission_id,
+                expected_source=(self.employee_id, self.source_session_id),
+            )
         return await DshLifecycle(self.runtime).send(
             task_id, text, expected_binding_id=binding.id,
             expected_submission_id=expected_submission_id,

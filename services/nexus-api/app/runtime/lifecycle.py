@@ -912,7 +912,10 @@ class RuntimeService:
                     )
             raise
 
-    async def send(self, task_id, body, *, native_action="prompt_async", expected_session_id=None):
+    async def send(
+        self, task_id, body, *, native_action="prompt_async", expected_session_id=None,
+        expected_submission_id=None, expected_source=None,
+    ):
         if await self._uses_dsh(task_id):
             raise RuntimeStateError("DSH 输入必须通过绑定隔离的 Workbench API")
         if native_action not in {"prompt_async", "command"}:
@@ -927,6 +930,10 @@ class RuntimeService:
             raise RuntimeStateError("Session 不存在；请显式启动任务")
         if expected_session_id and task.current_session_id != expected_session_id:
             raise RuntimeStateError("当前 Session 已切换，请刷新 Workspace")
+        if expected_submission_id and task.last_message_id != expected_submission_id:
+            raise RuntimeStateError("当前回合已变化，请重新查询求助")
+        if expected_source and (task.responsible_employee_id, task.source_session_id) != expected_source:
+            raise RuntimeStateError("任务不属于当前员工及来源对话")
         if task.pending_message_id:
             raise RuntimeStateError("上次输入尚未确认，请重连核对 Session 后再发送")
         if _task_result_concluded(task):
@@ -953,6 +960,16 @@ class RuntimeService:
                     "请先通过责任数字员工回答当前执行会话及其子会话中的问题或处理权限请求"
                 )
 
+            if expected_submission_id:
+                state = derive_session_state(
+                    messages=await self._all_messages(client, Path(workspace), submitted_session),
+                    server_status=await client.status(Path(workspace), submitted_session),
+                    has_pending_question=False, has_pending_permission=False, pending_ack=False,
+                    turn_anchor_id=expected_submission_id,
+                )
+                if state.status != RuntimeSessionStatus.SUCCEEDED.value:
+                    raise RuntimeStateError("当前轮尚未正常结束，请重新查询求助")
+
         # Short transaction: revalidate the binding and reserve this submission.
         task = await self.lock_task(task_id)
         if task.current_session_id != submitted_session:
@@ -967,6 +984,12 @@ class RuntimeService:
         if _cancel_active(task):
             await self.session.rollback()
             raise RuntimeStateError("任务正在取消，不能提交新输入")
+        if expected_submission_id and task.last_message_id != expected_submission_id:
+            await self.session.rollback()
+            raise RuntimeStateError("当前回合已变化，请重新查询求助")
+        if expected_source and (task.responsible_employee_id, task.source_session_id) != expected_source:
+            await self.session.rollback()
+            raise RuntimeStateError("任务不属于当前员工及来源对话")
         employee = await self.session.scalar(
             select(AgentWorker)
             .where(AgentWorker.id == employee_id)
@@ -1952,7 +1975,7 @@ class RuntimeService:
         return task
 
     async def confirm_completion(self, task_id: str):
-        """Close the business task only on an explicit human action."""
+        """Close the business task only on explicit business confirmation."""
         if await self._uses_dsh(task_id):
             from app.runtime.dsh_lifecycle import DshLifecycle
             return await DshLifecycle(self).confirm(task_id)
@@ -2064,13 +2087,13 @@ class RuntimeService:
                 task,
                 "TASK_COMPLETION_CONFIRMED",
                 "review",
-                "人工确认完成，待经验复盘",
+                "任务确认完成，待经验复盘",
                 snapshot,
                 commit=False,
             )
             await self.session.flush()
             await enqueue_in_transaction(self.session, task=task, event=event, snapshot=snapshot)
-        await self.project(task, TaskStatus.SUCCEEDED, detail="任务已人工确认完成")
+        await self.project(task, TaskStatus.SUCCEEDED, detail="任务已确认完成")
         return task
 
     async def disconnected(self, task_id, error):

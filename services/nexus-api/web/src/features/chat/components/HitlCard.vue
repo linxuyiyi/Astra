@@ -51,42 +51,55 @@ function choose(value: "yes" | "yes_with_rule" | "no") {
 <style scoped>
 .hitl-card {
   margin-top: 8px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid #d7ebe0;
-  background: #f4faf6;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 2px solid var(--green, #188b69);
+  background: #ffffff;
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  box-shadow: 0 1px 2px rgba(24, 139, 105, 0.06), 0 8px 22px rgba(24, 139, 105, 0.08);
 }
 .hitl-card__head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.hitl-card__head strong { color: var(--ink, #203830); font-size: 13px; }
 .hitl-card__body {
   margin: 0;
   max-height: 160px;
   overflow: auto;
   padding: 8px 10px;
   border-radius: 8px;
-  background: #fff;
+  background: #f7fbf8;
   border: 1px solid #e4efe8;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 12px;
   line-height: 1.6;
 }
-.hitl-card__prompt { margin: 0; font-size: 12px; color: #3f6b56; font-weight: 600; }
-.hitl-card__options { display: grid; gap: 2px; }
+.hitl-card__prompt { margin: 0; font-size: 12px; color: #187956; font-weight: 700; }
+.hitl-card__options { display: grid; gap: 6px; }
 .hitl-card__option {
   display: flex;
   align-items: center;
-  gap: 6px;
-  border: 0;
-  background: transparent;
+  gap: 8px;
+  border: 1px solid #d7ebe0;
+  background: #fbfefc;
   text-align: left;
-  padding: 6px 4px;
-  border-radius: 8px;
-  color: #6b8979;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #3f6b56;
+  font-weight: 650;
   cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
-.hitl-card__option.sel { color: #187956; background: #e5f6ed; }
+.hitl-card__option:hover:not(:disabled) {
+  border-color: #a8d4c0;
+  background: #eef8f2;
+}
+.hitl-card__option.sel {
+  color: #117154;
+  background: #e5f6ed;
+  border-color: var(--green, #188b69);
+  box-shadow: inset 0 0 0 1px rgba(24, 139, 105, 0.18);
+}
 .hitl-card__option:disabled { opacity: 0.65; cursor: default; }
-.hitl-card__marker { width: 12px; display: inline-block; }
+.hitl-card__marker { width: 14px; display: inline-block; color: var(--green, #188b69); font-weight: 800; }
 </style>

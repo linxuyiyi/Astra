@@ -89,17 +89,89 @@ button, input, textarea { font: inherit; }
 .rail-item { display: flex; gap: 10px; align-items: center; padding: 11px 9px; border-radius: 13px; cursor: pointer; margin-bottom: 5px; }
 .rail-item.active, .rail-item:hover { background: #eaf6ee; }
 .chat { display: flex; flex-direction: column; overflow: hidden; min-height: 0; box-sizing: border-box; }
-.chat-messages { flex: 1; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 17px; }
-.chat-compose { padding: 12px 17px 16px; border-top: 1px solid #edf2ef; }
+.chat-messages {
+  flex: 1;
+  padding: 24px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 17px;
+}
+.chat-messages > .msg,
+.chat-messages > .chat-empty {
+  width: 100%;
+  max-width: 760px;
+}
+.chat-compose {
+  padding: 14px 20px 18px;
+  border-top: 1px solid #edf2ef;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(180deg, #f7fbf9 0%, #ffffff 48%);
+}
+.chat-compose > * { width: 100%; max-width: 760px; }
 .chat-head { min-width: 0; flex-wrap: wrap; padding: 16px 19px; display: flex; justify-content: space-between; gap: 13px; border-bottom: 1px solid #edf2ee; }
-.msg { display: flex; gap: 10px; max-width: 94%; }
-.msg.user { align-self: flex-end; flex-direction: row-reverse; }
+.msg { display: flex; gap: 10px; max-width: 100%; align-self: center; }
+.msg.user { align-self: center; flex-direction: row-reverse; }
 .msg.system { align-self: center; max-width: 100%; }
-.bubble { background: #f6faf7; border: 1px solid #e9f1ec; padding: 12px 15px; line-height: 1.9; border-radius: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.msg.user .bubble { background: #dff5e9; border-color: #c9e8d7; }
-.msg.system .bubble { background: #f4f8f5; color: #91a89c; font-size: 10px; border-radius: 100px; }
-.compose-box { display: flex; align-items: flex-end; gap: 9px; background: #fbfdfb; border: 1px solid #dfece4; border-radius: 13px; padding: 9px; }
-.compose-box textarea { flex: 1; border: 0; resize: none; outline: none; background: transparent; min-height: 43px; line-height: 1.7; }
+.bubble {
+  background: #ffffff;
+  border: 1px solid #c5d9cd;
+  padding: 12px 15px;
+  line-height: 1.9;
+  border-radius: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(32, 56, 48, 0.06), 0 8px 22px rgba(24, 139, 105, 0.09);
+}
+.msg.user .bubble {
+  background: #d4f1e2;
+  border-color: #a6d4bb;
+  box-shadow: 0 1px 2px rgba(24, 139, 105, 0.08), 0 8px 20px rgba(24, 139, 105, 0.11);
+}
+.msg.system .bubble {
+  background: #f4f8f5;
+  color: #91a89c;
+  font-size: 10px;
+  border-radius: 100px;
+  box-shadow: none;
+}
+.compose-shell {
+  width: 100%;
+  max-width: 760px;
+}
+.compose-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+  background: #ffffff;
+  border: 1.5px solid #a8cbb8;
+  border-radius: 16px;
+  padding: 12px 12px 12px 14px;
+  box-shadow:
+    0 1px 2px rgba(32, 56, 48, 0.06),
+    0 12px 32px rgba(24, 139, 105, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.compose-box:focus-within {
+  border-color: #188b69;
+  box-shadow:
+    0 0 0 3px rgba(24, 139, 105, 0.14),
+    0 10px 28px rgba(24, 139, 105, 0.1);
+}
+.compose-box textarea {
+  flex: 1;
+  border: 0;
+  resize: none;
+  outline: none;
+  background: transparent;
+  min-height: 48px;
+  line-height: 1.7;
+  color: var(--ink);
+}
 .chip { border: 1px solid #dfebe3; background: #fff; color: #6b8979; border-radius: 8px; padding: 6px 9px; font-size: 10px; cursor: pointer; }
 .draft-attachments, .message-attachments { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 9px; }
 .draft-file, .sent-attachment { display: flex; gap: 8px; align-items: center; border: 1px solid #dcebe1; border-radius: 10px; padding: 6px 8px; background: #f4faf6; max-width: 270px; }

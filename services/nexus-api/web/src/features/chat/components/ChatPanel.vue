@@ -121,72 +121,129 @@
     </div>
 
     <div v-if="target" class="chat-compose" data-testid="chat-compose">
-      <div v-if="state.draftFiles.length" class="draft-attachments">
-        <div v-for="file in state.draftFiles" :key="file.id" class="draft-file">
-          <img v-if="imageFile(file.type)" :src="attachmentUrl(file.id)" :alt="file.name" />
-          <span>{{ file.name }}</span>
-          <el-button text size="small" @click="runtime.removeDraftFile(file.id)">移除</el-button>
-        </div>
-      </div>
-      <div
-        v-if="asrState !== 'idle' || asrError || asrRequesting"
-        class="asr-status"
-        data-testid="asr-status"
-        role="status"
-      >
-        <span v-if="asrRequesting" class="muted">正在请求麦克风…</span>
-        <span v-else-if="asrState === 'recording'" class="asr-recording">
-          录音中 {{ formatClock(asrSeconds) }}，再次点击结束
-        </span>
-        <span v-else-if="asrState === 'transcribing'" class="muted">正在识别…</span>
-        <span v-else-if="asrState === 'error'" class="asr-error" role="alert">{{ asrError }}</span>
-        <el-button v-if="asrState === 'recording'" text size="small" @click="asrCancel()">取消</el-button>
-        <el-button v-if="asrState === 'error'" text size="small" type="primary" @click="asrRetry()">重试</el-button>
-      </div>
       <div class="compose-shell" data-testid="compose-shell">
-        <div class="compose-box">
-        <el-tooltip content="添加附件" placement="top">
-          <el-button circle aria-label="添加附件" :disabled="!canType" @click="pickFiles">＋</el-button>
-        </el-tooltip>
-        <el-tooltip :content="micTooltip" placement="top">
-          <el-button
-            circle
-            class="asr-mic"
-            :class="{ recording: asrState === 'recording' }"
-            data-testid="asr-mic"
-            :aria-label="asrState === 'recording' ? '停止录音' : '语音输入（转文字）'"
-            :disabled="!canType || asrState === 'transcribing'"
-            :loading="asrState === 'transcribing' || asrRequesting"
-            @click="asrToggle()"
+        <div class="compose-box" data-testid="compose-box">
+          <div
+            v-if="(state.draftPending || []).length || state.draftFiles.length"
+            class="draft-attachments"
+            data-testid="draft-attachments"
           >
-            <span v-if="asrState === 'recording'" aria-hidden="true">■</span>
-            <span v-else aria-hidden="true">🎤</span>
-          </el-button>
-        </el-tooltip>
-        <textarea
-          ref="inputEl"
-          v-model="state.draft"
-          rows="1"
-          :placeholder="placeholder"
-          :disabled="!canType"
-          aria-label="消息输入"
-          @keydown="onKeydown"
-          @paste="onPaste"
-        />
-        <el-button
-          v-if="runtime.streaming"
-          type="danger"
-          plain
-          :loading="state.phase === 'interrupting'"
-          @click="runtime.stop()"
-        >停止</el-button>
-        <el-button
-          v-else
-          type="primary"
-          :disabled="!canSend"
-          :loading="state.sending || state.uploading"
-          @click="doSend"
-        >发送</el-button>
+            <div
+              v-for="file in (state.draftPending || [])"
+              :key="file.id"
+              class="draft-file draft-file--pending"
+              data-testid="draft-chip-pending"
+            >
+              <span class="draft-file__media" aria-hidden="true">
+                <Loader2 class="draft-file__spin" :size="14" />
+              </span>
+              <span class="draft-file__meta">
+                <span class="draft-file__name">{{ file.name }}</span>
+                <span class="draft-file__desc">上传中</span>
+              </span>
+            </div>
+            <div
+              v-for="file in state.draftFiles"
+              :key="file.id"
+              class="draft-file"
+              data-testid="draft-chip"
+            >
+              <span class="draft-file__media" aria-hidden="true">
+                <img v-if="imageFile(file.type)" :src="attachmentUrl(file.id)" :alt="file.name" />
+                <FileText v-else class="draft-file__icon" :size="14" />
+              </span>
+              <span class="draft-file__meta">
+                <span class="draft-file__name">{{ file.name }}</span>
+                <span class="draft-file__desc">{{ fileExtLabel(file) }}</span>
+              </span>
+              <button
+                type="button"
+                class="draft-file__remove"
+                :aria-label="`移除 ${file.name}`"
+                @click="runtime.removeDraftFile(file.id)"
+              >
+                <X :size="14" />
+              </button>
+            </div>
+          </div>
+
+          <div
+            v-if="asrState !== 'idle' || asrError || asrRequesting"
+            class="asr-status"
+            data-testid="asr-status"
+            role="status"
+          >
+            <span v-if="asrRequesting" class="muted">正在请求麦克风…</span>
+            <span v-else-if="asrState === 'recording'" class="asr-recording">
+              录音中 {{ formatClock(asrSeconds) }}，再次点击结束
+            </span>
+            <span v-else-if="asrState === 'transcribing'" class="muted">正在识别…</span>
+            <span v-else-if="asrState === 'error'" class="asr-error" role="alert">{{ asrError }}</span>
+            <button v-if="asrState === 'recording'" type="button" class="asr-text-btn" @click="asrCancel()">取消</button>
+            <button v-if="asrState === 'error'" type="button" class="asr-text-btn asr-text-btn--primary" @click="asrRetry()">重试</button>
+          </div>
+
+          <div class="compose-row">
+            <textarea
+              ref="inputEl"
+              v-model="state.draft"
+              rows="1"
+              :placeholder="placeholder"
+              :disabled="!canType"
+              aria-label="消息输入"
+              data-testid="compose-input"
+              @keydown="onKeydown"
+              @paste="onPaste"
+            />
+            <div class="compose-actions" data-testid="compose-actions">
+              <el-tooltip :content="micTooltip" placement="top">
+                <button
+                  type="button"
+                  class="compose-icon-btn asr-mic"
+                  :class="{ recording: asrState === 'recording' }"
+                  data-testid="asr-mic"
+                  :aria-label="asrState === 'recording' ? '停止录音' : '语音输入（转文字）'"
+                  :disabled="!canType || asrState === 'transcribing'"
+                  @click="asrToggle()"
+                >
+                  <Loader2 v-if="asrState === 'transcribing' || asrRequesting" class="spin" :size="16" />
+                  <Square v-else-if="asrState === 'recording'" :size="14" />
+                  <Mic v-else :size="16" />
+                </button>
+              </el-tooltip>
+              <el-tooltip content="添加附件" placement="top">
+                <button
+                  type="button"
+                  class="compose-icon-btn"
+                  data-testid="compose-attach"
+                  aria-label="添加附件"
+                  :disabled="!canType || state.uploading"
+                  @click="pickFiles"
+                >
+                  <Paperclip :size="16" />
+                </button>
+              </el-tooltip>
+              <el-button
+                v-if="runtime.streaming"
+                class="compose-send"
+                type="danger"
+                round
+                :loading="state.phase === 'interrupting'"
+                data-testid="compose-stop"
+                @click="runtime.stop()"
+              >停止</el-button>
+              <el-button
+                v-else
+                class="compose-send"
+                type="primary"
+                round
+                data-testid="compose-send"
+                :disabled="!canSend"
+                :loading="state.sending || state.uploading"
+                @click="doSend"
+              >发送</el-button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="compose-hint muted">Enter 发送 · Shift+Enter 换行 · ⌘K 聚焦 · 点击麦克风语音输入</div>
@@ -197,6 +254,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { FileText, Loader2, Mic, Paperclip, Square, X } from "lucide-vue-next";
 import { attachmentUrl, currentUid } from "@/api";
 import type { Attachment, ChatMessage } from "@/types";
 import { ChatRuntime, imageFile } from "../ChatRuntime";
@@ -218,7 +276,12 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const avatar = computed(() => props.target?.avatar || "员");
 const canType = computed(() => Boolean(props.target && props.state.adapter?.canSend && props.state.status === "ready"));
 const canSend = computed(
-  () => canType.value && !props.state.sending && Boolean(props.state.draft.trim() || props.state.draftFiles.length),
+  () =>
+    canType.value
+    && !props.state.sending
+    && !props.state.uploading
+    && !(props.state.draftPending || []).length
+    && Boolean(props.state.draft.trim() || props.state.draftFiles.length),
 );
 const placeholder = computed(() =>
   props.target?.kind === "group"
@@ -260,6 +323,13 @@ const previewFetched = new Set<string>();
 function textFile(type: string) {
   const lower = (type || "").toLowerCase();
   return lower.startsWith("text/") || lower === "application/markdown" || lower.includes("markdown");
+}
+
+function fileExtLabel(file: Attachment) {
+  const fromName = file.name.includes(".") ? file.name.split(".").pop() : "";
+  if (fromName && fromName.length <= 8) return fromName.toUpperCase();
+  const type = (file.type || "").split("/").pop() || "FILE";
+  return type.toUpperCase();
 }
 
 async function ensurePreview(file: Attachment) {
@@ -440,19 +510,172 @@ onBeforeUnmount(() => window.removeEventListener("keydown", focusInput));
 }
 .compose-shell { width: 100%; max-width: 760px; }
 .compose-hint { margin-top: 8px; font-size: 11px; width: 100%; max-width: 760px; }
-.asr-status {
+.compose-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-height: 52px;
+}
+.compose-row textarea {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  resize: none;
+  outline: none;
+  background: transparent;
+  min-height: 52px;
+  max-height: 168px;
+  padding: 15.5px 4px;
+  line-height: 21px;
+  font-size: 14px;
+  color: var(--ink, #203830);
+}
+.compose-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  height: 52px;
+  flex-shrink: 0;
+}
+.compose-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: #4d6b5c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.compose-icon-btn:hover:not(:disabled) {
+  background: #eef6f1;
+  color: #188b69;
+}
+.compose-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.compose-icon-btn .spin { animation: compose-spin 0.9s linear infinite; }
+.compose-send {
+  min-width: 64px;
+  height: 36px;
+  padding: 0 14px;
+  font-weight: 650;
+}
+.draft-attachments {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding: 4px 2px 2px;
+  margin: 0 0 2px;
+  max-width: 100%;
+}
+.draft-attachments::-webkit-scrollbar { display: none; }
+.draft-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-width: 148px;
+  max-width: 220px;
+  border: 1px solid #dcebe1;
+  border-radius: 12px;
+  padding: 6px 8px;
+  background: #f7fbf8;
+}
+.draft-file--pending {
+  border-style: dashed;
+  opacity: 0.92;
+}
+.draft-file__media {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #e8f4ee;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: none;
+  color: #3f6b56;
+}
+.draft-file__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.draft-file__spin { animation: compose-spin 0.9s linear infinite; }
+.draft-file__meta {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 1px;
+}
+.draft-file__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink, #203830);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.draft-file__desc {
+  font-size: 11px;
+  color: var(--muted, #7b9386);
+}
+.draft-file__remove {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #6b8979;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: none;
+}
+.draft-file__remove:hover { background: #e8f0eb; color: #203830; }
+.asr-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 4px 0;
   font-size: 12px;
 }
 .asr-recording { color: #c0392b; font-weight: 600; }
 .asr-error { color: #b42318; }
+.asr-text-btn {
+  border: 0;
+  background: transparent;
+  color: #3f6b56;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+.asr-text-btn--primary { color: #188b69; font-weight: 600; }
 .asr-mic.recording {
   background: #e74c3c;
-  border-color: #e74c3c;
   color: #fff;
+}
+.asr-mic.recording:hover:not(:disabled) {
+  background: #d64537;
+  color: #fff;
+}
+@keyframes compose-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .compose-icon-btn .spin, .draft-file__spin { animation: none; }
 }
 .tool-card {
   border: 1px solid #e1ece5;
@@ -480,8 +703,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", focusInput));
   overflow: auto;
   max-height: 280px;
 }
-.sent-attachment.image, .draft-file { display: flex; gap: 8px; align-items: center; }
-.sent-attachment img, .draft-file img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; }
+.sent-attachment.image { display: flex; gap: 8px; align-items: center; }
+.sent-attachment img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; }
 .text-preview {
   display: block;
   max-width: min(520px, 100%);

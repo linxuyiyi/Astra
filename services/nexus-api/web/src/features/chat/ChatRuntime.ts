@@ -165,20 +165,32 @@ export class ChatRuntime {
   async attach(files: FileList | File[]): Promise<void> {
     const list = Array.from(files);
     if (!list.length) return;
-    if (this.state.draftFiles.length + list.length > 6) {
+    if (!this.state.draftPending) this.state.draftPending = [];
+    if (this.state.draftFiles.length + this.state.draftPending.length + list.length > 6) {
       this.state.notice = "每条消息最多添加 6 个附件";
       return;
     }
+    const room = 6 - this.state.draftFiles.length - this.state.draftPending.length;
+    const batch = list.slice(0, room).map((file) => ({
+      file,
+      pending: { id: `pending-${crypto.randomUUID()}`, name: file.name },
+    }));
+    this.state.draftPending = [...this.state.draftPending, ...batch.map((item) => item.pending)];
     this.state.uploading = true;
     try {
-      for (const file of list.slice(0, 6 - this.state.draftFiles.length)) {
-        const attachment = await uploadAttachment(file);
-        this.state.draftFiles.push(attachment);
+      for (const item of batch) {
+        try {
+          const attachment = await uploadAttachment(item.file);
+          if (!this.isActive()) return;
+          this.state.draftFiles = [...this.state.draftFiles, attachment];
+        } finally {
+          this.state.draftPending = this.state.draftPending.filter((pending) => pending.id !== item.pending.id);
+        }
       }
     } catch (error) {
       this.state.notice = shortText(error, "附件上传失败");
     } finally {
-      this.state.uploading = false;
+      this.state.uploading = this.state.draftPending.length > 0;
     }
   }
 
@@ -239,6 +251,7 @@ export function createSessionState(target: ChatSessionState["target"]): ChatSess
     notice: "",
     draft: "",
     draftFiles: [],
+    draftPending: [],
     uploading: false,
     sending: false,
     phase: "idle",

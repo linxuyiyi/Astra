@@ -83,6 +83,8 @@ export interface ChatSessionState {
   notice: string;
   draft: string;
   draftFiles: Attachment[];
+  /** Local placeholders while uploadAttachment is in flight (island-style uploading chips). */
+  draftPending: { id: string; name: string }[];
   uploading: boolean;
   sending: boolean;
   phase: ReplyPhase;

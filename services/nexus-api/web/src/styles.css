@@ -145,12 +145,12 @@ button, input, textarea { font: inherit; }
 }
 .compose-box {
   display: flex;
-  align-items: flex-end;
-  gap: 9px;
+  flex-direction: column;
+  gap: 4px;
   background: #ffffff;
   border: 1.5px solid #a8cbb8;
-  border-radius: 16px;
-  padding: 12px 12px 12px 14px;
+  border-radius: 28px;
+  padding: 8px 10px 8px 12px;
   box-shadow:
     0 1px 2px rgba(32, 56, 48, 0.06),
     0 12px 32px rgba(24, 139, 105, 0.11),
@@ -168,13 +168,13 @@ button, input, textarea { font: inherit; }
   resize: none;
   outline: none;
   background: transparent;
-  min-height: 48px;
-  line-height: 1.7;
+  min-height: 52px;
+  line-height: 21px;
   color: var(--ink);
 }
 .chip { border: 1px solid #dfebe3; background: #fff; color: #6b8979; border-radius: 8px; padding: 6px 9px; font-size: 10px; cursor: pointer; }
-.draft-attachments, .message-attachments { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 9px; }
-.draft-file, .sent-attachment { display: flex; gap: 8px; align-items: center; border: 1px solid #dcebe1; border-radius: 10px; padding: 6px 8px; background: #f4faf6; max-width: 270px; }
+.message-attachments { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 9px; }
+.sent-attachment { display: flex; gap: 8px; align-items: center; border: 1px solid #dcebe1; border-radius: 10px; padding: 6px 8px; background: #f4faf6; max-width: 270px; }
 .data-page { display: flex; flex-direction: column; gap: 12px; }
 .page > .astra-page,
 .page > .task-detail,

@@ -41,7 +41,7 @@ def create_directory_database(directory: Path, count: int) -> Path:
                     domain=role,
                     description=role,
                     instructions="办公室验收夹具，不调用模型",
-                    avatar="",
+                    avatar=f"robot-v1-{[0, 2, 4, 1, 3, 5][index]}",
                     enabled=1,
                     knowledge_json="[]",
                     skills_json="[]",

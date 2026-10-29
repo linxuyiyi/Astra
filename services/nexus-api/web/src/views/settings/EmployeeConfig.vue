@@ -42,7 +42,7 @@
               :label="`${item.name} · ${item.domain}`"
             >
               <span class="digital-option">
-                <span class="digital-option__avatar">{{ item.avatar || '🤖' }}</span>
+                <EmployeeAvatar :avatar="item.avatar" :size="28" />
                 <span class="digital-option__copy">
                   <strong>{{ item.name }}</strong>
                   <small>{{ item.domain }}</small>
@@ -57,7 +57,7 @@
         </ElFormItem>
 
         <div v-if="digitalSummary.found" class="digital-summary" data-testid="worker-digital-summary">
-          <span class="digital-summary__avatar">{{ digitalSummary.avatar || '🤖' }}</span>
+          <EmployeeAvatar :avatar="digitalSummary.avatar" :size="44" />
           <div class="digital-summary__copy">
             <div class="digital-summary__line">
               <strong>{{ digitalSummary.name }}</strong>
@@ -299,6 +299,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { api } from '@/api/client'
 import type { Employee, TaskCategory, TaskType } from '@/api/types'
 import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
+import EmployeeAvatar from '@/components/EmployeeAvatar.vue'
 import StickyActionBar from '@/components/astra/StickyActionBar.vue'
 import { useWorkerMaintenance } from '@/composables/useWorkerMaintenance'
 import { useAstraStore } from '@/stores/astra'

@@ -37,7 +37,10 @@ def do_run_migrations(connection) -> None:
         versions = connection.execute(text("SELECT version_num FROM alembic_version")).scalars().all()
         if versions and (
             len(versions) != 1
-            or versions[0] not in {"0001_init", "0002_collaborative_groups", "0003_gateway_speech", "0004_remove_local_auth", CURRENT_REVISION}
+            or versions[0] not in {
+                "0001_init", "0002_collaborative_groups", "0003_gateway_speech",
+                "0004_remove_local_auth", "0005_dsh_runtime", CURRENT_REVISION,
+            }
         ):
             raise RuntimeError("不支持历史数据库升级；请使用新的空数据库执行初始化")
         if versions == [CURRENT_REVISION]:

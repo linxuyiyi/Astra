@@ -10,7 +10,7 @@ from sqlalchemy.engine import URL, Connection, Engine, make_url
 
 from app.config.settings import get_settings
 
-CURRENT_REVISION = "0005_dsh_runtime"
+CURRENT_REVISION = "0006_employee_avatars"
 VERSION = Table("alembic_version", MetaData(), Column("version_num", String(32), primary_key=True))
 NEW_DATABASE_MESSAGE = (
     "数据库 schema 未就绪；请执行 alembic upgrade head。早期历史库请使用新的空数据库，不支持导入"

@@ -7,6 +7,7 @@ import { attachmentIdFromBlock, uploadAttachment } from "./attachments";
 import { type GroupChannel, type GroupItem, interruptGroup, loadGroupTimeline, sendGroupMessage, streamChannelEvents } from "./group";
 import { nexusFetch } from "./http";
 import "./group.css";
+import { EmployeeAvatar } from "./EmployeeAvatar";
 
 function merge(previous: GroupItem[], incoming: GroupItem[]): GroupItem[] {
   const result = new Map(previous.map(item => [item.id, item]));
@@ -170,7 +171,7 @@ export function GroupApp({ channelId }: { channelId: string }) {
           const self = item.sender_type === "human" && item.sender_id === channel?.viewer_id;
           const who = channel?.members.find(m => m.member_id === item.sender_id);
           return <div key={item.id} className="group-message" data-self={String(self)} data-sender={item.sender_id} data-seq={item.seq}>
-            <div className="group-message-avatar" aria-hidden="true">{who?.avatar || (item.sender_type === "human" ? "👤" : "🤖")}</div>
+            <div className="group-message-avatar" aria-hidden="true">{item.sender_type === "employee" ? <EmployeeAvatar avatar={who?.avatar ?? ""} /> : who?.avatar || "👤"}</div>
             <div className="group-message-body">
               <div className="group-message-label"><span>{item.sender_name}{item.sender_type === "employee" ? " · 数字员工" : ""}</span><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</time></div>
               <ASMessageBubble message={item.message} onUserConfirm={async () => undefined} />

@@ -15,12 +15,7 @@
         <X :size="19" />
       </button>
       <div class="employee-heading">
-        <div class="portrait">
-          <img
-            :src="`/office/person${robotVariant(employee)}_down_0.png`"
-            alt=""
-          />
-        </div>
+        <EmployeeAvatar :avatar="employee.avatar" :size="68" />
         <div class="employee-title">
           <h1 id="office-employee-name">{{ employee.name }}</h1>
           <p>{{ employee.domain || "数字员工" }}</p>
@@ -258,6 +253,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
+import EmployeeAvatar from "../../components/EmployeeAvatar.vue";
 import {
   AlertCircle,
   ArrowUpRight,
@@ -274,7 +270,6 @@ import { HEALTH_TEXT, OCCUPANCY_TEXT, STATUS_TEXT } from "../nebula/layout";
 import {
   employeeState,
   needsAttention,
-  robotVariant,
   STATE_TEXT,
   taskReason,
   workerState,
@@ -374,21 +369,6 @@ function formatTime(value: string) {
   align-items: center;
   gap: 15px;
   margin-top: 20px;
-}
-.portrait {
-  width: 65px;
-  height: 73px;
-  flex-shrink: 0;
-  background: #dce8d5;
-  border: 1px solid #c7d7c1;
-  overflow: hidden;
-  border-radius: 6px;
-}
-.portrait img {
-  width: 65px;
-  height: 98px;
-  image-rendering: pixelated;
-  margin-top: -11px;
 }
 .employee-title {
   min-width: 0;
@@ -859,15 +839,6 @@ summary:focus-visible {
   .employee-heading {
     margin-top: 10px;
     gap: 10px;
-  }
-  .portrait {
-    height: 55px;
-    width: 50px;
-  }
-  .portrait img {
-    width: 50px;
-    height: 75px;
-    margin-top: -8px;
   }
   .employee-title h1 {
     font-size: 19px;

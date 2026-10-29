@@ -42,13 +42,15 @@
         />
         <img
           class="robot robot-a"
-          :src="`/office/person${robotVariant(employee)}_sit_0.png`"
+          :src="employeeAppearance(employee.avatar)?.office.frames[0]"
+          :style="characterStyle(employee.avatar)"
           alt=""
           draggable="false"
         />
         <img
           class="robot robot-b"
-          :src="`/office/person${robotVariant(employee)}_sit_1.png`"
+          :src="employeeAppearance(employee.avatar)?.office.frames[1]"
+          :style="characterStyle(employee.avatar)"
           alt=""
           draggable="false"
         />
@@ -111,11 +113,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
+import { employeeAppearance } from "../../../../shared/employeeAvatar.ts";
 import type { NebulaEmployee, NebulaSnapshot } from "../nebula/types";
 import {
   employeeState,
   officeCamera,
-  robotVariant,
   stationPositions,
   STATE_TEXT,
 } from "./model";
@@ -159,6 +161,17 @@ const camera = computed(() =>
 const worldStyle = computed(() => ({
   transform: `translate(${camera.value.x}px, ${camera.value.y}px) scale(${camera.value.scale})`,
 }));
+function characterStyle(avatar: string) {
+  const pose = employeeAppearance(avatar)?.office;
+  return pose
+    ? {
+        left: `${-pose.width / 2}px`,
+        top: `${pose.top}px`,
+        width: `${pose.width}px`,
+        height: `${pose.height}px`,
+      }
+    : { display: "none" };
+}
 const images = new Map<string, HTMLImageElement>();
 let observer: ResizeObserver | undefined;
 // 墙体与地板按 V5 原始场景绘制；家具和机器人使用提取的原 PNG。

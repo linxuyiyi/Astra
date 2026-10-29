@@ -11,9 +11,40 @@
         </el-form-item>
       </div>
       <el-form-item label="员工形象">
-        <el-select v-model="form.avatar" style="width: 100%">
-          <el-option v-for="item in avatars" :key="item" :label="item" :value="item" />
-        </el-select>
+        <div class="avatar-selection">
+          <div class="avatar-preview">
+            <EmployeeAvatar :avatar="form.avatar" :size="68" /><span
+              ><strong>{{ selectedAppearance?.label || "请选择形象" }}</strong
+              ><small>保存后，办公室和聊天均使用这个角色</small></span
+            >
+          </div>
+          <div
+            v-for="family in avatarFamilies"
+            :key="family.id"
+            class="avatar-family"
+          >
+            <div class="avatar-family-label">{{ family.label }}</div>
+            <div class="avatar-options" role="group" :aria-label="family.label">
+              <button
+                v-for="item in avatars.filter(
+                  (item) => item.family === family.id,
+                )"
+                :key="item.id"
+                type="button"
+                :disabled="saving"
+                :aria-pressed="form.avatar === item.id"
+                :aria-label="`选择${item.label}`"
+                :class="{ selected: form.avatar === item.id }"
+                @click="form.avatar = item.id"
+              >
+                <EmployeeAvatar :avatar="item.id" :size="58" /><span>{{
+                  item.label
+                }}</span>
+              </button>
+            </div>
+          </div>
+          <p class="avatar-attribution">像素人物：BotPixel · MIT</p>
+        </div>
       </el-form-item>
       <el-form-item label="职责说明" prop="description">
         <el-input v-model="form.description" type="textarea" :rows="3" placeholder="例如：负责测试平台的问题定位和需求澄清，不直接改生产配置。" />
@@ -107,6 +138,8 @@ import type { FormInstance, FormRules } from "element-plus";
 import type { Employee, ResourceCatalog } from "../types";
 import type { GatewayRoute } from "../api/gateway";
 import { formatToolLabel } from "../utils/tools";
+import EmployeeAvatar from "./EmployeeAvatar.vue";
+import { EMPLOYEE_APPEARANCES, DEFAULT_EMPLOYEE_AVATAR, employeeAppearance } from "../../../shared/employeeAvatar.ts";
 
 const formRef = ref<FormInstance>();
 const rules: FormRules = {
@@ -184,14 +217,18 @@ const emit = defineEmits<{
   "reload-catalogs": [];
 }>();
 
-const avatars = ["👩🏻‍💻", "🧑🏻‍🔬", "👩🏽‍🚀", "🤖", "🧑🏽‍💻"];
+const avatars = EMPLOYEE_APPEARANCES;
+const avatarFamilies = [
+  { id: "robot", label: "机器人员工" },
+  { id: "pixel", label: "像素同事 · BotPixel" },
+];
 const defaultInstructions = "收到消息后先判断能否直接回答；信息不足时追问；需要其他员工帮助时联系相应员工。";
 const form = reactive({
   name: "",
   domain: "",
   description: "",
   instructions: defaultInstructions,
-  avatar: "👩🏻‍💻",
+  avatar: DEFAULT_EMPLOYEE_AVATAR,
   enabled: true,
   knowledge: [] as string[],
   skills: [] as string[],
@@ -199,6 +236,8 @@ const form = reactive({
   tools: [] as string[],
   model_route_id: "",
 });
+
+const selectedAppearance = computed(() => employeeAppearance(form.avatar));
 
 const guard = useFormGuard({
   isOpen: () => props.open,
@@ -231,7 +270,7 @@ watch(
     form.domain = employee?.domain ?? "";
     form.description = employee?.description ?? "";
     form.instructions = employee?.instructions ?? defaultInstructions;
-    form.avatar = employee?.avatar ?? "👩🏻‍💻";
+    form.avatar = employee?.avatar ?? DEFAULT_EMPLOYEE_AVATAR;
     form.enabled = employee?.enabled ?? true;
     form.knowledge = [...(employee?.knowledge ?? [])];
     form.skills = [...(employee?.skills ?? [])];
@@ -288,4 +327,79 @@ async function submit() {
 .save-error { margin-bottom: 12px; text-align: left; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.avatar-selection {
+  width: 100%;
+}
+.avatar-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 15px;
+  background: #f0f5e9;
+  border: 1px solid #dbe6d1;
+  border-radius: 9px;
+  margin-bottom: 16px;
+}
+.avatar-preview strong {
+  display: block;
+  font-size: 14px;
+  color: #41684d;
+}
+.avatar-preview small {
+  display: block;
+  font-size: 11px;
+  margin-top: 6px;
+  color: #819078;
+}
+.avatar-family + .avatar-family {
+  margin-top: 17px;
+}
+.avatar-family-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6f8268;
+  margin-bottom: 10px;
+}
+.avatar-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+.avatar-options button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid #dde5d6;
+  border-radius: 8px;
+  background: #fafcf6;
+  padding: 12px 4px 9px;
+  color: #6d7d64;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.avatar-options button:hover,
+.avatar-options button:focus-visible {
+  border-color: #8bac83;
+  outline: 2px solid #b8d3a7;
+  outline-offset: 1px;
+}
+.avatar-options button.selected {
+  border-color: #589464;
+  background: #e9f3df;
+  box-shadow: inset 0 0 0 1px #589464;
+  color: #3f754c;
+}
+.avatar-options button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+.avatar-attribution {
+  font-size: 9px;
+  color: #95a18c;
+  margin: 9px 0 0;
+  text-align: right;
+}
 </style>

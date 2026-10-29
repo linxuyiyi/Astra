@@ -25,11 +25,12 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text as sql_text
 
 from .agentscope import PINNED_VERSION, AgentScopeClient, AgentScopeError
 from .auth import install_identity, require_user
+from .avatars import AVATAR_IDS, DEFAULT_AVATAR, validate_avatar
 from .capability import inspect_employee
 from .collaboration import Collaboration
 from .db import connect, employee_from_row, init_schema, message_from_row, new_id, utcnow
@@ -133,7 +134,16 @@ class EmployeeBody(BaseModel):
     domain: str = Field(min_length=1, max_length=42)
     description: str = Field(min_length=1)
     instructions: str = Field(min_length=1)
-    avatar: str = "🤖"
+    avatar: str = Field(
+        default=DEFAULT_AVATAR, max_length=64,
+        description="员工形象目录中的稳定 ID", json_schema_extra={"enum": sorted(AVATAR_IDS)},
+    )
+
+    @field_validator("avatar")
+    @classmethod
+    def supported_avatar(cls, value: str) -> str:
+        return validate_avatar(value)
+
     enabled: bool = True
     knowledge: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
@@ -2317,6 +2327,8 @@ def create_app() -> FastAPI:
         connection=Depends(database),
     ) -> dict[str, Any]:
         current = load_employee(connection, employee_id)
+        if "avatar" not in body.model_fields_set:
+            body.avatar = current["avatar"]
         conflict = find_duplicate(connection, body.name.strip(), body.domain.strip(), employee_id)
         if conflict:
             raise HTTPException(status_code=409, detail=conflict)

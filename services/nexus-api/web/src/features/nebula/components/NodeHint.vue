@@ -11,7 +11,8 @@
       <div class="hint-kind">{{ kindLabel }}</div>
 
       <div class="hint-head">
-        <span class="hint-avatar">{{ avatar }}</span>
+        <EmployeeAvatar v-if="kind === 'employee' && employee" :avatar="employee.avatar" :size="44" />
+        <span v-else class="hint-avatar">{{ avatar }}</span>
         <div class="hint-title">
           <h3>{{ title }}</h3>
           <small v-if="subtitle">{{ subtitle }}</small>
@@ -132,6 +133,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import EmployeeAvatar from "../../../components/EmployeeAvatar.vue";
 import { RouterLink } from "vue-router";
 import {
   HEALTH_TEXT,
@@ -201,7 +203,6 @@ const description = computed(() => {
 });
 
 const avatar = computed(() => {
-  if (props.kind === "employee") return props.employee?.avatar || "✦";
   if (props.kind === "worker" || props.kind === "execution") return "◈";
   if (props.kind === "task") return "▣";
   return "⇄";

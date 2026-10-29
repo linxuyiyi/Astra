@@ -30,28 +30,6 @@ export const STATE_TEXT: Record<OfficeState, string> = {
   offline: "已停用",
   unknown: "状态待确认",
 };
-export const ROBOT_ROLES = [
-  "测试自动化工程师",
-  "测试系统工程师",
-  "防线运营人员",
-];
-export function stableHash(value: string): number {
-  return Array.from(value).reduce(
-    (hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0,
-    0,
-  );
-}
-export function robotVariant(employee: NebulaEmployee): number {
-  const role = `${employee.domain} ${employee.description}`;
-  const group = /自动化|脚本/.test(role)
-    ? 0
-    : /系统|平台|架构/.test(role)
-      ? 1
-      : /防线|运营|巡检/.test(role)
-        ? 2
-        : stableHash(employee.id) % 3;
-  return group * 2 + (stableHash(employee.id) % 2);
-}
 export function employeeState(
   employee: NebulaEmployee,
   degraded = false,

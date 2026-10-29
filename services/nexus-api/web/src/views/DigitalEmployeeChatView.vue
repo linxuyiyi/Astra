@@ -33,7 +33,8 @@
           type="button"
           @click="selectTarget(target.key)"
         >
-          <span class="avatar" :class="{ off: !target.enabled }">{{ target.avatar }}</span>
+          <EmployeeAvatar v-if="target.kind === 'contact'" :avatar="target.avatar" :size="36" :disabled="!target.enabled" />
+          <span v-else class="avatar">{{ target.avatar }}</span>
           <span class="chat-target__meta">
             <b>{{ target.name }}</b>
             <small class="muted">{{ target.subtitle }}</small>
@@ -124,7 +125,8 @@
             <el-button v-if="canManage" size="small" @click="inviteHuman">邀请人类成员</el-button>
           </div>
           <div v-for="person in activeTarget.channel?.members || []" :key="`${person.member_type}:${person.member_id}`" class="member">
-            <span class="avatar">{{ person.avatar }}</span>
+            <EmployeeAvatar v-if="person.member_type === 'employee'" :avatar="person.avatar" :size="36" />
+            <span v-else class="avatar">{{ person.avatar }}</span>
             <div class="member-identity"><b>{{ person.name }}{{ person.member_id === currentUid() ? '（你）' : '' }}</b>
               <small class="muted">{{ person.member_type === 'employee' ? '数字员工' : `${roleLabels[person.role]} · ${person.online ? '在线' : '离线'}` }}</small>
             </div>
@@ -166,13 +168,13 @@
         <el-form-item label="群组目标" required><el-input v-model="groupForm.description" type="textarea" :rows="3" maxlength="2000" show-word-limit /></el-form-item>
         <el-form-item v-if="groupEditingId" label="已有成员">
           <div class="resource-list">
-            <span v-for="employee in employees.filter((item) => groupExistingMemberIds.includes(item.id))" :key="employee.id" class="mini-chip">{{ employee.avatar }} {{ employee.name }}</span>
+            <span v-for="employee in employees.filter((item) => groupExistingMemberIds.includes(item.id))" :key="employee.id" class="mini-chip"><EmployeeAvatar :avatar="employee.avatar" :size="24" /> {{ employee.name }}</span>
           </div>
         </el-form-item>
         <el-form-item :label="groupEditingId ? '添加数字员工' : '参与的数字员工'">
           <el-checkbox-group v-model="groupForm.memberIds">
             <el-checkbox v-for="employee in employees" :key="employee.id" :value="employee.id">
-              {{ employee.avatar }} {{ employee.name }} · {{ employee.domain }}
+              <EmployeeAvatar :avatar="employee.avatar" :size="24" /> {{ employee.name }} · {{ employee.domain }}
             </el-checkbox>
           </el-checkbox-group>
         </el-form-item>
@@ -186,6 +188,7 @@
 </template>
 
 <script setup lang="ts">
+import EmployeeAvatar from "../components/EmployeeAvatar.vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";

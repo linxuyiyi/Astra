@@ -850,7 +850,7 @@ def _body(
         "domain": domain,
         "description": description,
         "instructions": instructions,
-        "avatar": "🌟",
+        "avatar": "robot-v1-1",
         "enabled": enabled,
         "knowledge": knowledge or [],
         "skills": skills or [],

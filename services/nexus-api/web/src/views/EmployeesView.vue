@@ -50,7 +50,7 @@
       <ElTableColumn label="数字员工" min-width="190">
         <template #default="{ row }">
           <div class="person-cell">
-            <span class="avatar" :class="{ off: !row.enabled }">{{ row.avatar }}</span>
+            <EmployeeAvatar :avatar="row.avatar" :size="38" :disabled="!row.enabled" />
             <span class="person-name">
               <b>{{ row.name }}</b>
               <small class="person-id">{{ row.id }}</small>
@@ -154,7 +154,7 @@
     <ElDrawer v-model="viewDrawerOpen" title="员工档案详情" size="520px" :close-on-click-modal="true">
       <div v-if="viewing" class="view-profile">
         <div class="view-hero">
-          <span class="avatar" :class="{ off: !viewing.enabled }">{{ viewing.avatar }}</span>
+          <EmployeeAvatar :avatar="viewing.avatar" :size="64" :disabled="!viewing.enabled" />
           <div class="view-hero-text">
             <h3>{{ viewing.name }}</h3>
             <p class="muted">{{ viewing.domain }}</p>
@@ -283,6 +283,7 @@ import {
   ElTag,
 } from "element-plus";
 import EmployeeDrawer from "../components/EmployeeDrawer.vue";
+import EmployeeAvatar from "../components/EmployeeAvatar.vue";
 import SettingsHeaderActions from "./settings/SettingsHeaderActions.vue";
 import { deleteEmployee, getKnowledge, getMcps, getSkills, getTools, listEmployees, saveEmployee } from "../api";
 import { gatewayApi, type GatewayRoute } from "../api/gateway";
@@ -497,15 +498,12 @@ onMounted(async () => {
 .person-cell { display: flex; align-items: center; gap: 10px; }
 .person-name { display: flex; flex-direction: column; gap: 2px; }
 .person-id { color: var(--astra-text-muted); font-size: 11px; }
-.avatar { font-size: 20px; line-height: 1; }
-.avatar.off { opacity: 0.4; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .mini-chip { font-size: 11px; }
 .muted { color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 
 .view-profile { display: flex; flex-direction: column; gap: 16px; padding: 4px 8px; }
 .view-hero { display: flex; align-items: center; gap: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--astra-border); }
-.view-hero .avatar { font-size: 36px; }
 .view-hero-text h3 { margin: 0 0 4px; color: var(--astra-text-primary); font-size: 18px; }
 .view-hero-text p { margin: 0 0 6px; }
 .view-section { display: flex; flex-direction: column; gap: 6px; }

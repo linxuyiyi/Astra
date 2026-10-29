@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   employeeState,
   officeCamera,
-  robotVariant,
   stationPositions,
   taskReason,
 } from "../src/features/office/model.ts";
@@ -25,15 +24,6 @@ test("degraded data never presents a normal idle/working employee; waiting overr
     "attention",
   );
   assert.equal(employeeState({ ...employee, enabled: false }, true), "offline");
-});
-test("robot variants stay in role pairs and remain stable across order and state changes", () => {
-  assert.ok(robotVariant(employee) < 2);
-  assert.equal(
-    robotVariant(employee),
-    robotVariant({ ...employee, enabled: false }),
-  );
-  assert.ok(robotVariant({ ...employee, domain: "测试系统工程师" }) >= 2);
-  assert.ok(robotVariant({ ...employee, domain: "防线运营人员" }) >= 4);
 });
 test("three/six desks remain separate and focus stays in the visible office area", () => {
   for (const count of [3, 6]) {

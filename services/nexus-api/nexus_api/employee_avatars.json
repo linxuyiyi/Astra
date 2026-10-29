@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "defaultId": "robot-v1-0",
+  "items": [
+    {
+      "id": "robot-v1-0",
+      "label": "薄荷绿机器人",
+      "family": "robot",
+      "source": "Nexus V5",
+      "portrait": "/office/person0_down_0.png",
+      "office": {
+        "frames": [
+          "/office/person0_sit_0.png",
+          "/office/person0_sit_1.png"
+        ],
+        "width": 74,
+        "height": 104,
+        "top": 13
+      }
+    },
+    {
+      "id": "robot-v1-1",
+      "label": "蓝白机器人",
+      "family": "robot",
+      "source": "Nexus V5",
+      "portrait": "/office/person1_down_0.png",
+      "office": {
+        "frames": [
+          "/office/person1_sit_0.png",
+          "/office/person1_sit_1.png"
+        ],
+        "width": 74,
+        "height": 104,
+        "top": 13
+      }
+    },
+    {
+      "id": "robot-v1-2",
+      "label": "薰衣草机器人",
+      "family": "robot",
+      "source": "Nexus V5",
+      "portrait": "/office/person2_down_0.png",
+      "office": {
+        "frames": [
+          "/office/person2_sit_0.png",
+          "/office/person2_sit_1.png"
+        ],
+        "width": 74,
+        "height": 104,
+        "top": 13
+      }
+    },
+    {
+      "id": "robot-v1-3",
+      "label": "琥珀机器人",
+      "family": "robot",
+      "source": "Nexus V5",
+      "portrait": "/office/person3_down_0.png",
+      "office": {
+        "frames": [
+          "/office/person3_sit_0.png",
+          "/office/person3_sit_1.png"
+        ],
+        "width": 74,
+        "height": 104,
+        "top": 13
+      }
+    },
+    {
+      "id": "robot-v1-4",
+      "label": "青柠机器人",
+      "family": "robot",
+      "source": "Nexus V5",
+      "portrait": "/office/person4_down_0.png",
+      "office": {
+        "frames": [
+          "/office/person4_sit_0.png",
+          "/office/person4_sit_1.png"
+        ],
+        "width": 74,
+        "height": 104,
+        "top": 13
+      }
+    },
+    {
+      "id": "robot-v1-5",
+      "label": "珊瑚机器人",
+      "family": "robot",
+      "source": "Nexus V5",
+      "portrait": "/office/person5_down_0.png",
+      "office": {
+        "frames": [
+          "/office/person5_sit_0.png",
+          "/office/person5_sit_1.png"
+        ],
+        "width": 74,
+        "height": 104,
+        "top": 13
+      }
+    },
+    {
+      "id": "botpixel-v1-beret",
+      "label": "金发贝雷帽",
+      "family": "pixel",
+      "source": "BotPixel 0.10.2",
+      "portrait": "/avatars/botpixel-v1-beret.svg",
+      "office": {
+        "frames": [
+          "/avatars/botpixel-v1-beret.svg",
+          "/avatars/botpixel-v1-beret.svg"
+        ],
+        "width": 98,
+        "height": 98,
+        "top": 18
+      }
+    },
+    {
+      "id": "botpixel-v1-braids",
+      "label": "棕发花冠",
+      "family": "pixel",
+      "source": "BotPixel 0.10.2",
+      "portrait": "/avatars/botpixel-v1-braids.svg",
+      "office": {
+        "frames": [
+          "/avatars/botpixel-v1-braids.svg",
+          "/avatars/botpixel-v1-braids.svg"
+        ],
+        "width": 98,
+        "height": 98,
+        "top": 18
+      }
+    },
+    {
+      "id": "botpixel-v1-silver",
+      "label": "银发夹克",
+      "family": "pixel",
+      "source": "BotPixel 0.10.2",
+      "portrait": "/avatars/botpixel-v1-silver.svg",
+      "office": {
+        "frames": [
+          "/avatars/botpixel-v1-silver.svg",
+          "/avatars/botpixel-v1-silver.svg"
+        ],
+        "width": 98,
+        "height": 98,
+        "top": 18
+      }
+    },
+    {
+      "id": "botpixel-v1-headphones",
+      "label": "耳机眼镜",
+      "family": "pixel",
+      "source": "BotPixel 0.10.2",
+      "portrait": "/avatars/botpixel-v1-headphones.svg",
+      "office": {
+        "frames": [
+          "/avatars/botpixel-v1-headphones.svg",
+          "/avatars/botpixel-v1-headphones.svg"
+        ],
+        "width": 98,
+        "height": 98,
+        "top": 18
+      }
+    },
+    {
+      "id": "botpixel-v1-tie",
+      "label": "短发领带",
+      "family": "pixel",
+      "source": "BotPixel 0.10.2",
+      "portrait": "/avatars/botpixel-v1-tie.svg",
+      "office": {
+        "frames": [
+          "/avatars/botpixel-v1-tie.svg",
+          "/avatars/botpixel-v1-tie.svg"
+        ],
+        "width": 98,
+        "height": 98,
+        "top": 18
+      }
+    },
+    {
+      "id": "botpixel-v1-hime",
+      "label": "黑发发饰",
+      "family": "pixel",
+      "source": "BotPixel 0.10.2",
+      "portrait": "/avatars/botpixel-v1-hime.svg",
+      "office": {
+        "frames": [
+          "/avatars/botpixel-v1-hime.svg",
+          "/avatars/botpixel-v1-hime.svg"
+        ],
+        "width": 98,
+        "height": 98,
+        "top": 18
+      }
+    }
+  ]
+}

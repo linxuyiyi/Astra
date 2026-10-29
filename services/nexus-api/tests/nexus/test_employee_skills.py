@@ -24,7 +24,7 @@ def employee_body(**overrides):
         "domain": "测试自动化工程师",
         "description": "负责自动化脚本",
         "instructions": "直接回答。",
-        "avatar": "👩🏻‍💻",
+        "avatar": "robot-v1-0",
         "enabled": True,
         "knowledge": [],
         "skills": [],

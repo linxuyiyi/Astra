@@ -46,7 +46,7 @@ def employee_body(**overrides):
         "domain": "测试自动化工程师",
         "description": "负责自动化脚本",
         "instructions": "能直接回答的问题直接回答；需要同事时联系对方。",
-        "avatar": "👩🏻‍💻",
+        "avatar": "robot-v1-0",
         "enabled": True,
         "knowledge": [],
         "skills": [],
@@ -1602,3 +1602,36 @@ def test_task_skill_is_revoked_and_restored_on_existing_sessions(tmp_path, monke
         mcp_calls = [item for item in calls if item[0] == "POST" and item[1] == "/workspace/mcp"]
         assert {item[2] for item in mcp_calls} == {"ses_chat"}
         assert all(item[3] == "Bearer shared-secret" for item in mcp_calls)
+
+
+def test_employee_avatar_persists_and_metadata_edits_do_not_change_it(client):
+    body = employee_body(avatar="botpixel-v1-headphones")
+    response = client.post("/api/v1/employees", json=body)
+    assert response.status_code == 201
+    employee = response.json()["employee"]
+    assert employee["avatar"] == "botpixel-v1-headphones"
+    changed = {**body, "name": "新名字", "domain": "新职责"}
+    changed.pop("avatar")
+    updated = client.patch(f"/api/v1/employees/{employee['id']}", json=changed)
+    assert updated.status_code == 200
+    assert updated.json()["employee"]["avatar"] == "botpixel-v1-headphones"
+    assert client.get("/api/v1/employees").json()["items"][0]["avatar"] == "botpixel-v1-headphones"
+
+
+@pytest.mark.parametrize("value", [None, "🤖", "unknown", "https://example.com/avatar.svg", "<svg/>"])
+def test_employee_avatar_rejects_unsupported_values_without_writing(client, value):
+    response = client.post("/api/v1/employees", json=employee_body(avatar=value))
+    assert response.status_code == 422
+    assert client.get("/api/v1/employees").json()["items"] == []
+
+
+def test_employee_avatar_default_and_failed_update_preserve_saved_identity(client):
+    body = employee_body()
+    body.pop("avatar")
+    response = client.post("/api/v1/employees", json=body)
+    assert response.status_code == 201
+    employee = response.json()["employee"]
+    assert employee["avatar"] == "robot-v1-0"
+    rejected = client.patch(f"/api/v1/employees/{employee['id']}", json={**body, "avatar": "invalid"})
+    assert rejected.status_code == 422
+    assert client.get("/api/v1/employees").json()["items"][0]["avatar"] == "robot-v1-0"

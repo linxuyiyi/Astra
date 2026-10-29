@@ -15,6 +15,8 @@ export interface LiveLine {
   name: string;
   text: string;
   tools: LiveTool[];
+  /** Wall-clock when REPLY_START arrived; drives footer elapsed tick. */
+  createdAt?: string;
 }
 
 export type ChatAdapterEvent =

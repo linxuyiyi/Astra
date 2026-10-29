@@ -83,6 +83,14 @@
               </a>
             </template>
           </div>
+          <MessageFooter
+            v-if="message.sender === 'user' ? Boolean(message.text?.trim()) : true"
+            :variant="message.sender === 'user' ? 'user' : 'assistant'"
+            :text="message.text"
+            :created-at="message.created_at"
+            :finished-at="message.finished_at"
+            :usage="message.usage"
+          />
         </div>
       </div>
       <div v-for="line in state.liveLines" :key="`live-${line.employeeId}`" class="msg">
@@ -105,6 +113,13 @@
               <pre v-if="tool.output">{{ tool.output }}</pre>
             </details>
           </template>
+          <MessageFooter
+            variant="assistant"
+            :text="line.text"
+            :created-at="line.createdAt"
+            :finished-at="null"
+            force-running
+          />
         </div>
       </div>
       <div
@@ -119,6 +134,13 @@
             <span class="stream-pulse" aria-hidden="true" />
             正在生成…
           </div>
+          <MessageFooter
+            variant="assistant"
+            text=""
+            :created-at="streamingStartedAt"
+            :finished-at="null"
+            force-running
+          />
         </div>
       </div>
       <div v-if="state.notice" class="fail-bar" role="status" data-testid="fail-bar">
@@ -298,6 +320,7 @@ import { renderMarkdown, shouldCollapse } from "../markdown";
 import type { ChatSessionState, ChatTarget, LiveTool } from "../types";
 import { formatClock, useAsrRecorder } from "../useAsrRecorder";
 import HitlCard from "./HitlCard.vue";
+import MessageFooter from "./MessageFooter.vue";
 
 const props = defineProps<{
   state: ChatSessionState;
@@ -312,6 +335,8 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const followLatest = ref(true);
 const showJumpLatest = ref(false);
 const isDropTarget = ref(false);
+/** Wall-clock when empty streaming placeholder appeared (no liveLines yet). */
+const streamingStartedAt = ref<string>(new Date().toISOString());
 let dragDepth = 0;
 const SCROLL_BOTTOM_THRESHOLD = 80;
 const avatar = computed(() => props.target?.avatar || "员");
@@ -537,6 +562,13 @@ function onCodeCopyClick(event: MouseEvent) {
     }, 1600);
   });
 }
+
+watch(
+  () => props.runtime.streaming && !props.state.liveLines.length && !props.state.notice,
+  (showPlaceholder) => {
+    if (showPlaceholder) streamingStartedAt.value = new Date().toISOString();
+  },
+);
 
 watch(
   () => [props.state.messages.length, props.state.liveLines.map((l) => l.text).join(""), props.state.notice, props.state.phase],
@@ -1102,5 +1134,10 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .stream-cursor, .stream-pulse { animation: none; }
   .stream-pulse { box-shadow: none; }
+}
+/* M5: reveal message-level Copy on bubble hover (island group-hover/message). */
+.msg:hover :deep(.msg-footer__copy),
+.msg:focus-within :deep(.msg-footer__copy) {
+  opacity: 1;
 }
 </style>

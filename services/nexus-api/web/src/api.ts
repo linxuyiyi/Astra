@@ -181,6 +181,8 @@ export interface TimelineItem {
   text: string;
   kind: string;
   created_at: string;
+  finished_at?: string | null;
+  usage?: { input_tokens?: number; output_tokens?: number } | null;
   attachments?: Attachment[];
 }
 

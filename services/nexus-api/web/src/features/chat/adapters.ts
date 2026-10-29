@@ -45,6 +45,8 @@ function fromTimeline(item: TimelineItem): ChatMessage {
     text: item.text,
     attachments: item.attachments ?? [],
     created_at: item.created_at,
+    finished_at: item.finished_at,
+    usage: item.usage ?? null,
   };
 }
 
@@ -100,6 +102,7 @@ export class PrivateChatAdapter implements ChatAdapter {
   private reloadSequence = 0;
   private liveText = "";
   private liveTools: LiveTool[] = [];
+  private liveCreatedAt = "";
   private eventCursor = "";
 
   constructor(private employee: Employee, conversation: Conversation) {
@@ -192,6 +195,7 @@ export class PrivateChatAdapter implements ChatAdapter {
           name: this.employee.name,
           text: this.liveText,
           tools: this.liveTools.map((tool) => ({ ...tool })),
+          createdAt: this.liveCreatedAt || undefined,
         }],
       });
     };
@@ -217,6 +221,7 @@ export class PrivateChatAdapter implements ChatAdapter {
               liveActive = true;
               this.liveText = "";
               this.liveTools = [];
+              this.liveCreatedAt = new Date().toISOString();
               publishLive();
               return;
             }
@@ -272,6 +277,7 @@ export class PrivateChatAdapter implements ChatAdapter {
               liveActive = false;
               this.liveText = "";
               this.liveTools = [];
+              this.liveCreatedAt = "";
               emit({ type: "live", lines: [] });
               emit({ type: "finished" });
               void reload();
@@ -439,6 +445,7 @@ export class GroupChatAdapter implements ChatAdapter {
                   name: this.speakerName(employeeId),
                   text: "",
                   tools: [],
+                  createdAt: new Date().toISOString(),
                 });
                 publishLive();
                 return;
@@ -446,47 +453,47 @@ export class GroupChatAdapter implements ChatAdapter {
               if (event.type === "TEXT_BLOCK_DELTA" && typeof event.delta === "string") {
                 const line = this.liveState.get(employeeId);
                 if (line) line.text += event.delta;
-                else this.liveState.set(employeeId, { employeeId, name: this.speakerName(employeeId), text: event.delta, tools: [] });
+                else this.liveState.set(employeeId, { employeeId, name: this.speakerName(employeeId), text: event.delta, tools: [], createdAt: new Date().toISOString() });
                 publishLive();
                 return;
               }
               if (event.type === "TOOL_CALL_START" && typeof event.tool_call_id === "string") {
-                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [], createdAt: new Date().toISOString() };
                 ensureTool(line.tools, event.tool_call_id, typeof event.tool_call_name === "string" ? event.tool_call_name : "");
                 this.liveState.set(employeeId, line);
                 publishLive();
                 return;
               }
               if (event.type === "TOOL_CALL_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
-                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [], createdAt: new Date().toISOString() };
                 ensureTool(line.tools, event.tool_call_id).input += event.delta;
                 this.liveState.set(employeeId, line);
                 publishLive();
                 return;
               }
               if (event.type === "TOOL_CALL_END" && typeof event.tool_call_id === "string") {
-                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [], createdAt: new Date().toISOString() };
                 ensureTool(line.tools, event.tool_call_id);
                 this.liveState.set(employeeId, line);
                 publishLive();
                 return;
               }
               if (event.type === "TOOL_RESULT_TEXT_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
-                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [], createdAt: new Date().toISOString() };
                 ensureTool(line.tools, event.tool_call_id).output += event.delta;
                 this.liveState.set(employeeId, line);
                 publishLive();
                 return;
               }
               if (event.type === "TOOL_RESULT_START" && typeof event.tool_call_id === "string") {
-                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [], createdAt: new Date().toISOString() };
                 ensureTool(line.tools, event.tool_call_id).state = "done";
                 this.liveState.set(employeeId, line);
                 publishLive();
                 return;
               }
               if (event.type === "REQUIRE_USER_CONFIRM") {
-                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
+                const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [], createdAt: new Date().toISOString() };
                 applyRequireUserConfirm(line.tools, event);
                 this.liveState.set(employeeId, line);
                 publishLive();

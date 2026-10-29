@@ -127,6 +127,11 @@ export interface Attachment {
   size: number;
 }
 
+export interface ChatMessageUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+}
+
 export interface ChatMessage {
   id: string;
   sender: string;
@@ -135,6 +140,9 @@ export interface ChatMessage {
   tools?: { id: string; name: string; input: string; output: string; state: string }[];
   attachments: Attachment[];
   created_at: string;
+  /** AgentScope: null while running; ISO string when done. Missing = legacy finished. */
+  finished_at?: string | null;
+  usage?: ChatMessageUsage | null;
 }
 
 export interface Conversation {

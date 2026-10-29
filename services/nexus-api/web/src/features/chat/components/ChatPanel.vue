@@ -594,12 +594,34 @@ watch(
   { immediate: true },
 );
 
+/** Island TextInput parity: 52px collapsed, grow to ~6 lines then scroll. */
+const COMPOSE_LINE_PX = 21;
+const COMPOSE_COLLAPSED_PX = 52;
+const COMPOSE_PAD_Y_PX = (COMPOSE_COLLAPSED_PX - COMPOSE_LINE_PX) / 2; // 15.5
+const COMPOSE_MAX_PX = COMPOSE_LINE_PX * 6 + COMPOSE_PAD_Y_PX * 2; // 157
+
+function syncComposeHeight() {
+  const el = inputEl.value;
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${Math.min(el.scrollHeight, COMPOSE_MAX_PX)}px`;
+}
+
+watch(
+  () => props.state.draft,
+  async () => {
+    await nextTick();
+    syncComposeHeight();
+  },
+);
+
 onMounted(() => {
   window.addEventListener("keydown", focusInput);
   messageBox.value?.addEventListener("scroll", onMessagesScroll, { passive: true });
   messageBox.value?.addEventListener("click", onCodeCopyClick);
   scrollBottom();
   inputEl.value?.focus();
+  syncComposeHeight();
 });
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", focusInput);
@@ -732,7 +754,7 @@ onBeforeUnmount(() => {
   margin-bottom: -2px; /* with msg-body gap 6 → ~4px to bubble */
 }
 .chat-compose {
-  padding: 14px 20px 18px;
+  padding: 10px 20px 12px;
   border-top: 1px solid #edf2ef;
   display: flex;
   flex-direction: column;
@@ -749,7 +771,7 @@ onBeforeUnmount(() => {
   border-color: var(--green, #188b69);
   border-style: dashed;
 }
-.compose-hint { margin-top: 8px; font-size: 11px; width: 100%; max-width: 760px; }
+.compose-hint { margin-top: 4px; font-size: 11px; width: 100%; max-width: 760px; }
 .compose-row {
   display: flex;
   align-items: flex-end;
@@ -757,6 +779,7 @@ onBeforeUnmount(() => {
   min-height: 52px;
 }
 .compose-row textarea {
+  /* C2/C4/C5 single source: collapsed 52, max ~6 lines (157px), pad-y 15.5 */
   flex: 1;
   min-width: 0;
   border: 0;
@@ -764,7 +787,8 @@ onBeforeUnmount(() => {
   outline: none;
   background: transparent;
   min-height: 52px;
-  max-height: 168px;
+  max-height: 157px;
+  overflow-y: auto;
   padding: 15.5px 4px;
   line-height: 21px;
   font-size: 14px;

@@ -33,7 +33,7 @@
       >
         <span class="avatar">{{ message.sender === 'user' ? '我' : avatar }}</span>
         <div class="msg-body">
-          <div class="muted">{{ senderLabel(message) }}</div>
+          <div v-if="senderLabel(message)" class="muted">{{ senderLabel(message) }}</div>
           <div v-if="message.text" class="bubble markdown" v-html="renderMarkdown(message.text)" />
           <template v-for="tool in message.tools || []" :key="tool.id">
             <HitlCard v-if="tool.state === 'asking'" :tool="asLiveTool(tool)" @confirm="(choice) => onHitl(tool.id, choice)" />
@@ -394,7 +394,10 @@ async function ensurePreview(file: Attachment) {
 function senderLabel(message: ChatMessage) {
   const speaker = message.speaker || "";
   const me = currentUid();
-  if (message.sender === "user" && (!speaker || speaker === "user" || (me && speaker === me))) return "你";
+  const isSelf =
+    message.sender === "user" && (!speaker || speaker === "user" || (me && speaker === me));
+  // 一对一：自己气泡不显示「你」名行；群聊仍显示说话人名（含自己）。
+  if (isSelf) return props.target?.kind === "group" ? "你" : "";
   const identity = speaker && speaker !== "user" ? speaker : message.sender;
   if (identity === props.target?.id) return props.target?.name || "数字员工";
   return identity || "数字员工";

@@ -30,17 +30,44 @@
             </details>
           </template>
           <div v-if="message.attachments?.length" class="message-attachments">
-            <a
-              v-for="file in message.attachments"
-              :key="file.id"
-              class="sent-attachment"
-              :href="attachmentUrl(file.id)"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <img v-if="imageFile(file.type)" :src="attachmentUrl(file.id)" :alt="file.name" />
-              <span v-else>{{ file.name }}</span>
-            </a>
+            <template v-for="file in message.attachments" :key="file.id">
+              <a
+                v-if="imageFile(file.type)"
+                class="sent-attachment"
+                :href="attachmentUrl(file.id)"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <img :src="attachmentUrl(file.id)" :alt="file.name" />
+              </a>
+              <details
+                v-else-if="textFile(file.type)"
+                class="sent-attachment text-preview"
+                :open="previewOpen[file.id] !== false"
+              >
+                <summary>
+                  <a :href="attachmentUrl(file.id)" target="_blank" rel="noreferrer" @click.stop>{{ file.name }}</a>
+                  <span class="muted"> · 正文预览</span>
+                </summary>
+                <pre v-if="previewLoading[file.id]" class="attach-preview muted">加载中…</pre>
+                <pre v-else-if="previewError[file.id]" class="attach-preview muted">{{ previewError[file.id] }}</pre>
+                <div
+                  v-else-if="file.type.includes('markdown') || file.name.endsWith('.md')"
+                  class="attach-preview markdown"
+                  v-html="renderMarkdown(previewText[file.id] || '')"
+                />
+                <pre v-else class="attach-preview">{{ previewText[file.id] }}</pre>
+              </details>
+              <a
+                v-else
+                class="sent-attachment"
+                :href="attachmentUrl(file.id)"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span>{{ file.name }}</span>
+              </a>
+            </template>
           </div>
         </div>
       </div>
@@ -49,6 +76,7 @@
         <div class="msg-body">
           <div class="muted">{{ line.name }} · 正在回复</div>
           <div v-if="line.text" class="bubble markdown" v-html="renderMarkdown(line.text)" />
+          <div v-else class="bubble muted streaming-placeholder">正在生成…</div>
           <template v-for="tool in line.tools" :key="tool.id">
             <HitlCard v-if="tool.state === 'asking'" :tool="tool" @confirm="onHitl" />
             <details v-else class="tool-card" open>
@@ -57,6 +85,17 @@
               <pre v-if="tool.output">{{ tool.output }}</pre>
             </details>
           </template>
+        </div>
+      </div>
+      <div
+        v-if="runtime.streaming && !state.liveLines.length && !state.notice"
+        class="msg"
+        data-testid="streaming-placeholder"
+      >
+        <span class="avatar">{{ avatar }}</span>
+        <div class="msg-body">
+          <div class="muted">{{ target?.name || '数字员工' }} · 正在回复</div>
+          <div class="bubble muted streaming-placeholder">正在生成…</div>
         </div>
       </div>
       <div v-if="state.notice" class="msg system" role="status">
@@ -73,11 +112,40 @@
           <el-button text size="small" @click="runtime.removeDraftFile(file.id)">移除</el-button>
         </div>
       </div>
+      <div
+        v-if="asrState !== 'idle' || asrError || asrRequesting"
+        class="asr-status"
+        data-testid="asr-status"
+        role="status"
+      >
+        <span v-if="asrRequesting" class="muted">正在请求麦克风…</span>
+        <span v-else-if="asrState === 'recording'" class="asr-recording">
+          录音中 {{ formatClock(asrSeconds) }}，再次点击结束
+        </span>
+        <span v-else-if="asrState === 'transcribing'" class="muted">正在识别…</span>
+        <span v-else-if="asrState === 'error'" class="asr-error" role="alert">{{ asrError }}</span>
+        <el-button v-if="asrState === 'recording'" text size="small" @click="asrCancel()">取消</el-button>
+        <el-button v-if="asrState === 'error'" text size="small" type="primary" @click="asrRetry()">重试</el-button>
+      </div>
       <div class="compose-box">
         <el-tooltip content="添加附件" placement="top">
           <el-button circle aria-label="添加附件" :disabled="!canType" @click="pickFiles">＋</el-button>
         </el-tooltip>
-        <!-- 藏麦：不渲染麦克风入口；⌘K / Ctrl+K 聚焦输入 -->
+        <el-tooltip :content="micTooltip" placement="top">
+          <el-button
+            circle
+            class="asr-mic"
+            :class="{ recording: asrState === 'recording' }"
+            data-testid="asr-mic"
+            :aria-label="asrState === 'recording' ? '停止录音' : '语音输入（转文字）'"
+            :disabled="!canType || asrState === 'transcribing'"
+            :loading="asrState === 'transcribing' || asrRequesting"
+            @click="asrToggle()"
+          >
+            <span v-if="asrState === 'recording'" aria-hidden="true">■</span>
+            <span v-else aria-hidden="true">🎤</span>
+          </el-button>
+        </el-tooltip>
         <textarea
           ref="inputEl"
           v-model="state.draft"
@@ -103,19 +171,20 @@
           @click="doSend"
         >发送</el-button>
       </div>
-      <div class="compose-hint muted">Enter 发送 · Shift+Enter 换行 · ⌘K 聚焦 · 麦克风已隐藏</div>
+      <div class="compose-hint muted">Enter 发送 · Shift+Enter 换行 · ⌘K 聚焦 · 点击麦克风语音输入</div>
       <input ref="fileInput" type="file" multiple hidden accept="image/*,application/pdf,text/*" @change="onFileChange" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { attachmentUrl, currentUid } from "@/api";
-import type { ChatMessage } from "@/types";
+import type { Attachment, ChatMessage } from "@/types";
 import { ChatRuntime, imageFile } from "../ChatRuntime";
 import { renderMarkdown, shouldCollapse } from "../markdown";
 import type { ChatSessionState, ChatTarget, LiveTool } from "../types";
+import { formatClock, useAsrRecorder } from "../useAsrRecorder";
 import HitlCard from "./HitlCard.vue";
 
 const props = defineProps<{
@@ -138,6 +207,60 @@ const placeholder = computed(() =>
     ? "发送消息，@数字员工，或拖入、粘贴图片…"
     : "发送消息，或拖入、粘贴图片…",
 );
+const sessionKey = computed(() => props.state.key);
+const asrEnabled = computed(() => canType.value);
+const {
+  state: asrState,
+  seconds: asrSeconds,
+  error: asrError,
+  requesting: asrRequesting,
+  toggle: asrToggle,
+  cancel: asrCancel,
+  retry: asrRetry,
+} = useAsrRecorder({
+  enabled: asrEnabled,
+  sessionKey,
+  onText: (text) => {
+    const draft = props.state.draft.trim();
+    props.state.draft = draft ? `${draft} ${text}` : text;
+    void nextTick(() => inputEl.value?.focus());
+  },
+});
+const micTooltip = computed(() => {
+  if (asrState.value === "recording") return `录音中 ${formatClock(asrSeconds.value)}`;
+  if (asrState.value === "transcribing") return "正在识别…";
+  if (asrError.value) return asrError.value;
+  return "语音输入（转文字）";
+});
+
+const previewText = reactive<Record<string, string>>({});
+const previewLoading = reactive<Record<string, boolean>>({});
+const previewError = reactive<Record<string, string>>({});
+const previewOpen = reactive<Record<string, boolean>>({});
+const previewFetched = new Set<string>();
+
+function textFile(type: string) {
+  const lower = (type || "").toLowerCase();
+  return lower.startsWith("text/") || lower === "application/markdown" || lower.includes("markdown");
+}
+
+async function ensurePreview(file: Attachment) {
+  if (!textFile(file.type) || previewFetched.has(file.id)) return;
+  previewFetched.add(file.id);
+  previewLoading[file.id] = true;
+  previewError[file.id] = "";
+  try {
+    const response = await fetch(attachmentUrl(file.id), { credentials: "same-origin" });
+    if (!response.ok) throw new Error(`无法加载附件（HTTP ${response.status}）`);
+    const text = await response.text();
+    previewText[file.id] = text.length > 20_000 ? `${text.slice(0, 20_000)}\n…（已截断）` : text;
+    if (previewOpen[file.id] === undefined) previewOpen[file.id] = text.length < 4000;
+  } catch (error) {
+    previewError[file.id] = error instanceof Error ? error.message : "附件预览失败";
+  } finally {
+    previewLoading[file.id] = false;
+  }
+}
 
 function senderLabel(message: ChatMessage) {
   const speaker = message.speaker || "";
@@ -210,11 +333,23 @@ function scrollBottom() {
 }
 
 watch(
-  () => [props.state.messages.length, props.state.liveLines.map((l) => l.text).join(""), props.state.notice],
+  () => [props.state.messages.length, props.state.liveLines.map((l) => l.text).join(""), props.state.notice, props.state.phase],
   async () => {
     await nextTick();
     scrollBottom();
   },
+);
+
+watch(
+  () => props.state.messages.map((message) => (message.attachments || []).map((file) => `${file.id}:${file.type}`).join(",")).join("|"),
+  () => {
+    for (const message of props.state.messages) {
+      for (const file of message.attachments || []) {
+        if (textFile(file.type)) void ensurePreview(file);
+      }
+    }
+  },
+  { immediate: true },
 );
 
 onMounted(() => {
@@ -232,6 +367,20 @@ onBeforeUnmount(() => window.removeEventListener("keydown", focusInput));
 .msg-body { min-width: 0; display: grid; gap: 6px; }
 .chat-compose { padding: 12px 17px 16px; border-top: 1px solid #edf2ef; }
 .compose-hint { margin-top: 6px; font-size: 11px; }
+.asr-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.asr-recording { color: #c0392b; font-weight: 600; }
+.asr-error { color: #b42318; }
+.asr-mic.recording {
+  background: #e74c3c;
+  border-color: #e74c3c;
+  color: #fff;
+}
 .tool-card {
   border: 1px solid #e1ece5;
   border-radius: 10px;
@@ -260,4 +409,22 @@ onBeforeUnmount(() => window.removeEventListener("keydown", focusInput));
 }
 .sent-attachment.image, .draft-file { display: flex; gap: 8px; align-items: center; }
 .sent-attachment img, .draft-file img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; }
+.text-preview {
+  display: block;
+  max-width: min(520px, 100%);
+  padding: 8px 10px;
+}
+.text-preview summary { cursor: pointer; }
+.attach-preview {
+  margin: 8px 0 0;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  background: #f7fbf8;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.streaming-placeholder { font-style: italic; opacity: 0.85; }
 </style>

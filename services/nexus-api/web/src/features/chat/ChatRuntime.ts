@@ -43,9 +43,12 @@ export class ChatRuntime {
     this.state.generation += 1;
   }
 
+  private followAlive = false;
+
   private stopFollow() {
     this.state.abort?.abort();
     this.state.abort = null;
+    this.followAlive = false;
   }
 
   private startFollow() {
@@ -55,19 +58,24 @@ export class ChatRuntime {
     const generation = ++this.state.generation;
     const abort = new AbortController();
     this.state.abort = abort;
+    this.followAlive = true;
     const emit = (event: ChatAdapterEvent) => {
       if (this.state.generation !== generation || this.state.adapter !== adapter) return;
       if (event.type === "messages") {
         const before = this.state.messages.length;
         this.state.messages = mergeMessages(this.state.messages, event.messages);
         this.updateSummary();
-        if (this.state.liveLines.length === 0) this.state.phase = "idle";
+        // 历史刷新不等于停流：仅当没有 live 行且不在 interrupting 时回到 idle。
+        if (this.state.liveLines.length === 0 && this.state.phase !== "interrupting" && this.state.phase !== "streaming") {
+          this.state.phase = "idle";
+        }
         if (!this.isActive() && this.state.messages.length > before) {
           this.bumpUnread(this.state.messages.length - before);
         }
       } else if (event.type === "live") {
         this.state.liveLines = event.lines;
         this.state.phase = event.lines.length ? "streaming" : this.state.phase === "interrupting" ? "interrupting" : "idle";
+        if (event.lines.length) this.state.notice = "";
         if (!this.isActive() && event.lines.length) this.bumpUnread(1);
       } else if (event.type === "notice") {
         this.state.notice = shortText(event.text, event.text);
@@ -78,8 +86,20 @@ export class ChatRuntime {
     };
     void adapter.follow(abort.signal, emit).catch((error) => {
       if (abort.signal.aborted || this.state.generation !== generation) return;
+      this.followAlive = false;
       this.state.notice = shortText(error);
+    }).finally(() => {
+      if (this.state.generation === generation && this.state.abort === abort) {
+        this.followAlive = false;
+      }
     });
+  }
+
+  /** 发送后若 follow 已退出，立即重连，避免 phase=streaming 却收不到 delta。 */
+  private ensureFollow() {
+    if (!this.state.adapter) return;
+    if (this.followAlive && this.state.abort && !this.state.abort.signal.aborted) return;
+    this.startFollow();
   }
 
   private updateSummary() {
@@ -112,6 +132,7 @@ export class ChatRuntime {
       if (sameIds(this.state.draftFiles.map((item) => item.id), fileIds)) this.state.draftFiles = [];
       if (result.notice) this.state.notice = shortText(result.notice, result.notice);
       this.state.phase = "streaming";
+      this.ensureFollow();
       return true;
     } catch (error) {
       this.state.notice = shortText(error);

@@ -136,18 +136,22 @@ export class PrivateChatAdapter implements ChatAdapter {
     if (payload.history_error) emit({ type: "notice", text: payload.history_error });
     if (!payload.agentscope_session_id) return;
 
-    const seen = new Set<string>();
+    const seen = new Set<string>(); // event id de-dupe across reconnects
     const cursor = { value: this.eventCursor };
+    let liveActive = false;
     const reload = () => {
       const sequence = ++this.reloadSequence;
       return getConversation(this.conversation.id).then((next) => {
         if (!sequenceIsCurrent(sequence, this.reloadSequence, signal.aborted)) return;
         this.conversation.agentscope_session_id = next.agentscope_session_id;
+        this.eventCursor = maxCursor(this.eventCursor, next.event_cursor || "");
+        cursor.value = maxCursor(cursor.value, this.eventCursor);
         emit({ type: "messages", messages: next.messages });
       }).catch(() => undefined);
     };
     const publishLive = () => {
-      if (!this.liveText && !this.liveTools.length) {
+      // REPLY_START 后即便尚无 delta，也要推一条空 live，避免「停止」可见却无「正在回复」。
+      if (!liveActive && !this.liveText && !this.liveTools.length) {
         emit({ type: "live", lines: [] });
         return;
       }
@@ -163,58 +167,77 @@ export class PrivateChatAdapter implements ChatAdapter {
     };
     publishLive();
 
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    // 对齐岛侧 raw=1：同连接承接多轮回复，不因 NEXUS_RUN_FINISHED 关流。
+    for (let attempt = 0; attempt < 32; attempt += 1) {
       if (signal.aborted) return;
-      const query = cursor.value ? `?after=${encodeURIComponent(cursor.value)}` : "";
-      let sawEvent = false;
-      let finished = false;
+      const params = new URLSearchParams({ raw: "1" });
+      if (cursor.value) params.set("after", cursor.value);
       try {
-        await readEventStream(`/api/v1/conversations/${this.conversation.id}/stream${query}`, signal, (event) => {
-          sawEvent = true;
-          cursor.value = streamCursor(cursor.value, event.id);
-          this.eventCursor = cursor.value;
-          if (typeof event.id === "string") {
-            if (seen.has(event.id)) return;
-            seen.add(event.id);
-          }
-          if (event.type === "TEXT_BLOCK_DELTA" && typeof event.delta === "string") {
-            this.liveText += event.delta;
-            publishLive();
-          }
-          if (event.type === "TOOL_CALL_START" && typeof event.tool_call_id === "string") {
-            ensureTool(this.liveTools, event.tool_call_id, typeof event.tool_call_name === "string" ? event.tool_call_name : "");
-            publishLive();
-          }
-          if (event.type === "TOOL_CALL_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
-            ensureTool(this.liveTools, event.tool_call_id).input += event.delta;
-            publishLive();
-          }
-          if (event.type === "TOOL_RESULT_TEXT_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
-            ensureTool(this.liveTools, event.tool_call_id).output += event.delta;
-            publishLive();
-          }
-          if (event.type === "TOOL_RESULT_START" && typeof event.tool_call_id === "string") {
-            ensureTool(this.liveTools, event.tool_call_id).state = "done";
-            publishLive();
-          }
-          if (event.type === "REPLY_END" || event.type === "NEXUS_RUN_FINISHED") {
-            const reason = String(event.finished_reason ?? "");
-            if (reason === "error" || reason === "interrupted") {
-              emit({ type: "notice", text: reason === "interrupted" ? "回复已中断" : "回复失败" });
+        await readEventStream(
+          `/api/v1/conversations/${this.conversation.id}/stream?${params.toString()}`,
+          signal,
+          (event) => {
+            cursor.value = streamCursor(cursor.value, event.id);
+            this.eventCursor = cursor.value;
+            if (typeof event.id === "string") {
+              if (seen.has(event.id)) return;
+              seen.add(event.id);
             }
-            this.liveText = "";
-            this.liveTools.length = 0;
-            emit({ type: "live", lines: [] });
-            void reload();
-            finished = true;
-            return;
-          }
-          if (event.type === "NEXUS_UPSTREAM_ERROR") {
-            emit({ type: "notice", text: String(event.detail ?? "事件流中断") });
-          }
-        });
-        if (finished || signal.aborted) return;
-        if (!sawEvent) return;
+            if (event.type === "REPLY_START") {
+              liveActive = true;
+              this.liveText = "";
+              this.liveTools = [];
+              publishLive();
+              return;
+            }
+            if (event.type === "TEXT_BLOCK_DELTA" && typeof event.delta === "string") {
+              liveActive = true;
+              this.liveText += event.delta;
+              publishLive();
+              return;
+            }
+            if (event.type === "TOOL_CALL_START" && typeof event.tool_call_id === "string") {
+              liveActive = true;
+              ensureTool(this.liveTools, event.tool_call_id, typeof event.tool_call_name === "string" ? event.tool_call_name : "");
+              publishLive();
+              return;
+            }
+            if (event.type === "TOOL_CALL_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
+              ensureTool(this.liveTools, event.tool_call_id).input += event.delta;
+              publishLive();
+              return;
+            }
+            if (event.type === "TOOL_RESULT_TEXT_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
+              ensureTool(this.liveTools, event.tool_call_id).output += event.delta;
+              publishLive();
+              return;
+            }
+            if (event.type === "TOOL_RESULT_START" && typeof event.tool_call_id === "string") {
+              ensureTool(this.liveTools, event.tool_call_id).state = "done";
+              publishLive();
+              return;
+            }
+            if (event.type === "REPLY_END" || event.type === "NEXUS_RUN_FINISHED") {
+              const reason = String(event.finished_reason ?? "");
+              if (reason === "error" || reason === "interrupted") {
+                emit({ type: "notice", text: reason === "interrupted" ? "回复已中断" : "回复失败" });
+              }
+              liveActive = false;
+              this.liveText = "";
+              this.liveTools = [];
+              emit({ type: "live", lines: [] });
+              emit({ type: "finished" });
+              void reload();
+              // raw=1 下继续听下一轮，不退出 follow。
+              return;
+            }
+            if (event.type === "NEXUS_UPSTREAM_ERROR") {
+              emit({ type: "notice", text: String(event.detail ?? "事件流中断") });
+            }
+          },
+        );
+        if (signal.aborted) return;
+        // 连接被服务端正常结束：短暂退避后带着 cursor 重连，保住后续发送的 delta。
         await delay(400, signal);
       } catch (error) {
         if (signal.aborted) return;
@@ -341,9 +364,10 @@ export class GroupChatAdapter implements ChatAdapter {
       this.memberSeen.set(employeeId, seen);
       const cursor = { value: this.memberCursors.get(employeeId) ?? "" };
       try {
-        const query = cursor.value ? `?after=${encodeURIComponent(cursor.value)}` : "";
+        const params = new URLSearchParams({ raw: "1" });
+        if (cursor.value) params.set("after", cursor.value);
         await readEventStream(
-          `/api/v1/channels/${this.channel.id}/members/${employeeId}/stream${query}`,
+          `/api/v1/channels/${this.channel.id}/members/${employeeId}/stream?${params.toString()}`,
           signal,
           (event) => {
             cursor.value = streamCursor(cursor.value, event.id);
@@ -352,28 +376,42 @@ export class GroupChatAdapter implements ChatAdapter {
               if (seen.has(event.id)) return;
               seen.add(event.id);
             }
+            if (event.type === "REPLY_START") {
+              this.liveState.set(employeeId, {
+                employeeId,
+                name: this.speakerName(employeeId),
+                text: "",
+                tools: [],
+              });
+              publishLive();
+              return;
+            }
             if (event.type === "TEXT_BLOCK_DELTA" && typeof event.delta === "string") {
               const line = this.liveState.get(employeeId);
               if (line) line.text += event.delta;
               else this.liveState.set(employeeId, { employeeId, name: this.speakerName(employeeId), text: event.delta, tools: [] });
               publishLive();
+              return;
             }
             if (event.type === "TOOL_CALL_START" && typeof event.tool_call_id === "string") {
               const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
               ensureTool(line.tools, event.tool_call_id, typeof event.tool_call_name === "string" ? event.tool_call_name : "");
               this.liveState.set(employeeId, line);
               publishLive();
+              return;
             }
             if (event.type === "TOOL_RESULT_TEXT_DELTA" && typeof event.tool_call_id === "string" && typeof event.delta === "string") {
               const line = this.liveState.get(employeeId) ?? { employeeId, name: this.speakerName(employeeId), text: "", tools: [] };
               ensureTool(line.tools, event.tool_call_id).output += event.delta;
               this.liveState.set(employeeId, line);
               publishLive();
+              return;
             }
-            if (event.type === "REPLY_END") {
+            if (event.type === "REPLY_END" || event.type === "NEXUS_RUN_FINISHED") {
               this.liveState.delete(employeeId);
               publishLive();
               void reload();
+              return;
             }
             if (event.type === "NEXUS_UPSTREAM_ERROR") {
               emit({ type: "notice", text: String(event.detail ?? "事件流中断") });

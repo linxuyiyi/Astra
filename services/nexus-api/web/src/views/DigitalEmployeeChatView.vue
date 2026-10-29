@@ -41,7 +41,6 @@
             <small class="muted">{{ railSummary(target.key) || target.subtitle }}</small>
           </span>
           <span v-if="unreadOf(target.key)" class="unread-badge" :aria-label="`${unreadOf(target.key)} 条未读`">{{ unreadOf(target.key) > 99 ? '99+' : unreadOf(target.key) }}</span>
-          <span v-else-if="target.kind === 'group'" class="tag">群组</span>
         </button>
         <div v-if="!filteredTargets.length" class="muted" style="padding: 12px 4px">没有匹配的联系人或群组</div>
       </aside>
@@ -50,11 +49,22 @@
         <div v-if="activeTarget" class="chat-head">
           <div class="chat-head__copy">
             <h2 :title="activeTarget.name">{{ activeTarget.name }}</h2>
-            <p v-if="activeTarget.kind === 'group'" class="muted">{{ activeTarget.channel?.description }}</p>
+            <p v-if="activeTarget.kind === 'group' && activeTarget.channel?.description" class="chat-head__desc muted">{{ activeTarget.channel?.description }}</p>
             <p v-else-if="!activeTarget.enabled" class="muted">已禁用</p>
           </div>
           <div class="chat-head__actions">
-            <el-button v-if="activeTarget.kind === 'group' && canManage" size="small" @click="openGroupDialog(activeTarget.channel)">群组设置</el-button>
+            <el-dropdown
+              v-if="activeTarget.kind === 'group' && canManage"
+              trigger="click"
+              @command="onChatHeadCommand"
+            >
+              <button type="button" class="chat-head-more" aria-label="更多操作" data-testid="chat-head-more">⋯</button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="group-settings">群组设置</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
             <el-button @click="asideOpen = !asideOpen">{{ asideOpen ? "收起资料" : "查看资料" }}</el-button>
           </div>
         </div>
@@ -127,16 +137,38 @@
           </div>
           <div v-for="person in activeTarget.channel?.members || []" :key="`${person.member_type}:${person.member_id}`" class="member">
             <span class="avatar">{{ person.avatar }}</span>
-            <div class="member-identity"><b>{{ person.name }}{{ person.member_id === currentUid() ? '（你）' : '' }}</b>
-              <small class="muted">{{ person.member_type === 'employee' ? '数字员工' : `${roleLabels[person.role]} · ${person.online ? '在线' : '离线'}` }}</small>
+            <div class="member-identity">
+              <b class="member-name">{{ person.name }}{{ person.member_id === currentUid() ? '（你）' : '' }}</b>
+              <small class="member-role muted">{{ person.member_type === 'employee' ? '数字员工' : `${roleLabels[person.role]} · ${person.online ? '在线' : '离线'}` }}</small>
             </div>
-            <template v-if="person.member_type === 'human' && person.role !== 'owner' && canManage">
-              <el-select v-if="activeTarget.channel?.my_role === 'owner'" :model-value="person.role" size="small" style="width:88px" @change="(value: unknown) => setRole(person.member_id, String(value))">
-                <el-option label="管理员" value="admin" /><el-option label="成员" value="member" />
-              </el-select>
-              <el-button v-if="person.member_id !== currentUid()" text type="danger" size="small" @click="removeHuman(person.member_id)">移除</el-button>
-              <el-button v-if="activeTarget.channel?.my_role === 'owner'" text size="small" @click="transferOwner(person.member_id)">转让</el-button>
-            </template>
+            <el-dropdown
+              v-if="person.member_type === 'human' && person.role !== 'owner' && canManage"
+              trigger="click"
+              @command="onMemberCommand"
+            >
+              <button type="button" class="member-more" aria-label="成员操作" data-testid="member-more">⋯</button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item
+                    v-if="activeTarget.channel?.my_role === 'owner' && person.role !== 'admin'"
+                    :command="`role:admin:${person.member_id}`"
+                  >设为管理员</el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="activeTarget.channel?.my_role === 'owner' && person.role !== 'member'"
+                    :command="`role:member:${person.member_id}`"
+                  >设为成员</el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="person.member_id !== currentUid()"
+                    :command="`remove:${person.member_id}`"
+                    divided
+                  >移除</el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="activeTarget.channel?.my_role === 'owner'"
+                    :command="`transfer:${person.member_id}`"
+                  >转让群主</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
           <el-button v-if="activeTarget.channel?.my_role !== 'owner'" type="danger" plain size="small" @click="leaveGroup">退出群组</el-button>
 
@@ -470,6 +502,20 @@ async function applyRouteTarget() {
 
 
 
+function onChatHeadCommand(command: string) {
+  if (command === "group-settings" && activeTarget.value?.kind === "group") {
+    openGroupDialog(activeTarget.value.channel);
+  }
+}
+
+function onMemberCommand(command: string | number) {
+  const raw = String(command);
+  const [action, a, b] = raw.split(":");
+  if (action === "role" && a && b) void setRole(b, a);
+  else if (action === "remove" && a) void removeHuman(a);
+  else if (action === "transfer" && a) void transferOwner(a);
+}
+
 function openGroupDialog(channel?: Channel) {
   groupEditingId.value = channel?.id ?? null;
   groupExistingMemberIds.value = channel?.members.filter(item => item.member_type === "employee").map((item) => item.employee_id) ?? [];
@@ -628,8 +674,27 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .member-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.member { flex-wrap:wrap; }
-.member-identity { flex:1; min-width:0; overflow-wrap:anywhere; }
+.member { flex-wrap:nowrap; }
+.member-identity { flex:1; min-width:0; overflow-wrap:anywhere; display:grid; gap:2px; }
+.member-name { font-size: 12px; font-weight: 600; line-height: 1.3; }
+.member-role { font-size: 10.5px; line-height: 1.35; }
+.member-more,
+.chat-head-more {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b8979;
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.member-more:hover,
+.chat-head-more:hover { background: #eef7f2; color: #188b69; }
 .chat-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .chat-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .chat-search-row :deep(.el-input) { flex: 1; }
@@ -710,6 +775,26 @@ onBeforeUnmount(() => {
 .chat-target__meta { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .chat-target__meta b, .chat-target__meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-head__actions { display: flex; flex: none; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chat-head__copy h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.chat-head__desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.chat-target__meta small {
+  font-size: 11px;
+  line-height: 1.35;
+}
 .unread-badge {
   flex: none;
   min-width: 18px;

@@ -33,7 +33,7 @@
       >
         <span class="avatar">{{ message.sender === 'user' ? '我' : avatar }}</span>
         <div class="msg-body">
-          <div v-if="senderLabel(message)" class="muted">{{ senderLabel(message) }}</div>
+          <div v-if="senderLabel(message)" class="msg-sender-name muted">{{ senderLabel(message) }}</div>
           <div v-if="message.text" class="bubble markdown" v-html="renderMarkdown(message.text)" />
           <template v-for="tool in message.tools || []" :key="tool.id">
             <HitlCard v-if="tool.state === 'asking'" :tool="asLiveTool(tool)" @confirm="(choice) => onHitl(tool.id, choice)" />
@@ -693,6 +693,12 @@ onBeforeUnmount(() => {
   padding: 5px 11px;
 }
 .msg-body { min-width: 0; display: grid; gap: 6px; flex: 1; }
+.msg-sender-name {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-bottom: -2px; /* with msg-body gap 6 → ~4px to bubble */
+}
 .chat-compose {
   padding: 14px 20px 18px;
   border-top: 1px solid #edf2ef;

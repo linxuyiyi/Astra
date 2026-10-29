@@ -81,6 +81,10 @@ export interface ChatSessionState {
   messages: ChatMessage[];
   liveLines: LiveLine[];
   notice: string;
+  /** 最近一次发送失败的原文+附件，供「重试」同 payload 再发。 */
+  failedSend: { text: string; files: Attachment[] } | null;
+  /** stop 失败后仍可点停止；重试条对此类 notice 不抢绑定会话。 */
+  noticeSource: "send" | "stop" | "follow" | "attach" | "other" | "";
   draft: string;
   draftFiles: Attachment[];
   /** Local placeholders while uploadAttachment is in flight (island-style uploading chips). */

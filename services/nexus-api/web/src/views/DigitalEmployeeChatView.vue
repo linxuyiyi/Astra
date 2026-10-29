@@ -422,6 +422,8 @@ async function selectTarget(key: string, options: { fromRoute?: boolean; retry?:
     state.messages = [];
     state.liveLines = [];
     state.notice = "";
+    state.failedSend = null;
+    state.noticeSource = "";
   }
   if (!state.adapter) {
     if (target.kind === "contact") await ensurePrepared(state);

@@ -1,9 +1,16 @@
 <template>
-  <div class="chat-panel" @dragover.prevent @drop.prevent="onDrop">
+  <div
+    class="chat-panel"
+    @dragenter.prevent="onDragEnter"
+    @dragover.prevent="onDragOver"
+    @dragleave="onDragLeave"
+    @drop.prevent="onDrop"
+  >
+    <div class="chat-messages-shell">
     <div ref="messageBox" class="chat-messages" data-testid="chat-messages">
-      <div v-if="state.status === 'error'" class="msg system" role="alert">
-        <div class="bubble">{{ state.error }}</div>
-        <el-button size="small" @click="$emit('retry')">重试</el-button>
+      <div v-if="state.status === 'error'" class="fail-bar" role="alert" data-testid="fail-bar">
+        <span class="fail-bar__text">{{ state.error }}</span>
+        <button type="button" class="fail-bar__retry" data-testid="fail-retry" @click="$emit('retry')">重试</button>
       </div>
       <div
         v-else-if="!state.messages.length && !state.liveLines.length && state.status === 'ready'"
@@ -114,14 +121,43 @@
           </div>
         </div>
       </div>
-      <div v-if="state.notice" class="msg system" role="status">
-        <div class="bubble">{{ state.notice }}</div>
-        <el-button size="small" @click="$emit('retry')">重试</el-button>
+      <div v-if="state.notice" class="fail-bar" role="status" data-testid="fail-bar">
+        <span class="fail-bar__text">{{ state.notice }}</span>
+        <button
+          v-if="state.failedSend || state.noticeSource === 'send'"
+          type="button"
+          class="fail-bar__retry"
+          data-testid="fail-retry"
+          :disabled="state.sending"
+          @click="retryFailed"
+        >重试</button>
+        <button
+          v-else-if="state.noticeSource === 'stop'"
+          type="button"
+          class="fail-bar__dismiss"
+          data-testid="fail-dismiss"
+          @click="runtime.clearNotice()"
+        >知道了</button>
+        <button
+          v-else
+          type="button"
+          class="fail-bar__retry"
+          data-testid="fail-retry"
+          @click="$emit('retry')"
+        >重试</button>
       </div>
+    </div>
+    <button
+      v-if="showJumpLatest"
+      type="button"
+      class="jump-latest"
+      data-testid="jump-latest"
+      @click="jumpToLatest"
+    >最新</button>
     </div>
 
     <div v-if="target" class="chat-compose" data-testid="chat-compose">
-      <div class="compose-shell" data-testid="compose-shell">
+      <div class="compose-shell" :class="{ 'is-drop-target': isDropTarget }" data-testid="compose-shell">
         <div class="compose-box" data-testid="compose-box">
           <div
             v-if="(state.draftPending || []).length || state.draftFiles.length"
@@ -246,7 +282,7 @@
           </div>
         </div>
       </div>
-      <div class="compose-hint muted">Enter 发送 · Shift+Enter 换行 · ⌘K 聚焦 · 点击麦克风语音输入</div>
+      <div class="compose-hint muted" data-testid="compose-hint">Enter 发送 · Shift+Enter 换行 · ⌘K 聚焦输入</div>
       <input ref="fileInput" type="file" multiple hidden accept="image/*,application/pdf,text/*" @change="onFileChange" />
     </div>
   </div>
@@ -273,6 +309,11 @@ defineEmits<{ retry: [] }>();
 const messageBox = ref<HTMLElement | null>(null);
 const inputEl = ref<HTMLTextAreaElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
+const followLatest = ref(true);
+const showJumpLatest = ref(false);
+const isDropTarget = ref(false);
+let dragDepth = 0;
+const SCROLL_BOTTOM_THRESHOLD = 80;
 const avatar = computed(() => props.target?.avatar || "员");
 const canType = computed(() => Boolean(props.target && props.state.adapter?.canSend && props.state.status === "ready"));
 const canSend = computed(
@@ -369,6 +410,7 @@ function onHitl(toolId: string, choice: "yes" | "yes_with_rule" | "no") {
 }
 
 async function doSend() {
+  followLatest.value = true;
   await props.runtime.send(props.state.draft, props.state.draftFiles);
   await nextTick();
   scrollBottom();
@@ -385,7 +427,27 @@ function onFileChange(event: Event) {
   input.value = "";
 }
 
+function onDragEnter(event: DragEvent) {
+  if (!canType.value) return;
+  if (![...(event.dataTransfer?.types || [])].includes("Files")) return;
+  dragDepth += 1;
+  isDropTarget.value = true;
+}
+
+function onDragOver(event: DragEvent) {
+  if (!canType.value) return;
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+  isDropTarget.value = true;
+}
+
+function onDragLeave() {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) isDropTarget.value = false;
+}
+
 function onDrop(event: DragEvent) {
+  dragDepth = 0;
+  isDropTarget.value = false;
   if (!canType.value) return;
   const files = event.dataTransfer?.files;
   if (files?.length) void props.runtime.attach(files);
@@ -400,10 +462,11 @@ function onPaste(event: ClipboardEvent) {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
-    event.preventDefault();
-    if (canSend.value) void doSend();
-  }
+  // IME 组字中（isComposing / keyCode 229）不发送，Shift+Enter 换行。
+  if (event.key !== "Enter" || event.shiftKey) return;
+  if (event.isComposing || event.keyCode === 229) return;
+  event.preventDefault();
+  if (canSend.value) void doSend();
 }
 
 function focusInput(event: KeyboardEvent) {
@@ -416,14 +479,69 @@ function focusInput(event: KeyboardEvent) {
   inputEl.value?.focus();
 }
 
+function distanceFromBottom(box: HTMLElement) {
+  return box.scrollHeight - box.scrollTop - box.clientHeight;
+}
+
+function onMessagesScroll() {
+  const box = messageBox.value;
+  if (!box) return;
+  const dist = distanceFromBottom(box);
+  const atBottom = dist <= SCROLL_BOTTOM_THRESHOLD;
+  followLatest.value = atBottom;
+  showJumpLatest.value = !atBottom;
+}
+
 function scrollBottom() {
   const box = messageBox.value;
-  if (box) box.scrollTop = box.scrollHeight;
+  if (!box) return;
+  box.scrollTop = box.scrollHeight;
+  followLatest.value = true;
+  showJumpLatest.value = false;
+}
+
+function jumpToLatest() {
+  followLatest.value = true;
+  showJumpLatest.value = false;
+  scrollBottom();
+}
+
+async function retryFailed() {
+  const ok = await props.runtime.retryFailedSend();
+  if (ok) {
+    await nextTick();
+    jumpToLatest();
+    inputEl.value?.focus();
+  }
+}
+
+function onCodeCopyClick(event: MouseEvent) {
+  const target = event.target as HTMLElement | null;
+  const btn = target?.closest?.("[data-md-copy]") as HTMLElement | null;
+  if (!btn) return;
+  event.preventDefault();
+  const block = btn.closest(".md-codeblock");
+  const pre = block?.querySelector("pre");
+  const text = pre?.textContent ?? "";
+  if (!text) return;
+  void navigator.clipboard.writeText(text).then(() => {
+    const prev = btn.textContent;
+    btn.textContent = "Copied";
+    btn.classList.add("is-copied");
+    window.setTimeout(() => {
+      btn.textContent = prev || "Copy";
+      btn.classList.remove("is-copied");
+    }, 1600);
+  });
 }
 
 watch(
   () => [props.state.messages.length, props.state.liveLines.map((l) => l.text).join(""), props.state.notice, props.state.phase],
   async () => {
+    if (!followLatest.value) {
+      showJumpLatest.value = true;
+      return;
+    }
     await nextTick();
     scrollBottom();
   },
@@ -443,14 +561,27 @@ watch(
 
 onMounted(() => {
   window.addEventListener("keydown", focusInput);
+  messageBox.value?.addEventListener("scroll", onMessagesScroll, { passive: true });
+  messageBox.value?.addEventListener("click", onCodeCopyClick);
   scrollBottom();
   inputEl.value?.focus();
 });
-onBeforeUnmount(() => window.removeEventListener("keydown", focusInput));
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", focusInput);
+  messageBox.value?.removeEventListener("scroll", onMessagesScroll);
+  messageBox.value?.removeEventListener("click", onCodeCopyClick);
+});
 </script>
 
 <style scoped>
 .chat-panel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.chat-messages-shell {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .chat-messages {
   flex: 1;
   padding: 24px 20px;
@@ -459,6 +590,64 @@ onBeforeUnmount(() => window.removeEventListener("keydown", focusInput));
   flex-direction: column;
   align-items: center;
   gap: 17px;
+}
+.jump-latest {
+  position: absolute;
+  right: 20px;
+  bottom: 16px;
+  z-index: 5;
+  border: 1px solid #a8cbb8;
+  background: #fff;
+  color: #188b69;
+  font-size: 12px;
+  font-weight: 650;
+  border-radius: 999px;
+  padding: 7px 14px;
+  box-shadow: 0 8px 22px rgba(24, 139, 105, 0.16);
+  cursor: pointer;
+}
+.jump-latest:hover { background: #eef8f2; border-color: #188b69; }
+.fail-bar {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #f0c7b8;
+  background: #fff6f2;
+  color: #8a3b22;
+  box-shadow: 0 6px 18px rgba(176, 74, 42, 0.08);
+}
+.fail-bar__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.fail-bar__retry,
+.fail-bar__dismiss {
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fail-bar__retry {
+  background: #188b69;
+  color: #fff;
+}
+.fail-bar__retry:hover:not(:disabled) { background: #147556; }
+.fail-bar__retry:disabled { opacity: 0.55; cursor: not-allowed; }
+.fail-bar__dismiss {
+  background: transparent;
+  color: #8a3b22;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .chat-empty {
   margin-top: auto;
@@ -508,7 +697,17 @@ onBeforeUnmount(() => window.removeEventListener("keydown", focusInput));
   flex-direction: column;
   align-items: center;
 }
-.compose-shell { width: 100%; max-width: 760px; }
+.compose-shell { width: 100%; max-width: 760px; border-radius: 30px; transition: box-shadow 0.15s ease; }
+.compose-shell.is-drop-target {
+  outline: 2px dashed var(--green, #188b69);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(24, 139, 105, 0.12);
+}
+.compose-shell.is-drop-target :deep(.compose-box),
+.compose-shell.is-drop-target .compose-box {
+  border-color: var(--green, #188b69);
+  border-style: dashed;
+}
 .compose-hint { margin-top: 8px; font-size: 11px; width: 100%; max-width: 760px; }
 .compose-row {
   display: flex;
@@ -778,12 +977,55 @@ onBeforeUnmount(() => window.removeEventListener("keydown", focusInput));
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.92em;
 }
-.markdown :deep(pre) {
+/* 刀 B：代码块横滑 + 右上 Copy（不改 h1–h6/ul/blockquote/table） */
+.markdown :deep(.md-codeblock) {
+  position: relative;
+  margin: 8px 0;
+  border-radius: 10px;
+  background: #eef6f1;
+  border: 1px solid #d5eade;
+  overflow: hidden;
+  max-width: 100%;
+}
+.markdown :deep(.md-codeblock__pre),
+.markdown :deep(pre.md-codeblock__pre) {
+  margin: 0;
+  padding: 12px 14px;
+  padding-top: 36px;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 280px;
+  white-space: pre;
+  background: transparent;
+  border-radius: 0;
+}
+.markdown :deep(.md-codeblock__copy) {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  border: 1px solid #c5d9cd;
+  background: #fff;
+  color: #3f6b56;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 3px 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(32, 56, 48, 0.06);
+}
+.markdown :deep(.md-codeblock__copy:hover) { border-color: #188b69; color: #188b69; }
+.markdown :deep(.md-codeblock__copy.is-copied) {
+  background: #188b69;
+  border-color: #188b69;
+  color: #fff;
+}
+.markdown :deep(pre:not(.md-codeblock__pre)) {
   margin: 8px 0;
   padding: 8px 10px;
   border-radius: 8px;
   background: #eef6f1;
-  overflow: auto;
+  overflow-x: auto;
   max-height: 280px;
   white-space: pre;
 }

@@ -34,6 +34,8 @@ export class ChatRuntime {
     this.state.status = "ready";
     this.state.error = "";
     this.state.notice = "";
+    this.state.failedSend = null;
+    this.state.noticeSource = "";
     this.state.phase = "idle";
     this.startFollow();
   }
@@ -75,10 +77,14 @@ export class ChatRuntime {
       } else if (event.type === "live") {
         this.state.liveLines = event.lines;
         this.state.phase = event.lines.length ? "streaming" : this.state.phase === "interrupting" ? "interrupting" : "idle";
-        if (event.lines.length) this.state.notice = "";
+        if (event.lines.length) {
+          this.state.notice = "";
+          this.state.noticeSource = "";
+        }
         if (!this.isActive() && event.lines.length) this.bumpUnread(1);
       } else if (event.type === "notice") {
         this.state.notice = shortText(event.text);
+        this.state.noticeSource = this.state.noticeSource || "other";
       } else if (event.type === "finished") {
         this.state.phase = "idle";
         this.state.liveLines = [];
@@ -88,6 +94,8 @@ export class ChatRuntime {
       if (abort.signal.aborted || this.state.generation !== generation) return;
       this.followAlive = false;
       this.state.notice = shortText(error);
+      this.state.noticeSource = "follow";
+      this.state.failedSend = null;
     }).finally(() => {
       if (this.state.generation === generation && this.state.abort === abort) {
         this.followAlive = false;
@@ -122,24 +130,47 @@ export class ChatRuntime {
     if (!trimmed && !files.length) return false;
     this.state.sending = true;
     this.state.notice = "";
+    this.state.noticeSource = "";
     const sentDraft = this.state.draft;
-    const fileIds = files.map((item) => item.id);
+    const snapshotFiles = [...files];
+    const fileIds = snapshotFiles.map((item) => item.id);
     try {
       const result = await adapter.send(trimmed, fileIds, new AbortController().signal);
       this.state.messages = mergeMessages(this.state.messages, [result.message]);
       this.updateSummary();
       if (this.state.draft === sentDraft) this.state.draft = "";
       if (sameIds(this.state.draftFiles.map((item) => item.id), fileIds)) this.state.draftFiles = [];
-      if (result.notice) this.state.notice = shortText(result.notice);
+      this.state.failedSend = null;
+      if (result.notice) {
+        this.state.notice = shortText(result.notice);
+        this.state.noticeSource = "other";
+      }
       this.state.phase = "streaming";
       this.ensureFollow();
       return true;
     } catch (error) {
+      this.state.failedSend = { text: trimmed, files: snapshotFiles };
       this.state.notice = shortText(error);
+      this.state.noticeSource = "send";
       return false;
     } finally {
       this.state.sending = false;
     }
+  }
+
+  /** 用失败时保存的同 payload 再发一次。 */
+  async retryFailedSend(): Promise<boolean> {
+    const failed = this.state.failedSend;
+    if (!failed) return false;
+    // 把失败稿还原进输入区，再走 send，保证 UI 与 payload 一致。
+    this.state.draft = failed.text;
+    this.state.draftFiles = [...failed.files];
+    return this.send(failed.text, failed.files);
+  }
+
+  clearNotice() {
+    this.state.notice = "";
+    this.state.noticeSource = "";
   }
 
   async stop(): Promise<void> {
@@ -157,7 +188,10 @@ export class ChatRuntime {
         }
       }, 10_000);
     } catch (error) {
-      this.state.notice = shortText(error);
+      // 停流失败：phase 回到 streaming/idle，停止钮可再点；notice 仅提示。
+      this.state.notice = shortText(error, "停止失败，请重试");
+      this.state.noticeSource = "stop";
+      this.state.failedSend = null;
       this.state.phase = this.state.liveLines.length ? "streaming" : "idle";
     }
   }
@@ -168,6 +202,8 @@ export class ChatRuntime {
     if (!this.state.draftPending) this.state.draftPending = [];
     if (this.state.draftFiles.length + this.state.draftPending.length + list.length > 6) {
       this.state.notice = "每条消息最多添加 6 个附件";
+      this.state.noticeSource = "attach";
+      this.state.failedSend = null;
       return;
     }
     const room = 6 - this.state.draftFiles.length - this.state.draftPending.length;
@@ -189,6 +225,8 @@ export class ChatRuntime {
       }
     } catch (error) {
       this.state.notice = shortText(error, "附件上传失败");
+      this.state.noticeSource = "attach";
+      this.state.failedSend = null;
     } finally {
       this.state.uploading = this.state.draftPending.length > 0;
     }
@@ -249,6 +287,8 @@ export function createSessionState(target: ChatSessionState["target"]): ChatSess
     messages: [],
     liveLines: [],
     notice: "",
+    failedSend: null,
+    noticeSource: "",
     draft: "",
     draftFiles: [],
     draftPending: [],

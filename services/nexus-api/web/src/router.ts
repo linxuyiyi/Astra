@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory, type LocationQueryRaw, type RouteLocationGeneric } from "vue-router";
 import DigitalEmployeeChatView from "./views/DigitalEmployeeChatView.vue";
-import NebulaHomeView from "./views/NebulaHomeView.vue";
+import PixelOfficeHomeView from "./views/PixelOfficeHomeView.vue";
 import TaskListView from "./views/TaskListView.vue";
 import TaskDetailView from "./views/TaskDetailView.vue";
 import EmployeeListView from "./views/EmployeeListView.vue";
@@ -59,7 +59,7 @@ function teamRedirect(to: RouteLocationGeneric) {
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: "/", name: "nebula", component: NebulaHomeView },
+    { path: "/", name: "office", component: PixelOfficeHomeView },
     { path: "/employees", redirect: keepQuery("/settings/employees") },
     { path: "/chat", name: "chat", component: DigitalEmployeeChatView },
     { path: "/team", redirect: teamRedirect },

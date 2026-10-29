@@ -432,6 +432,13 @@ async def test_http_contract_uses_camel_case_and_validates_status(facts):
         assert snapshot.status_code == 200
         assert snapshot.json()["employees"][0]["counts"]["running"] == 1
         assert client.get("/api/v1/nebula/employees/e1/tasks").status_code == 200
+        office = client.get("/api/v1/nebula/employees/e1/office")
+        assert office.status_code == 200
+        assert office.json()["workers"][0]["tasks"][0]["id"] == "a"
+        assert office.json()["employee"]["id"] == "e1"
+        assert client.get("/api/v1/nebula/employees/e1/office?pageSize=21").status_code == 422
+        assert client.get("/api/v1/nebula/employees/e1/office?workerPage=0").status_code == 422
+        assert client.get("/api/v1/nebula/employees/missing/office").status_code == 404
         assert (
             client.get("/api/v1/nebula/employees/e1/tasks", params={"priority": "HIGH"}).json()["total"] == 0
         )
@@ -443,3 +450,92 @@ async def test_http_contract_uses_camel_case_and_validates_status(facts):
         collaborations = client.get("/api/v1/nebula/collaborations")
         assert collaborations.status_code == 200
         assert "items" in collaborations.json()
+
+
+@pytest.mark.asyncio
+async def test_office_shared_worker_is_related_by_current_task_and_private_refs_are_hidden(facts):
+    sessions, chat = facts
+    _insert_employee(chat, "e1", "自动化", "agent-1")
+    _insert_employee(chat, "e2", "系统", "agent-2")
+    async with sessions() as session:
+        await _worker(session, "shared", None)
+        await _worker(session, "idle", "e1")
+        await _worker(session, "busy-elsewhere", "e1")
+        t1 = _task("waiting", status="WAITING", owner="e1", worker="shared", waiting_reason="HITL_QUESTION")
+        t1.source_conversation_id = "private-of-another-owner"
+        session.add_all([
+            t1,
+            _task("running-e2", status="RUNNING", owner="e2", worker="shared"),
+            _task("elsewhere", status="RUNNING", owner="e2", worker="busy-elsewhere"),
+            _task("pending", status="PENDING", owner="e1"),
+        ])
+        await session.commit()
+        first = await nebula.collect_employee_office(session, chat, "e1")
+        assert [w["id"] for w in first["workers"]] == ["shared", "idle"]
+        assert first["workers"][0]["association"] == "task"
+        assert first["workers"][1]["association"] == "dispatch"
+        assert [t["id"] for t in first["workers"][0]["tasks"]] == ["waiting"]
+        assert first["workers"][0]["tasks"][0]["waitingReason"] == "等待人工回答"
+        assert first["workers"][0]["tasks"][0]["sourceConversationId"] is None
+        assert first["issueTotal"] == 2
+        assert [t["id"] for t in first["issues"]] == ["waiting", "pending"]
+        second = await nebula.collect_employee_office(session, chat, "e2")
+        assert {w["id"] for w in second["workers"]} == {"shared", "busy-elsewhere"}
+        assert second["workers"][0]["id"] == "shared"
+        shared = next(w for w in second["workers"] if w["id"] == "shared")
+        assert [t["id"] for t in shared["tasks"]] == ["running-e2"]
+        assert (await session.get(Task, "waiting")).status == "WAITING"
+        assert (await session.get(AgentWorker, "shared")).digital_employee_id is None
+
+
+@pytest.mark.asyncio
+async def test_office_pages_attention_before_active_before_idle_without_global_preview_limit(
+    facts, monkeypatch,
+):
+    sessions, chat = facts
+    _insert_employee(chat, "e1", "自动化", "agent-1")
+    monkeypatch.setattr(nebula, "ACTIVE_PREVIEW_LIMIT", 1)
+    monkeypatch.setattr(nebula, "ATTENTION_LIMIT", 1)
+    async with sessions() as session:
+        await _worker(session, "a-idle", "e1")
+        await _worker(session, "b-running", None)
+        await _worker(session, "c-offline", "e1", env_status="UNAVAILABLE")
+        await _worker(session, "d-waiting", None)
+        session.add_all([
+            _task("running", status="RUNNING", owner="e1", worker="b-running"),
+            _task("wait", status="WAITING", owner="e1", worker="d-waiting"),
+            *[_task(f"pending-{i}", status="PENDING", owner="e1") for i in range(24)],
+            _task("failed", status="FAILED", owner="e1"),
+        ])
+        await session.commit()
+        first = await nebula.collect_employee_office(session, chat, "e1", page_size=2)
+        assert first["workerTotal"] == 4
+        assert [w["id"] for w in first["workers"]] == ["c-offline", "d-waiting"]
+        assert [t["status"] for t in first["issues"]] == ["WAITING", "FAILED"]
+        assert first["issueTotal"] == 26
+        second = await nebula.collect_employee_office(
+            session, chat, "e1", page_size=2, worker_page=2, issue_page=2,
+        )
+        assert [w["id"] for w in second["workers"]] == ["b-running", "a-idle"]
+        assert all(t["status"] == "PENDING" for t in second["issues"])
+        last = await nebula.collect_employee_office(
+            session, chat, "e1", page_size=2, worker_page=99, issue_page=99,
+        )
+        assert last["workerPage"] == 2
+        assert last["issuePage"] == 13
+
+
+@pytest.mark.asyncio
+async def test_office_missing_employee_and_degraded_tasks_do_not_report_empty_success(facts, monkeypatch):
+    sessions, chat = facts
+    _insert_employee(chat, "e1", "自动化", "agent-1")
+    async with sessions() as session:
+        with pytest.raises(ValueError, match="员工不存在"):
+            await nebula.collect_employee_office(session, chat, "missing")
+        async def unavailable(*args, **kwargs):
+            return {"employees": [{"id": "e1"}], "degradedSources": ["tasks"]}
+        monkeypatch.setattr(nebula, "_collect_core", unavailable)
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc:
+            await nebula.collect_employee_office(session, chat, "e1")
+        assert exc.value.status_code == 503

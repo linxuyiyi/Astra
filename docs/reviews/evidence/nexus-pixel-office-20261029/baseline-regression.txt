@@ -1,0 +1,83 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_____________ test_question_to_acceptance_wakes_for_the_new_result _____________
+
+runtime = namespace(session=<sqlalchemy.ext.asyncio.session.AsyncSession object at 0x10efb1d10>, native=<tests.platform.test_ses...ar/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/pytest-of-niuniu/pytest-945/test_question_to_acceptance_wa0/workspace'))
+
+    async def test_question_to_acceptance_wakes_for_the_new_result(runtime):
+        r = runtime
+        r.task.status = "RUNNING"
+        r.task.responsible_employee_id = "E1"
+        r.task.last_message_id = "msg_question01"
+        r.native.state = "idle"
+        r.native.pending = [{"sessionID": "ses_current", "id": "q1"}]
+        r.native.sessions["ses_current"] = [
+            {
+                "info": {"id": "msg_question01", "role": "user"},
+                "parts": [{"type": "text", "text": "need a decision"}],
+            }
+        ]
+        await r.session.commit()
+
+        await r.service.refresh("T1")
+        assert r.task.status == "WAITING"
+>       assert "回答问题" in (r.task.human_required_reason or "")
+E       AssertionError: assert '回答问题' in (('等待数字员工处理问题或权限请求'))
+E        +  where '等待数字员工处理问题或权限请求' = <app.models.Task object at 0x10efb57f0>.human_required_reason
+E        +    where <app.models.Task object at 0x10efb57f0> = namespace(session=<sqlalchemy.ext.asyncio.session.AsyncSession object at 0x10efb1d10>, native=<tests.platform.test_ses...ar/folders/xd/jlp267wx0v5dmnn4l4h2_b_40000gn/T/pytest-of-niuniu/pytest-945/test_question_to_acceptance_wa0/workspace')).task
+
+tests/platform/test_acceptance_review.py:80: AssertionError
+_ test_shared_serve_checks_actual_config_before_ready[small_model-vendor/small] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10f112060>
+field = 'small_model', value = 'vendor/small'
+
+    @pytest.mark.parametrize("field,value", [
+        ("small_model", "vendor/small"), ("model", "vendor/main"),
+        ("enabled_providers", ["nexus-gateway", "vendor"]),
+    ])
+    async def test_shared_serve_checks_actual_config_before_ready(monkeypatch, field, value):
+        from app.config.settings import Settings
+        from app.runtime.opencode_model import gateway_environment
+        from app.runtime.opencode_server import OpenCodeServerManager
+
+        source = {"NEXUS_GATEWAY_API_KEY": "agw_test"}
+        config = json.loads(gateway_environment("default", source)["OPENCODE_CONFIG_CONTENT"])
+        config[field] = value
+        monkeypatch.delenv("NEXUS_GATEWAY_OPENAI_BASE", raising=False)
+        original = httpx.AsyncClient
+
+        def handler(request):
+            if request.url.path == "/global/health":
+                return httpx.Response(200, json={"healthy": True, "version": "1.18.35"})
+            assert request.url.path == "/config"
+            return httpx.Response(200, json=config)
+
+        monkeypatch.setattr("app.runtime.opencode_server.httpx.AsyncClient",
+                            lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
+        manager = OpenCodeServerManager(Settings(seed_demo=False))
+        with pytest.raises(RuntimeError, match="统一网关"):
+>           await manager.wait_until_ready()
+
+tests/platform/test_deployment_gateway.py:248:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <app.runtime.opencode_server.OpenCodeServerManager object at 0x10ef1ae40>
+
+    async def wait_until_ready(self) -> OpenCodeServerHealth:
+        deadline = time.monotonic() + self.settings.opencode_server_start_timeout_seconds
+        last = OpenCodeServerHealth(False, detail="尚未检查")
+        while time.monotonic() < deadline:
+            last = await self.health()
+            if last.healthy:
+                await self.validate_gateway_configuration()
+                return last
+            await asyncio.sleep(0.2)
+>       raise TimeoutError(f"OpenCode Server 未就绪: {last.detail}")
+E       TimeoutError: OpenCode Server 未就绪: OpenCode 1.18.35 不是唯一支持版本 1.18.33
+
+app/runtime/opencode_server.py:101: TimeoutError
+=========================== short test summary info ============================
+FAILED tests/platform/test_acceptance_review.py::test_question_to_acceptance_wakes_for_the_new_result
+FAILED tests/platform/test_deployment_gateway.py::test_shared_serve_checks_actual_config_before_ready[small_model-vendor/small]
+2 failed, 19 warnings in 30.95s

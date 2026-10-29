@@ -1,9 +1,9 @@
 <template>
-  <div class="app" :class="{ 'app--nebula': route.path === '/' }">
+  <div class="app" :class="{ 'app--office': route.path === '/' }">
     <header v-if="route.path !== '/'" class="top">
-      <router-link to="/" class="brand" title="星云首页">
+      <router-link to="/" class="brand" title="数字办公室">
         <div class="mark">✦</div>
-        <div class="brandname">NEXUS <span class="version">v1.4.8</span></div>
+        <div class="brandname">NEXUS <span class="version">v1.4.9</span></div>
       </router-link>
       <nav class="top-nav" aria-label="页面导航">
         <router-link
@@ -96,7 +96,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .brand { text-decoration: none; color: inherit; }
 .uid-card { width:min(420px, calc(100% - 32px)); margin:64px auto; color:var(--astra-text-primary); }
-.app--nebula {
+.app--office {
   padding: 0;
   gap: 0;
   height: 100dvh;
@@ -104,9 +104,9 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: #010e16;
 }
-.app--nebula .top,
-.app--nebula .page { max-width: none; }
-.app--nebula .page { height: 100dvh; overflow: hidden; }
+.app--office .top,
+.app--office .page { max-width: none; }
+.app--office .page { height: 100dvh; overflow: hidden; }
 
 .top-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .top-nav a {
@@ -123,6 +123,6 @@ onBeforeUnmount(() => {
 @media (max-width: 900px) {
   .env-text { max-width: 120px; }
   .top-nav a { padding: 6px 9px; }
-  .app--nebula { height: 100dvh; min-height: 100dvh; overflow: hidden; }
+  .app--office { height: 100dvh; min-height: 100dvh; overflow: hidden; }
 }
 </style>

@@ -1,0 +1,39 @@
+........................................................................ [ 35%]
+......F.............ss...............................ssss............... [ 70%]
+.............................................................            [100%]
+=================================== FAILURES ===================================
+_______ test_different_humans_employee_requests_are_queued_independently _______
+
+setup = (<fastapi.applications.FastAPI object at 0x11379da90>, <starlette.testclient.TestClient object at 0x11383f570>, 'owner', 'ch_760f86024144', <tests.nexus.test_collaboration.FakeAgentService object at 0x1138191d0>)
+
+    def test_different_humans_employee_requests_are_queued_independently(setup):
+        app, owner, _, cid, fake = setup
+        other = TestClient(app)
+        record_uid(other, "colleague")
+        join(owner, other, cid)
+        fake.delay = 0.2
+        first = send(owner, cid, "@小掌柜 说明测试范围").json()["discussion_id"]
+        second = send(other, cid, "@小牛码 说明开发范围").json()["discussion_id"]
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            with connect() as db:
+                states = dict(
+                    db.execute(
+                        text("SELECT id,state FROM t_nexus_discussions WHERE channel_id=:c"), {"c": cid}
+                    ).all()
+                )
+            if states.get(first) == states.get(second) == "completed":
+                break
+            time.sleep(0.03)
+>       assert states[first] == states[second] == "completed"
+E       AssertionError: assert 'completed' == 'failed'
+E
+E         - failed
+E         + completed
+
+tests/nexus/test_collaboration.py:572: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  nexus.groups:collaboration.py:1295 群讨论失败: RuntimeError
+=========================== short test summary info ============================
+FAILED tests/nexus/test_collaboration.py::test_different_humans_employee_requests_are_queued_independently
+1 failed, 198 passed, 6 skipped, 417 warnings in 37.15s

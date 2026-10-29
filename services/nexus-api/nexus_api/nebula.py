@@ -20,7 +20,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy import text as sql_text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
@@ -1211,16 +1211,7 @@ async def collect_employee_tasks(
     employee_names = {row["id"]: row["name"] for row in employee_rows}
     owned_ids = sorted(worker_id for worker_id, owner in worker_owner.items() if owner == employee_id)
 
-    if owned_ids:
-        condition = or_(
-            Task.responsible_employee_id == employee_id,
-            and_(
-                Task.responsible_employee_id.is_(None),
-                Task.employee_id.in_(owned_ids),
-            ),
-        )
-    else:
-        condition = Task.responsible_employee_id == employee_id
+    condition = _employee_task_condition(employee_id, owned_ids)
     filters = [condition]
     if task_status:
         filters.append(Task.status == task_status)
@@ -1268,6 +1259,161 @@ async def collect_employee_tasks(
         "pageSize": page_size,
         "total": int(total or 0),
         "items": items,
+    }
+
+
+def _employee_task_condition(employee_id: str, configured_worker_ids: list[str]):
+    """与现有任务归属投影一致：显式责任员工优先。"""
+    return or_(
+        Task.responsible_employee_id == employee_id,
+        and_(
+            Task.responsible_employee_id.is_(None),
+            Task.employee_id.in_(configured_worker_ids),
+        ),
+    )
+
+
+async def collect_employee_office(
+    session: AsyncSession,
+    connection: Connection,
+    employee_id: str,
+    *,
+    worker_page: int = 1,
+    issue_page: int = 1,
+    page_size: int = 20,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """办公室只读视图；关联源是当前任务和现有调度配置，不创建资源归属。
+
+    对员工单独查询，避免全局首页预览截断遗漏人工事项。Worker 的
+    健康/占用继续使用统一投影，任务摘要只包含该员工当前执行的任务。
+    """
+    current = _now(now)
+    core = await _collect_core(session, connection, now=current)
+    employee = next((item for item in core["employees"] if item["id"] == employee_id), None)
+    if employee is None:
+        raise ValueError("员工不存在")
+    if "tasks" in core["degradedSources"] or "workers" in core["degradedSources"]:
+        raise HTTPException(status_code=503, detail="任务或 Worker 数据暂不可用，请重试")
+    condition = _employee_task_condition(employee_id, employee["workerIds"])
+    active_condition = and_(condition, Task.status.in_((RUNNING, WAITING)))
+    grouped = (
+        await session.execute(
+            select(Task.employee_id, Task.status, func.count(Task.id))
+            .where(active_condition, Task.employee_id.is_not(None))
+            .group_by(Task.employee_id, Task.status)
+        )
+    ).all()
+    active_counts: dict[str, dict[str, int]] = defaultdict(lambda: {RUNNING: 0, WAITING: 0})
+    for worker_id, status, count in grouped:
+        active_counts[str(worker_id)][str(status)] = int(count)
+    attention_worker_ids = set(await session.scalars(
+        select(Task.employee_id).where(
+            active_condition,
+            or_(
+                Task.status == WAITING,
+                Task.runtime_connection == "UNAVAILABLE",
+                Task.inactivity_alert.is_(True),
+            ),
+        ).distinct()
+    ))
+    # 有实际执行关系的共享 Worker 均可见。配置关联但正执行其他员工工作的
+    # 资源不冒充当前员工执行资源；空闲及不可用配置资源供查看调度环境。
+    related = [
+        {**worker, "association": "task" if worker["id"] in active_counts else "dispatch"}
+        for worker in core["workers"]
+        if worker["id"] in active_counts
+        or (worker["digitalEmployeeId"] == employee_id and worker["occupancy"] == "idle")
+    ]
+
+    def worker_rank(worker: dict[str, Any]) -> tuple[int, str, str]:
+        attention = (
+            worker["health"] != "online"
+            or worker["occupancy"] == "waiting"
+            or worker["id"] in attention_worker_ids
+        )
+        rank = 0 if attention else 1 if worker["occupancy"] == "running" else 2
+        return rank, worker["name"], worker["id"]
+
+    related.sort(key=worker_rank)
+    worker_total = len(related)
+    worker_page = min(worker_page, max(1, (worker_total + page_size - 1) // page_size))
+    worker_items = related[(worker_page - 1) * page_size : worker_page * page_size]
+    worker_ids = [worker["id"] for worker in worker_items]
+    task_rank = case(
+        (Task.status == WAITING, 0),
+        (or_(Task.runtime_connection == "UNAVAILABLE", Task.inactivity_alert.is_(True)), 1),
+        else_=2,
+    )
+    # 每个 Worker 至多三个任务摘要，SQL 窗口避免某个繁忙 Worker 占满预览。
+    preview = (
+        select(
+            Task.id,
+            func.row_number().over(
+                partition_by=Task.employee_id,
+                order_by=(task_rank, Task.updated_at.desc(), Task.id),
+            ).label("position"),
+        )
+        .where(active_condition, Task.employee_id.in_(worker_ids))
+        .subquery()
+    )
+    worker_tasks = list(
+        await session.scalars(
+            select(Task).join(preview, Task.id == preview.c.id)
+            .where(preview.c.position <= 3)
+            .order_by(task_rank, Task.updated_at.desc(), Task.id)
+        )
+    )
+    issue_condition = and_(
+        condition,
+        or_(
+            Task.status.in_((WAITING, FAILED, PENDING)),
+            and_(
+                Task.status == RUNNING,
+                or_(Task.runtime_connection == "UNAVAILABLE", Task.inactivity_alert.is_(True)),
+            ),
+        ),
+    )
+    issue_total = int(await session.scalar(select(func.count(Task.id)).where(issue_condition)) or 0)
+    issue_page = min(issue_page, max(1, (issue_total + page_size - 1) // page_size))
+    issue_rank = case((Task.status == WAITING, 0), (Task.status == PENDING, 2), else_=1)
+    issues = list(
+        await session.scalars(
+            select(Task).where(issue_condition)
+            .order_by(issue_rank, Task.updated_at.desc(), Task.id)
+            .offset((issue_page - 1) * page_size).limit(page_size)
+        )
+    )
+    session_statuses = await _load_session_statuses(session, [*worker_tasks, *issues])
+    employee_names = {item["id"]: item["name"] for item in core["employees"]}
+
+    def dto(task: Task) -> dict[str, Any]:
+        owner, conflicts = _resolve_task_owner(
+            task, set(employee_names), core["workerOwner"], core["workerKnown"]
+        )
+        result = _task_dto(
+            task, owner=owner, conflicts=conflicts, worker_names=core["workerNames"],
+            employee_names=employee_names, session_statuses=session_statuses,
+        )
+        # 工作台通过现有 Task 入口处理，不公开其他用户的会话引用。
+        result["sourceConversationId"] = None
+        result["sourceChannelId"] = None
+        return result
+
+    for worker in worker_items:
+        worker["tasks"] = [dto(task) for task in worker_tasks if task.employee_id == worker["id"]]
+        worker["employeeTaskCounts"] = active_counts.get(worker["id"], {RUNNING: 0, WAITING: 0})
+    return {
+        "employee": employee,
+        "generatedAt": current.astimezone(UTC).isoformat(),
+        "degradedSources": core["degradedSources"],
+        "workers": worker_items,
+        "workerTotal": worker_total,
+        "workerPage": worker_page,
+        "issues": [dto(task) for task in issues],
+        "issueTotal": issue_total,
+        "issuePage": issue_page,
+        "pageSize": page_size,
     }
 
 
@@ -1412,6 +1558,24 @@ async def nebula_task(
 ) -> dict[str, Any]:
     try:
         return await collect_task_detail(session, connection, task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/employees/{employee_id}/office")
+async def nebula_employee_office(
+    employee_id: str,
+    worker_page: int = Query(default=1, ge=1, alias="workerPage"),
+    issue_page: int = Query(default=1, ge=1, alias="issuePage"),
+    page_size: int = Query(default=20, ge=1, le=20, alias="pageSize"),
+    session: AsyncSession = Depends(get_session),
+    connection=Depends(chat_database),
+) -> dict[str, Any]:
+    try:
+        return await collect_employee_office(
+            session, connection, employee_id, worker_page=worker_page,
+            issue_page=issue_page, page_size=page_size,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

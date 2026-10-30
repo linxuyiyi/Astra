@@ -59,6 +59,8 @@ def employee_body(**overrides):
 
 def test_health_and_runtime_report_pinned_version(client):
     assert client.get("/api/health").json()["product"] == "nexus"
+    assert client.get("/api/health").json()["version"] == "1.4.9"
+    assert client.get("/openapi.json").json()["info"]["version"] == "1.4.9"
     runtime = client.get("/api/v1/runtime").json()
     assert runtime["agentscope_version"] == "2.0.10"
     assert runtime["configured"] is False

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nexus-api"
-version = "1.4.8"
+version = "1.4.9"
 description = "Nexus 单一服务：员工对话、任务、Runtime、Worker、网关与数字图书馆"
 requires-python = ">=3.11"
 dependencies = [

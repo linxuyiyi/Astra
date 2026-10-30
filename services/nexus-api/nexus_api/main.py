@@ -28,6 +28,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text as sql_text
 
+from . import __version__
 from .agentscope import PINNED_VERSION, AgentScopeClient, AgentScopeError
 from .auth import install_identity, require_user
 from .avatars import AVATAR_IDS, DEFAULT_AVATAR, validate_avatar
@@ -1019,7 +1020,7 @@ def create_app() -> FastAPI:
             await app.state.collaboration.close()
             await app.state.agentscope.aclose()
 
-    app = FastAPI(title="Nexus", version="1.4.8", lifespan=lifespan)
+    app = FastAPI(title="Nexus", version=__version__, lifespan=lifespan)
     install_identity(app)
     app.add_middleware(
         CORSMiddleware,
@@ -1568,7 +1569,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
-        return {"status": "ok", "product": "nexus", "version": "1.4.8"}
+        return {"status": "ok", "product": "nexus", "version": __version__}
 
     @app.get("/api/v1/me")
     def me(owner_id: str = Depends(require_owner)) -> dict[str, str]:

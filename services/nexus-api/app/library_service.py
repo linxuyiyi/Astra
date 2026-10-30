@@ -63,6 +63,7 @@ from app.models import (
 from app.runtime.runtime_context import RuntimeContext
 from app.runtime.runtime_context import resolve_runtime_context as _resolve_runtime_context
 from app.usage import day_bounds
+from app.worker_presentation import worker_display_name
 
 KNOWLEDGE_TYPES = {"document", "rule", "guide", "experience", "faq", "tool", "example"}
 logger = logging.getLogger(__name__)
@@ -719,9 +720,12 @@ class KnowledgeService:
         employee_name = None
         task_title = None
         if item.source_employee_id:
-            employee_name = await self.session.scalar(
-                select(AgentWorker.name).where(AgentWorker.id == item.source_employee_id)
+            worker = await self.session.scalar(
+                select(AgentWorker)
+                .options(selectinload(AgentWorker.execution_environment))
+                .where(AgentWorker.id == item.source_employee_id)
             )
+            employee_name = worker_display_name(worker) if worker else None
         if item.source_task_id:
             task_title = await self.session.scalar(select(Task.title).where(Task.id == item.source_task_id))
         favorite = await self.session.scalar(
@@ -938,7 +942,8 @@ class KnowledgeService:
         await self._item(knowledge_id, principal)
         rows = (
             await self.session.execute(
-                select(KnowledgeUsage, AgentWorker.name, Task.title)
+                select(KnowledgeUsage, AgentWorker, Task.title)
+                .options(selectinload(AgentWorker.execution_environment))
                 .outerjoin(AgentWorker, KnowledgeUsage.employee_id == AgentWorker.id)
                 .outerjoin(Task, KnowledgeUsage.task_id == Task.id)
                 .where(
@@ -953,13 +958,13 @@ class KnowledgeService:
             KnowledgeUsageRead(
                 id=usage.id,
                 employee_id=usage.employee_id,
-                employee_name=employee_name,
+                employee_name=worker_display_name(worker) if worker else None,
                 task_id=usage.task_id,
                 task_title=task_title,
                 action=usage.action,
                 used_at=usage.created_at,
             )
-            for usage, employee_name, task_title in rows
+            for usage, worker, task_title in rows
         ]
 
     async def publish_knowledge(

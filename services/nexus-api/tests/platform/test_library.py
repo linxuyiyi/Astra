@@ -204,6 +204,7 @@ def test_candidate_experience_mcp_flow_preserves_provenance_and_review_audit():
             json={
                 "id": employee_id,
                 "name": "测试知识员工",
+                "execution_environment": {"name": "知识验证 Worker 01"},
                 "role": "知识验证员工",
                 "category_ids": ["testing-platform"],
                 "auto_claim": False,
@@ -262,6 +263,7 @@ def test_candidate_experience_mcp_flow_preserves_provenance_and_review_audit():
         assert candidate.status == "candidate"
         assert candidate.type == "experience"
         assert candidate.source_employee_id == employee_id
+        assert candidate.source_employee_name == "知识验证 Worker 01"
         assert candidate.evidence[0].result == "PASS"
 
         candidate_stats = client.get(

@@ -22,6 +22,7 @@ export interface PlatformWorker {
   enabled: boolean;
   current_task_count: number;
   execution_environment: {
+    name: string;
     mode: string;
     status: string;
     model_name: string | null;

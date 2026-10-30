@@ -36,6 +36,7 @@ from app.models import (
     Task,
     WorkerInstance,
 )
+from app.worker_presentation import worker_display_name
 
 from .db import connect
 from .main import require_owner
@@ -287,7 +288,7 @@ def _worker_dto(
         "id": worker.id,
         "digitalEmployeeId": worker.digital_employee_id,
         "workerInstanceId": instance.id if instance else None,
-        "name": worker.name,
+        "name": worker_display_name(worker),
         "role": worker.role,
         "capabilityLabels": labels,
         "environmentMode": environment.mode if environment else None,
@@ -622,7 +623,7 @@ async def _collect_core(
         else:
             unassigned_workers += 1
 
-    worker_names = {worker.id: worker.name for worker in workers}
+    worker_names = {worker.id: worker_display_name(worker) for worker in workers}
     worker_dtos: list[dict[str, Any]] = []
     for worker in workers:
         environment = worker.execution_environment
@@ -1172,7 +1173,7 @@ async def collect_task_detail(
     employee_ids = {row["id"] for row in employee_rows}
     employee_names = {row["id"]: row["name"] for row in employee_rows}
     workers, _instances = await _load_workers(session)
-    worker_names = {worker.id: worker.name for worker in workers}
+    worker_names = {worker.id: worker_display_name(worker) for worker in workers}
     worker_owner = {worker.id: worker.digital_employee_id for worker in workers if worker.digital_employee_id}
     owner, codes = _resolve_task_owner(task, employee_ids, worker_owner, set(worker_names))
     session_statuses = await _load_session_statuses(session, [task])
@@ -1206,7 +1207,7 @@ async def collect_employee_tasks(
     if not any(row["id"] == employee_id for row in employee_rows):
         raise ValueError("员工不存在")
     workers, _instances = await _load_workers(session)
-    worker_names = {worker.id: worker.name for worker in workers}
+    worker_names = {worker.id: worker_display_name(worker) for worker in workers}
     worker_owner = {worker.id: worker.digital_employee_id for worker in workers if worker.digital_employee_id}
     employee_names = {row["id"]: row["name"] for row in employee_rows}
     owned_ids = sorted(worker_id for worker_id, owner in worker_owner.items() if owner == employee_id)
@@ -1434,7 +1435,7 @@ async def collect_link_tasks(
     employee_ids = {row["id"] for row in employee_rows}
     employee_names = {row["id"]: row["name"] for row in employee_rows}
     workers, _instances = await _load_workers(session)
-    worker_names = {item.id: item.name for item in workers}
+    worker_names = {item.id: worker_display_name(item) for item in workers}
     worker_owner = {item.id: item.digital_employee_id for item in workers if item.digital_employee_id}
     status_rows = (
         await session.execute(
@@ -1466,7 +1467,7 @@ async def collect_link_tasks(
         )
     return {
         "workerId": worker_id,
-        "workerName": worker.name,
+        "workerName": worker_display_name(worker),
         "digitalEmployeeId": worker.digital_employee_id,
         "generatedAt": current.astimezone(UTC).isoformat(),
         "counts": counts,

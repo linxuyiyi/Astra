@@ -1,3 +1,4 @@
+import { workerDisplayName } from '@/utils/workerName'
 import type { Employee, Task } from '@/api/types'
 import {
   workspaceAreaMap,
@@ -5,7 +6,7 @@ import {
   type WorkspaceAreaId,
 } from '@/features/workspace/sceneLayout'
 import { taskWorkspaceArea } from '@/features/workspace/taskAreaMapping'
-import { employeeDisplayName, platformCopy } from '@/utils/format'
+import { platformCopy } from '@/utils/format'
 
 export { workspaceAreas, type WorkspaceAreaId } from '@/features/workspace/sceneLayout'
 
@@ -64,7 +65,7 @@ export function toEmployeeViewModel(employee: Employee, tasks: Task[]): Employee
   return {
     employee,
     id: employee.id,
-    name: employeeDisplayName(employee.name),
+    name: workerDisplayName(employee),
     role: employee.role,
     status: employee.status,
     statusText: STATUS_COPY[employee.status] ?? '状态未知',

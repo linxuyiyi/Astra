@@ -76,6 +76,7 @@ from app.usage import (
     summarize_sessions,
     task_usage,
 )
+from app.worker_presentation import worker_display_name
 
 router = APIRouter(prefix="/api")
 
@@ -323,7 +324,7 @@ async def create_employee(payload: EmployeeCreate, session: AsyncSession = Depen
                 employee_id=employee.id,
                 event_type="EMPLOYEE_CREATED",
                 phase="business",
-                message=f"新增 Agent Worker：{employee.name}",
+                message=f"新增 Agent Worker：{environment.name}",
                 detail={"role": employee.role},
             )
         )
@@ -498,7 +499,7 @@ async def delete_employee(employee_id: str, session: AsyncSession = Depends(get_
         Event(
             event_type="EMPLOYEE_DELETED",
             phase="business",
-            message=f"删除 Agent Worker：{employee.name}",
+            message=f"删除 Agent Worker：{worker_display_name(employee)}",
             detail={"role": employee.role},
         )
     )

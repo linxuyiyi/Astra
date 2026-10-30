@@ -288,7 +288,6 @@ import {
 import { semanticTone } from '@/features/workers/semantic'
 import { hasOccupancy, occupiedTaskIds } from '@/features/workers/actionPolicy'
 import {
-  employeeDisplayName,
   formatTaskDuration,
   formatTime,
   platformCopy,
@@ -296,6 +295,7 @@ import {
   statusTone,
   taskTypeLabel,
 } from '@/utils/format'
+import { workerDisplayName } from '@/utils/workerName'
 
 type DetailSection = 'tasks' | 'config' | 'maintenance'
 const SECTIONS: DetailSection[] = ['tasks', 'config', 'maintenance']
@@ -344,7 +344,7 @@ const currentTaskEmptyText = computed(() => {
   if (hasOccupancy(health.value)) return '有未结束的执行会话，请在维护页检查。'
   return health.value.schedulable ? '当前没有占用任务，可接收匹配任务。' : '当前没有占用任务；恢复可接任务后再派单。'
 })
-const workerTitle = computed(() => environment.value?.name || employeeDisplayName(employee.value?.name))
+const workerTitle = computed(() => workerDisplayName(employee.value))
 const digitalEmployee = computed(() => digitalEmployees.value.find((item) => item.id === employee.value?.digital_employee_id) ?? null)
 const taskTypesLabel = computed(() => (employee.value?.task_types ?? []).map((item) => taskTypeLabel(item)).join('、') || '—')
 

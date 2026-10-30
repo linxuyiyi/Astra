@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config.settings import get_settings
 from app.domain import EmployeeStatus, RuntimeSessionStatus, TaskStatus
@@ -14,6 +15,7 @@ from app.models import AgentWorker, Event, RuntimeSession, Task
 from app.runtime.presentation import EMPLOYEE_LABELS, TASK_STATUS
 from app.services import dashboard_metrics
 from app.usage import day_bounds
+from app.worker_presentation import worker_display_name
 
 ATTENTION_STATUSES = {key for key, value in TASK_STATUS.items() if value["group"] == "attention"}
 OFFICE_TASK_STATUSES = {TaskStatus.PENDING, TaskStatus.RUNNING, TaskStatus.WAITING, TaskStatus.FAILED}
@@ -177,7 +179,9 @@ async def dashboard_overview(session: AsyncSession) -> dict:
 async def dashboard_employees(session: AsyncSession) -> dict:
     employees = (
         await session.scalars(
-            select(AgentWorker).order_by(AgentWorker.created_at, AgentWorker.id)
+            select(AgentWorker)
+            .options(selectinload(AgentWorker.execution_environment))
+            .order_by(AgentWorker.created_at, AgentWorker.id)
         )
     ).all()
     current_tasks = await _current_employee_tasks(session)
@@ -194,7 +198,7 @@ async def dashboard_employees(session: AsyncSession) -> dict:
         team["employees"].append(
             {
                 "id": employee.id,
-                "name": employee.name,
+                "name": worker_display_name(employee),
                 "role": employee.role,
                 "character_id": employee.character_id,
                 "status": employee.status,
@@ -219,7 +223,8 @@ def _attention_status(task: Task) -> tuple[str, str]:
 async def dashboard_attention(session: AsyncSession) -> dict:
     rows = (
         await session.execute(
-            select(Task, AgentWorker.name, RuntimeSession)
+            select(Task, AgentWorker, RuntimeSession)
+            .options(selectinload(AgentWorker.execution_environment))
             .outerjoin(AgentWorker, Task.employee_id == AgentWorker.id)
             .outerjoin(RuntimeSession, _current_session_condition())
             .where(_attention_condition())
@@ -228,7 +233,7 @@ async def dashboard_attention(session: AsyncSession) -> dict:
         )
     ).all()
     items = []
-    for task, employee_name, binding in rows:
+    for task, worker, binding in rows:
         status, status_label = _attention_status(task)
         occurred_at = task.inactivity_alert_since or task.finished_at or task.updated_at
         items.append(
@@ -236,7 +241,7 @@ async def dashboard_attention(session: AsyncSession) -> dict:
                 "task_id": task.id,
                 "task_title": task.title,
                 "employee_id": task.employee_id,
-                "employee_name": employee_name or "未分配",
+                "employee_name": worker_display_name(worker) if worker else "未分配",
                 "status": status,
                 "status_label": status_label,
                 "current_session_id": task.current_session_id,
@@ -289,7 +294,8 @@ async def dashboard_tasks(session: AsyncSession) -> dict:
             points[completed_key]["completed"] += 1
     recent_rows = (
         await session.execute(
-            select(Task, AgentWorker.name)
+            select(Task, AgentWorker)
+            .options(selectinload(AgentWorker.execution_environment))
             .outerjoin(AgentWorker, Task.employee_id == AgentWorker.id)
             .order_by(Task.updated_at.desc())
             .limit(6)
@@ -311,10 +317,10 @@ async def dashboard_tasks(session: AsyncSession) -> dict:
                 "runtime_detail": task.runtime_detail,
                 "failure": task.failure,
                 "employee_id": task.employee_id,
-                "employee_name": employee_name or "未分配",
+                "employee_name": worker_display_name(worker) if worker else "未分配",
                 "updated_at": task.updated_at,
             }
-            for task, employee_name in recent_rows
+            for task, worker in recent_rows
         ],
     }
 
@@ -344,7 +350,8 @@ def _activity_copy(
 async def dashboard_activity(session: AsyncSession) -> dict:
     rows = (
         await session.execute(
-            select(Event, AgentWorker.name, Task.title, Task.source)
+            select(Event, AgentWorker, Task.title, Task.source)
+            .options(selectinload(AgentWorker.execution_environment))
             .outerjoin(AgentWorker, Event.employee_id == AgentWorker.id)
             .outerjoin(Task, Event.task_id == Task.id)
             .where(
@@ -360,7 +367,8 @@ async def dashboard_activity(session: AsyncSession) -> dict:
         )
     ).all()
     items = []
-    for event, employee_name, task_title, task_source in rows:
+    for event, worker, task_title, task_source in rows:
+        employee_name = worker_display_name(worker) if worker else None
         kind, description = _activity_copy(event, task_title, task_source, employee_name)
         target_type = "task" if event.task_id else "employee" if event.employee_id else None
         target_id = event.task_id or event.employee_id

@@ -227,6 +227,7 @@
 </template>
 
 <script setup lang="ts">
+import { workerDisplayName } from '@/utils/workerName'
 import EmployeeAvatar from "../components/EmployeeAvatar.vue";
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -370,7 +371,7 @@ const rightTabs = computed(() => activeTarget.value?.kind === "group"
 const nameById = computed(() => {
   const names: Record<string, string> = {};
   for (const employee of employees.value) names[employee.id] = employee.name;
-  for (const worker of workers.value) names[worker.id] = worker.name;
+  for (const worker of workers.value) names[worker.id] = workerDisplayName(worker);
   return names;
 });
 

@@ -9,7 +9,7 @@ from app.dashboard import (
     dashboard_employees,
     dashboard_overview,
 )
-from app.models import AgentWorker, Base, Event, RuntimeSession, Task
+from app.models import AgentWorker, Base, Event, OpenCodeExecutionEnvironment, RuntimeSession, Task
 from app.runtime.presentation import TASK_STATUS
 
 
@@ -321,3 +321,20 @@ async def test_office_activity_excludes_deleted_targets_before_limit(office_sess
     assert [item["id"] for item in items] == [valid.id]
     assert items[0]["description"] == "完成任务：真实工作"
     assert items[0]["target_id"] == "T-office"
+
+
+async def test_worker_names_are_independent_of_the_digital_employee_name(office_session):
+    worker, task, _ = await employee_task(
+        office_session, task_values={"status": "WAITING"}, session_status="WAITING",
+    )
+    office_session.add(OpenCodeExecutionEnvironment(
+        employee_id=worker.id, name="独立构建 Worker", mode="LOCAL",
+    ))
+    await office_session.commit()
+
+    employee = await office_employee(office_session)
+    attention = (await dashboard_attention(office_session))["items"][0]
+    assert employee["name"] == "独立构建 Worker"
+    assert attention["employee_name"] == "独立构建 Worker"
+    assert employee["name"] != worker.name
+    assert attention["task_id"] == task.id

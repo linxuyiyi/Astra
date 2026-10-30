@@ -33,7 +33,7 @@
             <ElOption v-for="item in statuses" :key="item" :value="item" :label="runtimeStatusLabel(item)" />
           </ElSelect>
           <ElSelect v-model="filters.employee" class="admin-page__select" data-testid="task-filter-employee" aria-label="Worker" placeholder="Worker：全部" clearable>
-            <ElOption v-for="item in store.employees" :key="item.id" :value="item.id" :label="employeeDisplayName(item.name)" />
+            <ElOption v-for="item in store.employees" :key="item.id" :value="item.id" :label="workerDisplayName(item)" />
           </ElSelect>
           <ElSelect v-model="filters.owner" class="admin-page__select" data-testid="task-filter-owner" aria-label="责任数字员工" placeholder="责任数字员工：全部" clearable>
             <ElOption v-for="item in owners" :key="item.id" :value="item.id" :label="item.name" />
@@ -102,7 +102,8 @@
       </div>
     </div>
 
-    <TaskCreateDrawer :open="createOpen || Boolean(editTask)" :task="editTask" @close="closeEditor" @created="onTaskCreated" @saved="onTaskSaved" />
+    <!-- 每次打开重建表单，回填本次任务并清理上一次草稿。 -->
+    <TaskCreateDrawer v-if="createOpen || editTask" :open="createOpen || Boolean(editTask)" :task="editTask" @close="closeEditor" @created="onTaskCreated" @saved="onTaskSaved" />
 
     <ElDialog
       v-if="pending"
@@ -146,7 +147,8 @@ import {
   type RuntimeStatusFilter,
 } from '@/features/runtime/status'
 import { useAstraStore } from '@/stores/astra'
-import { employeeDisplayName, platformCopy, priorityLabel, taskTypeLabel } from '@/utils/format'
+import { platformCopy, priorityLabel, taskTypeLabel } from '@/utils/format'
+import { workerDisplayName } from '@/utils/workerName'
 import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
 const store = useAstraStore()
@@ -232,7 +234,7 @@ watch(pageSize, () => { currentPage.value = 1 })
 const categoryName = (id: string | null) => store.categories.find((item) => item.id === id)?.name ?? '—'
 const employeeName = (id: string | null) => {
   const item = store.employees.find((employee) => employee.id === id)
-  return item?.execution_environment?.name || employeeDisplayName(item?.name ?? '自动分配')
+  return item ? workerDisplayName(item) : (id ? `Worker · ${id}` : '自动分配')
 }
 const ownerName = (id: string | null) => owners.value.find((item) => item.id === id)?.name ?? ''
 function ownerLine(id: string | null) {

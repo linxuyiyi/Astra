@@ -12,6 +12,7 @@ from app.runtime.environment import environment_snapshot
 from app.runtime.maintenance import active_maintenance_exists
 from app.runtime.occupancy import occupying_exists, sync_employee_occupancy
 from app.services import TaskService
+from app.worker_presentation import worker_display_name
 
 
 def runtime_assignment_block(environment, task) -> str | None:
@@ -186,11 +187,11 @@ class Dispatcher:
                 task,
                 "TASK_ASSIGNED",
                 "work",
-                f"任务已分配给 {employee.name}",
+                f"任务已分配给 {worker_display_name(employee)}",
                 {"auto_execute": employee.auto_execute},
                 commit=False,
             )
-            task.current_progress = f"已分配给 {employee.name}，等待启动"
+            task.current_progress = f"已分配给 {worker_display_name(employee)}，等待启动"
             await sync_employee_occupancy(self.session, employee.id, preferred=task)
             await self.session.commit()
             await self.session.refresh(task)

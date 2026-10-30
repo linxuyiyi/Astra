@@ -275,6 +275,7 @@
 </template>
 
 <script setup lang="ts">
+import { workerDisplayName } from '@/utils/workerName'
 import { Laptop, Server } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -304,7 +305,6 @@ import StickyActionBar from '@/components/astra/StickyActionBar.vue'
 import { useWorkerMaintenance } from '@/composables/useWorkerMaintenance'
 import { useAstraStore } from '@/stores/astra'
 import { isMaintenanceActive } from '@/features/workers/presentation'
-import { employeeDisplayName } from '@/utils/format'
 import type { Employee as DigitalEmployee } from '@/types'
 
 type CodingTool = 'opencode' | 'dsh'
@@ -364,7 +364,7 @@ const currentTaskCount = computed(() => props.employee?.current_task_count ?? 0)
 const maintenance = useWorkerMaintenance(computed(() => selectedEnvironment.value?.id ?? null))
 const maintenanceBusy = computed(() => maintenance.busyAction.value !== null || isMaintenanceActive(maintenance.operation.value?.state))
 const paused = computed(() => props.employee?.status === 'PAUSED')
-const workerTitle = computed(() => selectedEnvironment.value?.name || employeeDisplayName(props.employee?.name))
+const workerTitle = computed(() => selectedEnvironment.value?.name || workerDisplayName(props.employee))
 
 const selectedDigitalEmployee = computed(() =>
   props.digitalEmployees.find((item) => item.id === form.digital_employee_id) ?? null,

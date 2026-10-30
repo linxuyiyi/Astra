@@ -25,13 +25,13 @@
         <ElInput v-model.trim="form.title" maxlength="240" placeholder="例如：修复用户登录接口偶发 500 问题" />
       </ElFormItem>
       <ElFormItem label="任务类型" prop="task_type">
-        <ElRadioGroup v-model="form.task_type">
+        <ElRadioGroup v-model="form.task_type" :disabled="Boolean(task)">
           <ElRadioButton value="ISSUE">问题</ElRadioButton>
           <ElRadioButton value="REQUIREMENT">需求</ElRadioButton>
         </ElRadioGroup>
       </ElFormItem>
       <ElFormItem label="任务分类" prop="category_id">
-        <ElSelect v-model="form.category_id" placeholder="请选择分类">
+        <ElSelect v-model="form.category_id" :disabled="Boolean(task)" placeholder="请选择分类">
           <ElOption v-for="item in store.categories" :key="item.id" :value="item.id" :label="item.name" />
         </ElSelect>
       </ElFormItem>
@@ -89,7 +89,7 @@
         <template #label>执行 Worker</template>
         <ElSelect v-model="form.employee_id" :disabled="Boolean(task && task.status !== 'PENDING')">
           <ElOption value="" label="自动分配" />
-          <ElOption v-for="item in compatibleEmployees" :key="item.id" :value="item.id" :label="`${item.execution_environment?.name || employeeDisplayName(item.name)} · ${item.role}`" />
+          <ElOption v-for="item in compatibleEmployees" :key="item.id" :value="item.id" :label="`${workerDisplayName(item)} · ${item.role}`" />
         </ElSelect>
       </ElFormItem>
       <ElFormItem>
@@ -133,7 +133,8 @@ import { listEmployees } from '../../api'
 import type { Employee as NexusEmployee } from '../../types'
 import { confirmDialog } from '@/composables/useConfirm'
 import { useAstraStore } from '@/stores/astra'
-import { employeeDisplayName, priorityLabel, safeUUID } from '@/utils/format'
+import { priorityLabel, safeUUID } from '@/utils/format'
+import { workerDisplayName } from '@/utils/workerName'
 import { applyDefaultCategory, taskDraftSnapshot, type TaskDraftSnapshot } from '@/components/task/taskDraft'
 
 const props = defineProps<{ open: boolean; task?: Task | null }>()

@@ -207,6 +207,8 @@ async def test_snapshot_builds_galaxies_edges_and_marks_conflicts(facts):
     assert employees["e2"]["interactionStatus"] == "available"
 
     workers = {item["id"]: item for item in snapshot["workers"]}
+    assert workers["w1"]["name"] == "环境 w1"
+    assert workers["w1"]["name"] != employees["e1"]["name"]
     assert workers["w1"]["health"] == "online"
     assert workers["w1"]["occupancy"] == "waiting"
     assert workers["w1"]["taskCount"] == 3

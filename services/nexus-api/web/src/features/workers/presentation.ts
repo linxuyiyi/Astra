@@ -1,3 +1,4 @@
+import { workerDisplayName } from '@/utils/workerName'
 import type { Employee, ExecutionEnvironment, Task } from '@/api/types'
 import type {
   MaintenanceEvent,
@@ -318,7 +319,7 @@ export function toWorkerRow(
     id: employee.id,
     employee,
     environment,
-    name: environment.name || employeeDisplayName(employee.name),
+    name: workerDisplayName({ id: employee.id, execution_environment: environment }),
     employeeName: employeeDisplayName(employee.name),
     role: employee.role,
     server: serverAddress(environment),

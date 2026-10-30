@@ -47,6 +47,7 @@
 </template>
 
 <script setup lang="ts">
+import { workerDisplayName } from '@/utils/workerName'
 import { onBeforeRouteLeave } from 'vue-router'
 import { computed, ref } from 'vue'
 import { ElButton, ElDrawer, ElSpace, ElTag } from 'element-plus'
@@ -54,7 +55,6 @@ import type { Employee, TaskCategory } from '@/api/types'
 import type { Employee as DigitalEmployee } from '@/types'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
-import { employeeDisplayName } from '@/utils/format'
 import EmployeeConfig from '@/views/settings/EmployeeConfig.vue'
 
 const props = withDefaults(defineProps<{
@@ -69,7 +69,7 @@ const emit = defineEmits<{ (e: 'close'): void; (e: 'saved', id: string, deployed
 const configRef = ref<InstanceType<typeof EmployeeConfig> | null>(null)
 
 const drawerTitle = computed(() =>
-  props.creating ? '新建 Agent Worker' : `编辑 ${props.employee?.execution_environment?.name || employeeDisplayName(props.employee?.name)}`,
+  props.creating ? '新建 Agent Worker' : `编辑 ${workerDisplayName(props.employee)}`,
 )
 
 // The config drawer is a form: overlay click and ESC never close it. Only the

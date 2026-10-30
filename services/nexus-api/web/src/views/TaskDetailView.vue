@@ -160,7 +160,8 @@ import type { AstraEvent, ExperienceReviewJob, Task, TaskUsage, TaskWorkspaceBin
 import DshWorkbench from '@/components/runtime/DshWorkbench.vue'
 import { useAstraStore } from '@/stores/astra'
 import { confirmDialog } from '@/composables/useConfirm'
-import { employeeDisplayName, formatTaskDuration, formatTime, formatTokens, priorityLabel, taskTypeLabel } from '@/utils/format'
+import { formatTaskDuration, formatTime, formatTokens, priorityLabel, taskTypeLabel } from '@/utils/format'
+import { workerDisplayName } from '@/utils/workerName'
 import { listEmployees } from '../api'
 import type { Employee as NexusEmployee } from '../types'
 
@@ -232,7 +233,7 @@ const displayTitle = computed(() => {
 const employeeName = computed(() => {
   const workerId = task.value?.worker_id || task.value?.employee_id
   const employee = store.employees.find(item => item.id === workerId)
-  return employee?.execution_environment?.name || (employee ? employeeDisplayName(employee.name) : '未分配 Worker')
+  return employee ? workerDisplayName(employee) : (workerId ? `Worker · ${workerId}` : '未分配 Worker')
 })
 const responsibleName = computed(() => {
   const id = task.value?.responsible_employee_id

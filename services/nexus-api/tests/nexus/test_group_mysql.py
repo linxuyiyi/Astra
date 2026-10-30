@@ -116,3 +116,34 @@ def test_group_event_cursor_follows_commit_order():
             if p["type"] == "message" and p["item"]["sender_type"] == "human"
         ]
         assert messages == ["第一条", "第二条"]
+
+
+def test_group_history_and_pagination_with_event_cursor():
+    with TestClient(create_app()) as owner:
+        account(owner, "mysql-owner")
+        cid = owner.post("/api/v1/channels", json={"name": "MySQL历史"}).json()["id"]
+        paths = [f"/api/v1/channels/{cid}/{suffix}" for suffix in (
+            "messages", "timeline", "timeline/native",
+        )]
+        for path in paths:
+            response = owner.get(path)
+            assert response.status_code == 200
+            assert all(item["sender_type"] == "system" for item in response.json()["items"])
+            assert isinstance(response.json()["event_cursor"], int)
+        initial_cursor = response.json()["event_cursor"]
+        initial_items = response.json()["items"]
+        with connect() as db:
+            lock_channel(db, cid)
+            append_message(db, cid, "human", "first", "甲", "第一条")
+            append_message(db, cid, "human", "second", "乙", "第二条")
+            db.commit()
+        for path in paths:
+            latest = owner.get(path, params={"limit": 1}).json()
+            assert [item["text"] for item in latest["items"]] == ["第二条"]
+            assert latest["event_cursor"] > initial_cursor
+            earlier = owner.get(path, params={"limit": 1, "before": latest["before"]}).json()
+            assert [item["text"] for item in earlier["items"]] == ["第一条"]
+            assert earlier["event_cursor"] == latest["event_cursor"]
+            original = owner.get(path, params={"before": earlier["before"]}).json()
+            assert original["items"] == initial_items
+            assert original["before"] == 0

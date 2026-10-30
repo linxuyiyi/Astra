@@ -695,9 +695,9 @@ class Collaboration:
                 cursor = (
                     one(
                         db,
-                        "SELECT MAX(id) AS cursor FROM t_nexus_group_events WHERE channel_id=:c",
+                        "SELECT MAX(id) AS event_cursor FROM t_nexus_group_events WHERE channel_id=:c",
                         c=channel_id,
-                    )["cursor"]
+                    )["event_cursor"]
                     or 0
                 )
                 channel = channel_payload(db, channel_id, uid)

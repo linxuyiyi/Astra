@@ -1,0 +1,55 @@
+........................................................................ [ 40%]
+...........................ss...............................ssss........ [ 81%]
+................................                                         [100%]
+=============================== warnings summary ===============================
+tests/nexus/test_agentscope_proxy.py::test_agentscope_proxy_is_registered_before_frontend_fallback
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/nexus/test_agentscope_proxy.py: 5 warnings
+tests/nexus/test_schedule_mcp.py: 5 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:874: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    _restore_event_loop_policy(asyncio.get_event_loop_policy()),
+
+tests/nexus/test_agentscope_proxy.py: 5 warnings
+tests/nexus/test_schedule_mcp.py: 5 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:772: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    old_loop_policy = asyncio.get_event_loop_policy()
+
+tests/nexus/test_agentscope_proxy.py: 5 warnings
+tests/nexus/test_schedule_mcp.py: 5 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:777: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(policy)
+
+tests/nexus/test_agentscope_proxy.py: 5 warnings
+tests/nexus/test_schedule_mcp.py: 5 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1183: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+
+tests/nexus/test_agentscope_proxy.py: 5 warnings
+tests/nexus/test_schedule_mcp.py: 5 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:889: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/nexus/test_agentscope_proxy.py: 5 warnings
+tests/nexus/test_schedule_mcp.py: 5 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:794: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(old_loop_policy)
+
+tests/nexus/test_agentscope_proxy.py: 5 warnings
+tests/nexus/test_schedule_mcp.py: 5 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:942: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+tests/nexus/test_agentscope_proxy.py: 5 warnings
+tests/nexus/test_schedule_mcp.py: 5 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:966: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(previous_policy)
+
+tests/nexus/test_agentscope_proxy.py: 5 warnings
+tests/nexus/test_schedule_mcp.py: 5 warnings
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:978: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    policy = asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+170 passed, 6 skipped, 91 warnings in 26.48s

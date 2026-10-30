@@ -36,6 +36,12 @@ test('a sent message is inserted after existing history, not before it', () => {
   assert.deepEqual(mergeMessages(history, [sent]).map((item) => item.id), ['m1', 'm2', 'sent'])
 })
 
+test('microsecond timestamps keep a fast reply after its user message even when SSE arrives first', () => {
+  const user = { ...message('user', 'hello'), created_at: '2026-10-30T00:32:42.809038+00:00' }
+  const reply = { ...message('reply', 'answer'), created_at: '2026-10-30T00:32:42.809056+00:00' }
+  assert.deepEqual(mergeMessages([reply], [user, reply]).map(item => item.id), ['user', 'reply'])
+})
+
 test('mergeMessages does not duplicate the same server message arriving twice', () => {
   const once = mergeMessages([], [message('m1', 'reply', 1)])
   const twice = mergeMessages(once, [message('m1', 'reply', 1)])

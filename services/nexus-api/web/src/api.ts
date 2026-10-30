@@ -148,6 +148,20 @@ export async function sendConversation(id: string, text: string, attachmentIds: 
   );
 }
 
+export async function interruptConversation(id: string): Promise<void> {
+  await read(await fetch(`/api/v1/conversations/${id}/interrupt`, { method: "POST", headers: headers() }));
+}
+
+export async function interruptChannel(id: string): Promise<void> {
+  await read(await fetch(`/api/v1/channels/${id}/interrupt`, { method: "POST", headers: headers() }));
+}
+
+export async function markChannelRead(id: string, seq: number): Promise<void> {
+  await read(await fetch(`/api/v1/channels/${id}/read`, {
+    method: "POST", headers: headers(), body: JSON.stringify({ seq }),
+  }));
+}
+
 export async function listChannels(): Promise<Channel[]> {
   const payload = await read<{ items: Channel[] }>(await fetch("/api/v1/channels"));
   return payload.items;
@@ -163,29 +177,40 @@ export async function saveChannel(body: { name: string; description: string; mem
   );
 }
 
-export async function channelMessages(id: string): Promise<Channel & { messages: ChatMessage[]; history_error?: string }> {
-  return read(await fetch(`/api/v1/channels/${id}/messages`, { headers: headers(false) }));
-}
-
 export interface TimelineItem {
   id: string;
-  speaker: string;
+  seq: number;
+  sender_type: "human" | "employee" | "system";
+  sender_id: string;
+  sender_name: string;
   text: string;
-  kind: string;
   created_at: string;
-  attachments?: Attachment[];
+  discussion_id: string;
+  message: import("@agentscope-ai/agentscope/message").Msg;
 }
-
-export async function channelTimeline(id: string): Promise<{ items: TimelineItem[] }> {
-  return read(await fetch(`/api/v1/channels/${id}/timeline`, { headers: headers(false) }));
+export interface ChannelTimeline {
+  channel: Channel;
+  items: TimelineItem[];
+  before: number;
+  event_cursor: number;
 }
-
-export async function sendChannel(id: string, text: string, attachmentIds: string[]) {
-  return read<{ message: ChatMessage; triggered: Array<AgentScopeOutcome & { employee_id: string; name: string }> }>(
+export interface NativeHistory {
+  messages: import("@agentscope-ai/agentscope/message").Msg[];
+  event_cursor: string;
+  is_running: boolean;
+}
+export async function nativeConversationMessages(id: string): Promise<NativeHistory> {
+  return read(await fetch(`/api/v1/conversations/${id}/messages`, { headers: headers(false) }));
+}
+export async function channelTimeline(id: string, before = 0): Promise<ChannelTimeline> {
+  return read(await fetch(`/api/v1/channels/${id}/messages?before=${before}&limit=50`, { headers: headers(false) }));
+}
+export async function sendChannel(id: string, text: string, attachmentIds: string[], clientId: string) {
+  return read<{ message: TimelineItem; participants: string[]; discussion_id: string; duplicate: boolean }>(
     await fetch(`/api/v1/channels/${id}/messages`, {
       method: "POST",
       headers: headers(),
-      body: JSON.stringify({ text, attachment_ids: attachmentIds }),
+      body: JSON.stringify({ text, attachment_ids: attachmentIds, client_id: clientId }),
     }),
   );
 }
@@ -209,19 +234,26 @@ export async function readEventStream(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  while (!signal.aborted) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const frames = buffer.split("\n\n");
-    buffer = frames.pop() ?? "";
-    for (const frame of frames) {
-      const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
-      if (!dataLine) continue;
-      const raw = dataLine.slice(5).trim();
-      if (!raw) continue;
-      onEvent(JSON.parse(raw) as Record<string, unknown>);
+  try {
+    while (!signal.aborted) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.replace(/\r\n/g, "\n").split("\n\n");
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
+        if (!dataLine) continue;
+        const raw = dataLine.slice(5).trim();
+        if (!raw) continue;
+        const event = JSON.parse(raw) as Record<string, unknown>;
+        const eventId = frame.split("\n").find(line => line.startsWith("id:"))?.slice(3).trim();
+        onEvent(eventId ? { ...event, event_cursor: eventId, ...(event.id ? {} : { id: eventId }) } : event);
+      }
     }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
 }
 

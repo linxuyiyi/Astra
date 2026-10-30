@@ -49,6 +49,23 @@ Session 后调用 AgentScope `POST /sessions/{sid}/interrupt`。浏览器不能�
 - 把扁平历史就地改成原生结构：破坏旧页与回退路径。
 - 用文本+时间去重对账：会吞掉连续相同消息。
 
+## 2026-10-30 同文档客户端约束
+
+- Vue 窗口复用聊天岛已经采用的 `@agentscope-ai/agentscope` 0.0.15 消息 SDK，
+  保留完整原生对象，仅投影文本、thinking、hint、data、工具及 usage 供展示。
+  Vue 代理在交给 SDK 克隆前通过 `toRaw` 还原；响应读取在结束和异常时均释放连接。
+- 私聊读取 `/conversations/{id}/messages`，订阅 `stream?raw=1`；运行态来自
+  `is_running` 和原生事件。发送后读取失败不伪装成发送失败，避免诱导重复投递。
+- 群聊读取既有 `/channels/{id}/messages` 与 `/events`，采用规范 sender envelope、
+  `client_id` 和 `/read`；SSE 重放序号与 JSON 内的 discussion id 分开保存。
+  通过 before 分页，不订阅不存在的成员流，不轮询猜测讨论状态。
+- 停止失败保留可重试状态；不使用定时器宣布停止成功。意外出现 asking 时只读显示，
+  不提供没有服务端处理通道的允许/拒绝按钮，不改变现有权限策略。
+- 同一浏览器只订阅当前会话；切走 abort，返回重读权威快照。草稿与上传结果留在原会话。
+  排序保留 ISO 时间的微秒精度，避免快回复在同一毫秒内倒序。
+- 形象按员工 id 复用统一头像组件；私聊同事回复读取 `peer_employee_id`，群聊读取
+  sender_id。窄屏以抽屉承载会话和资料，保持输入区位于可用视口。
+
 ## Risks
 
 - `raw=1` 的连接不自动结束，客户端必须自己 abort，否则切换会话会留下连接。

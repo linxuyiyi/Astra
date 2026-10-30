@@ -612,6 +612,13 @@ def session_transcript(remote: list[Any], employee_id: str) -> list[dict[str, An
         raw_id = message.get("id") or metadata.get("message_id")
         name = message.get("name") if isinstance(message.get("name"), str) else ""
         created = message.get("created_at")
+        raw_finished = message.get("finished_at")
+        finished_at = (
+            canonical_timestamp(raw_finished)
+            if isinstance(raw_finished, str)
+            else raw_finished
+        )
+        usage = message.get("usage") if isinstance(message.get("usage"), dict) else None
         found.append(
             {
                 "id": str(raw_id) if raw_id else f"remote_{len(found)}",
@@ -622,6 +629,8 @@ def session_transcript(remote: list[Any], employee_id: str) -> list[dict[str, An
                 "attachments": [item for item in attachments if isinstance(item, dict)],
                 "accepted": True,
                 "created_at": canonical_timestamp(created) if isinstance(created, str) else "",
+                "finished_at": finished_at,
+                "usage": usage,
             }
         )
     return found

@@ -167,6 +167,8 @@ def test_session_transcript_keeps_speaker_and_tool_cards():
             {
                 "id": "a",
                 "role": "assistant",
+                "finished_at": "2026-10-30T00:00:00Z",
+                "usage": {"input_tokens": 12, "output_tokens": 4},
                 "content": [
                     {"type": "text", "text": "ok"},
                     {"type": "tool_call", "id": "c1", "name": "read", "input": '{"path":"a"}'},
@@ -178,6 +180,8 @@ def test_session_transcript_keeps_speaker_and_tool_cards():
     )
     assert rows[0]["speaker"] == "张三"
     assert rows[1]["text"] == "ok"
+    assert rows[1]["finished_at"] == "2026-10-30T00:00:00+00:00"
+    assert rows[1]["usage"] == {"input_tokens": 12, "output_tokens": 4}
     assert rows[1]["tools"] == [
         {
             "id": "c1",

@@ -1,0 +1,105 @@
+
+> nexus-web@1.4.9 test
+> tsx --test tests/*.test.ts
+
+✔ native history preserves thinking, failed tool results, images, usage and terminal reason (1.117291ms)
+✔ group sender identity comes from the canonical envelope, including system and other humans (0.157083ms)
+✔ replayed group events use the SDK exactly once and old history cannot overwrite a newer terminal message (0.332042ms)
+✔ SDK events can be applied to the Vue reactive messages used by the real chat window (0.166166ms)
+✔ a terminal event arriving before send resolves cannot leave the UI streaming (1.19175ms)
+✔ sending a message with no triggered group reply stays idle instead of showing a permanent stop button (0.1465ms)
+✔ failed send keeps the draft and retry reuses the same idempotency key (0.38775ms)
+✔ switching away aborts the stream, keeps the draft, and resumes exactly one stream on return (0.136459ms)
+✔ a conversation binding resolving after selection changed cannot start a background subscription (0.114125ms)
+✔ stop remains pending until a service terminal event, while rejected stop preserves the previous activity (0.273333ms)
+✔ successful background attachment upload remains attached to its original conversation (70.487833ms)
+✔ loss of group membership disables the session and aborts its stream (0.286833ms)
+✔ mergeMessages dedupes by id and keeps an unconfirmed local message in time order (2.348583ms)
+✔ a sent message is inserted after existing history, not before it (0.16375ms)
+✔ microsecond timestamps keep a fast reply after its user message even when SSE arrives first (0.206834ms)
+✔ mergeMessages does not duplicate the same server message arriving twice (0.093208ms)
+✔ mergeMessages keeps two identical messages that the user really sent twice (0.127084ms)
+✔ mergeMessages replaces the optimistic message when the server echoes the same id (0.107125ms)
+✔ streamCursor only accepts numeric replay cursors (0.152125ms)
+✔ maxCursor keeps the newest replay cursor across reconnects (0.146542ms)
+✔ selection and reload guards reject stale async work (0.144125ms)
+✔ replayed events are ignored by the per-member seen set (0.163334ms)
+✔ a delayed timeline response cannot overwrite a newer one (0.122333ms)
+✔ shortText maps network failures (1.381334ms)
+✔ shortText maps interrupt and upstream (2.050083ms)
+✔ shortText keeps brief Chinese copy (0.941792ms)
+✔ shortText falls back for long opaque text (0.314542ms)
+✔ SSE replay cursor remains separate from a discussion's semantic id (25.401042ms)
+✔ group send uses the canonical idempotency contract and does not require the removed triggered field (0.99375ms)
+✔ group follow consumes one ordered channel stream, preserves streamed content and handles id-less revocation (0.958042ms)
+✔ native private history retains running state, and the stream accepts more than one reply (3.692ms)
+✔ private peer replies retain their authoritative employee identity (0.792583ms)
+✔ an id-less upstream failure is displayed even after a saved replay cursor (1.028333ms)
+✔ a failed event consumer cancels its response body before reconnecting (0.719583ms)
+✖ a delayed private history snapshot cannot erase a newer streamed delta (3.216167ms)
+✔ all twelve stable appearances resolve to existing local assets and office poses (1.586166ms)
+✔ unknown and unsafe identities never resolve to an image source (0.136541ms)
+✔ BotPixel assets are transparent, local and attributed without remote or script content (1.73025ms)
+✔ untouched and reverted forms close without a prompt (1.091333ms)
+✔ continuing editing preserves nested resource content (0.136ms)
+✔ explicit discard allows closing a changed form (0.075875ms)
+✔ saving blocks close even when the form is untouched (0.060791ms)
+✔ repeated close actions share a single pending confirmation (0.63525ms)
+✔ an old confirmation cannot close a newly initialized form (6.753833ms)
+✔ saving that starts during confirmation still blocks closing (1.081875ms)
+✔ unproject round-trips a screen point on the target plane (1.3895ms)
+✔ dragging keeps the pressed screen point fixed while the camera rotates (0.548917ms)
+✔ reset clears the temporary orbit pivot (0.178125ms)
+✔ hash32 and collaborationKey are deterministic (0.704375ms)
+✔ task status changes do not move galaxies, workers or satellites (13.856875ms)
+✔ galaxy color follows business state instead of decorative palette (0.072875ms)
+✔ only owned workers orbit a galaxy and queued satellites cap at five (0.127333ms)
+✔ degraded data never presents a normal idle/working employee; waiting overrides task work (0.520083ms)
+✔ one to twelve stations fit the overview and the area beside the workbench (1.171125ms)
+✔ partial last rows remain centered and twelve employees have distinct accessible stations (0.119709ms)
+✔ human issues retain actual reason and unavailable connection is visible (0.093334ms)
+✔ opening the create drawer stays uncategorized and clean (0.470625ms)
+✔ an edit after the baseline stays dirty (0.066625ms)
+✔ empty and null employee ids compare as the same untouched value (0.050208ms)
+✔ current tasks follow authoritative occupancy references, including released-state edge cases (1.023708ms)
+✔ initial offline, unknown health and pending equipment do not block deploy (0.095291ms)
+✔ real occupancy blocks restart/deploy but not disable (0.046959ms)
+✔ health abnormalities are not treated as occupancy (0.044333ms)
+✔ active maintenance blocks actions while interrupted keeps restore/check available (0.046292ms)
+✔ runtime info and neutral tones map to progress and neutral (0.453917ms)
+✔ semantic tones already in the target vocabulary pass through (0.051584ms)
+✔ neutral renders with the shared gray class instead of info blue (0.040708ms)
+✔ colored semantics keep Element Plus type colors and no override class (0.574209ms)
+✔ records and probe logs agree on failure, success, cancellation and interruption colors (0.070875ms)
+ℹ tests 69
+ℹ suites 0
+ℹ pass 68
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 555.390125
+
+✖ failing tests:
+
+test at tests/chat-transport.test.ts:4:6383
+✖ a delayed private history snapshot cannot erase a newer streamed delta (3.216167ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'first'
+  - 'first second'
+          ^
+
+      at <anonymous> (/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api/web/tests/chat-transport.test.ts:180:14)
+      at async withFetch (/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api/web/tests/chat-transport.test.ts:23:9)
+      at async TestContext.<anonymous> (/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api/web/tests/chat-transport.test.ts:159:3)
+      at async Test.run (node:internal/test_runner/test:1102:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:777:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'first',
+    expected: 'first second',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

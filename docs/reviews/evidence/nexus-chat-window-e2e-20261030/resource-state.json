@@ -1,0 +1,20 @@
+{
+  "private_open": {
+    "fixture": true,
+    "active_streams": 1,
+    "running_sessions": [],
+    "pending_tasks": 0
+  },
+  "after_switch_to_group": {
+    "fixture": true,
+    "active_streams": 0,
+    "running_sessions": [],
+    "pending_tasks": 0
+  },
+  "real_runtime": {
+    "agentscope_version": "2.0.10",
+    "configured": true,
+    "reachable": false,
+    "agentscope_user_id": "nexus"
+  }
+}

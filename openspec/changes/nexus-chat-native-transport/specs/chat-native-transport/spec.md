@@ -89,3 +89,30 @@
 
 - **WHEN** 用户从一个会话切到另一个
 - **THEN** 前一个会话的订阅被释放，新会话不会收到旧会话的事件
+
+### Requirement: Native window preserves the transport contract
+
+同文档聊天窗口 SHALL 使用既有私聊原生历史与群聊有序消息/事件契约，不得因更换渲染组件
+丢失发言身份、消息块、附件、工具结果或运行终态。群聊 SHALL 保留 `client_id`、已读序号与历史分页。
+
+#### Scenario: Group message and event identities
+
+- **WHEN** 人类、数字员工或系统在群聊发言
+- **THEN** 窗口按规范 sender_type、sender_id、sender_name 展示，员工形象与配置一致
+- **AND** SSE 重放序号不覆盖 discussion id，客户端不访问不存在的成员流
+
+#### Scenario: Fast reply and retry
+
+- **WHEN** 回复在发送响应之前完成，或消息发送失败后重试
+- **THEN** 窗口不会永久停在执行中，失败草稿保留，群聊重试复用原 client_id
+- **AND** 时间排序保留服务端微秒精度，不按相同文本合并两次真实发送
+
+#### Scenario: Unexpected confirmation request
+
+- **WHEN** 上游意外返回等待人工确认，而当前 Nexus 未提供确认处理通道
+- **THEN** 窗口只读显示真实等待状态，不以本地按钮伪造允许、记住或拒绝成功
+
+#### Scenario: Narrow viewport
+
+- **WHEN** 在窄屏打开会话并切换联系人或查看资料
+- **THEN** 会话和资料以可关闭的侧栏展示，输入区仍在可用视口内

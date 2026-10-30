@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 15174",
     "type-check": "vue-tsc --noEmit -p tsconfig.json",
-    "test": "node --test tests/*.test.ts",
+    "test": "tsx --test tests/*.test.ts",
     "build": "vue-tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 15174"
   },
   "dependencies": {
+    "@agentscope-ai/agentscope": "0.0.15",
     "@vueuse/core": "^13.9.0",
     "dompurify": "^3.4.17",
     "echarts": "^6.1.0",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
+    "tsx": "4.20.6",
     "typescript": "~5.9.3",
     "vite": "^7.1.9",
     "vue-tsc": "^3.1.1"

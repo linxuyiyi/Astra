@@ -11,6 +11,14 @@ export function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): 
   // 两条相同文字折叠成一条；这不是去重，是掩盖 id 不一致的 bug。
   for (const message of incoming) {
     const previous = byId.get(message.id);
+    if (previous?.replay_cursor && message.replay_cursor
+      && maxCursor(previous.replay_cursor, message.replay_cursor) !== message.replay_cursor) continue;
+    if (previous?.native && message.native) {
+      if (previous.finished_at && message.finished_at === null) continue;
+      const previousCursor = Number(previous.native.metadata?.stream_cursor ?? 0);
+      const incomingCursor = Number(message.native.metadata?.stream_cursor ?? 0);
+      if (previousCursor > incomingCursor) continue;
+    }
     byId.set(message.id, {
       ...previous,
       ...message,
@@ -26,6 +34,12 @@ export function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): 
     const rightTime = Date.parse(right.created_at || "");
     if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
       return leftTime - rightTime;
+    }
+    if (Number.isFinite(leftTime) && leftTime === rightTime) {
+      // AgentScope/Nexus 的 ISO 时间有微秒；Date.parse 截到毫秒会颠倒快速回复的先后。
+      const fraction = (value: string) => Number((value.match(/\.(\d+)/)?.[1] || "").slice(3).padEnd(6, "0"));
+      const precision = fraction(left.created_at || "") - fraction(right.created_at || "");
+      if (precision) return precision;
     }
     return (position.get(left.id) ?? 0) - (position.get(right.id) ?? 0);
   });

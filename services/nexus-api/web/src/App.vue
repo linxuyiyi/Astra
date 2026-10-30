@@ -1,5 +1,5 @@
 <template>
-  <div class="app" :class="{ 'app--office': route.path === '/' }">
+  <div class="app" :class="{ 'app--office': route.path === '/', 'app--chat': route.path === '/chat' }">
     <header v-if="route.path !== '/'" class="top">
       <router-link to="/" class="brand" title="数字办公室">
         <div class="mark">✦</div>

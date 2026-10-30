@@ -127,7 +127,21 @@ export interface Attachment {
   size: number;
 }
 
+export interface ChatMessageUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+}
+
 export interface ChatMessage {
+  /** 私聊历史/事件的服务端重放游标，仅用于防止旧视图覆盖新消息。 */
+  replay_cursor?: string;
+  native?: import("@agentscope-ai/agentscope/message").Msg;
+  sender_type?: "human" | "employee" | "system";
+  sender_name?: string;
+  thinking?: string[];
+  hints?: { id: string; source: string; text: string }[];
+  data?: import("@agentscope-ai/agentscope/message").DataBlock[];
+  finished_reason?: string | null;
   id: string;
   sender: string;
   speaker?: string;
@@ -135,6 +149,9 @@ export interface ChatMessage {
   tools?: { id: string; name: string; input: string; output: string; state: string }[];
   attachments: Attachment[];
   created_at: string;
+  /** AgentScope: null while running; ISO string when done. Missing = legacy finished. */
+  finished_at?: string | null;
+  usage?: ChatMessageUsage | null;
 }
 
 export interface Conversation {
@@ -158,6 +175,7 @@ export interface ChannelMember {
 }
 
 export interface Channel {
+  discussion?: { state: string; detail?: string } | null;
   my_role: "owner" | "admin" | "member";
   viewer_id: string;
   id: string;

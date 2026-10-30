@@ -1,0 +1,85 @@
+{
+  "channel": {
+    "id": "ch_34d47cae8e2f",
+    "name": "MySQL149真实部署验收",
+    "description": "验证 MySQL、AgentScope 和 DeepSeek 群聊链路；只回复验收标记，不创建任务。",
+    "members": [
+      {
+        "member_id": "emp_08e46cd7b5c3",
+        "member_type": "employee",
+        "employee_id": "emp_08e46cd7b5c3",
+        "role": "member",
+        "name": "C",
+        "avatar": "robot-v1-4",
+        "online": false,
+        "read_seq": 0,
+        "agentscope_session_id": "dc6e69793c8e44728ddc6f80e5206d6f"
+      },
+      {
+        "member_id": "emp_edad74fc6854",
+        "member_type": "employee",
+        "employee_id": "emp_edad74fc6854",
+        "role": "member",
+        "name": "B",
+        "avatar": "robot-v1-3",
+        "online": false,
+        "read_seq": 0,
+        "agentscope_session_id": "9fc631937a304a9bb0d9d53e49286048"
+      },
+      {
+        "member_id": "deployment-e2e-20261030",
+        "member_type": "human",
+        "employee_id": "",
+        "role": "owner",
+        "name": "deployment-e2e-20261030",
+        "avatar": "👤",
+        "online": false,
+        "read_seq": 5,
+        "agentscope_session_id": null
+      }
+    ],
+    "created_at": "2026-10-30T05:34:00.570665+00:00",
+    "my_role": "owner",
+    "viewer_id": "deployment-e2e-20261030",
+    "discussion": {
+      "id": "dis_be36da797055",
+      "state": "completed",
+      "turns": 2,
+      "detail": "",
+      "active_employee_id": ""
+    }
+  },
+  "event_cursor": 170,
+  "messages": [
+    {
+      "sender_type": "system",
+      "sender_name": "系统",
+      "text": "deployment-e2e-20261030 创建了群组",
+      "seq": 1
+    },
+    {
+      "sender_type": "human",
+      "sender_name": "deployment-e2e-20261030",
+      "text": "MySQL 验收普通记录，不要求数字员工回复。",
+      "seq": 2
+    },
+    {
+      "sender_type": "human",
+      "sender_name": "deployment-e2e-20261030",
+      "text": "@B @C 这是 MySQL v1.4.9 群聊验收，请各自仅回复你自己的名字和 MYSQL149_GROUP_OK，不调用工具、不联系其他同事、不创建任务。",
+      "seq": 3
+    },
+    {
+      "sender_type": "employee",
+      "sender_name": "B",
+      "text": "B\n\nMYSQL149_GROUP_OK",
+      "seq": 4
+    },
+    {
+      "sender_type": "employee",
+      "sender_name": "C",
+      "text": "C\n\nMYSQL149_GROUP_OK",
+      "seq": 5
+    }
+  ]
+}

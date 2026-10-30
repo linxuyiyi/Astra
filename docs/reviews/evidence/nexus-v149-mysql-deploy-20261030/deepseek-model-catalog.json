@@ -1,0 +1,11 @@
+{
+  "status": 200,
+  "base_url": "https://api.deepseek.com",
+  "configured_models": [
+    "deepseek-flash"
+  ],
+  "available_model_ids": [
+    "deepseek-flash",
+    "deepseek-v4-pro"
+  ]
+}

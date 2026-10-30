@@ -1,0 +1,347 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________ test_group_history_and_pagination_with_event_cursor ______________
+
+self = <sqlalchemy.engine.base.Connection object at 0x10e9185f0>
+dialect = <sqlalchemy.dialects.mysql.pymysql.MySQLDialect_pymysql object at 0x10e451810>
+context = <sqlalchemy.dialects.mysql.mysqldb.MySQLExecutionContext_mysqldb object at 0x10e832360>
+statement = <sqlalchemy.dialects.mysql.mysqldb.MySQLCompiler_mysqldb object at 0x10e839bd0>
+parameters = [{'c': 'ch_823834f5fec2'}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1969: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/cursors.py:170: in execute
+    result = self._query(query)
+             ^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/cursors.py:335: in _query
+    conn.query(q)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/connections.py:581: in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/connections.py:857: in _read_query_result
+    result.read()
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/connections.py:1290: in read
+    first_packet = self.connection._read_packet()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/connections.py:810: in _read_packet
+    packet.raise_for_error()
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/protocol.py:219: in raise_for_error
+    err.raise_mysql_exception(self._data)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+data = b"\xff(\x04#42000You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'cursor FROM t_nexus_group_events WHERE channel_id='ch_823834f5fec2'' at line 1"
+
+    def raise_mysql_exception(data):
+        errno = struct.unpack("<h", data[1:3])[0]
+        # https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_err_packet.html
+        # Error packet has optional sqlstate that is 5 bytes and starts with '#'.
+        sqlstate = None
+        if data[3] == 0x23:  # '#'
+            sqlstate = data[4:9].decode()
+            errval = data[9:].decode("utf-8", "replace")
+        else:
+            errval = data[3:].decode("utf-8", "replace")
+        errorclass = error_map.get(errno)
+        if errorclass is None:
+            errorclass = InternalError if errno < 1000 else OperationalError
+>       raise errorclass(errno, errval, sqlstate=sqlstate)
+E       pymysql.err.ProgrammingError: (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'cursor FROM t_nexus_group_events WHERE channel_id='ch_823834f5fec2'' at line 1")
+
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/err.py:154: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+    def test_group_history_and_pagination_with_event_cursor():
+        with TestClient(create_app()) as owner:
+            account(owner, "mysql-owner")
+            cid = owner.post("/api/v1/channels", json={"name": "MySQL历史"}).json()["id"]
+            paths = [f"/api/v1/channels/{cid}/{suffix}" for suffix in (
+                "messages", "timeline", "timeline/native",
+            )]
+            for path in paths:
+>               response = owner.get(path)
+                           ^^^^^^^^^^^^^^^
+
+tests/nexus/test_group_mysql.py:129: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/testclient.py:483: in get
+    return super().get(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:1113: in get
+    return self.request(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/testclient.py:455: in request
+    return super().request(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:797: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:980: in send
+    response = self._send_handling_auth(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:1008: in _send_handling_auth
+    response = self._send_handling_redirects(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:1043: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/httpx2/_client.py:1076: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/testclient.py:354: in handle_request
+    raise exc
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/testclient.py:351: in handle_request
+    portal.call(self.app, scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/anyio/from_thread.py:338: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/concurrent/futures/_base.py:450: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/concurrent/futures/_base.py:395: in __get_result
+    raise self._exception
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/anyio/from_thread.py:263: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/applications.py:1163: in __call__
+    await super().__call__(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py:88: in __call__
+    await self.app(scope, receive, send)
+nexus_api/auth.py:67: in __call__
+    await self.app(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/routing.py:670: in __call__
+    await self.middleware_stack(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:2734: in app
+    await route.handle(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:1281: in handle
+    await super().handle(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/routing.py:280: in handle
+    await self.app(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:158: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:144: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:706: in app
+    raw_response = await run_endpoint_function(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/fastapi/routing.py:354: in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/starlette/concurrency.py:34: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/anyio/to_thread.py:65: in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py:2641: in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py:1033: in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+nexus_api/collaboration.py:696: in history
+    one(
+nexus_api/collaboration.py:45: in one
+    row = db.execute(text(sql), params).mappings().first()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1421: in execute
+    return meth(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/sql/elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1848: in _execute_context
+    return self._exec_single_context(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:2365: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/cursors.py:170: in execute
+    result = self._query(query)
+             ^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/cursors.py:335: in _query
+    conn.query(q)
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/connections.py:581: in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/connections.py:857: in _read_query_result
+    result.read()
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/connections.py:1290: in read
+    first_packet = self.connection._read_packet()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/connections.py:810: in _read_packet
+    packet.raise_for_error()
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/protocol.py:219: in raise_for_error
+    err.raise_mysql_exception(self._data)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+data = b"\xff(\x04#42000You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'cursor FROM t_nexus_group_events WHERE channel_id='ch_823834f5fec2'' at line 1"
+
+    def raise_mysql_exception(data):
+        errno = struct.unpack("<h", data[1:3])[0]
+        # https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_err_packet.html
+        # Error packet has optional sqlstate that is 5 bytes and starts with '#'.
+        sqlstate = None
+        if data[3] == 0x23:  # '#'
+            sqlstate = data[4:9].decode()
+            errval = data[9:].decode("utf-8", "replace")
+        else:
+            errval = data[3:].decode("utf-8", "replace")
+        errorclass = error_map.get(errno)
+        if errorclass is None:
+            errorclass = InternalError if errno < 1000 else OperationalError
+>       raise errorclass(errno, errval, sqlstate=sqlstate)
+E       sqlalchemy.exc.ProgrammingError: (pymysql.err.ProgrammingError) (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'cursor FROM t_nexus_group_events WHERE channel_id='ch_823834f5fec2'' at line 1")
+E       [SQL: SELECT MAX(id) AS cursor FROM t_nexus_group_events WHERE channel_id=%(c)s]
+E       [parameters: {'c': 'ch_823834f5fec2'}]
+E       (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pymysql/err.py:154: ProgrammingError
+=============================== warnings summary ===============================
+tests/nexus/test_group_mysql.py::test_group_history_and_pagination_with_event_cursor
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/nexus/test_group_mysql.py::test_group_history_and_pagination_with_event_cursor
+1 failed, 1 warning in 1.48s

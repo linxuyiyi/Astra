@@ -1,0 +1,320 @@
+{
+  "verified_at": "2026-10-30T05:48:53.911129+00:00",
+  "release": "22ea08019",
+  "processes": {
+    "gateway": {
+      "pid": 60990,
+      "pgid": 60990,
+      "create_time": "1793339236.313",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": 18511,
+      "mysql_configured": true
+    },
+    "library-mcp": {
+      "pid": 60992,
+      "pgid": 60992,
+      "create_time": "1793339236.362",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": 18512,
+      "mysql_configured": true
+    },
+    "task-mcp": {
+      "pid": 60994,
+      "pgid": 60994,
+      "create_time": "1793339236.413",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": 18502,
+      "mysql_configured": true
+    },
+    "schedule-mcp": {
+      "pid": 60996,
+      "pgid": 60996,
+      "create_time": "1793339236.467",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": 18503,
+      "mysql_configured": true
+    },
+    "agent": {
+      "pid": 60998,
+      "pgid": 60998,
+      "create_time": "1793339236.539",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/agent-service",
+      "port": 18500,
+      "mysql_configured": true
+    },
+    "api": {
+      "pid": 61000,
+      "pgid": 61000,
+      "create_time": "1793339238.341",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": 18520,
+      "mysql_configured": true
+    },
+    "celery-worker": {
+      "pid": 61004,
+      "pgid": 61004,
+      "create_time": "1793339238.397",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": null,
+      "mysql_configured": true
+    },
+    "celery-beat": {
+      "pid": 61006,
+      "pgid": 61006,
+      "create_time": "1793339238.456",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": null,
+      "mysql_configured": true
+    },
+    "asr": {
+      "pid": 52851,
+      "pgid": 52851,
+      "create_time": "1793325792.106",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-asr",
+      "port": 19899
+    },
+    "mysql": {
+      "pid": 60986,
+      "pgid": 60986,
+      "create_time": "1793339234.167",
+      "cwd": "/Users/niuniu/.local/state/nexus/releases/v1.4.9-mysql-e950abb50/mysql",
+      "port": 18536
+    },
+    "redis": {
+      "pid": 60988,
+      "pgid": 60988,
+      "create_time": "1793339235.225",
+      "cwd": "/Users/niuniu/.local/state/nexus/releases/v1.4.9-mysql-e950abb50/redis",
+      "port": 18589
+    }
+  },
+  "mysql": {
+    "connection": {
+      "version": "8.0.36",
+      "isolation_level": "REPEATABLE-READ",
+      "time_zone": "+00:00",
+      "charset": "utf8mb4",
+      "sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+    },
+    "database": "nexus_v149",
+    "revision": "0006_employee_avatars",
+    "non_innodb": 0,
+    "t_nexus_employees": 3,
+    "t_nexus_conversations": 2,
+    "t_nexus_channels": 1,
+    "t_nexus_tasks": 1
+  },
+  "agent_mysql": {
+    "database": "nexus_agentscope_v149",
+    "revision": "0004_sops",
+    "agents": 3,
+    "sessions": 7,
+    "messages": 26,
+    "message_time_precision": 6
+  },
+  "health": {
+    "status": "ok",
+    "product": "nexus",
+    "version": "1.4.9"
+  },
+  "runtime": {
+    "agentscope_version": "2.0.10",
+    "configured": true,
+    "reachable": true,
+    "agentscope_user_id": "nexus"
+  },
+  "task": {
+    "id": "T-20261030-7FE48C",
+    "status": "SUCCEEDED",
+    "current_session_id": "ses_e74b0b9eaffem1Up00X32LF0eB",
+    "waiting_reason": null
+  },
+  "worker": {
+    "id": "qa-worker-experience-20261023",
+    "status": "IDLE",
+    "current_task_count": 0,
+    "channel_health": {
+      "runtime_engine": "opencode",
+      "runtime_reachable": true,
+      "worker_online": true,
+      "opencode_reachable": true,
+      "repository_bound": true,
+      "executing": false,
+      "waiting_human": false,
+      "availability": "AVAILABLE"
+    }
+  },
+  "workspace": {
+    "task_id": "T-20261030-7FE48C",
+    "task_status": "SUCCEEDED",
+    "runtime": {
+      "runtime_engine": "opencode",
+      "native_session_id": "ses_e74b0b9eaffem1Up00X32LF0eB",
+      "engine_metadata": null,
+      "server": "/api/tasks/T-20261030-7FE48C/opencode",
+      "session_id": "ses_e74b0b9eaffem1Up00X32LF0eB",
+      "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261030-7FE48C-env-5",
+      "connection": "CONNECTED",
+      "error": null,
+      "opencode_version": "1.18.35",
+      "workspace_ui": "/opencode-workspace/1.18.35/index.html",
+      "workspace_ui_error": null,
+      "worker_online": true
+    },
+    "sessions": [
+      {
+        "id": "ses_e74b0b9eaffem1Up00X32LF0eB",
+        "runtime_engine": "opencode",
+        "native_session_id": "ses_e74b0b9eaffem1Up00X32LF0eB",
+        "engine_metadata": null,
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261030-7FE48C-env-5",
+        "created_at": "2026-10-30T05:36:30.750149+00:00",
+        "status": "SUCCEEDED",
+        "superseded_by": null,
+        "finished_at": "2026-10-30T05:36:44.675000+00:00",
+        "current": true,
+        "opencode_version": "1.18.35",
+        "workspace_ui": "/opencode-workspace/1.18.35/index.html",
+        "workspace_ui_error": null
+      }
+    ]
+  },
+  "group": {
+    "id": "ch_34d47cae8e2f",
+    "discussion": {
+      "id": "dis_be36da797055",
+      "state": "completed",
+      "turns": 2,
+      "detail": "",
+      "active_employee_id": ""
+    },
+    "event_cursor": 170,
+    "message_count": 5
+  },
+  "private_runtime": [
+    {
+      "conversation_id": "conv_1c50e34a0bba",
+      "employee_id": "emp_7af34a345fa7",
+      "is_running": false,
+      "message_count": 7,
+      "assistant_replies": [
+        {
+          "id": "4c1d44afac854766a7ab1da83ccb1e04",
+          "finished_at": "2026-10-30T13:32:40.738938",
+          "finished_reason": "completed",
+          "markers": [
+            "MYSQL149_CHAT_OK"
+          ]
+        },
+        {
+          "id": "03af3c0c70ec4f76843525d7ea7a4f1d",
+          "finished_at": "2026-10-30T13:33:35.705161",
+          "finished_reason": "completed",
+          "markers": []
+        },
+        {
+          "id": "0f779ffd3e8b454da0306e157efc55bd",
+          "finished_at": "2026-10-30T13:36:58.548825",
+          "finished_reason": "completed",
+          "markers": []
+        },
+        {
+          "id": "d217c776ebe747ab9d1d01628a0f03ad",
+          "finished_at": "2026-10-30T13:39:58.491107",
+          "finished_reason": "completed",
+          "markers": []
+        }
+      ]
+    },
+    {
+      "conversation_id": "conv_67b85c9e4e17",
+      "employee_id": "emp_edad74fc6854",
+      "is_running": false,
+      "message_count": 10,
+      "assistant_replies": [
+        {
+          "id": "c08696aa23de45c0b1881f65ceb883e7",
+          "finished_at": "2026-10-30T13:40:49.287189",
+          "finished_reason": "completed",
+          "markers": []
+        },
+        {
+          "id": "3a8f1287c86a45c1ab5220a1c3190ffc",
+          "finished_at": "2026-10-30T13:41:27.690185",
+          "finished_reason": "interrupted",
+          "markers": []
+        },
+        {
+          "id": "a3af1392dacd4760b74fe04db50be4ec",
+          "finished_at": "2026-10-30T13:43:22.577033",
+          "finished_reason": "completed",
+          "markers": [
+            "MYSQL149_ATTACHMENT_OK"
+          ]
+        },
+        {
+          "id": "ed0f43bc22c0426798aba4a5367571f5",
+          "finished_at": "2026-10-30T13:44:06.085178",
+          "finished_reason": "completed",
+          "markers": [
+            "MYSQL149_ATTACHMENT_OK"
+          ]
+        },
+        {
+          "id": "25cdbb7f6bdc4ab9ad978108bac829a7",
+          "finished_at": "2026-10-30T13:48:08.493975",
+          "finished_reason": "completed",
+          "markers": [
+            "MYSQL149_RESTART_OK"
+          ]
+        }
+      ]
+    }
+  ],
+  "static_asset": {
+    "path": "/assets/index-DFBq2DU2.js",
+    "sha256": "39cef583c7588a43004fd0cfc52c8bf29d333250c8d083cb78776e1d1b76a57c"
+  },
+  "restart": {
+    "release": "22ea08019",
+    "before_pids": {
+      "gateway": 57906,
+      "library-mcp": 57908,
+      "task-mcp": 57910,
+      "schedule-mcp": 57912,
+      "agent": 57914,
+      "api": 58188,
+      "celery-worker": 57920,
+      "celery-beat": 57922,
+      "asr": 52851,
+      "mysql": 57849,
+      "redis": 57850
+    },
+    "after_pids": {
+      "gateway": 60990,
+      "library-mcp": 60992,
+      "task-mcp": 60994,
+      "schedule-mcp": 60996,
+      "agent": 60998,
+      "api": 61000,
+      "celery-worker": 61004,
+      "celery-beat": 61006,
+      "asr": 52851,
+      "mysql": 60986,
+      "redis": 60988
+    },
+    "mysql_dump_bytes": 1100120
+  },
+  "new_nexus_sqlite_files": [],
+  "celery": {
+    "active": {
+      "celery@qa-worker-experience": 0
+    },
+    "reserved": {
+      "celery@qa-worker-experience": 0
+    },
+    "scheduled": {
+      "celery@qa-worker-experience": 0
+    }
+  }
+}

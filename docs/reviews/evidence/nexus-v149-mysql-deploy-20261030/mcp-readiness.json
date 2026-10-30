@@ -1,0 +1,53 @@
+[
+  {
+    "name": "library",
+    "without_auth": 401,
+    "initialize": 200,
+    "tools_list": 200,
+    "tool_names": [
+      "library_search",
+      "library_get",
+      "library_related",
+      "library_feedback"
+    ]
+  },
+  {
+    "name": "task",
+    "without_auth": 401,
+    "initialize": 200,
+    "tools_list": 200,
+    "tool_names": [
+      "nexus_task_create",
+      "nexus_task_repositories",
+      "nexus_task_categories",
+      "nexus_task_get",
+      "nexus_task_list",
+      "nexus_task_update",
+      "nexus_task_assign",
+      "nexus_task_start",
+      "nexus_task_pause",
+      "nexus_task_resume",
+      "nexus_task_terminate",
+      "nexus_task_retry",
+      "nexus_task_logs",
+      "nexus_task_result",
+      "nexus_task_summary",
+      "nexus_task_intervene",
+      "nexus_task_assistance",
+      "nexus_task_reply",
+      "nexus_task_input",
+      "nexus_task_confirm"
+    ]
+  },
+  {
+    "name": "schedule",
+    "without_auth": 401,
+    "initialize": 200,
+    "tools_list": 200,
+    "tool_names": [
+      "schedule_create",
+      "schedule_list",
+      "schedule_view"
+    ]
+  }
+]

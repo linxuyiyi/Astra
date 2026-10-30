@@ -1,0 +1,46 @@
+[
+  {
+    "name": "真实私聊 DeepSeek",
+    "passed": true
+  },
+  {
+    "name": "群聊 B/C 真实回复",
+    "passed": true
+  },
+  {
+    "name": "原生任务工具和文件",
+    "passed": true
+  },
+  {
+    "name": "首页关联共享 Worker 与人工确认入口",
+    "passed": true
+  },
+  {
+    "name": "真实停止生成",
+    "passed": true
+  },
+  {
+    "name": "附件单发入库并读取标记",
+    "passed": true
+  },
+  {
+    "name": "数字图书馆与待审草稿",
+    "passed": true
+  },
+  {
+    "name": "API 网关真实节点恢复可服务",
+    "passed": true
+  },
+  {
+    "name": "配置中心员工已同步",
+    "passed": true
+  },
+  {
+    "name": "Worker 无永久员工绑定且已释放",
+    "passed": true
+  },
+  {
+    "name": "全服务重启后新回复",
+    "passed": true
+  }
+]

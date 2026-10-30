@@ -1,0 +1,42 @@
+{
+  "task": {
+    "id": "T-20261030-7FE48C",
+    "status": "WAITING",
+    "waiting_reason": "EXECUTION_RESULT_REVIEW"
+  },
+  "workspace": {
+    "task_id": "T-20261030-7FE48C",
+    "task_status": "WAITING",
+    "runtime": {
+      "runtime_engine": "opencode",
+      "native_session_id": "ses_e74b0b9eaffem1Up00X32LF0eB",
+      "engine_metadata": null,
+      "server": "/api/tasks/T-20261030-7FE48C/opencode",
+      "session_id": "ses_e74b0b9eaffem1Up00X32LF0eB",
+      "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261030-7FE48C-env-5",
+      "connection": "CONNECTED",
+      "error": null,
+      "opencode_version": "1.18.35",
+      "workspace_ui": "/opencode-workspace/1.18.35/index.html",
+      "workspace_ui_error": null,
+      "worker_online": true
+    },
+    "sessions": [
+      {
+        "id": "ses_e74b0b9eaffem1Up00X32LF0eB",
+        "runtime_engine": "opencode",
+        "native_session_id": "ses_e74b0b9eaffem1Up00X32LF0eB",
+        "engine_metadata": null,
+        "workspace": "/tmp/nexus-worker-experience-20261023/.astra-tasks/qa-worker-experience-20261023/T-20261030-7FE48C-env-5",
+        "created_at": "2026-10-30T05:36:30.750149+00:00",
+        "status": "SUCCEEDED",
+        "superseded_by": null,
+        "finished_at": "2026-10-30T05:36:44.675000+00:00",
+        "current": true,
+        "opencode_version": "1.18.35",
+        "workspace_ui": "/opencode-workspace/1.18.35/index.html",
+        "workspace_ui_error": null
+      }
+    ]
+  }
+}

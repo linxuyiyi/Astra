@@ -1,5 +1,7 @@
 # Nexus v1.4.9 本机完整部署与真实验收
 
+> 本文记录较早的 SQLite 验收。后续已切换 MySQL，当前部署事实与新一轮真实验证见 [MySQL 部署报告](nexus-v149-mysql-deploy-20261030.md)。下文作为历史证据保留。
+
 日期：2026-10-30（Asia/Shanghai）。部署代码：`517fb35a0ab010ddabd3524d5e45a3964dafbc48`；工作区 `codex/nexus-chat-window-e2e`。本次已完成现有本机环境的服务切换、迁移、真实模型/群聊/Worker/ASR 与重启验证。历史目录数据和可选 Ollama 节点仍有问题，见末尾，不能据此称为公司生产环境全绿。
 
 入口：<http://127.0.0.1:18520/>。由同一个 Nexus API 托管预构建前端，未使用 Vite 或受控上游工厂。

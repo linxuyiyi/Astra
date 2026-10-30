@@ -1,0 +1,11 @@
+{
+  "is_running": false,
+  "last_assistant": [
+    {
+      "id": "3a8f1287c86a45c1ab5220a1c3190ffc",
+      "role": "assistant",
+      "finished_at": "2026-10-30T13:41:27.690185",
+      "finished_reason": "interrupted"
+    }
+  ]
+}

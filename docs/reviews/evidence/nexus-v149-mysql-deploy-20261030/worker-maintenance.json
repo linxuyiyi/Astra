@@ -1,0 +1,10 @@
+{
+  "id": "op_d71f22ca1760474291db2df3b2a61770",
+  "action": "deploy",
+  "state": "SUCCEEDED",
+  "environment_id": 5,
+  "requested_by": "mysql-e2e-20261030",
+  "created_at": null,
+  "finished_at": "2026-10-30T05:36:27.868902+00:00",
+  "error": null
+}

@@ -1,0 +1,23 @@
+{
+  "task": {
+    "id": "T-20261030-7FE48C",
+    "status": "SUCCEEDED",
+    "waiting_reason": null,
+    "current_session_id": "ses_e74b0b9eaffem1Up00X32LF0eB"
+  },
+  "worker": {
+    "id": "qa-worker-experience-20261023",
+    "status": "IDLE",
+    "current_task_count": 0,
+    "channel_health": {
+      "runtime_engine": "opencode",
+      "runtime_reachable": true,
+      "worker_online": true,
+      "opencode_reachable": true,
+      "repository_bound": true,
+      "executing": false,
+      "waiting_human": false,
+      "availability": "AVAILABLE"
+    }
+  }
+}

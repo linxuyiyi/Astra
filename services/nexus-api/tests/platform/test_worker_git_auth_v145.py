@@ -5,10 +5,8 @@ from __future__ import annotations
 import base64
 import json
 import os
-import shlex
 import shutil
 import subprocess
-import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -66,9 +64,7 @@ class GitHTTPServer:
                 self._serve()
 
             def _serve(self):
-                expected = "Basic " + base64.b64encode(
-                    f"git:{owner.token}".encode()
-                ).decode()
+                expected = "Basic " + base64.b64encode(f"git:{owner.token}".encode()).decode()
                 if self.headers.get("Authorization") != expected:
                     self.send_response(401)
                     self.send_header("WWW-Authenticate", 'Basic realm="git"')
@@ -167,16 +163,8 @@ def _configure_git_env(monkeypatch, askpass: Path):
     monkeypatch.setenv("GIT_CONFIG_VALUE_0", "")
 
 
-def test_installer_askpass_authenticates_real_http_git_without_secret_in_environment(
-    http_git, tmp_path
-):
+def test_installer_askpass_authenticates_real_http_git_without_secret_in_environment(http_git, tmp_path):
     _workspace, token, token_file, _askpass, server = http_git
-    script = (Path(__file__).resolve().parents[2] / "app/runtime/remote_install.sh").read_text(
-        encoding="utf-8"
-    )
-    functions = script.split("# >>> nexus-installer-functions\n", 1)[1].split(
-        "# <<< nexus-installer-functions", 1
-    )[0]
     real_git = shutil.which("git")
     assert real_git
     bindir = tmp_path / "bin"
@@ -207,21 +195,6 @@ def test_installer_askpass_authenticates_real_http_git_without_secret_in_environ
     workspace = tmp_path / "installer-clone"
     token_file.write_text(token, encoding="utf-8")
     token_file.chmod(0o644)
-    body = (
-        "set -euo pipefail\n"
-        + functions
-        + f"\npython_bin={shlex.quote(sys.executable)}\n"
-        + f"workspace={shlex.quote(str(workspace))}\n"
-        + f"workspace_real={shlex.quote(str(workspace))}\n"
-        + "action=deploy\n"
-        + f"repo_url={shlex.quote(server.url)}\n"
-        + "repo_branch=main\n"
-        + f"token_file={shlex.quote(str(token_file))}\n"
-        + "repo_changed=false\n"
-        + "remote_commit=''\n"
-        + "repository_stage\n"
-        + "printf 'RESULT\\t%s\\t%s\\n' \"$repo_changed\" \"$remote_commit\"\n"
-    )
     env = {
         **os.environ,
         "PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}",
@@ -230,10 +203,14 @@ def test_installer_askpass_authenticates_real_http_git_without_secret_in_environ
         "TOKEN_PATH": str(token_file),
         "GIT_TERMINAL_PROMPT": "0",
     }
-    completed = subprocess.run(
-        ["bash", "-c", body], text=True, capture_output=True, env=env, timeout=30
-    )
-    assert completed.returncode == 0, completed.stderr
+    import asyncio
+
+    from app.runtime.remote_workspace import git_workspace
+    from tests.platform.deployment_target import LocalTarget
+
+    worker = LocalTarget(tmp_path, workspace=workspace, env=env)
+    asyncio.run(git_workspace(worker, url=server.url, branch="main", token_path=str(token_file)))
+    completed = subprocess.CompletedProcess([], 0, "", "")
     records = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
     assert records, (completed.stdout, completed.stderr)
     clone = next(item for item in records if "clone" in item["argv"])
@@ -267,9 +244,7 @@ def test_correct_pat_reads_remote_and_wrong_pat_fails(http_git, monkeypatch):
 def test_rotated_pat_is_read_without_restart(http_git, monkeypatch):
     workspace, token, token_file, askpass, server = http_git
     _configure_git_env(monkeypatch, askpass)
-    assert inspection._inspect_repository(str(workspace), set())[
-        "authentication_verified"
-    ] is True
+    assert inspection._inspect_repository(str(workspace), set())["authentication_verified"] is True
 
     server.token = "pat-rotated"
     token_file.write_text("pat-rotated", encoding="utf-8")
@@ -351,13 +326,9 @@ async def test_deploy_uses_written_credential_revision(monkeypatch):
         await db.commit()
     async with SessionLocal() as db:
         environment = await db.scalar(
-            select(OpenCodeExecutionEnvironment).where(
-                OpenCodeExecutionEnvironment.employee_id == "gitrev"
-            )
+            select(OpenCodeExecutionEnvironment).where(OpenCodeExecutionEnvironment.employee_id == "gitrev")
         )
-        operation = await submit_operation(
-            db, environment.id, "deploy", requested_by="test"
-        )
+        operation = await submit_operation(db, environment.id, "deploy", requested_by="test")
         operation_id = operation.id
         db.expunge(environment)
     assert await claim_next("owner-gitrev") == operation_id
@@ -422,7 +393,9 @@ async def test_token_rotation_does_not_restart_unchanged_units(monkeypatch):
     )
 
     settings = get_settings()
-    monkeypatch.setattr(settings, "worker_agent_gateway_url", "ws://10.0.0.8:18100/api/worker-gateway/connect")
+    monkeypatch.setattr(
+        settings, "worker_agent_gateway_url", "ws://10.0.0.8:18100/api/worker-gateway/connect"
+    )
     monkeypatch.setattr(settings, "remote_gateway_local_url", "http://10.0.0.8:18110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
@@ -484,20 +457,16 @@ async def test_token_rotation_does_not_restart_unchanged_units(monkeypatch):
     monkeypatch.setattr(provisioner, "_ensure_safe", safe)
     monkeypatch.setattr(provisioner, "_native_idle", idle)
     monkeypatch.setattr(provisioner, "_existing_worker_credentials", credentials)
-    await provisioner._install_units(emit)
+    await provisioner._install_worker(emit)
 
     assert (git_token_path(77), 0o600) in atomic
     assert (git_askpass_path(77), 0o700) in atomic
-    systemd = next(item for item in commands if "systemctl enable" in item)
-    assert "daemon-reload" not in systemd
-    assert "restart nexus-opencode-77.service" not in systemd
-    assert "restart nexus-worker-77.service" not in systemd
+    assert not any("systemctl" in item for item in commands)
+    assert all(not call.kwargs["restart"] for call in provisioner._manage_process.await_args_list)
 
 
 @pytest.mark.asyncio
-async def test_generated_worker_env_authenticates_real_git_and_matches_unit(
-    http_git, monkeypatch, tmp_path
-):
+async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http_git, monkeypatch, tmp_path):
     import hashlib
 
     from app.runtime import remote_provisioning
@@ -508,11 +477,11 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(
     )
 
     workspace, _token, _token_file, _askpass, _server = http_git
-    monkeypatch.setattr(
-        remote_provisioning, "WORKER_SECRET_DIR", str(tmp_path / "etc-nexus")
-    )
+    monkeypatch.setattr(remote_provisioning, "WORKER_SECRET_DIR", str(tmp_path / "etc-nexus"))
     settings = get_settings()
-    monkeypatch.setattr(settings, "worker_agent_gateway_url", "ws://10.0.0.8:18100/api/worker-gateway/connect")
+    monkeypatch.setattr(
+        settings, "worker_agent_gateway_url", "ws://10.0.0.8:18100/api/worker-gateway/connect"
+    )
     monkeypatch.setattr(settings, "remote_gateway_local_url", "http://10.0.0.8:18110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
@@ -583,9 +552,9 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(
     monkeypatch.setattr(provisioner, "_native_idle", idle)
     monkeypatch.setattr(provisioner, "_existing_worker_credentials", credentials)
 
-    await provisioner._install_units(emit)
+    await provisioner._install_worker(emit)
     env_path = f"{remote_provisioning.WORKER_SECRET_DIR}/worker-88.env"
-    unit_path = "/etc/systemd/system/nexus-opencode-88.service"
+    unit_path = f"{remote_provisioning.WORKER_SECRET_DIR}/opencode-88.env"
     env_text = written[env_path].decode()
     unit_text = written[unit_path].decode()
     env_file = tmp_path / "worker-88.env"
@@ -599,8 +568,8 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(
     assert {key: loaded[key] for key in safe_git} == safe_git
     unit_git = {}
     for line in unit_text.splitlines():
-        if line.startswith("Environment=GIT_"):
-            key, sep, value = line.removeprefix("Environment=").partition("=")
+        if line.startswith("GIT_"):
+            key, sep, value = line.partition("=")
             if sep:
                 unit_git[key] = value
     assert unit_git == safe_git
@@ -613,10 +582,15 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(
     # Second identical generation changes no env/unit content and does not
     # restart Worker/OpenCode (PID criteria).
     commands.clear()
-    await provisioner._install_units(emit)
+    await provisioner._install_worker(emit)
     assert written[env_path].decode() == env_text
     assert written[unit_path].decode() == unit_text
-    systemd = next(item for item in commands if "systemctl enable" in item)
-    assert "daemon-reload" not in systemd
-    assert "restart nexus-worker-88.service" not in systemd
-    assert "restart nexus-opencode-88.service" not in systemd
+    assert not any("systemctl" in item for item in commands)
+
+
+@pytest.fixture(autouse=True)
+def isolate_process_start_for_environment_tests(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(RemoteProvisioner, "_manage_process", AsyncMock())
+    monkeypatch.setattr(RemoteProvisioner, "_wait_opencode_ready", AsyncMock())

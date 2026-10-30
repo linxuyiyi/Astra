@@ -84,7 +84,7 @@ echo "== deployment invariants =="
 for file in model.pt config.yaml tokens.json am.mvn chn_jpn_yue_eng_ko_spectok.bpe.model; do
   check "model file $file" "$([ -f "$ROOT/models/SenseVoiceSmall/$file" ] && echo 1 || echo 0)"
 done
-check "Nginx has no direct ASR upstream" "$(grep -Eq 'proxy_pass[[:space:]]+http://127.0.0.1:19899' "$REPO/ops/deploy/nginx-nexus.conf" && echo 0 || echo 1)"
+check "Nginx has no direct ASR upstream" "$(grep -Eq 'proxy_pass[[:space:]]+http://127.0.0.1:19899' "$REPO/ops/deploy/deploy.py" && echo 0 || echo 1)"
 
 echo
 echo "passed=$pass failed=$fail"

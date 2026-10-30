@@ -1,47 +1,28 @@
-"""Company-network bootstrap boundaries and real shell failure behavior."""
+"""Server-owned target probing, dependency decisions and Python reuse/build."""
 
-import shlex
-import socket
-import subprocess
-import sys
-from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.config.settings import Settings
-from app.runtime.remote_bootstrap import (
-    dependency_script,
-    download_base,
-    managed_python,
-    prepare_python,
-    python_build_script,
-)
-from app.runtime.remote_provisioning import RemoteProvisioner, agent_python
+from app.config.worker_deployment import PYTHON_SHA256, deployment_manifest
+from app.runtime.remote_bootstrap import dependency_packages, managed_python, prepare_python
 
 
 class BootstrapWorker:
-    def __init__(self, *, ready=False, explicit="", canceled_at=0, build_error=False, busy=False):
-        self.settings = SimpleNamespace(
-            remote_python=explicit,
-            remote_download_base_url="https://repo.huaweicloud.com",
-            remote_deploy_timeout_seconds=1200,
-        )
-        self.ready = ready
-        self.commands = []
-        self.steps = []
-        self.checks = 0
-        self.canceled_at = canceled_at
-        self.build_error = build_error
-        self.busy = busy
+    def __init__(self, *, ready="", explicit="", uid="0", busy=False, failure=False):
+        self.settings = Settings(_env_file=None, remote_python=explicit)
+        self.environment, self.operation_id = SimpleNamespace(id=7), "bootstrap"
+        self.ready, self.uid, self.busy, self.failure = ready, uid, busy, failure
+        self.commands, self.steps, self.python_interpreter = [], [], None
+        self._acquire_install_lock = AsyncMock()
 
     def _agent_interpreter(self):
-        return self.settings.remote_python or managed_python(7)
+        return self.python_interpreter or self.settings.remote_python or managed_python(7)
 
     async def _ensure_safe(self):
-        self.checks += 1
-        if self.checks == self.canceled_at:
-            raise RuntimeError("lease lost")
+        return None
 
     async def _bootstrap_idle(self, *, interpreter_ready):
         if self.busy:
@@ -49,175 +30,86 @@ class BootstrapWorker:
 
     async def _command(self, command, timeout=30):
         self.commands.append(command)
+        values = {
+            "uname -s": "Linux",
+            "uname -m": "x86_64",
+            "id -u": self.uid,
+            'printf "%s" "$HOME"': "/root",
+            "getconf GNU_LIBC_VERSION 2>/dev/null || true": "glibc 2.31",
+        }
+        if command in values:
+            return values[command]
+        if command.startswith("command -v"):
+            tool = command.split()[2]
+            return (
+                "" if tool in {"dnf", "yum", "python3.13", "python3.12", "python3.11"} else "/usr/bin/" + tool
+            )
         if command.startswith("if "):
-            return "READY" if self.ready else "MISSING"
-        if self.build_error and "./configure" in command:
-            raise RuntimeError("checksum failed")
+            return "READY" if self.ready and self.ready in command else "MISSING"
+        if command.startswith("sha256sum"):
+            return PYTHON_SHA256 + " archive"
+        if self.failure and "./configure" in command:
+            raise RuntimeError("build failed")
         return ""
 
     async def step(self, emit, name, state, detail=""):
         self.steps.append((name, state))
 
 
-@pytest.mark.asyncio
-async def test_missing_system_python_uses_private_bootstrap():
+async def test_missing_python_build_is_selected_by_server_from_explicit_source():
     worker = BootstrapWorker()
     await prepare_python(worker, None)
-    assert len(worker.commands) == 3
-    assert managed_python(7) in worker.commands[0]
-    assert "python3 -c" not in "\n".join(worker.commands)
-    assert "https://repo.huaweicloud.com/python/" in worker.commands[-1]
+    assert any(
+        "https://mirrors.tools.huawei.com/python/3.11.17/Python-3.11.17.tar.xz" in c for c in worker.commands
+    )
+    assert any("./configure" in c for c in worker.commands)
+    assert worker.python_interpreter == managed_python(7)
     assert worker.steps[-1] == ("Python 运行环境", "passed")
+    worker._acquire_install_lock.assert_awaited_once()
 
 
-@pytest.mark.asyncio
-async def test_redeploy_does_not_build_available_managed_python():
-    worker = BootstrapWorker(ready=True)
+async def test_preinstalled_python_is_reused_without_compilation_or_dev_packages():
+    worker = BootstrapWorker(ready="/usr/bin/python3")
     await prepare_python(worker, None)
-    assert len(worker.commands) == 2
-    assert not any("./configure" in c for c in worker.commands)
+    assert worker.python_interpreter == "/usr/bin/python3"
+    assert not any("./configure" in c or "apt-get install" in c for c in worker.commands)
 
 
-@pytest.mark.asyncio
-async def test_explicit_bad_python_fails_before_dependency_or_configuration_writes():
+async def test_explicit_bad_python_does_not_fallback():
     worker = BootstrapWorker(explicit="/custom/python3")
     with pytest.raises(RuntimeError, match="指定的远端 Python 不可用"):
         await prepare_python(worker, None)
-    assert len(worker.commands) == 1
+    assert not any("apt-get install" in c or c.startswith("curl ") for c in worker.commands)
 
 
-@pytest.mark.asyncio
-async def test_lease_loss_stops_before_build():
-    worker = BootstrapWorker(canceled_at=3)
-    with pytest.raises(RuntimeError, match="lease lost"):
-        await prepare_python(worker, None)
-    assert len(worker.commands) == 2
-    assert not any("./configure" in c for c in worker.commands)
-
-
-@pytest.mark.asyncio
-async def test_build_failure_is_not_reported_as_success():
-    worker = BootstrapWorker(build_error=True)
-    with pytest.raises(RuntimeError, match="checksum failed"):
-        await prepare_python(worker, None)
-    assert ("Python 运行环境", "passed") not in worker.steps
-
-
-@pytest.mark.asyncio
-async def test_native_busy_blocks_before_any_package_install():
+async def test_native_busy_blocks_before_package_installation():
     worker = BootstrapWorker(busy=True)
     with pytest.raises(RuntimeError, match="native busy"):
         await prepare_python(worker, None)
-    assert len(worker.commands) == 1
+    assert not any("apt-get install" in c or "./configure" in c for c in worker.commands)
 
 
-@pytest.mark.asyncio
-async def test_existing_agent_python_checks_native_state_before_bootstrap():
-    worker = RemoteProvisioner(
-        SimpleNamespace(id=7, ssh_password="", model_name="", opencode_path=""),
-        {"id": "op", "action": "deploy"},
-    )
-    probes = []
-
-    async def command(*_args):
-        return "yes"
-
-    async def native_idle(**kwargs):
-        probes.append(kwargs)
-
-    worker._command = command
-    worker._native_idle = native_idle
-    await worker._bootstrap_idle(interpreter_ready=False)
-    assert probes == [{"strict": True, "interpreter": agent_python(7)}]
+async def test_non_root_is_rejected_before_dependency_or_workspace_changes():
+    worker = BootstrapWorker(uid="1000")
+    with pytest.raises(RuntimeError, match="需要 root"):
+        await prepare_python(worker, None)
+    assert not any("apt-get" in c or "mkdir" in c for c in worker.commands)
 
 
-def test_mirrors_default_to_huawei():
+async def test_build_failure_never_reports_success_and_cleans_its_own_stage():
+    worker = BootstrapWorker(failure=True)
+    with pytest.raises(RuntimeError, match="build failed"):
+        await prepare_python(worker, None)
+    assert ("Python 运行环境", "passed") not in worker.steps
+    assert any("rm -rf --" in c and ".build-bootstrap" in c for c in worker.commands)
+
+
+def test_sources_are_independent_and_legacy_root_is_explicitly_rejected():
     settings = Settings(_env_file=None)
-    assert download_base(settings) == "https://repo.huaweicloud.com"
-    assert settings.remote_npm_registry == "https://repo.huaweicloud.com/repository/npm/"
-    assert settings.remote_pip_index_url == "https://repo.huaweicloud.com/repository/pypi/simple"
-    source = Path("app/runtime/remote_install.sh").read_text()
-    assert 'node_source="$download_base/nodejs"' in source
-    assert 'node_dist=linux-x64-musl' in source
-    for external in ("nodejs.org", "kernel.org", "dl-cdn.alpinelinux.org", "vault.centos.org"):
-        assert external not in source
-    assert "https://repo.huaweicloud.com/centos-vault" in dependency_script(download_base(settings))
-
-
-@pytest.mark.parametrize("base", ["http://mirror.test", "https://user:secret@mirror.test", "https://x/?k=v"])
-def test_invalid_download_base_is_rejected(base):
-    with pytest.raises(RuntimeError, match="HTTPS"):
-        download_base(SimpleNamespace(remote_download_base_url=base))
-
-
-def test_checksum_failure_does_not_extract_or_leave_partial_python(tmp_path):
-    bindir = tmp_path / "bin"
-    bindir.mkdir()
-    # Real sha256sum rejects this bogus payload before configure/build can run.
-    (bindir / "curl").write_text('#!/bin/sh\nfor arg; do target="$arg"; done\nprintf bad >"$target"\n')
-    (bindir / "curl").chmod(0o755)
-    interpreter = str(tmp_path / "python" / "bin" / "python3.11")
-    source = python_build_script(interpreter, "https://repo.huaweicloud.com")
-    # macOS lacks flock: a no-op for this non-concurrent checksum test only.
-    result = subprocess.run(
-        ["bash", "-euc", f"export PATH={shlex.quote(str(bindir))}:$PATH\nflock() {{ :; }}\n" + source],
-        capture_output=True,
-        text=True,
-        timeout=20,
-    )
-    assert result.returncode != 0
-    assert "FAILED" in result.stdout + result.stderr
-    assert not (tmp_path / "python").exists()
-    assert not list(tmp_path.glob(".python-build.*"))
-
-
-@pytest.mark.parametrize("version,accepted", [("2.17.9", False), ("1.19.0", False),
-                                               ("2.18.0", True), ("2.19.1", True), ("2.43.7", True)])
-def test_git_floor_uses_existing_git_without_installing(version, accepted):
-    source = Path("app/runtime/remote_install.sh").read_text()
-    functions = source.split("# >>> nexus-installer-functions\n")[1].split(
-        "# <<< nexus-installer-functions"
-    )[0]
-    result = subprocess.run(
-        ["bash", "-euc", "fail() { echo \"$*\" >&2; exit 1; }\n"
-         + f"git() {{ printf 'git version {version}\\n'; }}\n" + functions + "\nassert_git_version"],
-        capture_output=True, text=True, timeout=10,
-    )
-    assert (result.returncode == 0) is accepted
-    if not accepted:
-        assert "Git 版本低于 2.18" in result.stderr
-    assert "kernel.org" not in source
-    assert "git_release=" not in source
-
-
-def test_all_ssh_probes_select_managed_or_installed_agent_python():
-    worker = RemoteProvisioner(
-        SimpleNamespace(id=7, ssh_password="", model_name="", opencode_path=""),
-        {"id": "op", "action": "deploy"},
-    )
-    worker.settings = SimpleNamespace(remote_python="")
-    assert worker._probe_interpreter() == managed_python(7)
-    worker.action = "restart"
-    assert worker._probe_interpreter() == agent_python(7)
-
-
-@pytest.mark.skipif(sys.platform != "linux", reason="前置监听检查使用 Linux procfs")
-async def test_bootstrap_without_python_blocks_real_listener_before_packages():
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        listener.listen()
-        worker = RemoteProvisioner(
-            SimpleNamespace(id=987654321, ssh_password="", model_name="", opencode_path="",
-                            opencode_server_port=listener.getsockname()[1]),
-            {"id": "op", "action": "deploy"},
-        )
-
-        async def command(text, timeout=30):
-            result = subprocess.run(["bash", "-c", text], capture_output=True, text=True, timeout=timeout)
-            assert result.returncode == 0, result.stderr
-            return result.stdout.strip()
-
-        worker._command = command
-        with pytest.raises(RuntimeError, match="停止环境引导"):
-            await worker._bootstrap_idle(interpreter_ready=False)
-    await worker._bootstrap_idle(interpreter_ready=False)
+    manifest = deployment_manifest(settings)
+    assert manifest["npm_registry"] == "https://mirrors.tools.huawei.com/npm"
+    assert manifest["pip_index_url"] == "https://mirrors.tools.huawei.com/pypi/simple"
+    with pytest.raises(ValueError, match="已停用"):
+        deployment_manifest(Settings(_env_file=None, remote_download_base_url="https://old.invalid"))
+    assert "build-essential" not in dependency_packages("apt-get", build_python=False, git_missing=False)
+    assert "git" not in dependency_packages("dnf", build_python=True, git_missing=False)

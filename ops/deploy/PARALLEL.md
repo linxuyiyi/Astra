@@ -16,7 +16,7 @@ python ops/deploy/check_parallel.py
 | SQLite 文件 | `astra.db` | `nexus.db` |
 | Redis | 库 `0`，前缀 `astra:` | 库 `1`，前缀 `nexus:` |
 | Celery 队列 | `control`（任务名 `astra.*`） | `nexus-control`（任务名 `nexus.*`） |
-| systemd | `astra-opencode-{id}.service`、`astra-worker-{id}.service` | `nexus-opencode-{id}.service`、`nexus-worker-{id}.service` |
+| 进程管理 | 旧版系统服务 | Nexus 记录独立进程身份，不创建系统服务单元 |
 | 路径 | `/opt/astra`、`/etc/astra` | `/opt/nexus`、`/etc/nexus` |
 | 锁目录 | `/tmp/astra-employee-serve` | `/tmp/nexus-employee-serve` |
 | 部署缓存 | `~/.cache/astra-provision` | `~/.cache/nexus-provision` |
@@ -25,4 +25,4 @@ python ops/deploy/check_parallel.py
 
 Redis 进程仍监听 6379。`ASTRA_REDIS_URL` 使用库 1。`ASTRA_*` 变量名保持不变。
 
-Celery 的 `agent` 队列名，以及 worker 主机名 `astra-control`、`astra-agent`，沿用原名。它们和 v0.9 不在同一个 Redis 库里。
+Celery 保留 `agent` 队列，标准部署的 Worker 主机名带独立部署目录摘要。它们和 v0.9 不在同一个 Redis 库里。

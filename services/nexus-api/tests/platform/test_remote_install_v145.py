@@ -1,58 +1,37 @@
-"""v1.4.5 remote installer: Git semantics, config idempotence and safety probes."""
+"""Server-owned config and real Git deployment/update contract tests."""
 
-from __future__ import annotations
-
+import asyncio
 import json
-import os
-import shlex
-import shutil
 import subprocess
-import sys
-import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import pytest
-
-ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "app/runtime/remote_install.sh"
-JSONC = ROOT / "app/worker_agent/jsonc.py"
-NODE = shutil.which("node")
+from app.runtime.remote_workspace import configure_runtime, git_workspace
+from tests.platform.deployment_target import LocalTarget
 
 
-def _script() -> str:
-    return SCRIPT.read_text(encoding="utf-8")
+def _run_config(tmp_path, payload, operation="op1"):
+    worker = LocalTarget(tmp_path)
+    worker.operation_id = operation
+    result_file = tmp_path / "result.json"
+    try:
+        result = asyncio.run(configure_runtime(worker, payload))
+        result_file.write_text(json.dumps(result))
+        return subprocess.CompletedProcess([], 0, "", ""), result_file
+    except Exception as exc:
+        return subprocess.CompletedProcess([], 1, "", str(exc)), result_file
 
 
-def _functions() -> str:
-    text = _script()
-    return text.split("# >>> nexus-installer-functions\n", 1)[1].split(
-        "# <<< nexus-installer-functions", 1
-    )[0]
-
-
-def _run_functions(
-    body: str, *, timeout: int = 30, extra_env: dict[str, str] | None = None
-) -> subprocess.CompletedProcess[str]:
-    source = (
-        "set -euo pipefail\n"
-        + _functions()
-        + "\npython_bin="
-        + shlex.quote(sys.executable)
-        + "\n"
-        + body
-    )
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    if extra_env:
-        env.update(extra_env)
-    return subprocess.run(
-        ["bash", "-c", source],
-        text=True,
-        capture_output=True,
-        timeout=timeout,
-        env=env,
-    )
+def _run_repository(tmp_path, *, action, repo_url, workspace, branch="main", token_file=""):
+    worker = LocalTarget(tmp_path, workspace=workspace, action=action)
+    try:
+        result, changed = asyncio.run(
+            git_workspace(worker, url=repo_url, branch=branch, token_path=token_file)
+        )
+        output = "RESULT\t" + str(changed).lower() + "\t" + (result["remote_commit"] or "") + "\n"
+        return subprocess.CompletedProcess([], 0, output, "")
+    except Exception as exc:
+        return subprocess.CompletedProcess([], 1, "", str(exc))
 
 
 def _git(cwd: Path | None, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -102,52 +81,10 @@ def _advance(seed: Path, text: str, message: str) -> str:
     return _git(seed, "rev-parse", "HEAD").stdout.strip()
 
 
-def _run_repository(
-    tmp_path: Path,
-    *,
-    action: str,
-    repo_url: str,
-    workspace: Path,
-    branch: str = "main",
-    token_file: str = "",
-) -> subprocess.CompletedProcess[str]:
-    body = f"""
-workspace={shlex.quote(str(workspace))}
-workspace_real=$("$python_bin" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$workspace")
-action={shlex.quote(action)}
-repo_url={shlex.quote(repo_url)}
-repo_branch={shlex.quote(branch)}
-token_file={shlex.quote(token_file)}
-repo_changed=false
-remote_commit=""
-repository_stage
-printf 'RESULT\\t%s\\t%s\\n' "$repo_changed" "$remote_commit"
-"""
-    return _run_functions(body)
-
-
 def _repo_result(output: str) -> tuple[str, str]:
     line = next(item for item in output.splitlines() if item.startswith("RESULT\t"))
     _, changed, remote = line.split("\t")
     return changed, remote
-
-
-def test_install_script_has_valid_bash_syntax():
-    result = subprocess.run(
-        ["bash", "-n", str(SCRIPT)], text=True, capture_output=True, check=False
-    )
-    assert result.returncode == 0, result.stderr
-
-
-def test_install_script_uses_only_nexus_identifiers():
-    text = _script()
-    assert "astra" not in text.lower()
-    assert "NEXUS_STEP\\t" in text
-    assert "NEXUS_META\\t" in text
-    assert "npm config" not in text
-    assert "/usr/local/bin/node" not in text
-    assert "/usr/local/bin/npm" not in text
-    assert "$HOME/.local/bin" not in text
 
 
 def _payload(config: Path, **overrides) -> dict:
@@ -168,30 +105,6 @@ def _payload(config: Path, **overrides) -> dict:
     return payload
 
 
-def _run_config(tmp_path: Path, payload: dict, operation: str = "op1"):
-    payload_file = tmp_path / "payload.json"
-    payload_file.write_text(json.dumps(payload), encoding="utf-8")
-    result_file = tmp_path / "result.json"
-    source = _script().split("<<'NODE'\n", 1)[1].split("\nNODE", 1)[0]
-    result = subprocess.run(
-        [
-            NODE,
-            "-",
-            str(payload_file),
-            operation,
-            sys.executable,
-            str(JSONC),
-            str(result_file),
-        ],
-        input=source,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    return result, result_file
-
-
-@pytest.mark.skipif(not NODE, reason="Node.js required for config merge")
 def test_config_merge_is_scoped_and_idempotent(tmp_path):
     config = tmp_path / "opencode.jsonc"
     original = {
@@ -275,7 +188,6 @@ def test_config_merge_is_scoped_and_idempotent(tmp_path):
     assert (tmp_path / "skill" / "user-skill" / "SKILL.md").read_text() == "user"
 
 
-@pytest.mark.skipif(not NODE, reason="Node.js required for config merge")
 def test_config_merge_refuses_unmanaged_conflicts_and_invalid_json(tmp_path):
     config = tmp_path / "opencode.jsonc"
     config.write_text(
@@ -302,143 +214,6 @@ def test_config_merge_refuses_unmanaged_conflicts_and_invalid_json(tmp_path):
     assert broken.read_text() == "not json"
 
 
-def test_native_idle_allows_provably_stopped_server(tmp_path):
-    import socket
-
-    workspace = tmp_path / "ws"
-    workspace.mkdir()
-    probe = socket.socket()
-    probe.bind(("127.0.0.1", 0))
-    port = probe.getsockname()[1]
-    probe.close()
-    result = _run_functions(
-        f"workspace={shlex.quote(str(workspace))}\nassert_native_idle {port}\n"
-    )
-    assert result.returncode == 0, result.stderr
-
-
-def _serve(body: bytes):
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def log_message(self, *args):
-            return None
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    return server
-
-
-@pytest.mark.parametrize(
-    ("body", "returncode", "message"),
-    [
-        (b"{}", 0, ""),
-        (b'{"ses": {"type": "idle"}}', 0, ""),
-        (b'{"ses": {"type": "busy"}}', 4, "正在执行"),
-        (b'{"ses": {"type": "retry"}}', 4, "正在执行"),
-        (b'{"ses": {}}', 3, "无法确认"),
-        (b'{"ses": {"type": "unknown"}}', 3, "无法确认"),
-        (b'{"ses": {"type": null}}', 3, "无法确认"),
-        (b'{"ses": null}', 3, "无法确认"),
-        (b'{"ses": "idle"}', 3, "无法确认"),
-        (b"not-json", 3, "无法确认"),
-        (b"[]", 3, "无法确认"),
-    ],
-)
-def test_native_idle_handles_busy_idle_and_malformed_probes(
-    tmp_path, body, returncode, message
-):
-    workspace = tmp_path / "ws"
-    workspace.mkdir()
-    server = _serve(body)
-    try:
-        result = _run_functions(
-            f"workspace={shlex.quote(str(workspace))}\nassert_native_idle {server.server_port}\n"
-        )
-    finally:
-        server.shutdown()
-        server.server_close()
-    assert result.returncode == returncode
-    if message:
-        assert message in result.stderr
-
-
-def test_native_idle_requires_an_explicit_port(tmp_path):
-    workspace = tmp_path / "ws"
-    workspace.mkdir()
-    result = _run_functions(
-        f"workspace={shlex.quote(str(workspace))}\nassert_native_idle ''\n"
-    )
-    assert result.returncode != 0
-    assert "缺少 opencode_server_port" in result.stderr
-
-
-def test_native_idle_rejects_unknown_socket_errors(tmp_path):
-    workspace = tmp_path / "ws"
-    workspace.mkdir()
-    (tmp_path / "sitecustomize.py").write_text(
-        "import socket as _socket\n"
-        "class _Probe(_socket.socket):\n"
-        "    def connect(self, address):\n"
-        "        raise TimeoutError('timed out')\n"
-        "_socket.socket = _Probe\n",
-        encoding="utf-8",
-    )
-    existing = os.environ.get("PYTHONPATH", "")
-    python_path = str(tmp_path) + (os.pathsep + existing if existing else "")
-    result = _run_functions(
-        f"workspace={shlex.quote(str(workspace))}\nassert_native_idle 4096\n",
-        extra_env={"PYTHONPATH": python_path, "PYTHONNOUSERSITE": "1"},
-    )
-    assert result.returncode == 3
-    assert "无法确认 OpenCode 监听状态" in result.stderr
-
-
-@pytest.mark.parametrize(
-    ("value", "valid"),
-    [
-        ("1", True),
-        ("4096", True),
-        ("65535", True),
-        ("0", False),
-        ("65536", False),
-        ("", False),
-        ("latest", False),
-        (" 4096", False),
-    ],
-)
-def test_port_validator(value, valid):
-    result = _run_functions(f"validate_port {shlex.quote(value)}\n")
-    assert (result.returncode == 0) is valid
-
-
-@pytest.mark.parametrize(
-    ("value", "valid"),
-    [
-        ("22.23.3", True),
-        ("1.18.35", True),
-        ("1.18.35-beta.1", True),
-        ("1.18.35+build.7", True),
-        ("1.18.35-rc.1+build.7", True),
-        ("latest", False),
-        ("v1.18.35", False),
-        ("1.18", False),
-        ("1.18.35/evil", False),
-        ("https://example.invalid/opencode.tgz", False),
-        ("", False),
-    ],
-)
-def test_semver_validator(value, valid):
-    result = _run_functions(f"validate_semver {shlex.quote(value)}\n")
-    assert (result.returncode == 0) is valid
-
-
 def test_deploy_clone_then_update_fast_forwards(tmp_path):
     bare, seed = _make_remote(tmp_path)
     workspace = tmp_path / "workspace"
@@ -448,9 +223,7 @@ def test_deploy_clone_then_update_fast_forwards(tmp_path):
     first_commit = _git(workspace, "rev-parse", "HEAD").stdout.strip()
 
     target = _advance(seed, "v2\n", "second")
-    deploy_again = _run_repository(
-        tmp_path, action="deploy", repo_url=str(bare), workspace=workspace
-    )
+    deploy_again = _run_repository(tmp_path, action="deploy", repo_url=str(bare), workspace=workspace)
     assert deploy_again.returncode == 0, deploy_again.stderr
     assert _repo_result(deploy_again.stdout)[0] == "false"
     assert _git(workspace, "rev-parse", "HEAD").stdout.strip() == first_commit

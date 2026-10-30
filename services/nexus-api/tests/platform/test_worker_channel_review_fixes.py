@@ -262,87 +262,30 @@ def test_resume_wakes_a_paused_event_reader():
     assert manager.resume_waiters["/srv/app"].is_set()
 
 
-def test_child_environ_drops_worker_credentials_and_restart_is_not_pure(tmp_path, monkeypatch):
-    source = {
-        "PATH": "/usr/bin",
-        "HOME": "/home/dev",
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-        "NEXUS_WORKER_TOKEN": "wtk_secret",
-        "NEXUS_WORKER_GATEWAY_URL": "ws://nexus/api/worker-gateway/connect",
-        "NEXUS_GATEWAY_MASTER_KEY": "master",
-    }
-    cleaned = child_environ(source)
-    assert cleaned["PATH"] == "/usr/bin"
-    assert "NEXUS_WORKER_TOKEN" not in cleaned
-    assert "NEXUS_WORKER_GATEWAY_URL" not in cleaned
-    assert "NEXUS_GATEWAY_MASTER_KEY" not in cleaned
-    captured: dict[str, object] = {}
+def test_child_environ_drops_worker_credentials_and_preserves_managed_config():
+    from app.worker_agent.process_env import child_environ
 
-    def popen(cmd, **kwargs):
-        captured["cmd"] = cmd
-        captured["env"] = kwargs["env"]
-        return SimpleNamespace()
+    source = {"NEXUS_WORKER_TOKEN": "canary", "OPENCODE_CONFIG": "/managed/config.jsonc", "PATH": "/usr/bin"}
+    result = child_environ(source)
+    assert "NEXUS_WORKER_TOKEN" not in result
+    assert result["OPENCODE_CONFIG"] == source["OPENCODE_CONFIG"]
 
-    monkeypatch.setattr("app.worker_agent.channel_switch._listener_pid", lambda _port: None)
-    monkeypatch.setattr("app.worker_agent.channel_switch._probe_listener", lambda _port: False)
-    monkeypatch.setattr("app.worker_agent.channel_switch.probe_url", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr("app.worker_agent.channel_switch._wait_until_healthy", lambda *_a, **_k: None)
-    monkeypatch.setattr("app.worker_agent.channel_switch.subprocess.Popen", popen)
-    workspace = tmp_path / "ws"
-    workspace.mkdir()
+
+def test_restart_refuses_a_listener_without_a_managed_record(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.worker_agent.channel_switch.assert_native_idle", lambda *_a, **_kw: True)
+    with pytest.raises(RuntimeError, match="缺少受管进程记录"):
+        restart_local_opencode(str(tmp_path), 4096, environ={})
+
+
+def test_process_restart_passes_the_maintenance_gate(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr("app.worker_agent.channel_switch._wait_until_healthy", lambda *_a, **_kw: None)
+    monkeypatch.setattr("app.worker_agent.channel_switch.assert_native_idle", lambda *_a, **_kw: False)
+    monkeypatch.setattr("app.worker_agent.channel_switch.manage_process", lambda *a, **kw: calls.append(kw))
     restart_local_opencode(
-        str(workspace),
-        4096,
-        environ={**source, "NEXUS_WORKER_OPENCODE_BIN": "/opt/opencode"},
+        str(tmp_path), 4096, environ={"NEXUS_WORKER_OPENCODE_PROCESS_RECORD": str(tmp_path / "record")}
     )
-    assert captured["cmd"] == ["/opt/opencode", "serve", "--hostname", "127.0.0.1", "--port", "4096"]
-    assert "--pure" not in captured["cmd"]
-    assert "NEXUS_WORKER_TOKEN" not in captured["env"]
-
-
-def test_restart_refuses_a_port_that_is_not_opencode(tmp_path, monkeypatch):
-    killed: list[int] = []
-    monkeypatch.setattr("app.worker_agent.channel_switch._probe_listener", lambda _port: True)
-    monkeypatch.setattr("app.worker_agent.channel_switch._read_native_status", lambda *_a, **_k: {})
-    monkeypatch.setattr("app.worker_agent.channel_switch._listener_pid", lambda _port: 4321)
-    monkeypatch.setattr("app.worker_agent.channel_switch._opencode_listener", lambda _pid: False)
-    monkeypatch.setattr("app.worker_agent.channel_switch.os.kill", lambda pid, _sig: killed.append(pid))
-    workspace = tmp_path / "ws"
-    workspace.mkdir()
-    with pytest.raises(RuntimeError, match="不是 OpenCode"):
-        restart_local_opencode(str(workspace), 4096, environ={"PATH": "/usr/bin", "HOME": "/home/dev"})
-    assert killed == []
-
-
-def test_systemd_restart_does_not_inherit_the_worker_token(tmp_path, monkeypatch):
-    calls: list[tuple] = []
-
-    def run(cmd, **kwargs):
-        calls.append((cmd, kwargs.get("env")))
-        return SimpleNamespace(returncode=0)
-
-    monkeypatch.setattr("app.worker_agent.channel_switch.subprocess.run", run)
-    monkeypatch.setattr("app.worker_agent.channel_switch.probe_url", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr("app.worker_agent.channel_switch._wait_until_healthy", lambda *_a, **_k: None)
-    monkeypatch.setattr(
-        "app.worker_agent.channel_switch.subprocess.Popen",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("systemd 路径不应再拉起进程")),
-    )
-    workspace = tmp_path / "ws"
-    workspace.mkdir()
-    restart_local_opencode(
-        str(workspace),
-        4096,
-        environ={
-            "PATH": "/usr/bin",
-            "HOME": "/home/dev",
-            "NEXUS_WORKER_TOKEN": "wtk_secret",
-            "NEXUS_WORKER_OPENCODE_UNIT": "opencode.service",
-        },
-    )
-    assert calls[0][0] == ["systemctl", "restart", "opencode.service"]
-    assert "NEXUS_WORKER_TOKEN" not in calls[0][1]
+    assert calls[0]["opencode"] is True and calls[0]["restart"] is True
 
 
 def test_oversized_event_frame_becomes_a_gap_marker():
@@ -399,11 +342,9 @@ async def test_fetch_rejects_a_sealed_or_stale_attempt(environment_id):
     gateway = gateway_for()
     enrolled, auth = await bring_online(gateway, environment_id)
     async with SessionLocal() as session:
-        employee_id = (
-            await session.scalar(
-                select(OpenCodeExecutionEnvironment.employee_id).where(
-                    OpenCodeExecutionEnvironment.id == environment_id
-                )
+        employee_id = await session.scalar(
+            select(OpenCodeExecutionEnvironment.employee_id).where(
+                OpenCodeExecutionEnvironment.id == environment_id
             )
         )
         task = Task(
@@ -597,9 +538,7 @@ async def test_worker_prompt_path_check_does_not_open_ssh(monkeypatch):
     environment = OpenCodeExecutionEnvironment(
         mode="LINUX_REMOTE", worker_channel="worker", workspace_root="/srv/app"
     )
-    checked = await check_request_path(
-        environment, "/srv/app", ".", native_path="/session/ses/prompt_async"
-    )
+    checked = await check_request_path(environment, "/srv/app", ".", native_path="/session/ses/prompt_async")
     assert checked == "."
     calls = []
 
@@ -1016,10 +955,7 @@ async def test_native_event_keepalive_is_an_sse_comment(monkeypatch):
         yield Client()
 
     monkeypatch.setattr("app.api.workspace_routes.connect", fake_connect)
-    chunks = [
-        chunk
-        async for chunk in native_events(SimpleNamespace(), "/srv/app", "ses", False)
-    ]
+    chunks = [chunk async for chunk in native_events(SimpleNamespace(), "/srv/app", "ses", False)]
     assert chunks[0].startswith(": keepalive")
     assert "worker_reconnected" in chunks[1]
 

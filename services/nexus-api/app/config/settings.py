@@ -9,6 +9,13 @@ from urllib.parse import quote, urlparse
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.config.worker_deployment import (
+    DEFAULT_NODE_BASE,
+    DEFAULT_NPM_REGISTRY,
+    DEFAULT_PIP_INDEX,
+    DEFAULT_PYTHON_SOURCE,
+)
+
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = Path(__file__).resolve().parents[4]
 PROJECT_ROOT = REPO_ROOT
@@ -18,7 +25,7 @@ BACKEND_ROOT = SERVICE_ROOT
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="ASTRA_",
-        env_file=REPO_ROOT / "ops" / "env" / ".env",
+        env_file=os.environ.get("NEXUS_RUNTIME_ENV_FILE") or REPO_ROOT / "ops" / "env" / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
         populate_by_name=True,
@@ -157,15 +164,23 @@ class Settings(BaseSettings):
     remote_opencode_version: str = Field(default="1.18.35", validation_alias="NEXUS_REMOTE_OPENCODE_VERSION")
     remote_node_version: str = Field(default="22.23.3", validation_alias="NEXUS_REMOTE_NODE_VERSION")
     remote_npm_registry: str = Field(
-        default="https://repo.huaweicloud.com/repository/npm/", validation_alias="NEXUS_REMOTE_NPM_REGISTRY"
+        default=DEFAULT_NPM_REGISTRY, validation_alias="NEXUS_REMOTE_NPM_REGISTRY"
     )
     remote_download_base_url: str = Field(
-        default="https://repo.huaweicloud.com", validation_alias="NEXUS_REMOTE_DOWNLOAD_BASE_URL"
+        default="", validation_alias="NEXUS_REMOTE_DOWNLOAD_BASE_URL"
     )
-    # Empty prepares a private, pinned Python without replacing the system Python.
+    remote_python_source_url: str = Field(
+        default=DEFAULT_PYTHON_SOURCE, validation_alias="NEXUS_REMOTE_PYTHON_SOURCE_URL"
+    )
+    remote_node_base_url: str = Field(
+        default=DEFAULT_NODE_BASE, validation_alias="NEXUS_REMOTE_NODE_BASE_URL"
+    )
+    remote_node_binary: str = Field(default="", validation_alias="NEXUS_REMOTE_NODE_BINARY")
+    remote_npm_artifact_hosts: str = Field(default="", validation_alias="NEXUS_REMOTE_NPM_ARTIFACT_HOSTS")
+    # Empty prefers a verified existing interpreter before building private Python.
     remote_python: str = Field(default="", validation_alias="NEXUS_REMOTE_PYTHON")
     remote_pip_index_url: str = Field(
-        default="https://repo.huaweicloud.com/repository/pypi/simple",
+        default=DEFAULT_PIP_INDEX,
         validation_alias="NEXUS_REMOTE_PIP_INDEX_URL",
     )
     remote_deploy_timeout_seconds: int = Field(

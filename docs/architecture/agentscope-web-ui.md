@@ -33,7 +33,7 @@ ops/deploy/build_agentscope_web_ui.sh
 - UI 静态/深链接：`/agentscope-ui/`，Vite middleware 与 nginx 都回退到 `/agentscope-ui/index.html`；`/agentscope-ui/assets/` 直接读缓存文件。
 - API：`/agentscope-api/` 先经统一 Nexus 服务（默认 `http://127.0.0.1:18120`），由该服务剥离前缀并转发 AgentScope；保留控制台身份，但拒绝浏览器冒充专用 `nexus-schedule-` 日程身份。
 - 开发：`services/nexus-api/web/vite.config.ts` 的 `VITE_NEXUS_API_PROXY_TARGET`；不再直通 Agent Service，以保证日程身份保护生效。
-- 生产：`ops/dev/astra_service.py` 把 `NEXUS_AGENTSCOPE_BASE_URL` 传给 Vite preview；`ops/deploy/nginx-nexus.conf` 提供同样的代理。
+- 标准部署：`ops/deploy/install_nexus.sh` 构建 Web，`ops/deploy/deploy.py` 生成受管 Nginx HTTPS 代理；`/agentscope-api/` 统一交给 Nexus 服务。
 - 统一入口：`services/nexus-api/nexus_api/agentscope_proxy.py` 在 18120 上提供同一份代理（前缀剥离、流式透传、保留浏览器 `X-User-ID`），直连统一服务也能打开控制台并调用模型/凭证接口。
 - 用户上下文：`GET /api/v1/runtime` 返回 `agentscope_user_id`；`AgentscopeView` 在 iframe 加载前写入同源 `localStorage.username`。
 

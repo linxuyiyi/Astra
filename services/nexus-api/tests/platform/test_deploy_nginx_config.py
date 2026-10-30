@@ -1,62 +1,40 @@
-"""部署模板必须跟随统一服务的目录与端口。
+"""唯一生成器必须维持内部拓扑和入口安全边界。真实 Nginx 覆盖见隔离验收。"""
 
-背景：前端已迁移到 ``services/nexus-api/web/dist``，任务/Worker/网关控制面
-与 ``/api/v1`` 合并到同一个 18120 进程；``nginx-nexus.conf`` 仍指向
-``/opt/nexus/web/nexus/dist`` 和已退役的 18100，按模板发布就会静态资源 404、
-控制面接口 502。这里做配置一致性检查，真实 nginx 行为仍需部署验收。
-"""
+import pytest
 
-from __future__ import annotations
-
-import re
-from pathlib import Path
-
-CONFIG = Path(__file__).resolve().parents[4] / "ops" / "deploy" / "nginx-nexus.conf"
+from tests.platform.deployment_platform import deploy
 
 
-def _upstreams(text: str) -> dict[str, str]:
-    """location -> proxy_pass 上游（仅一级 location 块）。"""
-
-    upstreams: dict[str, str] = {}
-    locations = re.finditer(r"(?m)^  location\s+(.+?)\s*\{", text)
-    for match in locations:
-        start = match.end()
-        end = text.find("\n  }", start)
-        block = text[start:end if end != -1 else len(text)]
-        proxy = re.search(r"proxy_pass\s+(\S+);", block)
-        if proxy:
-            upstreams[match.group(1).strip()] = proxy.group(1)
-    return upstreams
-
-
-def test_static_root_points_at_unified_web_build():
-    text = CONFIG.read_text(encoding="utf-8")
-    assert "root /opt/nexus/services/nexus-api/web/dist;" in text
-    assert "/opt/nexus/web/nexus/dist" not in text
+@pytest.fixture
+def network_config(tmp_path):
+    values = {
+        "NEXUS_API_PORT": "19120",
+        "ASTRA_SERVICE_GATEWAY_PORT": "19110",
+        "NEXUS_MCP_PORT": "19201",
+        "NEXUS_DEPLOY_HTTPS_PORT": "19443",
+        "NEXUS_DEPLOY_WORKER_PORT": "19130",
+        "NEXUS_DEPLOY_PUBLIC_IP": "7.1.2.3",
+        "NEXUS_DEPLOY_WORKER_ALLOW": "7.0.0.0/8",
+        "NEXUS_DEPLOY_TLS_CERT": str(tmp_path / "cert"),
+        "NEXUS_DEPLOY_TLS_KEY": str(tmp_path / "key"),
+    }
+    return deploy.nginx_config(tmp_path, tmp_path, values)
 
 
-def test_control_plane_and_docs_use_unified_service():
-    upstreams = _upstreams(CONFIG.read_text(encoding="utf-8"))
-    for location in ("/api/", "/api/v1/", "= /docs", "= /openapi.json"):
-        assert upstreams[location].startswith("http://127.0.0.1:18120"), location
+def test_web_and_gateway_use_one_https_entry_and_loopback_upstreams(network_config):
+    assert "listen 19443 ssl;" in network_config
+    assert "proxy_pass http://127.0.0.1:19120" in network_config
+    assert "proxy_pass http://127.0.0.1:19110" in network_config
+    assert "proxy_buffering off;" in network_config
+    assert "proxy_set_header Upgrade $http_upgrade;" in network_config
+    assert "proxy_set_header Connection $nexus_connection;" in network_config
 
 
-def test_voice_transcription_goes_through_the_unified_service():
-    text = CONFIG.read_text(encoding="utf-8")
-    upstreams = _upstreams(text)
-    # 浏览器只访问统一服务；ASR 由服务端经网关调用，不配置直连 location。
-    assert "= /api/asr/transcribe" not in upstreams
-    assert "= /api/asr/models" not in upstreams
-    assert all("19899" not in target for target in upstreams.values())
-    assert upstreams["/api/"].startswith("http://127.0.0.1:18120")
-    assert upstreams["/v1/"].startswith("http://127.0.0.1:18110")
-    assert "client_max_body_size 13m;" in text
-    assert "client_max_body_size 20m;" in text
-
-
-def test_retired_port_and_infrastructure_proxy_boundaries():
-    text = CONFIG.read_text(encoding="utf-8")
-    assert "18100" not in text
-    upstreams = _upstreams(text)
-    assert upstreams["/v1/"].startswith("http://127.0.0.1:18110")
-    assert upstreams["/agentscope-api/"] == "http://127.0.0.1:18120"
+def test_worker_http_is_acl_limited_and_management_paths_are_not_proxied(network_config):
+    worker = network_config[network_config.index("listen 7.1.2.3:19130") :]
+    assert "allow 7.0.0.0/8;" in worker and "deny all;" in worker
+    assert "location = /api/worker-gateway/connect" in worker
+    assert "location = /mcp" in worker
+    assert "location / { return 404; }" in worker
+    assert "location /api/" not in worker
+    assert "Authorization" not in network_config  # 原请求鉴权由上游验证，不由代理伪造。

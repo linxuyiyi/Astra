@@ -245,8 +245,8 @@ def test_status_managed_by_only_when_unit_exists(monkeypatch, opencode_server):
     _state, base = opencode_server
     monkeypatch.delenv("NEXUS_WORKER_OPENCODE_UNIT", raising=False)
     assert status_summary(base)["managed_by"] == "external"
-    monkeypatch.setenv("NEXUS_WORKER_OPENCODE_UNIT", "nexus-opencode-7")
-    assert status_summary(base)["managed_by"] == "systemd"
+    monkeypatch.setenv("NEXUS_WORKER_OPENCODE_PROCESS_RECORD", "/managed/record.json")
+    assert status_summary(base)["managed_by"] == "process"
 
 
 def test_worker_artifact_imports_without_control_plane_runtime():
@@ -609,7 +609,7 @@ async def test_disconnect_gate_stops_queued_restart_before_side_effect(monkeypat
         "app.worker_agent.channel_switch.assert_native_idle", slow_native_idle
     )
     monkeypatch.setattr(
-        "app.worker_agent.channel_switch.subprocess.run",
+        "app.worker_agent.process_manager.subprocess.run",
         lambda *args, **_kwargs: calls.append(args) or types.SimpleNamespace(returncode=0),
     )
     transport = _ControlTransport([_auth_reply(), _restart_command(workspace, 14096)])

@@ -74,9 +74,7 @@ def maintenance_settings(monkeypatch):
     monkeypatch.setattr(settings, "mcp_transport", "streamable-http")
     monkeypatch.setattr(settings, "remote_gateway_local_url", "http://10.0.0.8:8110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:8201/mcp")
-    monkeypatch.setattr(
-        settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect"
-    )
+    monkeypatch.setattr(settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect")
 
 
 async def make_environment(**overrides):
@@ -162,9 +160,7 @@ async def test_closing_event_stream_does_not_cancel_operation(monkeypatch):
 
     async def fake_run(self, emit):
         await self.lease.set_stage("running")
-        await emit(
-            {"type": "step", "name": "测试阶段", "state": "running", "detail": "已开始"}
-        )
+        await emit({"type": "step", "name": "测试阶段", "state": "running", "detail": "已开始"})
         started.set()
         await release.wait()
         await self._finish(True, "", None)
@@ -200,9 +196,7 @@ async def test_sse_resume_uses_last_event_id():
 
     async with SessionLocal() as db:
         await cancel_operation(db, operation.id)
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         async with client.stream(
             "GET",
             f"/api/maintenance/{operation.id}/events",
@@ -231,9 +225,7 @@ async def test_expired_lease_is_interrupted_and_stale_attempt_cannot_write():
     assert recovered.state == "INTERRUPTED"
     assert recovered.error_code == "lease_expired"
     assert recovered.active_environment_id == environment_id
-    assert not await lease.finish(
-        "SUCCEEDED", stage="verify", after_snapshot={"stale": True}
-    )
+    assert not await lease.finish("SUCCEEDED", stage="verify", after_snapshot={"stale": True})
     assert (await read_operation(operation.id)).state == "INTERRUPTED"
 
     async with SessionLocal() as db:
@@ -242,9 +234,7 @@ async def test_expired_lease_is_interrupted_and_stale_attempt_cannot_write():
     assert retried.state == "QUEUED"
     assert retried.reconcile_required is True
     assert await claim_next("owner-b") == operation.id
-    assert not await lease.finish(
-        "SUCCEEDED", stage="verify", after_snapshot={"stale": True}
-    )
+    assert not await lease.finish("SUCCEEDED", stage="verify", after_snapshot={"stale": True})
     current = await read_operation(operation.id)
     assert current.attempt == 2
     assert current.state == "PREFLIGHT"
@@ -571,10 +561,7 @@ async def test_existing_worker_token_is_reused_when_digest_matches():
 
     class SSH:
         async def read_file(self, _path):
-            return (
-                f"NEXUS_WORKER_TOKEN={token}\n"
-                "NEXUS_WORKER_INSTANCE_ID=wrk_reuse\n"
-            ).encode()
+            return (f"NEXUS_WORKER_TOKEN={token}\nNEXUS_WORKER_INSTANCE_ID=wrk_reuse\n").encode()
 
     worker.ssh = SSH()
     assert await worker._existing_worker_credentials("/etc/nexus/worker.env") == (
@@ -653,6 +640,7 @@ async def test_failed_apply_does_not_revoke_key_already_written(monkeypatch):
 
     monkeypatch.setattr(RemoteProvisioner, "_gateway_service", lambda *_args: Service())
     monkeypatch.setattr("app.runtime.remote_provisioning.RedisRuntimeStore", lambda _url: Runtime())
+
     async def healthy(_self):
         return EnvironmentStatus.AVAILABLE
 
@@ -664,8 +652,6 @@ async def test_failed_apply_does_not_revoke_key_already_written(monkeypatch):
     await lease.mark_danger()
     await worker._finish(False, "install failed")
     assert revoked == []
-
-
 
 
 @pytest.mark.asyncio
@@ -741,10 +727,7 @@ async def test_expired_lease_cannot_renew_stage_danger_or_finish():
         await lease.set_stage("danger")
     with pytest.raises(MaintenanceLeaseLost):
         await lease.mark_danger()
-    assert (
-        await lease.finish("SUCCEEDED", stage="verify", after_snapshot={"stale": True})
-        is False
-    )
+    assert await lease.finish("SUCCEEDED", stage="verify", after_snapshot={"stale": True}) is False
     current = await read_operation(operation.id)
     assert current.state == "PREFLIGHT"
     await recover_expired("other-owner")
@@ -836,12 +819,8 @@ async def test_reconcile_checks_remote_facts_before_release(monkeypatch):
         return {"ses_idle": {"type": "idle"}}
 
     monkeypatch.setattr("app.runtime.maintenance._installer_locks_free", free_locks)
-    monkeypatch.setattr(
-        "app.runtime.worker_client.WorkerOpenCodeClient.health", health
-    )
-    monkeypatch.setattr(
-        "app.runtime.worker_client.WorkerOpenCodeClient.request", status
-    )
+    monkeypatch.setattr("app.runtime.worker_client.WorkerOpenCodeClient.health", health)
+    monkeypatch.setattr("app.runtime.worker_client.WorkerOpenCodeClient.request", status)
     await run_maintenance_once("owner-reconcile")
     current = await read_operation(operation.id)
     assert current.state == "FAILED"
@@ -866,9 +845,7 @@ async def test_reconcile_full_probe_rejects_broken_model_despite_fresh_old_snaps
             "observed_at": now.isoformat(),
             "observed_epoch": 1,
             "observed_online": True,
-            "equipment": [
-                {"key": "model", "configured": True, "deployed": True, "verified": True}
-            ],
+            "equipment": [{"key": "model", "configured": True, "deployed": True, "verified": True}],
         },
     )
     operation = await prepare_reconcile_operation(environment_id)
@@ -894,9 +871,7 @@ async def test_reconcile_full_probe_rejects_broken_model_despite_fresh_old_snaps
                 "last_checked_at": now,
                 "status_detail": {
                     "observed_at": now.isoformat(),
-                    "equipment": [
-                        {"key": "model", "configured": True, "deployed": True, "verified": False}
-                    ],
+                    "equipment": [{"key": "model", "configured": True, "deployed": True, "verified": False}],
                 },
             },
         }
@@ -924,9 +899,7 @@ async def test_reconcile_stale_or_failed_probe_writes_unknown(monkeypatch):
             "observed_at": now.isoformat(),
             "observed_epoch": 1,
             "observed_online": True,
-            "equipment": [
-                {"key": "model", "configured": True, "deployed": True, "verified": True}
-            ],
+            "equipment": [{"key": "model", "configured": True, "deployed": True, "verified": True}],
         },
     )
     operation = await prepare_reconcile_operation(environment_id)
@@ -1283,29 +1256,22 @@ async def test_check_is_allowed_while_occupied_and_uses_real_probe():
 
 
 @pytest.mark.asyncio
-async def test_restart_records_worker_route_after_choosing_agent(monkeypatch):
+async def test_restart_records_ssh_route_for_online_worker(monkeypatch):
+    from unittest.mock import AsyncMock
+
     environment_id, _ = await make_environment()
-    async with SessionLocal() as db:
-        db.add(
-            WorkerInstance(
-                id="wrk_route_" + uuid4().hex[:8],
-                environment_id=environment_id,
-                token_digest=gateway_key_digest("wtk_route"),
-                status="online",
-                epoch=1,
-            )
-        )
-        await db.commit()
     operation = await make_operation(environment_id, action="restart")
-
-    async def via_agent(_self, _emit):
-        return None
-
-    monkeypatch.setattr(RemoteProvisioner, "_restart_via_agent", via_agent)
-    await run_maintenance_once("owner-route-worker")
+    ssh = SimpleNamespace(close=AsyncMock())
+    monkeypatch.setattr(RemoteProvisioner, "_acquire_install_lock", AsyncMock())
+    monkeypatch.setattr(RemoteProvisioner, "_native_idle", AsyncMock(return_value=True))
+    monkeypatch.setattr(RemoteProvisioner, "_restart_processes", AsyncMock())
+    monkeypatch.setattr(
+        "app.runtime.remote_provisioning.ExecutionEnvironmentRuntime",
+        lambda _settings: SimpleNamespace(open_session=AsyncMock(return_value=ssh)),
+    )
+    await run_maintenance_once("owner-route-ssh")
     current = await read_operation(operation.id)
-    assert current.execution_channel == "worker"
-    assert "Worker Agent" in current.execution_reason
+    assert current.execution_channel == "ssh"
 
 
 @pytest.mark.asyncio
@@ -1333,9 +1299,11 @@ async def test_restart_records_ssh_route_when_worker_is_offline(monkeypatch):
     monkeypatch.setattr(
         "app.runtime.remote_provisioning.ExecutionEnvironmentRuntime", lambda _settings: Runtime()
     )
-    monkeypatch.setattr(RemoteProvisioner, "_worker_is_online", offline)
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(RemoteProvisioner, "_acquire_install_lock", AsyncMock())
     monkeypatch.setattr(RemoteProvisioner, "_native_idle", native_idle)
-    monkeypatch.setattr(RemoteProvisioner, "_restart_offline", via_ssh)
+    monkeypatch.setattr(RemoteProvisioner, "_restart_processes", via_ssh)
     await run_maintenance_once("owner-route-ssh")
     current = await read_operation(operation.id)
     assert current.execution_channel == "ssh"
@@ -1443,9 +1411,7 @@ async def test_event_page_returns_cursor_items():
     async with SessionLocal() as db:
         await append_event(db, operation.id, 1, name="a", message="1")
         await append_event(db, operation.id, 1, name="b", message="2")
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
             f"/api/maintenance/{operation.id}/events/page",
             params={"after_id": 0, "limit": 1},
@@ -1466,9 +1432,7 @@ async def test_event_page_next_cursor_is_null_on_the_last_page():
         await append_event(db, operation.id, 1, name="a", message="1")
         await append_event(db, operation.id, 1, name="b", message="2")
 
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         fewer = await client.get(
             f"/api/maintenance/{operation.id}/events/page",
             params={"after_id": 0, "limit": 5},
@@ -1532,19 +1496,31 @@ async def test_health_json_contract_and_stale_blocking():
 async def test_probe_age_does_not_downgrade_busy_worker_and_expires_when_idle():
     checked_at = datetime.now(UTC) - timedelta(hours=1)
     environment_id, employee_id = await make_environment(
-        status="AVAILABLE", last_checked_at=checked_at,
+        status="AVAILABLE",
+        last_checked_at=checked_at,
         status_detail={"observed_at": checked_at.isoformat(), "observed_epoch": 1, "observed_online": True},
     )
     task_id = "task-" + uuid4().hex
     async with SessionLocal() as db:
-        db.add(WorkerInstance(
-            id="wrk-age-" + uuid4().hex, environment_id=environment_id,
-            token_digest=gateway_key_digest("test-age-token"), status="online", epoch=1,
-        ))
-        db.add(Task(
-            id=task_id, title="long running", task_type="ISSUE", category_id="testing-platform",
-            employee_id=employee_id, status="RUNNING",
-        ))
+        db.add(
+            WorkerInstance(
+                id="wrk-age-" + uuid4().hex,
+                environment_id=environment_id,
+                token_digest=gateway_key_digest("test-age-token"),
+                status="online",
+                epoch=1,
+            )
+        )
+        db.add(
+            Task(
+                id=task_id,
+                title="long running",
+                task_type="ISSUE",
+                category_id="testing-platform",
+                employee_id=employee_id,
+                status="RUNNING",
+            )
+        )
         await db.commit()
         busy = await environment_health(db, environment_id)
         assert busy["runtime_health"]["status"] == "AVAILABLE"
@@ -1640,9 +1616,7 @@ async def test_observe_does_not_persist_stale_worker_epoch(monkeypatch):
     async def probe(environment, desired, settings, **_kwargs):
         async with SessionLocal() as db:
             await db.execute(
-                update(WorkerInstance)
-                .where(WorkerInstance.environment_id == environment_id)
-                .values(epoch=2)
+                update(WorkerInstance).where(WorkerInstance.environment_id == environment_id).values(epoch=2)
             )
             await db.commit()
         return {"source": "worker", "observed_epoch": 1}
@@ -1945,9 +1919,7 @@ async def test_health_and_scheduling_share_pending_equipment_rules():
             }
         ],
     }
-    environment_id, _ = await make_environment(
-        status="AVAILABLE", status_detail=pending_detail
-    )
+    environment_id, _ = await make_environment(status="AVAILABLE", status_detail=pending_detail)
     async with SessionLocal() as db:
         db.add(
             WorkerInstance(
@@ -1985,7 +1957,7 @@ async def test_checking_status_is_never_schedulable_and_matches_scheduling_block
 
 
 @pytest.mark.asyncio
-async def test_install_units_skips_unnecessary_restarts_when_unchanged(monkeypatch):
+async def test_install_worker_skips_unnecessary_restarts_when_unchanged(monkeypatch):
     import hashlib
 
     from app.runtime.remote_provisioning import agent_wheel
@@ -1997,9 +1969,7 @@ async def test_install_units_skips_unnecessary_restarts_when_unchanged(monkeypat
     provisioner = RemoteProvisioner(environment, {"id": "op-idem", "action": "deploy"})
     provisioner.home = "/root"
     provisioner.config_path = f"/etc/nexus/opencode/{environment_id}/opencode.jsonc"
-    provisioner.target_binary = (
-        f"/root/.local/share/nexus/workers/{environment_id}/bin/opencode"
-    )
+    provisioner.target_binary = f"/root/.local/share/nexus/workers/{environment_id}/bin/opencode"
     provisioner.installer_meta = {
         "changed": {
             "runtime": False,
@@ -2015,7 +1985,7 @@ async def test_install_units_skips_unnecessary_restarts_when_unchanged(monkeypat
         calls.append(text)
         if "wheel.sha256" in text and text.lstrip().startswith("cat "):
             return wheel_digest
-        if "test -x" in text and text.rstrip().endswith("&& echo yes || true"):
+        if "test -x" in text and "printf yes" in text:
             return "yes"
         return ""
 
@@ -2040,14 +2010,14 @@ async def test_install_units_skips_unnecessary_restarts_when_unchanged(monkeypat
     async def emit(_event):
         return None
 
-    await provisioner._install_units(emit)
+    from unittest.mock import AsyncMock
+
+    provisioner._manage_process = AsyncMock()
+    provisioner._wait_opencode_ready = AsyncMock()
+    await provisioner._install_worker(emit)
     assert not any("pip install" in item for item in calls)
-    systemd = next(item for item in calls if "systemctl enable" in item)
-    assert "daemon-reload" not in systemd
-    assert f"systemctl start nexus-opencode-{environment_id}.service" in systemd
-    assert f"systemctl start nexus-worker-{environment_id}.service" in systemd
-    assert "restart nexus-opencode" not in systemd
-    assert "restart nexus-worker" not in systemd
+    assert not any("systemctl" in item for item in calls)
+    assert all(not call.kwargs["restart"] for call in provisioner._manage_process.await_args_list)
 
 
 @pytest.mark.asyncio
@@ -2165,15 +2135,11 @@ def _healthy_observation(desired):
         "mcp": {
             "status": "healthy",
             "missing": [],
-            "endpoints": {
-                item["name"]: item["url"] for item in desired["mcp"]["items"]
-            },
+            "endpoints": {item["name"]: item["url"] for item in desired["mcp"]["items"]},
         },
         "skills": {
             "status": "healthy",
-            "content_hashes": {
-                item["name"]: item["content_hash"] for item in desired["skills"]["items"]
-            },
+            "content_hashes": {item["name"]: item["content_hash"] for item in desired["skills"]["items"]},
         },
         "repository": {
             "status": "healthy",
@@ -2252,14 +2218,13 @@ async def test_read_only_observation_keeps_existing_deployed_repository(monkeypa
     # A credential change is a new desired revision, but check/restart must not
     # pretend it was already deployed.
     async with SessionLocal() as db:
-        credential = await db.scalar(
-            select(GitCredential).where(GitCredential.repository_id == repo_id)
-        )
+        credential = await db.scalar(select(GitCredential).where(GitCredential.repository_id == repo_id))
         credential.token_ciphertext = "rotated-ciphertext"
         await db.commit()
     async with SessionLocal() as db:
         environment = await db.get(OpenCodeExecutionEnvironment, environment_id)
         new_desired = await desired_equipment(db, environment)
+
     async def rotated_probe(_environment, _desired, _settings, **_kwargs):
         return _healthy_observation(new_desired)
 
@@ -2505,9 +2470,7 @@ async def test_dirty_git_diff_does_not_block_but_real_equipment_drift_does(monke
         ('{"ses_idle": {"type": "idle"}}', True, False),
     ],
 )
-async def test_ssh_native_idle_only_accepts_explicit_refused_as_stopped(
-    output, expected, raises
-):
+async def test_ssh_native_idle_only_accepts_explicit_refused_as_stopped(output, expected, raises):
     environment = SimpleNamespace(
         id=1,
         opencode_server_port=4096,
@@ -2560,13 +2523,20 @@ async def test_offline_restart_waits_for_real_health_before_passed(monkeypatch):
         return None
 
     worker.ssh = type("SSH", (), {"run_command": staticmethod(run_command)})()
+    from unittest.mock import AsyncMock
+
+    async def managed(name, **_kwargs):
+        if name == "opencode":
+            calls["restart"] += 1
+
+    worker._manage_process = AsyncMock(side_effect=managed)
     monkeypatch.setattr(worker, "_wait_until_online", online)
     events: list[dict] = []
 
     async def emit(event):
         events.append(event)
 
-    await worker._restart_offline(emit)
+    await worker._restart_processes(emit)
     assert calls["restart"] == 1
     assert calls["health"] == 3
     assert events[-1]["name"] == "重启 OpenCode Serve"
@@ -2584,9 +2554,7 @@ async def test_offline_restart_waits_for_real_health_before_passed(monkeypatch):
         "NOT_READY:JSONDecodeError",
     ],
 )
-async def test_offline_restart_failure_never_reports_passed(
-    health_output, monkeypatch
-):
+async def test_offline_restart_failure_never_reports_passed(health_output, monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "opencode_server_start_timeout_seconds", 0.6)
     environment = SimpleNamespace(
@@ -2615,6 +2583,13 @@ async def test_offline_restart_failure_never_reports_passed(
         raise AssertionError("Worker online must not be awaited before OpenCode health")
 
     worker.ssh = type("SSH", (), {"run_command": staticmethod(run_command)})()
+    from unittest.mock import AsyncMock
+
+    async def managed(name, **_kwargs):
+        if name == "opencode":
+            calls["restart"] += 1
+
+    worker._manage_process = AsyncMock(side_effect=managed)
     monkeypatch.setattr(worker, "_wait_until_online", online)
     events: list[dict] = []
 
@@ -2622,12 +2597,11 @@ async def test_offline_restart_failure_never_reports_passed(
         events.append(event)
 
     with pytest.raises(RuntimeError, match="健康检查未通过"):
-        await worker._restart_offline(emit)
+        await worker._restart_processes(emit)
     assert calls["restart"] == 1
     assert calls["health"] >= 1
     assert not any(
-        item.get("name") == "重启 OpenCode Serve" and item.get("state") == "passed"
-        for item in events
+        item.get("name") == "重启 OpenCode Serve" and item.get("state") == "passed" for item in events
     )
 
 
@@ -2664,6 +2638,13 @@ async def test_offline_readiness_wait_honors_cancel_or_lease_loss(monkeypatch):
         if calls["safe"] >= 3:
             raise MaintenanceCanceled("操作已请求取消")
 
+    from unittest.mock import AsyncMock
+
+    async def managed(name, **_kwargs):
+        if name == "opencode":
+            calls["restart"] += 1
+
+    worker._manage_process = AsyncMock(side_effect=managed)
     worker.ssh = type("SSH", (), {"run_command": staticmethod(run_command)})()
     monkeypatch.setattr(worker, "_ensure_safe", ensure_safe)
     events: list[dict] = []
@@ -2672,10 +2653,9 @@ async def test_offline_readiness_wait_honors_cancel_or_lease_loss(monkeypatch):
         events.append(event)
 
     with pytest.raises(MaintenanceCanceled):
-        await worker._restart_offline(emit)
+        await worker._restart_processes(emit)
     assert calls["restart"] == 1
     assert calls["health"] == 0
     assert not any(
-        item.get("name") == "重启 OpenCode Serve" and item.get("state") == "passed"
-        for item in events
+        item.get("name") == "重启 OpenCode Serve" and item.get("state") == "passed" for item in events
     )

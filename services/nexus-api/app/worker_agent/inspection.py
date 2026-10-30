@@ -166,9 +166,7 @@ def status_summary(opencode_url: str) -> dict[str, Any]:
 
 
 def _managed_by() -> str:
-    """只有部署时写入 OpenCode unit 的环境才声明 systemd 管理。"""
-
-    return "systemd" if (os.environ.get("NEXUS_WORKER_OPENCODE_UNIT") or "").strip() else "external"
+    return "process" if (os.environ.get("NEXUS_WORKER_OPENCODE_PROCESS_RECORD") or "").strip() else "external"
 
 
 def _inspect_opencode(

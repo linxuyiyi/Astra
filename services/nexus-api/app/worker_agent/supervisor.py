@@ -1,6 +1,6 @@
 """OpenCode 观测 helper。
 
-OpenCode 进程由 systemd 管理，本类不拉起、不重启进程，只记录观测结果。
+OpenCode 进程由Nexus 通过 SSH管理，本类不拉起、不重启进程，只记录观测结果。
 通信断开是网络故障，健康状态由 Worker 本地只读探测给出；断线绝不触发
 OpenCode restart。
 """

@@ -1,0 +1,30 @@
+[
+  {
+    "profile": "public",
+    "kind": "pip_index",
+    "url": "https://pypi.org/simple/pip/",
+    "passed": true,
+    "bytes": 108381
+  },
+  {
+    "profile": "public",
+    "kind": "npm_registry",
+    "url": "https://registry.npmjs.org/typescript/latest",
+    "passed": true,
+    "bytes": 4833
+  },
+  {
+    "profile": "huawei",
+    "kind": "pip_index",
+    "url": "https://mirrors.tools.huawei.com/pypi/simple/pip/",
+    "passed": false,
+    "error": "来源 mirrors.tools.huawei.com/pypi/simple/pip/ 访问失败：TLS/证书验证失败；未切换来源"
+  },
+  {
+    "profile": "huawei",
+    "kind": "npm_registry",
+    "url": "https://mirrors.tools.huawei.com/npm/typescript/latest",
+    "passed": false,
+    "error": "来源 mirrors.tools.huawei.com/npm/typescript/latest 访问失败：TLS/证书验证失败；未切换来源"
+  }
+]

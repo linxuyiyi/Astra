@@ -1,0 +1,32 @@
+[
+  {
+    "url": "https://www.python.org/ftp/python/3.11.17/Python-3.11.17.tar.xz",
+    "curl_exit": 0,
+    "error": "",
+    "size": 20352864,
+    "sha256": "bfb74ad39efae27cda510f134ab408e00f9992c56851cfc0b1cdb5646da11599",
+    "checksum_matches": true
+  },
+  {
+    "url": "https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz",
+    "curl_exit": 0,
+    "error": "",
+    "size": 31001304,
+    "sha256": "df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de",
+    "checksum_matches": true
+  },
+  {
+    "url": "https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-arm64.tar.xz",
+    "curl_exit": 0,
+    "error": "",
+    "size": 30172012,
+    "sha256": "a44aeb94849a299b22df10b9e622ec2f605c2183501bc40590705131de7c740f",
+    "checksum_matches": true
+  },
+  {
+    "url": "https://nodejs.org/dist/v22.23.3/node-v22.23.3-darwin-arm64.tar.xz",
+    "size": 25876024,
+    "sha256": "72d5d8832b41c9d9646197af614ffd751406ea4d215060eb91b98864e1919a3e",
+    "checksum_matches": true
+  }
+]

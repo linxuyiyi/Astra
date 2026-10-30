@@ -1,0 +1,50 @@
+[
+  {
+    "project": "chat-island",
+    "command": [
+      "ci",
+      "--ignore-scripts"
+    ],
+    "exit": 0
+  },
+  {
+    "project": "chat-island",
+    "command": [
+      "run",
+      "type-check"
+    ],
+    "exit": 0
+  },
+  {
+    "project": "chat-island",
+    "command": [
+      "run",
+      "build"
+    ],
+    "exit": 0
+  },
+  {
+    "project": "web",
+    "command": [
+      "ci",
+      "--ignore-scripts"
+    ],
+    "exit": 0
+  },
+  {
+    "project": "web",
+    "command": [
+      "run",
+      "type-check"
+    ],
+    "exit": 0
+  },
+  {
+    "project": "web",
+    "command": [
+      "run",
+      "build"
+    ],
+    "exit": 0
+  }
+]

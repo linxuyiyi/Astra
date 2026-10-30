@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 import pytest
 
 import app.worker_agent as worker_agent
-from app.worker_agent import channel_switch
+from app.worker_agent import channel_switch, process_manager
 from app.worker_agent.connection import (
     AgentConfig,
     WorkerConnectionManager,
@@ -113,7 +113,7 @@ def test_native_busy_or_retry_blocks_restart_before_systemctl(
     workspace = _workspace(tmp_path)
     calls: list[tuple] = []
     monkeypatch.setattr(
-        channel_switch.subprocess,
+        process_manager.subprocess,
         "run",
         lambda *args, **_kwargs: calls.append(args) or types.SimpleNamespace(returncode=0),
     )
@@ -143,7 +143,7 @@ def test_unknown_or_malformed_native_state_is_conservatively_rejected(
     workspace = _workspace(tmp_path)
     calls: list[tuple] = []
     monkeypatch.setattr(
-        channel_switch.subprocess,
+        process_manager.subprocess,
         "run",
         lambda *args, **_kwargs: calls.append(args) or types.SimpleNamespace(returncode=0),
     )
@@ -163,7 +163,7 @@ def test_unreadable_native_status_blocks_restart(tmp_path: Path, monkeypatch):
     workspace = _workspace(tmp_path)
     calls: list[tuple] = []
     monkeypatch.setattr(
-        channel_switch.subprocess,
+        process_manager.subprocess,
         "run",
         lambda *args, **_kwargs: calls.append(args) or types.SimpleNamespace(returncode=0),
     )
@@ -180,50 +180,25 @@ def test_unreadable_native_status_blocks_restart(tmp_path: Path, monkeypatch):
 
 
 @pytest.mark.parametrize("body", [{}, {"one": {"type": "idle"}}])
-def test_native_idle_allows_the_systemd_restart(tmp_path: Path, monkeypatch, body):
-    workspace = _workspace(tmp_path)
-    calls: list[tuple] = []
-    waited: list[int] = []
-    monkeypatch.setattr(
-        channel_switch.subprocess,
-        "run",
-        lambda *args, **_kwargs: calls.append(args) or types.SimpleNamespace(returncode=0),
-    )
-    monkeypatch.setattr(
-        channel_switch, "_wait_until_healthy", lambda port, **_kwargs: waited.append(port)
-    )
-
+def test_native_idle_allows_managed_process_restart(tmp_path: Path, monkeypatch, body):
+    calls = []
+    monkeypatch.setattr(channel_switch, "managed_running", lambda _path: True)
+    monkeypatch.setattr(channel_switch, "manage_process", lambda *a, **kw: calls.append(kw))
+    monkeypatch.setattr(channel_switch, "_wait_until_healthy", lambda *_a, **_kw: None)
     with _server({"/session/status": (200, body)}) as port:
         channel_switch.restart_local_opencode(
-            str(workspace),
-            port,
-            environ={"NEXUS_WORKER_OPENCODE_UNIT": "nexus-opencode-1.service"},
+            str(_workspace(tmp_path)), port,
+            environ={"NEXUS_WORKER_OPENCODE_PROCESS_RECORD": str(tmp_path/"record.json")},
         )
-
-    assert calls == [(["systemctl", "restart", "nexus-opencode-1.service"],)]
-    assert waited == [port]
+    assert len(calls) == 1 and calls[0]["restart"] is True
 
 
-def test_connection_refused_allows_starting_a_stopped_opencode(tmp_path: Path, monkeypatch):
-    workspace = _workspace(tmp_path)
-    port = _free_port()
-    started: list[list[str]] = []
-    monkeypatch.setattr(
-        channel_switch.subprocess,
-        "Popen",
-        lambda command, **_kwargs: started.append(command),
-    )
-    monkeypatch.setattr(channel_switch, "_wait_until_healthy", lambda *_args, **_kwargs: None)
 
-    channel_switch.restart_local_opencode(
-        str(workspace),
-        port,
-        environ={"NEXUS_WORKER_OPENCODE_BIN": "/opt/nexus/opencode"},
-    )
+def test_stopped_opencode_without_record_requires_platform_deployment(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(channel_switch, "assert_native_idle", lambda *_a, **_kw: False)
+    with pytest.raises(RuntimeError, match="缺少受管进程记录"):
+        channel_switch.restart_local_opencode(str(_workspace(tmp_path)), _free_port(), environ={})
 
-    assert started == [
-        ["/opt/nexus/opencode", "serve", "--hostname", "127.0.0.1", "--port", str(port)]
-    ]
 
 
 def test_timeout_is_not_treated_as_stopped(tmp_path: Path, monkeypatch):
@@ -242,12 +217,12 @@ def test_timeout_is_not_treated_as_stopped(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(channel_switch.socket, "socket", lambda *_args, **_kwargs: TimedOut())
     monkeypatch.setattr(
-        channel_switch.subprocess,
+        process_manager.subprocess,
         "run",
         lambda *args, **_kwargs: calls.append(args) or types.SimpleNamespace(returncode=0),
     )
     monkeypatch.setattr(
-        channel_switch.subprocess, "Popen", lambda *args, **_kwargs: calls.append(args)
+        process_manager.subprocess, "Popen", lambda *args, **_kwargs: calls.append(args)
     )
 
     with pytest.raises(RuntimeError, match="无法确认 OpenCode 监听状态"):
@@ -356,31 +331,16 @@ def test_matching_binding_reaches_the_dangerous_handler(tmp_path: Path, monkeypa
         assert kwargs["port"] == 14096
 
 
-def test_gate_failure_after_systemctl_does_not_report_success(tmp_path: Path, monkeypatch):
-    workspace = _workspace(tmp_path)
-    commands: list[tuple] = []
-    monkeypatch.setattr(channel_switch, "assert_native_idle", lambda *_args, **_kwargs: False)
-    monkeypatch.setattr(
-        channel_switch.subprocess,
-        "run",
-        lambda *args, **_kwargs: commands.append(args) or types.SimpleNamespace(returncode=0),
-    )
-    checks: list[int] = []
-
-    def gate() -> None:
-        checks.append(1)
-        if len(checks) >= 2:
-            raise RuntimeError("控制命令已失效")
-
+def test_gate_failure_during_managed_restart_does_not_report_success(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(channel_switch, "assert_native_idle", lambda *_a, **_kw: False)
+    def gate():
+        raise RuntimeError("控制命令已失效")
     with pytest.raises(RuntimeError, match="已失效"):
         channel_switch.restart_local_opencode(
-            str(workspace),
-            4096,
-            environ={"NEXUS_WORKER_OPENCODE_UNIT": "nexus-opencode-1.service"},
-            gate=gate,
+            str(_workspace(tmp_path)), 4096,
+            environ={"NEXUS_WORKER_OPENCODE_PROCESS_RECORD": str(tmp_path/"record.json")}, gate=gate,
         )
 
-    assert commands == [(["systemctl", "restart", "nexus-opencode-1.service"],)]
 
 
 def test_version_contract_comes_from_the_module_not_env():
@@ -536,7 +496,7 @@ async def test_thread_gate_stops_restart_before_the_real_side_effect(
     commands: list[tuple] = []
     monkeypatch.setattr(channel_switch, "assert_native_idle", slow_native_idle)
     monkeypatch.setattr(
-        channel_switch.subprocess,
+        process_manager.subprocess,
         "run",
         lambda *args, **_kwargs: commands.append(args) or types.SimpleNamespace(returncode=0),
     )

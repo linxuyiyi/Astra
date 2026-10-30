@@ -37,6 +37,9 @@ class RemoteExecChannel:
         self.stderr = _AsyncStream(channel.makefile_stderr("rb", -1))
         self._returncode: int | None = None
 
+    def is_active(self) -> bool:
+        return not self._channel.closed and not self._channel.exit_status_ready()
+
     @property
     def returncode(self) -> int | None:
         return self._returncode
@@ -99,7 +102,7 @@ class SSHSession:
         transport = self._client.get_transport()
         return bool(transport is not None and transport.is_active())
 
-    async def open_exec(self, command: str) -> RemoteExecChannel:
+    async def open_exec(self, command: str, *, keep_stdin: bool = False) -> RemoteExecChannel:
         def open_channel():
             transport = self._client.get_transport()
             if transport is None or not transport.is_active():
@@ -107,10 +110,27 @@ class SSHSession:
             channel = transport.open_session(timeout=self.connect_timeout)
             channel.exec_command(command)
             # Remote wrappers must never wait for interactive stdin.
-            channel.shutdown_write()
+            if not keep_stdin:
+                channel.shutdown_write()
             return channel
 
         return RemoteExecChannel(await _run_blocking(open_channel))
+
+    async def hold_lock(self, paths: list[str]) -> RemoteExecChannel:
+        """An SSH-owned flock is released on disconnect; no remote lock daemon."""
+        import shlex
+
+        command = " ".join("flock -n " + shlex.quote(path) for path in sorted(paths))
+        command += " sh -c " + shlex.quote("printf 'NEXUS_LOCKED\\n'; read -r release")
+        channel = await self.open_exec(command, keep_stdin=True)
+        try:
+            line = await asyncio.wait_for(channel.stdout.readline(), 10)
+            if line.strip() != b"NEXUS_LOCKED":
+                raise RuntimeError("同一 Worker 或工作区正在执行部署/更新，未取得远端锁")
+            return channel
+        except BaseException:
+            await channel.close()
+            raise
 
     async def run_command(self, command: str) -> tuple[int, str, str]:
         channel = await self.open_exec(command)

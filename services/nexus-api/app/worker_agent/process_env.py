@@ -13,6 +13,8 @@ from collections.abc import Mapping
 _EXACT = frozenset(
     {
         "PATH",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR",
         "HOME",
         "USER",
         "LOGNAME",

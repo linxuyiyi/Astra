@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 
 from app.config.settings import get_settings
+from app.config.worker_deployment import deployment_manifest
 from app.database import SessionLocal
 from app.domain import EnvironmentStatus
 from app.gateway.models import GatewayKey, GatewayRoute
@@ -42,12 +43,14 @@ from app.runtime.capability import (
 from app.runtime.direct_urls import require_direct_url
 from app.runtime.environment import ExecutionEnvironmentRuntime
 from app.runtime.opencode_model import route_model_id
-from app.runtime.remote_bootstrap import download_base, managed_python, prepare_python
+from app.runtime.remote_artifacts import install_node, install_opencode
+from app.runtime.remote_bootstrap import managed_python, prepare_python
+from app.runtime.remote_package_config import configure_sources
+from app.runtime.remote_workspace import configure_runtime, git_workspace
 from app.runtime.repository import cipher, collect_skill_files
 
 PROVIDER_ID = "nexus-gateway"
 WORKER_SECRET_DIR = "/etc/nexus"
-SYSTEMD_UNIT_DIR = "/etc/systemd/system"
 
 
 def worker_install_dir(environment_id: int) -> str:
@@ -151,11 +154,16 @@ def agent_wheel() -> tuple[str, bytes]:
         "app/runtime/__init__.py",
         "app/runtime/redaction.py",
     ]
-    names.extend(str(path.relative_to(app_root.parent))
-                 for path in sorted((app_root / "worker_agent").rglob("*.py")))
+    names.extend(
+        str(path.relative_to(app_root.parent)) for path in sorted((app_root / "worker_agent").rglob("*.py"))
+    )
     files = sorted((name, (app_root.parent / name).read_bytes()) for name in set(names))
-    files.append(("app/worker_agent/dsh_acp/dependency-lock.json",
-                  (app_root.parents[2] / "ops/runtime/dsh/package-lock.json").read_bytes()))
+    files.append(
+        (
+            "app/worker_agent/dsh_acp/dependency-lock.json",
+            (app_root.parents[2] / "ops/runtime/dsh/package-lock.json").read_bytes(),
+        )
+    )
     info = f"{dist}.dist-info"
     metadata = (
         "Metadata-Version: 2.1\n"
@@ -242,8 +250,11 @@ class RemoteProvisioner:
         self.git_credential_revision: str | None = None
         self.git_repository_id: str | None = None
         self.installer_meta: dict = {}
+        self.install_lock = None
 
     def _agent_interpreter(self) -> str:
+        if getattr(self, "python_interpreter", None):
+            return self.python_interpreter
         configured = (self.settings.remote_python or "").strip()
         return configured or managed_python(self.environment.id)
 
@@ -272,7 +283,23 @@ class RemoteProvisioner:
         self.steps = [s for s in self.steps if s["name"] != name] + [item]
         await emit({"type": "step", **item})
 
+    async def _acquire_install_lock(self):
+        if self.install_lock is not None:
+            return
+        root = "/opt/nexus/workers/.locks"
+        await self._command(shlex.join(["install", "-d", "-m", "700", root]))
+        canonical = await self._command(shlex.join(["realpath", "-m", self.environment.workspace_root]))
+        digest = hashlib.sha256(canonical.encode()).hexdigest()[:24]
+        self.install_lock = await self.ssh.hold_lock(
+            [
+                f"{root}/environment-{self.environment.id}.lock",
+                f"{root}/workspace-{digest}.lock",
+            ]
+        )
+
     async def _ensure_safe(self, *, allow_occupied: bool = False):
+        if self.install_lock is not None and not self.install_lock.is_active():
+            raise RuntimeError("远端部署锁已失效，停止修改")
         if self.lease is None:
             return
         from app.runtime.maintenance import MaintenanceCanceled
@@ -359,15 +386,19 @@ class RemoteProvisioner:
 
     async def _bootstrap_idle(self, *, interpreter_ready: bool):
         if interpreter_ready:
-            await self._native_idle(strict=True)
+            readable = await self._native_idle(strict=True)
+            if readable:
+                await self._require_owned_listener()
             return
         installed = agent_python(self.environment.id)
         if await self._command(f"test -x {shlex.quote(installed)} && printf yes || true") == "yes":
-            await self._native_idle(strict=True, interpreter=installed)
+            readable = await self._native_idle(strict=True, interpreter=installed)
+            if readable:
+                await self._require_owned_listener()
             return
         # Before Python exists, only absence of a kernel TCP listener permits
         # bootstrap. A listener cannot be treated as idle without native facts.
-        probe = r'''
+        probe = r"""
 files=(/proc/net/tcp)
 if test -e /proc/net/tcp6; then files+=(/proc/net/tcp6); fi
 for file in "${files[@]}"; do
@@ -379,19 +410,33 @@ if awk -v port="$1" '$4 == "0A" && $2 ~ ":" port "$" { found=1 }
 else
   printf BLOCKED
 fi
-'''
+"""
         port = f"{int(self.environment.opencode_server_port):04X}"
         state = await self._command("bash -c " + shlex.quote(probe) + " -- " + shlex.quote(port))
         if state != "CLEAR":
             raise RuntimeError("OpenCode 端口已有监听且尚无可用解释器确认原生状态，停止环境引导")
 
-    async def _opencode_unit_active(self) -> bool:
-        unit = f"nexus-opencode-{self.environment.id}.service"
+    async def _require_owned_listener(self):
+        from app.runtime.remote_processes import identity
+
+        path = f"{worker_install_dir(self.environment.id)}/opencode-process.json"
+        raw = await self.ssh.read_file(path)
+        if not raw:
+            raise RuntimeError("OpenCode 已在运行但缺少受管身份记录，请管理员确认停止旧部署后重新部署")
         try:
-            state = await self._command(f"systemctl is-active {shlex.quote(unit)} || true")
-        except Exception:
-            return True
-        return state.strip() == "active"
+            expected = json.loads(raw)["identity"]
+            pid = expected["pid"]
+            if not isinstance(pid, int) or pid <= 1 or expected.get("pgid") != pid:
+                raise ValueError("invalid identity")
+        except (ValueError, KeyError, TypeError) as exc:
+            raise RuntimeError("已有进程身份记录无效，未修改环境") from exc
+        if await identity(self, pid) != expected:
+            raise RuntimeError("已有进程身份已变化，未修改环境")
+
+    async def _manage_process(self, name: str, *, restart: bool) -> None:
+        from app.runtime.remote_processes import manage
+
+        await manage(self, name, restart=restart)
 
     async def _gateway_key(self, config_path, models):
         content = await self.ssh.read_file(config_path)
@@ -476,10 +521,13 @@ fi
             skills=collect_skill_files(list(self.environment.skill_refs or []), skill_source),
             mcp_refs=list(self.environment.mcp_refs or []),
         )
+        payload["deployment"] = deployment_manifest(self.settings)
         payload.update(
             {
                 "action": "update" if self.action == "update" else "deploy",
                 "environment_id": self.environment.id,
+                "workspace_root": self.environment.workspace_root,
+                "opencode_binary": self.target_binary,
                 "opencode_server_port": int(self.environment.opencode_server_port),
                 "repository": {"url": "", "branch": self.environment.branch or "main"},
             }
@@ -499,82 +547,76 @@ fi
             self.git_credential_revision = credential_revision(credential.token_ciphertext)
             self.git_repository_id = repository.id
             token_file = stem + ".token"
-            await self.ssh.write_file(token_file, token.encode(), mode=0o600)
             payload["repository"] = {
                 "url": repository.url,
                 "branch": self.environment.branch or repository.branch,
             }
-        jsonc_file = stem + ".jsonc.py"
-        await self.ssh.write_file(stem + ".json", json.dumps(payload, ensure_ascii=False).encode())
-        await self.ssh.write_file(
-            jsonc_file, Path(__file__).resolve().parents[1].joinpath("worker_agent", "jsonc.py").read_bytes()
+        manifest = deployment_manifest(self.settings)
+        await self.step(emit, "部署配置", "passed", "已准备员工专属网关与图书馆配置")
+        await self.step(emit, "Node.js 运行环境", "running")
+        facts = self.remote_facts
+        arch = "x64" if facts["arch"] == "x86_64" else "arm64"
+        node_root, node_changed = await install_node(self, manifest, home, arch=arch, libc=facts["libc"])
+        self.node_binary = node_root + "/bin/node"
+        await self.step(emit, "Node.js 运行环境", "passed", manifest["node_version"])
+        await self.step(emit, "包管理器全局镜像", "running")
+        await configure_sources(self, manifest, home, node_root)
+        await self.step(emit, "包管理器全局镜像", "passed", "已保留或写入部署用户 pip/npm 配置")
+        await self.step(emit, "OpenCode 安装", "running")
+        prefix = f"{home}/.local/share/nexus/workers/{self.environment.id}/opencode"
+        package_changed = await install_opencode(
+            self, manifest, prefix, arch=arch, musl=facts["libc"] == "musl"
         )
-        await self.ssh.write_file(stem + ".sh", Path(__file__).with_name("remote_install.sh").read_bytes())
-        await self.step(emit, "部署配置", "passed", "已准备员工专属中转、数字图书馆与安全连接")
-        args = [
-            self.environment.workspace_root,
-            self.target_binary,
-            self.settings.remote_node_version,
-            self.settings.remote_opencode_version,
-            self.settings.remote_npm_registry,
-            stem + ".json",
-            self.operation_id,
-            self._agent_interpreter(),
-            jsonc_file,
-            token_file,
-            download_base(self.settings),
-        ]
-        command = (
-            f"timeout -k 10 {self.settings.remote_deploy_timeout_seconds} bash {shlex.quote(stem + '.sh')} "
-            + shlex.join(args)
-        )
-        # The remote script may merge the new key into the config even when it
-        # later fails, so never revoke the new key after this point.
-        self.key_applied = True
-        if self.lease is not None:
-            await self.lease.mark_danger()
-        channel = await self.ssh.open_exec(command)
-        stderr_task = asyncio.create_task(channel.stderr.read())
-        tail = ""
+        await self._command(shlex.join(["mkdir", "-p", str(Path(self.target_binary).parent)]))
+        current_link = await self._command(shlex.join(["readlink", self.target_binary]) + " || true")
+        link_changed = current_link != prefix + "/bin/opencode"
+        if link_changed:
+            backup = self.target_binary + ".nexus-backup-" + self.operation_id
+            await self._ensure_safe()
+            await self._command(
+                f"if test -e {shlex.quote(self.target_binary)} "
+                f"&& ! test -L {shlex.quote(self.target_binary)}; "
+                f"then test ! -e {shlex.quote(backup)} "
+                f"&& mv {shlex.quote(self.target_binary)} {shlex.quote(backup)} "
+                f"|| exit 1; fi; " + shlex.join(["ln", "-sfn", prefix + "/bin/opencode", self.target_binary])
+            )
+        await self.step(emit, "OpenCode 安装", "passed", manifest["opencode_version"])
+        await self._native_idle(strict=True)
+        await self.step(emit, "Git 工作区", "running")
         try:
-            while line := await channel.stdout.readline():
-                text = line.decode(errors="replace").strip()
-                if text.startswith("NEXUS_STEP\t"):
-                    _, name, state = text.split("\t", 2)
-                    await self.step(emit, name, state)
-                elif text.startswith("NEXUS_META\t"):
-                    try:
-                        self.installer_meta = json.loads(text.split("\t", 1)[1])
-                    except json.JSONDecodeError:
-                        self.installer_meta = {}
-                else:
-                    tail = (tail + "\n" + text)[-2000:]
-            rc = await channel.wait()
-            err = (await stderr_task).decode(errors="replace")
-            if rc:
-                raise RuntimeError(self.redact(err or tail or f"安装退出码 {rc}"))
-            if self.action == "update" and self.lease is not None:
-                repository = (
-                    self.installer_meta.get("repository")
-                    if isinstance(self.installer_meta.get("repository"), dict)
-                    else {}
-                )
-                remote_commit = repository.get("remote_commit")
-                if remote_commit:
-                    current = await self.lease.snapshot()
-                    target = (
-                        dict(current.target_revision or {}) if current is not None else {}
-                    )
-                    target["repository_commit"] = remote_commit
-                    await self.lease.set_target_revision(target)
-        finally:
-            await channel.close()
-            stderr_task.cancel()
-            await asyncio.gather(stderr_task, return_exceptions=True)
-            leftovers = [stem + ".sh", stem + ".json", jsonc_file]
             if token_file:
-                leftovers.append(token_file)
-            await self._command("rm -f " + " ".join(shlex.quote(path) for path in leftovers))
+                await self.ssh.write_file(token_file, self.git_token.encode(), mode=0o600)
+            repository, repository_changed = await git_workspace(
+                self,
+                url=payload["repository"]["url"],
+                branch=payload["repository"]["branch"],
+                token_path=token_file,
+            )
+            await self.step(emit, "Git 工作区", "passed", repository["commit"])
+            await self.step(emit, "OpenCode 配置", "running")
+            await self._ensure_safe()
+            if self.lease is not None:
+                await self.lease.mark_danger()
+            self.key_applied = True
+            changed = await configure_runtime(self, payload)
+            await self.step(emit, "OpenCode 配置", "passed")
+            self.installer_meta = {
+                "repository": repository,
+                "opencode": {"version": manifest["opencode_version"], "binary": self.target_binary},
+                "changed": {
+                    "runtime": node_changed or package_changed or link_changed,
+                    "repository": repository_changed,
+                    **changed,
+                },
+            }
+            if self.action == "update" and self.lease is not None and repository["remote_commit"]:
+                current = await self.lease.snapshot()
+                target = dict(current.target_revision or {}) if current is not None else {}
+                target["repository_commit"] = repository["remote_commit"]
+                await self.lease.set_target_revision(target)
+        finally:
+            if token_file:
+                await self._command(shlex.join(["rm", "-f", "--", token_file, token_file + ".askpass"]))
 
     def _direct_endpoints(self) -> tuple[str, str]:
         return (
@@ -585,52 +627,39 @@ fi
     async def _channel_endpoints(self) -> tuple[str, str]:
         return self._direct_endpoints()
 
-    async def _restart_via_agent(self, emit):
-        await self.step(emit, "重启 OpenCode Serve", "running")
-        await self._ensure_safe()
-        from app.runtime.worker_client import WorkerOpenCodeClient
-
-        if self.lease is not None:
-            await self.lease.mark_danger()
-        client = WorkerOpenCodeClient(self.settings, environment_id=self.environment.id)
-        attempt = self.lease.attempt if self.lease is not None else 0
-        await client.run_command(
-            "restart_opencode",
-            {
-                "workspace": self.environment.workspace_root,
-                "port": self.environment.opencode_server_port,
-            },
-            request_id=f"maint:{self.operation_id}:{attempt}",
-        )
-        health = await client.health()
-        await self.step(emit, "重启 OpenCode Serve", "passed", f"健康 · OpenCode {health.get('version')}")
-
     async def _probe_gateway(self, emit):
         await self.step(emit, "模型中转连接", "running")
-        if not self.home:
-            raise RuntimeError("无法确定远程用户目录，不能定位本次安装的 Node.js")
-        node = (
-            f"{self.home}/.local/share/nexus/workers/{self.environment.id}"
-            f"/node-v{self.settings.remote_node_version}/bin/node"
+        if not self.config_path:
+            raise RuntimeError("尚未准备 OpenCode 配置，无法验收网关")
+        source = (
+            "import json,sys,urllib.request,urllib.error\n"
+            "config=json.load(open(sys.argv[1]));provider=config['provider']['nexus-gateway']\n"
+            "request=urllib.request.Request(provider['options']['baseURL']+'/models',"
+            "headers={'Authorization':'Bearer '+provider['options']['apiKey']})\n"
+            "try:\n"
+            " response=urllib.request.urlopen(request,timeout=5)\n"
+            " print(json.dumps({'status':response.status,'body':json.load(response)}))\n"
+            "except urllib.error.HTTPError as error:print(json.dumps({'status':error.code}))\n"
         )
-        probe = (
-            "const fs=require('fs');const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));"
-            "const p=c.provider['nexus-gateway'];"
-            "async function main(){for(let i=0;i<15;i++){"
-            "const r=await fetch(p.options.baseURL+'/models',{headers:{Authorization:'Bearer '+"
-            "p.options.apiKey},signal:AbortSignal.timeout(5000)});"
-            "if(r.ok){const d=await r.json();const id=c.model.slice('nexus-gateway/'.length);"
-            "if(!d.data?.some(m=>m.id===id))throw Error('中转未提供员工模型');"
-            "console.log('模型中转认证与模型路由正常');return;}"
-            "if(r.status!==401)throw Error('中转 HTTP '+r.status);"
-            "await new Promise(r=>setTimeout(r,2000));}throw Error('中转 Key 未生效');}"
-            "main().catch(e=>{console.error(e.message);process.exit(1)})"
-        )
-        detail = await self._command(
-            f"{shlex.quote(node)} -e {shlex.quote(probe)} {shlex.quote(self.config_path)}",
-            timeout=50,
-        )
-        await self.step(emit, "模型中转连接", "passed", detail)
+        deadline = asyncio.get_running_loop().time() + 30
+        while asyncio.get_running_loop().time() < deadline:
+            await self._ensure_safe()
+            result = json.loads(
+                await self._command(
+                    shlex.join([self._agent_interpreter(), "-I", "-c", source, self.config_path]),
+                    timeout=8,
+                )
+            )
+            if result["status"] == 200:
+                model = route_model_id(self.target_model)
+                if not any(item.get("id") == model for item in result["body"].get("data", [])):
+                    raise RuntimeError("中转未提供当前 Worker 模型")
+                await self.step(emit, "模型中转连接", "passed", "模型中转认证与模型路由正常")
+                return
+            if result["status"] != 401:
+                raise RuntimeError(f"模型中转 HTTP {result['status']}")
+            await asyncio.sleep(2)
+        raise RuntimeError("网关 Key 未在时限内生效")
 
     async def _read_optional(self, path: str) -> bytes | None:
         try:
@@ -709,174 +738,137 @@ fi
                 return recovered, instance.id
         raise RuntimeError("无法证明现有 Worker token 有效，需人工修复或在数据库中重新登记，不会盲目轮换")
 
-    async def _install_units(self, emit):
+    async def _install_worker(self, emit):
         await self.step(emit, "安装 Worker Agent", "running")
         await self._ensure_safe()
         gateway_url, mcp_url = self._direct_endpoints()
         agent_gateway = require_direct_url(self.settings.worker_agent_gateway_url, "Worker Gateway")
         port = int(self.environment.opencode_server_port)
-        home = self.home or "/opt/nexus"
+        home = self.home
+        if not home:
+            raise RuntimeError("部署尚未探测远端 HOME")
         env_root = f"{home}/.local/share/nexus/workers/{self.environment.id}"
-        node_root = f"{env_root}/node-v{self.settings.remote_node_version}"
-        npm_bin = f"{env_root}/npm/bin"
-        install_dir = worker_install_dir(self.environment.id)
-        venv = agent_venv(self.environment.id)
-        python = agent_python(self.environment.id)
-        opencode_unit = f"nexus-opencode-{self.environment.id}.service"
-        worker_unit = f"nexus-worker-{self.environment.id}.service"
-        token_path = f"{WORKER_SECRET_DIR}/worker-{self.environment.id}.env"
-        opencode_url = f"http://127.0.0.1:{port}"
-        timeout = int(self.settings.opencode_control_timeout_seconds)
-        opencode_config = self.config_path or (f"/etc/nexus/opencode/{self.environment.id}/opencode.jsonc")
-        opencode_dir = str(Path(opencode_config).parent)
-        path_value = ":".join([f"{node_root}/bin", npm_bin, "/usr/local/bin", "/usr/bin", "/bin"])
-        git_environment = safe_git_environment(self.environment.id)
-        git_unit_environment = "".join(
-            f"Environment={key}={value}\n" for key, value in git_environment.items()
+        node_binary = getattr(self, "node_binary", None) or self.settings.remote_node_binary
+        node_bin = (
+            str(Path(node_binary).parent)
+            if node_binary
+            else (f"{env_root}/node-v{self.settings.remote_node_version}/bin")
         )
-        opencode_unit_text = (
-            "[Unit]\nDescription=Nexus OpenCode\nAfter=network-online.target\n"
-            "[Service]\n"
-            f"WorkingDirectory={self.environment.workspace_root}\n"
-            f"Environment=PATH={path_value}\n"
-            f"Environment=OPENCODE_CONFIG={opencode_config}\n"
-            f"Environment=OPENCODE_CONFIG_DIR={opencode_dir}\n"
-            f"{git_unit_environment}"
-            f"ExecStart={self.target_binary} serve --hostname 127.0.0.1 --port {port}\n"
-            "Restart=on-failure\n"
-            "[Install]\nWantedBy=multi-user.target\n"
+        path_value = ":".join([node_bin, f"{env_root}/opencode/bin", "/usr/local/bin", "/usr/bin", "/bin"])
+        install_dir, python = worker_install_dir(self.environment.id), agent_python(self.environment.id)
+        await self._command(shlex.join(["install", "-d", "-m", "755", install_dir]))
+        await self._command(shlex.join(["install", "-d", "-m", "700", WORKER_SECRET_DIR]))
+        token_path_git, askpass_git = (
+            git_token_path(self.environment.id),
+            git_askpass_path(self.environment.id),
         )
-        agent_unit_text = (
-            "[Unit]\nDescription=Nexus Worker Agent\nAfter=network-online.target\n"
-            "[Service]\n"
-            f"WorkingDirectory={self.environment.workspace_root}\n"
-            f"Environment=PATH={path_value}\n"
-            f"EnvironmentFile={token_path}\n"
-            f"ExecStart={python} -m app.worker_agent\n"
-            "Restart=on-failure\n"
-            "[Install]\nWantedBy=multi-user.target\n"
-        )
-        wheel_name, wheel_bytes = agent_wheel()
-        wheel_digest = hashlib.sha256(wheel_bytes).hexdigest()
-        wheel_path = f"{install_dir}/{wheel_name}"
-        marker_path = f"{install_dir}/wheel.sha256"
-        await self._command(f"install -d -m 755 {shlex.quote(install_dir)} {shlex.quote(env_root)}")
-        await self._command(f"install -d -m 700 {shlex.quote(WORKER_SECRET_DIR)}")
-        await self._command(
-            f"test -d {shlex.quote(SYSTEMD_UNIT_DIR)} "
-            f"|| install -d -m 755 {shlex.quote(SYSTEMD_UNIT_DIR)}"
-        )
-        await self._ensure_safe()
-        token_path_git = git_token_path(self.environment.id)
-        askpass_git = git_askpass_path(self.environment.id)
         if self.git_token:
+            await self._write_atomic_if_changed(token_path_git, self.git_token.encode(), 0o600)
             await self._write_atomic_if_changed(
-                token_path_git, self.git_token.encode("utf-8"), 0o600
-            )
-            await self._write_atomic_if_changed(
-                askpass_git,
-                git_askpass_script(self.environment.id).encode("utf-8"),
-                0o700,
+                askpass_git, git_askpass_script(self.environment.id).encode(), 0o700
             )
         else:
-            await self._command(
-                f"rm -f {shlex.quote(token_path_git)} {shlex.quote(askpass_git)}"
-            )
-        marker = (await self._command(f"cat {shlex.quote(marker_path)} || true")).strip()
-        interpreter = shlex.quote(self._agent_interpreter())
-        venv_python = f"{venv}/bin/python"
+            await self._command(shlex.join(["rm", "-f", token_path_git, askpass_git]))
+        wheel_name, wheel_bytes = agent_wheel()
+        wheel_digest = hashlib.sha256(wheel_bytes).hexdigest()
+        wheel_path, marker_path = f"{install_dir}/{wheel_name}", f"{install_dir}/wheel.sha256"
+        marker = (await self._command(shlex.join(["cat", marker_path]) + " 2>/dev/null || true")).strip()
         venv_ok = (
             marker == wheel_digest
-            and (await self._command(f"test -x {shlex.quote(venv_python)} && echo yes || true")).strip()
-            == "yes"
+            and await self._command(f"test -x {shlex.quote(python)} && printf yes || true") == "yes"
         )
-        wheel_changed = False
         if not venv_ok:
             await self._ensure_safe()
             await self._write_atomic_if_changed(wheel_path, wheel_bytes, 0o644)
-            index = (self.settings.remote_pip_index_url or "").strip()
-            pip_index = f"-i {shlex.quote(index)} " if index else ""
+            index = deployment_manifest(self.settings)["pip_index_url"]
             pip = (
-                f"{python} -m pip install --disable-pip-version-check --upgrade --force-reinstall "
-                f"{pip_index}{shlex.quote(wheel_path)}"
+                "env -u PIP_EXTRA_INDEX_URL -u PIP_FIND_LINKS -u PIP_TRUSTED_HOST -u PIP_NO_INDEX "
+                "-u PIP_TARGET -u PIP_PREFIX -u PIP_USER PIP_CONFIG_FILE=/dev/null "
+                + shlex.join(
+                    [
+                        python,
+                        "-m",
+                        "pip",
+                        "install",
+                        "--disable-pip-version-check",
+                        "--upgrade",
+                        "--force-reinstall",
+                        "--index-url",
+                        index,
+                        wheel_path,
+                    ]
+                )
             )
             await self._command(
-                f"{interpreter} -m venv {shlex.quote(venv)} && {pip}",
+                shlex.join([self._agent_interpreter(), "-m", "venv", agent_venv(self.environment.id)])
+                + " && "
+                + pip,
                 timeout=300,
             )
-            await self._command(f"printf '%s' {shlex.quote(wheel_digest)} > {shlex.quote(marker_path)}")
-            wheel_changed = True
-
-        from app.worker_gateway.service import get_gateway
-
-        await self._ensure_safe()
+            await self._write_atomic_if_changed(marker_path, wheel_digest.encode(), 0o600)
+        token_path = f"{WORKER_SECRET_DIR}/worker-{self.environment.id}.env"
         existing = await self._existing_worker_credentials(token_path)
         if existing is not None:
             token, worker_instance_id = existing
         else:
+            from app.worker_gateway.service import get_gateway
+
             async with SessionLocal() as session:
                 enrolled = await get_gateway().enroll(session, self.environment.id)
             token, worker_instance_id = enrolled.token, enrolled.worker_instance_id
         self.secrets.append(token)
-        env_lines = [
-            f"NEXUS_WORKER_TOKEN={token}",
-            f"NEXUS_WORKER_GATEWAY_URL={agent_gateway}",
-            f"NEXUS_WORKER_INSTANCE_ID={worker_instance_id}",
-            f"NEXUS_WORKER_ENVIRONMENT_ID={self.environment.id}",
-            f"NEXUS_REMOTE_GATEWAY_URL={gateway_url}",
-            f"NEXUS_MCP_RESOURCE_URL={mcp_url}",
-            f"NEXUS_WORKER_OPENCODE_URL={opencode_url}",
-            f"NEXUS_WORKER_OPENCODE_UNIT={opencode_unit}",
-            f"NEXUS_WORKER_OPENCODE_BIN={self.target_binary}",
-            f"OPENCODE_CONFIG={opencode_config}",
-            f"OPENCODE_CONFIG_DIR={opencode_dir}",
-            f"NEXUS_WORKER_WORKSPACE_ROOT={self.environment.workspace_root}",
-            f"NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS={timeout}",
-        ]
-        env_lines.extend(f"{key}={value}" for key, value in git_environment.items())
-        env = "\n".join(env_lines) + "\n"
+        common = {
+            "HOME": home,
+            "PATH": path_value,
+            "OPENCODE_CONFIG": self.config_path,
+            "OPENCODE_CONFIG_DIR": str(Path(self.config_path).parent),
+            **safe_git_environment(self.environment.id),
+        }
+        worker_env = {
+            **common,
+            "NEXUS_WORKER_TOKEN": token,
+            "NEXUS_WORKER_INSTANCE_ID": worker_instance_id,
+            "NEXUS_WORKER_ENVIRONMENT_ID": str(self.environment.id),
+            "NEXUS_WORKER_GATEWAY_URL": agent_gateway,
+            "NEXUS_REMOTE_GATEWAY_URL": gateway_url,
+            "NEXUS_MCP_RESOURCE_URL": mcp_url,
+            "NEXUS_WORKER_OPENCODE_URL": f"http://127.0.0.1:{port}",
+            "NEXUS_WORKER_OPENCODE_BIN": self.target_binary,
+            "NEXUS_WORKER_WORKSPACE_ROOT": self.environment.workspace_root,
+            "NEXUS_WORKER_OPENCODE_PROCESS_RECORD": f"{install_dir}/opencode-process.json",
+            "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS": str(self.settings.opencode_control_timeout_seconds),
+        }
+
+        def serialize(env):
+            if any("\n" in str(value) or "\r" in str(value) for value in env.values()):
+                raise RuntimeError("进程环境变量含换行，拒绝写入")
+            return "".join(f"{key}={value}\n" for key, value in env.items()).encode()
+
+        worker_changed = await self._write_atomic_if_changed(
+            token_path, serialize(worker_env), 0o600, backup=True
+        )
+        opencode_changed = await self._write_atomic_if_changed(
+            f"{WORKER_SECRET_DIR}/opencode-{self.environment.id}.env",
+            serialize(common),
+            0o600,
+            backup=True,
+        )
         await self._ensure_safe()
-        env_changed = await self._write_atomic_if_changed(
-            token_path, env.encode(), 0o600, backup=True
-        )
-        opencode_unit_changed = await self._write_atomic_if_changed(
-            f"{SYSTEMD_UNIT_DIR}/{opencode_unit}", opencode_unit_text.encode(), 0o644, backup=True
-        )
-        worker_unit_changed = await self._write_atomic_if_changed(
-            f"{SYSTEMD_UNIT_DIR}/{worker_unit}", agent_unit_text.encode(), 0o644, backup=True
-        )
-        units_changed = opencode_unit_changed or worker_unit_changed
-        await self._ensure_safe()
-        readable = await self._native_idle(strict=False)
-        if not readable and await self._opencode_unit_active():
-            raise RuntimeError("OpenCode 服务正在运行但原生状态不可读，不能继续重启")
-        await self._ensure_safe()
-        changed = self.installer_meta.get("changed") if isinstance(self.installer_meta, dict) else {}
-        runtime_changed = bool(isinstance(changed, dict) and changed.get("runtime"))
-        configuration_changed = bool(
-            isinstance(changed, dict) and (changed.get("configuration") or changed.get("skills"))
-        )
-        # Restart OpenCode only when its own unit, runtime, or configuration
-        # changed. A Worker-Agent wheel/env/unit update must not bounce it.
-        restart_opencode = (
-            opencode_unit_changed or runtime_changed or configuration_changed
-        )
-        restart_worker = worker_unit_changed or env_changed or wheel_changed
+        await self._native_idle(strict=True)
+        changes = self.installer_meta.get("changed", {})
         if self.lease is not None:
             await self.lease.mark_danger()
-        commands = [
-            "systemctl daemon-reload" if (units_changed or wheel_changed) else None,
-            f"systemctl enable {shlex.quote(opencode_unit)} {shlex.quote(worker_unit)}",
-        ]
-        if restart_opencode:
-            commands.append(f"systemctl restart {shlex.quote(opencode_unit)}")
-        else:
-            commands.append(f"systemctl start {shlex.quote(opencode_unit)}")
-        if restart_worker:
-            commands.append(f"systemctl restart {shlex.quote(worker_unit)}")
-        else:
-            commands.append(f"systemctl start {shlex.quote(worker_unit)}")
-        await self._command(" && ".join(item for item in commands if item))
+        await self._manage_process(
+            "opencode",
+            restart=bool(
+                opencode_changed
+                or changes.get("runtime")
+                or changes.get("configuration")
+                or changes.get("skills")
+            ),
+        )
+        await self._wait_opencode_ready()
+        await self._manage_process("worker", restart=worker_changed or not venv_ok)
         await self.step(emit, "安装 Worker Agent", "passed", worker_instance_id)
 
     async def _wait_until_online(self):
@@ -945,10 +937,7 @@ fi
     async def _wait_opencode_ready(self) -> None:
         """Bounded read-only readiness wait after an SSH unit restart."""
 
-        deadline = (
-            asyncio.get_running_loop().time()
-            + self.settings.opencode_server_start_timeout_seconds
-        )
+        deadline = asyncio.get_running_loop().time() + self.settings.opencode_server_start_timeout_seconds
         last = "NOT_READY"
         while asyncio.get_running_loop().time() < deadline:
             await self._ensure_safe()
@@ -958,23 +947,22 @@ fi
             await asyncio.sleep(0.5)
         raise RuntimeError(f"OpenCode 重启后健康检查未通过：{last[-200:]}")
 
-    async def _restart_offline(self, emit):
+    async def _restart_processes(self, emit):
         await self.step(emit, "重启 OpenCode Serve", "running")
         await self._ensure_safe()
         await self._native_idle(strict=True)
         await self._ensure_safe()
-        unit = f"nexus-opencode-{self.environment.id}.service"
-        worker_unit = f"nexus-worker-{self.environment.id}.service"
         if self.lease is not None:
             await self.lease.mark_danger()
-        await self._command(f"systemctl restart {shlex.quote(unit)} {shlex.quote(worker_unit)}")
+        await self._manage_process("opencode", restart=True)
         await self._wait_opencode_ready()
+        await self._manage_process("worker", restart=True)
         await self._wait_until_online()
         await self.step(
             emit,
             "重启 OpenCode Serve",
             "passed",
-            "单元重启、OpenCode 健康与 Worker 上线均已确认",
+            "进程重启、OpenCode 健康与 Worker 上线均已确认",
         )
 
     async def _observe_capability(self) -> dict:
@@ -1106,13 +1094,9 @@ fi
             else {}
         )
         observed_opencode = (
-            observation.get("opencode")
-            if isinstance(observation.get("opencode"), dict)
-            else {}
+            observation.get("opencode") if isinstance(observation.get("opencode"), dict) else {}
         )
-        observed_model = (
-            observation.get("model") if isinstance(observation.get("model"), dict) else {}
-        )
+        observed_model = observation.get("model") if isinstance(observation.get("model"), dict) else {}
         installer_repository = (
             self.installer_meta.get("repository")
             if isinstance(self.installer_meta.get("repository"), dict)
@@ -1123,13 +1107,11 @@ fi
             "checks": self.steps,
             "message": redact_text(error, self.secrets),
             "probe_status": None,
-            "opencode_version": installer_opencode.get("version")
-            or observed_opencode.get("version"),
+            "opencode_version": installer_opencode.get("version") or observed_opencode.get("version"),
             "worker_agent_version": installer_worker.get("version")
             or observation.get("worker_agent_version"),
             "model_name": observed_model.get("model"),
-            "repository": installer_repository
-            or (probe["repository"] if probe is not None else None),
+            "repository": installer_repository or (probe["repository"] if probe is not None else None),
             "changed": self.installer_meta.get("changed") or {},
             "equipment": probe["equipment"] if probe else [],
         }
@@ -1146,9 +1128,7 @@ fi
                         repository_snapshot = deployed.get("repository")
                         if isinstance(repository_snapshot, dict):
                             repository_snapshot = dict(repository_snapshot)
-                            repository_snapshot["credential_revision"] = (
-                                self.git_credential_revision
-                            )
+                            repository_snapshot["credential_revision"] = self.git_credential_revision
                             deployed["repository"] = repository_snapshot
                     else:
                         deployed["repository"] = None
@@ -1210,15 +1190,6 @@ fi
                 await runtime.close()
         return True
 
-    async def _worker_is_online(self) -> bool:
-        from app.models import WorkerInstance
-
-        async with SessionLocal() as session:
-            instance = await session.scalar(
-                select(WorkerInstance).where(WorkerInstance.environment_id == self.environment.id)
-            )
-            return instance is not None and instance.status == "online"
-
     async def run(self, emit):
         from app.runtime.maintenance import (
             MaintenanceBlocked,
@@ -1232,45 +1203,26 @@ fi
         try:
             async with asyncio.timeout(self.settings.remote_deploy_timeout_seconds):
                 self._direct_endpoints()
-                if self.action == "restart" and await self._worker_is_online():
-                    # The Worker-local restart owns the native-idle decision:
-                    # ECONNREFUSED means stopped and recoverable; busy/unknown is
-                    # rejected locally under the same gate. No control-plane
-                    # /session/status probe is repeated here.
-                    if self.lease is not None:
-                        await self.lease.set_execution_route(
-                            "worker", "Worker 在线，通过 Worker Agent 重启 OpenCode"
-                        )
-                    await self._ensure_safe()
-                    await self._restart_via_agent(emit)
-                    success = True
+                await self.step(emit, "SSH 连接与执行检查", "running")
+                self.ssh = await self.runtime.open_session(self.environment)
+                if self.action in {"deploy", "update"}:
+                    await prepare_python(self, emit)
                 else:
-                    await self.step(emit, "SSH 连接与执行检查", "running")
-                    self.ssh = await self.runtime.open_session(self.environment)
-                    if self.action in {"deploy", "update"}:
-                        await prepare_python(self, emit)
-                    readable = await self._native_idle(strict=self.action == "restart")
-                    if (
-                        not readable
-                        and self.action in {"deploy", "update"}
-                        and await self._opencode_unit_active()
-                    ):
-                        raise RuntimeError("OpenCode 服务正在运行但原生状态不可读，不能当作未运行继续部署")
-                    await self.step(emit, "SSH 连接与执行检查", "passed")
-                    if self.action == "restart" and self.lease is not None:
-                        await self.lease.set_execution_route(
-                            "ssh", "Worker 不在线，使用 SSH 重启 OpenCode"
-                        )
-                    await self._ensure_safe()
-                    if self.action in {"deploy", "update"}:
-                        await self._install(emit)
-                        await self._probe_gateway(emit)
-                        await self._install_units(emit)
-                        await self._mark_inside_operation(emit)
-                        capability = await self._observe_capability()
-                    else:
-                        await self._restart_offline(emit)
-                    success = True
+                    await self._acquire_install_lock()
+                await self._native_idle(strict=True)
+                await self.step(emit, "SSH 连接与执行检查", "passed")
+                if self.lease is not None:
+                    await self.lease.set_execution_route("ssh", "Nexus 通过 SSH 管理 Worker 进程")
+                await self._ensure_safe()
+                if self.action in {"deploy", "update"}:
+                    await self._install(emit)
+                    await self._probe_gateway(emit)
+                    await self._install_worker(emit)
+                    await self._mark_inside_operation(emit)
+                    capability = await self._observe_capability()
+                else:
+                    await self._restart_processes(emit)
+                success = True
         except (MaintenanceCanceled, MaintenanceLeaseLost, MaintenanceBlocked):
             skip_finish = True
             raise
@@ -1289,6 +1241,9 @@ fi
                     "环境维护",
                 )
                 await self.step(emit, current, "failed", error)
+            if self.install_lock is not None:
+                await self.install_lock.close()
+                self.install_lock = None
             if self.ssh:
                 await self.ssh.close()
                 self.ssh = None

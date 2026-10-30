@@ -27,7 +27,6 @@ V09_REDIS_PREFIXES = ("astra:worker-gateway", "astra:gateway:")
 V09_CELERY_APP = "astra"
 V09_CELERY_QUEUE = "control"
 V09_CELERY_TASK_PREFIX = "astra."
-V09_UNITS = ("astra-opencode-", "astra-worker-")
 V09_OPT = "/opt/astra"
 V09_ETC = "/etc/astra"
 V09_LOCK_DIR = "astra-employee-serve"
@@ -71,16 +70,24 @@ def collect() -> list[tuple[bool, str, str]]:
     from app.executors.opencode_local_server import SERVE_LOCK_DIR
     from app.gateway.runtime import LEASE_KEY, REVOKED_KEYS_KEY
     from app.runtime.celery_app import celery
-    from app.runtime.remote_provisioning import WORKER_SECRET_DIR, agent_venv, worker_install_dir
+    from app.runtime.remote_provisioning import (
+        WORKER_SECRET_DIR,
+        agent_venv,
+        worker_install_dir,
+    )
     from app.worker_gateway.bus import RedisRouteBus
 
     settings = Settings(_env_file=None)
     service = _load_astra_service()
-    install = (ROOT / "ops" / "deploy" / "install_nexus.sh").read_text(encoding="utf-8")
+    platform_config = (ROOT / "ops" / "deploy" / "configuration.py").read_text(
+        encoding="utf-8"
+    )
     provisioning = (
         TASK_PLATFORM / "app" / "runtime" / "remote_provisioning.py"
     ).read_text(encoding="utf-8")
-    install_script = (TASK_PLATFORM / "app" / "runtime" / "remote_install.sh").read_text(encoding="utf-8")
+    processes = (TASK_PLATFORM / "app" / "runtime" / "remote_processes.py").read_text(
+        encoding="utf-8"
+    )
     channel_switch = (
         TASK_PLATFORM / "app" / "worker_agent" / "channel_switch.py"
     ).read_text(encoding="utf-8")
@@ -90,17 +97,23 @@ def collect() -> list[tuple[bool, str, str]]:
         rows.append((ok, label, detail))
 
     add(
-        settings.database_name == "nexus" and settings.database_name != V09_DATABASE_NAME,
+        settings.database_name == "nexus"
+        and settings.database_name != V09_DATABASE_NAME,
         "database name",
         settings.database_name,
     )
     add(
-        settings.database_username == "nexus" and settings.database_username != V09_DATABASE_USER,
+        settings.database_username == "nexus"
+        and settings.database_username != V09_DATABASE_USER,
         "database user",
         settings.database_username,
     )
     sqlite_name = settings.sqlalchemy_database_url.rsplit("/", 1)[-1]
-    add(sqlite_name == "nexus.db" and sqlite_name != V09_SQLITE_FILE, "sqlite file", sqlite_name)
+    add(
+        sqlite_name == "nexus.db" and sqlite_name != V09_SQLITE_FILE,
+        "sqlite file",
+        sqlite_name,
+    )
     add(
         str(settings.database_description).endswith("nexus.db"),
         "database description",
@@ -116,14 +129,21 @@ def collect() -> list[tuple[bool, str, str]]:
         prefix,
     )
     add(
-        LEASE_KEY.startswith("nexus:gateway:") and REVOKED_KEYS_KEY.startswith("nexus:gateway:"),
+        LEASE_KEY.startswith("nexus:gateway:")
+        and REVOKED_KEYS_KEY.startswith("nexus:gateway:"),
         "redis gateway prefix",
         LEASE_KEY.split("{", 1)[0],
     )
 
-    task_names = [name for name in celery.tasks if name.startswith(V09_CELERY_TASK_PREFIX)]
+    task_names = [
+        name for name in celery.tasks if name.startswith(V09_CELERY_TASK_PREFIX)
+    ]
     queues = {route["queue"] for route in celery.conf.task_routes.values()}
-    add(celery.main == "nexus" and celery.main != V09_CELERY_APP, "celery app", celery.main)
+    add(
+        celery.main == "nexus" and celery.main != V09_CELERY_APP,
+        "celery app",
+        celery.main,
+    )
     add(
         celery.conf.task_default_queue == "nexus-control"
         and celery.conf.task_default_queue != V09_CELERY_QUEUE
@@ -134,13 +154,13 @@ def collect() -> list[tuple[bool, str, str]]:
         celery.conf.task_default_queue,
     )
 
-    # The wheel name astra-worker-agent is the package name, not a systemd unit.
-    unit_text = provisioning.replace("astra-worker-agent", "")
-    unit_hit = [name for name in V09_UNITS if name in unit_text]
     add(
-        "nexus-opencode-" in provisioning and "nexus-worker-" in provisioning and not unit_hit,
-        "systemd units",
-        "nexus-opencode-{id}.service, nexus-worker-{id}.service",
+        "async def manage(" in processes
+        and "os.killpg" in processes
+        and "systemctl" not in processes
+        and "systemctl" not in provisioning,
+        "managed processes",
+        "Worker 隔离进程记录，无系统服务单元",
     )
 
     path_hit = V09_OPT in provisioning or V09_ETC in provisioning
@@ -148,7 +168,6 @@ def collect() -> list[tuple[bool, str, str]]:
         agent_venv(1).startswith("/opt/nexus/")
         and worker_install_dir(1).startswith("/opt/nexus/")
         and WORKER_SECRET_DIR == "/etc/nexus"
-        and "NEXUS_ROOT:=/opt/nexus" in install
         and not path_hit,
         "opt and etc paths",
         f"{agent_venv(1)}, {WORKER_SECRET_DIR}",
@@ -168,12 +187,17 @@ def collect() -> list[tuple[bool, str, str]]:
     occupied = set(V09_PORTS.values())
     shared = sorted(port for port in nexus_ports.values() if port in occupied)
     # Extract literal defaults; configured live ports are already checked above.
-    listed = [int(item) for item in re.findall(
-        r"\d+", re.search(r"^PORTS=\(([^)]*)\)", install, re.M).group(1)
-    )]
-    install_shared = sorted(port for port in listed if port != 6379 and port in occupied)
+    listed = [
+        int(item) for item in re.findall(r'"[A-Z_]+PORT": "(\d+)"', platform_config)
+    ]
+    install_shared = sorted(
+        port for port in listed if port != 6379 and port in occupied
+    )
     add(
-        not shared and not install_shared and nexus_ports["opencode"] != V09_PORTS["opencode"],
+        bool(listed)
+        and not shared
+        and not install_shared
+        and nexus_ports["opencode"] != V09_PORTS["opencode"],
         "ports",
         " ".join(f"{name}={port}" for name, port in nexus_ports.items()),
     )
@@ -185,18 +209,15 @@ def collect() -> list[tuple[bool, str, str]]:
     )
     add(
         ".cache/nexus-provision" in provisioning
-        and ".cache/nexus-provision" in install_script
-        and ".cache/astra-provision" not in provisioning
-        and ".cache/astra-provision" not in install_script,
+        and ".cache/astra-provision" not in provisioning,
         "provision cache",
         "nexus-provision",
     )
     add(
         "/etc/nexus/opencode/" in provisioning
-        and "Environment=OPENCODE_CONFIG=" in provisioning
+        and '"OPENCODE_CONFIG"' in provisioning
         and "OPENCODE_CONFIG" in channel_switch
-        and "${XDG_CONFIG_HOME:-$HOME/.config}" not in provisioning
-        and "${XDG_CONFIG_HOME:-$HOME/.config}" not in install_script,
+        and "${XDG_CONFIG_HOME:-$HOME/.config}" not in provisioning,
         "opencode config",
         "/etc/nexus/opencode/{id}/opencode.jsonc",
     )

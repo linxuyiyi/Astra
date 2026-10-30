@@ -201,9 +201,10 @@ def _validate_action(environment: OpenCodeExecutionEnvironment, action: str) -> 
         raise HTTPException(409, "仅 Linux 远程员工支持部署、更新和重启")
     if action in remote_actions and not environment.workspace_root.startswith("/"):
         raise HTTPException(409, "工程目录必须是 Linux 绝对路径")
-    if action in {MaintenanceAction.DEPLOY.value, MaintenanceAction.UPDATE.value}:
+    if action in remote_actions:
         if not environment.host or not environment.username or not environment.ssh_password:
-            raise HTTPException(409, "请先保存远程 IP、用户名和 SSH 密码")
+            raise HTTPException(409, "部署、更新和重启均需要远程 IP、用户名和 SSH 密码")
+    if action in {MaintenanceAction.DEPLOY.value, MaintenanceAction.UPDATE.value}:
         if settings.mcp_transport != "streamable-http":
             raise HTTPException(
                 409,

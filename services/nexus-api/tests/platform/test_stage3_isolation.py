@@ -25,7 +25,7 @@ def test_process_defaults_do_not_collide_with_v09():
         "redis db",
         "redis prefix",
         "celery queue",
-        "systemd units",
+        "managed processes",
         "opt and etc paths",
         "ports",
         "lock directory",

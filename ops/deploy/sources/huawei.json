@@ -1,0 +1,10 @@
+{
+  "python_url": "https://mirrors.tools.huawei.com/python/3.11.17/Python-3.11.17.tar.xz",
+  "node_base": "https://mirrors.tools.huawei.com/nodejs",
+  "pip_index": "https://mirrors.tools.huawei.com/pypi/simple",
+  "npm_registry": "https://mirrors.tools.huawei.com/npm/",
+  "npm_lock_hosts": [
+    "registry.npmjs.org"
+  ],
+  "os_repository_dir": ""
+}

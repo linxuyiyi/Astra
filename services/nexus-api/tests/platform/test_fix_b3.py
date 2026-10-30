@@ -180,9 +180,7 @@ async def test_deploy_observe_writes_applied_revision():
     record = await provisioner._observe_capability()
     assert record["applied_revision"] == record["desired_revision"]
     assert record["runtime_status"] == "applied"
-    assert dispatch_allowed(
-        {"capability": record}, bindings=["review", "library"]
-    )
+    assert dispatch_allowed({"capability": record}, bindings=["review", "library"])
 
 
 def _employee(employee_id="E1", **overrides):
@@ -479,71 +477,55 @@ def _git_stub() -> str:
 
 
 def _run_workspace(tmp_path: Path, payload: dict, *, token: str | None, state: dict, workspace: Path):
-    script = Path("app/runtime/remote_install.sh").read_text(encoding="utf-8")
-    functions = script.split("# >>> nexus-installer-functions\n", 1)[1].split(
-        "# <<< nexus-installer-functions", 1
-    )[0]
-    body = script[
-        script.index("step '工程目录' running") : script.index("step '工程目录' passed")
-    ]
-    trap = next(line for line in script.splitlines() if line.startswith("trap "))
+    import asyncio
+
+    from app.runtime.remote_workspace import git_workspace
+    from tests.platform.deployment_target import LocalTarget
+
     bindir = tmp_path / "bin"
     bindir.mkdir(parents=True)
     git = bindir / "git"
-    git.write_text(_git_stub(), encoding="utf-8")
+    stub = _git_stub()
+    stub = stub.replace('command = args[0] if args else ""', 'command = args[0] if args else ""')
+    stub = stub.replace(
+        'repo = state.get(workspace or "", {})',
+        'repo = state.get(workspace or "", {})\n'
+        'if command == "--version": print("git version 2.43.0"); sys.exit(0)\n'
+        'if command == "status": sys.exit(0)',
+    )
+    stub = stub.replace('sys.stdout.write(workspace or "")', 'sys.stdout.write(workspace if repo else "")')
+    stub = stub.replace(
+        'if command == "rev-parse" and "HEAD" in rest:',
+        'if command == "rev-parse" and "HEAD" in rest:\n    sys.stdout.write(repo.get("head", ""))',
+    )
+    git.write_text(stub)
     git.chmod(0o755)
-    payload_file = tmp_path / "payload.json"
-    payload_file.write_text(json.dumps(payload), encoding="utf-8")
     token_file = tmp_path / "secret.token"
     if token is not None:
-        fd = os.open(token_file, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o644)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(token)
-    log = tmp_path / "git.log"
-    state_path = tmp_path / "git-state.json"
-    state_path.write_text(json.dumps(state), encoding="utf-8")
-    wrapper = tmp_path / "workspace.sh"
-    token_ref = str(token_file) if token is not None else ""
-    wrapper.write_text(
-        "\n".join(
-            [
-                "set -euo pipefail",
-                "umask 077",
-                "step() { printf 'ASTRA_STEP\\t%s\\t%s\\n' \"$1\" \"$2\"; }",
-                "cleanup() { if test -n \"${token_file:-}\"; then rm -f \"$token_file\"; fi; "
-                "if test -n \"${askpass:-}\"; then rm -f \"$askpass\"; fi; }",
-                functions,
-                f"python_bin={sys.executable}",
-                f"payload={payload_file}",
-                f"workspace={workspace}",
-                f"token_file={token_ref}",
-                "askpass=",
-                "action=deploy",
-                "repo_url=$(json_field repository.url)",
-                "repo_branch=$(json_field repository.branch)",
-                "repo_branch=${repo_branch:-main}",
-                "repo_changed=false",
-                "remote_commit=''",
-                "workspace_real=$(\"$python_bin\" -c "
-                "'import os,sys; print(os.path.realpath(sys.argv[1]))' \"$workspace\")",
-                trap,
-                body,
-            ]
-        ),
-        encoding="utf-8",
-    )
-    env = os.environ.copy()
-    env.update(PATH=f"{bindir}:{env.get('PATH', '')}", GIT_LOG=str(log), GIT_STATE=str(state_path))
+        token_file.write_text(token)
+    log, state_path = tmp_path / "git.log", tmp_path / "git-state.json"
+    state_path.write_text(json.dumps(state))
+    env = {
+        "PATH": str(bindir) + os.pathsep + os.environ["PATH"],
+        "GIT_LOG": str(log),
+        "GIT_STATE": str(state_path),
+    }
     if token is not None:
         env["TOKEN_PATH"] = str(token_file)
-    completed = subprocess.run(
-        ["bash", str(wrapper)],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    calls = json.loads(log.read_text(encoding="utf-8")) if log.exists() else []
+    worker = LocalTarget(tmp_path, workspace=workspace, env=env)
+    try:
+        asyncio.run(
+            git_workspace(
+                worker,
+                url=payload.get("repository", {}).get("url", ""),
+                branch=payload.get("repository", {}).get("branch", "main"),
+                token_path=str(token_file) if token is not None else "",
+            )
+        )
+        completed = subprocess.CompletedProcess([], 0, "", "")
+    except Exception as exc:
+        completed = subprocess.CompletedProcess([], 1, "", str(exc))
+    calls = json.loads(log.read_text()) if log.exists() else []
     return completed, calls, token_file
 
 

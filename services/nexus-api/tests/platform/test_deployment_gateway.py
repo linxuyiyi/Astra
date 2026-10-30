@@ -1,10 +1,6 @@
 """部署环境必须能脱离安装进程恢复，不依赖本机 OpenCode 或厂商 key。"""
 
 import json
-import os
-import shlex
-import subprocess
-import sys
 from pathlib import Path
 from uuid import uuid4
 
@@ -22,100 +18,14 @@ ROOT = Path(__file__).resolve().parents[4]
 INSTALLER = ROOT / "ops/deploy/install_nexus.sh"
 
 
-def installer(tmp_path, body, *, extra=None):
-    env = {
-        "PATH": os.environ["PATH"],
-        "HOME": str(tmp_path),
-        # Explicit env wins over the checkout's local ops/env/.env; this test
-        # verifies installer persistence, not this developer's run mode.
-        "ASTRA_EXECUTOR_TYPE": "worker",
-        "LC_ALL": "C",
-        "NEXUS_ROOT": str(tmp_path),
-        "NEXUS_STATE_DIR": str(tmp_path),
-        "ASTRA_DATABASE_URL": "mysql+asyncmy://test:abc%40pass@localhost/nexus?charset=utf8mb4",
-        "AGENTSCOPE_SQL_URL": "mysql+asyncmy://test@localhost/agent",
-        "ASTRA_GATEWAY_MASTER_KEY": "test-master",
-        "NEXUS_MCP_API_KEY": "test-mcp",
-        "NEXUS_GATEWAY_OPENAI_BASE": "http://gateway.test:18110/v1",
-        "ASTRA_SERVICE_GATEWAY_HOST": "0.0.0.0",
-        "ASTRA_SERVICE_GATEWAY_PORT": "19110",
-        "NEXUS_REMOTE_GATEWAY_LOCAL_URL": "http://10.0.0.8:18110/v1",
-        "NEXUS_KB_EMBEDDING_JSON": '{"model_route_id":"embed-route","dimensions":1024}',
-        **(extra or {}),
-    }
-    script = f"source {shlex.quote(str(INSTALLER))}\n" + body
-    return subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True, timeout=10)
 
 
-def test_generated_environment_survives_clean_process_and_reinstall(tmp_path):
-    read = (
-        "import json,os; print(json.dumps({k:os.getenv(k) for k in "
-        "['ASTRA_EXECUTOR_TYPE','NEXUS_GATEWAY_API_KEY','NEXUS_GATEWAY_OPENAI_BASE',"
-        "'ASTRA_DATABASE_URL','NEXUS_KB_EMBEDDING_JSON','NEXUS_RUNTIME_ENV_FILE',"
-        "'ASTRA_SERVICE_GATEWAY_HOST','ASTRA_SERVICE_GATEWAY_PORT']}))"
-    )
-    script = """step_secrets
-step_runenv
-before=$(get_kv "$SECRETS" NEXUS_GATEWAY_API_KEY)
-step_secrets
-[ "$before" = "$(get_kv "$SECRETS" NEXUS_GATEWAY_API_KEY)" ]
-"""
-    script += (
-        'env -i PATH="$PATH" bash -c \'set -a; . "$1"; . "$2"; set +a; exec "$3" -c "$4"\' '
-        f'-- "$RUNENV" "$SECRETS" {shlex.quote(sys.executable)} {shlex.quote(read)}'
-    )
-    result = installer(tmp_path, script)
-    assert result.returncode == 0, result.stderr
-    saved = json.loads(result.stdout.splitlines()[-1])
-    assert saved["ASTRA_EXECUTOR_TYPE"] == "worker"
-    assert saved["ASTRA_SERVICE_GATEWAY_HOST"] == "0.0.0.0"
-    assert saved["ASTRA_SERVICE_GATEWAY_PORT"] == "19110"
-    assert saved["NEXUS_GATEWAY_API_KEY"].startswith("agw_")
-    assert saved["NEXUS_GATEWAY_OPENAI_BASE"] == "http://gateway.test:18110/v1"
-    assert saved["ASTRA_DATABASE_URL"].endswith("?charset=utf8mb4")
-    assert json.loads(saved["NEXUS_KB_EMBEDDING_JSON"])["model_route_id"] == "embed-route"
-    assert Path(saved["NEXUS_RUNTIME_ENV_FILE"]).is_file()
-    assert (tmp_path / "secrets.env").stat().st_mode & 0o777 == 0o600
-    assert not (tmp_path / ".config/opencode/opencode.json").exists()
-    assert "DEEPSEEK" not in (tmp_path / "nexus.env").read_text()
 
 
-def test_existing_wiki_never_invents_credentials(tmp_path):
-    result = installer(tmp_path, "WITH_WIKI=1\nstep_secrets")
-    assert result.returncode != 0 and "llm_wiki token" in result.stderr
-    assert "ASTRA_LLM_WIKI_API_TOKEN=" not in (tmp_path / "secrets.env").read_text()
 
 
-def test_remote_bootstrap_settings_survive_clean_process(tmp_path):
-    expected = {
-        "NEXUS_REMOTE_DOWNLOAD_BASE_URL": "https://mirror.company.test",
-        "NEXUS_REMOTE_NPM_REGISTRY": "https://mirror.company.test/repository/npm/",
-        "NEXUS_REMOTE_PIP_INDEX_URL": "https://mirror.company.test/repository/pypi/simple",
-        "NEXUS_REMOTE_PYTHON": "/opt/company/python3.11",
-        "NEXUS_REMOTE_DEPLOY_TIMEOUT_SECONDS": "2400",
-    }
-    read = "import json,os; print(json.dumps({k:os.getenv(k) for k in " + repr(list(expected)) + "}))"
-    body = "step_runenv\n" + (
-        'env -i PATH="$PATH" bash -c \'set -a; . "$1"; set +a; exec "$2" -c "$3"\' '
-        f'-- "$RUNENV" {shlex.quote(sys.executable)} {shlex.quote(read)}'
-    )
-    result = installer(tmp_path, body, extra=expected)
-    assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout.splitlines()[-1]) == expected
 
 
-def test_systemd_reads_the_same_shell_environment(tmp_path):
-    result = installer(
-        tmp_path,
-        """SUDO=""
-tee() { cat > "$NEXUS_ROOT/unit"; }
-svc_unit nexus-test simple "exec python3 app.py"
-""",
-    )
-    assert result.returncode == 0, result.stderr
-    unit = (tmp_path / "unit").read_text()
-    assert '. "' + str(tmp_path / "nexus.env") + '"' in unit
-    assert '. "' + str(tmp_path / "secrets.env") + '"' in unit
 
 
 @pytest.mark.parametrize("url", ["http://gateway.test:18110", "http://gateway.test:18110/v1/"])
@@ -200,24 +110,6 @@ def test_local_managed_runtime_cannot_use_vendor_provider_or_small_model():
     assert json.loads(original["OPENCODE_CONFIG_CONTENT"])["small_model"] == "vendor/direct"
 
 
-def test_installer_reads_quoted_json_and_urls_without_executing_input(tmp_path):
-    config = tmp_path / "input.env"
-    config.write_text(
-        'REVIEW_JSON=\'{"model_route_id":"embed","dimensions":2}\'\n'
-        'REVIEW_URL="http://gateway.test/v1?value=%40"\n'
-        "REVIEW_LITERAL=literal$(touch sentinel) # comment\n"
-    )
-    result = installer(
-        tmp_path,
-        'load_env_file "$NEXUS_ROOT/input.env"\n'
-        'printf \'%s\\n\' "$REVIEW_JSON" "$REVIEW_URL" "$REVIEW_LITERAL"',
-    )
-    assert result.returncode == 0, result.stderr
-    lines = result.stdout.splitlines()
-    assert json.loads(lines[-3])["dimensions"] == 2
-    assert lines[-2] == "http://gateway.test/v1?value=%40"
-    assert lines[-1] == "literal$(touch sentinel)"
-    assert not (ROOT / "sentinel").exists()
 
 
 @pytest.mark.parametrize("field,value", [
@@ -248,17 +140,3 @@ async def test_shared_serve_checks_actual_config_before_ready(monkeypatch, field
         await manager.wait_until_ready()
     config[field] = json.loads(gateway_environment("default", source)["OPENCODE_CONFIG_CONTENT"])[field]
     assert (await manager.wait_until_ready()).healthy
-
-
-def test_custom_runtime_and_review_settings_survive_restart(tmp_path):
-    result = installer(tmp_path, 'step_secrets\nstep_runenv', extra={
-        "ASTRA_OPENCODE_MODEL": "nexus-gateway/custom",
-        "NEXUS_EXPERIENCE_REVIEW_GATEWAY_URL": "http://gateway.test:19110/v1/chat/completions",
-        "NEXUS_EXPERIENCE_REVIEW_GATEWAY_KEY": "agw_review_test",
-    })
-    assert result.returncode == 0, result.stderr
-    runtime = (tmp_path / "nexus.env").read_text()
-    assert "ASTRA_OPENCODE_MODEL=nexus-gateway/custom" in runtime
-    assert "NEXUS_EXPERIENCE_REVIEW_GATEWAY_URL=http://gateway.test:19110/v1/chat/completions" in runtime
-    assert "agw_review_test" not in runtime
-    assert "NEXUS_EXPERIENCE_REVIEW_GATEWAY_KEY=agw_review_test" in (tmp_path / "secrets.env").read_text()

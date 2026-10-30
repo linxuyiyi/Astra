@@ -10,9 +10,7 @@ import json
 import os
 import re
 import shutil
-import signal
 import socket
-import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -21,7 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.worker_agent.jsonc import loads_jsonc
-from app.worker_agent.process_env import child_environ
+from app.worker_agent.process_manager import manage_process, managed_running
 
 _GATEWAY_ENV = "NEXUS_REMOTE_GATEWAY_URL"
 _MCP_ENV = "NEXUS_MCP_RESOURCE_URL"
@@ -295,51 +293,26 @@ def restart_local_opencode(
         raise RuntimeError("OpenCode 端口无效")
     listener = assert_native_idle(workspace, port, gate=gate)
     env = environ if environ is not None else os.environ
-    unit = (env.get("NEXUS_WORKER_OPENCODE_UNIT") or "").strip()
-    if unit:
-        if _UNIT_NAME.fullmatch(unit) is None:
-            raise RuntimeError("OpenCode systemd 单元名无效")
-        _check_gate(gate)
-        completed = subprocess.run(
-            ["systemctl", "restart", unit],
-            check=False,
-            capture_output=True,
-            text=True,
-            env=child_environ(env),
-        )
-        if completed.returncode != 0:
-            raise RuntimeError("systemd 重载 OpenCode 失败")
-        _wait_until_healthy(port, gate=gate)
-        return
-    if listener:
-        pid = _listener_pid(port)
-        if pid is None:
-            raise RuntimeError("无法确认 OpenCode 监听进程，未重载")
-        if pid == os.getpid():
-            raise RuntimeError("拒绝结束当前进程")
-        if not _opencode_listener(pid):
-            raise RuntimeError("端口上的进程不是 OpenCode，未重载")
-        _check_gate(gate)
-        os.kill(pid, signal.SIGTERM)
-        deadline = time.monotonic() + _EXIT_WAIT_SECONDS
-        while time.monotonic() < deadline:
-            if _listener_pid(port) is None:
-                break
-            time.sleep(0.1)
-        else:
-            raise RuntimeError("OpenCode 没有在时限内退出")
-    else:
+    record = env.get("NEXUS_WORKER_OPENCODE_PROCESS_RECORD")
+    if record:
+        path = Path(record)
+        if listener and not managed_running(path):
+            raise RuntimeError("监听进程缺少受管记录，未重载 OpenCode")
         _check_gate(gate)
         binary = env.get("NEXUS_WORKER_OPENCODE_BIN") or "opencode"
-        subprocess.Popen(
-            [binary, "serve", "--hostname", "127.0.0.1", "--port", str(port)],
-            cwd=folder,
-            env=child_environ(env),
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        manage_process(
+            path,
+            command=[binary, "serve", "--hostname", "127.0.0.1", "--port", str(port)],
+            workspace=workspace,
+            log_path=path.with_suffix(".log"),
+            environ=dict(env),
+            restart=True,
+            opencode=True,
+            gate=gate,
         )
-    _wait_until_healthy(port, gate=gate)
+        _wait_until_healthy(port, gate=gate)
+        return
+    raise RuntimeError("Worker 缺少受管进程记录，请先通过 Nexus 重新部署，不接管未知进程")
 
 
 def _wait_until_healthy(port: int, *, gate: Gate | None = None) -> None:
@@ -363,42 +336,6 @@ def _wait_until_healthy(port: int, *, gate: Gate | None = None) -> None:
             return
         time.sleep(0.2)
     raise RuntimeError("OpenCode 重载后健康检查失败")
-
-
-def _cmdline(pid: int) -> str:
-    try:
-        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
-    except OSError:
-        return ""
-    return raw.replace(b"\0", b" ").decode("utf-8", "replace")
-
-
-def _parent_pid(pid: int) -> int | None:
-    try:
-        text = Path(f"/proc/{pid}/status").read_text(encoding="utf-8")
-    except OSError:
-        return None
-    for line in text.splitlines():
-        if line.startswith("PPid:"):
-            return int(line.split()[1])
-    return None
-
-
-def _opencode_listener(pid: int) -> bool:
-    """The listener is OpenCode itself, or a process OpenCode started."""
-
-    current = pid
-    seen: set[int] = set()
-    while current and current > 1 and current not in seen:
-        seen.add(current)
-        command = _cmdline(current)
-        if "opencode" in command and "serve" in command:
-            return True
-        parent = _parent_pid(current)
-        if parent is None:
-            return False
-        current = parent
-    return False
 
 
 def apply_channel_switch(

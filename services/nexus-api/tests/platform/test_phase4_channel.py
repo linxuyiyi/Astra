@@ -1,13 +1,8 @@
 """Phase 4: worker-only remote execution, intranet addresses, and install mark."""
 
-import asyncio
-import io
-import json
 import os
-import shlex
 import subprocess
 import sys
-import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,21 +14,16 @@ from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.database import SessionLocal, init_database
-from app.gateway.models import GatewayKey, GatewayPool, GatewayRoute
-from app.gateway.security import gateway_key_digest
-from app.models import AgentWorker, OpenCodeExecutionEnvironment, WorkerMaintenanceOperation
+from app.models import AgentWorker, OpenCodeExecutionEnvironment
 from app.runtime.environment import ExecutionEnvironmentRuntime
 from app.runtime.maintenance import OperationLease, submit_operation
 from app.runtime.opencode_model import gateway_model
-from app.runtime.remote_provisioning import RemoteProvisioner, agent_python, agent_wheel
+from app.runtime.remote_provisioning import RemoteProvisioner, agent_wheel
 from app.runtime.worker_channel import complete_worker_mark, read_worker_channel
-from app.runtime.workspace_files import upload, validate_path
 from app.worker_agent.connection import handle_command
-from app.worker_agent.files import execute_file_command
 from app.worker_agent.supervisor import RuntimeSupervisor
-from app.worker_gateway.data_channel import DataChannel
 from app.worker_gateway.protocol import envelope
-from tests.platform.test_worker_gateway import authenticate, gateway_for
+from tests.platform.test_worker_gateway import authenticate
 
 
 @pytest.fixture(autouse=True)
@@ -73,9 +63,7 @@ def _direct(monkeypatch):
     monkeypatch.setattr(settings, "mcp_transport", "streamable-http")
     monkeypatch.setattr(settings, "remote_gateway_local_url", GATEWAY)
     monkeypatch.setattr(settings, "mcp_resource_server_url", MCP)
-    monkeypatch.setattr(
-        settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect"
-    )
+    monkeypatch.setattr(settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect")
     return settings
 
 
@@ -197,324 +185,82 @@ async def test_failed_switch_does_not_mark_worker(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_online_restart_does_not_open_ssh(monkeypatch):
+async def test_online_restart_is_owned_by_nexus_over_ssh(monkeypatch):
+    from unittest.mock import AsyncMock
+
     _direct(monkeypatch)
-    gateway = gateway_for()
-    monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda: gateway)
-    monkeypatch.setattr("app.runtime.worker_client.get_gateway", lambda: gateway)
-    employee_id, environment_id = await _employee()
-    enrolled, auth = await authenticate_existing(gateway, environment_id)
-    queues = gateway.bus.bound[enrolled.worker_instance_id]
-
-    async def answer():
-        # The Worker performs the native-idle check inside restart_opencode;
-        # the controller must not probe /session/status first.
-        frame = await queues.wait_frame()
-        assert frame["payload"]["name"] == "restart_opencode"
-        await _complete(gateway, frame, auth.epoch, {"restarted": True})
-        health = await queues.wait_frame()
-        assert health["payload"]["data"]["path"] == "/global/health"
-        async with SessionLocal() as session:
-            await DataChannel(gateway).commit_upload(
-                session,
-                request_id=health["request_id"],
-                worker_instance_id=enrolled.worker_instance_id,
-                epoch=auth.epoch,
-                upload_id="health",
-                http_status=200,
-                headers={},
-                content_type="application/json",
-                chunk=json.dumps({"healthy": True, "version": "1.18.35"}),
-                complete=True,
-            )
-
-    running = asyncio.create_task(answer())
+    employee_id, _environment_id = await _employee()
     environment, operation, lease = await _reserve(employee_id, "restart")
-    called = False
-
-    async def opened(self, _environment):
-        nonlocal called
-        called = True
-        raise AssertionError("ssh")
-
-    monkeypatch.setattr(ExecutionEnvironmentRuntime, "open_session", opened)
+    worker = RemoteProvisioner(environment, operation, lease=lease)
+    ssh = SimpleNamespace(close=AsyncMock())
+    opened = AsyncMock(return_value=ssh)
+    monkeypatch.setattr(worker.runtime, "open_session", opened)
+    worker._acquire_install_lock = AsyncMock()
+    worker._native_idle = AsyncMock(return_value=True)
+    worker._restart_processes = AsyncMock()
+    worker._finish = AsyncMock(return_value=True)
     events = []
 
     async def emit(event):
         events.append(event)
 
-    await RemoteProvisioner(environment, operation, lease=lease).run(emit)
-    await running
-    assert called is False
-    assert events[-1]["success"] is True, events[-1]
-
-
-@pytest.mark.asyncio
-async def test_online_restart_does_not_require_ssh_password(monkeypatch):
-    _direct(monkeypatch)
-    gateway = gateway_for()
-    monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda: gateway)
-    monkeypatch.setattr("app.runtime.worker_client.get_gateway", lambda: gateway)
-    employee_id, environment_id = await _employee(ssh_password=None)
-    await authenticate_existing(gateway, environment_id)
-    environment, operation, lease = await _reserve(employee_id, "restart")
-    assert operation.action == "restart"
-    assert environment.ssh_password is None
-
-
-@pytest.mark.asyncio
-@pytest.mark.skipif(sys.platform != "linux", reason="Worker 文件命令依赖 Linux O_PATH")
-async def test_install_marks_inside_the_operation_and_serves_files(tmp_path, monkeypatch):
-    _direct(monkeypatch)
-    gateway = gateway_for()
-    monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda: gateway)
-    monkeypatch.setattr("app.runtime.worker_client.get_gateway", lambda: gateway)
-
-    async def nested(*_args, **_kwargs):
-        raise AssertionError("deploy 不应再取一把维护锁")
-
-    monkeypatch.setattr("app.runtime.worker_channel.mark_worker_channel", nested)
-    workspace = str(tmp_path)
-    employee_id, environment_id = await _employee(workspace_root=workspace)
-    suffix = uuid4().hex[:8]
-    async with SessionLocal() as db:
-        pool_id = "pool-" + suffix
-        db.add(GatewayPool(id=pool_id, name="pool-" + suffix))
-        db.add(GatewayRoute(id="route-" + suffix, model="deepseek-flash", pool_id=pool_id, enabled=True))
-        db.add(
-            GatewayKey(
-                id="key-" + suffix,
-                name="employee",
-                owner_id=employee_id,
-                key_prefix=RAW_KEY[:12],
-                key_digest=gateway_key_digest(RAW_KEY),
-                enabled=True,
-                allowed_models=["deepseek-flash"],
-            )
-        )
-        await db.commit()
-    environment, operation, lease = await _reserve(employee_id, "deploy")
-
-    files: dict[str, bytes] = {}
-    commands: list[str] = []
-    seen: list[str] = []
-    holder: dict = {}
-
-    class Channel:
-        async def readline(self):
-            return b""
-
-        async def read(self, _size=-1):
-            return b""
-
-        async def wait(self):
-            return 0
-
-        async def close(self):
-            return None
-
-        stdout = None
-        stderr = None
-
-    channel = Channel()
-    channel.stdout = channel
-    channel.stderr = channel
-
-    class SSH:
-        async def run_command(self, command):
-            commands.append(command)
-            parts = shlex.split(command)
-            if parts[:2] == ["cp", "-p"] and parts[2] in files:
-                files[parts[3]] = files[parts[2]]
-                return 0, "", ""
-            if parts[:2] == ["mv", "-f"] and parts[2] in files:
-                files[parts[3]] = files.pop(parts[2])
-                return 0, "", ""
-            if parts[:2] == ["rm", "-f"]:
-                files.pop(parts[2], None)
-                return 0, "", ""
-            if "pip install" in command:
-                assert any(path.endswith(".whl") for path in files)
-                assert not any(path.endswith(".env") for path in files)
-            if "session/status" in command:
-                return 0, "", ""
-            if "$HOME" in command:
-                return 0, "/root\n/root/.config\n", ""
-            if command.strip() == "id -u":
-                return 0, "0\n", ""
-            if command.startswith("node ") or " node " in f" {command}":
-                return 0, "模型中转认证与模型路由正常\n", ""
-            if "systemctl restart" in command:
-                await bring_installed_worker_online()
-                return 0, "", ""
-            return 0, "", ""
-
-        async def read_file(self, path):
-            if path in files:
-                return files[path]
-            if path.endswith("opencode.json") or path.endswith("opencode.jsonc"):
-                return json.dumps(
-                    {"provider": {"nexus-gateway": {"options": {"apiKey": RAW_KEY}}}}
-                ).encode()
-            return None
-
-        async def write_file(self, path, data, mode=0o644):
-            files[path] = data
-
-        async def open_exec(self, _command):
-            return channel
-
-        async def close(self):
-            return None
-
-    ssh_calls = []
-
-    async def opened(self, _environment):
-        ssh_calls.append("ssh")
-        return SSH()
-
-    monkeypatch.setattr(ExecutionEnvironmentRuntime, "open_session", opened)
-
-    async def bring_installed_worker_online():
-        env = next(value.decode() for key, value in files.items() if key.endswith(".env"))
-        values = dict(line.split("=", 1) for line in env.splitlines() if "=" in line)
-        auth = await authenticate(
-            gateway,
-            environment_id,
-            values["NEXUS_WORKER_INSTANCE_ID"],
-            values["NEXUS_WORKER_TOKEN"],
-            "auth-install",
-        )
-        assert await gateway.bus.set_owner(
-            auth.worker_instance_id, gateway.owner_id, auth.epoch
-        )
-        queues = await gateway.bus.bind(
-            auth.worker_instance_id, epoch=auth.epoch, owner_id=gateway.owner_id
-        )
-        assert queues is not None
-        holder["task"] = asyncio.create_task(answer(queues, auth.epoch))
-
-    async def answer(queues, epoch):
-        while True:
-            frame = await queues.wait_frame()
-            name = frame["payload"]["name"]
-            seen.append(name)
-            data = frame["payload"].get("data") or {}
-            if name == "switch_channel":
-                await _complete(
-                    gateway,
-                    frame,
-                    epoch,
-                    {"reloaded": True, "verified": True, "gateway_url": GATEWAY, "mcp_url": MCP},
-                )
-                continue
-            if name == "http" and data.get("path") == "/mcp":
-                async with SessionLocal() as session:
-                    await DataChannel(gateway).commit_upload(
-                        session,
-                        request_id=frame["request_id"],
-                        worker_instance_id=frame["worker_instance_id"],
-                        epoch=epoch,
-                        upload_id="mcp",
-                        http_status=200,
-                        headers={},
-                        content_type="application/json",
-                        chunk=json.dumps({"nexus-library": {"status": "connected"}}),
-                        complete=True,
-                    )
-                continue
-            if name == "upload_file":
-                async with SessionLocal() as session:
-                    fetched = await DataChannel(gateway).fetch_request(
-                        session,
-                        request_id=frame["request_id"],
-                        worker_instance_id=frame["worker_instance_id"],
-                        epoch=epoch,
-                    )
-                result, _body = execute_file_command(
-                    frame["payload"],
-                    allowed_root=workspace,
-                    request_id=frame["request_id"],
-                    deadline=frame.get("expires_at") or 0,
-                    content=fetched.content,
-                )
-                await _complete(gateway, frame, epoch, result)
-                continue
-            if name == "validate_path":
-                result, _body = execute_file_command(
-                    frame["payload"],
-                    allowed_root=workspace,
-                    request_id=frame["request_id"],
-                    deadline=frame.get("expires_at") or 0,
-                )
-                await _complete(gateway, frame, epoch, result)
-
-    events = []
-
-    async def emit(event):
-        events.append(event)
-
-    await RemoteProvisioner(environment, operation, lease=lease).run(emit)
+    await worker.run(emit)
+    opened.assert_awaited_once()
+    worker._restart_processes.assert_awaited_once()
     assert events[-1]["success"] is True
-    assert ssh_calls == ["ssh"]
-    assert seen[:2] == ["switch_channel", "http"]
-    texts = []
-    for value in files.values():
-        try:
-            texts.append(value.decode())
-        except UnicodeDecodeError:
-            continue
-    assert any(f"NEXUS_REMOTE_GATEWAY_URL={GATEWAY}" in text for text in texts)
-    assert any(f"NEXUS_MCP_RESOURCE_URL={MCP}" in text for text in texts)
-    assert any("NEXUS_WORKER_OPENCODE_URL=http://127.0.0.1:4096" in text for text in texts)
-    assert any("serve --hostname 127.0.0.1 --port 4096" in text for text in texts)
-    assert any(GATEWAY in text and "nexus-gateway" in text for text in texts)
-    wheels = [path for path in files if path.endswith(".whl")]
-    assert wheels == [f"/opt/nexus/workers/{environment_id}/nexus_worker_agent-1.4.5-py3-none-any.whl"]
-    with zipfile.ZipFile(io.BytesIO(files[wheels[0]])) as archive:
-        packed = set(archive.namelist())
-    assert "app/worker_agent/__main__.py" in packed
-    assert "app/worker_gateway/heartbeat.py" in packed
-    assert "app/config/settings.py" not in packed
-    assert "app/worker_gateway/service.py" not in packed
-    install = next(command for command in commands if "pip install" in command)
-    assert install.startswith(f"python3 -m venv /opt/nexus/workers/{environment_id}/venv && ")
-    assert f"{agent_python(environment_id)} -m pip install" in install
-    assert "--force-reinstall" in install
-    assert wheels[0] in install
-    worker_unit = f"nexus-worker-{environment_id}.service"
-    opencode_unit = f"nexus-opencode-{environment_id}.service"
-    unit = files[f"/etc/systemd/system/{worker_unit}"].decode()
-    assert f"ExecStart={agent_python(environment_id)} -m app.worker_agent\n" in unit
-    assert "/usr/bin/python3" not in unit
-    skill_dir = f"/etc/nexus/opencode/{environment_id}"
-    opencode = files[f"/etc/systemd/system/{opencode_unit}"].decode()
-    worker_env = files[f"/etc/nexus/worker-{environment_id}.env"].decode()
-    assert f"Environment=OPENCODE_CONFIG_DIR={skill_dir}\n" in opencode
-    assert f"OPENCODE_CONFIG_DIR={skill_dir}\n" in worker_env
-    restart = next(command for command in commands if "systemctl daemon-reload" in command)
-    assert restart == (
-        "systemctl daemon-reload && "
-        f"systemctl enable {opencode_unit} {worker_unit} && "
-        f"systemctl restart {opencode_unit} && "
-        f"systemctl restart {worker_unit}"
+
+
+@pytest.mark.asyncio
+async def test_restart_requires_ssh_credentials_even_when_worker_is_online(monkeypatch):
+    _direct(monkeypatch)
+    employee_id, _environment_id = await _employee(ssh_password=None)
+    with pytest.raises(HTTPException, match="SSH"):
+        await _reserve(employee_id, "restart")
+
+
+@pytest.mark.parametrize("failure", [None, "gateway", "agent"])
+async def test_server_deployment_order_and_failure_do_not_report_early_success(monkeypatch, failure):
+    from unittest.mock import AsyncMock
+
+    _direct(monkeypatch)
+    employee_id, _ = await _employee()
+    environment, operation, lease = await _reserve(employee_id, "deploy")
+    worker = RemoteProvisioner(environment, operation, lease=lease)
+    ssh = SimpleNamespace(close=AsyncMock())
+    monkeypatch.setattr(worker.runtime, "open_session", AsyncMock(return_value=ssh))
+    order = []
+
+    def stage(name):
+        async def execute(*_args, **_kwargs):
+            order.append(name)
+            if failure == name:
+                raise RuntimeError("fixture failure: " + name)
+
+        return execute
+
+    monkeypatch.setattr("app.runtime.remote_provisioning.prepare_python", stage("probe"))
+    worker._native_idle = AsyncMock(return_value=True)
+    worker._install = stage("runtime")
+    worker._probe_gateway = stage("gateway")
+    worker._install_worker = stage("agent")
+    worker._mark_inside_operation = stage("online")
+    worker._observe_capability = AsyncMock(return_value={})
+    worker._finish = AsyncMock(return_value=True)
+    events = []
+
+    async def emit(event):
+        events.append(event)
+
+    await worker.run(emit)
+    assert order == (
+        ["probe", "runtime", "gateway"]
+        if failure == "gateway"
+        else ["probe", "runtime", "gateway", "agent"]
+        if failure == "agent"
+        else ["probe", "runtime", "gateway", "agent", "online"]
     )
-    assert commands.index(install) < commands.index(restart)
-    async with SessionLocal() as db:
-        stored = await db.get(OpenCodeExecutionEnvironment, environment_id)
-        assert stored.worker_channel == "worker"
-        assert stored.ssh_password == "test-ssh-secret"
-        finished = await db.get(WorkerMaintenanceOperation, operation.id)
-        assert finished.state == "SUCCEEDED"
-        ready = SimpleNamespace(id=stored.id, mode=stored.mode)
-    relative = await validate_path(ready, workspace, ".")
-    assert relative == "."
-    uploaded = await upload(ready, workspace, "note.txt", b"phase4")
-    assert Path(uploaded).read_bytes() == b"phase4"
-    assert ssh_calls == ["ssh"]
-    holder["task"].cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await holder["task"]
+    assert events[-1]["success"] is (failure is None)
+    ssh.close.assert_awaited_once()
 
 
 def test_restart_command_restarts_local_opencode(monkeypatch):
@@ -534,6 +280,7 @@ def test_restart_command_restarts_local_opencode(monkeypatch):
         message_type="command",
         payload={"name": "restart_opencode", "data": {"workspace": "/srv/project", "port": 4096}},
     )
+
     def gate():
         return None
 
@@ -568,13 +315,14 @@ def repo_root() -> Path:
 def test_remote_port_default_is_14096_and_llm_wiki_is_a_lan_server():
     root = repo_root()
     script = (root / "ops/deploy/install_nexus.sh").read_text(encoding="utf-8")
-    assert "REMOTE_WORKER_OPENCODE_PORT:=14096" in script
+    from app.config.settings import Settings
+
+    assert Settings.model_fields["opencode_server_port"].default == 14096
     assert "4296" not in script
     # llm_wiki 服务器版本按局域网地址接入，不再有 SSH 隧道和主机模式。
-    assert "ASTRA_LLM_WIKI_API_BASE_URL" in script
+    assert "ASTRA_LLM_WIKI_ENABLED" in (root / "ops/deploy/deploy.py").read_text()
     assert "LLM_WIKI_HOST" not in script
     example = (root / "ops/env/.env.example").read_text(encoding="utf-8")
-    assert "REMOTE_WORKER_OPENCODE_PORT=14096" in example
     assert "4296" not in example
     guide = (root / "ops/deploy/DEPLOYMENT_GUIDE.md").read_text(encoding="utf-8")
     employees = (root / "docs/deploy/REMOTE_EMPLOYEES.md").read_text(encoding="utf-8")

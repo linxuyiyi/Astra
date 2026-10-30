@@ -3,9 +3,9 @@ import os
 import shlex
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import httpx
@@ -285,23 +285,14 @@ def test_real_config_merge_writes_jsonc_and_keeps_user_settings(tmp_path):
     repo = tmp_path / "repo" / ".opencode" / "skills" / "hidden"
     repo.mkdir(parents=True)
     (repo / "SKILL.md").write_text("untouched", encoding="utf-8")
-    source = Path("app/runtime/remote_install.sh").read_text().split("<<'NODE'\n", 1)[1].split("\nNODE", 1)[0]
-    result_file = tmp_path / "config-info.json"
-    result = subprocess.run(
-        [
-            shutil.which("node"),
-            "-",
-            str(payload_file),
-            "op123",
-            sys.executable,
-            str(Path("app/worker_agent/jsonc.py")),
-            str(result_file),
-        ],
-        input=source,
-        text=True,
-        capture_output=True,
-    )
-    assert result.returncode == 0, result.stderr
+    import asyncio
+
+    from app.runtime.remote_workspace import configure_runtime
+    from tests.platform.deployment_target import LocalTarget
+
+    worker = LocalTarget(tmp_path)
+    worker.operation_id = "op123"
+    asyncio.run(configure_runtime(worker, payload))
     config = json.loads(target.read_text())
     assert config["provider"]["custom"] == original["provider"]["custom"]
     assert config["provider"]["nexus-gateway"]["options"]["baseURL"] == "http://127.0.0.1:8110/v1"
@@ -363,168 +354,6 @@ def test_deleted_tunnel_helpers_have_no_callers():
             assert name not in text, f"{path} still mentions {name}"
 
 
-@pytest.mark.skipif(not shutil.which("node"), reason="Node.js required for npm installation metadata")
-@pytest.mark.parametrize("outcome", ["success", "install-failed", "wrong-version"])
-def test_npm_install_migrates_manual_binary_and_preserves_it_on_failure(tmp_path, outcome):
-    import os
-
-    fixture_root = tmp_path / "employee home"
-    stub_dir = tmp_path / "tools"
-    stub_dir.mkdir()
-    target = tmp_path / "opencode"
-    target.write_text("#!/bin/sh\nprintf '1.18.35\\n'\n")
-    target.chmod(0o755)
-    calls = tmp_path / "npm-calls"
-    npm = stub_dir / "npm"
-    npm.write_text(
-        """#!/bin/sh
-set -eu
-printf '%s\\n' "$*" >>"$npm_calls"
-test "$install_outcome" != install-failed || exit 17
-prefix="$fixture_root/npm"
-mkdir -p "$prefix/bin" "$prefix/lib/node_modules/opencode-ai"
-printf '{"version":"1.18.35"}' >"$prefix/lib/node_modules/opencode-ai/package.json"
-actual=1.18.35
-test "$install_outcome" != wrong-version || actual=1.2.27
-printf '#!/bin/sh\\nprintf "%s\\\\n"\\n' "$actual" >"$prefix/bin/opencode"
-chmod 755 "$prefix/bin/opencode"
-"""
-    )
-    npm.chmod(0o755)
-    script = Path("app/runtime/remote_install.sh").read_text()
-    source = script.split(
-        "# npm is installed under the Worker-specific prefix, never into a shared global path.\n",
-        1,
-    )[1].split("step 'OpenCode 安装' passed", 1)[0]
-    source = (
-        'fail() { printf "%s\\n" "$*" >&2; exit 1; }\n'
-        "runtime_changed=false\n"
-        'npm_prefix="$fixture_root/npm"\n'
-        'npm_package="$npm_prefix/lib/node_modules/opencode-ai/package.json"\n'
-        'npm_binary="$npm_prefix/bin/opencode"\n'
-        'npm_cache="$fixture_root/npm-cache"\n'
-        + source
-    )
-    env = dict(os.environ, PATH=str(stub_dir) + os.pathsep + os.environ["PATH"])
-    env.update(
-        fixture_root=str(fixture_root),
-        npm_calls=str(calls),
-        binary=str(target),
-        opencode_version="1.18.35",
-        npm_registry="https://registry.example.invalid",
-        install_outcome=outcome,
-    )
-    result = subprocess.run(["bash", "-eu", "-c", source], env=env, capture_output=True, text=True)
-    if outcome != "success":
-        assert result.returncode != 0
-        assert not target.is_symlink()
-        assert "1.18.35" in target.read_text()
-        return
-    assert result.returncode == 0, result.stderr
-    assert target.is_symlink()
-    assert "opencode-ai@1.18.35" in calls.read_text()
-    assert "--registry https://registry.example.invalid" in calls.read_text()
-    assert "--include=optional" in calls.read_text()
-    # A satisfied npm package is reused; a matching standalone binary alone was not.
-    again = subprocess.run(["bash", "-eu", "-c", source], env=env, capture_output=True, text=True)
-    assert again.returncode == 0, again.stderr
-    assert len(calls.read_text().splitlines()) == 1
-
-
-def _install_script(*extra, home: Path, payload: Path):
-    return subprocess.run(
-        [
-            "bash",
-            "app/runtime/remote_install.sh",
-            "/srv/project",
-            "/usr/local/bin/opencode",
-            "22.23.3",
-            "1.18.35",
-            "https://registry.example.invalid",
-            str(payload),
-            "op123",
-            *extra,
-        ],
-        capture_output=True,
-        text=True,
-        env={**os.environ, "HOME": str(home)},
-        timeout=20,
-    )
-
-
-@pytest.mark.skipif(sys.platform != "linux", reason="remote_install.sh 只支持 Linux")
-def test_install_script_rejects_python_below_3_11(tmp_path):
-    payload = tmp_path / "payload.json"
-    payload.write_text("{}")
-    result = _install_script(str(tmp_path / "missing-python"), home=tmp_path, payload=payload)
-    assert result.returncode != 0
-    assert "需要 Python ≥3.11" in result.stderr
-    assert "apt-get" not in result.stderr + result.stdout
-    assert "nodejs.org" not in result.stderr + result.stdout
-
-
-@pytest.mark.skipif(sys.platform != "linux", reason="remote_install.sh 只支持 Linux")
-def test_install_script_rejects_incomplete_selected_python_without_installing_packages(tmp_path):
-    bindir = tmp_path / "bin"
-    bindir.mkdir()
-    python = bindir / "python3.12"
-    python.write_text(
-        "#!/bin/sh\n"
-        "if [ \"$1\" = \"-\" ]; then exec /usr/bin/python3 \"$@\"; fi\n"
-        "for arg in \"$@\"; do\n"
-        "  case \"$arg\" in\n"
-        "    *ensurepip*) exit 1 ;;\n"
-        "    *print*) printf '3.12\\n'; exit 0 ;;\n"
-        "  esac\n"
-        "done\n"
-        "exit 0\n"
-    )
-    python.chmod(0o755)
-    apt_log = tmp_path / "apt.log"
-    apt = bindir / "apt-get"
-    apt.write_text("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$APT_LOG\"\nexit 0\n")
-    apt.chmod(0o755)
-    payload = tmp_path / "payload.json"
-    payload.write_text(
-        json.dumps(
-            {
-                "action": "deploy",
-                "environment_id": 1,
-                "opencode_server_port": 4096,
-                "config_path": str(tmp_path / "opencode.jsonc"),
-            }
-        )
-    )
-    env = {
-        **os.environ,
-        "HOME": str(tmp_path),
-        "PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}",
-        "APT_LOG": str(apt_log),
-    }
-    result = subprocess.run(
-        [
-            "bash",
-            "app/runtime/remote_install.sh",
-            "/srv/project",
-            "/usr/local/bin/opencode",
-            "22.23.3",
-            "1.18.35",
-            "https://registry.example.invalid",
-            str(payload),
-            "op123",
-            str(python),
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-        timeout=20,
-    )
-    assert result.returncode != 0
-    assert "选定的 Python 缺少 SSL、venv 或 ensurepip" in result.stderr
-    assert "nodejs.org" not in result.stderr + result.stdout
-    assert not apt_log.exists()
-
-
 def _agent_install_worker(monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "remote_python", "/usr/bin/python3.12")
@@ -538,6 +367,11 @@ def _agent_install_worker(monkeypatch):
         opencode_path="/usr/local/bin/opencode",
     )
     worker = RemoteProvisioner(environment, {"id": "op", "action": "deploy"})
+    worker.home = "/root"
+    worker.config_path = "/etc/nexus/opencode/7/opencode.jsonc"
+    worker._manage_process = AsyncMock()
+    worker._native_idle = AsyncMock(return_value=True)
+    worker._wait_opencode_ready = AsyncMock()
     calls = []
 
     class SSH:
@@ -586,13 +420,13 @@ async def test_failed_venv_does_not_rotate_the_worker_token(monkeypatch):
         return None
 
     with pytest.raises(RuntimeError, match="pip failed"):
-        await worker._install_units(emit)
+        await worker._install_worker(emit)
     assert not any(item == "enroll" for item in calls)
     assert not any(isinstance(item, str) and item.endswith(".env") for item in calls)
     pip = next(item for item in calls if isinstance(item, tuple) and "pip install" in item[1])
     assert pip[0] == 300
     assert pip[1].startswith("/usr/bin/python3.12 -m venv /opt/nexus/workers/7/venv && ")
-    assert "-i https://pypi.example.invalid/simple " in pip[1]
+    assert "--index-url https://pypi.example.invalid/simple " in pip[1]
 
 
 @pytest.mark.asyncio
@@ -609,7 +443,7 @@ async def test_enroll_happens_after_the_venv_and_writes_the_token(monkeypatch):
     async def emit(_event):
         return None
 
-    await worker._install_units(emit)
+    await worker._install_worker(emit)
     pip_at = next(i for i, item in enumerate(calls) if isinstance(item, tuple) and "pip install" in item[1])
     enroll_at = calls.index("enroll")
     token_at = next(
@@ -617,60 +451,6 @@ async def test_enroll_happens_after_the_venv_and_writes_the_token(monkeypatch):
     )
     assert pip_at < enroll_at < token_at
     assert calls[pip_at][0] == 300
-
-
-@pytest.mark.parametrize("existing_mode", [None, 0o700])
-@pytest.mark.asyncio
-async def test_install_units_does_not_chmod_existing_systemd_dir(monkeypatch, tmp_path, existing_mode):
-    from app.runtime import remote_provisioning
-
-    secret_dir = tmp_path / "etc-nexus"
-    systemd_dir = tmp_path / "systemd"
-    if existing_mode is not None:
-        systemd_dir.mkdir()
-        systemd_dir.chmod(existing_mode)
-    monkeypatch.setattr(remote_provisioning, "WORKER_SECRET_DIR", str(secret_dir))
-    monkeypatch.setattr(remote_provisioning, "SYSTEMD_UNIT_DIR", str(systemd_dir))
-
-    worker, _calls = _agent_install_worker(monkeypatch)
-    executed: list[str] = []
-
-    async def command(self, text, timeout=30):
-        if str(tmp_path) in text and text.startswith(("install -d ", "test -d ")):
-            executed.append(text)
-            result = subprocess.run(["bash", "-c", text], capture_output=True, text=True)
-            assert result.returncode == 0, result.stderr
-            return result.stdout
-        return ""
-
-    async def unchanged(*_args, **_kwargs):
-        return False
-
-    async def safe(*_args, **_kwargs):
-        return None
-
-    async def idle(*_args, **_kwargs):
-        return True
-
-    async def credentials(_path):
-        return "wtk_existing", "wrk_existing"
-
-    monkeypatch.setattr(worker, "_command", command.__get__(worker, RemoteProvisioner))
-    monkeypatch.setattr(worker, "_write_atomic_if_changed", unchanged)
-    monkeypatch.setattr(worker, "_ensure_safe", safe)
-    monkeypatch.setattr(worker, "_native_idle", idle)
-    monkeypatch.setattr(worker, "_existing_worker_credentials", credentials)
-
-    async def emit(_event):
-        return None
-
-    await worker._install_units(emit)
-
-    assert secret_dir.stat().st_mode & 0o777 == 0o700
-    expected = existing_mode if existing_mode is not None else 0o755
-    assert systemd_dir.stat().st_mode & 0o777 == expected
-    assert any("install -d -m 700" in item and str(secret_dir) in item for item in executed)
-    assert not any("install -d -m 700" in item and str(systemd_dir) in item for item in executed)
 
 
 class _AtomicLocalSSH:
@@ -884,6 +664,8 @@ async def _probe_worker(tmp_path):
     env, op = await reserve(await employee())
     worker = RemoteProvisioner(env, op)
     worker.home = str(tmp_path)
+    worker.python_interpreter = str(tmp_path / "python")
+    worker.target_model = "nexus-gateway/probe-model"
     worker.config_path = str(tmp_path / "opencode.jsonc")
     Path(worker.config_path).write_text("{}", encoding="utf-8")
     return worker
@@ -907,8 +689,8 @@ async def test_probe_gateway_uses_environment_node_without_global_node(tmp_path)
     empty_bin.mkdir()
     worker.ssh = _ProbeLocalSSH({"PATH": str(empty_bin), "HOME": str(tmp_path)})
     log = tmp_path / "invoked.log"
-    node = _probe_node_path(tmp_path, worker)
-    _write_probe_node(node, log, "probe-ok")
+    node = Path(worker.python_interpreter)
+    _write_probe_node(node, log, json.dumps({"status":200,"body":{"data":[{"id":"probe-model"}]}}))
     steps = []
 
     async def emit(step):
@@ -917,7 +699,7 @@ async def test_probe_gateway_uses_environment_node_without_global_node(tmp_path)
     await worker._probe_gateway(emit)
 
     assert log.read_text(encoding="utf-8").splitlines() == [str(node)]
-    assert steps[-1]["detail"] == "probe-ok"
+    assert steps[-1]["detail"] == "模型中转认证与模型路由正常"
 
 
 @pytest.mark.asyncio
@@ -943,7 +725,7 @@ async def test_probe_gateway_fails_without_environment_node_and_ignores_global(
 @pytest.mark.asyncio
 async def test_probe_gateway_fails_when_home_is_unknown(tmp_path):
     worker = await _probe_worker(tmp_path)
-    worker.home = None
+    worker.config_path = None
     global_bin = tmp_path / "global-bin"
     global_log = tmp_path / "global.log"
     _write_probe_node(global_bin / "node", global_log, "global-node")
@@ -953,7 +735,7 @@ async def test_probe_gateway_fails_when_home_is_unknown(tmp_path):
     async def emit(step):
         steps.append(step)
 
-    with pytest.raises(RuntimeError, match="远程用户目录"):
+    with pytest.raises(RuntimeError, match="尚未准备 OpenCode 配置"):
         await worker._probe_gateway(emit)
 
     assert not global_log.exists()

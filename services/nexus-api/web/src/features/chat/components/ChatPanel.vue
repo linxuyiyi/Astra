@@ -39,7 +39,11 @@
           <div v-if="senderLabel(message)" class="msg-sender-name muted">{{ senderLabel(message) }}</div>
           <details v-for="(thought, index) in message.thinking || []" :key="`thinking-${index}`" class="tool-card"><summary>思考过程</summary><pre>{{ thought }}</pre></details>
           <details v-for="hint in message.hints || []" :key="hint.id" class="tool-card"><summary>{{ hint.source }}</summary><pre>{{ hint.text }}</pre></details>
-          <div v-if="!message.text && !message.tools?.length && !message.thinking?.length && message.finished_at === null" class="bubble muted">正在生成…</div>
+          <div
+            v-if="isAssistantMessageRunning(message) && !message.text && !message.tools?.length
+              && !message.thinking?.length && !message.hints?.length && !message.data?.length && !message.attachments?.length"
+            class="bubble muted"
+          >正在生成…</div>
           <div v-if="message.text" class="bubble markdown" v-html="renderMarkdown(message.text)" />
           <template v-for="tool in message.tools || []" :key="tool.id">
             <HitlCard v-if="tool.state === 'asking'" :tool="asLiveTool(tool)" />
@@ -111,7 +115,7 @@
         </div>
       </div>
       <div
-        v-if="runtime.streaming && !state.notice && !state.messages.some(message => message.finished_at === null)"
+        v-if="runtime.streaming && !state.notice && !state.messages.some(isAssistantMessageRunning)"
         class="msg"
         data-testid="streaming-placeholder"
       >
@@ -309,6 +313,7 @@ import type { DataBlock } from "@agentscope-ai/agentscope/message";
 import type { Attachment, ChatMessage, Employee } from "@/types";
 import { ChatRuntime, imageFile } from "../ChatRuntime";
 import { renderMarkdown, shouldCollapse } from "../markdown";
+import { isAssistantMessageRunning } from "../messageFormat";
 import type { ChatSessionState, ChatTarget, LiveTool } from "../types";
 import { formatClock, useAsrRecorder } from "../useAsrRecorder";
 import HitlCard from "./HitlCard.vue";

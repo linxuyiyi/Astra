@@ -3,6 +3,8 @@
  * (`formatNumber` / `formatTime`) for bubble footers.
  */
 
+import type { ChatMessage } from "@/types";
+
 export function formatNumber(num: number): string {
   if (num < 1000) return num.toLocaleString();
   const units = [
@@ -49,6 +51,11 @@ export function messagePlainText(text: string | undefined | null): string {
 /** Island: explicit `finished_at === null` ⇒ running; missing ⇒ legacy finished. */
 export function isMessageRunning(finishedAt: string | null | undefined): boolean {
   return finishedAt === null;
+}
+
+/** 原生用户消息也可能没有 finished_at；它不代表员工正在回复。 */
+export function isAssistantMessageRunning(message: Pick<ChatMessage, "sender" | "sender_type" | "finished_at">): boolean {
+  return message.sender !== "user" && message.sender_type !== "system" && isMessageRunning(message.finished_at);
 }
 
 export function messageElapsedSeconds(opts: {

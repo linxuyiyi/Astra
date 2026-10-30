@@ -1,0 +1,133 @@
+{
+  "release": "517fb35a0ab010ddabd3524d5e45a3964dafbc48",
+  "health": {
+    "status": "ok",
+    "product": "nexus",
+    "version": "1.4.9"
+  },
+  "runtime": {
+    "agentscope_version": "2.0.10",
+    "configured": true,
+    "reachable": true,
+    "agentscope_user_id": "nexus"
+  },
+  "schema_revision": "0006_employee_avatars",
+  "celery": {
+    "ping": {
+      "celery@qa-worker-experience": {
+        "ok": "pong"
+      }
+    },
+    "active": {
+      "celery@qa-worker-experience": 0
+    },
+    "reserved": {
+      "celery@qa-worker-experience": 0
+    }
+  },
+  "processes": {
+    "gateway": {
+      "pid": 52134,
+      "pgid": 52134,
+      "create_time": "1793324768.326",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": 18511,
+      "alive": true
+    },
+    "library-mcp": {
+      "pid": 52137,
+      "pgid": 52137,
+      "create_time": "1793324768.861",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": 18512,
+      "alive": true
+    },
+    "task-mcp": {
+      "pid": 52187,
+      "pgid": 52187,
+      "create_time": "1793324879.891",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": 18502,
+      "alive": true
+    },
+    "schedule-mcp": {
+      "pid": 52188,
+      "pgid": 52188,
+      "create_time": "1793324880.662",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": 18503,
+      "alive": true
+    },
+    "agent": {
+      "pid": 52191,
+      "pgid": 52191,
+      "create_time": "1793324881.180",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/agent-service",
+      "port": 18500,
+      "alive": true
+    },
+    "api": {
+      "pid": 56506,
+      "pgid": 56506,
+      "create_time": "1793336011.372",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": 18520,
+      "alive": true
+    },
+    "celery-worker": {
+      "pid": 52193,
+      "pgid": 52193,
+      "create_time": "1793324883.537",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": null,
+      "alive": true
+    },
+    "celery-beat": {
+      "pid": 52194,
+      "pgid": 52194,
+      "create_time": "1793324883.541",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+      "port": null,
+      "alive": true
+    },
+    "asr": {
+      "pid": 52851,
+      "pgid": 52851,
+      "create_time": "1793325792.106",
+      "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-asr",
+      "port": 19899,
+      "alive": true
+    }
+  },
+  "task": {
+    "id": "T-20261030-A2B360",
+    "status": "SUCCEEDED",
+    "finished_at": "2026-10-30T01:58:17.594342Z",
+    "waiting_reason": null,
+    "runtime_connection": "CONNECTED"
+  },
+  "worker": {
+    "id": "qa-worker-experience-20261023",
+    "status": "IDLE",
+    "current_task_count": 0,
+    "channel_health": {
+      "runtime_engine": "opencode",
+      "runtime_reachable": true,
+      "worker_online": true,
+      "opencode_reachable": true,
+      "repository_bound": true,
+      "executing": false,
+      "waiting_human": false,
+      "availability": "AVAILABLE"
+    }
+  },
+  "history_message_count": 11,
+  "history_running": false,
+  "asset": {
+    "path": "/assets/index-DFBq2DU2.js",
+    "sha256": "39cef583c7588a43004fd0cfc52c8bf29d333250c8d083cb78776e1d1b76a57c",
+    "matches_disk": true
+  },
+  "redis_ping": true,
+  "verified_at": "2026-10-30T13:02:13.334213+08:00"
+}

@@ -1,0 +1,8 @@
+{
+  "status_code": 200,
+  "elapsed_seconds": 0.55,
+  "source": "synthesized speech; real local ASR; no microphone recording",
+  "result": {
+    "text": "This is a deployment test, 17 plus 25 equals 42."
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "conversation": "conv_65ef8ef1446e",
+  "is_running": false,
+  "last_messages": [
+    {
+      "id": "msg_edd4e765a142",
+      "role": "user",
+      "name": "deployment-e2e-20261030",
+      "finished_at": null,
+      "finished_reason": null,
+      "created_at": "2026-10-30T09:51:12.538897",
+      "usage": null,
+      "text": "仅验证新部署的对话链路，不调用工具、不创建任务。请只回复 NEXUS_149_REAL_CHAT_OK，并计算 17+25。"
+    },
+    {
+      "id": "5e39a41c780a409a9dc5b67580ceee59",
+      "role": "assistant",
+      "name": "A",
+      "finished_at": "2026-10-30T09:51:14.154714",
+      "finished_reason": "completed",
+      "created_at": "2026-10-30T09:51:12.617609",
+      "usage": {
+        "input_tokens": 6717,
+        "output_tokens": 92,
+        "cache_input_tokens": 0,
+        "cache_creation_input_tokens": 0
+      },
+      "text": "NEXUS_149_REAL_CHAT_OK\n\n17 + 25 = 42"
+    },
+    {
+      "id": "msg_5aacae3ed30b",
+      "role": "user",
+      "name": "deployment-e2e-20261030",
+      "finished_at": null,
+      "finished_reason": null,
+      "created_at": "2026-10-30T09:52:12.580467",
+      "usage": null,
+      "text": "这是停止按钮验收，不调用工具。请从 1 起逐行输出到 1000，每行写一句简短的测试说明，不要省略或总结。"
+    },
+    {
+      "id": "39019f589d20474cb5e30dccd69f052d",
+      "role": "assistant",
+      "name": "A",
+      "finished_at": "2026-10-30T09:52:12.767274",
+      "finished_reason": "interrupted",
+      "created_at": "2026-10-30T09:52:12.629325",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_input_tokens": 0,
+        "cache_creation_input_tokens": 0
+      },
+      "text": ""
+    }
+  ]
+}

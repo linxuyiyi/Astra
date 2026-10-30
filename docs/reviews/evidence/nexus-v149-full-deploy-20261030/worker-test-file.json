@@ -1,0 +1,4 @@
+{
+  "type": "text",
+  "content": "import json\nimport unittest\n\n\nclass TestNexus149JsonUtf8(unittest.TestCase):\n    def test_chinese_dict_roundtrip(self):\n        original = {\n            \"任务\": \"对话链路部署验收\",\n            \"状态\": \"通过\",\n            \"数据\": {\"序号\": 149, \"说明\": \"JSON 中文 UTF-8 往返测试\"},\n            \"列表\": [\"中文\", \"emoji-无\", \"符号：，。！？\"],\n        }\n\n        raw = json.dumps(original, ensure_ascii=False).encode(\"utf-8\")\n        restored = json.loads(raw.decode(\"utf-8\"))\n\n        self.assertEqual(restored, original)\n        text = raw.decode(\"utf-8\")\n        self.assertIn(\"任务\", text)\n        self.assertNotIn(\"\\\\u4e\", text)\n        print(\"NEXUS_149_WORKER_OK\")\n\n\nif __name__ == \"__main__\":\n    unittest.main(verbosity=2)"
+}

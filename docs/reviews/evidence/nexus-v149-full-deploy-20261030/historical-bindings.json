@@ -1,0 +1,78 @@
+{
+  "directory_count": 16,
+  "persisted_agents": 5,
+  "missing_bindings": [
+    {
+      "id": "emp_b2f49ed10212",
+      "name": "星244fc2",
+      "agentscope_agent_id": "1413c3de8ac44f2eb55ffd76814557ba",
+      "model_route_id": ""
+    },
+    {
+      "id": "emp_022837b0cb18",
+      "name": "知244fc2",
+      "agentscope_agent_id": "2d494105d91840aabc210e0559b1e288",
+      "model_route_id": ""
+    },
+    {
+      "id": "emp_5b74fb26d7ef",
+      "name": "星551612",
+      "agentscope_agent_id": "d291399b4e144f1bbecd41c0c12bafaa",
+      "model_route_id": ""
+    },
+    {
+      "id": "emp_f1e52cc7f768",
+      "name": "知551612",
+      "agentscope_agent_id": "bd69c91f7e0c4485859b4e841563cddb",
+      "model_route_id": ""
+    },
+    {
+      "id": "emp_c87ba2e75783",
+      "name": "验收工程师1016",
+      "agentscope_agent_id": "087d945ab37f42a8b2c1e6bff83cd364",
+      "model_route_id": ""
+    },
+    {
+      "id": "emp_69c29d38a757",
+      "name": "星937531",
+      "agentscope_agent_id": "a37276c985cf40fb987063a580bfe5f5",
+      "model_route_id": ""
+    },
+    {
+      "id": "emp_124a5c861f26",
+      "name": "知937531",
+      "agentscope_agent_id": "bc3be269cee544d0a8e974171a03bf8c",
+      "model_route_id": ""
+    },
+    {
+      "id": "emp_7863ff18a640",
+      "name": "验收机器人",
+      "agentscope_agent_id": "72bdf5306842442f9d3b3840f5ed6b27",
+      "model_route_id": "gr_ac311277ec84"
+    },
+    {
+      "id": "emp_815a4c618515",
+      "name": "DeepSeek 验收员工",
+      "agentscope_agent_id": "7f59a28b8f664d53aff34ab8f24a7e9a",
+      "model_route_id": "gr_0a9df224112e"
+    },
+    {
+      "id": "emp_cc1620f70577",
+      "name": "阿明",
+      "agentscope_agent_id": "052d26aaa37c441183c5601a58d53b42",
+      "model_route_id": "gr_0a9df224112e"
+    },
+    {
+      "id": "emp_2ad156fd7a51",
+      "name": "阿亮",
+      "agentscope_agent_id": "f764493ae13c4c48a568ba7b770d38d5",
+      "model_route_id": "gr_0a9df224112e"
+    },
+    {
+      "id": "emp_6f7a0cec2f89",
+      "name": "E2E验收员工",
+      "agentscope_agent_id": "e7d6d8b8badb4324839efa66dcb8d32a",
+      "model_route_id": "gr_0a9df224112e"
+    }
+  ]
+}

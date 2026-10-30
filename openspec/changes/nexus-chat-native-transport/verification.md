@@ -18,3 +18,10 @@
 `openspec validate nexus-chat-native-transport --strict` 通过。当前仓库/可用技能未提供可执行的 /opsx-verify；本文件记录逐 Scenario 核对，不把 strict validate 当作 E2E。
 
 真实环境 18120 的 AgentScope reachable=false。模型、实际任务工具/Worker、远端 Linux、ASR 麦克风和生产稳定性仍未验收，不据此归档为完成真实运行验收。完整结果与截图：docs/reviews/nexus-chat-window-review-20261030.md。
+
+
+## 后续真实部署补验（2026-10-30）
+
+在既有 18520 本机环境部署后，AgentScope 2.0.10 reachable=true。真实私聊、停止、B/C 群聊、附件单发、Task MCP→Linux Worker→业务确认→资源释放，以及 API 重启后的历史与新推理均已验证。ASR 恢复后通过真实本地识别。完整证据见 docs/reviews/nexus-v149-full-deploy-20261030.md。
+
+前述18120不可达和受控上游报告是此前环境的历史事实，不再作为本次真实补验的结论；公司 MySQL / 长稳、12条历史缺失 Agent 绑定与可选 Ollama 不可用仍未解决，不将其计为通过。

@@ -1,0 +1,8 @@
+.................................................                        [100%]
+=============================== warnings summary ===============================
+tests/nexus/test_api.py::test_health_and_runtime_report_pinned_version
+  /Users/niuniu/程序/Astra/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:1216: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+49 passed, 1 warning in 3.14s

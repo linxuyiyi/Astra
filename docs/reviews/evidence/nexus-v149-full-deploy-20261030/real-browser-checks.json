@@ -1,0 +1,47 @@
+[
+  {
+    "case": "真实私聊：AgentScope→Nexus网关→模型，返回标记与42",
+    "pass": true
+  },
+  {
+    "case": "真实停止：REPLY_END=interrupted，is_running=false",
+    "pass": true
+  },
+  {
+    "case": "真实群聊创建与普通消息保持空闲",
+    "pass": true
+  },
+  {
+    "case": "真实群聊 B/C 两轮模型回复，讨论 completed",
+    "pass": true
+  },
+  {
+    "case": "数字员工实际创建/派发 Linux Worker，原生 bash 与文件证据验证 unittest 通过",
+    "pass": true,
+    "task_id": "T-20261030-A2B360"
+  },
+  {
+    "case": "真实首页16名员工分页12+4，默认办公室全景",
+    "pass": true
+  },
+  {
+    "case": "真实附件单独发送：正文预览、模型回复，用户气泡无永久生成提示",
+    "pass": true
+  },
+  {
+    "case": "真实任务原生工作台加载文件差异、Shell命令与真实输出",
+    "pass": true
+  },
+  {
+    "case": "数字图书馆入口与既有知识列表正常",
+    "pass": true
+  },
+  {
+    "case": "API网关与配置中心正常打开，保留原配置",
+    "pass": true
+  },
+  {
+    "case": "受控重启 API 后历史保持，B 新会话真实模型返回 RESTART_OK",
+    "pass": true
+  }
+]

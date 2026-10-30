@@ -1,0 +1,10 @@
+{
+  "old_api_pid": 52192,
+  "new_api_pid": 56506,
+  "release": "517fb35a0ab010ddabd3524d5e45a3964dafbc48",
+  "identity": {
+    "pgid": 56506,
+    "cwd": "/Users/niuniu/.codex/worktrees/nexus-chat-window-e2e/Astra/services/nexus-api",
+    "create_time": "1793336011.372"
+  }
+}

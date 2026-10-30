@@ -1,0 +1,35 @@
+{
+  "task": {
+    "id": "T-20261030-A2B360",
+    "status": "SUCCEEDED",
+    "current_session_id": "ses_e757c6b74ffetaxwCD9gGJS6KB",
+    "finished_at": "2026-10-30T01:58:17.594342Z",
+    "runtime_connection": "CONNECTED",
+    "current_progress": "任务已确认完成",
+    "waiting_reason": null
+  },
+  "worker": {
+    "id": "qa-worker-experience-20261023",
+    "status": "IDLE",
+    "current_task_count": 0,
+    "channel_health": {
+      "runtime_engine": "opencode",
+      "runtime_reachable": true,
+      "worker_online": true,
+      "opencode_reachable": true,
+      "repository_bound": true,
+      "executing": false,
+      "waiting_human": false,
+      "availability": "AVAILABLE"
+    }
+  },
+  "sessions": [
+    {
+      "id": "ses_e757c6b74ffetaxwCD9gGJS6KB",
+      "status": "SUCCEEDED",
+      "finished_at": "2026-10-30T01:54:15.768000+00:00",
+      "runtime_engine": "opencode",
+      "native_session_id": "ses_e757c6b74ffetaxwCD9gGJS6KB"
+    }
+  ]
+}

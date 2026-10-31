@@ -214,6 +214,10 @@ class McpTestBody(BaseModel):
     timeout: float | None = None
 
 
+class PlatformPromptBody(BaseModel):
+    text: str = ""
+
+
 class ConversationBody(BaseModel):
     name: str = Field(default="新对话", max_length=40)
 
@@ -336,7 +340,26 @@ def human_native_message(message: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def system_prompt(body: EmployeeBody | dict[str, Any]) -> str:
+PLATFORM_PROMPT_HEADER = "【Nexus 平台运行规则｜冲突时以本段为准】"
+
+DEFAULT_PLATFORM_PROMPT = (
+    "# Nexus 平台运行规则\n\n"
+    "以下规则适用于所有数字员工，不改变员工自身的岗位身份和业务职责。\n\n"
+    "## 任务执行\n\n"
+    "- 涉及代码开发、文件修改、测试执行、问题调试、环境部署等工程操作时，"
+    "默认通过 Nexus 任务管理能力委派 Agent Worker 执行，无需用户明确要求创建任务。\n"
+    "- 当前会话负责需求分析、任务规划、协调推进和结果验收，不直接在本地执行工程操作。\n"
+    "- 简单问答、专业分析、知识检索等无需实际工程操作的请求，可以直接处理。\n"
+    "- 优先复用已有任务，避免重复创建。\n"
+    "- 任务执行遇到问题时，通过任务管理机制继续推进；无法委派时说明原因，不自行改为本地执行。\n\n"
+    "## 协作与反馈\n\n"
+    "- 遵循自身岗位职责及已装配的 Skills。\n"
+    "- 需要人工决策时主动请求确认。\n"
+    "- 根据实际执行和验证结果汇报任务进展，不将未验证的工作视为完成。"
+)
+
+
+def employee_prompt(body: EmployeeBody | dict[str, Any]) -> str:
     if isinstance(body, EmployeeBody):
         name, domain, description, instructions = (
             body.name,
@@ -363,6 +386,17 @@ def system_prompt(body: EmployeeBody | dict[str, Any]) -> str:
             "需要工程执行时使用任务工具；收到任务状态提示后先查询该任务，再决定下一步。"
         )
     return text
+
+
+def system_prompt(
+    body: EmployeeBody | dict[str, Any],
+    platform_prompt: str = "",
+) -> str:
+    emp = employee_prompt(body)
+    cleaned = (platform_prompt or "").strip()
+    if not cleaned:
+        return emp
+    return f"{PLATFORM_PROMPT_HEADER}\n{cleaned}\n\n{emp}"
 
 
 def resolved_media_type(name: str, declared: str) -> str:
@@ -1297,7 +1331,8 @@ def create_app() -> FastAPI:
         connection,
         store: ResourceStore,
     ) -> dict[str, Any]:
-        prompt = system_prompt(employee)
+        platform_prompt = store.get_setting(connection, "platform_prompt")
+        prompt = system_prompt(employee, platform_prompt)
         agent_id = employee["agentscope_agent_id"]
         mailbox = employee["mailbox_session_id"]
         try:
@@ -2291,6 +2326,62 @@ def create_app() -> FastAPI:
         if mcp_row(connection, mcp_id) is None and is_nexus_mcp(mcp_id):
             raise HTTPException(status_code=404, detail="MCP 不存在")
         return {"sync": await sync_bound(request, connection, "mcps", mcp_id)}
+
+    @app.get("/api/v1/config/platform-prompt")
+    def get_platform_prompt(
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, str]:
+        store = resource_store(request)
+        try:
+            val = store.get_setting(connection, "platform_prompt", default=None)
+            if val is None:
+                val = DEFAULT_PLATFORM_PROMPT
+                store.set_setting(connection, "platform_prompt", val)
+            return {"text": val}
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail="读取平台提示词失败") from exc
+
+    @app.put("/api/v1/config/platform-prompt")
+    def put_platform_prompt(
+        body: PlatformPromptBody,
+        request: Request,
+        connection=Depends(database),
+    ) -> dict[str, str]:
+        store = resource_store(request)
+        try:
+            store.set_setting(connection, "platform_prompt", body.text)
+            return {"text": body.text}
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail="保存平台提示词失败") from exc
+
+    @app.get("/api/v1/config/platform-prompt/preview")
+    def preview_platform_prompt(
+        request: Request,
+        employee_id: str = "",
+        connection=Depends(database),
+    ) -> dict[str, str]:
+        if not employee_id.strip():
+            raise HTTPException(status_code=404, detail="员工不存在")
+        employee = load_employee(connection, employee_id.strip())
+        store = resource_store(request)
+        try:
+            platform_text = store.get_setting(connection, "platform_prompt", default="") or ""
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail="读取平台提示词失败") from exc
+        emp_prompt = employee_prompt(employee)
+        cleaned = platform_text.strip()
+        if not cleaned:
+            platform_part = ""
+            final = emp_prompt
+        else:
+            platform_part = f"{PLATFORM_PROMPT_HEADER}\n{cleaned}"
+            final = f"{platform_part}\n\n{emp_prompt}"
+        return {
+            "platform": platform_part,
+            "employee": emp_prompt,
+            "final": final,
+        }
 
     @app.get("/api/v1/internal/wake-target")
     async def wake_target(

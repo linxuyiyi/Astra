@@ -325,13 +325,13 @@ class ResourceStore:
             raise ResourceError("MCP 凭据无法用当前主密钥解密", 500) from exc
 
     # -- 设置 -------------------------------------------------------------
-    def get_setting(self, connection, key: str) -> str:
+    def get_setting(self, connection, key: str, default: str | None = "") -> str | None:
         row = (
             connection.execute(sql_text("SELECT value FROM t_nexus_settings WHERE `key` = :p0"), {"p0": key})
             .mappings()
             .fetchone()
         )
-        return str(row["value"]) if row is not None else ""
+        return str(row["value"]) if row is not None else default
 
     def set_setting(self, connection, key: str, value: str) -> None:
         upsert_record(

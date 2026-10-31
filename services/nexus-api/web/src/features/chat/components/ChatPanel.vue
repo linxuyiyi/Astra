@@ -235,6 +235,29 @@
             <button v-if="asrState === 'error'" type="button" class="asr-text-btn asr-text-btn--primary" @click="asrRetry()">重试</button>
           </div>
 
+          <div
+            v-if="mentionOpen && mentionMatches.length"
+            class="compose-mentions"
+            role="listbox"
+            aria-label="提及数字员工"
+            data-testid="compose-mentions"
+          >
+            <button
+              v-for="(member, index) in mentionMatches"
+              :key="member.id"
+              type="button"
+              class="compose-mention"
+              :class="{ 'is-active': index === mentionIndex }"
+              role="option"
+              :aria-selected="index === mentionIndex"
+              :data-testid="`compose-mention-${member.id}`"
+              @mousedown.prevent="chooseMention(member)"
+              @mouseenter="mentionIndex = index"
+            >
+              <EmployeeAvatar :avatar="member.avatar || ''" :size="22" />
+              <span class="compose-mention__name">{{ member.name }}</span>
+            </button>
+          </div>
           <div class="compose-row">
             <textarea
               ref="inputEl"
@@ -245,6 +268,10 @@
               aria-label="消息输入"
               data-testid="compose-input"
               @keydown="onKeydown"
+              @keyup="onComposeKeyup"
+              @input="updateMention"
+              @click="updateMention"
+              @blur="onComposeBlur"
               @paste="onPaste"
             />
             <div class="compose-actions" data-testid="compose-actions">
@@ -298,7 +325,11 @@
           </div>
         </div>
       </div>
-      <div class="compose-hint muted" data-testid="compose-hint">Enter 发送 · Shift+Enter 换行 · ⌘K 聚焦输入</div>
+      <div class="compose-hint muted" data-testid="compose-hint">
+        Enter 发送 · Shift+Enter 换行
+        <template v-if="target?.kind === 'group'"> · @ 提及员工</template>
+        · ⌘K 聚焦输入
+      </div>
       <input ref="fileInput" type="file" multiple hidden accept="image/*,application/pdf,text/*" @change="onFileChange" />
     </div>
   </div>
@@ -313,6 +344,7 @@ import type { DataBlock } from "@agentscope-ai/agentscope/message";
 import type { Attachment, ChatMessage, Employee } from "@/types";
 import { ChatRuntime, imageFile } from "../ChatRuntime";
 import { renderMarkdown, shouldCollapse } from "../markdown";
+import { insertMention, mentionCandidates, mentionTrigger, type MentionCandidate } from "../mentions";
 import { isAssistantMessageRunning } from "../messageFormat";
 import type { ChatSessionState, ChatTarget, LiveTool } from "../types";
 import { formatClock, useAsrRecorder } from "../useAsrRecorder";
@@ -361,6 +393,20 @@ const placeholder = computed(() =>
   props.target?.kind === "group"
     ? "消息，@员工…"
     : "发送消息…",
+);
+const mentionOpen = ref(false);
+const mentionQuery = ref("");
+const mentionIndex = ref(0);
+let mentionBlurTimer: ReturnType<typeof setTimeout> | null = null;
+const mentionMembers = computed<MentionCandidate[]>(() => {
+  if (props.target?.kind !== "group") return [];
+  const enabled = new Map(props.employees.map(employee => [employee.id, employee.enabled]));
+  return (props.target.channel?.members || [])
+    .filter(member => member.member_type === "employee" && enabled.get(member.employee_id) !== false)
+    .map(member => ({ id: member.member_id, name: member.name, avatar: member.avatar }));
+});
+const mentionMatches = computed(() =>
+  mentionOpen.value ? mentionCandidates(mentionMembers.value, mentionQuery.value).slice(0, 8) : [],
 );
 const sessionKey = computed(() => props.state.key);
 const asrEnabled = computed(() => canType.value);
@@ -439,11 +485,76 @@ function asLiveTool(tool: { id: string; name: string; input: string; output: str
 }
 
 async function doSend() {
+  closeMention();
   followLatest.value = true;
   await props.runtime.send(props.state.draft, props.state.draftFiles);
   await nextTick();
   scrollBottom();
   inputEl.value?.focus();
+}
+
+function clearMentionBlur() {
+  if (mentionBlurTimer) {
+    clearTimeout(mentionBlurTimer);
+    mentionBlurTimer = null;
+  }
+}
+
+function closeMention() {
+  clearMentionBlur();
+  mentionOpen.value = false;
+  mentionQuery.value = "";
+  mentionIndex.value = 0;
+}
+
+function updateMention() {
+  clearMentionBlur();
+  const node = inputEl.value;
+  if (!node || props.target?.kind !== "group") {
+    mentionOpen.value = false;
+    return;
+  }
+  const trigger = mentionTrigger(node.value, node.selectionStart ?? node.value.length);
+  if (!trigger) {
+    mentionOpen.value = false;
+    mentionQuery.value = "";
+    return;
+  }
+  mentionQuery.value = trigger.query;
+  mentionIndex.value = 0;
+  mentionOpen.value = mentionMembers.value.length > 0;
+}
+
+function onComposeKeyup(event: KeyboardEvent) {
+  // 上下选择、确认和关闭由 keydown 处理；keyup 不能重置选择位置。
+  if (["ArrowUp", "ArrowDown", "Enter", "Tab", "Escape"].includes(event.key)) return;
+  updateMention();
+}
+
+function onComposeBlur() {
+  clearMentionBlur();
+  mentionBlurTimer = setTimeout(() => {
+    mentionOpen.value = false;
+  }, 120);
+}
+
+function chooseMention(member: MentionCandidate) {
+  const node = inputEl.value;
+  if (!node) return;
+  const caret = node.selectionStart ?? props.state.draft.length;
+  const trigger = mentionTrigger(props.state.draft, caret);
+  if (!trigger) {
+    closeMention();
+    return;
+  }
+  const result = insertMention(props.state.draft, trigger, member.name, caret);
+  props.state.draft = result.text;
+  closeMention();
+  void nextTick(() => {
+    const next = inputEl.value;
+    next?.focus();
+    next?.setSelectionRange(result.caret, result.caret);
+  });
 }
 
 function pickFiles() {
@@ -491,9 +602,29 @@ function onPaste(event: ClipboardEvent) {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  // IME 组字中（isComposing / keyCode 229）不发送，Shift+Enter 换行。
-  if (event.key !== "Enter" || event.shiftKey) return;
+  // IME 组字中（isComposing / keyCode 229）不处理，交给输入法。
   if (event.isComposing || event.keyCode === 229) return;
+  const mentionCount = mentionMatches.value.length;
+  if (mentionOpen.value && mentionCount) {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      mentionIndex.value = (mentionIndex.value + delta + mentionCount) % mentionCount;
+      return;
+    }
+    if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      const member = mentionMatches.value[mentionIndex.value] ?? mentionMatches.value[0];
+      if (member) chooseMention(member);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMention();
+      return;
+    }
+  }
+  if (event.key !== "Enter" || event.shiftKey) return;
   event.preventDefault();
   if (canSend.value) void doSend();
 }
@@ -635,6 +766,7 @@ onMounted(() => {
   syncComposeHeight();
 });
 onBeforeUnmount(() => {
+  clearMentionBlur();
   window.removeEventListener("keydown", focusInput);
   messageBox.value?.removeEventListener("scroll", onMessagesScroll);
   messageBox.value?.removeEventListener("click", onCodeCopyClick);
@@ -783,6 +915,38 @@ onBeforeUnmount(() => {
   border-style: dashed;
 }
 .compose-hint { margin-top: 4px; font-size: 11px; width: 100%; max-width: 760px; }
+.compose-box { position: relative; }
+.compose-mentions {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 8px;
+  z-index: 5;
+  width: min(320px, calc(100% - 16px));
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid #d8e7de;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(32, 56, 48, 0.14);
+}
+.compose-mention {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink, #203830);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.compose-mention.is-active,
+.compose-mention:hover { background: #eef7f2; }
+.compose-mention__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .compose-row {
   display: flex;
   align-items: flex-end;

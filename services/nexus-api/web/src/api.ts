@@ -469,3 +469,34 @@ export async function scheduleMessages(id: string, sessionId: string, before = '
     { headers: headers(false) },
   ));
 }
+
+export type PlatformPromptPayload = { text: string };
+
+export type PlatformPromptPreview = {
+  platform: string;
+  employee: string;
+  final: string;
+};
+
+export async function getPlatformPrompt(): Promise<PlatformPromptPayload> {
+  return read(await fetch("/api/v1/config/platform-prompt", { headers: headers(false) }));
+}
+
+export async function savePlatformPrompt(text: string): Promise<PlatformPromptPayload> {
+  return read(
+    await fetch("/api/v1/config/platform-prompt", {
+      method: "PUT",
+      headers: headers(),
+      body: JSON.stringify({ text }),
+    }),
+  );
+}
+
+export async function previewPlatformPrompt(employeeId: string): Promise<PlatformPromptPreview> {
+  const q = encodeURIComponent(employeeId);
+  return read(
+    await fetch(`/api/v1/config/platform-prompt/preview?employee_id=${q}`, {
+      headers: headers(false),
+    }),
+  );
+}

@@ -11,6 +11,7 @@ import EmployeesView from "./views/EmployeesView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import AgentscopeView from "./views/settings/AgentscopeView.vue";
 import CategoryConfig from "./views/settings/CategoryConfig.vue";
+import PlatformPromptConfig from "./views/settings/PlatformPromptConfig.vue";
 import SkillResourcesView from "./views/settings/SkillResourcesView.vue";
 import McpResourcesView from "./views/settings/McpResourcesView.vue";
 import GatewayView from "./views/gateway/GatewayView.vue";
@@ -81,6 +82,7 @@ export const router = createRouter({
         { path: "skills", name: "settings-skills", component: SkillResourcesView },
         { path: "mcps", name: "settings-mcps", component: McpResourcesView },
         { path: "categories", name: "settings-categories", component: CategoryConfig },
+        { path: "platform-prompt", name: "settings-platform-prompt", component: PlatformPromptConfig },
         { path: "agentscope", name: "settings-agentscope", component: AgentscopeView },
       ],
     },

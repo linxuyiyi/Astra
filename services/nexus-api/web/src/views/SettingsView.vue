@@ -31,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import { Bot, Boxes, Calendar, Plug, Sparkles, Tags, Users } from "lucide-vue-next";
+import { Bot, Boxes, Calendar, Plug, ScrollText, Sparkles, Tags, Users } from "lucide-vue-next";
 import { computed } from "vue";
 import { RouterView, useRoute } from "vue-router";
 import { ElAside, ElCard, ElContainer, ElMain, ElMenu, ElMenuItem } from "element-plus";
@@ -44,6 +44,7 @@ const menuItems = [
   { id: "skills", label: "技能管理", path: "/settings/skills", icon: Sparkles },
   { id: "mcps", label: "MCP 管理", path: "/settings/mcps", icon: Plug },
   { id: "categories", label: "任务分类", path: "/settings/categories", icon: Tags },
+  { id: "platform-prompt", label: "平台提示词", path: "/settings/platform-prompt", icon: ScrollText },
   { id: "agentscope", label: "AgentScope", path: "/settings/agentscope", icon: Boxes },
 ];
 const activeMenu = computed(() => {

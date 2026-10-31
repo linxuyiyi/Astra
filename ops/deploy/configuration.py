@@ -199,8 +199,30 @@ def usable_address(value):
         return False
 
 
+def mcp_url(host: str, port: str, path: str = "/mcp") -> str:
+    """把监听地址和端口收敛成 AgentScope 使用的 URL；通配监听回落到回环。"""
+
+    address = str(host or "").strip() or "127.0.0.1"
+    if address in {"0.0.0.0", "::", "[::]"}:
+        address = "127.0.0.1"
+    if ":" in address and not address.startswith("["):
+        address = f"[{address}]"
+    return f"http://{address}:{port}{path}"
+
+
 def initialize(values, root, state, dialog, addresses=None):
     values = dict(values)
+    # 旧安装器生成过 MCP 共享 Bearer key；现在内网标准 HTTP MCP 不再使用。
+    # 先从旧环境文件里静默移除，避免升级时被当作未知参数而失败。
+    for key in (
+        "NEXUS_MCP_API_KEY",
+        "NEXUS_TASK_MCP_KEY",
+        "NEXUS_SCHEDULE_MCP_KEY",
+        "ASTRA_MCP_API_KEY",
+        "ASTRA_TASK_MCP_KEY",
+        "ASTRA_SCHEDULE_MCP_KEY",
+    ):
+        values.pop(key, None)
     # 无法判断的旧参数必须处理，不能因为文件存在就继续使用。
     obsolete = {
         "NEXUS_BIND_HOST",
@@ -280,8 +302,11 @@ def initialize(values, root, state, dialog, addresses=None):
         "NEXUS_API_PORT": "18120",
         "AGENTSCOPE_PORT": "18000",
         "ASTRA_SERVICE_GATEWAY_PORT": "18110",
+        "NEXUS_MCP_HOST": "127.0.0.1",
         "NEXUS_MCP_PORT": "18201",
+        "NEXUS_TASK_MCP_HOST": "127.0.0.1",
         "NEXUS_TASK_MCP_PORT": "18202",
+        "NEXUS_SCHEDULE_MCP_HOST": "127.0.0.1",
         "NEXUS_SCHEDULE_MCP_PORT": "18203",
         "NEXUS_DEPLOY_HTTPS_PORT": "443",
         "NEXUS_DEPLOY_WORKER_PORT": "18130",
@@ -347,9 +372,6 @@ def initialize(values, root, state, dialog, addresses=None):
         "ASTRA_GATEWAY_ENABLED": "true",
         "ASTRA_SERVICE_GATEWAY_HOST": "127.0.0.1",
         "AGENTSCOPE_HOST": "127.0.0.1",
-        "NEXUS_MCP_HOST": "127.0.0.1",
-        "NEXUS_TASK_MCP_HOST": "127.0.0.1",
-        "NEXUS_SCHEDULE_MCP_HOST": "127.0.0.1",
         "NEXUS_MCP_TRANSPORT": "streamable-http",
         "NEXUS_AGENTSCOPE_USER_ID": "nexus",
         "ASTRA_AGENTSCOPE_USER_ID": "nexus",
@@ -358,12 +380,6 @@ def initialize(values, root, state, dialog, addresses=None):
         "NEXUS_GATEWAY_OPENAI_BASE": "http://127.0.0.1:"
         + values["ASTRA_SERVICE_GATEWAY_PORT"]
         + "/v1",
-        "NEXUS_TASK_MCP_URL": "http://127.0.0.1:"
-        + values["NEXUS_TASK_MCP_PORT"]
-        + "/mcp",
-        "NEXUS_SCHEDULE_MCP_URL": "http://127.0.0.1:"
-        + values["NEXUS_SCHEDULE_MCP_PORT"]
-        + "/mcp",
         "NEXUS_RUNTIME_ENV_FILE": str(state / "nexus.env"),
     }
     expected["ASTRA_NEXUS_API_BASE"] = expected["NEXUS_API_BASE"]
@@ -381,10 +397,13 @@ def initialize(values, root, state, dialog, addresses=None):
             if chosen != value:
                 raise DeploymentError(f"{key} 尚未修正，部署停止")
         values[key] = value
+    # MCP 监听地址默认回环；AgentScope 分机部署时显式改为实际内网地址。
+    # AgentScope 只读取同一个 URL，避免 Nexus 与 AgentScope 各记一份。
+    for prefix in ("NEXUS_TASK_MCP", "NEXUS_SCHEDULE_MCP"):
+        host_key = prefix + "_HOST"
+        values[host_key] = str(values.get(host_key) or "127.0.0.1").strip() or "127.0.0.1"
+        values[prefix + "_URL"] = mcp_url(values[host_key], values[prefix + "_PORT"])
     for key in (
-        "NEXUS_MCP_API_KEY",
-        "NEXUS_TASK_MCP_KEY",
-        "NEXUS_SCHEDULE_MCP_KEY",
         "NEXUS_INTERNAL_KEY",
         "NEXUS_WORKER_GATEWAY_ADMIN_KEY",
         "NEXUS_GATEWAY_API_KEY",

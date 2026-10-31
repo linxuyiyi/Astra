@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import hmac
 from typing import Any, Literal
 
 from mcp.server.mcpserver import MCPServer
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from app.config.settings import Settings, get_settings
+from app.config.settings import get_settings
 from app.database import SessionLocal
 from app.task_tools import (
     TaskTools,
@@ -24,48 +23,17 @@ from app.task_tools import (
 )
 
 
-def presented_bearer(header: str | None) -> str:
-    value = (header or "").strip()
-    if len(value) < 7 or value[:7].lower() != "bearer ":
-        return ""
-    return value[7:].strip()
-
-
-def authenticate_mcp(headers, settings: Settings) -> str:
-    """共享密钥证明请求来自 Nexus 挂接的 Session。员工 id 必须同时存在。"""
-
-    expected = (settings.task_mcp_key or "").strip()
-    presented = presented_bearer(headers.get("authorization"))
-    if not expected or not presented or not hmac.compare_digest(presented, expected):
-        raise PermissionError("unauthorized")
-    employee = (headers.get("x-nexus-employee-id") or "").strip()
-    if not employee:
-        raise PermissionError("missing employee")
-    return employee
-
-
 class NexusIdentityMiddleware(BaseHTTPMiddleware):
+    """连接和工具发现只带入上下文，不要求群讨论或租约仍然存在。
+
+    AgentScope 在工作区挂接、列出 MCP 工具时也会请求这个服务；这些阶段
+    没有正在进行的业务操作，不能按工具调用去拒绝。真正的会话、员工、
+    讨论和日程归属校验由每个工具调用执行。
+    """
+
     async def dispatch(self, request, call_next):
         if request.url.path == "/health":
             return JSONResponse({"ok": True})
-        try:
-            employee = authenticate_mcp(request.headers, get_settings())
-        except PermissionError:
-            return JSONResponse({"ok": False, "error": "未授权"}, status_code=401)
-        from nexus_api.group_task_auth import authorize_task_source
-
-        try:
-            actor = await authorize_task_source(
-                request.headers.get("x-nexus-session-id", ""),
-                employee,
-                request.headers.get("x-nexus-channel-id", ""),
-                request.headers.get("x-nexus-discussion-id", ""),
-                request.headers.get("x-nexus-schedule-user-id", ""),
-                request.headers.get("x-nexus-schedule-agent-id", ""),
-                request.headers.get("x-nexus-conversation-id", ""),
-            )
-        except PermissionError:
-            return JSONResponse({"ok": False, "error": "群调用未授权"}, status_code=403)
         tokens = [
             (
                 nexus_schedule_user_id,
@@ -76,8 +44,12 @@ class NexusIdentityMiddleware(BaseHTTPMiddleware):
                 nexus_schedule_agent_id.set(request.headers.get("x-nexus-schedule-agent-id", "")),
             ),
             (nexus_discussion_id, nexus_discussion_id.set(request.headers.get("x-nexus-discussion-id", ""))),
-            (nexus_actor_id, nexus_actor_id.set(actor)),
-            (nexus_employee_id, nexus_employee_id.set(employee)),
+            (
+                nexus_employee_id,
+                nexus_employee_id.set(
+                    (request.headers.get("x-nexus-employee-id") or "").strip()
+                ),
+            ),
             (nexus_session_id, nexus_session_id.set(request.headers.get("x-nexus-session-id", ""))),
             (
                 nexus_conversation_id,
@@ -108,23 +80,30 @@ def build_mcp_server() -> MCPServer:
     )
 
     async def _call(name: str, **kwargs):
-        if nexus_session_id.get():
-            from nexus_api.group_task_auth import authorize_task_source
+        from nexus_api.group_task_auth import authorize_task_source
 
-            try:
-                await authorize_task_source(
-                    nexus_session_id.get(),
-                    nexus_employee_id.get(),
-                    nexus_channel_id.get(),
-                    nexus_discussion_id.get(),
-                    nexus_schedule_user_id.get(),
-                    nexus_schedule_agent_id.get(),
-                    nexus_conversation_id.get(),
-                )
-            except PermissionError:
-                return {"ok": False, "error": "群调用未授权"}
-        async with SessionLocal() as session:
-            return await getattr(TaskTools(session), name)(**kwargs)
+        try:
+            actor = await authorize_task_source(
+                nexus_session_id.get(),
+                nexus_employee_id.get(),
+                nexus_channel_id.get(),
+                nexus_discussion_id.get(),
+                nexus_schedule_user_id.get(),
+                nexus_schedule_agent_id.get(),
+                nexus_conversation_id.get(),
+            )
+        except PermissionError as exc:
+            reason = str(exc).strip()
+            message = "当前会话没有可执行该任务操作的业务上下文"
+            if reason:
+                message += f"：{reason}"
+            return {"ok": False, "error": message}
+        token = nexus_actor_id.set(actor)
+        try:
+            async with SessionLocal() as session:
+                return await getattr(TaskTools(session), name)(**kwargs)
+        finally:
+            nexus_actor_id.reset(token)
 
     @server.tool(name="nexus_task_create", structured_output=True)
     async def nexus_task_create(

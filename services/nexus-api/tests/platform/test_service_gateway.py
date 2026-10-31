@@ -137,7 +137,7 @@ def _workspace_ui_tree(
     tmp_path: Path,
     *,
     installed: list[str],
-    upstream_tag: str | None = "v1.18.35",
+    upstream_tag: str | None = "v1.18.33",
     upstream_raw: str | None = None,
 ):
     frontend = tmp_path / "frontend"
@@ -165,17 +165,17 @@ def _workspace_ui_tree(
 
 
 def test_running_opencode_version_requires_its_own_bundle(tmp_path, monkeypatch):
-    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.35", installed=["1.18.35"])
+    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.33", installed=["1.18.33"])
     monkeypatch.setattr(service, "FRONTEND", frontend)
     with pytest.raises(RuntimeError, match="9.9.9"):
         service.ensure_workspace_ui_bundle("v9.9.9")
     with pytest.raises(RuntimeError, match="1.2.27"):
         service.ensure_workspace_ui_bundle("1.2.27")
-    service.ensure_workspace_ui_bundle("1.18.35")
+    service.ensure_workspace_ui_bundle("1.18.33")
 
 
 def test_validate_start_accepts_the_single_upstream_bundle(tmp_path, monkeypatch):
-    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.35", installed=["1.18.35"])
+    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.33", installed=["1.18.33"])
     monkeypatch.setattr(service, "ROOT", tmp_path)
     monkeypatch.setattr(service, "FRONTEND", frontend)
 
@@ -183,7 +183,7 @@ def test_validate_start_accepts_the_single_upstream_bundle(tmp_path, monkeypatch
 
 
 def test_validate_start_rejects_missing_upstream_bundle(tmp_path, monkeypatch):
-    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.35", installed=["1.2.27"])
+    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.33", installed=["1.2.27"])
     monkeypatch.setattr(service, "ROOT", tmp_path)
     monkeypatch.setattr(service, "FRONTEND", frontend)
 
@@ -191,7 +191,7 @@ def test_validate_start_rejects_missing_upstream_bundle(tmp_path, monkeypatch):
         service.validate_start("dev", _settings())
 
     message = str(excinfo.value)
-    assert "1.18.35" in message
+    assert "1.18.33" in message
     assert "index.html" in message
     assert "restore" in message.lower()
 
@@ -202,9 +202,9 @@ def test_validate_start_rejects_invalid_upstream_metadata(
 ):
     # 上游元数据缺失或损坏时必须显式失败，不能静默跳过固定上游 UI 校验。
     if upstream_raw is None:
-        frontend = _workspace_ui_tree(tmp_path, upstream_tag=None, installed=["1.18.35"])
+        frontend = _workspace_ui_tree(tmp_path, upstream_tag=None, installed=["1.18.33"])
     else:
-        frontend = _workspace_ui_tree(tmp_path, upstream_raw=upstream_raw, installed=["1.18.35"])
+        frontend = _workspace_ui_tree(tmp_path, upstream_raw=upstream_raw, installed=["1.18.33"])
     monkeypatch.setattr(service, "ROOT", tmp_path)
     monkeypatch.setattr(service, "FRONTEND", frontend)
 
@@ -215,7 +215,7 @@ def test_validate_start_rejects_invalid_upstream_metadata(
 
 def test_validate_start_worker_mode_skips_local_opencode_bundle(tmp_path, monkeypatch):
     # 公司部署只用远程 Worker：没有本地 workspace-ui 产物也必须能启动。
-    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.35", installed=[])
+    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.33", installed=[])
     monkeypatch.setattr(service, "ROOT", tmp_path)
     monkeypatch.setattr(service, "FRONTEND", frontend)
 
@@ -226,7 +226,7 @@ def test_validate_start_worker_mode_skips_local_opencode_bundle(tmp_path, monkey
 
 
 def test_production_rejects_cli_fallback_executor(tmp_path, monkeypatch):
-    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.35", installed=["1.18.35"])
+    frontend = _workspace_ui_tree(tmp_path, upstream_tag="v1.18.33", installed=["1.18.33"])
     monkeypatch.setattr(service, "ROOT", tmp_path)
     monkeypatch.setattr(service, "FRONTEND", frontend)
 

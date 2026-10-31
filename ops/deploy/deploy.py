@@ -1229,6 +1229,12 @@ Settings()
             )
         self.step("启动全部服务并验证实际发布版本")
         self.lifecycle("start")
+        self.step("通过真实 AgentScope 接口验证内置 MCP 注册与连接")
+        self.run(
+            [py, "-m", "app.deployment", "mcp"],
+            cwd=self.release_root / "services/nexus-api",
+            env=self.env,
+        )
 
     def external_health(self):
         self.step("Nginx HTTPS 与 Worker HTTP 入口验收")

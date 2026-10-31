@@ -813,7 +813,7 @@ async def test_reconcile_checks_remote_facts_before_release(monkeypatch):
         return True
 
     async def health(_self):
-        return {"healthy": True, "version": "1.18.35"}
+        return {"healthy": True, "version": "1.18.33"}
 
     async def status(_self, *_args, **_kwargs):
         return {"ses_idle": {"type": "idle"}}

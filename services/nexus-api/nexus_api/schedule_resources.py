@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -14,6 +15,8 @@ from .db import connect, employee_from_row
 from .resources import RETIRE_PREFIX, sync_employee_resources
 from .task_skill import TASK_SKILL_ID, TASK_SKILL_NAME, skill_directory, task_mcp_headers, task_mcp_url
 from .tool_policy import employee_tool_policy, require_employee_tool
+
+logger = logging.getLogger("nexus.schedule_resources")
 
 
 class ScheduleSession(BaseModel):
@@ -132,7 +135,15 @@ async def prepare_schedule(client, context, store):
     tasks = [item for item in installed if is_task_skill(item)]
     if TASK_SKILL_ID in employee["skills"]:
         if not tasks:
-            await scoped.upload_workspace_skill(context.agent_id, context.session_id, skill_directory())
+            try:
+                await scoped.upload_workspace_skill(
+                    context.agent_id,
+                    context.session_id,
+                    skill_directory(),
+                )
+            except AgentScopeError as exc:
+                # 技能说明和 MCP 连接是两件事，重复上传失败不挡住任务工具。
+                logger.warning("日程会话任务技能未上传：%s", exc.detail)
         headers = task_mcp_headers(employee["id"], context.session_id)
         headers["X-Nexus-Schedule-User-Id"] = context.user_id
         headers["X-Nexus-Schedule-Agent-Id"] = context.agent_id

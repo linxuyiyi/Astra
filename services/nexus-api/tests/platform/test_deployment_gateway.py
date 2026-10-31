@@ -129,13 +129,13 @@ async def test_shared_serve_checks_actual_config_before_ready(monkeypatch, field
 
     def handler(request):
         if request.url.path == "/global/health":
-            return httpx.Response(200, json={"healthy": True, "version": "1.18.35"})
+            return httpx.Response(200, json={"healthy": True, "version": "1.18.33"})
         assert request.url.path == "/config"
         return httpx.Response(200, json=config)
 
     monkeypatch.setattr("app.runtime.opencode_server.httpx.AsyncClient",
                         lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
-    manager = OpenCodeServerManager(Settings(seed_demo=False))
+    manager = OpenCodeServerManager(Settings(seed_demo=False, opencode_server_version="1.18.33"))
     with pytest.raises(RuntimeError, match="统一网关"):
         await manager.wait_until_ready()
     config[field] = json.loads(gateway_environment("default", source)["OPENCODE_CONFIG_CONTENT"])[field]

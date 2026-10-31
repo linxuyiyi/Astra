@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hmac
 import os
 from contextvars import ContextVar
 from typing import Any
@@ -17,35 +16,12 @@ EMPLOYEE_ID: ContextVar[str] = ContextVar("schedule_mcp_employee_id", default=""
 CONVERSATION_ID: ContextVar[str] = ContextVar("schedule_mcp_conversation_id", default="")
 
 
-def presented_bearer(header: str | None) -> str:
-    value = (header or "").strip()
-    if len(value) < 7 or value[:7].lower() != "bearer ":
-        return ""
-    return value[7:].strip()
-
-
-def authenticate(headers) -> str:
-    """共享密钥证明请求来自 Nexus 挂接的 Session；会话和员工必须同时存在。"""
-
-    expected = os.environ.get("NEXUS_SCHEDULE_MCP_KEY", "").strip()
-    presented = presented_bearer(headers.get("authorization"))
-    if not expected or not presented or not hmac.compare_digest(presented, expected):
-        raise PermissionError("unauthorized")
-    employee = (headers.get("x-nexus-employee-id") or "").strip()
-    session = (headers.get("x-nexus-session-id") or "").strip()
-    if not employee or not session:
-        raise PermissionError("missing identity")
-    return employee
-
-
 class ScheduleIdentityMiddleware(BaseHTTPMiddleware):
+    """连接和工具发现只带入来源上下文；私聊归属由实际工具调用重验。"""
+
     async def dispatch(self, request, call_next):
         if request.url.path == "/health":
             return JSONResponse({"ok": True})
-        try:
-            authenticate(request.headers)
-        except PermissionError:
-            return JSONResponse({"ok": False, "error": "未授权"}, status_code=401)
         tokens = [
             (SESSION_ID, SESSION_ID.set(request.headers.get("x-nexus-session-id", ""))),
             (EMPLOYEE_ID, EMPLOYEE_ID.set(request.headers.get("x-nexus-employee-id", ""))),
@@ -70,6 +46,8 @@ def _client() -> httpx.AsyncClient:
 
 
 async def _call(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+    if not SESSION_ID.get().strip() or not EMPLOYEE_ID.get().strip():
+        return {"ok": False, "error": "当前会话没有可执行日程操作的业务上下文"}
     key = os.environ.get("NEXUS_INTERNAL_KEY", "").strip()
     if not key:
         return {"ok": False, "error": "内部日程接口未配置"}

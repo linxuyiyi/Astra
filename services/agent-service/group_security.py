@@ -13,7 +13,7 @@ execution_id: ContextVar[str] = ContextVar("nexus_execution_id", default="")
 
 
 def headers():
-    return {"X-Nexus-Internal-Key": os.environ.get("NEXUS_INTERNAL_KEY") or os.environ.get("NEXUS_TASK_MCP_KEY", "")}
+    return {"X-Nexus-Internal-Key": os.environ.get("NEXUS_INTERNAL_KEY", "")}
 
 
 def install_run_context(chat_service_class):

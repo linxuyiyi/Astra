@@ -2211,7 +2211,7 @@ async def _execute_operation(operation_id: str, owner: str) -> None:
                 MaintenanceState.FAILED.value,
                 error_code="environment_missing",
                 error_message="Worker 环境不存在",
-                secrets=(settings.mcp_api_key or "",),
+                secrets=(),
             )
             return
         attempt = operation.attempt
@@ -2219,7 +2219,7 @@ async def _execute_operation(operation_id: str, owner: str) -> None:
         reconcile_required = operation.reconcile_required
         session.expunge(operation)
         session.expunge(environment)
-    secrets = tuple(item for item in (environment.ssh_password, settings.mcp_api_key) if item)
+    secrets = tuple(item for item in (environment.ssh_password,) if item)
     lease = OperationLease(
         operation_id,
         attempt,

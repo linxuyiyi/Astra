@@ -59,6 +59,8 @@ docs/reports             验证记录与证据
 | Worker OpenCode | 每个 Worker 独立端口 | 在 Worker 机器运行；控制机默认不安装 |
 | Redis | 6379 | Agent Service 与 Celery |
 
+内置 MCP 使用标准 HTTP，默认监听 `127.0.0.1`，不配置共享 Bearer key。Task/Schedule 通过 AgentScope 官方 Session 工作区接口挂接；连接和工具发现不要求运行中的讨论，工具调用仍校验员工、会话、任务归属、讨论租约或日程来源。
+
 ## 本地启动
 
 先创建两个 MySQL 空库并安装 Python 依赖（见部署指南）。复制 `ops/env/.env.example` 为 `ops/env/.env` 后填写并设为 0600。公司使用 `ASTRA_EXECUTOR_TYPE=worker`：控制机只提供平台与网关，远程 Worker 执行任务；控制机不检查 OpenCode 版本，Worker 保留固定版本检查。密钥不提交仓库。

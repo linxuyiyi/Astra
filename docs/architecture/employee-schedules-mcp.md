@@ -32,7 +32,7 @@ MCP 工具只有三个：
   → AgentScope 存储；页面按人类命名空间读取
 ```
 
-- `services/nexus-api/nexus_api/schedule_mcp.py`：MCP 服务（默认 `127.0.0.1:18203`），校验 Bearer 密钥、员工和会话头，提供三个工具。
+- `services/nexus-api/nexus_api/schedule_mcp.py`：MCP 服务（默认 `127.0.0.1:18203`），连接和工具发现不要求业务上下文，工具调用通过员工、会话和私聊归属校验，提供三个工具。
 - `services/nexus-api/nexus_api/schedule_skill.py`：把 `nexus-schedule` 装进私聊 Session；按 `(agent_id, session_id)` 幂等，失败只记 warning，不阻塞聊天。
 - `services/nexus-api/nexus_api/schedules.py`：新增 `/api/v1/internal/schedules` 内部接口，按 `X-Nexus-Session-Id` 查私聊归属，校验 `X-Nexus-Employee-Id` 与员工一致，再以人类身份调用官方接口。
 - `services/agent-service/agent_service.py`：对 `mcp__nexus-schedule__` 前缀显式 ALLOW，避免把会话切到 `bypass`。
@@ -42,7 +42,7 @@ MCP 工具只有三个：
 
 - 归属只来自私聊 Session：`t_nexus_conversations.agentscope_session_id + kind='private'` → `owner_id`。MCP 工具和内部接口都不接受 `user_id`/`employee_id`/模型/凭据参数。
 - `X-Nexus-Employee-Id` 必须等于会话绑定的员工，否则 409；未知/非私聊会话 404。
-- 内部接口要求 `X-Nexus-Internal-Key`，MCP 服务要求自己的 `NEXUS_SCHEDULE_MCP_KEY`；两个密钥都在安装器/环境文件中生成并持久化。
+- 内部接口要求 `X-Nexus-Internal-Key`；内网标准 HTTP MCP 不配置共享 Bearer key，MCP 工具调用仍校验员工、会话和私聊归属。
 - 员工禁用或没有 Agent 时拒绝。
 - 默认不启用，减少“被文档/网页提示注入后自主创建定时任务”的风险；人类在页面确认后启用。
 - 只列出当前员工名下的日程，不把同一人类安排给其他员工的日程交给当前员工。
@@ -59,12 +59,11 @@ MCP 工具只有三个：
 | 变量 | 作用 | 默认 |
 | --- | --- | --- |
 | `NEXUS_SCHEDULE_MCP_URL` | Nexus 安装给 Session 的 MCP 地址 | `http://127.0.0.1:18203/mcp` |
-| `NEXUS_SCHEDULE_MCP_KEY` | Nexus 与 MCP 服务共享的 Bearer 密钥 | 无，未设置则不安装 |
 | `NEXUS_INTERNAL_KEY` | MCP 调 Nexus 内部接口的共享密钥 | 无，未设置则内部接口拒绝 |
 | `NEXUS_SCHEDULE_MCP_HOST` / `PORT` | MCP 监听地址/端口 | `127.0.0.1` / `18203` |
 | `NEXUS_API_BASE` | MCP 调 Nexus 的地址 | `http://127.0.0.1:18120` |
 
-安装器在 `secrets.env` 生成两个密钥，在 `nexus.env` 写入 MCP 端口和 URL；`astra_service` 启动 `schedule-mcp`，健康检查为 `http://127.0.0.1:18203/health`。
+安装器在 `nexus.env` 写入 MCP 端口和 URL，并生成 `NEXUS_INTERNAL_KEY`；部署器启动 `schedule-mcp`，验收会实际执行 MCP `initialize` 和 `tools/list`。
 
 ## 验证
 

@@ -102,6 +102,36 @@ def test_invalid_existing_key_never_automatically_regenerated(tmp_path, monkeypa
         cfg.initialize(values, DEPLOY.parents[1], tmp_path, cfg.Dialog(False))
 
 
+def test_mcp_addresses_derive_from_listener_and_old_keys_are_removed(tmp_path, monkeypatch):
+    old_env = tmp_path / "old.env"
+    old_env.write_text(
+        "NEXUS_MCP_API_KEY=old-library-key\n"
+        "NEXUS_TASK_MCP_KEY=old-task-key\n"
+        "NEXUS_SCHEDULE_MCP_KEY=old-schedule-key\n"
+        "ASTRA_TASK_MCP_KEY=old-astra-task-key\n"
+    )
+    values = settings(tmp_path, monkeypatch)
+    values.update(cfg.load_config([old_env], {}, cfg.Dialog(False)))
+    values.update(
+        NEXUS_TASK_MCP_HOST="10.1.2.3",
+        NEXUS_TASK_MCP_PORT="19202",
+        NEXUS_TASK_MCP_URL="http://127.0.0.1:18202/mcp",
+        NEXUS_SCHEDULE_MCP_HOST="0.0.0.0",
+        NEXUS_SCHEDULE_MCP_PORT="19203",
+    )
+    result = cfg.initialize(values, DEPLOY.parents[1], tmp_path, cfg.Dialog(False))
+    assert not {
+        "NEXUS_MCP_API_KEY",
+        "NEXUS_TASK_MCP_KEY",
+        "NEXUS_SCHEDULE_MCP_KEY",
+        "ASTRA_TASK_MCP_KEY",
+    } & result.keys()
+    assert result["NEXUS_TASK_MCP_URL"] == "http://10.1.2.3:19202/mcp"
+    assert result["NEXUS_SCHEDULE_MCP_URL"] == "http://127.0.0.1:19203/mcp"
+    assert cfg.mcp_url("0.0.0.0", "18202") == "http://127.0.0.1:18202/mcp"
+    assert cfg.mcp_url("::", "18202") == "http://127.0.0.1:18202/mcp"
+
+
 def test_shared_database_and_unrestricted_worker_acl_are_rejected(tmp_path, monkeypatch):
     values = settings(tmp_path, monkeypatch)
     values["AGENTSCOPE_SQL_URL"] = values["ASTRA_DATABASE_URL"]

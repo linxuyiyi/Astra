@@ -129,8 +129,8 @@ class Settings(BaseSettings):
     agentscope_user_id: str = "nexus"
     task_mcp_host: str = Field(default="127.0.0.1", validation_alias="NEXUS_TASK_MCP_HOST")
     task_mcp_port: int = Field(default=18202, ge=1, le=65535, validation_alias="NEXUS_TASK_MCP_PORT")
-    # Shared with Nexus API (NEXUS_TASK_MCP_KEY). Empty rejects every Task MCP call.
-    task_mcp_key: str | None = Field(default=None, validation_alias="NEXUS_TASK_MCP_KEY")
+    schedule_mcp_host: str = Field(default="127.0.0.1", validation_alias="NEXUS_SCHEDULE_MCP_HOST")
+    schedule_mcp_port: int = Field(default=18203, ge=1, le=65535, validation_alias="NEXUS_SCHEDULE_MCP_PORT")
     opencode_timeout_seconds: int = 3600
     # Control-plane requests (status/messages/session/abort/prompt) must never
     # inherit the long execution budget; a stalled control call has to fail fast
@@ -214,7 +214,6 @@ class Settings(BaseSettings):
     mcp_host: str = Field(default="127.0.0.1", validation_alias="NEXUS_MCP_HOST")
     mcp_port: int = Field(default=18201, ge=1, le=65535, validation_alias="NEXUS_MCP_PORT")
     mcp_streamable_http_path: str = Field(default="/mcp", validation_alias="NEXUS_MCP_STREAMABLE_HTTP_PATH")
-    mcp_api_key: str | None = Field(default=None, validation_alias="NEXUS_MCP_API_KEY")
     # Optional public MCP URL. Deploy uses mcp_resource_server_url and rejects loopback.
     mcp_public_url: str | None = Field(default=None, validation_alias="NEXUS_MCP_PUBLIC_URL")
     mcp_issuer_url: str = Field(default="http://127.0.0.1:18201", validation_alias="NEXUS_MCP_ISSUER_URL")
@@ -442,12 +441,6 @@ class Settings(BaseSettings):
             and not self.opencode_server_password
         ):
             raise ValueError("OpenCode Server 非 loopback 监听时必须配置密码")
-        if (
-            self.mcp_transport == "streamable-http"
-            and self.mcp_host not in {"127.0.0.1", "localhost", "::1"}
-            and not self.mcp_api_key
-        ):
-            raise ValueError("数字图书馆 MCP 非 loopback 监听时必须配置 NEXUS_MCP_API_KEY")
         if not self.mcp_streamable_http_path.startswith("/"):
             raise ValueError("NEXUS_MCP_STREAMABLE_HTTP_PATH 必须以 / 开头")
         if self.gateway_enabled and self.environment == "production":

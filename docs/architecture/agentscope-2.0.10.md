@@ -109,7 +109,9 @@ Nexus 自建技能保存在 `data/skills/<id>/<version>/`，通过 `/workspace/s
 
 Nexus 自建 MCP 保存 URL、非敏感请求头、超时和服务端加密的 Token，装入时拼成 `HttpMCPConfig`；AgentScope 已安装 MCP 只保存库 id，绑定走 `from-library`。连接测试通过 `/workspace/mcp` 的实时状态获取 Tool 列表，不另写 MCP 客户端。
 
-注意 `dont_ask` 权限模式会把 MCP Tool 的 PASSTHROUGH 权限转成 DENY。绑定 MCP 的会话使用 AgentScope 官方的 `bypass` 模式，否则员工能看见 Tool 却永远调不到。任务技能自带的 `nexus-task` MCP 仍由 `task_skill.py` 单独挂接。
+注意 `dont_ask` 权限模式会把 MCP Tool 的 PASSTHROUGH 权限转成 DENY。绑定 MCP 的会话使用 AgentScope 官方的 `bypass` 模式，否则员工能看见 Tool 却永远调不到。任务技能自带的 `nexus-task` MCP 仍由 `task_skill.py` 按会话挂接；它属于标准 HTTP MCP，不使用共享 Bearer key。
+
+`GET /workspace/mcp` 会实际执行 MCP `initialize`/`tools/list`，因此 Nexus 内置 MCP 的连接与工具发现不能要求正在运行的群讨论或讨论租约；员工、会话、任务和日程来源检查在工具调用时执行。
 
 ## Knowledge
 

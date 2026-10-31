@@ -289,22 +289,6 @@ def _needs_remote_secrets(environment, workspace: str) -> bool:
         return True
 
 
-def _platform_written_secrets() -> set[str]:
-    """Secrets this platform writes into opencode.jsonc and still holds in config.
-
-    The gateway provider apiKey is not stored in plaintext. OpenCode's merged
-    `/config`, reached through the connected client, supplies that value.
-    """
-
-    from app.config.settings import get_settings
-
-    found: set[str] = set()
-    key = get_settings().mcp_api_key
-    if isinstance(key, str) and len(key) >= 8:
-        found.add(key)
-    return found
-
-
 def _secret_cache_workspace(workspace: str) -> str:
     """Lexical path identity. A trailing slash shares the directory's cache entry."""
 
@@ -444,7 +428,6 @@ async def _load_proxy_secrets(workspace: str, environment=None, client=None) -> 
         found = configured_secret_values(workspace)
         if not _needs_remote_secrets(environment, workspace):
             return found, True
-        found |= _platform_written_secrets()
         remote, known = await _remote_configured_secrets(environment, client, workspace)
         return found | remote, known
     except Exception:

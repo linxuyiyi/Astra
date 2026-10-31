@@ -36,7 +36,7 @@ REMOTE = f"https://{URL_USERINFO}:{URL_USERINFO}@example.test/org/repo.git?token
 @pytest.fixture
 def opencode_server():
     state = {
-        "health": (200, {"healthy": True, "version": "1.18.35"}),
+        "health": (200, {"healthy": True, "version": "1.18.33"}),
         "session": (200, {}),
         "mcp": (200, {"nexus-library": {"status": "connected"}}),
         "skill": (200, [{"name": "alpha"}]),
@@ -158,7 +158,7 @@ def test_equipment_mismatch_is_reported_without_secrets(tmp_path: Path, opencode
         expected_skills=["wanted-skill"],
         expected_mcp=["nexus-library"],
         expected_model="custom-relay/route-1",
-        expected_opencode_version="1.18.35",
+        expected_opencode_version="1.18.33",
     )
 
     assert result["opencode"]["status"] == "unhealthy"
@@ -285,7 +285,7 @@ def test_expected_equipment_healthy_and_structure_is_stable(tmp_path: Path, open
         expected_skills=["alpha", "beta"],
         expected_mcp=["nexus-library"],
         expected_model="custom-relay/route-1",
-        expected_opencode_version="v1.18.35",
+        expected_opencode_version="v1.18.33",
     )
 
     assert _result_keys(result) == {
@@ -343,7 +343,7 @@ def test_payload_cannot_supply_paths_urls_or_shell(tmp_path: Path, opencode_serv
                 "expected_skills": ["alpha"],
                 "expected_mcp": ["nexus-library"],
                 "expected_model": "custom-relay/route-1",
-                "expected_opencode_version": "1.18.35",
+                "expected_opencode_version": "1.18.33",
                 "workspace": "/nonexistent",
                 "opencode_url": "http://127.0.0.1:1",
                 "config_path": "/etc/passwd",
@@ -397,7 +397,7 @@ def _inspect_command(request_id: str, epoch: int = 3) -> dict:
                 "expected_skills": ["alpha"],
                 "expected_mcp": ["nexus-library"],
                 "expected_model": "custom-relay/route-1",
-                "expected_opencode_version": "1.18.35",
+                "expected_opencode_version": "1.18.33",
             },
         },
     )
@@ -452,7 +452,7 @@ def _slow_inspection(monkeypatch, *, release: threading.Event) -> dict:
         with lock:
             state["current"] -= 1
         return {
-            "opencode": {"status": "healthy", "version": "1.18.35", "error": None},
+            "opencode": {"status": "healthy", "version": "1.18.33", "error": None},
             "model": {
                 "status": "healthy",
                 "configured": True,

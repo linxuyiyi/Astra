@@ -36,8 +36,7 @@ def require_user(request: Request) -> dict:
 
 
 def internal_headers() -> dict[str, str]:
-    key = os.environ.get("NEXUS_INTERNAL_KEY") or os.environ.get("NEXUS_TASK_MCP_KEY", "")
-    return {"X-Nexus-Internal-Key": key}
+    return {"X-Nexus-Internal-Key": os.environ.get("NEXUS_INTERNAL_KEY", "")}
 
 
 def require_internal(request: Request) -> None:

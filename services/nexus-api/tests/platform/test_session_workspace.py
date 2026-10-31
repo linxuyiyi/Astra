@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.api import workspace_routes
 from app.api.workspace_routes import load_proxy_secrets, redact_secret_fields
 from app.database import get_session
 from app.executors.errors import OpenCodeSessionNotFound
@@ -236,16 +237,25 @@ async def test_retired_recorded_version_keeps_the_snapshot_and_hides_the_ui(runt
     assert binding.environment["opencode_version"] == "1.18.31"
 
 
-async def test_supported_version_uses_its_bundle(runtime):
+async def test_supported_version_uses_its_bundle(runtime, tmp_path, monkeypatch):
+    bundles = tmp_path / "opencode-workspace"
+    (bundles / "1.18.33").mkdir(parents=True)
+    (bundles / "1.18.33" / "index.html").write_text("ok", encoding="utf-8")
+    monkeypatch.setattr(
+        workspace_routes,
+        "workspace_ui_bundle",
+        lambda version: bundles / version / "index.html",
+    )
+    monkeypatch.setattr(workspace_routes, "_present_bundles", set())
     binding = await runtime.session.get(RuntimeSession, "ses_current")
-    binding.environment = {**binding.environment, "opencode_version": "1.18.35"}
+    binding.environment = {**binding.environment, "opencode_version": "1.18.33"}
     await runtime.session.commit()
 
     response = await runtime.api.get("/api/tasks/T1/workspace")
     assert response.status_code == 200
     body = response.json()
-    assert body["runtime"]["opencode_version"] == "1.18.35"
-    assert body["runtime"]["workspace_ui"] == "/opencode-workspace/1.18.35/index.html"
+    assert body["runtime"]["opencode_version"] == "1.18.33"
+    assert body["runtime"]["workspace_ui"] == "/opencode-workspace/1.18.33/index.html"
     assert body["runtime"]["workspace_ui_error"] is None
 
 

@@ -265,7 +265,14 @@ def test_real_config_merge_writes_jsonc_and_keeps_user_settings(tmp_path):
     target = tmp_path / "opencode.jsonc"
     original = {
         "provider": {"custom": {"options": {"apiKey": "private"}}},
-        "mcp": {"custom-mcp": {"enabled": False}},
+        "mcp": {
+            "custom-mcp": {"enabled": False},
+            "nexus-library": {
+                "type": "remote",
+                "url": "http://old/mcp",
+                "headers": {"Authorization": "Bearer old-mcp-key"},
+            },
+        },
         "permission": {"bash": "ask"},
     }
     target.write_text("// keep this\n" + json.dumps(original))
@@ -276,7 +283,6 @@ def test_real_config_merge_writes_jsonc_and_keeps_user_settings(tmp_path):
         gateway_url="http://127.0.0.1:8110/v1",
         gateway_key="agw_test",
         mcp_url="http://127.0.0.1:8201/mcp",
-        mcp_key="mcp-test",
         skills=[{"name": "review", "body": "# review\n"}],
         mcp_refs=[{"name": "worker-mcp", "url": "http://127.0.0.1:9/mcp"}],
     )
@@ -300,7 +306,7 @@ def test_real_config_merge_writes_jsonc_and_keeps_user_settings(tmp_path):
     assert config["mcp"]["worker-mcp"]["url"] == "http://127.0.0.1:9/mcp"
     assert config["permission"] == original["permission"]
     assert config["model"] == "nexus-gateway/test-model"
-    assert config["mcp"]["nexus-library"]["headers"]["Authorization"] == "Bearer mcp-test"
+    assert "headers" not in config["mcp"]["nexus-library"]
     backup = json.loads((tmp_path / "opencode.jsonc.nexus-backup-op123").read_text().split("\n", 1)[1])
     assert backup == original
     assert target.stat().st_mode & 0o777 == 0o600
@@ -316,7 +322,6 @@ def test_special_model_names_still_use_gateway():
         gateway_url="http://127.0.0.1:8110/v1",
         gateway_key="agw_do_not_read",
         mcp_url="http://127.0.0.1:8201/mcp",
-        mcp_key="mcp-test",
     )
     assert payload["model"] == "nexus-gateway/deepseek-v4.1-flash-free"
     assert payload["provider"]["options"]["apiKey"] == "agw_do_not_read"

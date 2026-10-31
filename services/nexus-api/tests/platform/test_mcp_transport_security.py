@@ -31,13 +31,12 @@ def _app(settings, *, host: str):
     )
 
 
-def _post(client, host: str, token: str, body: dict):
+def _post(client, host: str, body: dict):
     return client.post(
         "/mcp",
         json=body,
         headers={
             "host": host,
-            "authorization": f"Bearer {token}",
             "accept": "application/json, text/event-stream",
             "mcp-protocol-version": "2025-06-18",
         },
@@ -46,7 +45,6 @@ def _post(client, host: str, token: str, body: dict):
 
 def test_transport_security_allows_configured_authority_only(monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "mcp_api_key", "test-mcp-key")
     monkeypatch.setattr(
         settings, "mcp_resource_server_url", "http://172.17.13.60:18042/mcp"
     )
@@ -67,7 +65,6 @@ def test_transport_security_allows_configured_authority_only(monkeypatch):
 
 def test_declared_remote_host_initializes_and_lists_tools(monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "mcp_api_key", "test-mcp-key")
     monkeypatch.setattr(
         settings, "mcp_resource_server_url", "http://host.lima.internal:61269/mcp"
     )
@@ -76,27 +73,21 @@ def test_declared_remote_host_initializes_and_lists_tools(monkeypatch):
     monkeypatch.setattr(settings, "mcp_port", 61269)
 
     with TestClient(_app(settings, host=settings.mcp_host)) as client:
-        initialized = _post(
-            client, "host.lima.internal:61269", "test-mcp-key", INITIALIZE
-        )
+        initialized = _post(client, "host.lima.internal:61269", INITIALIZE)
         assert initialized.status_code == 200, initialized.text
         assert initialized.json()["result"]["serverInfo"]["name"]
 
-        tools = _post(client, "host.lima.internal:61269", "test-mcp-key", TOOLS_LIST)
+        tools = _post(client, "host.lima.internal:61269", TOOLS_LIST)
         assert tools.status_code == 200, tools.text
         names = {item["name"] for item in tools.json()["result"]["tools"]}
         assert {"library_search", "library_get"} <= names
 
-        invalid = _post(client, "host.lima.internal:61269", "wrong-key", INITIALIZE)
-        assert invalid.status_code == 401
-
-        evil = _post(client, "evil.example:61269", "test-mcp-key", INITIALIZE)
+        evil = _post(client, "evil.example:61269", INITIALIZE)
         assert evil.status_code == 421
 
 
 def test_default_loopback_authority_still_works(monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "mcp_api_key", "test-mcp-key")
     monkeypatch.setattr(
         settings, "mcp_resource_server_url", "http://127.0.0.1:18201/mcp"
     )
@@ -105,5 +96,5 @@ def test_default_loopback_authority_still_works(monkeypatch):
     monkeypatch.setattr(settings, "mcp_port", 18201)
 
     with TestClient(_app(settings, host=settings.mcp_host)) as client:
-        response = _post(client, "127.0.0.1:18201", "test-mcp-key", INITIALIZE)
+        response = _post(client, "127.0.0.1:18201", INITIALIZE)
         assert response.status_code == 200, response.text

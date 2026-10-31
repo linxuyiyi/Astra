@@ -333,6 +333,17 @@ class AgentScopeClient:
             if exc.status_code != 404:
                 raise
 
+    async def delete_session(self, agent_id: str, session_id: str) -> None:
+        try:
+            await self.request(
+                "DELETE",
+                f"/sessions/{session_id}",
+                params={"agent_id": agent_id},
+            )
+        except AgentScopeError as exc:
+            if exc.status_code != 404:
+                raise
+
     async def list_workspace_mcp(self, agent_id: str, session_id: str) -> list[dict[str, Any]]:
         response = await self.request(
             "GET",

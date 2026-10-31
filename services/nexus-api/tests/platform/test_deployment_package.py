@@ -23,8 +23,8 @@ from tests.platform.deployment_target import LocalTarget
 def registry():
     state = {
         "calls": [],
-        "version": "1.18.35",
-        "binary_version": "1.18.35",
+        "version": "1.18.33",
+        "binary_version": "1.18.33",
         "corrupt": False,
         "redirect": False,
         "external": False,
@@ -75,7 +75,7 @@ def registry():
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     manifest = {
-        "opencode_version": "1.18.35",
+        "opencode_version": "1.18.33",
         "npm_artifact_hosts": [],
         "npm_registry": f"http://127.0.0.1:{server.server_port}",
     }

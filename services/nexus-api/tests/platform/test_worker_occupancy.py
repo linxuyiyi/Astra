@@ -201,7 +201,7 @@ async def test_heartbeat_does_not_clear_occupied_worker(session, monkeypatch):
 
         class Client:
             async def health(self):
-                return {"version": "1.18.35"}
+                return {"version": "1.18.33"}
 
         yield Client()
 
@@ -220,7 +220,7 @@ async def test_maintenance_blocks_until_release_matches_unknown_session(session,
         remote_deploy_timeout_seconds=30,
         mcp_transport="streamable-http",
         worker_maintenance_lease_seconds=60,
-        remote_opencode_version="1.18.35",
+        remote_opencode_version="1.18.33",
     )
     monkeypatch.setattr("app.runtime.remote_provisioning.get_settings", lambda: settings)
     monkeypatch.setattr("app.runtime.maintenance.get_settings", lambda: settings)

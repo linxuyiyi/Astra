@@ -49,7 +49,9 @@ sudo bash ops/deploy/install_nexus.sh --sources ops/deploy/sources/huawei.json
 
 唯一 Python 进程清单管理以下 11 个进程：AgentScope、网关、Nexus API、Library/Task/Schedule MCP、三个 Celery Worker、Celery Beat、Nginx。复用 `ops/dev/procman.py` 的进程组原语，记录 PID、创建时间、进程组、工作目录和发布提交；停止前重新核对，等待旧进程与端口退出再启动。已有正确的 Python 进程记录可迁移；未知进程/端口拒绝接管，可交互修改端口。旧 systemd 自启服务需管理员先停用，安装器不调用 systemctl。
 
-验收包括所有 HTTP/MCP 健康、进程身份与发布环境、Nginx 实际配置响应版本、三条 Celery 队列 ping、HTTPS、Worker HTTP 管理路径隔离及网关鉴权。任意失败返回非零并显示阶段，不把部分启动算成功。模型路由未配置时不验证真实模型生成任务。
+内置 MCP 使用标准 HTTP，监听地址和端口由 `NEXUS_MCP_HOST/PORT`、`NEXUS_TASK_MCP_HOST/PORT`、`NEXUS_SCHEDULE_MCP_HOST/PORT` 统一生成，默认回环；AgentScope 分机部署时显式改为实际内网地址，Nexus 与 AgentScope 读取同一个 `NEXUS_TASK_MCP_URL` / `NEXUS_SCHEDULE_MCP_URL`。内网部署不生成或校验 MCP 共享 Bearer key；升级时旧 `NEXUS_MCP_API_KEY`、`NEXUS_TASK_MCP_KEY`、`NEXUS_SCHEDULE_MCP_KEY` 会被静默清理，不阻断升级。
+
+验收包括所有 HTTP 健康、每个 MCP 实际执行 `initialize` 和 `tools/list`、通过真实 AgentScope `/workspace/mcp` 注册 Task/Schedule MCP 并核对连接状态与工具、进程身份与发布环境、Nginx 实际配置响应版本、三条 Celery 队列 ping、HTTPS、Worker HTTP 管理路径隔离及网关鉴权。临时校验 Agent/Session 在验收后删除，不创建永久测试员工或业务任务。任意失败返回非零并显示阶段，不把部分启动算成功。模型路由未配置时不验证真实模型生成任务。
 
 ```bash
 # 同一入口的运维操作，不是另一套部署方案

@@ -33,11 +33,12 @@ def services(root, state, env):
     agentpy = str(root / "services/agent-service/.venv-agentscope/bin/python")
     instance = hashlib.sha256(str(state).encode()).hexdigest()[:8]
 
-    def http(name, command, port, health, cwd=backend, headers=None):
+    def http(name, command, port, health, cwd=backend, headers=None, host="127.0.0.1"):
         return {
             "name": name,
             "command": command,
             "cwd": str(cwd),
+            "host": host,
             "port": int(port),
             "health": health,
             "headers": headers or {},
@@ -72,19 +73,25 @@ def services(root, state, env):
         ),
         http("nexus-api", uvicorn("nexus_api.service:app", api), api, "/api/health"),
         http(
-            "library-mcp", [py, "-m", "app.mcp_server"], env["NEXUS_MCP_PORT"], "/mcp"
+            "library-mcp",
+            [py, "-m", "app.mcp_server"],
+            env["NEXUS_MCP_PORT"],
+            "",
+            host=env.get("NEXUS_MCP_HOST", "127.0.0.1"),
         ),
         http(
             "task-mcp",
             [py, "-c", "from app.task_mcp import main;main()"],
             env["NEXUS_TASK_MCP_PORT"],
             "/health",
+            host=env.get("NEXUS_TASK_MCP_HOST", "127.0.0.1"),
         ),
         http(
             "schedule-mcp",
             [py, "-c", "from nexus_api.schedule_mcp import main;main()"],
             env["NEXUS_SCHEDULE_MCP_PORT"],
             "/health",
+            host=env.get("NEXUS_SCHEDULE_MCP_HOST", "127.0.0.1"),
         ),
     ]
     celery = [py, "-m", "celery", "-A", "app.runtime.celery_app:celery"]
@@ -288,51 +295,94 @@ class Manager:
         ):
             raise DeploymentError(f"{spec['name']} 启动清单不符")
 
+    def local_host(self, spec):
+        host = str(spec.get("host") or "127.0.0.1").strip()
+        if host in {"", "0.0.0.0", "::", "[::]"}:
+            return "127.0.0.1"
+        return f"[{host}]" if ":" in host and not host.startswith("[") else host
+
+    def mcp_tool_count(self, spec) -> int:
+        """按标准 MCP 协议执行 initialize 和 tools/list，不只检查端口。"""
+
+        url = f"http://{self.local_host(spec)}:{spec['port']}/mcp"
+        headers = {
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+        }
+        initialize = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "nexus-deploy", "version": "1.4.9"},
+            },
+        }
+        with urllib.request.urlopen(
+            urllib.request.Request(
+                url,
+                headers=headers,
+                data=json.dumps(initialize).encode(),
+            ),
+            timeout=5,
+        ) as response:
+            body = response.read(262144)
+            if response.status != 200 or b'"result"' not in body:
+                raise ValueError("MCP initialize 未返回 result")
+            session_id = response.headers.get("mcp-session-id")
+        if session_id:
+            headers["Mcp-Session-Id"] = session_id
+        tools_request = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+        with urllib.request.urlopen(
+            urllib.request.Request(
+                url,
+                headers=headers,
+                data=json.dumps(tools_request).encode(),
+            ),
+            timeout=5,
+        ) as response:
+            payload = json.loads(response.read(1048576))
+        tools = payload.get("result", {}).get("tools") if isinstance(payload, dict) else None
+        if not isinstance(tools, list) or not tools:
+            raise ValueError("MCP tools/list 没有返回工具")
+        return len(tools)
+
     def wait_health(self, spec, timeout=120):
-        if not spec.get("health"):
+        mcp = spec["name"] in {"library-mcp", "task-mcp", "schedule-mcp"}
+        if not spec.get("health") and not mcp:
             return
-        url = f"http://127.0.0.1:{spec['port']}" + spec["health"]
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             self.check_identity(spec)
-            headers = dict(spec.get("headers", {}))
-            data = None
-            if spec["name"] == "library-mcp":
-                headers.update(
-                    Authorization="Bearer " + self.env["NEXUS_MCP_API_KEY"],
-                    Accept="application/json, text/event-stream",
-                    **{"Content-Type": "application/json"},
-                )
-                data = json.dumps(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": 1,
-                        "method": "initialize",
-                        "params": {
-                            "protocolVersion": "2024-11-05",
-                            "capabilities": {},
-                            "clientInfo": {"name": "nexus-deploy", "version": "1.4.9"},
-                        },
-                    }
-                ).encode()
             try:
-                with urllib.request.urlopen(
-                    urllib.request.Request(url, headers=headers, data=data), timeout=3
-                ) as response:
-                    body = response.read(262144)
-                    if response.status == 200 and (
-                        b'"result"' in body
-                        if data
-                        else (
-                            json.loads(body).get("status") in ("ok", "healthy")
-                            or json.loads(body).get("ok") is True
-                        )
-                    ):
-                        return
+                if spec.get("health"):
+                    url = (
+                        f"http://{self.local_host(spec)}:{spec['port']}" + spec["health"]
+                    )
+                    with urllib.request.urlopen(
+                        urllib.request.Request(
+                            url,
+                            headers=dict(spec.get("headers", {})),
+                        ),
+                        timeout=3,
+                    ) as response:
+                        body = response.read(262144)
+                        payload = json.loads(body)
+                        if response.status != 200 or not (
+                            payload.get("status") in ("ok", "healthy")
+                            or payload.get("ok") is True
+                        ):
+                            raise ValueError("服务健康检查未通过")
+                if mcp:
+                    self.mcp_tool_count(spec)
+                return
             except (OSError, ValueError):
                 pass
             time.sleep(0.5)
-        raise DeploymentError(f"{spec['name']} 健康验证失败，查看私有日志")
+        raise DeploymentError(
+            f"{spec['name']} 健康或 MCP 初始化/工具发现验证失败，查看私有日志"
+        )
 
     def start(self):
         self.preflight()

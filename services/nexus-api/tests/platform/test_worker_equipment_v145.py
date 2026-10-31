@@ -47,7 +47,7 @@ async def session():
 def _settings(tmp_path: Path) -> SimpleNamespace:
     return SimpleNamespace(
         workspace_root=tmp_path,
-        remote_opencode_version="1.18.35",
+        remote_opencode_version="1.18.33",
         mcp_resource_server_url="https://mcp.example.test/mcp?token=query-canary",
     )
 
@@ -91,7 +91,7 @@ async def _seed(session, tmp_path: Path) -> OpenCodeExecutionEnvironment:
 
 def _desired() -> dict:
     return {
-        "opencode": {"version": "1.18.35"},
+        "opencode": {"version": "1.18.33"},
         "worker_agent": {"version": WORKER_AGENT_VERSION},
         "model": {"name": "nexus-gateway/route-1", "route": "route-1", "provider": "nexus-gateway"},
         "repository": {
@@ -411,7 +411,7 @@ async def test_online_worker_uses_inspect_runtime_even_when_channel_is_ssh(monke
                 "expected_skills": ["review"],
                 "expected_mcp": ["nexus-library"],
                 "expected_model": "nexus-gateway/route-1",
-                "expected_opencode_version": "1.18.35",
+                "expected_opencode_version": "1.18.33",
             },
         )
     ]

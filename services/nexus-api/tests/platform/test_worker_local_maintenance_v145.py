@@ -248,7 +248,7 @@ def test_health_check_requires_2xx_json_and_healthy_true(monkeypatch, route):
 
 def test_health_check_accepts_only_healthy_true(monkeypatch):
     monkeypatch.setattr(channel_switch, "_HEALTH_WAIT_SECONDS", 0.5)
-    with _server({"/global/health": (200, {"healthy": True, "version": "1.18.35"})}) as port:
+    with _server({"/global/health": (200, {"healthy": True, "version": "1.18.33"})}) as port:
         channel_switch._wait_until_healthy(port)
 
 

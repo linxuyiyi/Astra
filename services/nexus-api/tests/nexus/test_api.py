@@ -25,7 +25,6 @@ from nexus_api.main import (
     session_transcript,
     stream_cursor,
 )
-from nexus_api.schedule_skill import reset_schedule_mcp_attachments
 from tests.nexus.clients import TestClient
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -554,8 +553,6 @@ def test_connected_catalog_accepts_only_returned_resources(tmp_path, monkeypatch
 def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("NEXUS_AGENTSCOPE_BASE_URL", "")
-    monkeypatch.setenv("NEXUS_SCHEDULE_MCP_KEY", "mcp-test")
-    reset_schedule_mcp_attachments()
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -629,13 +626,13 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
             and request.method == "POST"
             and b"nexus-schedule" in request.content
         ]
-        assert len(schedule_mcp_calls) == 1
+        assert len(schedule_mcp_calls) == 2
         schedule_payload = json.loads(schedule_mcp_calls[0].content.decode())
         assert schedule_payload["name"] == "nexus-schedule"
         headers = schedule_payload["mcp_config"]["headers"]
         assert headers["X-Nexus-Employee-Id"] == employee["id"]
         assert headers["X-Nexus-Session-Id"]
-        assert headers["Authorization"] == "Bearer mcp-test"
+        assert "Authorization" not in headers
 
 
 def test_peer_hint_returns_limit_text_without_delivering():
@@ -1528,20 +1525,14 @@ def test_disabled_employee_defers_wake(client):
 
 def test_task_skill_is_revoked_and_restored_on_existing_sessions(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
-    monkeypatch.setenv("NEXUS_TASK_MCP_KEY", "shared-secret")
-    calls: list[tuple[str, str, str | None, str | None]] = []
+    calls: list[tuple[str, str, str | None]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        mcp_auth = None
-        if request.url.path == "/workspace/mcp" and request.content:
-            payload = json.loads(request.content.decode())
-            mcp_auth = payload.get("mcp_config", {}).get("headers", {}).get("Authorization")
         calls.append(
             (
                 request.method,
                 request.url.path,
                 request.url.params.get("session_id"),
-                mcp_auth,
             )
         )
         if request.url.path == "/agent/" and request.method == "POST":
@@ -1558,6 +1549,17 @@ def test_task_skill_is_revoked_and_restored_on_existing_sessions(tmp_path, monke
             return httpx.Response(200, json=[])
         if request.method == "GET" and request.url.path == "/workspace/skill":
             return httpx.Response(200, json=[{"name": "任务管理", "dir": "task-management"}])
+        if request.method == "GET" and request.url.path == "/workspace/mcp":
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "name": "nexus-task",
+                        "is_healthy": True,
+                        "tools": [{"name": "nexus_task_get"}],
+                    }
+                ],
+            )
         if request.url.path in {"/workspace/skill/upload", "/workspace/mcp"} or request.method == "DELETE":
             return httpx.Response(200, json={})
         return httpx.Response(404, json={"detail": "missing"})
@@ -1595,7 +1597,7 @@ def test_task_skill_is_revoked_and_restored_on_existing_sessions(tmp_path, monke
             json=employee_body(skills=[]),
         )
         assert removed.status_code == 200, removed.text
-        revoked = {(method, path, session_id) for method, path, session_id, _auth in calls}
+        revoked = set(calls)
         assert ("DELETE", "/workspace/skill/任务管理", employee["mailbox_session_id"]) in revoked
         assert ("DELETE", "/workspace/mcp/nexus-task", employee["mailbox_session_id"]) in revoked
         assert ("DELETE", "/workspace/mcp/nexus-task", "ses_chat") in revoked
@@ -1607,7 +1609,92 @@ def test_task_skill_is_revoked_and_restored_on_existing_sessions(tmp_path, monke
         assert restored.status_code == 200, restored.text
         mcp_calls = [item for item in calls if item[0] == "POST" and item[1] == "/workspace/mcp"]
         assert {item[2] for item in mcp_calls} == {"ses_chat"}
-        assert all(item[3] == "Bearer shared-secret" for item in mcp_calls)
+
+
+def test_task_mcp_discovery_error_is_visible_on_employee_capability(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("NEXUS_TASK_MCP_URL", "http://task.test/mcp")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/agent/" and request.method == "POST":
+            return httpx.Response(201, json={"agent_id": "agent-task"})
+        if request.url.path == "/sessions/" and request.method == "POST":
+            return httpx.Response(201, json={"session_id": "session-mail"})
+        if request.method == "PATCH" and request.url.path.startswith("/sessions/"):
+            return httpx.Response(200, json={})
+        if request.url.path == "/skill":
+            return httpx.Response(200, json=[])
+        if request.url.path == "/workspace/skill":
+            if request.method == "GET":
+                return httpx.Response(
+                    200,
+                    json=[{"name": "任务管理", "dir": "task-management"}],
+                )
+            return httpx.Response(201, json={})
+        if request.url.path == "/workspace/mcp":
+            if request.method == "POST":
+                return httpx.Response(201, json={})
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "name": "nexus-task",
+                        "is_healthy": False,
+                        "error": "连接被拒绝",
+                        "tools": [],
+                    }
+                ],
+            )
+        if request.url.path.endswith("/status"):
+            return httpx.Response(200, json={"status": "idle"})
+        return httpx.Response(200, json={})
+
+    application = create_app()
+    with TestClient(application) as test_client:
+        test_client.app.state.agentscope = AgentScopeClient(
+            "http://agentscope.test",
+            "nexus",
+            httpx.AsyncClient(
+                transport=httpx.MockTransport(handler),
+                base_url="http://agentscope.test",
+            ),
+        )
+        created = test_client.post(
+            "/api/v1/employees",
+            json=employee_body(skills=["task-management"]),
+        )
+        assert created.status_code == 201, created.text
+        employee = created.json()["employee"]
+        from nexus_api.db import connect
+        from nexus_api.main import db_path
+
+        connection = connect(db_path())
+        connection.execute(
+            sql_text(
+                """
+                INSERT INTO t_nexus_conversations (
+                    id, employee_id, owner_id, name, agentscope_session_id,
+                    created_at, updated_at
+                ) VALUES ('conv_task', :p0, 'owner', '任务对话', 'session-chat', 't', 't')
+                """
+            ),
+            {"p0": employee["id"]},
+        )
+        connection.commit()
+        connection.close()
+
+        updated = test_client.patch(
+            f"/api/v1/employees/{employee['id']}",
+            json=employee_body(skills=["task-management"]),
+        )
+        assert updated.status_code == 200, updated.text
+        payload = updated.json()
+        assert payload["sync"]["status"] == "error"
+        assert "任务 MCP 连接或工具发现失败" in payload["sync"]["detail"]
+        capability = payload["employee"]["capability"]
+        assert capability["runtime_status"] == "error"
+        assert "任务 MCP 连接或工具发现失败" in capability["error"]
+        assert capability["task"]["status"] == "error"
 
 
 def test_employee_avatar_persists_and_metadata_edits_do_not_change_it(client):

@@ -28,7 +28,7 @@ async def test_healthy_serve_check_compares_path_and_owner_without_writing(tmp_p
             self.base_url = base_url
 
         async def health(self):
-            return {"healthy": True, "version": "1.18.35"}
+            return {"healthy": True, "version": "1.18.33"}
 
         async def request(self, method, path, **_kwargs):
             assert method == "GET"

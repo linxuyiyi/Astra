@@ -23,7 +23,7 @@ def serve(tmp_path, monkeypatch):
         + """
 import http.server, json, os, sys
 if "--version" in sys.argv:
-    print("1.18.35")
+    print("1.18.33")
     sys.exit(0)
 port = int(sys.argv[sys.argv.index("--port") + 1])
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -35,7 +35,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif self.path == "/path":
             data = {"directory": os.getcwd()}
         else:
-            data = {"healthy": not os.path.exists("unhealthy"), "version": "1.18.35"}
+            data = {"healthy": not os.path.exists("unhealthy"), "version": "1.18.33"}
         self.wfile.write(json.dumps(data).encode())
     def log_message(self, *args): pass
 http.server.HTTPServer.allow_reuse_address = True
@@ -65,7 +65,11 @@ http.server.HTTPServer(("127.0.0.1", port), Handler).serve_forever()
         )
         return local.LocalOpenCodeServerExecutor(
             env,
-            Settings(seed_demo=False, opencode_server_start_timeout_seconds=3),
+            Settings(
+                seed_demo=False,
+                opencode_server_version="1.18.33",
+                opencode_server_start_timeout_seconds=3,
+            ),
         )
 
     yield create

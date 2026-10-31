@@ -1,4 +1,4 @@
-"""任务 MCP 和技能挂接走真实 AgentScopeClient，对面是按 2.0.10 语义实现的路由。"""
+"""任务技能与 MCP 挂接走真实 AgentScopeClient，对面是按 2.0.10 语义实现的路由。"""
 
 import asyncio
 
@@ -14,6 +14,8 @@ def _workspace():
     skills: dict[str, dict[str, str]] = {}
     mcps: dict[tuple[str, str], dict] = {}
     deleted: list[tuple[str, str, str]] = []
+    health: dict[tuple[str, str], bool] = {}
+    failed_uploads: list[str] = []
     app = FastAPI()
 
     @app.post("/workspace/skill/upload", status_code=201)
@@ -23,13 +25,17 @@ def _workspace():
         manifest: str = Form(...),
         files: list[UploadFile] = File(...),
     ):
-        del session_id, manifest
+        del manifest
         raw = await files[0].read()
+        if raw == b"fail":
+            raise HTTPException(status_code=500, detail="skill upload failed")
         name = ""
         for line in raw.decode().splitlines():
             if line.startswith("name:"):
                 name = line.split(":", 1)[1].strip()
                 break
+        if "fail" in failed_uploads:
+            raise HTTPException(status_code=500, detail="skill upload failed")
         skills[agent_id] = {"name": name, "dir": "task-management"}
         return {}
 
@@ -58,8 +64,19 @@ def _workspace():
 
     @app.get("/workspace/mcp")
     async def list_mcp(agent_id: str, session_id: str):
-        item = mcps.get((agent_id, session_id))
-        return [item] if item else []
+        key = (agent_id, session_id)
+        item = mcps.get(key)
+        if not item:
+            return []
+        healthy = health.get(key, True)
+        return [
+            {
+                **item,
+                "is_healthy": healthy,
+                "error": "" if healthy else "MCP 连接失败",
+                "tools": [{"name": "nexus_task_get"}] if healthy else [],
+            }
+        ]
 
     @app.delete("/workspace/mcp/{name}", status_code=204)
     async def delete_mcp(name: str, agent_id: str, session_id: str):
@@ -67,83 +84,152 @@ def _workspace():
         mcps.pop((agent_id, session_id), None)
         return Response(status_code=204)
 
-    return app, skills, mcps, deleted
+    return app, skills, mcps, deleted, health, failed_uploads
 
 
-def test_rotated_key_replaces_mcp_and_skill_revokes_by_stored_name(monkeypatch):
+async def _sync(app, employee, sessions):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://agentscope.test") as http:
+        client = AgentScopeClient("http://agentscope.test", "nexus", http)
+        return await sync_task_capability(client, employee, sessions)
+
+
+def test_sync_task_capability_is_idempotent_and_updates_url(monkeypatch):
     async def scenario():
-        app, skills, mcps, deleted = _workspace()
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://agentscope.test") as http:
+        app, skills, mcps, deleted, _health, _failed = _workspace()
+        employee = {
+            "id": "emp_1",
+            "agentscope_agent_id": "agt_1",
+            "skills": ["task-management"],
+        }
+        sessions = [
+            {"session_id": "mailbox", "conversation_id": "", "channel_id": ""},
+            {"session_id": "private", "conversation_id": "conv_1", "channel_id": ""},
+            {"session_id": "team", "conversation_id": "", "channel_id": "chan_1"},
+        ]
+        monkeypatch.setenv("NEXUS_TASK_MCP_URL", "http://task.test/mcp")
+        result = await _sync(app, employee, sessions)
+        assert result["status"] == "applied"
+        assert skills["agt_1"]["name"] == "任务管理"
+        assert set(mcps) == {("agt_1", "private"), ("agt_1", "team")}
+        for item in mcps.values():
+            assert "Authorization" not in item["mcp_config"]["headers"]
+            assert "X-Nexus-Task-Capability-Version" not in item["mcp_config"]["headers"]
+        assert mcps[("agt_1", "private")]["mcp_config"]["headers"]["X-Nexus-Conversation-Id"] == "conv_1"
+        assert mcps[("agt_1", "team")]["mcp_config"]["headers"]["X-Nexus-Channel-Id"] == "chan_1"
+        deletes_before = len(deleted)
+
+        again = await _sync(app, employee, sessions)
+        assert again["status"] == "applied"
+        assert len(deleted) == deletes_before
+
+        monkeypatch.setenv("NEXUS_TASK_MCP_URL", "http://task2.test/mcp")
+        updated = await _sync(app, employee, sessions)
+        assert updated["status"] == "applied"
+        assert {item[1] for item in deleted if item[0] == "mcp"} == {"nexus-task"}
+        assert all(
+            item["mcp_config"]["url"] == "http://task2.test/mcp" for item in mcps.values()
+        )
+
+        employee["skills"] = []
+        disabled = await _sync(app, employee, sessions)
+        assert disabled["status"] == "applied"
+        assert skills == {}
+        assert mcps == {}
+        assert ("skill", "任务管理", "mailbox") in deleted
+
+        employee["skills"] = ["task-management"]
+        enabled = await _sync(app, employee, sessions)
+        assert enabled["status"] == "applied"
+        assert skills["agt_1"]["name"] == "任务管理"
+        assert set(mcps) == {("agt_1", "private"), ("agt_1", "team")}
+
+    asyncio.run(scenario())
+
+
+def test_skill_upload_failure_does_not_block_mcp_registration(monkeypatch):
+    async def scenario():
+        app, _skills, mcps, _deleted, _health, failed = _workspace()
+        failed.append("fail")
+        employee = {
+            "id": "emp_1",
+            "agentscope_agent_id": "agt_1",
+            "skills": ["task-management"],
+        }
+        sessions = [{"session_id": "private", "conversation_id": "conv_1", "channel_id": ""}]
+        monkeypatch.setenv("NEXUS_TASK_MCP_URL", "http://task.test/mcp")
+        result = await _sync(app, employee, sessions)
+        assert result["status"] == "error"
+        assert result["failures"][0]["stage"] == "skill_upload"
+        assert "任务技能上传失败" in result["detail"]
+        assert ("agt_1", "private") in mcps
+
+    asyncio.run(scenario())
+
+
+def test_discovery_failure_is_reported_in_sync_result(monkeypatch):
+    async def scenario():
+        app, _skills, mcps, _deleted, health, _failed = _workspace()
+        employee = {
+            "id": "emp_1",
+            "agentscope_agent_id": "agt_1",
+            "skills": ["task-management"],
+        }
+        sessions = [{"session_id": "private", "conversation_id": "conv_1", "channel_id": ""}]
+        health[("agt_1", "private")] = False
+        monkeypatch.setenv("NEXUS_TASK_MCP_URL", "http://task.test/mcp")
+        result = await _sync(app, employee, sessions)
+        assert result["status"] == "error"
+        assert result["failures"] == [
+            {
+                "stage": "mcp_discovery",
+                "session_id": "private",
+                "detail": "MCP 连接失败",
+            }
+        ]
+        assert "任务 MCP 连接或工具发现失败" in result["detail"]
+        assert ("agt_1", "private") in mcps
+
+    asyncio.run(scenario())
+
+
+def test_attach_uploads_skill_and_mcp_independently(monkeypatch):
+    from nexus_api.task_skill import attach_task_capability
+
+    async def scenario():
+        app, _skills, mcps, _deleted, _health, failed = _workspace()
+        failed.append("fail")
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://agentscope.test",
+        ) as http:
             client = AgentScopeClient("http://agentscope.test", "nexus", http)
             employee = {
                 "id": "emp_1",
                 "agentscope_agent_id": "agt_1",
                 "skills": ["task-management"],
             }
-            sessions = [
-                {"session_id": "mailbox", "conversation_id": "", "channel_id": ""},
-                {"session_id": "private", "conversation_id": "conv_1", "channel_id": ""},
-                {"session_id": "team", "conversation_id": "", "channel_id": "chan_1"},
-            ]
-            monkeypatch.setenv("NEXUS_TASK_MCP_KEY", "old-key")
-            await sync_task_capability(client, employee, sessions)
-            assert skills["agt_1"]["name"] == "任务管理"
-            assert set(mcps) == {("agt_1", "private"), ("agt_1", "team")}
-            assert all(
-                item["mcp_config"]["headers"]["Authorization"] == "Bearer old-key" for item in mcps.values()
+            await attach_task_capability(
+                client,
+                employee,
+                "private",
+                conversation_id="conv_1",
             )
-            deletes_before = len(deleted)
+            assert ("agt_1", "private") in mcps
 
-            await sync_task_capability(client, employee, sessions)
-            assert len(deleted) == deletes_before
-
-            monkeypatch.setenv("NEXUS_TASK_MCP_KEY", "new-key")
-            await sync_task_capability(client, employee, sessions)
-            assert {item[1] for item in deleted if item[0] == "mcp"} == {"nexus-task"}
-            assert all(
-                item["mcp_config"]["headers"]["Authorization"] == "Bearer new-key" for item in mcps.values()
-            )
-            assert mcps[("agt_1", "private")]["mcp_config"]["headers"]["X-Nexus-Conversation-Id"] == "conv_1"
-            assert mcps[("agt_1", "team")]["mcp_config"]["headers"]["X-Nexus-Channel-Id"] == "chan_1"
-
-            employee["skills"] = []
-            await sync_task_capability(client, employee, sessions)
-            assert skills == {}
-            assert mcps == {}
-            assert ("skill", "任务管理", "mailbox") in deleted
-            assert ("skill", "task-management", "mailbox") not in deleted
-
-            employee["skills"] = ["task-management"]
-            await sync_task_capability(client, employee, sessions)
-            assert skills["agt_1"]["name"] == "任务管理"
-            assert all(
-                item["mcp_config"]["headers"]["Authorization"] == "Bearer new-key" for item in mcps.values()
-            )
-
-    asyncio.run(scenario())
-
-
-def test_assistance_capability_replaces_old_mcp_schema_and_uploads_skill(monkeypatch):
-    from nexus_api.task_skill import attach_task_capability, task_mcp_headers
-
-    async def scenario():
-        app, skills, mcps, deleted = _workspace()
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
-                                     base_url="http://agentscope.test") as http:
-            client = AgentScopeClient("http://agentscope.test", "nexus", http)
-            employee = {"id": "emp_1", "agentscope_agent_id": "agt_1", "skills": ["task-management"]}
-            old_headers = task_mcp_headers("emp_1", "private", conversation_id="conv_1")
-            old_headers.pop("X-Nexus-Task-Capability-Version")
-            await client.add_workspace_mcp(
-                "agt_1", "private", url="http://task.test/mcp", headers=old_headers,
-            )
-            await attach_task_capability(client, employee, "private", conversation_id="conv_1", strict=True)
-            headers = mcps[("agt_1", "private")]["mcp_config"]["headers"]
-            assert headers["X-Nexus-Task-Capability-Version"] == "worker-assistance-v1"
-            assert ("mcp", "nexus-task", "private") in deleted
-            assert skills["agt_1"]["name"] == "任务管理"
-
-    monkeypatch.setenv("NEXUS_TASK_MCP_KEY", "test-key")
     monkeypatch.setenv("NEXUS_TASK_MCP_URL", "http://task.test/mcp")
     asyncio.run(scenario())
+
+
+def test_task_mcp_address_uses_configured_listener_port_and_preserves_explicit_url(monkeypatch):
+    from types import SimpleNamespace
+
+    from nexus_api.task_skill import task_mcp_url
+
+    monkeypatch.delenv("NEXUS_TASK_MCP_URL", raising=False)
+    monkeypatch.setattr("app.config.settings.get_settings", lambda: SimpleNamespace(task_mcp_port=18202))
+    assert task_mcp_url() == "http://127.0.0.1:18202/mcp"
+    monkeypatch.setattr("app.config.settings.get_settings", lambda: SimpleNamespace(task_mcp_port=19202))
+    assert task_mcp_url() == "http://127.0.0.1:19202/mcp"
+    monkeypatch.setenv("NEXUS_TASK_MCP_URL", "http://task.internal:18202/mcp")
+    assert task_mcp_url() == "http://task.internal:18202/mcp"

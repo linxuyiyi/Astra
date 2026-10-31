@@ -124,6 +124,13 @@ async def test_connect_start_health_uses_the_worker_channel(environment_id, monk
     gateway = gateway_for()
     enrolled, auth = await bring_online(gateway, environment_id)
     await _mark(environment_id)
+    from app.config.settings import Settings
+
+    def versioned():
+        return Settings(seed_demo=False, opencode_server_version="1.18.33")
+
+    monkeypatch.setattr("app.runtime.worker_client.get_settings", versioned)
+    monkeypatch.setattr("app.runtime.session_connection.get_settings", versioned)
     monkeypatch.setattr("app.runtime.worker_client.get_gateway", lambda: gateway)
     local_calls: list[str] = []
 
@@ -149,7 +156,7 @@ async def test_connect_start_health_uses_the_worker_channel(environment_id, monk
                 http_status=200,
                 headers={},
                 content_type="application/json",
-                chunk=json.dumps({"healthy": True, "version": "1.18.35"}),
+                chunk=json.dumps({"healthy": True, "version": "1.18.33"}),
                 complete=True,
             )
 

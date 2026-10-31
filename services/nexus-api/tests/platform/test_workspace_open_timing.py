@@ -56,7 +56,7 @@ def test_open_timings_separate_cold_and_warm_and_only_read():
         report = load_script().measure(
             f"http://127.0.0.1:{port}",
             "T1",
-            "/opencode-workspace/1.18.35/index.html",
+            "/opencode-workspace/1.18.33/index.html",
         )
     finally:
         server.shutdown()

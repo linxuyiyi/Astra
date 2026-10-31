@@ -20,7 +20,7 @@
 
 - 远程安装/更新/离线重启需要 SSH 管理通道，且当前一键部署要求 SSH 用户为 root：安装脚本直接写 `/etc/nexus`、`/etc/systemd/system` 并直接调用 `systemctl`，没有 sudo 升权路径。非 root 用户即使 SSH 可达也不受支持，不要通过扩展 sudo 架构来支持非 root。在线重启与在线探测优先使用 Worker 通道。
 - 主控需要 `NEXUS_REMOTE_GATEWAY_LOCAL_URL`、`NEXUS_MCP_RESOURCE_SERVER_URL`、`NEXUS_WORKER_AGENT_GATEWAY_URL` 指向 Worker 可达的内网地址。
-- `deploy/update` 需要 `NEXUS_MCP_TRANSPORT=streamable-http` 与 `NEXUS_MCP_API_KEY`。
+- `deploy/update` 需要 `NEXUS_MCP_TRANSPORT=streamable-http`；图书馆 MCP 不再要求共享 Bearer key，入口由 Worker 网段 ACL 限制。
 - 图书馆 MCP 的 DNS rebinding 保护保持开启。允许的 Host/Origin 只来自 `NEXUS_MCP_RESOURCE_SERVER_URL`、`NEXUS_MCP_ISSUER_URL`、`NEXUS_MCP_HOST:NEXUS_MCP_PORT` 和 loopback；修改这些地址后需重启 MCP 服务。禁止使用 `*` 或请求自带 Host 扩大允许范围。
 - 私有 Git 仓库的 token 只在部署时通过临时 SFTP 文件传入远端，不写入 operation payload、日志或 argv；Git 认证与模型 Key 的自动生成已在 x86_64/aarch64 真实 Worker 验收（见维护报告）。
 

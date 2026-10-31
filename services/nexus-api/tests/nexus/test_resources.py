@@ -460,14 +460,19 @@ def test_employee_binds_mcp_and_unbind_removes_it(tmp_path, monkeypatch, fake):
         )
         assert sent.status_code == 200, sent.text
         session_id = sent.json()["agentscope"]["session_id"]
-        assert [item["name"] for item in fake.workspace(agent_id, session_id)[1]] == [mcp["runtime_name"]]
+        assert {item["name"] for item in fake.workspace(agent_id, session_id)[1]} == {
+            mcp["runtime_name"],
+            "nexus-schedule",
+        }
 
         updated = client.patch(
             f"/api/v1/employees/{employee['id']}",
             json=employee_body(mcps=[]),
         )
         assert updated.status_code == 200, updated.text
-        assert fake.workspace(agent_id, session_id)[1] == []
+        assert [item["name"] for item in fake.workspace(agent_id, session_id)[1]] == [
+            "nexus-schedule"
+        ]
         assert client.delete(f"/api/v1/config/mcps/{mcp['id']}").status_code == 200
 
 

@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import hmac
 from typing import Any
 from urllib.parse import urlsplit
 
-from mcp.server.auth.provider import AccessToken
-from mcp.server.auth.settings import AuthSettings
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
@@ -20,23 +17,6 @@ from app.library_schemas import (
 from app.library_service import KnowledgeService, LibraryError
 from app.llm_wiki import LlmWikiError
 from app.runtime.runtime_context import RuntimeContextError
-
-
-class StaticTokenVerifier:
-    """Validate the deployment-provided bearer token without persisting it."""
-
-    def __init__(self, expected_token: str):
-        self.expected_token = expected_token
-
-    async def verify_token(self, token: str) -> AccessToken | None:
-        if not hmac.compare_digest(token, self.expected_token):
-            return None
-        return AccessToken(
-            token=token,
-            client_id="nexus-digital-employee",
-            subject="nexus-library-client",
-            scopes=["library:read", "library:feedback"],
-        )
 
 
 def _authority(url: str) -> tuple[str, str] | None:
@@ -103,16 +83,6 @@ def transport_security(settings=None) -> TransportSecuritySettings:
 
 
 def build_mcp_server() -> MCPServer:
-    settings = get_settings()
-    auth = None
-    verifier = None
-    if settings.mcp_api_key:
-        verifier = StaticTokenVerifier(settings.mcp_api_key)
-        auth = AuthSettings(
-            issuer_url=settings.mcp_issuer_url,
-            resource_server_url=settings.mcp_resource_server_url,
-            required_scopes=["library:read"],
-        )
     server = MCPServer(
         name="NEXUS Digital Library",
         title="NEXUS 数字图书馆",
@@ -122,8 +92,6 @@ def build_mcp_server() -> MCPServer:
             "先使用 library_search 查找正式知识，再用 library_get 将选中的 Markdown 放入任务上下文。"
             "只负责执行任务；任务总结与经验由人工确认完成后的后台复盘统一处理。"
         ),
-        token_verifier=verifier,
-        auth=auth,
     )
 
     @server.tool(name="library_search", structured_output=True)

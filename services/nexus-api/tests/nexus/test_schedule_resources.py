@@ -61,7 +61,6 @@ class ScheduledAgentScope(FakeAgentScope):
 def scheduled(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("NEXUS_AGENTSCOPE_BASE_URL", "")
-    monkeypatch.setenv("NEXUS_TASK_MCP_KEY", "test-task-secret")
     fake = ScheduledAgentScope()
     with TestClient(create_app()) as client:
         attach(client, fake)
@@ -104,7 +103,7 @@ def test_prepare_without_private_is_idempotent_and_revokes(scheduled):
     assert headers["X-Nexus-Session-Id"] == "scheduled"
     assert headers["X-Nexus-Conversation-Id"] == ""
     assert headers["X-Nexus-Schedule-User-Id"] == fake.user
-    assert headers["Authorization"] == "Bearer test-task-secret"
+    assert "Authorization" not in headers
     assert client.post(path, json=context(fake)).status_code == 200
     assert len([u for u in fake.uploads if u["name"] == "任务管理"]) == 1
     assert fake.library_skills.count("ext-skill") == 1

@@ -30,7 +30,6 @@ def test_official_schedule_resources_complete_and_release(
         "ASTRA_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'nexus.db'}"
     )
     monkeypatch.setenv("NEXUS_INTERNAL_KEY", "schedule-test-internal")
-    monkeypatch.setenv("NEXUS_TASK_MCP_KEY", "schedule-test-task")
     monkeypatch.setenv("NEXUS_AGENTSCOPE_USER_ID", "nexus")
 
     async def scenario():

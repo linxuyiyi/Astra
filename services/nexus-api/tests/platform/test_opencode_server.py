@@ -31,19 +31,23 @@ def test_exact_version_magic_value_is_rejected():
 
 
 def test_version_check_accepts_only_the_supported_release():
-    strict = OpenCodeServerManager(Settings(seed_demo=False))
-    assert strict.version_error("1.18.35") is None
-    assert strict.version_error("v1.18.35") is None
+    strict = OpenCodeServerManager(Settings(seed_demo=False, opencode_server_version="1.18.33"))
+    assert strict.version_error("1.18.33") is None
+    assert strict.version_error("v1.18.33") is None
     assert strict.version_error("1.0.0") is not None
     assert strict.version_error("1.2.27") is not None
     assert strict.version_error("v1.2.27") is not None
     assert strict.version_error("1.18.25") is not None
-    assert strict.version_error("1.18.33") is not None
+    assert strict.version_error("1.18.35") is not None
     assert strict.version_error(None) is not None
     assert strict.version_error("") is not None
 
     relaxed = OpenCodeServerManager(
-        Settings(seed_demo=False, opencode_server_version_check_enabled=False)
+        Settings(
+            seed_demo=False,
+            opencode_server_version="1.18.33",
+            opencode_server_version_check_enabled=False,
+        )
     )
     assert relaxed.version_error("1.0.0") is None
     assert relaxed.version_error(None) is None

@@ -37,7 +37,7 @@
 | AgentScope 当前使用 RedisStorage 与 RedisMessageBus | services/agent-service/agent_service.py | 不把 SQL 存储和内存总线绑定在一起 |
 | AgentScope 2.0.10 官方提供 AsyncSQLAlchemyStorage | 已安装官方包 app/storage/_sql/_storage.py | 使用官方适配器；storage-sql extra 不包含 aiosqlite，须显式安装 |
 | task platform 与 AgentScope 的 mcp 版本约束冲突 | task-platform/pyproject.toml、AgentScope METADATA | 必须保持独立 Python 环境 |
-| 安装器未生成 Task MCP 的共享密钥 | ops/deploy/install_nexus.sh、app/task_mcp.py | init 补齐 ASTRA_TASK_MCP_KEY 与 NEXUS_TASK_MCP_KEY 的一致映射 |
+| 安装器历史生成过 MCP 共享 Bearer key | ops/deploy/install_nexus.sh、app/task_mcp.py | v1.4.9 改为内网标准 HTTP MCP，不再生成；旧环境项升级时清理 |
 | Workspace UI 依赖精确 OpenCode 版本及仓库资源路径 | app/api/workspace_routes.py、web/nexus/public/opencode-workspace | 发布清单与后端资源定位一起验证 |
 | llm_wiki 的设置主要保存为 app-state.json | llm_wiki/src/lib/project-store.ts | 借鉴操作方式；平台动态配置改用数据库 |
 
@@ -76,7 +76,7 @@
 | 任务分类与提示词 | 分类、排序、启用、任务/问题提示词 | 现有分类表 | 后续任务使用 |
 | 聊天模型与凭据 | 官方 credential、Agent/Session 绑定 | AgentScope 官方存储 | 首期保留 CLI 登记，无 Nexus 模型编辑表单 |
 | 启动参数 | 数据目录、数据库定位、监听地址与端口、Redis 地址、服务内部地址、存储后端 | 持久 bootstrap 文件及明确启动参数 | 重启生效 |
-| 内部身份密钥 | 管理密钥、加密主密钥、Library/Task MCP 共享密钥 | 持久 secrets 文件 | init 自动生成；不在通用设置表中编辑 |
+| 内部身份密钥 | 管理密钥、加密主密钥、NEXUS_INTERNAL_KEY | 持久 secrets 文件 | init 自动生成；不在通用设置表中编辑 |
 
 首期不把所有环境变量都搬进网页。心跳阈值、Runtime 恢复周期、Celery beat 间隔、进程端口、数据库地址、Redis 地址和根目录仍是启动配置，页面只读展示。核心 Runtime 超时等在线调整留到独立行为评审，不借本轮顺手扩展。
 
@@ -230,7 +230,7 @@ get_settings 只承载仍需启动时确定的参数。禁止用 clear lru_cache
 | nexus model bootstrap | 调用现有官方 credential 登记逻辑；模型 Key 由受保护输入或环境传入，避免命令行参数泄露 |
 | nexus backup / restore | 按下一节规则执行离线备份和恢复 |
 
-init 至少生成并复用：ASTRA_GATEWAY_MASTER_KEY、管理密钥、ASTRA_MCP_API_KEY、Task MCP 共享密钥。启动时保证 ASTRA_TASK_MCP_KEY 与 NEXUS_TASK_MCP_KEY 是同一值。内部秘密用原子文件写入及权限控制，不被安装器或普通 start 重置。
+init 至少生成并复用：ASTRA_GATEWAY_MASTER_KEY、管理密钥、NEXUS_INTERNAL_KEY。MCP 共享 Bearer key 已移除；内部秘密用原子文件写入及权限控制，不被安装器或普通 start 重置。
 
 nexus model bootstrap 成功后，原子保存不含 Key 的 credential_id/type/model/parameters 绑定引用到 bootstrap，启动 Nexus API 时映射为现有 NEXUS_AGENTSCOPE_CHAT_MODEL_CONFIG，避免只在终端打印 JSON 而下次启动丢失。模型 Key 只提交到 AgentScope。相同输入重复执行复用现有 credential；明确更换 Key 时调用官方 PATCH /credential/{credential_id}，不能因 endpoint 相同就跳过更新。更新默认绑定只影响后续新建 Session；现有 Session 不重建、不批量改绑。需要重新读取启动引用时只重启 Nexus API，不重启正在执行任务的 Runtime。
 

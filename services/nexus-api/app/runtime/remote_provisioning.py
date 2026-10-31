@@ -204,13 +204,10 @@ def managed_config(
     gateway_url,
     gateway_key,
     mcp_url,
-    mcp_key,
     skills=None,
     mcp_refs=None,
 ):
     mcp = {"type": "remote", "url": mcp_url, "enabled": True, "oauth": False}
-    if mcp_key:
-        mcp["headers"] = {"Authorization": f"Bearer {mcp_key}"}
     provider = {
         "npm": "@ai-sdk/openai-compatible",
         "name": "Nexus API 中转",
@@ -237,7 +234,7 @@ class RemoteProvisioner:
         self.settings = get_settings()
         self.runtime = runtime or ExecutionEnvironmentRuntime(self.settings)
         self.steps: list[dict] = []
-        self.secrets = [environment.ssh_password, self.settings.mcp_api_key]
+        self.secrets = [environment.ssh_password]
         self.ssh = None
         self.new_key_id = None
         self.old_key_id = None
@@ -517,7 +514,6 @@ fi
             gateway_url=gateway_url,
             gateway_key=raw,
             mcp_url=mcp_url,
-            mcp_key=self.settings.mcp_api_key,
             skills=collect_skill_files(list(self.environment.skill_refs or []), skill_source),
             mcp_refs=list(self.environment.mcp_refs or []),
         )

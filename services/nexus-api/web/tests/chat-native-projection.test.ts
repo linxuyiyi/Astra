@@ -25,6 +25,16 @@ test("native history preserves thinking, failed tool results, images, usage and 
   assert.equal(projected.finished_reason, "error"); assert.strictEqual(projected.native, raw);
 });
 
+test("AgentScope runtime-state hints stay internal and are not shown as chat hints", () => {
+  const raw = { ...native, content: [
+    { id: "runtime", type: "hint", hint: "<system-reminder>now</system-reminder>", source: '{"label": "System", "sublabel": "Runtime State"}', created_at: time },
+    { id: "peer", type: "hint", hint: "peer context", source: "同事提示", created_at: time },
+  ] } as Msg;
+  const projected = projectMessage(raw, identity);
+  assert.deepEqual(projected.hints?.map(item => item.id), ["peer"]);
+  assert.equal(projected.thinking?.length, 0);
+});
+
 test("group sender identity comes from the canonical envelope, including system and other humans", () => {
   const item = { id: "system-one", seq: 1, sender_type: "system" as const, sender_id: "", sender_name: "系统", text: "created", created_at: time, discussion_id: "", message: { ...native, id: "system-one", role: "system" as const } };
   assert.equal(timelineMessage(item).sender_type, "system");

@@ -10,6 +10,21 @@ export interface MessageIdentity {
   name: string;
 }
 
+/** AgentScope 每轮注入给模型的内部运行态提醒，不应作为员工对话内容展示。 */
+export function isRuntimeStateHintSource(source: string): boolean {
+  const raw = String(source || "").trim();
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as { label?: unknown; sublabel?: unknown };
+    const label = String(parsed.label ?? "").trim().toLowerCase();
+    const sublabel = String(parsed.sublabel ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+    return label === "system" && sublabel === "runtime state";
+  } catch {
+    const normalized = raw.toLowerCase();
+    return normalized === "system · runtime state" || normalized === "system / runtime state";
+  }
+}
+
 /** 仅为视图投影；原生内容和状态由 AgentScope SDK 保留，不另建执行状态。 */
 export function projectMessage(native: Msg, identity: MessageIdentity): ChatMessage {
   const tools: NonNullable<ChatMessage["tools"]> = [];
@@ -22,6 +37,7 @@ export function projectMessage(native: Msg, identity: MessageIdentity): ChatMess
     if (block.type === "thinking") thinking.push(block.thinking);
     if (block.type === "data") data.push(block);
     if (block.type === "hint") {
+      if (isRuntimeStateHintSource(block.source || "")) continue;
       hints.push({ id: block.id, source: block.source || "提示", text: typeof block.hint === "string" ? block.hint
         : block.hint.filter(item => item.type === "text").map(item => item.text).join("\n") });
       if (Array.isArray(block.hint)) data.push(...block.hint.filter((item): item is DataBlock => item.type === "data"));

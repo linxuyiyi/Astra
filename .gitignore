@@ -44,3 +44,7 @@ web/workspace-ui/upstream/**/node_modules/
 
 # 运行时锁文件
 ops/env/*.lock
+
+# 前端依赖锁文件含本地 registry 地址；公司内网由部署器按配置源安装，不提交。
+services/nexus-api/web/package-lock.json
+services/nexus-api/chat-island/package-lock.json

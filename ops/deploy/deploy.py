@@ -888,23 +888,29 @@ class Deployer:
                         raise DeploymentError(
                             name + " 项目 npm 配置与指定源/TLS 策略冲突"
                         )
-            lock = json.loads((directory / "package-lock.json").read_text())
-            registry_host = urlsplit(self.sources["npm_registry"]).netloc
-            for package in lock.get("packages", {}).values():
-                resolved = package.get("resolved", "")
-                if resolved and (
-                    urlsplit(resolved).scheme not in ("https", "http")
-                    or urlsplit(resolved).netloc
-                    not in [registry_host, *self.sources["npm_lock_hosts"]]
-                ):
-                    raise DeploymentError(
-                        f"{name} 锁文件含非配置 registry 制品，拒绝隐式访问"
-                    )
+            lock_path = directory / "package-lock.json"
+            install = [self.npm, "ci"]
+            if lock_path.is_file():
+                lock = json.loads(lock_path.read_text())
+                registry_host = urlsplit(self.sources["npm_registry"]).netloc
+                for package in lock.get("packages", {}).values():
+                    resolved = package.get("resolved", "")
+                    if resolved and (
+                        urlsplit(resolved).scheme not in ("https", "http")
+                        or urlsplit(resolved).netloc
+                        not in [registry_host, *self.sources["npm_lock_hosts"]]
+                    ):
+                        raise DeploymentError(
+                            f"{name} 锁文件含非配置 registry 制品，拒绝隐式访问"
+                        )
+            else:
+                # 前端锁文件不提交：其中可能写死公网 registry。按部署配置源
+                # 现场解析版本，保证内网机器不访问锁文件里的外部地址。
+                install = [self.npm, "install"]
             # 禁用任意生命周期下载；本仓库构建脚本显式执行。
             self.run(
                 [
-                    self.npm,
-                    "ci",
+                    *install,
                     "--ignore-scripts",
                     "--registry",
                     self.sources["npm_registry"],

@@ -380,3 +380,35 @@ def test_container_resources_use_nested_cgroup_limits_instead_of_host_totals(tmp
     if hasattr(deploy.os, "sched_getaffinity"):
         monkeypatch.setattr(deploy.os, "sched_getaffinity", lambda _pid: set(range(32)))
     assert deploy.linux_resources(proc, cgroup) == {"memory_mb": 2048, "cpus": 2}
+
+
+def test_frontend_build_without_committed_lock_uses_configured_registry(tmp_path):
+    """前端锁文件不提交时，部署应使用配置源现场解析，而不是 npm ci。"""
+    instance = object.__new__(deploy.Deployer)
+    instance.release_root = tmp_path / "release"
+    instance.sources = {
+        "npm_registry": "https://npm.company.test/",
+        "npm_lock_hosts": ["registry.npmjs.org"],
+        "python_version": "3.11.17",
+        "node_version": "22.23.3",
+    }
+    instance.values = {"NEXUS_DEPLOY_RELEASE": "test-release"}
+    instance.npm = "npm"
+    instance.package_env = {}
+    instance.step = lambda *_args, **_kwargs: None
+    calls = []
+    instance.run = lambda command, **_kwargs: calls.append(command)
+    for name in ("chat-island", "web"):
+        directory = instance.release_root / "services/nexus-api" / name
+        directory.mkdir(parents=True)
+        (directory / "package.json").write_text('{"name":"fixture","scripts":{"build":"true"}}')
+    (instance.release_root / "services/nexus-api/web/dist").mkdir()
+    (instance.release_root / "services/nexus-api/web/dist/index.html").write_text("ok")
+
+    instance.build_web()
+
+    installs = [call for call in calls if call[1] in {"install", "ci"}]
+    assert len(installs) == 2
+    assert all(call[1] == "install" for call in installs)
+    assert all("--registry" in call for call in installs)
+    assert all("--ignore-scripts" in call for call in installs)

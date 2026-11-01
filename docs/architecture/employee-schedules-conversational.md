@@ -2,6 +2,8 @@
 
 日期：2026-10-23。分支 `codex/employee-schedules`，基线 `a3f429e7c`。状态：**分析完成；最终按用户选择采用 MCP，已实现**。实现见 [数字员工日程 MCP](employee-schedules-mcp.md)。本文保留方案对比与风险分析；下文“推荐 A / 不推荐先做 MCP”是决策前结论，最终决策已改为 MCP。
 
+> 历史分析：以下部分结论已被后续实现更新。当前日程执行已同步员工 Skill/MCP（知识库仍未接入），MCP 也不再使用共享 Bearer key；现行行为以 `employee-schedules.md` 和 `employee-schedules-mcp.md` 为准。
+
 本文回答“能否让数字员工在对话里自己分析并创建日程，是否应该做成 MCP 工具”，并给出最小可行路线与验证计划。
 
 ## 结论
@@ -10,7 +12,7 @@
 2. **直接放开不可行。** Nexus 所有聊天 Session 都跑在平台身份 `nexus` 下，而日程页的命名空间是 `nexus-schedule-<sha256(人类 UID)>`。员工创建的日程会落到 `nexus` 名下：人类页面看不到，`ScheduleList` 还会把平台身份下所有人的日程列给任意员工，破坏现有“按人隔离”。
 3. **最终采用 MCP 方案（用户选择）。** 私聊通过 `nexus-schedule` MCP 创建、列表、查看当前人类的日程；官方 `ScheduleCreate` 等工具继续移除。MCP 只安装在私聊 Session，Nexus 用 `agentscope_session_id` 解析归属，内部接口校验员工和会话；创建默认不启用。实现见 [数字员工日程 MCP](employee-schedules-mcp.md)。分析时曾推荐“重定向官方工具”，因为它保留 `source=AGENT`/`source_session_id` 和官方列表/删除工具；代价是要动官方工具实例或重建工具。MCP 路径的代价是官方 `source=USER`、没有 `source_session_id`。
 4. **MCP 仍是传输层；归属才是关键。** 模型的分析能力来自对话推理和工具描述，不来自 MCP。MCP 只是把创建动作暴露给模型的另一种方式，仍要解决“会话属于谁、写进哪个命名空间、如何审计、如何限流”。本次实现用会话头 + Nexus 内部接口解决归属，没有改变这个判断。
-5. **还有前置缺口。** 官方触发新建的日程工作区不继承员工的 Skill/MCP/知识库；官方工具默认时区是 UTC；没有官方 `ScheduleUpdate` 工具；配额、递归创建和提示注入都未处理。这些必须在开放前定策略。
+5. **分析时的前置缺口（部分已修复）。** 分析时官方触发新建的日程工作区不继承员工 Skill/MCP/知识库；当前已通过 `schedule_resources.py` 同步 Skill/MCP，知识库仍未接入；官方工具默认时区是 UTC；没有官方 `ScheduleUpdate` 工具；配额、递归创建和提示注入都未处理。这些必须在开放前定策略。
 
 ## 一、官方 2.0.10 已经提供什么
 
@@ -35,8 +37,8 @@
 2. **工具被显式移除。** `services/agent-service/agent_service.py:149-160` 的 `REMOVED_AGENT_TOOLS` 包含四个 `Schedule*`，`:207-220` 在每次组装后 `remove_tool`。这是有意为之，不是遗漏。
 3. **页面只读人类命名空间。** `schedules.py:61-69` 把所有日程请求的 `X-User-ID` 换成 `schedule_user_id(uid)`；列表、创建、启停、删除、执行记录都走这个身份。
 4. **官方资源访问策略只为人类命名空间共享平台资源。** `services/agent-service/schedule_access.py` 让 `nexus-schedule-*` 只读访问平台 Agent、credential、知识库；不共享 Schedule 和 Session。它解决的是“执行时能拿到平台 Agent/模型”，不解决“员工在聊天里把日程写到哪个用户”。
-5. **MCP 是按会话安装的。** `services/nexus-api/nexus_api/task_skill.py:35-45` 已经给出 per-session header 模式（`X-Nexus-Employee-Id`、`X-Nexus-Session-Id`、`X-Nexus-Conversation-Id`、Bearer key），说明“让 MCP 知道当前会话”在工程上可行；但这也说明 MCP 需要额外的安装、鉴权和生命周期管理。
-6. **日程执行工作区不继承绑定。** 官方触发只创建 `workspace_id + chat_model_config`，没有 `knowledge_config`，也没有把私聊工作区的 Skill/MCP 复制过去；这与现有交接材料中的已知缺口一致。
+5. **MCP 是按会话安装的。** `services/nexus-api/nexus_api/task_skill.py:35-45` 已经给出 per-session header 模式（`X-Nexus-Employee-Id`、`X-Nexus-Session-Id`、`X-Nexus-Conversation-Id`），说明“让 MCP 知道当前会话”在工程上可行；但这也说明 MCP 需要额外的安装、鉴权和生命周期管理。
+6. **分析时日程执行工作区不继承绑定。** 官方触发只创建 `workspace_id + chat_model_config`，没有 `knowledge_config`，也没有把私聊工作区的 Skill/MCP 复制过去；后续已通过 `schedule_resources.py` 同步 Skill/MCP，知识库仍未接入。
 
 ## 三、为什么不能只删白名单
 
@@ -178,7 +180,7 @@ async def assembled(**kwargs):
 **技术上可以。** 仓库里已有 Task MCP / Library MCP 的服务端实现（`services/nexus-api/app/task_mcp.py`、`app/mcp_server.py`），但它们是独立基础设施进程，不在 `nexus_api` 进程内；Nexus 侧只有 MCP 客户端和 MCP 库管理（`resources.py`、`task_skill.py`）。做日程 MCP 可以复用这套 MCP 服务端技术，但仍要新增或扩展一个 MCP 服务进程、端口和部署，成本比一个 FunctionTool 高。具体做法是：
 
 1. 写一个 MCP server（放 Nexus 或 Agent Service 都可以），暴露 `schedule_create`、`schedule_list`、`schedule_cancel` 等工具。
-2. 按 `task_skill.py` 的模式，在私聊 Session 创建/同步时用 `add_workspace_mcp()` 安装，headers 带 `X-Nexus-Employee-Id`、`X-Nexus-Session-Id`、`X-Nexus-Conversation-Id` 和内部 Bearer key。
+2. 按 `task_skill.py` 的模式，在私聊 Session 创建/同步时用 `add_workspace_mcp()` 安装，headers 带 `X-Nexus-Employee-Id`、`X-Nexus-Session-Id`、`X-Nexus-Conversation-Id`。
 3. MCP server 用 session id 反查 Nexus 的 `t_nexus_conversations.owner_id`，再调用 Nexus 的创建逻辑。
 4. 工具名会是 `mcp__nexus-schedule__schedule_create`；要么像 `allow_nexus_task_mcp()` 一样给这个前缀显式 ALLOW，要么让会话用 `bypass` 权限模式。
 

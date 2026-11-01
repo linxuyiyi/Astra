@@ -1,6 +1,6 @@
 # 项目内 OpenSpec + Superpowers 集成
 
-Nexus v1.4.7 继续使用仓库里已经提交的 OpenSpec 与 Superpowers，**clone 后启动 OpenCode 即可使用**，
+Nexus v1.4.9 继续使用仓库里已经提交的 OpenSpec 与 Superpowers，**clone 后启动 OpenCode 即可使用**，
 不依赖任何全局安装、`~/.config`、`~/.opencode` 或 Home 目录配置。
 没有在仓库外再找一套 Superpowers，也没有补写缺失的 skill。
 

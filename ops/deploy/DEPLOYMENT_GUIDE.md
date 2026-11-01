@@ -45,7 +45,7 @@ sudo bash ops/deploy/install_nexus.sh --sources ops/deploy/sources/huawei.json
 
 流程为：系统与代码检查 → 配置诊断 → 来源/依赖检查 → 独立发布快照与虚拟环境准备 → SQL/Redis/Settings 验证 → 聊天岛和 Web 构建 → 证书及 `nginx -t` → 端口归属检查 → 停止旧进程 → Nexus Alembic 与 AgentScope 官方迁移 → 网关平台 Key 登记 → 启动全部服务 → 健康、实际发布版本及入口验收。
 
-发布快照在 `releases/<Git提交>/repo`，通过 `git archive` 生成，包含独立 venv 与构建产物，不修改在线旧发布。相同代码已完成的构建可复用。npm 使用指定 registry、锁文件校验和禁止安装生命周期脚本，随后显式执行仓库构建命令；pip 安装和隔离构建使用同一索引。地址默认配置不替代公司网络出站策略。
+发布快照在 `releases/<Git提交>/repo`，通过 `git archive` 生成，包含独立 venv 与构建产物，不修改在线旧发布。相同代码已完成的构建可复用。npm 使用指定 registry，禁止安装生命周期脚本；若发布快照带锁文件则校验 registry 主机，未提交锁文件时用 `npm install` 按配置源现场解析。随后显式执行仓库构建命令；pip 安装和隔离构建使用同一索引。地址默认配置不替代公司网络出站策略。
 
 唯一 Python 进程清单管理以下 11 个进程：AgentScope、网关、Nexus API、Library/Task/Schedule MCP、三个 Celery Worker、Celery Beat、Nginx。复用 `ops/dev/procman.py` 的进程组原语，记录 PID、创建时间、进程组、工作目录和发布提交；停止前重新核对，等待旧进程与端口退出再启动。已有正确的 Python 进程记录可迁移；未知进程/端口拒绝接管，可交互修改端口。旧 systemd 自启服务需管理员先停用，安装器不调用 systemctl。
 

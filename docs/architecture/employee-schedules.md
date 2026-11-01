@@ -32,7 +32,7 @@ Agent Service 使用官方 `ResourceAccessPolicyBase` 扩展点，只向该命�
 - 日程工作区独立于私聊。固定 2.0.10 的本地 manager 在 PER_SESSION 下仍共用员工物理目录，因此使用 `ScheduleWorkspaceManager` 仅对日程按安排者、员工和 workspace_id 派生独立目录及缓存键；旧共用目录中的工作文件不会自动搬入日程目录。每次运行在官方运行锁获取前调用 Nexus 内部准备接口，复用员工资源同步器安装/收回当前 Skill 和 MCP；装配时应用共用的员工工具权限并激活现存工具组。知识库绑定仍未在本次接入，模型配置仍为日程创建时的快照。
 - 准备接口从官方 ScheduleOrigin、日程记录、安排者身份和员工绑定验证来源；库安装只调整资源库读取 owner，Session 和工作区仍属于安排者。普通聊天沿用原流程。
 - 准备失败不调用模型，交由官方装配错误记录写入 ERROR 和 finished_at；中断请求跳过资源准备。不会自动重放历史卡住的执行。
-- 日程 Task MCP 使用本次 Session 与日程身份，在连接和工具调用时重新验证来源及任务权限；不借用私聊/群聊身份，任务查询和操作限制在当前执行 Session。无原人类聊天入口的日程任务，向人求助的投递闭环未在本次验收。
+- 日程 Task MCP 使用本次 Session 与日程身份，连接和工具发现只注入来源上下文，工具调用时再验证来源及任务权限；不借用私聊/群聊身份，任务查询和操作限制在当前执行 Session。无原人类聊天入口的日程任务，向人求助的投递闭环未在本次验收。
 - 连续上下文的会话数不等于执行次数；页面不推测执行成功、失败或下次运行时间。执行内容从官方消息读取，仅展示文本块，过滤内部 HintBlock/思考块。
 - 上游官方列表尚未提供分页；Nexus 在读取当前用户上游记录后筛选、分页，浏览器只收到一页。当前不承诺大规模上游查询性能。
 
@@ -44,7 +44,7 @@ MCP 走官方 REST 创建，官方 `source` 为 `USER`、没有 `source_session_
 
 ## 部署
 
-无需数据库 migration。资源准备修复需要一并更新 Nexus、Task MCP 和 Agent Service（包括新增的 `schedule_resources.py`、`schedule_workspace.py` 及 `group_security.py`），并重启对应进程；Nexus 与 Agent Service 的 `NEXUS_AGENTSCOPE_USER_ID` 必须一致，服务间密钥及 Task MCP 的 Nexus 回调地址需正确配置。已有前端/Nginx 安装方式保持不变。
+无需数据库 migration。资源准备修复需要一并更新 Nexus、Task MCP 和 Agent Service（包括新增的 `schedule_resources.py`、`schedule_workspace.py` 及 `group_security.py`），并重启对应进程；Nexus 与 Agent Service 的 `NEXUS_AGENTSCOPE_USER_ID` 必须一致，`NEXUS_INTERNAL_KEY` 及日程 MCP 的 Nexus API 地址需正确配置。已有前端/Nginx 安装方式保持不变。
 
 运行针对性验证：
 

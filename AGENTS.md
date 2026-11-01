@@ -1,8 +1,8 @@
-# Nexus v1.4.8 开发约定
+# Nexus v1.4.9 开发约定
 
 只放所有代码任务都要遵守的规则。OpenSpec 产物规则在 `openspec/config.yaml`，工具与集成细节见 `docs/architecture/OPENSPEC_SUPERPOWERS.md`；按需查阅，不要每轮加载整套教程。
 
-本分支的产品是 **Nexus v1.4.8**。`services/nexus-api` 是唯一的 Nexus 服务：同一进程提供 `/api/v1`（数字员工、私聊、团队、`contact_employee`）、`/api`（任务、Worker、网关控制面、图书馆）、Worker Gateway WebSocket 和前端静态资源。前端在 `services/nexus-api/web`，聊天岛在 `services/nexus-api/chat-island`；OpenCode 网关数据面、Task MCP、Library MCP 与 AgentScope 仍是独立基础设施进程。
+本分支的产品是 **Nexus v1.4.9**。`services/nexus-api` 是唯一的 Nexus 服务：同一进程提供 `/api/v1`（数字员工、私聊、团队、`contact_employee`）、`/api`（任务、Worker、网关控制面、图书馆）、Worker Gateway WebSocket 和前端静态资源。前端在 `services/nexus-api/web`，聊天岛在 `services/nexus-api/chat-island`；OpenCode 网关数据面、Task MCP、Library MCP 与 AgentScope 仍是独立基础设施进程。
 
 ## 项目范围
 
@@ -35,7 +35,7 @@ Task → Run → Employee → Worker → OpenCode Session
 
 ## 数据兼容
 
-v1.4.8 公司从空 MySQL 8.0.36 部署，不保留早期迁移链或旧库导入。后续已发布 schema 的异常通过 **新 Alembic migration、backfill 或一次性修复脚本**处理，不修改已发布 init。
+v1.4.9 公司从空 MySQL 8.0.36 部署，不保留早期迁移链或旧库导入。后续已发布 schema 的异常通过 **新 Alembic migration、backfill 或一次性修复脚本**处理，不修改已发布 init。
 
 不要为了兼容旧数据长期保留：
 

@@ -2,6 +2,8 @@
 
 > 基线：`linxuyiyi/Astra` 仓库 `nexus-v1.4.2` 分支，2026-10-19 静态源码审查。**本版本只处理 Agent Worker 部署、装备、维护及其运行状态呈现；主控部署属于 v1.4.4。**
 >
+> **历史设计（v1.4.5）**：当前 v1.4.9 的 Worker 部署已不使用 systemd/systemctl；本文仅保留当时的设计与差异记录。
+>
 > 产品原则：Nexus 是独立产品，不兼容历史版本；数字员工定义身份与职责，Agent Worker 是可部署、可调度的执行资源，**Worker ≠ 数字员工 ≠ SubAgent**。沿用现有 OpenCode、Worker Gateway、WebSocket、systemd，不另造执行框架。
 
 ## 一、审查结论

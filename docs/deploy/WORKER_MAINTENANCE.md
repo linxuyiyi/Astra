@@ -18,7 +18,7 @@
 
 ## 运行前提
 
-- 远程安装/更新/离线重启需要 SSH 管理通道，且当前一键部署要求 SSH 用户为 root：安装脚本直接写 `/etc/nexus`、`/etc/systemd/system` 并直接调用 `systemctl`，没有 sudo 升权路径。非 root 用户即使 SSH 可达也不受支持，不要通过扩展 sudo 架构来支持非 root。在线重启与在线探测优先使用 Worker 通道。
+- 远程安装/更新/离线重启需要 SSH 管理通道，且当前一键部署要求 SSH 用户为 root：安装程序直接写 `/etc/nexus`、启动和停止自身进程，不安装 systemd unit，也不调用 `systemctl`；没有 sudo 升权路径。非 root 用户即使 SSH 可达也不受支持。在线重启与在线探测优先使用 Worker 通道。
 - 主控需要 `NEXUS_REMOTE_GATEWAY_LOCAL_URL`、`NEXUS_MCP_RESOURCE_SERVER_URL`、`NEXUS_WORKER_AGENT_GATEWAY_URL` 指向 Worker 可达的内网地址。
 - `deploy/update` 需要 `NEXUS_MCP_TRANSPORT=streamable-http`；图书馆 MCP 不再要求共享 Bearer key，入口由 Worker 网段 ACL 限制。
 - 图书馆 MCP 的 DNS rebinding 保护保持开启。允许的 Host/Origin 只来自 `NEXUS_MCP_RESOURCE_SERVER_URL`、`NEXUS_MCP_ISSUER_URL`、`NEXUS_MCP_HOST:NEXUS_MCP_PORT` 和 loopback；修改这些地址后需重启 MCP 服务。禁止使用 `*` 或请求自带 Host 扩大允许范围。
@@ -30,10 +30,10 @@
 - OpenCode 目标入口：`$HOME/.local/share/nexus/workers/{environment_id}/bin/opencode`
 - Worker Agent venv / wheel：`/opt/nexus/workers/{environment_id}/venv`、同目录 wheel 与 `wheel.sha256`
 - Worker 环境文件：`/etc/nexus/worker-{environment_id}.env`
-- systemd：`nexus-opencode-{environment_id}.service`、`nexus-worker-{environment_id}.service`
+- 进程：由 PID/进程组记录管理；启动使用独立 session，不创建 systemd unit
 - 配置：`/etc/nexus/opencode/{environment_id}/opencode.jsonc`（备份后缀 `.nexus-backup-*`）
 
-Worker env 与 systemd unit 更新时先写同目录临时文件，SFTP 回读校验通过后再 `mv -f` 原子替换；旧 env/unit 保留为 `<path>.nexus-backup`。同内容不写、不触发重启。
+Worker env 更新时先写同目录临时文件，SFTP 回读校验通过后再 `mv -f` 原子替换；旧 env 保留为 `<path>.nexus-backup`。同内容不写、不触发重启。
 
 不共享旧的 `/opt/nexus/worker/venv`，也不把 OpenCode 安装到 `/usr/local/bin/opencode`。
 

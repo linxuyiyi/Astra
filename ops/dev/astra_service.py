@@ -203,7 +203,7 @@ def validate_start(mode: str, settings: Any) -> None:
     if not env_file.is_file():
         raise RuntimeError("env file not found; expected NEXUS_RUNTIME_ENV_FILE or ops/env/.env")
     if not (FRONTEND / "node_modules").is_dir():
-        raise RuntimeError("web dependencies missing; run: cd services/nexus-api/web && npm ci")
+        raise RuntimeError("web dependencies missing; run: cd services/nexus-api/web && npm install")
     # 本地 OpenCode 只是开发/单机调试的执行器；公司正式环境只使用远程 Worker。
     if settings.executor_type == "opencode_server":
         missing = missing_workspace_ui_bundles(settings)

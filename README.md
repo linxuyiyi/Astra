@@ -1,4 +1,4 @@
-# Nexus v1.4.8
+# Nexus v1.4.9
 
 Nexus 是数字员工的目录和交流产品。推理、会话、技能、知识和记忆由 **AgentScope 2.0.10 Agent Service** 承担。Nexus 只通过 HTTP 调用它。
 
@@ -7,6 +7,8 @@ Nexus 是数字员工的目录和交流产品。推理、会话、技能、知�
 公司正式部署使用 **MySQL 8.0.36 空库**。Nexus 的 53 张自有业务表以 `t_nexus_` 开头，由一个 Alembic `0001_init` 初始化。AgentScope 官方 SQL 存储使用独立数据库。SQLite 仅用于显式配置的开发/测试环境；不支持历史库升级或导入。Redis 继续承担消息总线、Celery 和网关运行态。
 
 ## 当前版本
+
+v1.4.9 在 v1.4.8 基础上完善了标准 HTTP MCP 注册与部署验收、群聊 @ 数字员工、平台提示词配置，把日程安排提升为主菜单，并将 `/chat` 切换为同文档原生 Vue 聊天窗口。
 
 v1.4.8 在 v1.4.7 基础上新增**星系首页**：
 
@@ -30,7 +32,7 @@ services/nexus-api       唯一 Nexus 服务（对话 + 任务 + Runtime + Worke
   nexus_api/             对话、员工目录、会话绑定、Skill/MCP 资源、统一入口
   app/                   任务、Runtime、Worker、网关控制面、图书馆（Alembic）
   web/                   唯一前端（Vue 3 + Element Plus）
-  chat-island/           聊天岛（React 子应用）
+  chat-island/           历史聊天岛（React 子应用，当前 /chat 不再使用）
   tests/                 nexus/ 与 platform/ 两套测试
 services/agent-service   AgentScope Agent Service
 web/workspace-ui         OpenCode 工作台静态资源
@@ -65,7 +67,7 @@ docs/reports             验证记录与证据
 
 先创建两个 MySQL 空库并安装 Python 依赖（见部署指南）。复制 `ops/env/.env.example` 为 `ops/env/.env` 后填写并设为 0600。公司使用 `ASTRA_EXECUTOR_TYPE=worker`：控制机只提供平台与网关，远程 Worker 执行任务；控制机不检查 OpenCode 版本，Worker 保留固定版本检查。密钥不提交仓库。
 
-安装器将执行模式、网关地址和监听配置写入运行环境，稳定保存内部网关 key，并登记其摘要。systemd 和手动重启读取相同文件；无需在新目录补造仓库 `.env`。安装器不创建 DeepSeek 等厂商节点。
+安装器将执行模式、网关地址和监听配置写入运行环境，稳定保存内部网关 key，并登记其摘要。统一部署器直接管理进程，不使用 systemd；无需在新目录补造仓库 `.env`。安装器不创建 DeepSeek 等厂商节点。
 
 ```bash
 cp ops/env/.env.example ops/env/.env
@@ -80,12 +82,11 @@ ops/dev/start_astra.sh start      # Celery、Gateway、Task MCP、Schedule MCP�
 ops/dev/start_nexus_api.sh start  # 唯一 API + 已构建前端，18120
 ```
 
-打开 `http://127.0.0.1:18120`。页面需要先构建：`cd services/nexus-api/web && npm ci && npm run build`（聊天岛先构建到 `web/public/nexus-chat`）。
+打开 `http://127.0.0.1:18120`。页面需要先构建：`cd services/nexus-api/web && npm install && npm run build`（前端锁文件不提交，由部署器按配置源安装；聊天岛仅为历史兼容产物）。
 
 页面开发时可单独启动 Vite：
 
 ```bash
-cd services/nexus-api/chat-island && npm run build
 cd services/nexus-api/web && npm install && npm run dev
 ```
 

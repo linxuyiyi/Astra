@@ -1,6 +1,6 @@
 # 星系首页（Nebula Home）
 
-v1.4.8 新增的 Nexus 正式首页。页面路由是 `/`，原 `/chat`、`/tasks`、`/settings/workers/:id` 继续可用。
+v1.4.8 引入、v1.4.9 继续使用的 Nexus 正式首页。页面路由是 `/`，原 `/chat`、`/tasks`、`/settings/workers/:id` 继续可用。
 
 首页是**只读投影**：它读取员工目录、Agent Worker、Task、RuntimeSession 和员工间职责请求，生成星系、执行光路、协作关系与统计；不拥有任务状态机，也不提供 `/nebula/*` 写接口。
 

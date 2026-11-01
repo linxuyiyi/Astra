@@ -18,6 +18,11 @@ export const PRIMARY_NAV_CONFIGS: readonly NavItemConfig[] = [
     isActive: (path: string) => path === "/chat" || path === "/team",
   },
   {
+    to: "/schedules",
+    label: "日程安排",
+    isActive: (path: string) => path.startsWith("/schedules"),
+  },
+  {
     to: "/tasks",
     label: "任务大厅",
     isActive: (path: string) => path.startsWith("/tasks") || path.startsWith("/interventions"),
@@ -38,8 +43,7 @@ export const PRIMARY_NAV_CONFIGS: readonly NavItemConfig[] = [
     isActive: (path: string) =>
       path.startsWith("/settings") ||
       path.startsWith("/employees") ||
-      path.startsWith("/workers") ||
-      path.startsWith("/schedules"),
+      path.startsWith("/workers"),
   },
 ];
 

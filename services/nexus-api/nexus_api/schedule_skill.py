@@ -25,17 +25,30 @@ def schedule_mcp_headers(employee_id: str, session_id: str, conversation_id: str
     }
 
 
+async def _discovery_error(client: AgentScopeClient, agent_id: str, session_id: str) -> str:
+    items = await client.list_workspace_mcp(agent_id, session_id)
+    target = next((item for item in items if str(item.get("name") or "") == "nexus-schedule"), None)
+    if target is None:
+        return "AgentScope 工作区没有返回 nexus-schedule"
+    if not target.get("is_healthy"):
+        return str(target.get("error") or "MCP 连接失败")
+    tools = target.get("tools")
+    if not isinstance(tools, list) or not tools:
+        return "MCP 工具发现返回空列表"
+    return ""
+
+
 async def attach_schedule_mcp(
     client: AgentScopeClient,
     employee: dict,
     session_id: str,
     conversation_id: str = "",
-) -> None:
-    """幂等挂接；每次调用交给 AgentScope 判别已有配置是否一致。"""
+) -> str:
+    """幂等挂接；成功返回空串，失败记录错误并返回描述（调用方可继续聊天）。"""
 
     agent_id = employee.get("agentscope_agent_id")
     if not client.configured or not agent_id or not session_id:
-        return
+        return ""
     try:
         await client.add_workspace_mcp(
             str(agent_id),
@@ -44,5 +57,9 @@ async def attach_schedule_mcp(
             headers=schedule_mcp_headers(str(employee["id"]), session_id, conversation_id),
             name="nexus-schedule",
         )
+        detail = await _discovery_error(client, str(agent_id), session_id)
     except AgentScopeError as exc:
-        logger.warning("日程 MCP 未挂上：%s", exc.detail)
+        detail = exc.detail
+    if detail:
+        logger.error("日程 MCP 不可用 session=%s：%s", session_id, detail)
+    return detail

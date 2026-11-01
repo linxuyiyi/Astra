@@ -135,6 +135,9 @@ async def test_attach_schedule_mcp_has_no_shared_key_and_reuses_agentscope_idemp
         async def add_workspace_mcp(self, agent_id, session_id, **kwargs):
             self.calls.append((agent_id, session_id, kwargs))
 
+        async def list_workspace_mcp(self, agent_id, session_id):
+            return [{"name": "nexus-schedule", "is_healthy": True, "tools": [{"name": "schedule_list"}]}]
+
     client = Client()
     employee = {"id": "emp-1", "agentscope_agent_id": "agent-1"}
     await schedule_skill.attach_schedule_mcp(client, employee, "ses-1", "conv-1")
@@ -146,3 +149,39 @@ async def test_attach_schedule_mcp_has_no_shared_key_and_reuses_agentscope_idemp
     assert kwargs["url"] == "http://schedule-mcp.test/mcp"
     assert "Authorization" not in kwargs["headers"]
     assert kwargs["headers"]["X-Nexus-Conversation-Id"] == "conv-1"
+
+
+@pytest.mark.asyncio
+async def test_attach_schedule_mcp_returns_and_logs_failure(caplog):
+    class Client:
+        configured = True
+        items = []
+
+        async def add_workspace_mcp(self, *args, **kwargs):
+            pass
+
+        async def list_workspace_mcp(self, agent_id, session_id):
+            return self.items
+
+    client = Client()
+    employee = {"id": "emp-1", "agentscope_agent_id": "agent-1"}
+    assert "没有返回" in await schedule_skill.attach_schedule_mcp(client, employee, "s")
+    client.items = [{"name": "nexus-schedule", "is_healthy": False, "error": "boom"}]
+    assert await schedule_skill.attach_schedule_mcp(client, employee, "s") == "boom"
+    client.items = [{"name": "nexus-schedule", "is_healthy": True, "tools": []}]
+    assert "空列表" in await schedule_skill.attach_schedule_mcp(client, employee, "s")
+    assert "日程 MCP 不可用" in caplog.text
+
+
+def test_require_employee_tool_allows_schedule_ref_only_when_allowed():
+    from fastapi import HTTPException
+
+    from nexus_api.tool_policy import require_employee_tool
+
+    policy = {"allowed_tools": [], "mcp_refs": {}, "skill_viewer": False, "schedule_allowed": True}
+    require_employee_tool(policy, "mcp__nexus-schedule__schedule_list", "__schedule__")
+    with pytest.raises(HTTPException):
+        require_employee_tool(policy, "mcp__evil__x", "__schedule__")
+    with pytest.raises(HTTPException):
+        denied = {**policy, "schedule_allowed": False}
+        require_employee_tool(denied, "mcp__nexus-schedule__schedule_list", "__schedule__")

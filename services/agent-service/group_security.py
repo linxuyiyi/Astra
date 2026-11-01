@@ -107,6 +107,13 @@ def secure_group_toolkit(factory, nexus_api, policy_loader=None):
                         and getattr(config, "headers", {}).get("X-Nexus-Session-Id") == sid
                         and getattr(config, "headers", {}).get("X-Nexus-Discussion-Id", "") == fence):
                         return "__task__" if current.get("task_allowed") else ""
+            if tool.mcp_name == "nexus-schedule" and name.startswith("mcp__nexus-schedule__"):
+                clients = [client for group in toolkit.tool_groups for client in group.mcps if client.name == "nexus-schedule"]
+                if len(clients) == 1:
+                    config = clients[0].mcp_config
+                    if (getattr(config, "url", "") == current.get("schedule_mcp_url")
+                        and getattr(config, "headers", {}).get("X-Nexus-Session-Id") == sid):
+                        return "__schedule__" if current.get("schedule_allowed") else ""
             return await mcp_ref_for(tool, current)
 
         async def permitted(name, registered, current):

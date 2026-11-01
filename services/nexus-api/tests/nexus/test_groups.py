@@ -257,6 +257,8 @@ def test_group_toolkit_filters_tools_by_server_origin(monkeypatch):
         "mcp_refs": {"ref-demo": "demo"},
         "task_allowed": True,
         "task_mcp_url": "http://task.local/mcp",
+        "schedule_allowed": True,
+        "schedule_mcp_url": "http://schedule.local/mcp",
         "skill_viewer": False,
     }
 
@@ -271,7 +273,12 @@ def test_group_toolkit_filters_tools_by_server_origin(monkeypatch):
             headers={"X-Nexus-Session-Id": "ses-1", "X-Nexus-Discussion-Id": "dis-1"},
         ),
     )
+    schedule_client = SimpleNamespace(
+        name="nexus-schedule",
+        mcp_config=SimpleNamespace(url="http://schedule.local/mcp", headers={"X-Nexus-Session-Id": "ses-1"}),
+    )
     tools = [
+        Tool("mcp__nexus-schedule__schedule_list", is_mcp=True, mcp_name="nexus-schedule"),
         Tool("Bash"),
         Tool("mcp__demo__lookup", is_mcp=True, mcp_name="demo"),
         Tool("mcp__evil__lookup", is_mcp=True, mcp_name="evil"),
@@ -282,7 +289,7 @@ def test_group_toolkit_filters_tools_by_server_origin(monkeypatch):
 
     async def factory(**_kwargs):
         assembled_records.append(_kwargs["agent_record"])
-        return Toolkit(tools, [task_client])
+        return Toolkit(tools, [task_client, schedule_client])
 
     assembled = module.secure_group_toolkit(factory, "http://nexus", loader)
     kwargs = {
@@ -298,19 +305,39 @@ def test_group_toolkit_filters_tools_by_server_origin(monkeypatch):
     try:
         toolkit = asyncio.run(assembled(**kwargs))
         available = asyncio.run(toolkit._get_available_tools(["basic"]))
-        assert set(available) == {"Bash", "mcp__demo__lookup", "mcp__nexus-task__nexus_task_get"}
+        assert set(available) == {
+            "Bash",
+            "mcp__demo__lookup",
+            "mcp__nexus-task__nexus_task_get",
+            "mcp__nexus-schedule__schedule_list",
+        }
+        policy["schedule_allowed"] = False
+        assert "mcp__nexus-schedule__schedule_list" not in asyncio.run(
+            toolkit._get_available_tools(["basic"])
+        )
+        policy["schedule_allowed"] = True
+        policy["schedule_mcp_url"] = "http://evil/mcp"
+        assert "mcp__nexus-schedule__schedule_list" not in asyncio.run(
+            toolkit._get_available_tools(["basic"])
+        )
+        policy["schedule_mcp_url"] = "http://schedule.local/mcp"
         assert assembled_records[-1].data.chat_config.react_config.max_iters == 8
         assert kwargs["agent_record"].data.chat_config.react_config.max_iters == 99
         with pytest.raises(PermissionError):
             asyncio.run(_collect(toolkit, "mcp__evil__lookup"))
         assert asyncio.run(_collect(toolkit, "mcp__demo__lookup")) == ["called"]
         policy["task_allowed"] = False
-        assert set(asyncio.run(toolkit._get_available_tools(["basic"]))) == {"Bash", "mcp__demo__lookup"}
+        assert set(asyncio.run(toolkit._get_available_tools(["basic"]))) == {
+            "Bash",
+            "mcp__demo__lookup",
+            "mcp__nexus-schedule__schedule_list",
+        }
         policy["task_allowed"] = True
         policy["allowed_tools"] = []
         assert set(asyncio.run(toolkit._get_available_tools(["basic"]))) == {
             "mcp__demo__lookup",
             "mcp__nexus-task__nexus_task_get",
+            "mcp__nexus-schedule__schedule_list",
         }
         with pytest.raises(PermissionError):
             asyncio.run(_collect(toolkit, "Bash"))

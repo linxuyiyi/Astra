@@ -3,6 +3,7 @@
 from fastapi import HTTPException
 from sqlalchemy import text
 
+from .schedule_skill import schedule_mcp_url
 from .task_skill import TASK_SKILL_ID, task_mcp_url
 
 
@@ -26,6 +27,8 @@ def employee_tool_policy(db, employee):
         "skill_viewer": bool(employee["skills"]),
         "task_allowed": TASK_SKILL_ID in employee["skills"],
         "task_mcp_url": task_mcp_url(),
+        "schedule_allowed": True,
+        "schedule_mcp_url": schedule_mcp_url(),
     }
 
 
@@ -37,6 +40,11 @@ def require_employee_tool(policy, tool_name, mcp_ref):
             mcp_ref == "__task__"
             and policy["task_allowed"]
             and tool_name.startswith("mcp__nexus-task__nexus_task_")
+        )
+        or (
+            mcp_ref == "__schedule__"
+            and policy.get("schedule_allowed")
+            and tool_name.startswith("mcp__nexus-schedule__")
         )
         or mcp_ref in policy["mcp_refs"]
     ):

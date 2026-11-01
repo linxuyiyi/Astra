@@ -21,7 +21,7 @@
         <div class="chat-empty__title">开始对话</div>
         <p class="chat-empty__hint">直接输入消息，或拖入、粘贴图片。Enter 发送 · Shift+Enter 换行 · ⌘K 聚焦输入。</p>
         <ul class="chat-empty__tips">
-          <li>可 @ 数字员工（群聊）</li>
+          <li v-if="target?.kind === 'group'">可 @ 数字员工</li>
           <li>点击麦克风语音转文字</li>
           <li>回复过程中可点击停止</li>
         </ul>

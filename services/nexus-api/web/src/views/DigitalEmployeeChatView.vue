@@ -54,6 +54,9 @@
           <div class="chat-head__copy">
             <h2 :title="activeTarget.name">{{ activeTarget.name }}</h2>
             <p v-if="activeTarget.kind === 'group' && activeTarget.channel?.description" class="chat-head__desc muted">{{ activeTarget.channel?.description }}</p>
+            <p v-else-if="activeTarget.kind === 'contact'" class="chat-head__desc muted" :title="`${activeTarget.subtitle} · ${activeTarget.employee?.description || ''}`">
+              {{ activeTarget.subtitle }}<template v-if="activeTarget.employee?.description"> · {{ activeTarget.employee.description }}</template><template v-if="!activeTarget.enabled"> · 已禁用</template>
+            </p>
             <p v-else-if="!activeTarget.enabled" class="muted">已禁用</p>
           </div>
           <div class="chat-head__actions">
@@ -69,7 +72,7 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-            <el-button @click="asideOpen = !asideOpen">{{ asideOpen ? "收起资料" : "查看资料" }}</el-button>
+            <el-button @click="toggleAside">{{ asideOpen ? "收起资料" : "查看资料" }}</el-button>
           </div>
         </div>
         <div v-else class="chat-head"><h2>数字员工</h2></div>
@@ -271,6 +274,10 @@ const filterOptions = [
 const selectedKey = ref("");
 const sessions = reactive<Record<string, ChatSessionState>>({});
 const asideOpen = ref(false);
+function toggleAside() {
+  asideOpen.value = !asideOpen.value;
+  if (asideOpen.value && activeTarget.value?.kind === "contact" && activeState.value) activeState.value.tab = "materials";
+}
 const mobileRailOpen = ref(false);
 const groupDialogOpen = ref(false);
 const groupEditingId = ref<string | null>(null);

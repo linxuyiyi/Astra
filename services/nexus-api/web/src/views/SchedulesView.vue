@@ -192,12 +192,26 @@ async function openCreate() {
   formError.value = ''; formOpen.value = true; formGuard.capture();
   try { await loadChoices(); } catch (e) { formError.value = reason(e); }
 }
+function restoreFrequency(cron: string) {
+  const parts = cron.trim().split(/\s+/);
+  const [minute, hour, day, month, week] = parts;
+  const valid = parts.length === 5 && /^\d+$/.test(minute!) && /^\d+$/.test(hour!) && Number(minute) <= 59 && Number(hour) <= 23 && month === '*';
+  frequency.value = 'custom';
+  if (!valid) return;
+  const at = `${hour!.padStart(2, '0')}:${minute!.padStart(2, '0')}`;
+  if (day === '*' && week === '*') frequency.value = 'daily';
+  else if (day === '*' && week === '1-5') frequency.value = 'weekdays';
+  else if (day === '*' && /^[0-7]$/.test(week!)) { frequency.value = 'weekly'; weekday.value = Number(week) % 7; }
+  else if (week === '*' && /^\d+$/.test(day!) && Number(day) >= 1 && Number(day) <= 31) { frequency.value = 'monthly'; monthDay.value = Number(day); }
+  else return;
+  time.value = at;
+}
 async function openEdit(row: EmployeeSchedule) {
   editing.value = row; employeeId.value = row.employee_id || ''; Object.assign(form, {
     name: row.data.name, description: row.data.description, cron_expression: row.data.cron_expression,
     timezone: row.data.timezone, stateful: row.data.stateful, enabled: row.data.enabled,
   });
-  frequency.value = 'custom'; formError.value = ''; formOpen.value = true; formGuard.capture();
+  restoreFrequency(row.data.cron_expression); formError.value = ''; formOpen.value = true; formGuard.capture();
   try { await loadChoices(); } catch (e) { formError.value = reason(e); }
 }
 async function save() {

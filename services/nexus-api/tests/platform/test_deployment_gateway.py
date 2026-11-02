@@ -121,10 +121,10 @@ async def test_shared_serve_checks_actual_config_before_ready(monkeypatch, field
     from app.runtime.opencode_model import gateway_environment
     from app.runtime.opencode_server import OpenCodeServerManager
 
-    source = {"NEXUS_GATEWAY_API_KEY": "agw_test"}
+    source = {"NEXUS_GATEWAY_API_KEY": "agw_test", "NEXUS_GATEWAY_OPENAI_BASE": "http://nginx.test:18130/v1"}
     config = json.loads(gateway_environment("default", source)["OPENCODE_CONFIG_CONTENT"])
     config[field] = value
-    monkeypatch.delenv("NEXUS_GATEWAY_OPENAI_BASE", raising=False)
+    monkeypatch.setenv("NEXUS_GATEWAY_OPENAI_BASE", source["NEXUS_GATEWAY_OPENAI_BASE"])
     original = httpx.AsyncClient
 
     def handler(request):
@@ -140,3 +140,54 @@ async def test_shared_serve_checks_actual_config_before_ready(monkeypatch, field
         await manager.wait_until_ready()
     config[field] = json.loads(gateway_environment("default", source)["OPENCODE_CONFIG_CONTENT"])[field]
     assert (await manager.wait_until_ready()).healthy
+
+
+async def test_platform_worker_and_review_share_generated_http_proxy(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from app.config.settings import Settings
+    from app.runtime.experience_review.llm_client import ReviewLLMClient
+    from app.runtime.opencode_model import gateway_environment
+    from app.runtime.remote_provisioning import RemoteProvisioner, managed_config
+    from nexus_api.model_route import gateway_base_url
+    from tests.platform.test_platform_deploy import settings as deployment_settings
+
+    values = deployment_settings(tmp_path, monkeypatch)
+    base = values["NEXUS_GATEWAY_OPENAI_BASE"]
+    assert base == "http://7.1.2.3:18130/v1"
+    monkeypatch.setenv("NEXUS_GATEWAY_OPENAI_BASE", base)
+    assert gateway_base_url() == base  # AgentScope chat/embedding and API ASR use this reader.
+    local = json.loads(gateway_environment("model-a", values)["OPENCODE_CONFIG_CONTENT"])
+    assert local["provider"]["nexus-gateway"]["options"]["baseURL"] == base
+    configured = Settings(
+        gateway_openai_base=base, mcp_resource_server_url=values["NEXUS_MCP_RESOURCE_SERVER_URL"]
+    )
+    provisioner = RemoteProvisioner(
+        SimpleNamespace(id=7, model_name="model-a", opencode_path="opencode"), {"id": "proxy-test"}
+    )
+    provisioner.settings = configured
+    worker_base, mcp_url = provisioner._direct_endpoints()
+    worker = managed_config(config_path="/test/opencode.jsonc", model="model-a", models=["model-a"],
+                            gateway_url=worker_base, gateway_key="agw_test", mcp_url=mcp_url)
+    assert worker["provider"]["options"]["baseURL"] == base
+    seen = []
+
+    def handler(request):
+        seen.append(str(request.url))
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"ok":true}'}}]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        review = ReviewLLMClient(configured, client=client)
+        assert await review.complete_json("system", "user") == {"ok": True}
+    assert seen == [base + "/chat/completions"]
+
+
+def test_clients_have_no_implicit_internal_gateway_fallback(monkeypatch):
+    from app.runtime.opencode_model import gateway_environment
+    from nexus_api.model_route import ModelRouteError, gateway_base_url
+
+    monkeypatch.delenv("NEXUS_GATEWAY_OPENAI_BASE", raising=False)
+    with pytest.raises(ModelRouteError):
+        gateway_base_url()
+    with pytest.raises(ValueError):
+        gateway_environment("default", {"NEXUS_GATEWAY_API_KEY": "agw_test"})

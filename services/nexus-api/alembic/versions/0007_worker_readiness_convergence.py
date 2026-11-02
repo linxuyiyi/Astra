@@ -5,7 +5,7 @@ from sqlalchemy.dialects import mysql
 
 from alembic import op
 
-revision = "0007_worker_readiness_convergence"
+revision = "0007_worker_readiness"
 down_revision = "0006_employee_avatars"
 branch_labels = None
 depends_on = None

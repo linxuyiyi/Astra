@@ -63,7 +63,7 @@ def test_configuration_reinstall_keeps_keys_and_one_canonical_environment(tmp_pa
     assert file.stat().st_mtime_ns == before
     assert file.stat().st_mode & 0o777 == 0o600
     assert not list(tmp_path.glob("*.backup-*"))
-    assert values["NEXUS_REMOTE_GATEWAY_LOCAL_URL"] == "http://7.1.2.3:18130/v1"
+    assert values["NEXUS_GATEWAY_OPENAI_BASE"] == "http://7.1.2.3:18130/v1"
     assert values["NEXUS_WORKER_AGENT_GATEWAY_URL"] == "ws://7.1.2.3:18130/api/worker-gateway/connect"
 
 
@@ -143,15 +143,18 @@ def test_shared_database_and_unrestricted_worker_acl_are_rejected(tmp_path, monk
         cfg.initialize(values, DEPLOY.parents[1], tmp_path, cfg.Dialog(False))
 
 
-def test_incorrect_internal_address_must_be_explicitly_corrected(tmp_path, monkeypatch):
+def test_generated_proxy_address_follows_configured_listener(tmp_path, monkeypatch):
     values = settings(tmp_path, monkeypatch)
-    values["NEXUS_GATEWAY_OPENAI_BASE"] = "https://public.invalid/v1"
-    with pytest.raises(cfg.DeploymentError, match="交互"):
-        cfg.initialize(values, DEPLOY.parents[1], tmp_path, cfg.Dialog(False))
-    dialog = cfg.Dialog()
-    dialog.ask = Mock(return_value="r")
-    result = cfg.initialize(values, DEPLOY.parents[1], tmp_path, dialog)
-    assert result["NEXUS_GATEWAY_OPENAI_BASE"] == "http://127.0.0.1:18110/v1"
+    values.update({
+        "NEXUS_GATEWAY_OPENAI_BASE": "http://127.0.0.1:18110/v1",
+        "NEXUS_DEPLOY_WORKER_PORT": "19130",
+    })
+    result = cfg.initialize(values, DEPLOY.parents[1], tmp_path, cfg.Dialog(False))
+    assert result["NEXUS_GATEWAY_OPENAI_BASE"] == "http://7.1.2.3:19130/v1"
+    assert result["NEXUS_MCP_RESOURCE_SERVER_URL"] == "http://7.1.2.3:19130/mcp"
+    assert result["NEXUS_WORKER_AGENT_GATEWAY_URL"] == "ws://7.1.2.3:19130/api/worker-gateway/connect"
+    cfg.save_env(tmp_path / "nexus.env", result)
+    assert cfg.parse_env(tmp_path / "nexus.env", cfg.Dialog(False)) == result
 
 
 def test_source_profiles_share_versions_but_keep_independent_urls():
@@ -382,8 +385,8 @@ def test_container_resources_use_nested_cgroup_limits_instead_of_host_totals(tmp
     assert deploy.linux_resources(proc, cgroup) == {"memory_mb": 2048, "cpus": 2}
 
 
-def test_frontend_build_without_committed_lock_uses_configured_registry(tmp_path):
-    """前端锁文件不提交时，部署应使用配置源现场解析，而不是 npm ci。"""
+@pytest.mark.parametrize("lock_kind", ["missing", "valid", "invalid", "foreign"])
+def test_frontend_release_requires_lock_and_uses_frozen_registry_install(tmp_path, lock_kind):
     instance = object.__new__(deploy.Deployer)
     instance.release_root = tmp_path / "release"
     instance.sources = {
@@ -405,10 +408,28 @@ def test_frontend_build_without_committed_lock_uses_configured_registry(tmp_path
     (instance.release_root / "services/nexus-api/web/dist").mkdir()
     (instance.release_root / "services/nexus-api/web/dist/index.html").write_text("ok")
 
+    if lock_kind == "missing":
+        with pytest.raises(cfg.DeploymentError, match="缺少已提交"):
+            instance.build_web()
+        assert calls == []
+        return
+    import json
+    packages = {"": {"name": "fixture"}}
+    if lock_kind == "foreign":
+        packages["node_modules/foreign"] = {"resolved": "https://outside.invalid/foreign.tgz"}
+    for name in ("chat-island", "web"):
+        (instance.release_root / "services/nexus-api" / name / "package-lock.json").write_text(
+            json.dumps({"lockfileVersion": 0 if lock_kind == "invalid" else 3, "packages": packages})
+        )
+    if lock_kind in {"invalid", "foreign"}:
+        with pytest.raises(cfg.DeploymentError, match="无效|非配置 registry"):
+            instance.build_web()
+        assert calls == []
+        return
     instance.build_web()
 
     installs = [call for call in calls if call[1] in {"install", "ci"}]
     assert len(installs) == 2
-    assert all(call[1] == "install" for call in installs)
+    assert all(call[1] == "ci" for call in installs)
     assert all("--registry" in call for call in installs)
     assert all("--ignore-scripts" in call for call in installs)

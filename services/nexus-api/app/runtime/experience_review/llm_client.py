@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from app.config.settings import Settings, get_settings
+from app.gateway.urls import client_gateway_base
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 
@@ -56,7 +57,7 @@ class ReviewLLMClient:
         if key:
             headers["Authorization"] = f"Bearer {key}"
         return await self._client.post(
-            self.settings.experience_review_gateway_url,
+            client_gateway_base(self.settings.gateway_openai_base) + "/chat/completions",
             headers=headers,
             json=body,
         )

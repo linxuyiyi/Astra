@@ -63,6 +63,7 @@ def _matching_snapshot(tmp_path, *, model: str = "nexus-gateway/gpt-5.4", branch
         "mcp": {
             "status": "healthy",
             "missing": [],
+            "servers": {"nexus-library": {"status": "connected"}, "jira-mcp": {"status": "connected"}},
             "endpoints": {
                 "nexus-library": "http://nexus.internal:18000/mcp",
                 "jira-mcp": "http://mcp.internal:9100/sse",
@@ -409,3 +410,38 @@ async def test_dispatcher_skips_drifted_or_offline_worker_and_assigns_healthy_pe
     assert claimed.employee_id == emp2.id
     await db_session.refresh(emp1)
     assert emp1.current_task_count == 0
+
+
+@pytest.mark.parametrize(
+    "failed_name,expected",
+    [("project-extra", "READY"), ("jira-mcp", "DEGRADED"), ("nexus-library", "DEGRADED")],
+)
+async def test_mcp_scheduling_uses_managed_scope(db_session, tmp_path, failed_name, expected):
+    settings, _, employee, env, instance, _ = await _seed_ready_remote_worker(db_session, tmp_path)
+    desired = await build_desired_spec(db_session, env, settings)
+    snapshot = dict(instance.observed_snapshot)
+    mcp = dict(snapshot["mcp"])
+    mcp["servers"] = {**mcp["servers"], failed_name: {"status": "failed", "error": "connection refused"}}
+    mcp.update(status="unhealthy", missing=[failed_name], error="MCP 未连接：" + failed_name)
+    snapshot["mcp"] = mcp
+    instance.observed_snapshot = snapshot
+    evaluated = evaluate_worker_readiness(desired, env, instance)
+    row = next(r for r in evaluated["runtime_health"]["equipment"] if r["key"] == "mcp")
+    assert evaluated["readiness"] == expected
+    assert evaluated["schedulable"] == (expected == "READY")
+    if expected == "READY":
+        assert row["verified"] is True and row["error"] is None
+        assert any("project-extra" in message for message in row["warnings"])
+    else:
+        assert failed_name in row["diff"][0]
+
+
+async def test_missing_per_server_observation_cannot_be_assumed_healthy(db_session, tmp_path):
+    settings, _, _, env, instance, _ = await _seed_ready_remote_worker(db_session, tmp_path)
+    desired = await build_desired_spec(db_session, env, settings)
+    snapshot = dict(instance.observed_snapshot)
+    snapshot["mcp"] = {"status": "healthy", "endpoints": snapshot["mcp"]["endpoints"]}
+    instance.observed_snapshot = snapshot
+    evaluated = evaluate_worker_readiness(desired, env, instance)
+    assert evaluated["readiness"] == "UNKNOWN"
+    assert not evaluated["schedulable"]

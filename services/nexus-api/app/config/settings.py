@@ -199,12 +199,7 @@ class Settings(BaseSettings):
     worker_health_max_age_seconds: int = Field(
         default=90, ge=5, le=86400, validation_alias="NEXUS_WORKER_HEALTH_MAX_AGE_SECONDS"
     )
-    remote_gateway_local_url: str = Field(
-        default="http://127.0.0.1:18110/v1", validation_alias="NEXUS_REMOTE_GATEWAY_LOCAL_URL"
-    )
-    remote_gateway_public_url: str | None = Field(
-        default=None, validation_alias="NEXUS_REMOTE_GATEWAY_PUBLIC_URL"
-    )
+    gateway_openai_base: str = Field(default="", validation_alias="NEXUS_GATEWAY_OPENAI_BASE")
     # WebSocket the remote Worker Agent dials. Deploy rejects an empty or loopback value.
     worker_agent_gateway_url: str = Field(default="", validation_alias="NEXUS_WORKER_AGENT_GATEWAY_URL")
 
@@ -273,10 +268,6 @@ class Settings(BaseSettings):
     )
     experience_review_shadow_mode: bool = Field(
         default=True, validation_alias="NEXUS_EXPERIENCE_REVIEW_SHADOW_MODE"
-    )
-    experience_review_gateway_url: str = Field(
-        default="http://127.0.0.1:18110/v1/chat/completions",
-        validation_alias="NEXUS_EXPERIENCE_REVIEW_GATEWAY_URL",
     )
     experience_review_model: str = Field(
         default="default", validation_alias="NEXUS_EXPERIENCE_REVIEW_MODEL"

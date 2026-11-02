@@ -18,3 +18,11 @@ def gateway_base(value: str) -> str:
     if not valid:
         raise ValueError("网关地址必须是 http(s) 主机根地址或 /v1，不含凭据、query 或其他路径")
     return urlunsplit((parsed.scheme, parsed.netloc, "/v1", "", ""))
+
+
+def client_gateway_base(value: str) -> str:
+    """受管模型客户端只使用平台生成的 Nginx HTTP /v1 入口。"""
+    base = gateway_base(value)
+    if urlsplit(base).scheme != "http":
+        raise ValueError("受管模型必须使用平台生成的 Nginx HTTP 网关地址")
+    return base

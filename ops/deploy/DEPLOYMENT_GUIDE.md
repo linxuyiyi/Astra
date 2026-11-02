@@ -39,15 +39,17 @@ sudo bash ops/deploy/install_nexus.sh --sources ops/deploy/sources/huawei.json
 
 源配置独立保存在 `sources.json`。Python、Node、pip、npm 地址可分别指定；访问失败报告 TLS/HTTP/重定向或摘要问题，可明确输入修正地址，不自动改用公网。OS 依赖默认沿用管理员仓库；可在源清单的 `os_repository_dir` 指定已有系统仓库配置目录，此时仅使用该目录，避免混入其他 OS 仓库。公司 OS 镜像具体路径未确认，模板不编造它们。
 
-华为模板的根地址为 `mirrors.tools.huawei.com`，具体路径及验证等级见本次核验报告。默认 Python 3.11.17、Node 22.23.3。实际 bootstrap/复用解释器版本也会记录。自定义版本须同步提供正确制品地址与两种架构摘要，并作为新发布提交；不在同一已准备发布中修改运行工具版本。
+华为模板使用公司已验证的 `mirrors.tools.huawei.com`：Python/Node 通过 HTTPS 下载，npm 使用 `http://mirrors.tools.huawei.com/npm/`，PyPI 使用 `http://mirrors.tools.huawei.com/pypi/simple`。HTTP PyPI 仅为该精确主机（自定义端口时包括端口）生成 trusted-host；HTTPS 不绕过证书校验。企业 CA 应导入实际 Python/npm 客户端使用的信任库，不设置 `strict-ssl=false`。默认 Python 3.11.17、Node 22.23.3。实际 bootstrap/复用解释器版本也会记录。自定义版本须同步提供正确制品地址与两种架构摘要，并作为新发布提交；不在同一已准备发布中修改运行工具版本。
 
 ## 发布和服务管理
 
 流程为：系统与代码检查 → 配置诊断 → 来源/依赖检查 → 独立发布快照与虚拟环境准备 → SQL/Redis/Settings 验证 → 聊天岛和 Web 构建 → 证书及 `nginx -t` → 端口归属检查 → 停止旧进程 → Nexus Alembic 与 AgentScope 官方迁移 → 网关平台 Key 登记 → 启动全部服务 → 健康、实际发布版本及入口验收。
 
-发布快照在 `releases/<Git提交>/repo`，通过 `git archive` 生成，包含独立 venv 与构建产物，不修改在线旧发布。相同代码已完成的构建可复用。npm 使用指定 registry，禁止安装生命周期脚本；若发布快照带锁文件则校验 registry 主机，未提交锁文件时用 `npm install` 按配置源现场解析。随后显式执行仓库构建命令；pip 安装和隔离构建使用同一索引。地址默认配置不替代公司网络出站策略。
+发布快照在 `releases/<Git提交>/repo`，通过 `git archive` 生成，包含独立 venv 与构建产物，不修改在线旧发布。相同代码已完成的构建可复用。npm 使用指定 registry，禁止安装生命周期脚本；发布快照必须带有效锁文件并校验制品来源，使用 `npm ci --ignore-scripts` 冻结安装；缺锁或不一致直接失败，不在现场重新解析依赖。随后显式执行仓库构建命令；pip 安装和隔离构建使用同一索引。地址默认配置不替代公司网络出站策略。
 
 唯一 Python 进程清单管理以下 11 个进程：AgentScope、网关、Nexus API、Library/Task/Schedule MCP、三个 Celery Worker、Celery Beat、Nginx。复用 `ops/dev/procman.py` 的进程组原语，记录 PID、创建时间、进程组、工作目录和发布提交；停止前重新核对，等待旧进程与端口退出再启动。已有正确的 Python 进程记录可迁移；未知进程/端口拒绝接管，可交互修改端口。旧 systemd 自启服务需管理员先停用，安装器不调用 systemctl。
+
+所有模型客户端统一使用平台一键部署生成的 Nginx HTTP 入口 `http://<控制机内网IP>:<NEXUS_DEPLOY_WORKER_PORT>/v1`，默认端口 18130，唯一配置项为 `NEXUS_GATEWAY_OPENAI_BASE`。平台聊天、AgentScope credential、embedding、ASR、复盘和 Worker/本机受管 OpenCode 共用该基址；复盘附加 `/chat/completions`。网关数据面监听 `127.0.0.1:18110`，仅供 Nginx upstream 转发。Worker 一键部署自动下发相同代理地址，不要求管理员另填。不再提供独立 Worker/复盘模型 URL，也不增加旧配置转换。
 
 内置 MCP 使用标准 HTTP，监听地址和端口由 `NEXUS_MCP_HOST/PORT`、`NEXUS_TASK_MCP_HOST/PORT`、`NEXUS_SCHEDULE_MCP_HOST/PORT` 统一生成，默认回环；AgentScope 分机部署时显式改为实际内网地址，Nexus 与 AgentScope 读取同一个 `NEXUS_TASK_MCP_URL` / `NEXUS_SCHEDULE_MCP_URL`。内网部署不生成或校验 MCP 共享 Bearer key；升级时旧 `NEXUS_MCP_API_KEY`、`NEXUS_TASK_MCP_KEY`、`NEXUS_SCHEDULE_MCP_KEY` 会被静默清理，不阻断升级。
 
@@ -66,13 +68,21 @@ sudo bash ops/deploy/install_nexus.sh --action stop
 | 入口/服务 | 默认地址 | 访问范围 |
 | --- | --- | --- |
 | Web / API / 网关 / WebSocket / SSE | `https://主IP:443` | Nginx HTTPS，代理到同机回环服务 |
-| Worker 专用入口 | `http://主IP:18130` | 指定 CIDR；仅 `/v1/`、`/mcp`、精确 Worker WebSocket 连接路径，保留鉴权，其余 404 |
+| Worker 专用入口 | `http://主IP:18130` | 指定 CIDR；仅 `/v1/`、`/mcp`、精确 Worker WebSocket 连接与 `/api/worker-gateway/data/`，保留 token/epoch 鉴权，其余 404 |
 | Nexus API / 网关 | `127.0.0.1:18120` / `127.0.0.1:18110` | 同容器内部 |
 | AgentScope | `127.0.0.1:18000` | 同容器内部 |
 | Library / Task / Schedule MCP | `127.0.0.1:18201/18202/18203` | 同容器内部，Library 经专用入口提供给 Worker |
 
 Nginx 使用部署器生成的完整配置，前台受管运行，不覆盖系统 Nginx 配置。已有外部 Nginx 占用入口时，明确处理冲突后才继续。平台自动生成非回环 Worker 地址；HTTPS 可通过 `NEXUS_DEPLOY_PUBLIC_HOST` 使用与证书匹配的域名。
 
+## Worker 一键部署与升级
+
+保存 Worker 配置只更新期望值；出现「待同步」后，由管理员手动点击「一键部署」。平台自动下发上述同一 HTTP 网关、`http://<控制机内网IP>:<NEXUS_DEPLOY_WORKER_PORT>/mcp` 的 `nexus-library` 地址及 Worker 连接地址，生成配置与 Nginx 规则，不要求手填另一套 URL。
+
+全新部署使用单守护管理 Worker 和 OpenCode；重复部署继续使用现有受管启停流程。不增加旧版进程识别、旧配置迁移或独立交接模块，不使用 systemd。
+
+MCP 就绪只依赖 `nexus-library` 和管理员显式绑定的服务。OpenCode 自行配置的额外 MCP 故障在维护面板保留告警，受管项健康时仍可调度；受管服务连接失败仍阻止新派单。
+
 ## 验证边界
 
-本机隔离验证覆盖真实 Nginx TLS/WebSocket/SSE/ACL、11 个服务启停、SQLite 迁移、独立 Redis 和队列回包；不等于 Linux root 首次安装、MySQL 8.0.36 或公司内网验收。当前公司镜像连接失败，远端 SSH 主机密钥不匹配，也未完成真实 Worker 回连。详细命令和结果见核验报告。开发辅助启动脚本和官方 UI 构建工具保留用于开发/制品维护，不是平台部署入口。
+公司提供的镜像、数据库和代理兼容结论为已验证输入。本次实现的数据库、Nginx、镜像冻结安装与真实 Linux Worker 结果见 `openspec/changes/nexus-intranet-deployment-corrections/verification.md`。隔离验收不等于公司现场整套平台重新部署或宿主机重启验收。开发辅助启动脚本和官方 UI 构建工具保留用于开发/制品维护，不是平台部署入口。

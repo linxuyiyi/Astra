@@ -57,7 +57,7 @@ ACTOR_HEADERS = {"X-Owner-Id": "admin-test"}
 def maintenance_settings(monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "mcp_transport", "streamable-http")
-    monkeypatch.setattr(settings, "remote_gateway_local_url", "http://10.0.0.8:8110")
+    monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:8110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:8201/mcp")
     monkeypatch.setattr(
         settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect"
@@ -168,6 +168,7 @@ async def enroll_ready_worker(
                 "status": "healthy",
                 "connected": True,
                 "missing": [],
+                "servers": {name: {"status": "connected"} for name in endpoints},
                 "endpoints": endpoints,
                 "error": None,
             },

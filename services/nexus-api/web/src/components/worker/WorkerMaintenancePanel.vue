@@ -61,6 +61,15 @@
       :title="blockedNote"
     />
 
+    <ElAlert
+      v-for="warning in health?.runtime_health.equipment.flatMap(item => item.warnings ?? []) ?? []"
+      :key="warning"
+      type="warning"
+      show-icon
+      :closable="false"
+      :title="warning"
+    />
+
     <ElAlert v-if="health?.readiness === 'DRIFTED'" type="warning" show-icon :closable="false" title="待同步，请点一键部署应用已保存的配置。" />
     <ElAlert v-if="health?.runtime_health.last_error" type="error" show-icon :closable="false" :title="maintenanceCopy(health.runtime_health.last_error)" />
 

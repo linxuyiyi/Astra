@@ -32,6 +32,7 @@ export interface WorkerEquipmentItem {
   verified: boolean | null
   desired_revision: string | null
   actual_revision: string | null
+  warnings?: string[]
   diff: string[]
   error: string | null
   detail: string | null

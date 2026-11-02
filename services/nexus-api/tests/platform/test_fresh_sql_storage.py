@@ -275,3 +275,16 @@ def test_worker_readiness_convergence_migration_cleans_interrupted_locks(tmp_pat
             "SELECT state, stage, active_environment_id "
             "FROM t_nexus_worker_maintenance_operations WHERE id='mnt_7'"
         ).fetchone() == ("FAILED", "failed", None)
+
+
+def test_all_revision_identifiers_fit_published_version_column():
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    from app.sql_storage import VERSION
+
+    config = Config(str(SERVICE / "alembic.ini"))
+    config.set_main_option("script_location", str(SERVICE / "alembic"))
+    scripts = ScriptDirectory.from_config(config)
+    assert scripts.get_current_head() == CURRENT_REVISION == "0007_worker_readiness"
+    assert all(len(r.revision) <= VERSION.c.version_num.type.length for r in scripts.walk_revisions())

@@ -680,8 +680,25 @@ def _mcp_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[str, 
     want_rev = _text(mcp.get("revision"))
     required = [str(name) for name in mcp.get("required") or [] if name]
     section = _section(observation, "mcp")
-    status = _status(section)
-    missing = [str(name) for name in section.get("missing") or [] if name]
+    servers = section.get("servers") if isinstance(section.get("servers"), dict) else None
+    missing = []
+    unknown = servers is None
+    warnings = []
+    if servers is not None:
+        for name in required:
+            entry = servers.get(name)
+            status = _text(entry.get("status")) if isinstance(entry, dict) else UNKNOWN
+            if status == UNKNOWN:
+                unknown = True
+            elif status != "connected":
+                missing.append(name)
+        for name, entry in sorted(servers.items()):
+            if name in required or not isinstance(entry, dict):
+                continue
+            status = _text(entry.get("status"))
+            if status and status not in {"connected", "disabled"}:
+                message = f"额外 MCP {name}：{_text(entry.get('error')) or status}"
+                warnings.append(redact_text(message))
     endpoints = section.get("endpoints") if isinstance(section.get("endpoints"), dict) else None
     drift_problems: list[str] = []
     if endpoints is not None:
@@ -710,28 +727,19 @@ def _mcp_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[str, 
         state = "drifted"
         verified: bool | None = False
         diff = [f"MCP 待同步：{'、'.join(drift_problems)}"]
-    elif status == UNHEALTHY or missing:
-        state = "degraded"
-        verified = False
-        diff = (
-            ["MCP 连接异常：" + "、".join(missing)]
-            if missing
-            else [_text(section.get("error")) or "MCP 状态探测失败"]
-        )
-    elif status == HEALTHY:
-        if endpoints is None and items:
-            state = "unknown"
-            verified = None
-            diff = ["实际 MCP 端点未知"]
-        else:
-            state = "ready"
-            verified = True
-            diff = []
-    else:
+    elif unknown or endpoints is None:
         state = "unknown"
         verified = None
-        diff = ["MCP 尚未核验"]
-    return _row(
+        diff = ["MCP 逐服务连接状态尚未核验"]
+    elif missing:
+        state = "degraded"
+        verified = False
+        diff = ["MCP 连接异常：" + "、".join(missing)]
+    else:
+        state = "ready"
+        verified = True
+        diff = []
+    row = _row(
         key="mcp",
         label="MCP",
         state=state,
@@ -748,6 +756,11 @@ def _mcp_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[str, 
             else None
         ),
     )
+
+    row["warnings"] = warnings
+    if state == "ready":
+        row["error"] = None
+    return row
 
 
 def _skills_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[str, Any]:

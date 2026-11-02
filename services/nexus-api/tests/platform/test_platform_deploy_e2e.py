@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import json
 import os
 import shutil
 import socket
@@ -11,6 +12,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -61,6 +63,19 @@ def certificate(tmp_path):
 def test_real_nginx_tls_websocket_sse_and_worker_access_boundaries(tmp_path):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
+
+        def do_PUT(self):
+            body = self.rfile.read(int(self.headers["Content-Length"]))
+            result = json.dumps({
+                "path": self.path,
+                "authorization": self.headers.get("Authorization"),
+                "epoch": self.headers.get("X-Astra-Worker-Epoch"),
+                "sha256": hashlib.sha256(body).hexdigest(),
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(result)))
+            self.end_headers()
+            self.wfile.write(result)
 
         def do_GET(self):
             if self.headers.get("Upgrade", "").lower() == "websocket":
@@ -153,6 +168,28 @@ def test_real_nginx_tls_websocket_sse_and_worker_access_boundaries(tmp_path):
             timeout=3,
         ) as response:
             assert response.status == 200
+        # Data 代理必须保留 URI、查询、鉴权、epoch 与编码后的文件正文。
+        path = "/api/worker-gateway/data/proxy-proof/response?upload_id=proof&final=true"
+        for size in (8 * 1024 * 1024, 28 * 1024 * 1024):
+            body = b"x" * size
+            with opener.open(urllib.request.Request(
+                f"http://127.0.0.1:{http}" + path,
+                data=body,
+                method="PUT",
+                headers={"Authorization": "Bearer test-secret", "X-Astra-Worker-Epoch": "7"},
+            ), timeout=10) as response:
+                assert json.load(response) == {
+                    "path": path,
+                    "authorization": "Bearer test-secret",
+                    "epoch": "7",
+                    "sha256": hashlib.sha256(body).hexdigest(),
+                }
+        connection = HTTPConnection("127.0.0.1", http, timeout=3)
+        connection.putrequest("PUT", path)
+        connection.putheader("Content-Length", str(65 * 1024 * 1024))
+        connection.endheaders()
+        assert connection.getresponse().status == 413
+        connection.close()
         started = time.monotonic()
         with opener.open(f"https://127.0.0.1:{https}/api/events", timeout=3) as response:
             assert response.readline() == b"data: first\n"

@@ -65,3 +65,15 @@ def deployment_manifest(settings) -> dict:
         "npm_artifact_hosts": hosts,
         "pip_index_url": source_url(settings.remote_pip_index_url, "PyPI 索引"),
     }
+
+
+def pip_trusted_host(index: str) -> str:
+    """显式 HTTP 源的准确授权，HTTPS 不允许借此绕过证书校验。"""
+    parsed = urlsplit(source_url(index, "PyPI 索引"))
+    return parsed.netloc.lower() if parsed.scheme == "http" else ""
+
+
+def pip_install_options(index: str) -> list[str]:
+    index = source_url(index, "PyPI 索引")
+    trusted = pip_trusted_host(index)
+    return ["--index-url", index] + (["--trusted-host", trusted] if trusted else [])

@@ -374,28 +374,24 @@ def _inspect_mcp(
             "endpoints": endpoints,
             "error": "MCP 状态返回结构无法识别",
         }
-    missing = [
-        name
-        for name in expected
-        if not (
-            isinstance(payload.get(name), dict)
-            and payload[name].get("status") == "connected"
-        )
-    ]
-    if missing:
-        return {
-            "status": UNHEALTHY,
-            "connected": False,
-            "missing": missing,
-            "endpoints": endpoints,
-            "error": "MCP 未连接：" + "、".join(missing),
-        }
+    servers = {}
+    for name in sorted(set(expected) | set(payload) | set(endpoints or {})):
+        entry = payload.get(name)
+        if not isinstance(entry, dict):
+            servers[name] = {"status": "missing", "error": "未返回连接状态"}
+        else:
+            servers[name] = {
+                "status": _text(entry.get("status")) or UNKNOWN,
+                "error": _redact(str(entry.get("error") or ""), secrets) or None,
+            }
+    missing = [name for name in expected if servers[name]["status"] != "connected"]
     return {
-        "status": HEALTHY,
-        "connected": True,
-        "missing": [],
+        "status": UNHEALTHY if missing else HEALTHY,
+        "connected": not missing,
+        "missing": missing,
+        "servers": servers,
         "endpoints": endpoints,
-        "error": None,
+        "error": "MCP 未连接：" + "、".join(missing) if missing else None,
     }
 
 

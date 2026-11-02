@@ -25,7 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 
 from app.config.settings import get_settings
-from app.config.worker_deployment import deployment_manifest
+from app.config.worker_deployment import deployment_manifest, pip_install_options, pip_trusted_host
 from app.database import SessionLocal
 from app.domain import EnvironmentStatus, MaintenanceState
 from app.gateway.models import GatewayKey, GatewayRoute
@@ -34,7 +34,7 @@ from app.gateway.runtime import RedisRuntimeStore
 from app.gateway.schemas import GatewayKeyCreate
 from app.gateway.security import CredentialCipher, gateway_key_digest
 from app.gateway.service import GatewayControlService
-from app.gateway.urls import gateway_base
+from app.gateway.urls import client_gateway_base
 from app.models import (
     CodeRepository,
     GitCredential,
@@ -429,7 +429,7 @@ def managed_config(
     provider = {
         "npm": "@ai-sdk/openai-compatible",
         "name": "Nexus API 中转",
-        "options": {"baseURL": gateway_base(gateway_url), "apiKey": gateway_key},
+        "options": {"baseURL": client_gateway_base(gateway_url), "apiKey": gateway_key},
         "models": {name: {"name": name} for name in models},
     }
     return {
@@ -872,7 +872,7 @@ fi
 
     def _direct_endpoints(self) -> tuple[str, str]:
         return (
-            gateway_base(require_direct_url(self.settings.remote_gateway_local_url, "Gateway")),
+            client_gateway_base(require_direct_url(self.settings.gateway_openai_base, "Gateway")),
             require_direct_url(self.settings.mcp_resource_server_url, "图书馆 MCP"),
         )
 
@@ -1060,6 +1060,12 @@ fi
             pip = (
                 "env -u PIP_EXTRA_INDEX_URL -u PIP_FIND_LINKS -u PIP_TRUSTED_HOST -u PIP_NO_INDEX "
                 "-u PIP_TARGET -u PIP_PREFIX -u PIP_USER PIP_CONFIG_FILE=/dev/null "
+                + "PIP_INDEX_URL="
+                + shlex.quote(index)
+                + " "
+                + "PIP_TRUSTED_HOST="
+                + shlex.quote(pip_trusted_host(index))
+                + " "
                 + shlex.join(
                     [
                         python,
@@ -1069,8 +1075,7 @@ fi
                         "--disable-pip-version-check",
                         "--upgrade",
                         "--force-reinstall",
-                        "--index-url",
-                        index,
+                        *pip_install_options(index),
                         wheel_path,
                     ]
                 )

@@ -37,7 +37,7 @@ from app.runtime.worker_readiness import compute_target_digest
 def isolated_settings(monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "mcp_transport", "streamable-http")
-    monkeypatch.setattr(settings, "remote_gateway_local_url", "http://10.0.0.8:8110")
+    monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:8110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:8201/mcp")
     monkeypatch.setattr(settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect")
 

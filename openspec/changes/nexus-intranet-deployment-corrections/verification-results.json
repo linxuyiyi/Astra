@@ -1,0 +1,155 @@
+{
+  "date": "2026-11-03",
+  "baseline": "a074809417ecc0b9e62cc17db9ff29eee79811ac",
+  "branch": "v1.4.9",
+  "followup_tests": {
+    "passed": 93,
+    "seconds": 18.88
+  },
+  "frontend_tests": {
+    "passed": 79
+  },
+  "ruff": "passed",
+  "nginx_component_data_boundaries": "passed",
+  "mysql": {
+    "server": "8.0.36",
+    "mode": "STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION",
+    "results": [
+      {
+        "database": "nexus_intranet_fresh",
+        "path": "empty -> head -> head",
+        "status": "passed"
+      },
+      {
+        "database": "nexus_intranet_upgrade",
+        "path": "0006 -> head -> head",
+        "status": "passed"
+      }
+    ]
+  },
+  "mirror_builds": [
+    {
+      "project": "chat-island",
+      "ci_typecheck_build": "passed",
+      "mirror_http_requests": 616,
+      "lock_unchanged": true,
+      "external_proxy_requests": 0
+    },
+    {
+      "project": "web",
+      "ci_typecheck_build": "passed",
+      "mirror_http_requests": 210,
+      "lock_unchanged": true,
+      "external_proxy_requests": 0
+    }
+  ],
+  "linux_e2e": [
+    {
+      "scenario": "generated_nginx_addresses_and_single_daemon",
+      "status": "passed"
+    },
+    {
+      "scenario": "busy_task_blocks_one_click_disruption",
+      "status": "passed",
+      "task_id": "T-20261102-DE95AA"
+    },
+    {
+      "scenario": "real_model_reads_undisclosed_proof_through_nginx",
+      "status": "passed",
+      "task_id": "T-20261102-DE95AA",
+      "final_state": "SUCCEEDED"
+    },
+    {
+      "scenario": "twenty_mib_file_over_nginx_data_channel",
+      "status": "passed",
+      "bytes": 20971520,
+      "sha256": "16cd8dc299e5a29481e694e130475c26c93f8316e05fe66a6a46c9f89a3f1825"
+    },
+    {
+      "scenario": "unmanaged_mcp_failure_warns_but_stays_schedulable",
+      "status": "passed",
+      "operation_id": "op_14b07ef4d4b8423ab440ea8a6c7e64f5",
+      "seconds": 4.36,
+      "warnings": [
+        "额外 MCP fixture-unmanaged-mcp：SSE error: Unable to connect. Is the computer able to access the url?"
+      ]
+    },
+    {
+      "scenario": "explicit_check_and_periodic_scope_agree",
+      "status": "passed",
+      "operation_id": "op_e20a4a57cc07462f87e9bf2b1b59171d",
+      "seconds": 2.03
+    },
+    {
+      "scenario": "identical_one_click_deploy_is_idempotent",
+      "status": "passed",
+      "operation_id": "op_04efb5a0db934829a65413a91887932e",
+      "seconds": 7.39
+    },
+    {
+      "scenario": "nginx_preserves_data_auth_and_hides_management",
+      "status": "passed"
+    },
+    {
+      "scenario": "final_ready",
+      "status": "passed"
+    }
+  ],
+  "linux_data_auth": {
+    "eight_mib_body": 200,
+    "existing_command_stale_epoch": 409,
+    "cross_worker": 404,
+    "anonymous": 401
+  },
+  "native_proxy_repeats": {
+    "requests": 3,
+    "status": 200,
+    "seconds": [
+      1.15,
+      0.51,
+      0.5
+    ]
+  },
+  "browser": {
+    "result": "passed",
+    "listHealthRequests": 0,
+    "enabledPatches": 2,
+    "asyncMaintenancePosts": 0,
+    "readiness": "READY",
+    "schedulable": true,
+    "errors": []
+  },
+  "final_health": {
+    "readiness": "READY",
+    "schedulable": true,
+    "blocking": [],
+    "test_mcp_removed": true
+  },
+  "openspec_validate": "passed",
+  "diff_check": "passed",
+  "scope": "按 2026-11-03 用户最新要求，全新代码部署，不增加旧版兼容或假设性兜底",
+  "previous_backend_full": {
+    "passed": 1396,
+    "skipped": 30,
+    "seconds": 256.27
+  },
+  "linux_current_source": {
+    "readiness": "READY",
+    "schedulable": true,
+    "repeat_deploy": "passed",
+    "same_daemon": true,
+    "same_opencode": true,
+    "legacy_handover_event": false,
+    "seconds": 6.25
+  },
+  "removed_from_implementation": [
+    "旧长标记 SQLite 转换脚本及测试",
+    "归档 Worker / 无标记 OpenCode 识别交接及测试",
+    "本轮新增旧网关环境变量自动清理"
+  ],
+  "backend_full": {
+    "passed": 1389,
+    "skipped": 30,
+    "seconds": 304.3
+  }
+}

@@ -377,22 +377,22 @@ def initialize(values, root, state, dialog, addresses=None):
         "ASTRA_AGENTSCOPE_USER_ID": "nexus",
         "NEXUS_API_BASE": "http://127.0.0.1:" + values["NEXUS_API_PORT"],
         "NEXUS_AGENTSCOPE_BASE_URL": "http://127.0.0.1:" + values["AGENTSCOPE_PORT"],
-        "NEXUS_GATEWAY_OPENAI_BASE": "http://127.0.0.1:"
-        + values["ASTRA_SERVICE_GATEWAY_PORT"]
-        + "/v1",
         "NEXUS_RUNTIME_ENV_FILE": str(state / "nexus.env"),
     }
     expected["ASTRA_NEXUS_API_BASE"] = expected["NEXUS_API_BASE"]
     expected["ASTRA_AGENTSCOPE_BASE_URL"] = expected["NEXUS_AGENTSCOPE_BASE_URL"]
     worker_base = "http://" + current + ":" + values["NEXUS_DEPLOY_WORKER_PORT"]
     expected.update(
-        NEXUS_REMOTE_GATEWAY_LOCAL_URL=worker_base + "/v1",
+        NEXUS_GATEWAY_OPENAI_BASE=worker_base + "/v1",
         NEXUS_MCP_RESOURCE_SERVER_URL=worker_base + "/mcp",
         NEXUS_WORKER_AGENT_GATEWAY_URL=worker_base.replace("http:", "ws:")
         + "/api/worker-gateway/connect",
     )
     for key, value in expected.items():
-        if key in values and values[key] != value:
+        if key in values and values[key] != value and key not in {
+            "NEXUS_GATEWAY_OPENAI_BASE", "NEXUS_MCP_RESOURCE_SERVER_URL",
+            "NEXUS_WORKER_AGENT_GATEWAY_URL",
+        }:
             chosen = dialog.resolve(key, values[key], value, "与单机受管服务拓扑不一致")
             if chosen != value:
                 raise DeploymentError(f"{key} 尚未修正，部署停止")

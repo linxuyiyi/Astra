@@ -434,7 +434,7 @@ async def test_admin_command_route_rejects_restart_opencode():
 @pytest.mark.asyncio
 async def test_worker_provisioning_writes_intranet_urls(environment_id, monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "remote_gateway_local_url", "http://10.0.0.8:8110")
+    monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:8110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:8201/mcp")
     async with SessionLocal() as session:
         environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
@@ -443,7 +443,7 @@ async def test_worker_provisioning_writes_intranet_urls(environment_id, monkeypa
     gateway_url, mcp_url = provisioner._direct_endpoints()
     assert gateway_url == "http://10.0.0.8:8110/v1"
     assert mcp_url == "http://10.0.0.8:8201/mcp"
-    monkeypatch.setattr(settings, "remote_gateway_local_url", "http://127.0.0.1:8110")
+    monkeypatch.setattr(settings, "gateway_openai_base", "http://127.0.0.1:8110")
     with pytest.raises(RuntimeError, match="内网"):
         provisioner._direct_endpoints()
 

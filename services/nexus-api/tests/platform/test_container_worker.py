@@ -65,7 +65,7 @@ def _provisioner(monkeypatch):
     wheel = b"worker-package"
     digest = hashlib.sha256(wheel).hexdigest()
     monkeypatch.setattr(remote_provisioning, "agent_wheel", lambda: ("worker.whl", wheel))
-    monkeypatch.setattr(worker.settings, "remote_gateway_local_url", "http://gateway.invalid:8110")
+    monkeypatch.setattr(worker.settings, "gateway_openai_base", "http://gateway.invalid:8110")
     monkeypatch.setattr(worker.settings, "mcp_resource_server_url", "http://mcp.invalid:8201/mcp")
     monkeypatch.setattr(worker.settings, "worker_agent_gateway_url", "ws://gateway.invalid/connect")
 

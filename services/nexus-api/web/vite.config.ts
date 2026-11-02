@@ -67,7 +67,10 @@ function agentscopeUiSpa(): Plugin {
 const proxy = {
   "/api/v1": process.env.VITE_NEXUS_API_PROXY_TARGET ?? "http://127.0.0.1:18120",
   "/api": process.env.VITE_PROXY_TARGET ?? "http://127.0.0.1:18120",
-  "/v1": process.env.VITE_GATEWAY_PROXY_TARGET ?? "http://127.0.0.1:18110",
+  "/v1": process.env.VITE_GATEWAY_PROXY_TARGET ??
+    (process.env.NEXUS_GATEWAY_OPENAI_BASE
+      ? new URL(process.env.NEXUS_GATEWAY_OPENAI_BASE).origin
+      : "http://127.0.0.1:18130"),
   "/agentscope-api": {
     // 统一经过 Nexus，保留日程身份保护；不能直通 Agent Service。
     target: process.env.VITE_NEXUS_API_PROXY_TARGET ?? "http://127.0.0.1:18120",

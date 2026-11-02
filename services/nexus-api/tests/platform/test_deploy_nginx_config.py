@@ -36,5 +36,16 @@ def test_worker_http_is_acl_limited_and_management_paths_are_not_proxied(network
     assert "location = /api/worker-gateway/connect" in worker
     assert "location = /mcp" in worker
     assert "location / { return 404; }" in worker
+    assert "location ^~ /api/worker-gateway/data/" in worker
     assert "location /api/" not in worker
     assert "Authorization" not in network_config  # 原请求鉴权由上游验证，不由代理伪造。
+
+
+def test_company_profile_scopes_tls_and_dependency_minimum(tmp_path):
+    from tests.platform.deployment_platform import DEPLOY
+    company = deploy.source_manifest(DEPLOY / "sources/huawei.json")
+    public = deploy.source_manifest(DEPLOY / "sources/public.json")
+    assert company["nginx_min"] == "1.12" and company["tls_protocols"] == ["TLSv1.2"]
+    assert public["nginx_min"] == "1.20" and public["tls_protocols"] == ["TLSv1.2", "TLSv1.3"]
+    assert company["pip_index"].startswith("http://mirrors.tools.huawei.com/")
+    assert company["npm_registry"].startswith("http://mirrors.tools.huawei.com/")

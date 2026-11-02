@@ -33,6 +33,10 @@ from configuration import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
+# This module only imports the dependency-free source policy during bootstrap.
+sys.path.insert(0, str(ROOT / "services/nexus-api"))
+from app.config.worker_deployment import pip_install_options, pip_trusted_host, source_url  # noqa: E402
+
 SOURCE_FIELDS = ("python_url", "node_base", "pip_index", "npm_registry")
 
 
@@ -48,6 +52,7 @@ def source_manifest(path):
         data = json.loads((Path(__file__).parent / "sources/versions.json").read_text())
         data.update(path if isinstance(path, dict) else json.loads(path.read_text()))
         for key in SOURCE_FIELDS:
+            data[key] = source_url(data[key], key)
             parsed = urlsplit(data[key])
             if (
                 parsed.scheme not in ("http", "https")
@@ -59,6 +64,10 @@ def source_manifest(path):
                 or any(c.isspace() for c in data[key])
             ):
                 raise ValueError(key)
+        if (not isinstance(data["tls_protocols"], list) or not data["tls_protocols"]
+                or len(set(data["tls_protocols"])) != len(data["tls_protocols"])
+                or any(p not in {"TLSv1.2", "TLSv1.3"} for p in data["tls_protocols"])):
+            raise ValueError("TLS protocols")
         for key in ("python_version", "node_version", "git_min", "nginx_min"):
             if not re.fullmatch(r"\d+\.\d+(?:\.\d+)?", data[key]):
                 raise ValueError(key)
@@ -207,7 +216,9 @@ def quote_nginx(value):
     return '"' + str(value) + '"'
 
 
-def nginx_config(root, state, env):
+def nginx_config(root, state, env, *, tls_protocols=("TLSv1.2", "TLSv1.3")):
+    if not tls_protocols or any(p not in {"TLSv1.2", "TLSv1.3"} for p in tls_protocols):
+        raise DeploymentError("TLS 协议配置无效")
     api, gateway, library = (
         env["NEXUS_API_PORT"],
         env["ASTRA_SERVICE_GATEWAY_PORT"],
@@ -249,7 +260,7 @@ http {{
     server_name _;
     ssl_certificate {quote_nginx(env["NEXUS_DEPLOY_TLS_CERT"])};
     ssl_certificate_key {quote_nginx(env["NEXUS_DEPLOY_TLS_KEY"])};
-    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_protocols {" ".join(tls_protocols)};
     location / {{ proxy_pass http://127.0.0.1:{api}; {common} }}
     location /v1/ {{ proxy_pass http://127.0.0.1:{gateway}; {common} }}
   }}
@@ -263,6 +274,7 @@ http {{
     location /v1/ {{ proxy_pass http://127.0.0.1:{gateway}; {common} }}
     location = /mcp {{ proxy_pass http://127.0.0.1:{library}; {common} }}
     location = /api/worker-gateway/connect {{ proxy_pass http://127.0.0.1:{api}; {common} }}
+    location ^~ /api/worker-gateway/data/ {{ proxy_pass http://127.0.0.1:{api}; {common} }}
     location / {{ return 404; }}
   }}
 }}
@@ -812,7 +824,7 @@ class Deployer:
             PIP_INDEX_URL=self.sources["pip_index"],
             PIP_DISABLE_PIP_VERSION_CHECK="1",
             npm_config_registry=self.sources["npm_registry"],
-            npm_config_replace_registry_host="always",
+            npm_config_replace_registry_host="npmjs",
             npm_config_audit="false",
             npm_config_fund="false",
         )
@@ -825,6 +837,9 @@ class Deployer:
             "registry=" + self.sources["npm_registry"] + "\nstrict-ssl=true\n",
         )
         atomic_write(self.state / "npmrc.global", "")
+        trusted = pip_trusted_host(self.sources["pip_index"])
+        if trusted:
+            package_env["PIP_TRUSTED_HOST"] = trusted
         self.package_env = package_env
         if (self.release_root.parent / "prepared.json").is_file():
             marker = json.loads(
@@ -857,8 +872,7 @@ class Deployer:
                 "-m",
                 "pip",
                 "install",
-                "--index-url",
-                self.sources["pip_index"],
+                *pip_install_options(self.sources["pip_index"]),
             ]
             command += (
                 ["-r", str(directory / requirements)]
@@ -889,24 +903,24 @@ class Deployer:
                             name + " 项目 npm 配置与指定源/TLS 策略冲突"
                         )
             lock_path = directory / "package-lock.json"
-            install = [self.npm, "ci"]
-            if lock_path.is_file():
+            if not lock_path.is_file():
+                raise DeploymentError(name + " 缺少已提交的 package-lock.json，拒绝动态解析依赖")
+            try:
                 lock = json.loads(lock_path.read_text())
+                if lock.get("lockfileVersion") not in (2, 3) or not isinstance(lock.get("packages"), dict):
+                    raise ValueError("lock shape")
                 registry_host = urlsplit(self.sources["npm_registry"]).netloc
-                for package in lock.get("packages", {}).values():
+                for package in lock["packages"].values():
                     resolved = package.get("resolved", "")
                     if resolved and (
                         urlsplit(resolved).scheme not in ("https", "http")
-                        or urlsplit(resolved).netloc
-                        not in [registry_host, *self.sources["npm_lock_hosts"]]
+                        or urlsplit(resolved).username or urlsplit(resolved).password
+                        or urlsplit(resolved).netloc not in [registry_host, *self.sources["npm_lock_hosts"]]
                     ):
-                        raise DeploymentError(
-                            f"{name} 锁文件含非配置 registry 制品，拒绝隐式访问"
-                        )
-            else:
-                # 前端锁文件不提交：其中可能写死公网 registry。按部署配置源
-                # 现场解析版本，保证内网机器不访问锁文件里的外部地址。
-                install = [self.npm, "install"]
+                        raise DeploymentError(f"{name} 锁文件含非配置 registry 制品，拒绝隐式访问")
+            except (ValueError, TypeError, AttributeError):
+                raise DeploymentError(name + " package-lock.json 无效") from None
+            install = [self.npm, "ci"]
             # 禁用任意生命周期下载；本仓库构建脚本显式执行。
             self.run(
                 [
@@ -1114,7 +1128,7 @@ Settings()
         ):
             raise DeploymentError("Nginx 缓存目录必须为绝对目录且不能经过符号链接")
         cache.mkdir(parents=True, exist_ok=True)
-        conf = nginx_config(self.root, self.state, self.values)
+        conf = nginx_config(self.root, self.state, self.values, tls_protocols=self.sources["tls_protocols"])
         prefix = self.state / "nginx"
         prefix.mkdir(exist_ok=True)
         (prefix / "logs").mkdir(exist_ok=True)

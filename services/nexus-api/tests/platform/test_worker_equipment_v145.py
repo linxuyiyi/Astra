@@ -154,6 +154,7 @@ def _observation(desired: dict | None = None) -> dict:
             "status": "healthy",
             "connected": True,
             "missing": [],
+            "servers": {name: {"status": "connected"} for name in endpoints},
             "endpoints": endpoints,
             "error": None,
         },
@@ -242,7 +243,7 @@ def test_healthy_projection_and_fixed_shapes():
         "git",
     ]
     for row in rows:
-        assert set(row) == {
+        expected_keys = {
             "key",
             "label",
             "state",
@@ -255,6 +256,10 @@ def test_healthy_projection_and_fixed_shapes():
             "error",
             "detail",
         }
+        if row["key"] == "mcp":
+            expected_keys.add("warnings")
+            assert row["warnings"] == []
+        assert set(row) == expected_keys
         assert row["state"] == "ready"
         assert row["verified"] is True
         assert row["deployed"] is True
@@ -314,6 +319,8 @@ def test_mcp_disconnected_is_reported_per_item():
         "status": "unhealthy",
         "connected": False,
         "missing": ["nexus-library"],
+        "servers": {"nexus-library": {"status": "failed"}},
+        "endpoints": {item["name"]: item["url"] for item in desired["mcp"]["items"]},
         "error": "MCP 未连接：nexus-library",
     }
 

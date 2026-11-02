@@ -35,7 +35,7 @@ def _direct(monkeypatch):
     if redis_url:
         monkeypatch.setattr(settings, "redis_url", redis_url)
     monkeypatch.setattr(settings, "mcp_transport", "streamable-http")
-    monkeypatch.setattr(settings, "remote_gateway_local_url", GATEWAY)
+    monkeypatch.setattr(settings, "gateway_openai_base", GATEWAY)
     monkeypatch.setattr(settings, "mcp_resource_server_url", MCP)
     monkeypatch.setattr(
         settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect"
@@ -97,7 +97,7 @@ async def _reserve(employee_id, action):
 @pytest.mark.asyncio
 async def test_deploy_rejects_loopback_before_ssh(monkeypatch):
     monkeypatch.setattr(get_settings(), "mcp_transport", "streamable-http")
-    monkeypatch.setattr(get_settings(), "remote_gateway_local_url", "http://127.0.0.1:8110")
+    monkeypatch.setattr(get_settings(), "gateway_openai_base", "http://127.0.0.1:8110")
     employee_id, _environment_id = await _employee()
     environment, operation, lease = await _reserve(employee_id, "deploy")
     called = False

@@ -368,7 +368,7 @@ async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkey
     monkeypatch.setattr(
         settings, "worker_agent_gateway_url", "ws://10.0.0.8:18100/api/worker-gateway/connect"
     )
-    monkeypatch.setattr(settings, "remote_gateway_local_url", "http://10.0.0.8:18110")
+    monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:18110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
         id=77, mode="LINUX_REMOTE", host="node.invalid", port=22, username="nexus",
@@ -456,7 +456,7 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
     monkeypatch.setattr(
         settings, "worker_agent_gateway_url", "ws://10.0.0.8:18100/api/worker-gateway/connect"
     )
-    monkeypatch.setattr(settings, "remote_gateway_local_url", "http://10.0.0.8:18110")
+    monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:18110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
         id=88, mode="LINUX_REMOTE", host="node.invalid", port=22, username="nexus",

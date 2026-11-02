@@ -37,7 +37,7 @@ def gateway_environment(model: str | None, source: dict[str, str]) -> dict[str, 
     """只覆盖受管 Serve 的模型连接，保留工作区工具配置，不写用户全局文件。"""
     import json
 
-    from app.gateway.urls import gateway_base
+    from app.gateway.urls import client_gateway_base
 
     if not source.get("NEXUS_GATEWAY_API_KEY", "").strip():
         raise RuntimeError("本机受管 OpenCode 需要 NEXUS_GATEWAY_API_KEY")
@@ -57,7 +57,7 @@ def gateway_environment(model: str | None, source: dict[str, str]) -> dict[str, 
         "npm": "@ai-sdk/openai-compatible",
         "name": "Nexus API 中转",
         "options": {
-            "baseURL": gateway_base(source.get("NEXUS_GATEWAY_OPENAI_BASE", "http://127.0.0.1:18110/v1")),
+            "baseURL": client_gateway_base(source.get("NEXUS_GATEWAY_OPENAI_BASE", "")),
             "apiKey": "{env:NEXUS_GATEWAY_API_KEY}",
         },
         "models": {route_model_id(model): {"name": route_model_id(model)}},
@@ -68,9 +68,9 @@ def gateway_environment(model: str | None, source: dict[str, str]) -> dict[str, 
 
 def validate_gateway_config(config: dict, source: dict[str, str]) -> None:
     """复用 Serve 前验证其实际配置，避免健康的旧进程继续直连。"""
-    from app.gateway.urls import gateway_base
+    from app.gateway.urls import client_gateway_base
 
-    expected = gateway_base(source.get("NEXUS_GATEWAY_OPENAI_BASE", "http://127.0.0.1:18110/v1"))
+    expected = client_gateway_base(source.get("NEXUS_GATEWAY_OPENAI_BASE", ""))
     providers = config.get("provider") or {}
     options = (providers.get(GATEWAY_PROVIDER) or {}).get("options") or {}
     models = [config.get("model"), config.get("small_model")]

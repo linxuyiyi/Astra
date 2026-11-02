@@ -45,14 +45,7 @@
             class="bubble muted"
           >正在生成…</div>
           <div v-if="message.text" class="bubble markdown" v-html="renderMarkdown(message.text)" />
-          <template v-for="tool in message.tools || []" :key="tool.id">
-            <HitlCard v-if="tool.state === 'asking'" :tool="asLiveTool(tool)" />
-            <details v-else class="tool-card" :open="!shouldCollapse(tool.output || tool.input)">
-              <summary>{{ tool.name || '工具' }} · {{ tool.state || 'done' }}</summary>
-              <pre v-if="tool.input">{{ tool.input }}</pre>
-              <pre v-if="tool.output">{{ tool.output }}</pre>
-            </details>
-          </template>
+          <ToolActivity v-if="message.tools?.length" :tools="message.tools" />
           <div v-if="message.attachments?.length" class="message-attachments">
             <template v-for="file in message.attachments" :key="file.id">
               <a
@@ -343,12 +336,12 @@ import EmployeeAvatar from "@/components/EmployeeAvatar.vue";
 import type { DataBlock } from "@agentscope-ai/agentscope/message";
 import type { Attachment, ChatMessage, Employee } from "@/types";
 import { ChatRuntime, imageFile } from "../ChatRuntime";
-import { renderMarkdown, shouldCollapse } from "../markdown";
+import { renderMarkdown } from "../markdown";
 import { insertMention, mentionCandidates, mentionTrigger, type MentionCandidate } from "../mentions";
 import { isAssistantMessageRunning } from "../messageFormat";
-import type { ChatSessionState, ChatTarget, LiveTool } from "../types";
+import type { ChatSessionState, ChatTarget } from "../types";
 import { formatClock, useAsrRecorder } from "../useAsrRecorder";
-import HitlCard from "./HitlCard.vue";
+import ToolActivity from "./ToolActivity.vue";
 import MessageFooter from "./MessageFooter.vue";
 
 const props = defineProps<{
@@ -478,10 +471,6 @@ function senderLabel(message: ChatMessage) {
   if (message.sender_type === "system") return "系统";
   if (message.sender_name) return message.sender_name;
   return message.speaker === props.target?.id ? props.target?.name : "数字员工";
-}
-
-function asLiveTool(tool: { id: string; name: string; input: string; output: string; state: string }): LiveTool {
-  return { id: tool.id, name: tool.name, input: tool.input, output: tool.output, state: tool.state };
 }
 
 async function doSend() {

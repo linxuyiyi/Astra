@@ -14,7 +14,7 @@ from app.api.workspace_routes import persist_attachments, router, task_repo
 from app.config.settings import get_settings
 from app.database import SessionLocal, init_database
 from app.domain import ExecutionMode
-from app.models import AgentWorker, OpenCodeExecutionEnvironment, Task
+from app.models import AgentWorker, OpenCodeExecutionEnvironment, Task, WorkerInstance
 from app.runtime.environment import ExecutionEnvironmentRuntime, environment_from_snapshot
 from app.runtime.worker_files import WorkerFileError, git_command_payload, worker_git, worker_upload
 from app.runtime.workspace_changes import workspace_diff
@@ -64,9 +64,8 @@ async def test_repo_metadata_with_git_218_commands_and_relative_common_dir(tmp_p
 
 
 class _SecretEnv:
-    id = 1
+    id = 999991
     mode = ExecutionMode.LINUX_REMOTE
-    worker_channel = "worker"
 
     @property
     def ssh_password(self):
@@ -157,6 +156,10 @@ async def test_worker_channel_does_not_open_ssh_or_read_the_password(monkeypatch
     async def remote(self, environment, command, **_kwargs):
         raise AssertionError("ssh remote")
 
+    async def fake_enrolled(_session, env_id):
+        return env_id == _SecretEnv.id
+
+    monkeypatch.setattr("app.runtime.worker_files.environment_enrolled_in_gateway", fake_enrolled)
     monkeypatch.setattr("app.runtime.worker_files.WorkerOpenCodeClient", FakeClient)
     monkeypatch.setattr(ExecutionEnvironmentRuntime, "open_session", opened)
     monkeypatch.setattr(ExecutionEnvironmentRuntime, "run_remote", remote)
@@ -170,14 +173,14 @@ async def test_worker_channel_does_not_open_ssh_or_read_the_password(monkeypatch
     assert calls[1][1]["operation"] == "head"
     assert "-c" not in calls[1][1]
 
-    ssh = SimpleNamespace(mode=ExecutionMode.LINUX_REMOTE, worker_channel="ssh", id=None)
+    unenrolled = SimpleNamespace(mode=ExecutionMode.LINUX_REMOTE, id=None)
     with pytest.raises(RuntimeError, match="尚未安装 Worker"):
-        await validate_path(ssh, "/ws", "a.txt")
+        await validate_path(unenrolled, "/ws", "a.txt")
     with pytest.raises(RuntimeError, match="尚未安装 Worker"):
-        await _git(ssh, "/ws", "rev-parse", "HEAD")
+        await _git(unenrolled, "/ws", "rev-parse", "HEAD")
 
 
-async def test_snapshot_environment_follows_the_stored_channel(monkeypatch):
+async def test_snapshot_environment_follows_the_enrolled_worker(monkeypatch):
     await init_database()
     async with SessionLocal() as session:
         employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
@@ -192,9 +195,17 @@ async def test_snapshot_environment_follows_the_stored_channel(monkeypatch):
             ssh_password="secret",
             opencode_path="opencode",
             workspace_root="/work",
-            worker_channel="worker",
         )
         session.add(environment)
+        await session.flush()
+        session.add(
+            WorkerInstance(
+                id=f"wi-{uuid4().hex[:8]}",
+                environment_id=environment.id,
+                token_digest=uuid4().hex * 2,
+                status="online",
+            )
+        )
         await session.commit()
         await session.refresh(environment)
         snapshot = environment_from_snapshot(
@@ -207,7 +218,6 @@ async def test_snapshot_environment_follows_the_stored_channel(monkeypatch):
             },
             employee.id,
         )
-        assert snapshot.worker_channel != "worker"
 
     seen = []
 
@@ -245,6 +255,10 @@ async def test_upload_stages_bytes_and_deleted_diff_still_returns_the_file(monke
             assert data["sha256"] == hashlib.sha256(b"hello").hexdigest()
             return {"path": "/ws/uploads/abc-a.txt"}
 
+    async def fake_enrolled(_session, env_id):
+        return env_id == _SecretEnv.id
+
+    monkeypatch.setattr("app.runtime.worker_files.environment_enrolled_in_gateway", fake_enrolled)
     monkeypatch.setattr("app.runtime.worker_files.WorkerOpenCodeClient", FakeClient)
     path = await worker_upload(_SecretEnv(), "/ws", "a.txt", b"hello")
     assert path == "/ws/uploads/abc-a.txt"
@@ -326,11 +340,18 @@ async def test_file_api_still_validates_before_opencode_and_repo_overflow_is_dir
             name="云执行机",
             opencode_path="opencode",
             workspace_root="/work",
-            worker_channel="worker",
             ssh_password="secret",
         )
         session.add(environment)
         await session.flush()
+        session.add(
+            WorkerInstance(
+                id=f"wi-{uuid4().hex[:8]}",
+                environment_id=environment.id,
+                token_digest=uuid4().hex * 2,
+                status="online",
+            )
+        )
         task = Task(
             id=f"T-{uuid4().hex[:8]}",
             title="repo",
@@ -391,6 +412,10 @@ async def test_worker_git_decodes_raw_bytes_with_replacement(monkeypatch):
                 "body": base64.b64encode(b"\xff").decode("ascii"),
             }
 
+    async def fake_enrolled(_session, env_id):
+        return env_id == _SecretEnv.id
+
+    monkeypatch.setattr("app.runtime.worker_files.environment_enrolled_in_gateway", fake_enrolled)
     monkeypatch.setattr("app.runtime.worker_files.WorkerOpenCodeClient", FakeClient)
     code, text = await worker_git(_SecretEnv(), "/ws", ("show", "HEAD:a.bin"))
     assert code == 0
@@ -398,10 +423,14 @@ async def test_worker_git_decodes_raw_bytes_with_replacement(monkeypatch):
 
 
 async def test_upload_helper_is_what_the_route_calls(monkeypatch):
+    async def fake_enrolled(_session, env_id):
+        return env_id == _SecretEnv.id
+
     async def fake_upload(environment, workspace, filename, content):
-        assert environment.worker_channel == "worker"
+        assert environment.mode == ExecutionMode.LINUX_REMOTE
         return f"{workspace}/uploads/abc-{filename}"
 
+    monkeypatch.setattr("app.runtime.worker_files.environment_enrolled_in_gateway", fake_enrolled)
     monkeypatch.setattr("app.runtime.worker_files.worker_upload", fake_upload)
     # upload() imports the helper inside the function.
     path = await upload(_SecretEnv(), "/ws", "a.txt", b"hi")
@@ -420,7 +449,6 @@ async def test_repo_route_turns_uninstalled_worker_into_503():
             name="云执行机",
             opencode_path="opencode",
             workspace_root="/work",
-            worker_channel="ssh",
         )
         session.add(environment)
         await session.flush()

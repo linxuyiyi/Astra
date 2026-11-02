@@ -31,7 +31,7 @@ async def environment_id() -> int:
         session.add(employee)
         await session.flush()
         environment = OpenCodeExecutionEnvironment(
-            employee_id=employee.id, mode="LINUX_REMOTE", name="云执行机", worker_channel="ssh"
+            employee_id=employee.id, mode="LINUX_REMOTE", name="云执行机"
         )
         session.add(environment)
         await session.commit()
@@ -240,11 +240,31 @@ async def test_remote_connection_on_worker_does_not_start_ssh(environment_id, mo
 
 
 async def _mark(environment_id: int, channel: str) -> None:
+    from sqlalchemy import delete, select
+
+    from app.models import WorkerInstance
+
     await init_database()
     async with SessionLocal() as session:
         environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        environment.worker_channel = channel
         environment.mode = ExecutionMode.LINUX_REMOTE
+        existing = await session.scalar(
+            select(WorkerInstance).where(WorkerInstance.environment_id == environment_id)
+        )
+        if channel == "worker":
+            if existing is None:
+                session.add(
+                    WorkerInstance(
+                        id=f"wi_{environment_id}",
+                        environment_id=environment_id,
+                        token_digest="x" * 64,
+                        status="online",
+                    )
+                )
+        else:
+            await session.execute(
+                delete(WorkerInstance).where(WorkerInstance.environment_id == environment_id)
+            )
         await session.commit()
 
 
@@ -263,7 +283,6 @@ async def _load(environment_id: int) -> OpenCodeExecutionEnvironment:
             opencode_path=stored.opencode_path,
             model_name=stored.model_name,
             workspace_root=stored.workspace_root,
-            worker_channel=stored.worker_channel,
             status=stored.status,
         )
 

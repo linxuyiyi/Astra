@@ -12,7 +12,6 @@ from app.api.maintenance_routes import router as maintenance_router
 from app.api.repository_routes import router as repository_router
 from app.api.routes import router
 from app.api.speech_routes import router as speech_router
-from app.api.workbench_routes import router as workbench_router
 from app.api.worker_routes import router as worker_router
 from app.api.workspace_routes import router as workspace_router
 from app.bootstrap import bootstrap_categories, bootstrap_employees, bootstrap_knowledge_spaces
@@ -21,7 +20,7 @@ from app.database import SessionLocal, validate_database
 from app.gateway.security import CredentialError
 from app.gateway.service import GatewayError
 from app.library_service import LibraryError
-from app.runtime.maintenance import health_observer, maintenance_executor
+from app.runtime.maintenance import maintenance_executor
 from app.runtime.recovery import supervise_sessions
 from app.seed import seed_demo_data
 from app.worker_gateway.routes import router as worker_gateway_router
@@ -48,16 +47,14 @@ async def lifespan(_: FastAPI):
     supervisor = asyncio.create_task(supervise_sessions())
     worker_sweep = asyncio.create_task(sweep_worker_gateway())
     maintenance = asyncio.create_task(maintenance_executor())
-    health = asyncio.create_task(health_observer())
     try:
         yield
     finally:
         supervisor.cancel()
         worker_sweep.cancel()
         maintenance.cancel()
-        health.cancel()
         await asyncio.gather(
-            supervisor, worker_sweep, maintenance, health, return_exceptions=True
+            supervisor, worker_sweep, maintenance, return_exceptions=True
         )
         from app.worker_gateway.service import get_gateway
 
@@ -83,7 +80,6 @@ app.include_router(worker_router)
 app.include_router(worker_gateway_router)
 app.include_router(maintenance_router)
 app.include_router(workspace_router)
-app.include_router(workbench_router)
 app.include_router(library_router)
 app.include_router(gateway_router)
 app.include_router(speech_router)

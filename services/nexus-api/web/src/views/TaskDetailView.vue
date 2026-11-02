@@ -57,15 +57,10 @@
           <span>最后已知状态：{{ task?.runtime_status_label }}</span>
           <ElButton :loading="loading" :disabled="busy || loading" @click="load">刷新状态</ElButton>
           <ElButton :disabled="busy || loading" @click="reconnect">重连</ElButton>
-          <ElButton v-if="task?.pending_message_id && !isDsh" :disabled="busy || loading" @click="action('retry-submission')">核对并重试未确认输入</ElButton>
+          <ElButton v-if="task?.pending_message_id" :disabled="busy || loading" @click="action('retry-submission')">核对并重试未确认输入</ElButton>
         </div>
       </ElAlert>
-      <DshWorkbench v-if="isDsh && task && selectedSessionBinding?.native_session_id"
-        :key="`${task.id}:${selectedSession}`" :task-id="task.id" :binding-id="selectedSession"
-        :native-session-id="selectedSessionBinding.native_session_id"
-        :readonly="!selectedSessionBinding.current || ['SUCCEEDED', 'CANCELED'].includes(task.status)"
-        @changed="load" @changes="showChanges = true; loadChanges()" />
-      <ElAlert v-else-if="workspaceUiError" class="workspace-alert" type="warning" show-icon :closable="false" :title="workspaceUiError" />
+      <ElAlert v-if="workspaceUiError" class="workspace-alert" type="warning" show-icon :closable="false" :title="workspaceUiError" />
       <iframe v-else-if="frameUrl" :key="frameKey" :src="frameUrl" ref="workspaceFrame" title="OpenCode Task Workspace" class="task-detail__frame" allow="clipboard-read; clipboard-write" />
       <ElEmpty v-else-if="binding" :image-size="80" :description="task?.current_session_id ? 'Session 绑定异常，请重连检查；系统不会自动创建新 Session。' : '任务尚未创建 Session，请先启动任务。'" />
     </ElMain>
@@ -155,9 +150,8 @@ import { ArrowLeft } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElContainer, ElDrawer, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElHeader, ElMain, ElOption, ElSelect, ElTable, ElTableColumn, ElTabPane, ElTabs, ElTag, ElText, ElTimeline, ElTimelineItem } from 'element-plus'
-import { api, request } from '@/api/client'
+import { api } from '@/api/client'
 import type { AstraEvent, ExperienceReviewJob, Task, TaskUsage, TaskWorkspaceBinding } from '@/api/types'
-import DshWorkbench from '@/components/runtime/DshWorkbench.vue'
 import { useAstraStore } from '@/stores/astra'
 import { confirmDialog } from '@/composables/useConfirm'
 import { formatTaskDuration, formatTime, formatTokens, priorityLabel, taskTypeLabel } from '@/utils/format'
@@ -330,7 +324,7 @@ const primaryDetail = computed(() => {
   if (current.status === 'CANCELED' && current.execution_released === false && !current.pending_message_id) return { key: 'release', label: '确认执行已停止', run: () => confirmExecutionStopped() }
   if (!current.current_session_id && !current.pending_message_id) return { key: 'start', label: '启动任务', run: () => action('start') }
   if (canFinish.value) return { key: 'confirm', label: '确认完成', run: () => action('confirm') }
-  if (current.pending_message_id && !isDsh.value) return { key: 'retry', label: '核对并重试', run: () => action('retry-submission') }
+  if (current.pending_message_id) return { key: 'retry', label: '核对并重试', run: () => action('retry-submission') }
   return { key: 'refresh', label: '刷新状态', run: () => load() }
 })
 function onDetailCommand(command: string | number) {
@@ -368,9 +362,7 @@ async function loadChanges() {
   // 读取有界等待与失败提示：长时间无响应时给出可读错误，而不是永久停留在加载态。
   const deadline = window.setTimeout(() => controller.abort(), 20000)
   try {
-    const path = isDsh.value
-      ? `/api/tasks/${encodeURIComponent(id)}/workbench/${encodeURIComponent(sessionId)}/diff?native_session_id=${encodeURIComponent(selectedSessionBinding.value?.native_session_id || '')}&mode=${mode}`
-      : `/api/tasks/${encodeURIComponent(id)}/opencode/${encodeURIComponent(sessionId)}/vcs/diff?mode=${mode}`
+    const path = `/api/tasks/${encodeURIComponent(id)}/opencode/${encodeURIComponent(sessionId)}/vcs/diff?mode=${mode}`
     const response = await fetch(`${import.meta.env.VITE_API_BASE ?? ''}${path}`, { signal: controller.signal })
     const data = await response.json()
     if (diffRequest !== controller) return
@@ -391,7 +383,6 @@ async function loadChanges() {
 }
 async function openChanges() { showChanges.value = true; await loadChanges() }
 const selectedSessionBinding = computed(() => binding.value?.sessions.find(item => item.id === selectedSession.value))
-const isDsh = computed(() => (selectedSessionBinding.value?.runtime_engine || binding.value?.runtime.runtime_engine) === 'dsh')
 const workspaceUiError = computed(() => {
   if (!selectedSession.value) return ''
   return selectedSessionBinding.value?.workspace_ui_error || binding.value?.runtime.workspace_ui_error || ''
@@ -435,9 +426,7 @@ async function loadTask(id: string) {
 async function action(name: string) {
   busy.value = true
   try {
-    if (isDsh.value && selectedSessionBinding.value?.native_session_id && ['stop', 'stop-current', 'confirm', 'continue', 'restart', 'reconnect'].includes(name)) {
-      await request(`/api/tasks/${encodeURIComponent(String(route.params.id))}/workbench/${encodeURIComponent(selectedSession.value)}/action`, { method: 'POST', body: JSON.stringify({ action: name, native_session_id: selectedSessionBinding.value.native_session_id }) })
-    } else { task.value = await api.taskAction(String(route.params.id), name) }
+    task.value = await api.taskAction(String(route.params.id), name)
     await loadRequest?.promise
     selectedSession.value = ''
     await load()

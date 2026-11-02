@@ -12,8 +12,8 @@ from app.config.settings import get_settings
 from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
 from app.main import app
 from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, Task
-from app.runtime.capability import binding_revision, observe_bindings, write_capability
 from app.runtime.dispatcher import Dispatcher
+from app.runtime.worker_readiness import capability_spec_revision
 
 
 @pytest.fixture
@@ -42,15 +42,6 @@ def _employee():
 
 
 def _environment(workspace: str, repository_id: str = "repo-1"):
-    desired = binding_revision(["review"])
-    ready = observe_bindings(
-        None,
-        desired=desired,
-        found={"review"},
-        expected=["review"],
-        error="",
-        checked_at="2026-10-17T00:00:00Z",
-    )
     return OpenCodeExecutionEnvironment(
         employee_id="E1",
         mode="LOCAL",
@@ -58,8 +49,9 @@ def _environment(workspace: str, repository_id: str = "repo-1"):
         workspace_root=workspace,
         repository_id=repository_id,
         model_name="nexus-gateway/demo",
+        skill_refs=["review"],
         status=EnvironmentStatus.AVAILABLE,
-        status_detail=write_capability({}, ready),
+        status_detail={},
     )
 
 
@@ -128,7 +120,9 @@ async def test_dispatch_stays_on_one_repository_and_defers_the_base_commit(sessi
     assert claimed.id == "T-same"
     assert claimed.base_commit is None
     assert "base_commit" not in claimed.execution_environment_snapshot
-    assert claimed.execution_environment_snapshot["capability_revision"] == binding_revision(["review"])
+    assert claimed.execution_environment_snapshot["capability_revision"] == capability_spec_revision(
+        ["review"], []
+    )
     assert claimed.execution_environment_snapshot["model_name"] == "nexus-gateway/demo"
     assert await Dispatcher(session).claim_once() is None
     waiting = await session.get(Task, "T-next")

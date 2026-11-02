@@ -17,19 +17,14 @@ const ACTION_LABELS: Record<string, string> = {
   deploy: '一键部署',
   update: '更新',
   restart: '重启',
-  disable: '禁用',
-  restore: '恢复',
 }
 
 const STATE_LABELS: Record<string, string> = {
   QUEUED: '排队中',
-  PREFLIGHT: '预检中',
   RUNNING: '执行中',
-  VERIFYING: '验证中',
   SUCCEEDED: '成功',
   FAILED: '失败',
   CANCELED: '已取消',
-  INTERRUPTED: '已中断待核对',
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -47,32 +42,23 @@ const STAGE_LABELS: Record<string, string> = {
   restart: '重启 OpenCode',
   verify: '验证',
   verify_failed: '装备验证失败',
-  reconcile: '核对远端',
-  reconciled: '已核对',
   blocked: '被阻塞',
-  disable: '禁用中',
-  disabled: '已禁用',
-  restore: '恢复中',
-  restored: '已恢复',
-  restore_failed: '恢复失败',
   finished: '完成',
   failed: '失败',
   canceled: '已取消',
-  interrupted: '已中断',
 }
 
 const ERROR_CODE_LABELS: Record<string, string> = {
-  lease_expired: '维护执行已中断，需核对远端状态',
-  controller_stopped: '维护执行已中断，需核对远端状态',
-  operation_not_finished: '维护执行已中断，需核对远端状态',
-  remote_state_unknown: '维护执行已中断，需核对远端状态',
-  canceled_after_remote_change: '取消时远端可能已变更，需核对远端状态',
+  lease_expired: '维护租约已过期，可重新检查或一键部署',
+  controller_stopped: '维护进程已停止，可重新检查或一键部署',
+  operation_not_finished: '维护未完成，可重新检查或一键部署',
   canceled: '操作已取消',
-  health_check_failed: '只读健康检查未通过',
+  health_check_failed: '健康检查未通过',
+  worker_not_installed: '尚未安装，请先执行一键部署',
 }
 
-const ACTIVE_STATES = new Set(['QUEUED', 'PREFLIGHT', 'RUNNING', 'VERIFYING'])
-const RETRYABLE_STATES = new Set(['FAILED', 'INTERRUPTED', 'CANCELED'])
+const ACTIVE_STATES = new Set(['QUEUED', 'RUNNING'])
+const RETRYABLE_STATES = new Set(['FAILED', 'CANCELED'])
 
 export function maintenanceActionLabel(action: string | null | undefined): string {
   return ACTION_LABELS[String(action ?? '')] ?? '维护'
@@ -96,7 +82,7 @@ export function isMaintenanceActive(state: string | null | undefined): boolean {
 }
 
 export function canCancelMaintenance(operation: MaintenanceOperation | null | undefined): boolean {
-  return Boolean(operation && (ACTIVE_STATES.has(operation.state) || operation.state === 'INTERRUPTED'))
+  return Boolean(operation && ACTIVE_STATES.has(operation.state))
 }
 
 export function canRetryMaintenance(operation: MaintenanceOperation | null | undefined): boolean {
@@ -134,6 +120,14 @@ export function connectionTone(state: string | null | undefined): SemanticTone {
   if (state === 'online') return 'success'
   if (state === 'offline') return 'danger'
   return 'neutral'
+}
+
+export function readinessLabel(state: string | null | undefined): string {
+  return ({ READY: '就绪', DRIFTED: '待同步', DEGRADED: '运行异常', UNKNOWN: '待检查' } as Record<string, string>)[String(state ?? '')] ?? '未获取'
+}
+
+export function readinessTone(state: string | null | undefined): SemanticTone {
+  return ({ READY: 'success', DRIFTED: 'attention', DEGRADED: 'danger', UNKNOWN: 'neutral' } as Record<string, SemanticTone>)[String(state ?? '')] ?? 'neutral'
 }
 
 export function runtimeHealthLabel(health: WorkerHealth | null): string {

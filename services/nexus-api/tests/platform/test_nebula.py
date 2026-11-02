@@ -90,7 +90,6 @@ async def _worker(session, worker_id, owner, *, mode="LOCAL", env_status="AVAILA
         employee_id=worker_id,
         mode=mode,
         name=f"环境 {worker_id}",
-        worker_channel="worker" if mode == "LINUX_REMOTE" else "ssh",
         status=env_status,
         labels=["自动化"],
     )

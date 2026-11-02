@@ -68,10 +68,14 @@ _FILE_API = {"/file", "/file/content", "/file/status", "/find/file"}
 
 
 async def check_request_path(environment, workspace: str, value: str, *, native_path: str = "") -> str:
-    """Worker send and session calls stay lexical. File and Git routes still use SSH."""
+    """Worker send and session calls stay lexical. File and Git routes validate on Worker."""
 
-    worker = getattr(environment, "worker_channel", "ssh") == "worker"
-    if worker and native_path not in _FILE_API:
+    from app.runtime.worker_files import environment_uses_worker
+
+    if native_path not in _FILE_API and (
+        str(getattr(environment, "mode", "")) == ExecutionMode.LINUX_REMOTE.value
+        or await environment_uses_worker(environment)
+    ):
         return relative_path(value or ".", workspace, local=environment.mode == ExecutionMode.LOCAL)
     return await validate_path(environment, workspace, value)
 

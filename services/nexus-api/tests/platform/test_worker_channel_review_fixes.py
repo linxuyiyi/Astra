@@ -12,7 +12,6 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.api.workspace_routes import native_events
@@ -34,11 +33,8 @@ from app.runtime.lifecycle import MessageHistoryIncomplete, RuntimeService, Runt
 from app.runtime.recovery import _refresh_with_client
 from app.runtime.remote_provisioning import RemoteProvisioner, guard_environment_write
 from app.runtime.session_connection import connect
-from app.runtime.worker_channel import main as channel_main
-from app.runtime.worker_channel import mark_worker_channel, read_worker_channel
 from app.runtime.worker_client import WorkerOpenCodeClient
 from app.runtime.workspace_files import check_request_path
-from app.worker_agent.channel_switch import restart_local_opencode
 from app.worker_agent.connection import (
     AgentConfig,
     WorkerConnectionManager,
@@ -55,7 +51,6 @@ from app.worker_gateway.service import (
     expire_due_commands_statement,
     held_slot_expire_statement,
 )
-from tests.platform.test_worker_data_channel import _direct_switch_result
 from tests.platform.test_worker_gateway import ADMIN_HEADERS, bring_online, gateway_for
 
 
@@ -70,7 +65,6 @@ async def environment_id() -> int:
             employee_id=employee.id,
             mode="LINUX_REMOTE",
             name="云执行机",
-            worker_channel="ssh",
             workspace_root="/srv/app",
             opencode_server_port=4096,
         )
@@ -80,10 +74,7 @@ async def environment_id() -> int:
 
 
 async def _mark(environment_id: int) -> None:
-    async with SessionLocal() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        environment.worker_channel = "worker"
-        await session.commit()
+    return
 
 
 def _detached_environment(environment_id: int, employee_id: str) -> OpenCodeExecutionEnvironment:
@@ -95,7 +86,6 @@ def _detached_environment(environment_id: int, employee_id: str) -> OpenCodeExec
         workspace_root="/srv/app",
         opencode_server_port=4096,
         opencode_path="opencode",
-        worker_channel="worker",
     )
 
 
@@ -270,29 +260,10 @@ def test_resume_wakes_a_paused_event_reader():
 
 
 def test_child_environ_drops_worker_credentials_and_preserves_managed_config():
-    from app.worker_agent.process_env import child_environ
-
     source = {"NEXUS_WORKER_TOKEN": "canary", "OPENCODE_CONFIG": "/managed/config.jsonc", "PATH": "/usr/bin"}
     result = child_environ(source)
     assert "NEXUS_WORKER_TOKEN" not in result
     assert result["OPENCODE_CONFIG"] == source["OPENCODE_CONFIG"]
-
-
-def test_restart_refuses_a_listener_without_a_managed_record(tmp_path, monkeypatch):
-    monkeypatch.setattr("app.worker_agent.channel_switch.assert_native_idle", lambda *_a, **_kw: True)
-    with pytest.raises(RuntimeError, match="缺少受管进程记录"):
-        restart_local_opencode(str(tmp_path), 4096, environ={})
-
-
-def test_process_restart_passes_the_maintenance_gate(tmp_path, monkeypatch):
-    calls = []
-    monkeypatch.setattr("app.worker_agent.channel_switch._wait_until_healthy", lambda *_a, **_kw: None)
-    monkeypatch.setattr("app.worker_agent.channel_switch.assert_native_idle", lambda *_a, **_kw: False)
-    monkeypatch.setattr("app.worker_agent.channel_switch.manage_process", lambda *a, **kw: calls.append(kw))
-    restart_local_opencode(
-        str(tmp_path), 4096, environ={"NEXUS_WORKER_OPENCODE_PROCESS_RECORD": str(tmp_path / "record")}
-    )
-    assert calls[0]["opencode"] is True and calls[0]["restart"] is True
 
 
 def test_oversized_event_frame_becomes_a_gap_marker():
@@ -447,74 +418,17 @@ async def test_incomplete_message_pages_do_not_count_as_read():
         await service._all_messages(repeated, Path("/srv/app"), "ses")
 
 
-@pytest.mark.asyncio
-async def test_switch_holds_the_maintenance_lock_until_the_mark(environment_id):
-    async with SessionLocal() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        employee_id = environment.employee_id
-
-        async def occupy():
-            async with SessionLocal() as other:
-                operation = await other.scalar(
-                    select(WorkerMaintenanceOperation).where(
-                        WorkerMaintenanceOperation.environment_id == environment_id,
-                        WorkerMaintenanceOperation.state.in_(
-                            ["QUEUED", "PREFLIGHT", "RUNNING", "VERIFYING", "INTERRUPTED"]
-                        ),
-                    )
-                )
-                assert operation is not None
-                other.add(
-                    Task(
-                        id="T-during-switch",
-                        title="during",
-                        task_type="ISSUE",
-                        status="RUNNING",
-                        employee_id=employee_id,
-                    )
-                )
-                await other.commit()
-            return _direct_switch_result()
-
-        with pytest.raises(HTTPException) as blocked:
-            await mark_worker_channel(session, environment_id, switch=occupy)
-        assert blocked.value.status_code == 409
-        assert await read_worker_channel(session, environment_id) == "ssh"
-        operation = await session.scalar(
-            select(WorkerMaintenanceOperation)
-            .where(WorkerMaintenanceOperation.environment_id == environment_id)
-            .order_by(WorkerMaintenanceOperation.requested_at.desc())
-        )
-        assert operation.state == "INTERRUPTED"
-        assert operation.active_environment_id == environment_id
-
-
-def test_admin_command_route_rejects_switch_channel():
-    with TestClient(app) as client:
-        response = client.post(
+async def test_admin_command_route_rejects_restart_opencode():
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
             "/api/worker-gateway/instances/wrk_missing/commands",
             headers=ADMIN_HEADERS,
-            json={"request_id": "cmd-switch", "name": "switch_channel", "payload": {}},
+            json={"request_id": "cmd-restart", "name": "restart_opencode", "payload": {}},
         )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "maintenance_command"
-
-
-def test_channel_admin_route_and_cli_call_mark(monkeypatch):
-    seen: dict[str, int] = {}
-
-    async def fake(_session, environment_id, *, switch=None):
-        seen["id"] = environment_id
-        return SimpleNamespace(id=environment_id, worker_channel="worker")
-
-    monkeypatch.setattr("app.runtime.worker_channel.mark_worker_channel", fake)
-    with TestClient(app) as client:
-        response = client.post("/api/worker-gateway/environments/7/channel", headers=ADMIN_HEADERS)
-    assert response.status_code == 200
-    assert response.json()["worker_channel"] == "worker"
-    assert seen["id"] == 7
-    assert channel_main(["--environment-id", "9"]) == 0
-    assert seen["id"] == 9
 
 
 @pytest.mark.asyncio
@@ -524,11 +438,9 @@ async def test_worker_provisioning_writes_intranet_urls(environment_id, monkeypa
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:8201/mcp")
     async with SessionLocal() as session:
         environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        environment.worker_channel = "worker"
-        await session.commit()
         await session.refresh(environment)
     provisioner = RemoteProvisioner(environment, {"id": "op"})
-    gateway_url, mcp_url = await provisioner._channel_endpoints()
+    gateway_url, mcp_url = provisioner._direct_endpoints()
     assert gateway_url == "http://10.0.0.8:8110/v1"
     assert mcp_url == "http://10.0.0.8:8201/mcp"
     monkeypatch.setattr(settings, "remote_gateway_local_url", "http://127.0.0.1:8110")
@@ -537,14 +449,15 @@ async def test_worker_provisioning_writes_intranet_urls(environment_id, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_worker_prompt_path_check_does_not_open_ssh(monkeypatch):
+async def test_worker_prompt_path_check_does_not_open_ssh(environment_id, monkeypatch):
     async def opened(self, environment):
         raise AssertionError(environment.host)
 
     monkeypatch.setattr("app.runtime.environment.ExecutionEnvironmentRuntime.open_session", opened)
-    environment = OpenCodeExecutionEnvironment(
-        mode="LINUX_REMOTE", worker_channel="worker", workspace_root="/srv/app"
-    )
+    await bring_online(gateway_for(), environment_id)
+    async with SessionLocal() as session:
+        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
+        session.expunge(environment)
     checked = await check_request_path(environment, "/srv/app", ".", native_path="/session/ses/prompt_async")
     assert checked == "."
     calls = []
@@ -640,7 +553,7 @@ async def _hold_operation(environment_id: int, *, expires_in: float = 300, statu
             WorkerMaintenanceOperation(
                 id="op_" + uuid4().hex,
                 environment_id=environment_id,
-                action="switch_channel",
+                action="deploy",
                 state="RUNNING",
                 stage="channel",
                 requested_by="test-hold",
@@ -741,58 +654,6 @@ def test_sweep_statements_execute_on_mysql():
 
 
 @pytest.mark.asyncio
-async def test_second_switch_cannot_replace_a_running_reservation(environment_id):
-    started = asyncio.Event()
-    release = asyncio.Event()
-
-    async def hold():
-        started.set()
-        await release.wait()
-        return _direct_switch_result()
-
-    async def first():
-        async with SessionLocal() as session:
-            return await mark_worker_channel(session, environment_id, switch=hold)
-
-    running = asyncio.create_task(first())
-    await asyncio.wait_for(started.wait(), 3)
-    async with SessionLocal() as session:
-        operation = await session.scalar(
-            select(WorkerMaintenanceOperation).where(
-                WorkerMaintenanceOperation.environment_id == environment_id,
-                WorkerMaintenanceOperation.state.in_(
-                    ["QUEUED", "PREFLIGHT", "RUNNING", "VERIFYING", "INTERRUPTED"]
-                ),
-            )
-        )
-        operation_id = operation.id
-        with pytest.raises(HTTPException) as blocked:
-            await mark_worker_channel(
-                session,
-                environment_id,
-                switch=lambda: _async_result(_direct_switch_result()),
-            )
-        assert blocked.value.status_code == 409
-        await session.rollback()
-        operation = await session.scalar(
-            select(WorkerMaintenanceOperation).where(
-                WorkerMaintenanceOperation.environment_id == environment_id,
-                WorkerMaintenanceOperation.state.in_(
-                    ["QUEUED", "PREFLIGHT", "RUNNING", "VERIFYING", "INTERRUPTED"]
-                ),
-            )
-        )
-        assert operation.id == operation_id
-    release.set()
-    switched = await running
-    assert switched.worker_channel == "worker"
-
-
-async def _async_result(value):
-    return value
-
-
-@pytest.mark.asyncio
 async def test_start_and_send_reject_an_active_maintenance_reservation(environment_id, monkeypatch):
     async def blocked(*_args, **_kwargs):
         raise AssertionError("维护预留期间不能连接 OpenCode")
@@ -837,21 +698,22 @@ async def test_start_and_send_reject_an_active_maintenance_reservation(environme
 
 
 @pytest.mark.asyncio
-async def test_expired_lease_does_not_release_unknown_maintenance_lock(environment_id):
+async def test_expired_lease_releases_maintenance_lock_while_unready_stays_unschedulable(
+    environment_id,
+):
     await _hold_operation(environment_id, expires_in=-5, status="UNKNOWN")
     async with SessionLocal() as session:
         environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
         with pytest.raises(HTTPException):
             await guard_environment_write(session, environment)
         await session.rollback()
-    from app.runtime.maintenance import recover_expired
+    from app.runtime.maintenance import recover_expired, scheduling_block
 
     await recover_expired("test-recovery")
     async with SessionLocal() as session:
         environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        with pytest.raises(HTTPException):
-            await guard_environment_write(session, environment)
-        await session.rollback()
+        await guard_environment_write(session, environment)
+        assert await scheduling_block(session, environment) is not None
 
 
 @pytest.mark.asyncio

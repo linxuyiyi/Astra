@@ -172,7 +172,7 @@ def _unwrap(chunk: str, global_stream: bool) -> dict:
 @pytest.mark.parametrize("global_stream", [False, True])
 async def test_sse_redacts_tool_part_canaries_on_both_event_modes(monkeypatch, global_stream):
     client = _RemoteClient([_tool_event(), _prompt_event(), _usage_event(), _gap_event()])
-    environment = SimpleNamespace(mode="LINUX_REMOTE", id=7, worker_channel="worker")
+    environment = SimpleNamespace(mode="LINUX_REMOTE", id=7)
 
     @asynccontextmanager
     async def fake_connect(*_args, **_kwargs):
@@ -408,7 +408,7 @@ def test_error_json_and_text_bodies_drop_secret_fields_and_values():
 @pytest.mark.asyncio
 async def test_remote_workspace_loads_secret_values_through_the_connected_client():
     secret = "platform-config-canary-value"
-    environment = SimpleNamespace(mode="LINUX_REMOTE", id=3, worker_channel="worker")
+    environment = SimpleNamespace(mode="LINUX_REMOTE", id=3)
 
     class Client:
         async def exchange(self, method, path, *, params=None, body=None, session_id=None, task_id=None):

@@ -8,14 +8,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from app.config.settings import get_settings
-from app.database import SessionLocal
 from app.domain import ExecutionMode
 from app.executors.opencode_local_server import LocalOpenCodeServerExecutor
 from app.executors.opencode_server import OpenCodeServerClient
 from app.models import OpenCodeExecutionEnvironment, Task
 from app.runtime.environment import environment_from_snapshot
-from app.runtime.worker_channel import read_worker_channel
 from app.runtime.worker_client import WorkerOpenCodeClient
+from app.runtime.worker_files import environment_uses_worker
 
 
 async def session_tree(client, directory: Path, root: str) -> set[str]:
@@ -54,12 +53,6 @@ async def resolve_runtime_session_environment(session, binding):
     return environment
 
 
-async def _worker_channel(environment) -> str:
-    environment_id = getattr(environment, "id", None)
-    async with SessionLocal() as session:
-        return await read_worker_channel(session, environment_id)
-
-
 @asynccontextmanager
 async def connect(environment, *, start: bool = False):
     settings = get_settings()
@@ -70,7 +63,7 @@ async def connect(environment, *, start: bool = False):
             await LocalOpenCodeServerExecutor(environment, settings).ensure_ready()
         yield OpenCodeServerClient(settings, base_url=f"http://127.0.0.1:{environment.opencode_server_port}")
         return
-    if await _worker_channel(environment) == "worker":
+    if await environment_uses_worker(environment):
         client = WorkerOpenCodeClient(settings, environment_id=environment.id)
         if start:
             await client.health()
@@ -194,7 +187,7 @@ async def prepare_workspace(task: Task, environment, *, reuse_existing: bool = T
         if local:
             await _assert_reusable_local_workspace(Path(root), task.workspace)
             _inherit_local_config(Path(root), Path(task.workspace))
-        elif await _worker_channel(environment) == "worker":
+        elif await environment_uses_worker(environment):
             await _prepare_worker_workspace(
                 environment, root=root, target=task.workspace, reuse_existing=True
             )
@@ -217,7 +210,7 @@ async def prepare_workspace(task: Task, environment, *, reuse_existing: bool = T
         else:
             Path(target).mkdir(exist_ok=False)
         _inherit_local_config(Path(root), Path(target), created=created)
-    elif await _worker_channel(environment) == "worker":
+    elif await environment_uses_worker(environment):
         await _prepare_worker_workspace(environment, root=root, target=target, reuse_existing=False)
     else:
         raise RuntimeError("远程环境尚未安装 Worker")
@@ -225,9 +218,7 @@ async def prepare_workspace(task: Task, environment, *, reuse_existing: bool = T
 
 
 async def _prepare_worker_workspace(environment, *, root: str, target: str, reuse_existing: bool) -> None:
-    from app.runtime.worker_transport import WorkerCommandTransport
-    client = (WorkerCommandTransport(environment_id=environment.id) if environment.runtime_engine == "dsh"
-              else WorkerOpenCodeClient(get_settings(), environment_id=environment.id))
+    client = WorkerOpenCodeClient(get_settings(), environment_id=environment.id)
     await client.run_command(
         "prepare_workspace",
         {"root": root, "target": target, "reuse_existing": reuse_existing},

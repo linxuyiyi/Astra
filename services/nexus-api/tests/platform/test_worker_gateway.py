@@ -601,7 +601,14 @@ def test_agent_config_requires_token_and_does_not_echo_it():
 
 
 def test_worker_gateway_routes_are_mounted_and_reject_unknown_workers():
-    with TestClient(app) as client:
+    from app.worker_gateway.routes import router
+
+    assert {
+        route.path for route in router.routes if getattr(route, "methods", None)
+    } <= app.openapi()["paths"].keys()
+    isolated_app = FastAPI()
+    isolated_app.include_router(router)
+    with TestClient(isolated_app) as client:
         health = client.get("/api/worker-gateway/health")
         assert health.status_code == 200
         mode, warning = resolve_worker_gateway_bus(

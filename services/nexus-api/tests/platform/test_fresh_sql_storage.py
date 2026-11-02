@@ -216,3 +216,62 @@ def test_released_init_upgrade_preserves_opencode_binding(tmp_path):
             "ses_original", "ses_original", "opencode", 0, "SUCCEEDED", 123, "/agentwork/task"
         )
     assert upgrade(database).returncode == 0
+
+
+def test_worker_readiness_convergence_migration_cleans_interrupted_locks(tmp_path):
+    database = tmp_path / "worker-convergence.db"
+    initial = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "0006_employee_avatars"],
+        cwd=SERVICE,
+        env={**os.environ, "ASTRA_DATABASE_URL": f"sqlite+aiosqlite:///{database}"},
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    assert initial.returncode == 0, initial.stderr
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO t_nexus_opencode_execution_environments "
+            "(id,employee_id,mode,name,description,port,opencode_server_port,opencode_path,"
+            "workspace_root,status,worker_channel,status_detail,labels,created_at,updated_at) "
+            "VALUES (7,'worker-7','LINUX_REMOTE','节点7','',22,14096,'opencode',"
+            "'/agentwork','AVAILABLE','worker','{}','[]','2026-10-25','2026-10-25')"
+        )
+        connection.execute(
+            "INSERT INTO t_nexus_worker_instances "
+            "(id,environment_id,token_digest,status,epoch,created_at,updated_at) "
+            "VALUES ('wrk_7',7,'digest','online',3,'2026-10-25','2026-10-25')"
+        )
+        connection.execute(
+            "INSERT INTO t_nexus_worker_maintenance_operations "
+            "(id,environment_id,action,state,stage,requested_by,attempt,cancel_requested,"
+            "danger_dispatched,reconcile_required,reconcile_only,target_revision,before_snapshot,"
+            "after_snapshot,active_environment_id,requested_at,created_at,updated_at) "
+            "VALUES ('mnt_7',7,'deploy','INTERRUPTED','interrupted','admin',1,0,"
+            "1,1,0,'{}','{}','{}',7,'2026-10-25','2026-10-25','2026-10-25')"
+        )
+    outcome = upgrade(database)
+    assert outcome.returncode == 0, outcome.stderr
+    with sqlite3.connect(database) as connection:
+        env_cols = {
+            row[1]
+            for row in connection.execute(
+                "PRAGMA table_info(t_nexus_opencode_execution_environments)"
+            )
+        }
+        assert "worker_channel" not in env_cols
+        inst_cols = {
+            row[1] for row in connection.execute("PRAGMA table_info(t_nexus_worker_instances)")
+        }
+        assert {"target_digest", "observed_snapshot", "observed_at"} <= inst_cols
+        op_cols = {
+            row[1]
+            for row in connection.execute(
+                "PRAGMA table_info(t_nexus_worker_maintenance_operations)"
+            )
+        }
+        assert not ({"danger_dispatched", "reconcile_required", "reconcile_only"} & op_cols)
+        assert connection.execute(
+            "SELECT state, stage, active_environment_id "
+            "FROM t_nexus_worker_maintenance_operations WHERE id='mnt_7'"
+        ).fetchone() == ("FAILED", "failed", None)

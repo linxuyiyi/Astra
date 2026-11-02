@@ -26,7 +26,7 @@ export interface TaskCategory {
 export type TaskCategoryWrite = Pick<TaskCategory, 'name' | 'description' | 'enabled' | 'sort_order' | 'task_prompt' | 'question_prompt'>
 
 export interface ExecutionEnvironment {
-  runtime_engine?: 'opencode' | 'dsh'
+  runtime_engine?: 'opencode'
   id: number
   employee_id: string
   mode: 'LOCAL' | 'LINUX_REMOTE'
@@ -44,7 +44,7 @@ export interface ExecutionEnvironment {
   repository_url?: string | null
   repository_branch?: string | null
   branch?: string | null
-  status: 'UNKNOWN' | 'CHECKING' | 'AVAILABLE' | 'UNAVAILABLE'
+  status: 'UNKNOWN' | 'CHECKING' | 'AVAILABLE' | 'UNAVAILABLE' | 'DRIFTED'
   status_detail: Record<string, unknown>
   labels: string[]
   last_checked_at: string | null
@@ -128,6 +128,7 @@ export interface Employee extends RuntimeProjection {
   created_at: string
   updated_at: string
   execution_environment: ExecutionEnvironment | null
+  worker_health: import('./maintenance').WorkerHealth | null
   channel_health: {
     worker_online: boolean
     opencode_reachable: boolean
@@ -500,7 +501,7 @@ export interface TaskWorkspaceBinding {
   task_id: string
   task_status: TaskStatus
   runtime: {
-    runtime_engine?: 'opencode' | 'dsh'
+    runtime_engine?: 'opencode'
     native_session_id?: string | null
     engine_metadata?: Record<string, string> | null
     server: string
@@ -513,7 +514,7 @@ export interface TaskWorkspaceBinding {
     workspace_ui_error: string | null
   }
   sessions: Array<{
-    runtime_engine?: 'opencode' | 'dsh'
+    runtime_engine?: 'opencode'
     native_session_id?: string | null
     engine_metadata?: Record<string, string> | null
     id: string

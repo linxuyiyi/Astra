@@ -21,7 +21,6 @@ from app.runtime.maintenance import (
     list_operations,
     operation_detail,
     operation_payload,
-    reconcile_operation,
     retry_operation,
     submit_operation,
 )
@@ -30,7 +29,7 @@ router = APIRouter()
 
 
 class MaintenanceSubmit(BaseModel):
-    action: Literal["check", "deploy", "update", "restart", "disable", "restore"]
+    action: Literal["check", "deploy", "update", "restart"]
 
 
 def maintenance_actor(
@@ -160,18 +159,6 @@ async def retry_maintenance(
     actor: str = Depends(maintenance_actor),
 ):
     operation = await retry_operation(session, operation_id, actor=actor)
-    return operation_payload(operation)
-
-
-@router.post("/api/maintenance/{operation_id}/reconcile")
-async def reconcile_maintenance(
-    operation_id: str,
-    session: AsyncSession = Depends(get_session),
-    actor: str = Depends(maintenance_actor),
-):
-    """Read-only check for an INTERRUPTED operation before releasing its lock."""
-
-    operation = await reconcile_operation(session, operation_id, actor=actor)
     return operation_payload(operation)
 
 

@@ -42,7 +42,7 @@ async def environment_id() -> int:
         session.add(employee)
         await session.flush()
         environment = OpenCodeExecutionEnvironment(
-            employee_id=employee.id, mode="LINUX_REMOTE", name="故障执行机", worker_channel="worker"
+            employee_id=employee.id, mode="LINUX_REMOTE", name="故障执行机"
         )
         session.add(environment)
         await session.commit()

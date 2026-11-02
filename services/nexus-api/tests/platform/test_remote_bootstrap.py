@@ -1,5 +1,7 @@
 """Server-owned target probing, dependency decisions and Python reuse/build."""
 
+import base64
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -60,7 +62,7 @@ async def test_missing_python_build_is_selected_by_server_from_explicit_source()
     worker = BootstrapWorker()
     await prepare_python(worker, None)
     assert any(
-        "https://mirrors.tools.huawei.com/python/3.11.17/Python-3.11.17.tar.xz" in c for c in worker.commands
+        "https://mirrors.huaweicloud.com/python/3.11.17/Python-3.11.17.tar.xz" in c for c in worker.commands
     )
     assert any("./configure" in c for c in worker.commands)
     assert worker.python_interpreter == managed_python(7)
@@ -107,9 +109,57 @@ async def test_build_failure_never_reports_success_and_cleans_its_own_stage():
 def test_sources_are_independent_and_legacy_root_is_explicitly_rejected():
     settings = Settings(_env_file=None)
     manifest = deployment_manifest(settings)
-    assert manifest["npm_registry"] == "https://mirrors.tools.huawei.com/npm"
-    assert manifest["pip_index_url"] == "https://mirrors.tools.huawei.com/pypi/simple"
+    assert manifest["npm_registry"] == "https://mirrors.huaweicloud.com/repository/npm"
+    assert manifest["pip_index_url"] == "https://mirrors.huaweicloud.com/repository/pypi/simple"
     with pytest.raises(ValueError, match="已停用"):
         deployment_manifest(Settings(_env_file=None, remote_download_base_url="https://old.invalid"))
     assert "build-essential" not in dependency_packages("apt-get", build_python=False, git_missing=False)
     assert "git" not in dependency_packages("dnf", build_python=True, git_missing=False)
+
+
+@pytest.mark.parametrize("tarball", ["/pkg/-/pkg.tgz", "pkg/-/pkg.tgz"])
+async def test_huawei_relative_tarball_uses_configured_registry_and_keeps_integrity(monkeypatch, tarball):
+    from app.runtime import remote_artifacts
+
+    registry = "https://mirror.example/repository/npm"
+    digest = "00" * 64
+    metadata = {
+        "name": "opencode-linux-x64-baseline", "version": "1.18.33",
+        "dist": {
+            "tarball": tarball,
+            "integrity": "sha512-" + base64.b64encode(bytes.fromhex(digest)).decode(),
+        },
+    }
+    worker = SimpleNamespace(
+        operation_id="relative", _ensure_safe=AsyncMock(),
+        ssh=SimpleNamespace(read_file=AsyncMock(side_effect=[None, json.dumps(metadata).encode()]),
+                            write_file=AsyncMock()),
+    )
+
+    async def command(value, timeout=30):
+        if "sha512sum" in value:
+            return digest + " package.tgz"
+        return "1.18.33" if "--version" in value else ""
+
+    worker._command = command
+    urls = []
+
+    async def download(_worker, url, _target, *, allowed=None, scheme=None):
+        remote_artifacts.validate_url(url, allowed, scheme=scheme)
+        urls.append(url)
+
+    monkeypatch.setattr(remote_artifacts, "download", download)
+    monkeypatch.setattr(remote_artifacts, "extract", AsyncMock())
+    assert await remote_artifacts.install_opencode(
+        worker, {"npm_registry": registry, "npm_artifact_hosts": [], "opencode_version": "1.18.33"},
+        "/managed/opencode", arch="x64", musl=False,
+    )
+    assert urls[-1] == registry + "/pkg/-/pkg.tgz"
+
+
+@pytest.mark.parametrize("url", ["https://foreign.example/pkg.tgz", "//foreign.example/pkg.tgz"])
+def test_artifact_origin_allowlist_still_rejects_foreign_hosts(url):
+    from app.runtime.remote_artifacts import validate_url
+
+    with pytest.raises(RuntimeError, match="未允许"):
+        validate_url(url, {"mirror.example"}, scheme="https")

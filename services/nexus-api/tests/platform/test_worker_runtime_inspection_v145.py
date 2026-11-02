@@ -9,7 +9,6 @@ import subprocess
 import sys
 import threading
 import time
-import types
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -243,10 +242,10 @@ def test_subdirectory_is_not_reported_as_repository_root(tmp_path: Path, opencod
 
 def test_status_managed_by_only_when_unit_exists(monkeypatch, opencode_server):
     _state, base = opencode_server
-    monkeypatch.delenv("NEXUS_WORKER_OPENCODE_UNIT", raising=False)
+    monkeypatch.delenv("NEXUS_WORKER_STATE_DIR", raising=False)
     assert status_summary(base)["managed_by"] == "external"
-    monkeypatch.setenv("NEXUS_WORKER_OPENCODE_PROCESS_RECORD", "/managed/record.json")
-    assert status_summary(base)["managed_by"] == "process"
+    monkeypatch.setenv("NEXUS_WORKER_STATE_DIR", "/opt/nexus/workers/env-1/state")
+    assert status_summary(base)["managed_by"] == "supervisor"
 
 
 def test_worker_artifact_imports_without_control_plane_runtime():
@@ -295,6 +294,7 @@ def test_expected_equipment_healthy_and_structure_is_stable(tmp_path: Path, open
         "skills",
         "repository",
         "checked_at",
+        "spec_revision",
     }
     for section in ("opencode", "model", "mcp", "skills", "repository"):
         assert result[section]["status"] == "healthy"
@@ -443,7 +443,7 @@ def _slow_inspection(monkeypatch, *, release: threading.Event) -> dict:
     state = {"calls": 0, "current": 0, "peak": 0}
     lock = threading.Lock()
 
-    def slow(*_args):
+    def slow(*_args, **_kwargs):
         with lock:
             state["calls"] += 1
             state["current"] += 1
@@ -594,6 +594,11 @@ async def test_disconnect_gate_stops_queued_restart_before_side_effect(monkeypat
     workspace = tmp_path / "ws"
     workspace.mkdir()
     manager = _manager("http://127.0.0.1:14096", workspace)
+    manager.supervisor = RuntimeSupervisor(
+        environment_id=7, workspace_root=str(workspace),
+        port=14096, opencode_bin="opencode", enabled=True,
+    )
+    manager.supervisor._loop = asyncio.get_running_loop()
     entered = threading.Event()
     release = threading.Event()
 
@@ -604,13 +609,17 @@ async def test_disconnect_gate_stops_queued_restart_before_side_effect(monkeypat
             gate()
         return False
 
-    calls: list[tuple] = []
+    calls: list[str] = []
+
+    async def _unexpected_stop():
+        calls.append("stop")
+
     monkeypatch.setattr(
-        "app.worker_agent.channel_switch.assert_native_idle", slow_native_idle
+        "app.worker_agent.supervisor.assert_native_idle", slow_native_idle
     )
     monkeypatch.setattr(
-        "app.worker_agent.process_manager.subprocess.run",
-        lambda *args, **_kwargs: calls.append(args) or types.SimpleNamespace(returncode=0),
+        manager.supervisor, "_terminate_child",
+        _unexpected_stop,
     )
     transport = _ControlTransport([_auth_reply(), _restart_command(workspace, 14096)])
     task = asyncio.create_task(manager.run_session(transport))

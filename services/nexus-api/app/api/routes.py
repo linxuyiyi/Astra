@@ -21,7 +21,14 @@ from app.dashboard import (
     dashboard_tasks,
 )
 from app.database import SessionLocal, get_session
-from app.domain import EmployeeStatus, EnvironmentStatus, RuntimeSessionStatus, TaskStatus
+from app.domain import (
+    EmployeeStatus,
+    EnvironmentStatus,
+    ExecutionMode,
+    MaintenanceState,
+    RuntimeSessionStatus,
+    TaskStatus,
+)
 from app.event_bus import event_bus
 from app.library_service import KnowledgeService, LibraryPrincipal
 from app.models import (
@@ -42,9 +49,16 @@ from app.models import (
     WorkerMaintenanceEvent,
     WorkerMaintenanceOperation,
 )
-from app.runtime.capability import binding_entries, stamp_desired
+from app.runtime.occupancy import occupying_clause, release_match_clause
 from app.runtime.presentation import project_channel_health
 from app.runtime.repository import related_tasks
+from app.runtime.worker_readiness import (
+    ACTIVE_MAINTENANCE_STATES,
+    build_desired_spec_from_context,
+    compute_target_digest,
+    evaluate_worker_readiness,
+    load_readiness_context,
+)
 from app.schemas import (
     EmployeeCreate,
     EmployeePatch,
@@ -103,51 +117,165 @@ async def require_employee(employee_id: str, session: AsyncSession) -> AgentWork
     return employee
 
 
-async def employee_read(employee: AgentWorker, session: AsyncSession) -> EmployeeRead:
+async def employees_read_batch(
+    employees: list[AgentWorker], session: AsyncSession
+) -> list[EmployeeRead]:
+    if not employees:
+        return []
+    settings = get_settings()
     start, end = day_bounds()
-    sessions = await load_sessions(session, employee_id=employee.id, start=start, end=end, overlap=True)
-    today = datetime.now(ZoneInfo(get_settings().timezone)).date()
-    day_sessions = [item for item in sessions if session_local_date(item) == today]
-    usage = await summarize_sessions(session, day_sessions, window=(start, end))
-    apply_day_tokens(usage, aggregate_usage_by_day(sessions).get(today.isoformat()))
-    completed = await count_completed_tasks(session, employee_id=employee.id, start=start, end=end)
-    base = EmployeeRead.model_validate(employee)
-    environment = employee.execution_environment
-    worker_status = None
-    repository_id = environment.repository_id if environment is not None else None
-    if environment is not None:
-        instance = await session.scalar(
-            select(WorkerInstance).where(WorkerInstance.environment_id == environment.id)
+    today = datetime.now(ZoneInfo(settings.timezone)).date()
+    environments = [
+        item.execution_environment
+        for item in employees
+        if item.execution_environment is not None
+    ]
+    context = await load_readiness_context(session, environments, settings)
+
+    env_ids = [env.id for env in environments if env.id is not None]
+    instances_by_env: dict[int, WorkerInstance] = {}
+    latest_ops_by_env: dict[int, WorkerMaintenanceOperation] = {}
+    if env_ids:
+        instance_rows = (
+            await session.scalars(
+                select(WorkerInstance).where(WorkerInstance.environment_id.in_(env_ids))
+            )
+        ).all()
+        instances_by_env = {row.environment_id: row for row in instance_rows}
+        op_rows = (
+            await session.scalars(
+                select(WorkerMaintenanceOperation)
+                .where(WorkerMaintenanceOperation.environment_id.in_(env_ids))
+                .order_by(
+                    WorkerMaintenanceOperation.requested_at.desc(),
+                    WorkerMaintenanceOperation.id.desc(),
+                )
+            )
+        ).all()
+        for op in op_rows:
+            existing = latest_ops_by_env.get(op.environment_id)
+            if existing is None:
+                latest_ops_by_env[op.environment_id] = op
+            elif (
+                existing.state not in ACTIVE_MAINTENANCE_STATES
+                and op.state in ACTIVE_MAINTENANCE_STATES
+            ):
+                latest_ops_by_env[op.environment_id] = op
+
+    employee_ids = [item.id for item in employees]
+    active_tasks_by_emp: dict[str, list[tuple[str, str, str]]] = {
+        emp_id: [] for emp_id in employee_ids
+    }
+    occupying_tasks_by_emp: dict[str, list[str]] = {emp_id: [] for emp_id in employee_ids}
+    active_sessions_by_emp: dict[str, list[str]] = {emp_id: [] for emp_id in employee_ids}
+    if employee_ids:
+        task_rows = (
+            await session.execute(
+                select(Task.id, Task.employee_id, Task.status, Task.runtime_connection).where(
+                    Task.employee_id.in_(employee_ids),
+                    Task.status.in_(["RUNNING", "WAITING"]),
+                )
+            )
+        ).all()
+        for row in task_rows:
+            if row.employee_id:
+                active_tasks_by_emp.setdefault(row.employee_id, []).append(
+                    (row.id, row.status, row.runtime_connection)
+                )
+        for emp_id in employee_ids:
+            occupying_tasks_by_emp[emp_id] = list(
+                (
+                    await session.scalars(
+                        select(Task.id).where(occupying_clause(emp_id)).limit(5)
+                    )
+                ).all()
+            )
+        released_task = (
+            select(Task.id)
+            .where(Task.id == RuntimeSession.task_id, release_match_clause())
+            .exists()
         )
-        if instance is not None:
-            worker_status = instance.status
-    rows = (
-        await session.execute(
-            select(Task.status, Task.runtime_connection).where(
-                Task.employee_id == employee.id,
-                Task.status.in_(["RUNNING", "WAITING"]),
+        session_rows = (
+            await session.execute(
+                select(RuntimeSession.id, RuntimeSession.employee_id).where(
+                    RuntimeSession.employee_id.in_(employee_ids),
+                    RuntimeSession.status.in_(["RUNNING", "WAITING", "UNKNOWN"]),
+                    ~released_task,
+                )
+            )
+        ).all()
+        for row in session_rows:
+            if row.employee_id and len(active_sessions_by_emp[row.employee_id]) < 5:
+                active_sessions_by_emp[row.employee_id].append(row.id)
+
+    results: list[EmployeeRead] = []
+    for employee in employees:
+        sessions = await load_sessions(
+            session, employee_id=employee.id, start=start, end=end, overlap=True
+        )
+        day_sessions = [item for item in sessions if session_local_date(item) == today]
+        usage = await summarize_sessions(session, day_sessions, window=(start, end))
+        apply_day_tokens(usage, aggregate_usage_by_day(sessions).get(today.isoformat()))
+        completed = await count_completed_tasks(
+            session, employee_id=employee.id, start=start, end=end
+        )
+        base = EmployeeRead.model_validate(employee)
+        environment = employee.execution_environment
+        instance = (
+            instances_by_env.get(environment.id)
+            if (environment is not None and environment.id is not None)
+            else None
+        )
+        latest_op = (
+            latest_ops_by_env.get(environment.id)
+            if (environment is not None and environment.id is not None)
+            else None
+        )
+        worker_health = None
+        if environment is not None:
+            desired = build_desired_spec_from_context(environment, context, settings)
+            worker_health = evaluate_worker_readiness(
+                desired,
+                environment,
+                instance,
+                employee_enabled=bool(employee.enabled),
+                occupying_task_ids=occupying_tasks_by_emp.get(employee.id, ()),
+                active_session_ids=active_sessions_by_emp.get(employee.id, ()),
+                latest_operation=latest_op,
+            )
+        active_tasks = active_tasks_by_emp.get(employee.id, [])
+        repository_id = environment.repository_id if environment is not None else None
+        env_status = (
+            worker_health["runtime_health"]["status"]
+            if worker_health is not None
+            else (environment.status if environment is not None else None)
+        )
+        health = project_channel_health(
+            mode=environment.mode if environment is not None else None,
+            environment_status=env_status,
+            worker_status=instance.status if instance is not None else None,
+            repository_id=str(repository_id) if repository_id else None,
+            employee_status=employee.status,
+            task_statuses=[item[1] for item in active_tasks],
+            runtime_connections=[item[2] for item in active_tasks],
+            runtime_engine=environment.runtime_engine if environment is not None else "opencode",
+        )
+        results.append(
+            EmployeeRead.model_validate(
+                {
+                    **base.model_dump(),
+                    "today_usage": usage,
+                    "today_completed": completed,
+                    "worker_health": worker_health,
+                    "channel_health": health,
+                }
             )
         )
-    ).all()
-    health = project_channel_health(
-        mode=environment.mode if environment is not None else None,
-        worker_channel=environment.worker_channel if environment is not None else None,
-        environment_status=environment.status if environment is not None else None,
-        worker_status=worker_status,
-        repository_id=str(repository_id) if repository_id else None,
-        employee_status=employee.status,
-        task_statuses=[row.status for row in rows],
-        runtime_connections=[row.runtime_connection for row in rows],
-        runtime_engine=environment.runtime_engine if environment is not None else "opencode",
-    )
-    return EmployeeRead.model_validate(
-        {
-            **base.model_dump(),
-            "today_usage": usage,
-            "today_completed": completed,
-            "channel_health": health,
-        }
-    )
+    return results
+
+
+async def employee_read(employee: AgentWorker, session: AsyncSession) -> EmployeeRead:
+    return (await employees_read_batch([employee], session))[0]
 
 
 @router.get("/health", include_in_schema=False)
@@ -268,7 +396,7 @@ async def validate_category_ids(category_ids: list[str], session: AsyncSession) 
 
 @router.get("/agent-workers", response_model=list[EmployeeRead])
 async def list_employees(session: AsyncSession = Depends(get_session)):
-    employees = (
+    employees = list(
         (
             await session.execute(
                 select(AgentWorker)
@@ -283,7 +411,7 @@ async def list_employees(session: AsyncSession = Depends(get_session)):
         .scalars()
         .all()
     )
-    return [await employee_read(employee, session) for employee in employees]
+    return await employees_read_batch(employees, session)
 
 
 @router.post("/agent-workers", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)
@@ -315,9 +443,6 @@ async def create_employee(payload: EmployeeCreate, session: AsyncSession = Depen
             environment.skill_refs = skill_refs
         if mcp_refs is not None:
             environment.mcp_refs = mcp_refs
-        entries = binding_entries(environment.skill_refs, environment.mcp_refs)
-        if entries:
-            environment.status_detail = stamp_desired({}, entries, checked_at=datetime.now(UTC).isoformat())
         session.add(environment)
         session.add(
             Event(
@@ -364,12 +489,24 @@ async def update_employee_environment(
 ):
     employee = await require_employee(employee_id, session)
     environment = employee.execution_environment
-    from app.runtime.remote_provisioning import guard_environment_write
-
-    await guard_environment_write(session, environment)
+    if environment is not None and environment.id is not None:
+        active = await session.scalar(
+            select(WorkerMaintenanceOperation.id).where(
+                WorkerMaintenanceOperation.environment_id == environment.id,
+                WorkerMaintenanceOperation.state.in_(
+                    (MaintenanceState.QUEUED.value, MaintenanceState.RUNNING.value)
+                ),
+            )
+        )
+        if active is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="环境正在执行维护操作，请等待当前操作完成或取消后再保存配置",
+            )
     if environment is None:
         environment = OpenCodeExecutionEnvironment(employee_id=employee.id)
         session.add(environment)
+    previous_target_digest = compute_target_digest(environment) if environment.id is not None else ""
     updates = payload.model_dump()
     provided = payload.model_fields_set
     skill_refs = updates.pop("skill_refs", None)
@@ -384,23 +521,26 @@ async def update_employee_environment(
         raise HTTPException(status_code=422, detail="代码仓库不存在")
     if "branch" not in provided:
         updates.pop("branch", None)
-    previous = environment.status_detail if isinstance(environment.status_detail, dict) else {}
-    bindings_changed = skill_refs is not None or mcp_refs is not None
     for key, value in updates.items():
         setattr(environment, key, value)
     if skill_refs is not None:
         environment.skill_refs = skill_refs
     if mcp_refs is not None:
         environment.mcp_refs = mcp_refs
-    environment.status = EnvironmentStatus.UNKNOWN
-    detail = {
-        "message": "配置已更新，等待测试连接",
-        "applies_to": "future_tasks" if employee.current_task_count else "all_new_runs",
-    }
-    entries = binding_entries(environment.skill_refs, environment.mcp_refs)
-    if bindings_changed or entries or (isinstance(previous.get("capability"), dict)):
-        detail = stamp_desired(detail, entries, previous=previous, checked_at=datetime.now(UTC).isoformat())
-    environment.status_detail = detail
+
+    # 环境表只存期望配置，不触碰 WorkerInstance 观测快照，也不中断在途任务。
+    if (
+        environment.mode == ExecutionMode.LOCAL
+        and previous_target_digest
+        and compute_target_digest(environment) != previous_target_digest
+    ):
+        environment.status = EnvironmentStatus.UNKNOWN
+    existing_detail = dict(environment.status_detail) if isinstance(environment.status_detail, dict) else {}
+    existing_detail["applies_to"] = (
+        "future_tasks" if employee.current_task_count else "all_new_runs"
+    )
+    environment.status_detail = existing_detail
+
     await session.commit()
     await session.refresh(environment)
     if environment.repository_id:
@@ -438,7 +578,7 @@ async def pause_employee(employee_id: str, session: AsyncSession = Depends(get_s
     if employee.current_task_count:
         raise HTTPException(status_code=409, detail="员工有当前任务，请先在任务详情中暂停或处理该任务")
     await EmployeeService(session).set_status(employee, EmployeeStatus.PAUSED)
-    return employee
+    return await employee_read(await require_employee(employee.id, session), session)
 
 
 @router.post("/agent-workers/{employee_id}/resume", response_model=EmployeeRead)
@@ -446,7 +586,7 @@ async def resume_employee(employee_id: str, session: AsyncSession = Depends(get_
     employee = await require_employee(employee_id, session)
     target = EmployeeStatus.WORKING if employee.current_task_count else EmployeeStatus.IDLE
     await EmployeeService(session).set_status(employee, target)
-    return employee
+    return await employee_read(await require_employee(employee.id, session), session)
 
 
 @router.delete("/agent-workers/{employee_id}")

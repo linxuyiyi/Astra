@@ -239,7 +239,7 @@ def _worker_health(
         return "offline"
     if environment is None:
         return "unknown"
-    remote = environment.mode == "LINUX_REMOTE" and environment.worker_channel == "worker"
+    remote = environment.mode == "LINUX_REMOTE"
     if remote:
         if instance is None:
             return "unknown"

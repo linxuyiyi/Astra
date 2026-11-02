@@ -6,10 +6,8 @@ import subprocess
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
-from app.config.settings import get_settings
 from app.database import SessionLocal, init_database
 from app.models import (
     AgentWorker,
@@ -18,11 +16,8 @@ from app.models import (
     WorkerCommand,
     WorkerHttpSlot,
     WorkerInstance,
-    WorkerMaintenanceOperation,
 )
 from app.runtime.submission import put_attempt
-from app.runtime.worker_channel import mark_worker_channel, read_worker_channel
-from app.runtime.worker_client import WorkerOpenCodeClient
 from app.worker_agent.connection import WorkerConnectionManager
 from app.worker_agent.workspace import prepare_workspace_local
 from app.worker_gateway.bus import MemoryRouteBus
@@ -40,7 +35,7 @@ async def environment_id() -> int:
         session.add(employee)
         await session.flush()
         environment = OpenCodeExecutionEnvironment(
-            employee_id=employee.id, mode="LINUX_REMOTE", name="云执行机", worker_channel="ssh"
+            employee_id=employee.id, mode="LINUX_REMOTE", name="云执行机"
         )
         session.add(environment)
         await session.commit()
@@ -338,120 +333,6 @@ def test_prepare_workspace_rejects_reuse_symlink_subdir_and_foreign_repo(tmp_pat
     _commit_repo(other)
     with pytest.raises(RuntimeError, match="不属于当前仓库"):
         prepare_workspace_local(str(root), str(other))
-
-
-def _direct_switch_result() -> dict[str, object]:
-    settings = get_settings()
-    return {
-        "gateway_url": settings.remote_gateway_local_url + "/",
-        "mcp_url": settings.mcp_resource_server_url + "/",
-        "reloaded": True,
-        "verified": True,
-    }
-
-
-@pytest.mark.asyncio
-async def test_worker_channel_switch_checks_effective_config_and_occupancy(environment_id):
-    async with SessionLocal() as session:
-        assert await read_worker_channel(session, environment_id) == "ssh"
-        calls: list[str] = []
-
-        async def clear_interrupted() -> None:
-            await session.rollback()
-            await session.execute(
-                delete(WorkerMaintenanceOperation).where(
-                    (WorkerMaintenanceOperation.environment_id == environment_id)
-                    | (WorkerMaintenanceOperation.active_environment_id == environment_id)
-                )
-            )
-            await session.commit()
-
-        async def fail():
-            calls.append("fail")
-            raise RuntimeError("内网 Gateway 或 MCP 探测失败")
-
-        with pytest.raises(HTTPException) as blocked:
-            await mark_worker_channel(session, environment_id, switch=fail)
-        assert blocked.value.status_code == 409
-        assert "探测失败" in blocked.value.detail
-        assert await read_worker_channel(session, environment_id) == "ssh"
-        # 失败切换会留下 INTERRUPTED 维护操作等待人工核对；测试模拟人工清理后继续下一次切换。
-        await clear_interrupted()
-
-        async def mismatch():
-            calls.append("mismatch")
-            result = _direct_switch_result()
-            result["gateway_url"] = "http://127.0.0.1:19999"
-            return result
-
-        with pytest.raises(HTTPException) as differed:
-            await mark_worker_channel(session, environment_id, switch=mismatch)
-        assert differed.value.status_code == 409
-        assert "Gateway" in differed.value.detail
-        assert await read_worker_channel(session, environment_id) == "ssh"
-        await clear_interrupted()
-
-        async def ok():
-            calls.append("ok")
-            return _direct_switch_result()
-
-        marked = await mark_worker_channel(session, environment_id, switch=ok)
-        assert marked.worker_channel == "worker"
-        employee_id = marked.employee_id
-        session.add(
-            Task(
-                id="T-hold",
-                title="hold",
-                task_type="ISSUE",
-                status="FAILED",
-                employee_id=employee_id,
-                claimed_at=marked.updated_at,
-            )
-        )
-        await session.commit()
-        with pytest.raises(HTTPException) as occupied:
-            await mark_worker_channel(session, environment_id, switch=ok)
-        assert occupied.value.status_code == 409
-        assert calls == ["fail", "mismatch", "ok"]
-
-
-@pytest.mark.asyncio
-async def test_worker_channel_without_an_online_worker_stays_ssh(environment_id, monkeypatch):
-    async def forbidden(*_args, **_kwargs):
-        raise AssertionError("离线环境不能下发切换")
-
-    monkeypatch.setattr(WorkerOpenCodeClient, "run_command", forbidden)
-    async with SessionLocal() as session:
-        with pytest.raises(HTTPException) as offline:
-            await mark_worker_channel(session, environment_id)
-        assert offline.value.status_code == 409
-        assert "不在线" in offline.value.detail
-        assert await read_worker_channel(session, environment_id) == "ssh"
-
-
-@pytest.mark.asyncio
-async def test_worker_channel_dispatches_workspace_and_port_only(environment_id, monkeypatch):
-    gateway = gateway_for()
-    await _online(gateway, environment_id)
-    captured: dict[str, object] = {}
-
-    async def fake_run(_self, name, data, *, session_id=None):
-        captured["name"] = name
-        captured["data"] = dict(data)
-        captured["session_id"] = session_id
-        return _direct_switch_result()
-
-    monkeypatch.setattr(WorkerOpenCodeClient, "run_command", fake_run)
-    async with SessionLocal() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        assert environment is not None
-        expected = {"workspace": environment.workspace_root, "port": environment.opencode_server_port}
-        marked = await mark_worker_channel(session, environment_id)
-        assert marked.worker_channel == "worker"
-    assert captured["name"] == "switch_channel"
-    assert captured["data"] == expected
-    assert "gateway_url" not in captured["data"]
-    assert "mcp_url" not in captured["data"]
 
 
 @pytest.mark.asyncio

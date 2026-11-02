@@ -38,7 +38,6 @@ async def make_environment(*, status: str = "AVAILABLE") -> tuple[int, str]:
             opencode_path="/usr/local/bin/opencode",
             status=status,
             status_detail={},
-            worker_channel="ssh",
         )
         db.add(environment)
         await db.commit()
@@ -201,6 +200,7 @@ async def test_retry_records_actor_and_keeps_original_requester():
             .values(
                 state="FAILED",
                 stage="failed",
+                active_environment_id=None,
                 error_code="remote_state_unknown",
                 error_message="测试失败",
             )
@@ -220,35 +220,23 @@ async def test_retry_records_actor_and_keeps_original_requester():
 
 
 @pytest.mark.asyncio
-async def test_reconcile_records_actor_without_replacing_initiator():
+async def test_reconcile_route_is_retired():
     environment_id, _ = await make_environment()
     operation = await make_operation(environment_id, requested_by="alice")
-    async with SessionLocal() as db:
-        await db.execute(
-            update(WorkerMaintenanceOperation)
-            .where(WorkerMaintenanceOperation.id == operation.id)
-            .values(state="INTERRUPTED", stage="interrupted", reconcile_required=True)
-        )
-        await db.commit()
     async with client() as http:
         response = await http.post(
             f"/api/maintenance/{operation.id}/reconcile",
             headers={"X-Owner-Id": "reviewer"},
         )
-    assert response.status_code == 200
-    assert response.json()["requested_by"] == "alice"
-    retries = [event for event in await events_of(operation.id) if event.type == "retry"]
-    assert retries[-1].detail["requested_by"] == "reviewer"
-    assert retries[-1].detail["reconcile_only"] is True
+    assert response.status_code in {404, 405}
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("action", ["retry", "reconcile"])
-async def test_followup_actions_require_identity(action):
+async def test_followup_retry_requires_identity():
     environment_id, _ = await make_environment()
     operation = await make_operation(environment_id)
     async with client() as http:
-        response = await http.post(f"/api/maintenance/{operation.id}/{action}")
+        response = await http.post(f"/api/maintenance/{operation.id}/retry")
     assert response.status_code == 401
     stored = await read_operation(operation.id)
     assert stored is not None and stored.state == "QUEUED"

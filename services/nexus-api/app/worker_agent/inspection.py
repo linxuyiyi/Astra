@@ -15,6 +15,7 @@ import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -77,6 +78,8 @@ def inspect_runtime_from_payload(
     opencode_url: str,
     workspace_root: str,
     data: Any,
+    *,
+    last_error: str | None = None,
 ) -> dict[str, Any]:
     """命令入口。只读取白名单字段，其余 payload（path/url/shell）一律忽略。"""
 
@@ -84,10 +87,14 @@ def inspect_runtime_from_payload(
     return inspect_runtime(
         opencode_url,
         workspace_root,
-        expected_skills=_names(options.get("expected_skills")),
-        expected_mcp=_names(options.get("expected_mcp")),
+        expected_skills=(
+            _names(options.get("expected_skills")) if options.get("expected_skills") is not None else None
+        ),
+        expected_mcp=_names(options.get("expected_mcp")) if options.get("expected_mcp") is not None else None,
         expected_model=_text(options.get("expected_model")),
         expected_opencode_version=_text(options.get("expected_opencode_version")),
+        deep=bool(options.get("deep")),
+        last_error=last_error,
     )
 
 
@@ -99,31 +106,41 @@ def inspect_runtime(
     expected_mcp: list[str] | None = None,
     expected_model: str = "",
     expected_opencode_version: str = "",
+    deep: bool = False,
+    last_error: str | None = None,
 ) -> dict[str, Any]:
     """返回稳定结构；每个环节独立探测，失败只影响该环节。"""
 
     base = str(opencode_url or "").rstrip("/")
     workspace = str(workspace_root or "")
     skills_expected = _names(expected_skills)
-    mcp_expected = _names([_DEFAULT_MCP, *(expected_mcp or [])])
     local_config = _read_local_config()
     effective_config = _read_effective_config(base, workspace)
     effective_confirmed = effective_config is not None
     config = effective_config if effective_confirmed else local_config
     secrets = _secrets(config) | _secrets(local_config)
     endpoints = _config_mcp_endpoints(effective_config, effective_confirmed)
+    if expected_mcp is None:
+        mcp_expected = _names([_DEFAULT_MCP, *((endpoints or {}).keys())])
+    else:
+        mcp_expected = _names([_DEFAULT_MCP, *expected_mcp])
 
     return {
-        "opencode": _inspect_opencode(base, workspace, expected_opencode_version, secrets),
+        "spec_revision": os.environ.get("NEXUS_WORKER_SPEC_REVISION") or None,
+        "opencode": _inspect_opencode(
+            base, workspace, expected_opencode_version, secrets, last_error=last_error
+        ),
         "model": _inspect_model(
             config,
             local_config,
             expected_model,
             effective_confirmed=effective_confirmed,
+            deep=deep,
+            secrets=secrets,
         ),
         "mcp": _inspect_mcp(base, workspace, mcp_expected, endpoints, secrets),
         "skills": _inspect_skills(base, workspace, skills_expected, secrets),
-        "repository": _inspect_repository(workspace, secrets),
+        "repository": _inspect_repository(workspace, secrets, verify_remote=deep),
         "checked_at": datetime.now(UTC).isoformat(),
     }
 
@@ -166,20 +183,41 @@ def status_summary(opencode_url: str) -> dict[str, Any]:
 
 
 def _managed_by() -> str:
-    return "process" if (os.environ.get("NEXUS_WORKER_OPENCODE_PROCESS_RECORD") or "").strip() else "external"
+    return "supervisor" if (os.environ.get("NEXUS_WORKER_STATE_DIR") or "").strip() else "external"
 
 
 def _inspect_opencode(
-    base: str, workspace: str, expected_version: str, secrets: set[str]
+    base: str,
+    workspace: str,
+    expected_version: str,
+    secrets: set[str],
+    *,
+    last_error: str | None = None,
 ) -> dict[str, Any]:
+    redacted_last_error = _redact(last_error, secrets) if last_error else None
     if not base:
-        return {"status": UNKNOWN, "version": None, "error": "未配置 OpenCode 地址"}
+        return {
+            "status": UNKNOWN,
+            "version": None,
+            "error": "未配置 OpenCode 地址",
+            "last_error": redacted_last_error,
+        }
     try:
         payload = _get_json(base + "/global/health")
     except _ProbeError as exc:
-        return {"status": UNHEALTHY, "version": None, "error": _redact(exc.message, secrets)}
+        return {
+            "status": UNHEALTHY,
+            "version": None,
+            "error": _redact(exc.message, secrets),
+            "last_error": redacted_last_error,
+        }
     if not isinstance(payload, dict) or payload.get("healthy") is not True:
-        return {"status": UNHEALTHY, "version": None, "error": "OpenCode 健康接口未通过"}
+        return {
+            "status": UNHEALTHY,
+            "version": None,
+            "error": "OpenCode 健康接口未通过",
+            "last_error": redacted_last_error,
+        }
     version = payload.get("version")
     version_text = str(version) if version is not None else None
     if expected_version and _version_key(version_text) != _version_key(expected_version):
@@ -187,6 +225,7 @@ def _inspect_opencode(
             "status": UNHEALTHY,
             "version": version_text,
             "error": f"OpenCode 版本不匹配，期望 {_redact(expected_version, secrets)}",
+            "last_error": redacted_last_error,
         }
     try:
         _get_json(base + "/session/status", {"directory": workspace} if workspace else None)
@@ -195,8 +234,14 @@ def _inspect_opencode(
             "status": UNHEALTHY,
             "version": version_text,
             "error": _redact(f"OpenCode session/status 不可用：{exc.message}", secrets),
+            "last_error": redacted_last_error,
         }
-    return {"status": HEALTHY, "version": version_text, "error": None}
+    return {
+        "status": HEALTHY,
+        "version": version_text,
+        "error": None,
+        "last_error": redacted_last_error,
+    }
 
 
 def _inspect_model(
@@ -205,8 +250,10 @@ def _inspect_model(
     expected_model: str,
     *,
     effective_confirmed: bool,
+    deep: bool = False,
+    secrets: set[str] | None = None,
 ) -> dict[str, Any]:
-    """只核对生效模型与网关配置；网关可用性不属于 Worker 健康事实。"""
+    """日常只核对生效模型与网关配置；仅显式 deep=True 时按需验证网关 /models 可达性。"""
     effective = config if isinstance(config, dict) else {}
     local = local_config if isinstance(local_config, dict) else {}
     if not effective_confirmed:
@@ -251,6 +298,23 @@ def _inspect_model(
             "model": actual,
             "error": "模型 provider 缺少网关地址或凭据",
         }
+    if deep:
+        gateway_error = _probe_model_gateway(base_url, api_key, secrets or set())
+        if gateway_error is not None:
+            return {
+                "status": UNHEALTHY,
+                "configured": True,
+                "model": actual,
+                "gateway_verified": False,
+                "error": gateway_error,
+            }
+        return {
+            "status": HEALTHY,
+            "configured": True,
+            "model": actual,
+            "gateway_verified": True,
+            "error": None,
+        }
 
     return {
         "status": HEALTHY,
@@ -258,6 +322,15 @@ def _inspect_model(
         "model": actual,
         "error": None,
     }
+
+
+def _probe_model_gateway(base_url: str, api_key: str, secrets: set[str]) -> str | None:
+    target = base_url.rstrip("/") + "/models"
+    try:
+        _get_json(target, headers={"Authorization": f"Bearer {api_key}"})
+    except _ProbeError as exc:
+        return _redact(f"模型网关不可达或鉴权失败：{exc.message}", secrets | {api_key})
+    return None
 
 
 def _config_mcp_endpoints(config: Any, confirmed: bool) -> dict[str, str] | None:
@@ -374,7 +447,14 @@ def _inspect_skills(
     }
 
 
-def _inspect_repository(workspace: str, secrets: set[str]) -> dict[str, Any]:
+def _inspect_repository(
+    workspace: str,
+    secrets: set[str],
+    *,
+    verify_remote: bool = True,
+) -> dict[str, Any]:
+    cred_rev = (os.environ.get("NEXUS_GIT_CREDENTIAL_REVISION") or "").strip() or None
+
     def result(
         status: str,
         *,
@@ -391,8 +471,9 @@ def _inspect_repository(workspace: str, secrets: set[str]) -> dict[str, Any]:
             "branch": branch,
             "commit": commit,
             "dirty": dirty,
+            "credential_revision": cred_rev,
             "authentication_verified": authentication_verified,
-            "verification_scope": "refs:read",
+            "verification_scope": "refs:read" if verify_remote else "local",
             "error": error,
         }
 
@@ -432,9 +513,12 @@ def _inspect_repository(workspace: str, secrets: set[str]) -> dict[str, Any]:
             dirty=bool(changes.strip()),
             error="Git 仓库缺少 remote.origin.url",
         )
-    authenticated, auth_error = _verify_remote_read(
-        workspace, branch.strip(), secrets
-    )
+    authenticated: bool | None = None
+    auth_error: str | None = None
+    if verify_remote:
+        authenticated, auth_error = _verify_remote_read(
+            workspace, branch.strip(), secrets
+        )
     return result(
         HEALTHY,
         url=_sanitize_url(url),
@@ -554,10 +638,25 @@ def _read_local_config() -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def global_config_path(environ: Mapping[str, str] | None = None) -> Path:
+    env = environ if environ is not None else os.environ
+    explicit = (env.get("OPENCODE_CONFIG") or "").strip()
+    if explicit:
+        return Path(explicit)
+    home = env.get("XDG_CONFIG_HOME")
+    if home:
+        root = Path(home) / "opencode"
+    else:
+        root = Path(env.get("HOME") or str(Path.home())) / ".config" / "opencode"
+    jsonc = root / "opencode.jsonc"
+    legacy = root / "opencode.json"
+    if jsonc.is_file() or not legacy.is_file():
+        return jsonc
+    return legacy
+
+
 def _local_config_path() -> Path | None:
     """Worker wheel 只带 worker_agent，不能依赖控制端的 app.runtime。"""
-
-    from app.worker_agent.channel_switch import global_config_path
 
     return global_config_path()
 

@@ -131,7 +131,7 @@ class NativeServer:
 async def runtime(tmp_path, monkeypatch):
     from app.database import init_database
 
-    # Proxy path checks read worker_channel from the process database. Create it
+    # Proxy path checks query WorkerInstance from the process database. Create it
     # here so the lookup does not depend on an earlier test having migrated.
     await init_database()
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
@@ -1202,7 +1202,6 @@ async def test_v2_session_lists_stay_inside_one_task(runtime, monkeypatch):
 
     workspace = str(runtime.workspace)
     snapshot = environment_snapshot(runtime.environment)
-    runtime.environment.worker_channel = "worker"
     runtime.session.add(
         Task(
             id="T2",
@@ -1929,7 +1928,7 @@ async def test_diff_stays_redacted_when_remote_connect_fails(runtime, monkeypatc
 
     seeded = await load_proxy_secrets(
         binding.workspace,
-        SimpleNamespace(mode="LINUX_REMOTE", id=runtime.environment.id, worker_epoch=0),
+        SimpleNamespace(mode="LINUX_REMOTE", id=runtime.environment.id),
         Client(),
     )
     assert secret in seeded
@@ -2083,7 +2082,6 @@ async def test_global_config_alone_does_not_make_a_cold_diff_known(runtime, monk
 
 async def test_session_diff_fails_closed_when_remote_config_is_unknown(runtime, monkeypatch):
     secret = "session-diff-gateway-canary"
-    runtime.environment.worker_channel = "worker"
     binding = await runtime.session.get(RuntimeSession, "ses_current")
     binding.environment = {**binding.environment, "mode": "LINUX_REMOTE"}
     await runtime.session.commit()
@@ -3012,7 +3010,6 @@ async def test_remote_worker_redacts_configured_secret_values(runtime, monkeypat
     """The workspace lives on the Worker. Value redaction still uses OpenCode config."""
 
     canary = "remote-worker-api-key-canary"
-    runtime.environment.worker_channel = "worker"
     binding = await runtime.session.get(RuntimeSession, "ses_current")
     binding.workspace = "/srv/worker/task"
     binding.environment = {**binding.environment, "mode": "LINUX_REMOTE"}
@@ -3174,7 +3171,6 @@ async def test_message_history_redacts_secret_names_and_embedded_values(runtime,
 
 async def test_remote_config_secrets_are_read_once_inside_the_cache_window(runtime, monkeypatch):
     canary = "cached-remote-config-canary"
-    runtime.environment.worker_channel = "worker"
     binding = await runtime.session.get(RuntimeSession, "ses_current")
     binding.workspace = "/srv/worker/task"
     binding.environment = {**binding.environment, "mode": "LINUX_REMOTE"}
@@ -3224,7 +3220,6 @@ FAST_503_ROUTES = (
 
 
 async def _remote_binding(runtime):
-    runtime.environment.worker_channel = "worker"
     binding = await runtime.session.get(RuntimeSession, "ses_current")
     binding.environment = {**binding.environment, "mode": "LINUX_REMOTE"}
     await runtime.session.commit()

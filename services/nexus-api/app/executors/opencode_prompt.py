@@ -57,7 +57,6 @@ def build_task_prompt(
     *,
     retry: bool = False,
     native_question: bool = False,
-    runtime_engine: str = "opencode",
 ) -> str:
     criteria = "\n".join(
         f"{item.get('id', f'AC-{index + 1:02d}')}. {item.get('content', '')}"
@@ -106,16 +105,6 @@ def build_task_prompt(
 收到回答或授权后继续当前执行会话，不要求人进入 AgentWork。
 不要用文本标记、自定义 JSON 或约定字符串伪装成人工阻塞状态。
 """
-
-    if runtime_engine == "dsh":
-        intervention_instructions = """
-工具操作授权使用 ACP 原生权限申请，由责任数字员工先判断是否已获授权。
-需要业务答案时，在正常回合回复中明确提出问题、必要背景和选项；责任数字员工读取后
-能答就直接答，缺信息时在来源对话询问人，再把真实答案续传同一执行会话。
-不要要求人去 AgentWork 回复，不要调用未装配的 Task MCP 求助工具。
-不要用文本标记、自定义 JSON 或约定字符串伪装成人工阻塞状态。
-"""
-    engine_label = "DSH" if runtime_engine == "dsh" else "OpenCode"
     return f"""当前任务：
 {task.id}
 
@@ -139,7 +128,7 @@ def build_task_prompt(
 
 请在该工作空间内自主决定完成方式。Nexus 不规定你使用的 Agent、Skill、Tool、命令、
 检查方式或内部步骤。分类执行要求用于补充该业务分类的处理规范，不替代当前任务目标、
-任务描述或验收标准。Nexus 会直接依据 {engine_label} Session、Workspace 和最终回复获取执行事实，
+任务描述或验收标准。Nexus 会直接依据 OpenCode Session、Workspace 和最终回复获取执行事实，
 不要输出 Nexus 专用 JSON 协议，也不要自行决定任务的系统状态。
 {intervention_instructions}
 完成任务后，请在最终回复中简洁说明：

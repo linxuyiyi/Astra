@@ -20,22 +20,11 @@ from sqlalchemy.orm import selectinload
 from app.config.settings import get_settings
 from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
 from app.main import app
-from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, Task, TaskCategory
-from app.runtime.capability import (
-    binding_entries,
-    binding_revision,
-    discover_names,
-    dispatch_allowed,
-    loads_jsonc,
-    observe_bindings,
-    stamp_desired,
-)
-from app.runtime.dispatcher import Dispatcher, runtime_assignment_block
+from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, Task
+from app.runtime.dispatcher import Dispatcher
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
-from app.runtime.remote_provisioning import RemoteProvisioner
 from app.runtime.repository import copy_worker
-from app.schemas import EmployeeCreate, ExecutionEnvironmentWrite
-from app.worker_agent.channel_switch import write_direct_config
+from app.runtime.worker_readiness import scheduling_block
 from app.worker_agent.jsonc import loads_jsonc as parse_jsonc
 
 PAT = "ghp_fixb3tokenvalue"
@@ -62,8 +51,7 @@ def test_shared_jsonc_accepts_inline_comments_and_trailing_commas(tmp_path):
     }
     """
     assert parse_jsonc(text) == {"url": "http://example/a//b", "n": 1}
-    assert loads_jsonc(text)["url"] == "http://example/a//b"
-    assert loads_jsonc("[1, 2,]") == {}
+    assert parse_jsonc("[1, 2,]") == [1, 2]
     target = tmp_path / "opencode.jsonc"
     target.write_text('{ "skill": "review", }\n', encoding="utf-8")
     completed = subprocess.run(
@@ -74,113 +62,6 @@ def test_shared_jsonc_accepts_inline_comments_and_trailing_commas(tmp_path):
     )
     assert completed.returncode == 0, completed.stderr
     assert json.loads(completed.stdout) == {"skill": "review"}
-
-
-def test_bindings_without_a_revision_record_are_not_applied():
-    assert dispatch_allowed(None, bindings=["review"]) is False
-    assert dispatch_allowed({}, bindings=["review"]) is False
-    assert dispatch_allowed(None) is True
-    assert dispatch_allowed({}, bindings=[]) is True
-    desired = binding_revision(["review", "library"])
-    detail = stamp_desired({}, ["review", "library"], checked_at="2026-10-17T00:00:00Z")
-    assert detail["capability"]["desired_revision"] == desired
-    assert "applied_revision" not in detail["capability"]
-    assert dispatch_allowed(detail, bindings=["review", "library"]) is False
-    found = discover_names(["review"], '{"mcp": {"library": {}}}')
-    record = observe_bindings(
-        detail["capability"],
-        desired=desired,
-        found=found,
-        expected=["review", "library"],
-        error="",
-        checked_at="2026-10-17T00:01:00Z",
-    )
-    assert record["applied_revision"] == desired
-    assert record["runtime_status"] == "applied"
-    same = binding_entries(["review"], [{"name": "library", "url": "http://127.0.0.1/a"}])
-    other = binding_entries(["review"], [{"name": "library", "url": "http://127.0.0.1/b"}])
-    configured = binding_entries(
-        ["review"],
-        [{"name": "library", "url": "http://127.0.0.1/a", "config": {"timeout": 1}}],
-    )
-    assert binding_revision(same) != desired
-    assert binding_revision(same) != binding_revision(other)
-    assert binding_revision(same) == binding_revision(configured)
-
-
-@pytest.mark.asyncio
-async def test_binding_changes_stamp_desired_until_deploy_observes(session):
-    session.add(TaskCategory(id="testing", name="测试"))
-    await session.commit()
-    from app.api.routes import create_employee, update_employee_environment
-
-    created = await create_employee(
-        EmployeeCreate(
-            id="E-bind",
-            name="绑定",
-            role="build",
-            category_ids=["testing"],
-            execution_environment=ExecutionEnvironmentWrite(
-                skill_refs=["review"],
-                mcp_refs=[{"name": "library"}],
-            ),
-        ),
-        session,
-    )
-    environment = created.execution_environment
-    assert environment is not None
-    names = ["review", "library"]
-    assert environment.status_detail["capability"]["desired_revision"] == binding_revision(names)
-    assert dispatch_allowed(environment.status_detail, bindings=names) is False
-
-    updated = await update_employee_environment(
-        "E-bind",
-        ExecutionEnvironmentWrite(name="改名", workspace_root="./workspaces"),
-        session,
-    )
-    assert updated.skill_refs == ["review"]
-    assert updated.status_detail["capability"]["desired_revision"] == binding_revision(names)
-
-    changed = await update_employee_environment(
-        "E-bind",
-        ExecutionEnvironmentWrite(skill_refs=["other"]),
-        session,
-    )
-    assert changed.skill_refs == ["other"]
-    assert changed.status_detail["capability"]["desired_revision"] == binding_revision(["other", "library"])
-    assert changed.status_detail["capability"]["runtime_status"] == "pending"
-
-
-@pytest.mark.asyncio
-async def test_deploy_observe_writes_applied_revision():
-    environment = OpenCodeExecutionEnvironment(
-        employee_id="E1",
-        mode="LINUX_REMOTE",
-        name="remote",
-        host="10.0.0.8",
-        username="root",
-        workspace_root="/srv/app",
-        skill_refs=["review"],
-        mcp_refs=[{"name": "library"}],
-        opencode_path="opencode",
-        status_detail=stamp_desired({}, ["review", "library"], checked_at="2026-10-17T00:00:00Z"),
-    )
-    provisioner = RemoteProvisioner(environment, {"id": "op", "action": "deploy"})
-
-    class SSH:
-        async def read_file(self, _path):
-            return b'{ "mcp": { "library": {}, }, }'
-
-        async def run_command(self, command):
-            assert "SKILL.md" in command
-            return 0, "/cfg/skill/review\n", ""
-
-    provisioner.ssh = SSH()
-    provisioner.config_path = "/cfg/opencode.jsonc"
-    record = await provisioner._observe_capability()
-    assert record["applied_revision"] == record["desired_revision"]
-    assert record["runtime_status"] == "applied"
-    assert dispatch_allowed({"capability": record}, bindings=["review", "library"])
 
 
 def _employee(employee_id="E1", **overrides):
@@ -264,7 +145,7 @@ async def test_claim_defers_worker_head_read_until_workspace_preparation(session
 
     monkeypatch.setattr("app.runtime.workspace_changes.workspace_head_commit", head)
     session.add(_employee())
-    session.add(_environment(worker_channel="worker", workspace_root="/srv/missing"))
+    session.add(_environment(workspace_root="/srv/missing"))
     session.add(_task("T-worker"))
     await session.commit()
     claimed = await Dispatcher(session).claim_once()
@@ -303,13 +184,18 @@ async def test_start_reuses_the_assignment_checks_and_merges_the_snapshot(sessio
 
     environment.repository_id = "repo-1"
     environment.skill_refs = ["review"]
+    environment.status_detail = {
+        "local_observation": {
+            "opencode": {"status": "healthy", "version": "1.18.33"},
+            "skills": {"status": "healthy", "discovered": [], "missing": ["review"], "content_hashes": {}},
+        }
+    }
     await session.commit()
-    blocked = runtime_assignment_block(environment, await session.get(Task, "T-start"))
-    assert blocked == "Worker 能力绑定尚未应用"
-    with pytest.raises(RuntimeStateError, match="装备绑定尚未应用"):
+    with pytest.raises(RuntimeStateError, match="待同步"):
         await RuntimeService(session).start("T-start")
 
     environment.skill_refs = []
+    environment.status_detail = {}
     await session.commit()
 
     class Client:
@@ -346,39 +232,12 @@ async def test_start_reuses_the_assignment_checks_and_merges_the_snapshot(sessio
     assert started.current_session_id == "ses-new"
 
 
-def test_direct_config_merges_the_gateway_into_jsonc(tmp_path):
-    jsonc = tmp_path / "opencode.jsonc"
-    legacy = tmp_path / "opencode.json"
-    jsonc.write_text(
-        '{ "theme": "dark", "mcp": { "custom": {"enabled": false}, }, }\n',
-        encoding="utf-8",
-    )
-    legacy.write_text(
-        json.dumps(
-            {
-                "theme": "overwrite-me",
-                "provider": {"nexus-gateway": {"options": {"apiKey": "k", "baseURL": "http://old/v1"}}},
-                "mcp": {"nexus-library": {"url": "http://old/mcp"}},
-            }
-        ),
-        encoding="utf-8",
-    )
-    write_direct_config(jsonc, gateway_url="http://10.0.0.8:8110/v1", mcp_url="http://10.0.0.8:8201/mcp")
-    written = json.loads(jsonc.read_text(encoding="utf-8"))
-    assert written["theme"] == "dark"
-    assert written["mcp"]["custom"] == {"enabled": False}
-    assert written["provider"]["nexus-gateway"]["options"]["baseURL"] == "http://10.0.0.8:8110/v1"
-    assert written["provider"]["nexus-gateway"]["options"]["apiKey"] == "k"
-    assert written["mcp"]["nexus-library"]["url"] == "http://10.0.0.8:8201/mcp"
-    assert "overwrite-me" not in jsonc.read_text(encoding="utf-8")
-    assert json.loads(legacy.read_text(encoding="utf-8"))["theme"] == "overwrite-me"
-
-
 @pytest.mark.asyncio
 async def test_copy_picks_a_free_port_or_the_requested_one(session):
     source = _employee("src")
     environment = _environment(
         "src",
+        mode="LINUX_REMOTE",
         host="10.9.9.9",
         opencode_server_port=19991,
         workspace_root="/tmp/workspaces/src",
@@ -387,7 +246,7 @@ async def test_copy_picks_a_free_port_or_the_requested_one(session):
     )
     source.execution_environment = environment
     other = _employee("other")
-    occupied = _environment("other", host="10.9.9.9", opencode_server_port=14096)
+    occupied = _environment("other", mode="LINUX_REMOTE", host="10.9.9.9", opencode_server_port=14096)
     other.execution_environment = occupied
     session.add_all([source, environment, other, occupied])
     await session.commit()
@@ -402,7 +261,7 @@ async def test_copy_picks_a_free_port_or_the_requested_one(session):
     )
     assert copied.opencode_server_port == 14097
     assert copied.port == 22
-    assert dispatch_allowed(copied.status_detail, bindings=["review", "library"]) is False
+    assert await scheduling_block(session, copied) is not None
     loaded = await session.scalar(
         select(AgentWorker)
         .where(AgentWorker.id == "src")

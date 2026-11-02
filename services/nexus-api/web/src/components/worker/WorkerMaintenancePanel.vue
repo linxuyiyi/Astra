@@ -9,39 +9,35 @@
           :disabled="actionDisabled('check')"
           @click="runAction('check')"
         >检查</ElButton>
-        <ElButton v-if="mode === 'LINUX_REMOTE' && runtimeEngine !== 'dsh'"
+        <ElButton v-if="mode === 'LINUX_REMOTE'"
           data-testid="deploy-environment"
           type="primary"
           :loading="busyAction === 'deploy'"
           :disabled="actionDisabled('deploy')"
           @click="runAction('deploy')"
         >一键部署</ElButton>
-        <ElButton v-if="mode === 'LINUX_REMOTE' && runtimeEngine !== 'dsh'"
+        <ElButton v-if="mode === 'LINUX_REMOTE'"
           data-testid="update-environment"
           :loading="busyAction === 'update'"
           :disabled="actionDisabled('update')"
           @click="runAction('update')"
         >更新</ElButton>
-        <ElButton v-if="mode === 'LINUX_REMOTE' && runtimeEngine !== 'dsh'"
+        <ElButton v-if="mode === 'LINUX_REMOTE'"
           data-testid="restart-environment"
           :loading="busyAction === 'restart'"
           :disabled="actionDisabled('restart')"
           @click="runAction('restart')"
         >重启</ElButton>
-        <ElButton v-if="workerDisabled || needsReconcile"
-          data-testid="restore-environment"
-          :loading="busyAction === 'restore'"
-          :disabled="actionDisabled('restore')"
-          @click="runAction('restore')"
-        >恢复</ElButton>
-        <ElButton v-else-if="health?.enabled === true"
-          data-testid="disable-environment"
-          type="danger"
-          plain
-          :loading="busyAction === 'disable'"
-          :disabled="actionDisabled('disable')"
-          @click="runAction('disable')"
-        >禁用</ElButton>
+        <ElSwitch
+          data-testid="worker-enabled"
+          :model-value="health?.enabled ?? false"
+          :loading="enabledSaving"
+          :disabled="!health || enabledSaving"
+          active-text="允许调度"
+          inactive-text="停止派单"
+          aria-label="允许 Worker 接收新任务"
+          @change="(value) => controller.setEnabled(Boolean(value))"
+        />
       </ElSpace>
       <ElButton data-testid="refresh-worker-maintenance" :icon="RefreshCw" :loading="loading" @click="controller.load">刷新</ElButton>
     </div>
@@ -64,6 +60,9 @@
       :closable="false"
       :title="blockedNote"
     />
+
+    <ElAlert v-if="health?.readiness === 'DRIFTED'" type="warning" show-icon :closable="false" title="待同步，请点一键部署应用已保存的配置。" />
+    <ElAlert v-if="health?.runtime_health.last_error" type="error" show-icon :closable="false" :title="maintenanceCopy(health.runtime_health.last_error)" />
 
     <ElAlert
       v-if="healthError"
@@ -197,10 +196,10 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElDescriptions, ElDescriptionsItem, ElDrawer, ElEmpty, ElSpace, ElTable, ElTableColumn, ElText, vLoading } from 'element-plus'
+import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElDescriptions, ElDescriptionsItem, ElDrawer, ElEmpty, ElSpace, ElSwitch, ElTable, ElTableColumn, ElText, vLoading } from 'element-plus'
 import { RefreshCw, Stethoscope } from 'lucide-vue-next'
 import type { MaintenanceAction, MaintenanceEvent, MaintenanceOperation } from '@/api/maintenance'
-import { actionBlockedByPolicy, hasOccupancy, isActiveMaintenanceState, isInterruptedMaintenanceState } from '@/features/workers/actionPolicy'
+import { actionBlockedByPolicy, hasOccupancy, isActiveMaintenanceState } from '@/features/workers/actionPolicy'
 import type { WorkerMaintenanceController } from '@/composables/useWorkerMaintenance'
 import IdDisplay from '@/components/astra/IdDisplay.vue'
 import SemanticTag from '@/components/astra/SemanticTag.vue'
@@ -229,7 +228,7 @@ import { formatTime } from '@/utils/format'
 const props = withDefaults(defineProps<{
   controller: WorkerMaintenanceController
   mode: 'LOCAL' | 'LINUX_REMOTE' | null
-  runtimeEngine?: 'opencode' | 'dsh'
+  runtimeEngine?: 'opencode'
   disabledReason?: string
   showHistory?: boolean
 }>(), {
@@ -248,6 +247,7 @@ const {
   healthError,
   actionError,
   busyAction,
+  enabledSaving,
   streamState,
   streamNote,
   historyHasMore,
@@ -269,21 +269,14 @@ const activeMaintenance = computed(() =>
 const summaryOperation = computed(() => activeOperation.value ?? (!props.showHistory ? operation.value : null))
 const historyOperations = computed(() => operations.value.filter(item => item.id !== activeOperation.value?.id))
 const occupancy = computed(() => hasOccupancy(health.value))
-const needsReconcile = computed(() => {
-  const latestState = health.value?.maintenance?.state
-  if (latestState) return isInterruptedMaintenanceState(latestState)
-  return isInterruptedMaintenanceState(operation.value?.state)
-})
-const workerDisabled = computed(() => health.value?.enabled === false)
 const revisions = computed(() => revisionRows(operation.value))
 const changed = computed(() => changedLabels(operation.value))
 const canCancel = computed(() => canCancelMaintenance(operation.value) && !operation.value?.cancel_requested && busyAction.value !== 'cancel')
 const canRetry = computed(() => canRetryMaintenance(operation.value) && !activeMaintenance.value && busyAction.value === null)
 const blockedNote = computed(() => {
   if (props.disabledReason) return props.disabledReason
-  if (needsReconcile.value) return '维护执行已中断，需核对远端；可执行检查或恢复（恢复会先只读核对），无法确认时维护锁保持。'
-  if (activeMaintenance.value) return '维护操作进行中，部署、更新、重启和禁用暂不可用。'
-  if (occupancy.value) return '存在正在执行或等待确认的任务/会话，部署、更新和重启已暂停；禁用仍允许当前任务完成。'
+  if (activeMaintenance.value) return '维护操作进行中，部署、更新和重启暂不可用。'
+  if (occupancy.value) return '存在正在执行或等待确认的任务/会话，部署、更新和重启已暂停；停止派单仍允许当前任务完成。'
   if (!health.value) return '尚未获取健康状态；部署、更新和重启仍可提交，是否安全由后端最终检查。'
   return ''
 })
@@ -313,10 +306,9 @@ function eventActor(event: MaintenanceEvent): string {
 
 function actionDisabled(action: MaintenanceAction): boolean {
   if (busyAction.value !== null) return true
-  if (props.disabledReason) return action !== 'check' && action !== 'restore'
+  if (props.disabledReason) return action !== 'check'
   return actionBlockedByPolicy(action, health.value, {
     activeMaintenance: activeMaintenance.value,
-    reconcileRequired: needsReconcile.value,
   })
 }
 
@@ -327,7 +319,6 @@ async function runAction(action: MaintenanceAction) {
       title: `${maintenanceActionLabel(action)} Agent Worker`,
       message: confirmMessage(action),
       confirmLabel: maintenanceActionLabel(action),
-      danger: action === 'disable',
     })
     if (!confirmed) return
   }
@@ -339,7 +330,7 @@ async function runAction(action: MaintenanceAction) {
 async function cancelOperation() {
   const confirmed = await confirmDialog({
     title: '取消维护操作',
-    message: '取消只停止服务端维护任务，不会回滚已经写入远端的配置或代码。危险步骤已发出时会进入待核对状态。',
+    message: '取消只停止服务端维护任务，不会回滚已经写入远端的配置或代码。操作取消后可重新检查或一键部署。',
     confirmLabel: '请求取消',
     danger: true,
   })
@@ -353,7 +344,7 @@ async function retryOperation() {
   if (!canRetry.value) return
   const action = operation.value?.action as MaintenanceAction | undefined
   if (action && action !== 'check') {
-    const confirmed = await confirmDialog({ title: `重试${maintenanceActionLabel(action)}？`, message: confirmMessage(action), confirmLabel: '重试', danger: action === 'disable' || action === 'restart' })
+    const confirmed = await confirmDialog({ title: `重试${maintenanceActionLabel(action)}？`, message: confirmMessage(action), confirmLabel: '重试', danger: action === 'restart' })
     if (!confirmed) return
   }
   const updated = await props.controller.retry()
@@ -377,8 +368,6 @@ function confirmMessage(action: MaintenanceAction): string {
     deploy: '将安装或校验运行依赖并写入配置，不会主动更新已有仓库代码；维护失败不会把真实健康的 Worker 标成不可用。',
     update: '将获取目标分支并更新仓库代码；工作区存在未提交修改或冲突时会停止并保留现场。',
     restart: '将重启 OpenCode Serve；需要任务、等待确认和未结束会话均已清空。',
-    disable: '仅停止新调度，不停止进程、不释放当前任务；当前任务可继续完成。环境、仓库、装备与维护记录不会删除。',
-    restore: '恢复会先只读核对远端状态；无法确认时不会由前端释放维护锁。',
   }
   return messages[action]
 }
@@ -391,7 +380,6 @@ function confirmMessage(action: MaintenanceAction): string {
 .worker-maintenance__summary { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px; border: 1px solid var(--astra-border); border-radius: 8px; }
 .worker-maintenance__reason { margin: 0; color: var(--astra-text-secondary); overflow-wrap: anywhere; line-height: 1.6; }
 .worker-maintenance__reason[data-state='FAILED'] { color: var(--astra-danger); }
-.worker-maintenance__reason[data-state='INTERRUPTED'] { color: var(--astra-warning); }
 .worker-maintenance__operation { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--astra-border); border-radius: 10px; background: var(--astra-bg-subtle, transparent); }
 .worker-maintenance__operation-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .worker-maintenance__operation-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }

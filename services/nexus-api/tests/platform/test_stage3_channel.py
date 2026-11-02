@@ -11,7 +11,6 @@ SSH_ALLOW = {
     ("app/runtime/maintenance.py", ".open_session("),
     ("app/runtime/remote_provisioning.py", ".open_session("),
     ("app/runtime/ssh_client.py", ".open_session("),
-    ("app/runtime/worker_health.py", ".open_session("),
     ("app/executors/opencode_remote.py", ".open_session("),
 }
 
@@ -30,7 +29,6 @@ def test_daily_workspace_and_health_do_not_open_ssh():
 def test_offline_worker_is_not_shown_available_and_does_not_encode_a_task_change():
     health = project_channel_health(
         mode="LINUX_REMOTE",
-        worker_channel="worker",
         environment_status="AVAILABLE",
         worker_status="offline",
         repository_id=None,
@@ -49,7 +47,6 @@ def test_offline_worker_is_not_shown_available_and_does_not_encode_a_task_change
 def test_waiting_human_and_repository_stay_separate_from_worker_health():
     health = project_channel_health(
         mode="LINUX_REMOTE",
-        worker_channel="worker",
         environment_status="AVAILABLE",
         worker_status="online",
         repository_id="repo-1",

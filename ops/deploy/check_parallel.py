@@ -85,11 +85,8 @@ def collect() -> list[tuple[bool, str, str]]:
     provisioning = (
         TASK_PLATFORM / "app" / "runtime" / "remote_provisioning.py"
     ).read_text(encoding="utf-8")
-    processes = (TASK_PLATFORM / "app" / "runtime" / "remote_processes.py").read_text(
-        encoding="utf-8"
-    )
-    channel_switch = (
-        TASK_PLATFORM / "app" / "worker_agent" / "channel_switch.py"
+    supervisor = (
+        TASK_PLATFORM / "app" / "worker_agent" / "supervisor.py"
     ).read_text(encoding="utf-8")
     rows: list[tuple[bool, str, str]] = []
 
@@ -155,12 +152,13 @@ def collect() -> list[tuple[bool, str, str]]:
     )
 
     add(
-        "async def manage(" in processes
-        and "os.killpg" in processes
-        and "systemctl" not in processes
+        "class OpenCodeSupervisor" in supervisor
+        and "os.killpg" in supervisor
+        and "fcntl.flock" in supervisor
+        and "systemctl" not in supervisor
         and "systemctl" not in provisioning,
         "managed processes",
-        "Worker 隔离进程记录，无系统服务单元",
+        "Worker 单守护与内核排他锁，无系统服务单元",
     )
 
     path_hit = V09_OPT in provisioning or V09_ETC in provisioning
@@ -216,7 +214,7 @@ def collect() -> list[tuple[bool, str, str]]:
     add(
         "/etc/nexus/opencode/" in provisioning
         and '"OPENCODE_CONFIG"' in provisioning
-        and "OPENCODE_CONFIG" in channel_switch
+        and "render_worker_ctl_script" in provisioning
         and "${XDG_CONFIG_HOME:-$HOME/.config}" not in provisioning,
         "opencode config",
         "/etc/nexus/opencode/{id}/opencode.jsonc",

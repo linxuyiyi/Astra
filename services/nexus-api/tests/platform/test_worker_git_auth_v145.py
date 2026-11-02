@@ -18,8 +18,7 @@ from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.database import SessionLocal
-from app.domain import EnvironmentStatus
-from app.models import AgentWorker, OpenCodeExecutionEnvironment
+from app.models import AgentWorker, OpenCodeExecutionEnvironment, WorkerMaintenanceOperation
 from app.runtime.maintenance import OperationLease, claim_next, submit_operation
 from app.runtime.remote_provisioning import RemoteProvisioner
 from app.worker_agent import inspection
@@ -297,7 +296,7 @@ def test_child_environ_allows_only_safe_git_variables(monkeypatch):
 
 
 def test_file_url_sanitizers_preserve_absolute_path():
-    from app.runtime.worker_health import _sanitize_url as health_sanitize
+    from app.runtime.worker_readiness import sanitize_url as health_sanitize
 
     expected = "file:///srv/git/project.git"
     assert inspection._sanitize_url(expected + "?token=secret") == expected
@@ -333,56 +332,29 @@ async def test_deploy_uses_written_credential_revision(monkeypatch):
         db.expunge(environment)
     assert await claim_next("owner-gitrev") == operation_id
     lease = OperationLease(operation_id, 1, "owner-gitrev", 60)
-    now = __import__("datetime").datetime.now(__import__("datetime").UTC)
-    desired_repo = {
-        "id": "repo",
-        "url": "https://git.example/repo.git",
-        "target_branch": "main",
-        "authentication": "token",
-        "credential_revision": "desired-new",
-        "error": None,
-    }
-    probe = {
-        "stale": False,
-        "status": EnvironmentStatus.AVAILABLE,
-        "desired": {"repository": desired_repo},
-        "observation": {"source": "worker"},
-        "equipment": [],
-        "repository": desired_repo,
-        "checked_at": now,
-        "values": {
-            "status": EnvironmentStatus.AVAILABLE,
-            "last_checked_at": now,
-            "status_detail": {
-                "deployed": {"repository": dict(desired_repo)},
-                "observed_at": now.isoformat(),
-                "observed_epoch": 1,
-            },
-        },
-        "observed_epoch": 1,
-    }
-
-    async def fake_observe(*_args, **_kwargs):
-        return probe
-
-    monkeypatch.setattr("app.runtime.maintenance.observe_environment", fake_observe)
     provisioner = RemoteProvisioner(
         environment,
         SimpleNamespace(id=operation_id, action="deploy"),
         lease=lease,
     )
+    # 已写入凭据版本只由 Worker 快照上报，部署完成不伪造环境表观测态。
     provisioner.git_repository_id = "repo"
     provisioner.git_credential_revision = "written-actual"
+    provisioner.verified_evaluation = {
+        "readiness": "READY",
+        "runtime_health": {"status": "AVAILABLE", "equipment": []},
+        "repository": {"credential_revision": "observed-actual"},
+    }
     assert await provisioner._finish(True) is True
     async with SessionLocal() as db:
         stored = await db.get(OpenCodeExecutionEnvironment, environment.id)
-        deployed = stored.status_detail["deployed"]["repository"]
-        assert deployed["credential_revision"] == "written-actual"
-        assert deployed["target_branch"] == "main"
+        assert stored.status_detail == {}
+        operation = await db.get(WorkerMaintenanceOperation, operation_id)
+        assert operation.after_snapshot["repository"]["credential_revision"] == "observed-actual"
 
 
 @pytest.mark.asyncio
-async def test_token_rotation_does_not_restart_unchanged_units(monkeypatch):
+async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkeypatch):
     import hashlib
 
     from app.runtime.remote_provisioning import (
@@ -399,7 +371,8 @@ async def test_token_rotation_does_not_restart_unchanged_units(monkeypatch):
     monkeypatch.setattr(settings, "remote_gateway_local_url", "http://10.0.0.8:18110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
-        id=77,
+        id=77, mode="LINUX_REMOTE", host="node.invalid", port=22, username="nexus",
+        repository_id=None, skill_refs=[], mcp_refs=[],
         employee_id="gitrot",
         workspace_root="/srv/project",
         opencode_server_port=14096,
@@ -446,7 +419,7 @@ async def test_token_rotation_does_not_restart_unchanged_units(monkeypatch):
     async def idle(*_args, **_kwargs):
         return True
 
-    async def credentials(_path):
+    async def credentials(_path, **_kwargs):
         return "wtk", "wrk"
 
     async def emit(_event):
@@ -462,7 +435,8 @@ async def test_token_rotation_does_not_restart_unchanged_units(monkeypatch):
     assert (git_token_path(77), 0o600) in atomic
     assert (git_askpass_path(77), 0o700) in atomic
     assert not any("systemctl" in item for item in commands)
-    assert all(not call.kwargs["restart"] for call in provisioner._manage_process.await_args_list)
+    provisioner._run_ctl.assert_awaited_once_with("restart")
+    assert not any("pip install" in item or "--force-reinstall" in item for item in commands)
 
 
 @pytest.mark.asyncio
@@ -485,7 +459,8 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
     monkeypatch.setattr(settings, "remote_gateway_local_url", "http://10.0.0.8:18110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
-        id=88,
+        id=88, mode="LINUX_REMOTE", host="node.invalid", port=22, username="nexus",
+        repository_id=None, skill_refs=[], mcp_refs=[],
         employee_id="gitwire",
         workspace_root=str(workspace),
         opencode_server_port=14096,
@@ -540,7 +515,7 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
     async def idle(*_args, **_kwargs):
         return True
 
-    async def credentials(_path):
+    async def credentials(_path, **_kwargs):
         return "wtk", "wrk"
 
     async def emit(_event):
@@ -554,9 +529,7 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
 
     await provisioner._install_worker(emit)
     env_path = f"{remote_provisioning.WORKER_SECRET_DIR}/worker-88.env"
-    unit_path = f"{remote_provisioning.WORKER_SECRET_DIR}/opencode-88.env"
     env_text = written[env_path].decode()
-    unit_text = written[unit_path].decode()
     env_file = tmp_path / "worker-88.env"
     env_file.write_text(env_text, encoding="utf-8")
     loaded: dict[str, str] = {}
@@ -566,25 +539,16 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
             loaded[key] = value
     safe_git = safe_git_environment(88)
     assert {key: loaded[key] for key in safe_git} == safe_git
-    unit_git = {}
-    for line in unit_text.splitlines():
-        if line.startswith("GIT_"):
-            key, sep, value = line.partition("=")
-            if sep:
-                unit_git[key] = value
-    assert unit_git == safe_git
-
     for key, value in loaded.items():
         monkeypatch.setenv(key, value)
     observed = inspection._inspect_repository(str(workspace), set())
     assert observed["authentication_verified"] is True
 
-    # Second identical generation changes no env/unit content and does not
-    # restart Worker/OpenCode (PID criteria).
+    # 相同配置再次部署只执行幂等 start，不重装或重启守护。
     commands.clear()
     await provisioner._install_worker(emit)
     assert written[env_path].decode() == env_text
-    assert written[unit_path].decode() == unit_text
+    assert provisioner._run_ctl.await_args.args == ("start",)
     assert not any("systemctl" in item for item in commands)
 
 
@@ -592,5 +556,4 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
 def isolate_process_start_for_environment_tests(monkeypatch):
     from unittest.mock import AsyncMock
 
-    monkeypatch.setattr(RemoteProvisioner, "_manage_process", AsyncMock())
-    monkeypatch.setattr(RemoteProvisioner, "_wait_opencode_ready", AsyncMock())
+    monkeypatch.setattr(RemoteProvisioner, "_run_ctl", AsyncMock())

@@ -167,11 +167,24 @@ async def git_workspace(worker, *, url: str, branch: str, token_path: str = "") 
             if url:
                 if await worker._command(git("config", "--get", "remote.origin.url") + " || true") != url:
                     raise RuntimeError("工程目录的 origin 与绑定仓库不一致，已停止并保留现场")
-                if (
-                    await worker._command(git("symbolic-ref", "--quiet", "--short", "HEAD") + " || true")
-                    != branch
-                ):
-                    raise RuntimeError("工程目录当前分支与绑定分支不一致，已停止并保留现场")
+                current_branch = await worker._command(
+                    git("symbolic-ref", "--quiet", "--short", "HEAD") + " || true"
+                )
+                if current_branch != branch:
+                    if worker.action != "deploy":
+                        raise RuntimeError("工程目录当前分支与绑定分支不一致，已停止并保留现场")
+                    if await worker._command(git("status", "--porcelain", "--untracked-files=normal")):
+                        raise RuntimeError(
+                            "工程目录当前分支与绑定分支不一致且存在未提交变更，已停止并保留现场"
+                        )
+                    await worker._command(
+                        auth
+                        + git("-c", "credential.helper=", "fetch", "--no-tags", "--", "origin", branch),
+                        timeout=180,
+                    )
+                    await worker._ensure_safe()
+                    await worker._command(git("checkout", "-B", branch, "FETCH_HEAD"))
+                    changed = True
         else:
             if worker.action == "update":
                 raise RuntimeError("工程目录不是 Git 仓库，无法执行更新")

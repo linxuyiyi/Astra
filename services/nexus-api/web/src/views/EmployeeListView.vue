@@ -1,7 +1,7 @@
 <template>
   <section class="admin-page worker-page" data-testid="employee-list-page">
     <SettingsHeaderActions>
-      <ElButton :icon="RefreshCw" :loading="store.loading || healthLoading" data-testid="employee-refresh" @click="refreshAll">刷新</ElButton>
+      <ElButton :icon="RefreshCw" :loading="store.loading" data-testid="employee-refresh" @click="refreshAll">刷新</ElButton>
       <ElButton type="primary" :icon="Plus" data-testid="employee-create" @click="beginCreate">新建 Agent Worker</ElButton>
     </SettingsHeaderActions>
 
@@ -41,12 +41,12 @@
       </ElSelect>
     </div>
 
-    <ElAlert v-if="store.error || healthError" type="error" show-icon :closable="false" :title="store.error || healthError">
+    <ElAlert v-if="store.error" type="error" show-icon :closable="false" :title="store.error">
       <ElButton size="small" @click="refreshAll">重新加载</ElButton>
     </ElAlert>
 
     <div class="astra-table-panel">
-      <ElTable v-loading="store.loading || healthLoading || digitalLoading" :data="paged" row-key="id" :max-height="TABLE_MAX_HEIGHT" aria-label="Agent Worker 列表" @row-click="openDetail">
+      <ElTable v-loading="store.loading || digitalLoading" :data="paged" row-key="id" :max-height="TABLE_MAX_HEIGHT" aria-label="Agent Worker 列表" @row-click="openDetail">
         <ElTableColumn label="Agent Worker" min-width="230" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="worker-cell">
@@ -74,6 +74,7 @@
         <ElTableColumn label="可接任务" width="130">
           <template #default="{ row }">
             <div class="worker-health-cell" @click.stop>
+              <SemanticTag v-if="row.health?.readiness === 'DRIFTED'" :tone="readinessTone(row.health.readiness)" :label="readinessLabel(row.health.readiness)" />
               <SemanticTag :tone="schedulableTone(row.health)" :label="schedulableLabel(row.health)" />
               <ElPopover v-if="blockingReasons(row.health).length" trigger="click" :width="320" placement="bottom-start">
                 <template #reference><ElButton link type="primary" size="small">查看原因</ElButton></template>
@@ -119,7 +120,7 @@
             <ElText>{{ store.error }}</ElText>
             <ElButton :icon="RefreshCw" @click="refreshAll">重新加载</ElButton>
           </ElEmpty>
-          <ElEmpty v-else-if="!store.loading && !healthLoading" :image-size="72" :description="store.employees.length ? '没有匹配的 Agent Worker' : '暂无 Agent Worker'">
+          <ElEmpty v-else-if="!store.loading" :image-size="72" :description="store.employees.length ? '没有匹配的 Agent Worker' : '暂无 Agent Worker'">
             <ElButton v-if="!store.employees.length" type="primary" :icon="Plus" @click="beginCreate">新建 Agent Worker</ElButton>
           </ElEmpty>
         </template>
@@ -154,10 +155,10 @@
 
 <script setup lang="ts">
 import { Plus, RefreshCw, Search, SlidersHorizontal } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ElAlert, ElButton, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElInput, ElOption, ElPagination, ElSelect, ElTable, ElTableColumn, ElText, ElPopover, vLoading } from 'element-plus'
-import { getWorkerHealth, submitMaintenance, type WorkerHealth } from '@/api/maintenance'
+import { submitMaintenance } from '@/api/maintenance'
 import type { Employee } from '@/api/types'
 import { listEmployees } from '@/api'
 import type { Employee as DigitalEmployee } from '@/types'
@@ -168,6 +169,8 @@ import { notify } from '@/composables/useToast'
 import {
   blockingReasons,
   isMaintenanceActive,
+  readinessLabel,
+  readinessTone,
   schedulableLabel,
   schedulableTone,
   toWorkerRow,
@@ -194,13 +197,8 @@ const pageSize = ref(20)
 const modalOpen = ref(false)
 const modalCreating = ref(false)
 const modalEmployee = ref<Employee | null>(null)
-const healthError = ref('')
-const healthByEnvironment = ref<Record<number, WorkerHealth>>({})
-const healthLoading = ref(false)
 const digitalEmployees = ref<DigitalEmployee[]>([])
 const digitalLoading = ref(false)
-let healthGeneration = 0
-let healthController: AbortController | null = null
 
 const connectionOptions = [
   { value: 'online', label: '连接在线' },
@@ -212,7 +210,6 @@ const maintenanceOptions = [
   { value: 'active', label: '维护进行中' },
   { value: 'succeeded', label: '维护成功' },
   { value: 'failed', label: '维护失败或取消' },
-  { value: 'interrupted', label: '维护待核对' },
   { value: 'none', label: '无维护记录' },
 ]
 
@@ -221,7 +218,7 @@ const environmentEmployees = computed(() => store.employees.filter((employee) =>
 const rows = computed<WorkerRowView[]>(() => environmentEmployees.value.map((employee) => {
   const environment = employee.execution_environment
   if (!environment) throw new Error('unreachable')
-  const row = toWorkerRow(employee, environment, store.tasks, healthByEnvironment.value[environment.id] ?? null)
+  const row = toWorkerRow(employee, environment, store.tasks, employee.worker_health)
   return { ...row, digital: digitalById.value.get(employee.digital_employee_id ?? '') ?? null }
 }))
 const unlinkedCount = computed(() => rows.value.filter((row) => !row.employee.digital_employee_id).length)
@@ -239,7 +236,6 @@ const filtered = computed(() => rows.value.filter((row) => {
 }))
 const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)))
 const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
-const environmentKey = computed(() => rows.value.map((row) => row.environment.id).join(','))
 
 function enabledState(row: WorkerRow): string {
   if (row.enabled === true) return 'enabled'
@@ -250,40 +246,8 @@ function enabledState(row: WorkerRow): string {
 function maintenanceFilter(row: WorkerRow): string {
   if (!row.maintenanceState) return 'none'
   if (isMaintenanceActive(row.maintenanceState)) return 'active'
-  if (row.maintenanceState === 'INTERRUPTED') return 'interrupted'
   if (row.maintenanceState === 'SUCCEEDED') return 'succeeded'
   return 'failed'
-}
-
-async function loadHealth() {
-  const ids = rows.value.map((row) => row.environment.id)
-  const key = ids.join(',')
-  const generation = ++healthGeneration
-  healthController?.abort()
-  if (!ids.length) {
-    healthController = null
-    healthByEnvironment.value = {}
-    healthLoading.value = false
-    return
-  }
-  const controller = new AbortController()
-  healthController = controller
-  healthLoading.value = true
-  healthError.value = ''
-  try {
-    const results = await Promise.allSettled(ids.map((id) => getWorkerHealth(id, controller.signal)))
-    if (generation !== healthGeneration || controller.signal.aborted) return
-    if (rows.value.map((row) => row.environment.id).join(',') !== key) return
-    const next: Record<number, WorkerHealth> = {}
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') next[ids[index]] = result.value
-    })
-    healthByEnvironment.value = next
-    const failed = results.filter(result => result.status === 'rejected').length
-    healthError.value = failed ? `${failed} 个 Worker 的健康状态读取失败，请重新加载。` : ''
-  } finally {
-    if (generation === healthGeneration) healthLoading.value = false
-  }
 }
 
 async function loadDigitalEmployees() {
@@ -299,7 +263,6 @@ async function loadDigitalEmployees() {
 
 async function refreshAll() {
   await Promise.all([store.refresh(), loadDigitalEmployees()])
-  await loadHealth()
 }
 
 function openDetail(row: WorkerRowView) {
@@ -351,7 +314,6 @@ async function onModalSaved(id: string, deployRequested: boolean) {
       }
     }
   }
-  await loadHealth()
   if (modalOpen.value) {
     modalCreating.value = false
     modalEmployee.value = saved
@@ -361,14 +323,8 @@ async function onModalSaved(id: string, deployRequested: boolean) {
 watch(pageSize, () => { page.value = 1 })
 watch(totalPages, (value) => { page.value = Math.min(page.value, value) })
 watch([query, connection, maintenance, enabled, digitalEmployee], () => { page.value = 1 })
-watch(environmentKey, () => { void loadHealth() }, { immediate: true })
 watch(() => store.employees, (employees) => {
   if (modalEmployee.value) modalEmployee.value = employees.find((item) => item.id === modalEmployee.value?.id) ?? null
-})
-onBeforeUnmount(() => {
-  healthGeneration += 1
-  healthController?.abort()
-  healthController = null
 })
 onMounted(async () => {
 

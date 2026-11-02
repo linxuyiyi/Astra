@@ -6,7 +6,7 @@ import base64
 import json
 import shlex
 from pathlib import PurePosixPath
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 
 def package_name(arch: str, musl: bool) -> str:
@@ -129,7 +129,14 @@ async def install_opencode(worker, manifest: dict, prefix: str, *, arch: str, mu
         if not isinstance(integrity, str) or not integrity.startswith("sha512-") or " " in integrity:
             raise RuntimeError("npm 制品缺少单一 SHA512 integrity")
         archive = f"{stage}/package.tgz"
-        await download(worker, dist.get("tarball", ""), archive, allowed=allowed, scheme=parsed.scheme)
+        tarball = dist.get("tarball", "")
+        if not isinstance(tarball, str) or not tarball:
+            raise RuntimeError("npm 制品缺少 tarball 地址")
+        reference = urlsplit(tarball)
+        if not reference.scheme and not reference.netloc:
+            # 华为仓库的元数据使用相对仓库路径，不能解析到镜像站首页。
+            tarball = urljoin(registry + "/", tarball.lstrip("/"))
+        await download(worker, tarball, archive, allowed=allowed, scheme=parsed.scheme)
         digest = (await worker._command(shlex.join(["sha512sum", archive]))).split()[0]
         expected = base64.b64encode(bytes.fromhex(digest)).decode()
         if expected != integrity.removeprefix("sha512-"):

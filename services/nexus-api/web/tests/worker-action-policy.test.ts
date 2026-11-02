@@ -16,8 +16,8 @@ function health(blocking: Array<ReturnType<typeof blocker>>) {
   return { blocking }
 }
 
-function policy(activeMaintenance = false, reconcileRequired = false) {
-  return { activeMaintenance, reconcileRequired }
+function policy(activeMaintenance = false) {
+  return { activeMaintenance }
 }
 
 test('current tasks follow authoritative occupancy references, including released-state edge cases', () => {
@@ -43,11 +43,11 @@ test('initial offline, unknown health and pending equipment do not block deploy'
   assert.equal(actionBlockedByPolicy('restart', value, policy()), false)
 })
 
-test('real occupancy blocks restart/deploy but not disable', () => {
+test('real occupancy blocks restart/deploy/update but permits checking', () => {
   const value = health([blocker('occupied_task', { task_id: 'task-1' })])
   assert.equal(actionBlockedByPolicy('restart', value, policy()), true)
   assert.equal(actionBlockedByPolicy('deploy', value, policy()), true)
-  assert.equal(actionBlockedByPolicy('disable', value, policy()), false)
+  assert.equal(actionBlockedByPolicy('check', value, policy()), false)
 })
 
 test('health abnormalities are not treated as occupancy', () => {
@@ -58,10 +58,10 @@ test('health abnormalities are not treated as occupancy', () => {
   assert.equal(actionBlockedByPolicy('deploy', value, policy()), false)
 })
 
-test('active maintenance blocks actions while interrupted keeps restore/check available', () => {
+test('active maintenance blocks changes while check stays available', () => {
   const value = health([blocker('maintenance:running')])
-  assert.equal(actionBlockedByPolicy('restart', value, policy(true, false)), true)
-  assert.equal(actionBlockedByPolicy('check', value, policy(true, false)), false)
-  assert.equal(actionBlockedByPolicy('restore', value, policy(false, true)), false)
-  assert.equal(actionBlockedByPolicy('deploy', value, policy(false, true)), true)
+  assert.equal(actionBlockedByPolicy('restart', value, policy(true)), true)
+  assert.equal(actionBlockedByPolicy('check', value, policy(true)), false)
+  assert.equal(actionBlockedByPolicy('update', value, policy(true)), true)
+  assert.equal(actionBlockedByPolicy('deploy', value, policy()), false)
 })

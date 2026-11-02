@@ -1,8 +1,7 @@
-"""R02/R06/R07：装备期望、真实只读探测与 canonical 投影。"""
+"""装备期望、节点观测对比与就绪投影契约测试。"""
 
 from __future__ import annotations
 
-import copy
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,16 +18,25 @@ from app.models import (
     CodeRepository,
     GitCredential,
     OpenCodeExecutionEnvironment,
+    WorkerInstance,
 )
-from app.runtime.worker_health import (
-    WORKER_AGENT_VERSION,
+from app.runtime.worker_health import probe_online_worker
+from app.runtime.worker_readiness import (
     _skills_content_revision,
-    desired_equipment,
-    equipment_rows,
-    health_status,
-    probe_equipment,
-    repository_payload,
+    compute_target_digest,
+    evaluate_worker_readiness,
+    mcp_endpoints_revision,
 )
+from app.runtime.worker_readiness import (
+    build_desired_spec as desired_equipment,
+)
+from app.runtime.worker_readiness import (
+    build_equipment_rows as equipment_rows,
+)
+from app.runtime.worker_readiness import (
+    build_repository_summary as repository_payload,
+)
+from app.worker_agent import __version__ as WORKER_AGENT_VERSION
 
 CANARY = "sk-canary-secret-value"
 
@@ -81,7 +89,6 @@ async def _seed(session, tmp_path: Path) -> OpenCodeExecutionEnvironment:
         model_name=None,
         skill_refs=["review"],
         mcp_refs=[{"name": "extra", "url": "https://extra.example.test/mcp"}],
-        worker_channel="ssh",
         status_detail={"desired": {"model": "stale-model-must-not-win"}},
     )
     session.add(environment)
@@ -90,6 +97,14 @@ async def _seed(session, tmp_path: Path) -> OpenCodeExecutionEnvironment:
 
 
 def _desired() -> dict:
+    skill_items = [
+        {
+            "name": "review",
+            "content_hash": "skill-hash",
+            "fullfile_hash": "skill-fullfile-hash",
+        }
+    ]
+    mcp_items = [{"name": "nexus-library", "url": "https://mcp.example.test/mcp", "required": True}]
     return {
         "opencode": {"version": "1.18.33"},
         "worker_agent": {"version": WORKER_AGENT_VERSION},
@@ -102,22 +117,16 @@ def _desired() -> dict:
             "credential_revision": None,
         },
         "skills": {
-            "items": [
-                {
-                    "name": "review",
-                    "content_hash": "skill-hash",
-                    "fullfile_hash": "skill-fullfile-hash",
-                }
-            ],
+            "items": skill_items,
             "missing_sources": [],
             "unverifiable_sources": [],
-            "revision": "skill-revision",
-            "content_revision": "skill-content-revision",
+            "revision": _skills_content_revision(skill_items),
+            "content_revision": _skills_content_revision(skill_items),
         },
         "mcp": {
-            "items": [{"name": "nexus-library", "url": "https://mcp.example.test/mcp", "required": True}],
+            "items": mcp_items,
             "required": ["nexus-library"],
-            "revision": "mcp-revision",
+            "revision": mcp_endpoints_revision(mcp_items),
         },
         "revision": "desired-revision",
     }
@@ -161,6 +170,7 @@ def _observation(desired: dict | None = None) -> dict:
             "branch": want["repository"]["target_branch"],
             "commit": "a" * 40,
             "dirty": False,
+            "credential_revision": want["repository"].get("credential_revision"),
             "error": None,
         },
         "checked_at": "2026-10-19T00:00:00+00:00",
@@ -171,10 +181,20 @@ def _observation(desired: dict | None = None) -> dict:
     }
 
 
-def _snapshot(desired: dict) -> dict:
-    snapshot = copy.deepcopy(desired)
-    snapshot["repository"]["commit"] = "a" * 40
-    return snapshot
+def health_status(observation: dict, desired: dict) -> EnvironmentStatus:
+    environment = OpenCodeExecutionEnvironment(
+        id=1, mode="LINUX_REMOTE", host="fixture.invalid", port=22,
+        username="nexus", workspace_root="/srv/project", opencode_server_port=14096,
+    )
+    digest = compute_target_digest(environment)
+    worker = WorkerInstance(
+        id="fixture", environment_id=1, status="online", epoch=1,
+        target_digest=digest, agent_version=WORKER_AGENT_VERSION,
+        observed_snapshot={**observation, "spec_revision": desired.get("revision")},
+    )
+    result = evaluate_worker_readiness({**desired, "target_digest": digest}, environment, worker)
+    return EnvironmentStatus(result["runtime_health"]["status"])
+
 
 
 @pytest.mark.asyncio
@@ -206,17 +226,12 @@ async def test_desired_uses_db_and_skill_content_changes_revision(session, tmp_p
     assert second["skills"]["revision"] != first["skills"]["revision"]
     assert second["model"] == first["model"]
 
-    rows = {row["key"]: row for row in equipment_rows(second, {}, first)}
-    assert rows["skills"]["deployed"] is False
-    assert any("Skill 部署 revision" in item for item in rows["skills"]["diff"])
-
 
 def test_healthy_projection_and_fixed_shapes():
     desired = _desired()
     observation = _observation(desired)
-    snapshot = _snapshot(desired)
 
-    rows = equipment_rows(desired, observation, snapshot)
+    rows = equipment_rows(desired, observation)
 
     assert [row["key"] for row in rows] == [
         "opencode",
@@ -230,6 +245,7 @@ def test_healthy_projection_and_fixed_shapes():
         assert set(row) == {
             "key",
             "label",
+            "state",
             "configured",
             "deployed",
             "verified",
@@ -239,6 +255,7 @@ def test_healthy_projection_and_fixed_shapes():
             "error",
             "detail",
         }
+        assert row["state"] == "ready"
         assert row["verified"] is True
         assert row["deployed"] is True
         assert row["error"] is None
@@ -267,7 +284,7 @@ def test_healthy_projection_and_fixed_shapes():
     }
 
 
-def test_missing_probe_is_unverified_and_not_schedulable():
+def test_missing_probe_is_unknown_and_not_schedulable():
     desired = _desired()
     observation = {
         key: {"status": "unknown", "error": "未探测"}
@@ -283,9 +300,9 @@ def test_missing_probe_is_unverified_and_not_schedulable():
         }
     )
 
-    rows = equipment_rows(desired, observation, None)
+    rows = equipment_rows(desired, observation)
 
-    assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
+    assert health_status(observation, desired) == EnvironmentStatus.UNKNOWN
     assert all(row["verified"] is None for row in rows)
     assert all(row["deployed"] is False for row in rows)
 
@@ -300,57 +317,55 @@ def test_mcp_disconnected_is_reported_per_item():
         "error": "MCP 未连接：nexus-library",
     }
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation, _snapshot(desired))}["mcp"]
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}["mcp"]
 
     assert row["verified"] is False
+    assert row["state"] == "degraded"
     assert row["error"] == "MCP 未连接：nexus-library"
-    assert any("MCP 未连接" in item for item in row["diff"])
     assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
 
 
-def test_skill_missing_is_reported_separately_from_content_revision():
+def test_skill_missing_marks_drifted_pending_deploy():
     desired = _desired()
     observation = _observation(desired)
     observation["skills"] = {
-        "status": "unhealthy",
+        "status": "healthy",
         "discovered": [],
         "missing": ["review"],
-        "error": "Skill 未发现：review",
+        "content_hashes": {},
+        "error": None,
     }
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation, _snapshot(desired))}[
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}[
         "skills"
     ]
 
     assert row["verified"] is False
-    assert any("Skill 未发现" in item for item in row["diff"])
-    assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
+    assert row["state"] == "drifted"
+    assert health_status(observation, desired) == EnvironmentStatus.DRIFTED
 
 
-@pytest.mark.parametrize(
-    ("actual", "configured", "error"),
-    [
-        ("nexus-gateway/other", True, "实际模型与期望模型不一致"),
-        ("nexus-gateway/route-1", False, "模型 provider 缺少网关地址或凭据"),
-    ],
-)
-def test_model_mismatch_and_missing_configuration_are_unverified(actual, configured, error):
+def test_model_mismatch_marks_drifted_while_missing_provider_marks_degraded():
     desired = _desired()
     observation = _observation(desired)
     observation["model"] = {
-        "status": "unhealthy",
-        "configured": configured,
-        "model": actual,
-        "error": error,
+        "status": "healthy",
+        "configured": True,
+        "model": "nexus-gateway/other",
+        "error": None,
     }
+    drifted_row = {item["key"]: item for item in equipment_rows(desired, observation)}["model"]
+    assert drifted_row["state"] == "drifted"
+    assert health_status(observation, desired) == EnvironmentStatus.DRIFTED
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation, _snapshot(desired))}[
-        "model"
-    ]
-
-    assert row["verified"] is False
-    assert row["error"] == error
-    assert any("模型" in item for item in row["diff"])
+    observation["model"] = {
+        "status": "unhealthy",
+        "configured": False,
+        "model": "nexus-gateway/route-1",
+        "error": "模型 provider 缺少网关地址或凭据",
+    }
+    degraded_row = {item["key"]: item for item in equipment_rows(desired, observation)}["model"]
+    assert degraded_row["state"] == "degraded"
     assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
 
 
@@ -360,15 +375,15 @@ def test_model_configuration_does_not_depend_on_gateway_authentication():
     observation["model"].pop("authenticated")
     assert health_status(observation, desired) == EnvironmentStatus.AVAILABLE
     desired["model"]["resolved"] = False
-    assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
+    assert health_status(observation, desired) != EnvironmentStatus.AVAILABLE
     model = next(
-        row for row in equipment_rows(desired, observation, _snapshot(desired)) if row["key"] == "model"
+        row for row in equipment_rows(desired, observation) if row["key"] == "model"
     )
     assert model["verified"] is False
 
 
 @pytest.mark.asyncio
-async def test_online_worker_uses_inspect_runtime_even_when_channel_is_ssh(monkeypatch):
+async def test_online_worker_probe_uses_inspect_runtime_with_deep_flag(monkeypatch):
     desired = _desired()
     calls: list[tuple[str, dict]] = []
     broken = _observation(desired)
@@ -390,18 +405,17 @@ async def test_online_worker_uses_inspect_runtime_even_when_channel_is_ssh(monke
     environment = SimpleNamespace(
         runtime_engine="opencode",
         id=7,
-        worker_channel="ssh",
         host="worker.test",
         username="root",
         ssh_password="ssh-secret",
     )
 
-    observation = await probe_equipment(
+    observation = await probe_online_worker(
         environment,
         desired,
         _settings(Path("/tmp")),
-        worker_instance=SimpleNamespace(status="online", agent_version=WORKER_AGENT_VERSION, epoch=3),
-        observed_epoch=11,
+        worker_instance=SimpleNamespace(status="online", agent_version=WORKER_AGENT_VERSION, epoch=11),
+        deep=True,
     )
 
     assert calls == [
@@ -412,10 +426,10 @@ async def test_online_worker_uses_inspect_runtime_even_when_channel_is_ssh(monke
                 "expected_mcp": ["nexus-library"],
                 "expected_model": "nexus-gateway/route-1",
                 "expected_opencode_version": "1.18.33",
+                "deep": True,
             },
         )
     ]
-    assert all(name == "inspect_runtime" for name, _data in calls)
     assert observation["source"] == "worker"
     assert observation["observed_epoch"] == 11
     assert observation["worker_agent_version"] == WORKER_AGENT_VERSION
@@ -423,29 +437,8 @@ async def test_online_worker_uses_inspect_runtime_even_when_channel_is_ssh(monke
 
 
 @pytest.mark.asyncio
-async def test_offline_ssh_probe_is_read_only_and_redacts_canary(monkeypatch):
+async def test_offline_worker_probe_never_opens_ssh():
     desired = _desired()
-    commands: list[str] = []
-    inspection = _observation(desired)
-    inspection["model"]["status"] = "unhealthy"
-    inspection["model"]["error"] = f"模型网关认证失败 Bearer {CANARY}"
-
-    class FakeSession:
-        async def run_command(self, command):
-            commands.append(command)
-            return 0, json.dumps(inspection, ensure_ascii=False), ""
-
-        async def close(self):
-            return None
-
-    class FakeRuntime:
-        def __init__(self, settings):
-            self.settings = settings
-
-        async def open_session(self, environment):
-            return FakeSession()
-
-    monkeypatch.setattr("app.runtime.worker_health.ExecutionEnvironmentRuntime", FakeRuntime)
     environment = SimpleNamespace(
         runtime_engine="opencode",
         id=9,
@@ -455,69 +448,15 @@ async def test_offline_ssh_probe_is_read_only_and_redacts_canary(monkeypatch):
         workspace_root="/srv/project",
     )
 
-    observation = await probe_equipment(
+    observation = await probe_online_worker(
         environment,
         desired,
         _settings(Path("/tmp")),
-        worker_instance=SimpleNamespace(status="offline", agent_version="1.4.4", epoch=2),
-        observed_epoch=4,
-        perenv_python="/opt/nexus/workers/9/venv/bin/python",
+        worker_instance=SimpleNamespace(status="offline", agent_version="1.4.5", epoch=2),
     )
 
-    command = commands[0]
-    assert "/opt/nexus/workers/9/venv/bin/python" in command
-    assert "/etc/nexus/worker-9.env" in command
-    assert "from app.worker_agent.inspection import inspect_runtime" in command
-    assert "expected_model" in command
-    assert "ASTRA_WORKER" not in command
-    assert "NEXUS_WORKER_OPENCODE_URL" in command
-    assert "NEXUS_WORKER_WORKSPACE_ROOT" in command
-    for forbidden in ("pip install", "systemctl", " restart", "git clone", "rm -rf"):
-        assert forbidden not in command
-    assert CANARY not in command
-    assert CANARY not in json.dumps(observation, ensure_ascii=False)
-    assert observation["source"] == "ssh"
-    assert observation["observed_epoch"] == 4
+    assert "离线" in str(observation["error"])
     assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
-
-
-@pytest.mark.asyncio
-async def test_missing_per_environment_artifact_is_explicitly_not_deployed(monkeypatch):
-    class FakeSession:
-        async def run_command(self, _command):
-            return 127, "", "python: no such file"
-
-        async def close(self):
-            return None
-
-    class FakeRuntime:
-        def __init__(self, settings):
-            self.settings = settings
-
-        async def open_session(self, environment):
-            return FakeSession()
-
-    monkeypatch.setattr("app.runtime.worker_health.ExecutionEnvironmentRuntime", FakeRuntime)
-    environment = SimpleNamespace(
-        runtime_engine="opencode",
-        id=3,
-        host="worker.test",
-        username="root",
-        ssh_password="ssh-secret",
-        workspace_root="/srv/project",
-    )
-
-    observation = await probe_equipment(
-        environment,
-        _desired(),
-        _settings(Path("/tmp")),
-        worker_instance=SimpleNamespace(status="offline", agent_version=None, epoch=1),
-        observed_epoch=1,
-    )
-
-    assert "未部署" in observation["error"]
-    assert observation["source"] == "ssh"
-    assert health_status(observation) == EnvironmentStatus.UNAVAILABLE
 
 
 def test_dirty_git_only_blocks_updates_not_runtime_health():
@@ -525,12 +464,11 @@ def test_dirty_git_only_blocks_updates_not_runtime_health():
     observation = _observation(desired)
     observation["repository"]["dirty"] = True
 
-    rows = {item["key"]: item for item in equipment_rows(desired, observation, _snapshot(desired))}
+    rows = {item["key"]: item for item in equipment_rows(desired, observation)}
     row = rows["git"]
 
     assert row["verified"] is True
     assert row["error"] is None
-    assert any("仅阻止更新" in item for item in row["diff"])
     assert health_status(observation, desired) == EnvironmentStatus.AVAILABLE
     assert repository_payload(desired, observation)["dirty"] is True
 
@@ -560,33 +498,35 @@ def test_repository_payload_sanitizes_url_and_redacts_errors():
         ("branch", "release", "分支"),
     ],
 )
-def test_raw_healthy_but_wrong_git_identity_is_unavailable(field, value, fragment):
+def test_wrong_git_identity_marks_drifted(field, value, fragment):
     desired = _desired()
     observation = _observation(desired)
     observation["repository"][field] = value
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation, _snapshot(desired))}[
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}[
         "git"
     ]
 
     assert row["verified"] is False
+    assert row["state"] == "drifted"
     assert any(fragment in item for item in row["diff"])
-    assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
+    assert health_status(observation, desired) == EnvironmentStatus.DRIFTED
 
 
-def test_same_skill_name_with_old_content_is_not_verified():
+def test_same_skill_name_with_old_content_marks_drifted():
     desired = _desired()
     desired["skills"]["items"][0]["content_hash"] = "new-content-hash"
     observation = _observation(desired)
     observation["skills"]["content_hashes"]["review"] = "old-content-hash"
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation, _snapshot(desired))}[
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}[
         "skills"
     ]
 
     assert row["verified"] is False
-    assert any("内容不一致" in item for item in row["diff"])
-    assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
+    assert row["state"] == "drifted"
+    assert any("内容待同步" in item for item in row["diff"])
+    assert health_status(observation, desired) == EnvironmentStatus.DRIFTED
 
 
 def test_managed_skill_revision_ignores_unmanaged_extra_skills():
@@ -597,9 +537,8 @@ def test_managed_skill_revision_ignores_unmanaged_extra_skills():
     desired["skills"]["content_revision"] = expected
     observation = _observation(desired)
     observation["skills"]["content_hashes"]["extra-unmanaged"] = "extra-hash-v1"
-    snapshot = _snapshot(desired)
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation, snapshot)}[
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}[
         "skills"
     ]
 
@@ -611,7 +550,7 @@ def test_managed_skill_revision_ignores_unmanaged_extra_skills():
     observation["skills"]["content_hashes"]["extra-unmanaged"] = "extra-hash-v2"
     unchanged = {
         item["key"]: item
-        for item in equipment_rows(desired, observation, snapshot)
+        for item in equipment_rows(desired, observation)
     }["skills"]
     assert unchanged["actual_revision"] == expected
     assert unchanged["verified"] is True
@@ -619,94 +558,39 @@ def test_managed_skill_revision_ignores_unmanaged_extra_skills():
     observation["skills"]["content_hashes"]["review"] = "skill-hash-drifted"
     drifted = {
         item["key"]: item
-        for item in equipment_rows(desired, observation, snapshot)
+        for item in equipment_rows(desired, observation)
     }["skills"]
     assert drifted["actual_revision"] != expected
     assert drifted["verified"] is False
 
-    observation["skills"]["content_hashes"].pop("review")
-    unknown = {
-        item["key"]: item
-        for item in equipment_rows(desired, observation, snapshot)
-    }["skills"]
-    assert unknown["actual_revision"] is None
 
-
-def test_skill_actual_revision_uses_observed_semantic_content_hashes():
-    desired = _desired()
-    observation = _observation(desired)
-    snapshot = _snapshot(desired)
-
-    row = {item["key"]: item for item in equipment_rows(desired, observation, snapshot)}["skills"]
-
-    assert row["desired_revision"] == "skill-content-revision"
-    assert row["actual_revision"] is not None
-    assert row["actual_revision"] != "skill-revision"
-    baseline = row["actual_revision"]
-
-    observation["skills"]["content_hashes"]["review"] = "drifted-content-hash"
-    drifted = {
-        item["key"]: item
-        for item in equipment_rows(desired, observation, snapshot)
-    }["skills"]
-    assert drifted["actual_revision"] != baseline
-    assert drifted["verified"] is False
-    assert any("内容不一致" in item for item in drifted["diff"])
-
-    observation["skills"]["content_hashes"] = None
-    unknown = {
-        item["key"]: item
-        for item in equipment_rows(desired, observation, snapshot)
-    }["skills"]
-    assert unknown["actual_revision"] is None
-    assert unknown["verified"] is None
-
-
-def test_same_mcp_name_with_wrong_url_is_not_verified():
+def test_same_mcp_name_with_wrong_url_marks_drifted():
     desired = _desired()
     observation = _observation(desired)
     observation["mcp"]["endpoints"]["nexus-library"] = "https://wrong.example.test/mcp"
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation, _snapshot(desired))}[
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}[
         "mcp"
     ]
 
     assert row["verified"] is False
-    assert any("URL 不一致" in item for item in row["diff"])
-    assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
+    assert row["state"] == "drifted"
+    assert any("地址待同步" in item for item in row["diff"])
+    assert health_status(observation, desired) == EnvironmentStatus.DRIFTED
 
 
-def test_unreadable_config_and_skill_content_are_unknown_not_verified():
-    desired = _desired()
-    observation = _observation(desired)
-    observation["mcp"]["endpoints"] = None
-    observation["skills"]["content_hashes"] = None
-    observation["skills"]["discovered"] = ["review"]
-
-    rows = {item["key"]: item for item in equipment_rows(desired, observation, _snapshot(desired))}
-
-    assert rows["mcp"]["verified"] is None
-    assert any("/config" in item for item in rows["mcp"]["diff"])
-    assert rows["skills"]["verified"] is None
-    assert any("内容未知" in item for item in rows["skills"]["diff"])
-    assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE
-
-
-def test_private_credential_change_does_not_reuse_previous_auth_verification():
+def test_private_credential_change_marks_drifted_until_deployed():
     desired = _desired()
     desired["repository"]["authentication"] = "token"
     desired["repository"]["credential_revision"] = "new-credential"
-    snapshot = _snapshot(desired)
-    snapshot["repository"]["credential_revision"] = "old-credential"
-    snapshot["repository"]["authentication_verified"] = True
     observation = _observation(desired)
+    observation["repository"]["credential_revision"] = "old-credential"
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation, snapshot)}["git"]
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}["git"]
 
-    assert row["verified"] is None
-    assert row["deployed"] is False
-    assert any("认证未单独探测" in item for item in row["diff"])
-    assert any("配置 revision" in item for item in row["diff"])
+    assert row["verified"] is False
+    assert row["state"] == "drifted"
+    assert health_status(observation, desired) == EnvironmentStatus.DRIFTED
 
 
 def test_unbound_repository_is_explicitly_unconfigured():
@@ -714,11 +598,9 @@ def test_unbound_repository_is_explicitly_unconfigured():
     desired["repository"] = None
     observation = _observation()
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation, None)}["git"]
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}["git"]
 
     assert row["configured"] is False
     assert row["deployed"] is False
     assert row["verified"] is None
     assert row["error"] == "未绑定 Git 仓库"
-    assert any("不能调度" in item for item in row["diff"])
-    assert health_status(observation, desired) == EnvironmentStatus.UNAVAILABLE

@@ -12,7 +12,6 @@ EMPLOYEE_LABELS = {
 def project_channel_health(
     *,
     mode: str | None,
-    worker_channel: str | None,
     environment_status: str | None,
     worker_status: str | None,
     repository_id: str | None,
@@ -27,15 +26,15 @@ def project_channel_health(
     This reads stored facts and does not change Task status.
     """
 
-    remote_worker = mode == "LINUX_REMOTE" and worker_channel == "worker"
+    remote_worker = mode == "LINUX_REMOTE"
     worker_online = worker_status == "online"
     if remote_worker and not worker_online:
         availability = "offline"
         opencode_reachable = False
     else:
         availability = environment_status or "UNKNOWN"
-        opencode_reachable = availability == "AVAILABLE"
-    if "UNAVAILABLE" in runtime_connections and availability == "AVAILABLE":
+        opencode_reachable = availability in {"AVAILABLE", "DRIFTED"}
+    if "UNAVAILABLE" in runtime_connections and availability in {"AVAILABLE", "DRIFTED"}:
         availability = "UNAVAILABLE"
         opencode_reachable = False
     return {

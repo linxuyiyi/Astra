@@ -23,7 +23,7 @@ class RuntimeRead(ORMModel):
 
 
 class ExecutionEnvironmentWrite(BaseModel):
-    runtime_engine: Literal["opencode", "dsh"] = "opencode"
+    runtime_engine: Literal["opencode"] = "opencode"
     mode: ExecutionMode = ExecutionMode.LOCAL
     name: str = "本地 Agent 工作环境"
     description: str = ""
@@ -43,11 +43,6 @@ class ExecutionEnvironmentWrite(BaseModel):
 
     @model_validator(mode="after")
     def validate_remote(self):
-        if self.runtime_engine == "dsh":
-            if self.mode != ExecutionMode.LINUX_REMOTE:
-                raise ValueError("DSH 只通过远程 Worker 执行")
-            if not self.model_name or not self.model_name.strip():
-                raise ValueError("DSH 必须显式选择已登记的 Gateway 模型别名")
         if self.mode is ExecutionMode.LINUX_REMOTE:
             missing = [
                 label
@@ -212,6 +207,7 @@ class EmployeeRead(RuntimeRead):
     created_at: datetime
     updated_at: datetime
     execution_environment: ExecutionEnvironmentRead | None = None
+    worker_health: dict[str, Any] | None = None
     channel_health: ChannelHealth = Field(
         default_factory=lambda: ChannelHealth(
             worker_online=True,

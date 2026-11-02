@@ -8,11 +8,11 @@ from urllib.parse import urlsplit
 PYTHON_VERSION = "3.11.17"
 PYTHON_SHA256 = "bfb74ad39efae27cda510f134ab408e00f9992c56851cfc0b1cdb5646da11599"
 DEFAULT_PYTHON_SOURCE = (
-    f"https://mirrors.tools.huawei.com/python/{PYTHON_VERSION}/Python-{PYTHON_VERSION}.tar.xz"
+    f"https://mirrors.huaweicloud.com/python/{PYTHON_VERSION}/Python-{PYTHON_VERSION}.tar.xz"
 )
-DEFAULT_NODE_BASE = "https://mirrors.tools.huawei.com/nodejs"
-DEFAULT_NPM_REGISTRY = "https://mirrors.tools.huawei.com/npm/"
-DEFAULT_PIP_INDEX = "https://mirrors.tools.huawei.com/pypi/simple"
+DEFAULT_NODE_BASE = "https://mirrors.huaweicloud.com/nodejs"
+DEFAULT_NPM_REGISTRY = "https://mirrors.huaweicloud.com/repository/npm/"
+DEFAULT_PIP_INDEX = "https://mirrors.huaweicloud.com/repository/pypi/simple"
 _VERSION = re.compile(r"^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$")
 
 

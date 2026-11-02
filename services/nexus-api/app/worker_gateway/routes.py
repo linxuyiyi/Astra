@@ -80,6 +80,8 @@ def _instance_body(instance: WorkerInstance) -> dict[str, Any]:
         "status": instance.status,
         "epoch": instance.epoch,
         "agent_version": instance.agent_version,
+        "target_digest": instance.target_digest,
+        "observed_at": instance.observed_at,
         "last_heartbeat_at": instance.last_heartbeat_at,
         "connected_at": instance.connected_at,
     }
@@ -133,18 +135,6 @@ async def enroll_instance(
     }
 
 
-@router.post("/environments/{environment_id}/channel")
-async def switch_environment_channel(
-    environment_id: int,
-    session: AsyncSession = Depends(get_session),
-    _: None = Depends(require_admin),
-) -> dict[str, Any]:
-    from app.runtime.worker_channel import mark_worker_channel
-
-    environment = await mark_worker_channel(session, environment_id)
-    return {"environment_id": environment.id, "worker_channel": environment.worker_channel}
-
-
 @router.get("/instances/{worker_instance_id}")
 async def get_instance(
     worker_instance_id: str,
@@ -164,7 +154,7 @@ async def create_command(
     session: AsyncSession = Depends(get_session),
     _: None = Depends(require_admin),
 ) -> dict[str, Any]:
-    if body.name in {"switch_channel", "restart_opencode"}:
+    if body.name in {"restart_opencode", "update_workspace"}:
         raise HTTPException(
             status_code=403,
             detail={"code": "maintenance_command", "message": "维护指令只能通过维护入口下发"},

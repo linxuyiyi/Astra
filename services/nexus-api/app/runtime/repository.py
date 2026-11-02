@@ -10,7 +10,6 @@ import stat
 import subprocess
 import tempfile
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -22,7 +21,6 @@ from app.config.settings import get_settings
 from app.domain import EmployeeStatus, EnvironmentStatus
 from app.gateway.security import CredentialCipher
 from app.models import AgentWorker, CodeRepository, GitCredential, OpenCodeExecutionEnvironment, Task
-from app.runtime.capability import binding_entries, stamp_desired
 
 Runner = Callable[[list[str], dict[str, str]], tuple[int, str, str]]
 
@@ -258,8 +256,6 @@ async def copy_worker(
     session.add(employee)
     await session.flush()
     chosen_port = port if port is not None else await free_opencode_port(session, environment.host)
-    entries = binding_entries(environment.skill_refs, environment.mcp_refs)
-    detail = stamp_desired({}, entries, checked_at=datetime.now(UTC).isoformat()) if entries else {}
     session.add(
         OpenCodeExecutionEnvironment(
             employee_id=employee.id,
@@ -279,9 +275,8 @@ async def copy_worker(
             skill_refs=list(environment.skill_refs or []),
             mcp_refs=[dict(item) for item in environment.mcp_refs or [] if isinstance(item, dict)],
             labels=list(environment.labels or []),
-            worker_channel=environment.worker_channel,
             status=EnvironmentStatus.UNKNOWN,
-            status_detail=detail,
+            status_detail={},
         )
     )
     await session.commit()

@@ -19,7 +19,6 @@ from urllib.parse import urlsplit
 import httpx
 
 from app.worker_agent import __version__
-from app.worker_agent.dsh_acp.commands import COMMANDS as DSH_COMMANDS
 from app.worker_agent.files import (
     FILE_COMMAND_LIMIT,
     FILE_COMMANDS,
@@ -45,10 +44,9 @@ CONTROL_COMMANDS = {
     "inspect_runtime",
     "status",
     "restart_opencode",
-    "switch_channel",
+    "update_workspace",
     "read_review_trace",
 }
-CONTROL_COMMANDS |= DSH_COMMANDS
 INSPECTION_COMMANDS = {"inspect_runtime", "status"}
 
 
@@ -78,6 +76,7 @@ class AgentConfig:
     command_dedupe_ttl_seconds: float = 600
     opencode_url: str = "http://127.0.0.1:14096"
     workspace_root: str = ""
+    report_interval_seconds: float = 0.0
 
 
 @dataclass(slots=True)
@@ -204,33 +203,43 @@ def handle_command(
             ), None
         except RuntimeError as exc:
             return None, str(exc)
-    if name == "switch_channel":
-        from app.worker_agent.channel_switch import apply_channel_switch
-
-        error = _binding_error(data, workspace_root, opencode_url)
-        if error is not None:
-            return None, error
-        port = int(data["port"])
-        try:
-            return apply_channel_switch(
-                workspace=str(data.get("workspace") or ""), port=port, gate=gate
-            ), None
-        except (RuntimeError, OSError, ValueError) as exc:
-            return None, str(exc)
     if name == "restart_opencode":
-        from app.worker_agent.channel_switch import restart_local_opencode
+        from app.worker_agent.inspection import inspect_runtime
+
+        error = _binding_error(data, workspace_root, opencode_url)
+        if error is not None:
+            return None, error
+        try:
+            supervisor.restart_from_thread(gate=gate)
+            snapshot = inspect_runtime(
+                opencode_url, workspace_root, last_error=supervisor.last_error
+            )
+        except (RuntimeError, OSError, ValueError, TimeoutError) as exc:
+            return None, str(exc)
+        return {"restarted": True, "snapshot": snapshot}, None
+    if name == "update_workspace":
+        from app.worker_agent.inspection import inspect_runtime
+        from app.worker_agent.supervisor import assert_native_idle
+        from app.worker_agent.workspace import update_workspace_local
 
         error = _binding_error(data, workspace_root, opencode_url)
         if error is not None:
             return None, error
         port = int(data["port"])
         try:
-            restart_local_opencode(
-                str(data.get("workspace") or ""), port, gate=gate
+            assert_native_idle(workspace_root, port, gate=gate)
+            updated = update_workspace_local(
+                workspace_root,
+                branch=str(data.get("branch") or ""),
+                gate=gate,
+            )
+            snapshot = inspect_runtime(
+                opencode_url, workspace_root, last_error=supervisor.last_error
             )
         except (RuntimeError, OSError, ValueError) as exc:
             return None, str(exc)
-        return {"restarted": True}, None
+        supervisor.notify_state_change()
+        return {**updated, "snapshot": snapshot}, None
     if name == "read_review_trace":
         from app.worker_agent.trace_read import read_trace_from_payload
 
@@ -246,7 +255,12 @@ def handle_command(
         from app.worker_agent.inspection import inspect_runtime_from_payload
 
         try:
-            result = inspect_runtime_from_payload(opencode_url, workspace_root, data)
+            result = inspect_runtime_from_payload(
+                opencode_url,
+                workspace_root,
+                data,
+                last_error=supervisor.last_error,
+            )
         except ValueError:
             return None, "invalid_data"
         return result, None
@@ -257,6 +271,7 @@ def handle_command(
             **status_summary(opencode_url),
             "restart_on_disconnect": False,
             "restarts": supervisor.restart_count,
+            "last_error": supervisor.last_error,
         }, None
     return None, "unsupported_command"
 
@@ -267,12 +282,14 @@ class WorkerConnectionManager:
         config: AgentConfig,
         *,
         supervisor: RuntimeSupervisor | None = None,
+        snapshot_provider: Callable[[], dict[str, Any]] | None = None,
         rng: random.Random | None = None,
         sleep: Callable[[float], Awaitable[None]] | None = None,
         clock: Callable[[], float] | None = None,
     ) -> None:
         self.config = config
         self.supervisor = supervisor or RuntimeSupervisor()
+        self.snapshot_provider = snapshot_provider
         self.rng = rng or random.Random()
         self.sleep = sleep or asyncio.sleep
         self.clock = clock or time.time
@@ -291,11 +308,46 @@ class WorkerConnectionManager:
         self.paused_directories: set[str] = set()
         self.stopped_directories: set[str] = set()
         self.resume_waiters: dict[str, asyncio.Event] = {}
+        self._state_changed: asyncio.Event | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
         self.fetch_body = None
         self.fetch_upload = None
         self.local_request = None
         self.upload_body = None
-        self.runtime_driver = None
+        if getattr(self.supervisor, "_on_state_change", None) is None and hasattr(
+            self.supervisor, "set_state_change_callback"
+        ):
+            self.supervisor.set_state_change_callback(self.notify_state_change)
+
+    def notify_state_change(self) -> None:
+        event = self._state_changed
+        loop = self._loop
+        if event is None or loop is None:
+            return
+        if loop.is_running():
+            loop.call_soon_threadsafe(event.set)
+        else:
+            event.set()
+
+    def _reporting_enabled(self) -> bool:
+        return (
+            self.snapshot_provider is not None
+            or bool(getattr(self.supervisor, "enabled", False))
+            or self.config.report_interval_seconds > 0
+        )
+
+    async def _collect_snapshot(self) -> dict[str, Any]:
+        async with self.inspection_slots:
+            if self.snapshot_provider is not None:
+                return await asyncio.to_thread(self.snapshot_provider)
+            from app.worker_agent.inspection import inspect_runtime
+
+            return await asyncio.to_thread(
+                inspect_runtime,
+                self.config.opencode_url,
+                self.config.workspace_root,
+                last_error=getattr(self.supervisor, "last_error", None),
+            )
 
     async def run(self, connect: Connect, stop: asyncio.Event, *, max_sessions: int | None = None) -> None:
         attempt = 1
@@ -324,20 +376,32 @@ class WorkerConnectionManager:
     async def run_session(self, transport: FrameTransport) -> None:
         config = self.config
         heartbeat: asyncio.Task[None] | None = None
+        reporter: asyncio.Task[None] | None = None
         heartbeat_stop = asyncio.Event()
+        self._loop = asyncio.get_running_loop()
+        self._state_changed = asyncio.Event()
         self.closed = threading.Event()
         try:
+            initial_snapshot: dict[str, Any] | None = None
+            if self._reporting_enabled():
+                try:
+                    initial_snapshot = await self._collect_snapshot()
+                except Exception:
+                    initial_snapshot = None
+            auth_payload: dict[str, Any] = {
+                "name": "authenticate",
+                "token": config.token,
+                "agent_version": config.agent_version,
+            }
+            if initial_snapshot is not None:
+                auth_payload["snapshot"] = initial_snapshot
             auth = envelope(
                 request_id=f"auth-{config.worker_instance_id}",
                 worker_instance_id=config.worker_instance_id,
                 environment_id=config.environment_id,
                 session_id=None,
                 message_type="command",
-                payload={
-                    "name": "authenticate",
-                    "token": config.token,
-                    "agent_version": config.agent_version,
-                },
+                payload=auth_payload,
             )
             try:
                 await asyncio.wait_for(transport.send(auth.to_dict()), config.auth_timeout_seconds)
@@ -347,8 +411,6 @@ class WorkerConnectionManager:
             if reply.type != "response" or not reply.payload.get("ok"):
                 raise WorkerTransportError(str(reply.payload.get("error_code") or "auth_failed"))
             epoch = int(reply.payload["epoch"])
-            if self.runtime_driver:
-                self.runtime_driver.connected = True
             self.epoch = epoch
             self.epochs.append(epoch)
             self.event_seq.clear()
@@ -358,6 +420,15 @@ class WorkerConnectionManager:
             heartbeat = asyncio.create_task(
                 self._heartbeat(transport, ping_seconds, ping_timeout, monitor, heartbeat_stop)
             )
+            if self._reporting_enabled():
+                reporter = asyncio.create_task(
+                    self._report_loop(
+                        transport,
+                        epoch,
+                        heartbeat_stop,
+                        initial_snapshot=initial_snapshot,
+                    )
+                )
             while True:
                 incoming = await self._next_message(transport, heartbeat)
                 if incoming.type == "heartbeat":
@@ -392,8 +463,6 @@ class WorkerConnectionManager:
                 await self._handle_command(transport, incoming, epoch)
         finally:
             self.closed.set()
-            if self.runtime_driver:
-                self.runtime_driver.connection_lost()
             for task in list(self.http_tasks.values()):
                 task.cancel()
             for task in list(self.event_tasks.values()):
@@ -412,6 +481,9 @@ class WorkerConnectionManager:
                 await asyncio.gather(*pending, return_exceptions=True)
             self.control_tasks.clear()
             heartbeat_stop.set()
+            if reporter is not None:
+                reporter.cancel()
+                await asyncio.gather(reporter, return_exceptions=True)
             if heartbeat is not None:
                 heartbeat.cancel()
                 await asyncio.gather(heartbeat, return_exceptions=True)
@@ -543,30 +615,7 @@ class WorkerConnectionManager:
             if closed.is_set() or self.epoch != epoch:
                 self.ledger.finish(incoming.request_id, None, "epoch_conflict", self.clock())
                 return
-            if name in DSH_COMMANDS:
-                if self.runtime_driver is None:
-                    raise RuntimeError("此 Worker 未显式启用 DSH")
-                data = dict(incoming.payload.get("data") or {})
-                if name == "dsh_submit":
-                    if not self.fetch_body:
-                        raise RuntimeError("DSH 待受理正文通道不可用")
-                    body = await self.fetch_body(incoming.request_id, epoch)
-                    data["text"] = body.get("body")
-                    if (not isinstance(data["text"], str) or hashlib.sha256(data["text"].encode()).hexdigest()
-                            != data.get("text_sha256")):
-                        raise RuntimeError("DSH 待受理正文校验失败")
-                result = await self.runtime_driver.handle(name, data, gate)
-                error_code = None
-                if name in {"dsh_snapshot", "dsh_trace"}:
-                    if self.upload_body is None:
-                        raise RuntimeError("Worker 响应数据通道不可用")
-                    await self.upload_body(incoming.request_id, epoch, {
-                        "status": 200, "body": json.dumps(result, ensure_ascii=False),
-                        "headers": {}, "content_type": "application/json",
-                    })
-                    self.ledger.finish(incoming.request_id, {}, None, self.clock())
-                    return
-            elif name in INSPECTION_COMMANDS:
+            if name in INSPECTION_COMMANDS:
                 async with self.inspection_slots:
                     result, error_code = await asyncio.to_thread(
                         handle_command,
@@ -598,6 +647,9 @@ class WorkerConnectionManager:
         except (ConnectionError, OSError):
             return
         except Exception as exc:
+            if closed.is_set() or self.epoch != epoch:
+                self.ledger.finish(incoming.request_id, None, "epoch_conflict", self.clock())
+                return
             self.ledger.finish(incoming.request_id, None, "io", self.clock(), error=str(exc))
             try:
                 await transport.send(
@@ -871,6 +923,74 @@ class WorkerConnectionManager:
         message.expires_at = int(self.clock()) + int(self.config.ping_timeout_seconds) + 1
         return message
 
+    def _agent_report(self, request_id: str, epoch: int, snapshot: dict[str, Any]) -> WorkerMessage:
+        message = envelope(
+            request_id=request_id,
+            worker_instance_id=self.config.worker_instance_id,
+            environment_id=self.config.environment_id,
+            session_id=None,
+            message_type="heartbeat",
+            payload={"kind": "report", "snapshot": snapshot},
+        )
+        message.epoch = epoch
+        message.expires_at = int(self.clock()) + int(self.config.ping_timeout_seconds) + 10
+        return message
+
+    async def _report_loop(
+        self,
+        transport: FrameTransport,
+        epoch: int,
+        stop: asyncio.Event,
+        *,
+        initial_snapshot: dict[str, Any] | None = None,
+    ) -> None:
+        interval = (
+            self.config.report_interval_seconds
+            if self.config.report_interval_seconds > 0
+            else 15.0
+        )
+        force_refresh = max(60.0, interval * 4.0)
+        last_digest = _snapshot_digest(initial_snapshot) if initial_snapshot else ""
+        last_sent_at = self.clock() if initial_snapshot else 0.0
+        count = 0
+        state_event = self._state_changed or asyncio.Event()
+        while not stop.is_set() and self.epoch == epoch:
+            stop_task = asyncio.create_task(stop.wait())
+            wake_task = asyncio.create_task(state_event.wait())
+            try:
+                await asyncio.wait(
+                    {stop_task, wake_task},
+                    timeout=max(interval, 0.05),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            finally:
+                for task in (stop_task, wake_task):
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(stop_task, wake_task, return_exceptions=True)
+            if stop.is_set() or self.epoch != epoch:
+                return
+            state_event.clear()
+            try:
+                snapshot = await self._collect_snapshot()
+            except Exception:
+                continue
+            if stop.is_set() or self.epoch != epoch:
+                return
+            digest = _snapshot_digest(snapshot)
+            now = self.clock()
+            if digest == last_digest and (now - last_sent_at) < force_refresh:
+                continue
+            count += 1
+            try:
+                await transport.send(
+                    self._agent_report(f"rpt-{epoch}-{count}", epoch, snapshot).to_dict()
+                )
+                last_digest = digest
+                last_sent_at = now
+            except (ConnectionError, OSError):
+                return
+
     def _heartbeat_reply(self, incoming: WorkerMessage, kind: str) -> WorkerMessage:
         message = envelope(
             request_id=incoming.request_id,
@@ -937,6 +1057,23 @@ def _message_fields(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _snapshot_digest(snapshot: dict[str, Any]) -> str:
+    comparable = {key: value for key, value in snapshot.items() if key != "checked_at"}
+    canonical = json.dumps(comparable, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _positive_float(raw: str | None, default: float) -> float:
+    text = (raw or "").strip()
+    if not text:
+        return default
+    try:
+        value = float(text)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
 def load_agent_config(environ: dict[str, str]) -> AgentConfig:
     token = environ.get("NEXUS_WORKER_TOKEN", "").strip()
     if not token:
@@ -954,6 +1091,9 @@ def load_agent_config(environ: dict[str, str]) -> AgentConfig:
         agent_version=__version__,
         opencode_url=environ.get("NEXUS_WORKER_OPENCODE_URL", "http://127.0.0.1:14096"),
         workspace_root=environ.get("NEXUS_WORKER_WORKSPACE_ROOT", "").strip(),
+        report_interval_seconds=_positive_float(
+            environ.get("NEXUS_WORKER_REPORT_SECONDS"), 15.0
+        ),
     )
 
 

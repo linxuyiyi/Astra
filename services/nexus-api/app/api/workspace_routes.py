@@ -593,8 +593,6 @@ def workspace_ui_for(snapshot: dict | None) -> tuple[str, str | None, str | None
     Missing or unreadable versions stay unknown. A recorded version is never
     replaced with the current release; a retired bundle is reported as such.
     """
-    if (snapshot or {}).get("runtime_engine") == "dsh":
-        return "", None, None
     raw = (snapshot or {}).get("opencode_version")
     if raw is None or not str(raw).strip():
         return "unknown", None, RETIRED_WORKSPACE_UI
@@ -607,22 +605,25 @@ def workspace_ui_for(snapshot: dict | None) -> tuple[str, str | None, str | None
 
 
 async def runtime_worker_online(session, snapshot: dict | None) -> bool | None:
-    """Worker 通道上的在线事实。非 Worker 通道不在这里判断。"""
+    """Worker 通道上的在线事实。非远程已登记节点不在这里判断。"""
 
     if not isinstance(snapshot, dict):
         return None
     environment_id = snapshot.get("environment_id")
     if environment_id is None:
         return None
+    from app.domain import ExecutionMode
     from app.models import OpenCodeExecutionEnvironment, WorkerInstance
 
     stored = await session.get(OpenCodeExecutionEnvironment, environment_id)
-    if stored is None or stored.worker_channel != "worker":
+    if stored is None or stored.mode != ExecutionMode.LINUX_REMOTE:
         return None
     instance = await session.scalar(
         select(WorkerInstance).where(WorkerInstance.environment_id == stored.id)
     )
-    return bool(instance is not None and instance.status == "online")
+    if instance is None:
+        return None
+    return bool(instance.status == "online")
 
 
 def error_response(exc):
@@ -900,8 +901,6 @@ async def native_proxy(
     binding = await session.get(RuntimeSession, session_id)
     if not binding or binding.task_id != task.id:
         raise HTTPException(404, "Session 不属于此任务")
-    if binding.runtime_engine != "opencode":
-        raise HTTPException(409, "此 Session 使用 DSH，请使用通用工作台")
     # Environment and directory are bound in the DB, never selected by browser-supplied paths.
     from app.models import OpenCodeExecutionEnvironment
     from app.runtime.environment import environment_from_snapshot
@@ -910,7 +909,6 @@ async def native_proxy(
     stored = await session.get(OpenCodeExecutionEnvironment, binding.environment["environment_id"])
     if stored:
         environment.ssh_password = stored.ssh_password
-        environment.worker_channel = stored.worker_channel
     workspace = binding.workspace
     # Release the read transaction before path validation, SSH/OpenCode startup,
     # SSE or upstream HTTP. Native Workspace requests can be long-lived.

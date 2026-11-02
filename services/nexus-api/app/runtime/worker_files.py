@@ -12,9 +12,11 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import SessionLocal
-from app.models import OpenCodeExecutionEnvironment
+from app.domain import ExecutionMode
+from app.models import WorkerInstance
 from app.runtime.worker_client import WorkerCommandError, WorkerOpenCodeClient
 from app.worker_gateway.data_channel import DataChannel, request_key
 
@@ -36,21 +38,27 @@ class WorkerFileError(ValueError):
         super().__init__(message)
 
 
-async def environment_uses_worker(environment) -> bool:
-    """Live rows already carry the mark. Snapshots do not, so re-read that column only."""
+async def environment_enrolled_in_gateway(
+    session: AsyncSession, environment_id: int | None
+) -> bool:
+    if not isinstance(environment_id, int):
+        return False
+    worker_id = await session.scalar(
+        select(WorkerInstance.id).where(WorkerInstance.environment_id == environment_id)
+    )
+    return worker_id is not None
 
-    if getattr(environment, "worker_channel", None) == "worker":
-        return True
+
+async def environment_uses_worker(environment) -> bool:
+    """远程环境只要已完成网关登记，即统一走 Worker Gateway 通道。"""
+
+    if str(getattr(environment, "mode", "")) != ExecutionMode.LINUX_REMOTE.value:
+        return False
     environment_id = getattr(environment, "id", None)
     if not isinstance(environment_id, int):
         return False
     async with SessionLocal() as session:
-        channel = await session.scalar(
-            select(OpenCodeExecutionEnvironment.worker_channel).where(
-                OpenCodeExecutionEnvironment.id == environment_id
-            )
-        )
-    return channel == "worker"
+        return await environment_enrolled_in_gateway(session, environment_id)
 
 
 def git_command_payload(args: tuple[str, ...]) -> dict[str, Any]:
@@ -158,9 +166,6 @@ async def worker_upload(environment, workspace: str, filename: str, content: byt
 
 
 def _client(environment):
-    if getattr(environment, "runtime_engine", "opencode") == "dsh":
-        from app.runtime.worker_transport import WorkerCommandTransport
-        return WorkerCommandTransport(environment_id=environment.id)
     return WorkerOpenCodeClient(environment_id=environment.id)
 
 

@@ -14,6 +14,7 @@ import {
   type MaintenanceOperation,
   type WorkerHealth,
 } from '@/api/maintenance'
+import { api } from '@/api/client'
 import { isMaintenanceActive, maintenanceCopy } from '@/features/workers/presentation'
 
 export type MaintenanceStreamState = 'idle' | 'live' | 'reconnecting' | 'polling' | 'ended'
@@ -30,6 +31,7 @@ export function useWorkerMaintenance(environmentId: MaybeRefOrGetter<number | nu
   const loading = ref(false)
   const healthError = ref('')
   const actionError = ref('')
+  const enabledSaving = ref(false)
   const busyAction = ref<MaintenanceAction | 'cancel' | 'retry' | null>(null)
   const streamState = ref<MaintenanceStreamState>('idle')
   const streamNote = ref('')
@@ -189,7 +191,7 @@ export function useWorkerMaintenance(environmentId: MaybeRefOrGetter<number | nu
       events.value = mergeEvents([], detail.events ?? [])
       updateOperationRow(detail)
       if (isMaintenanceActive(detail.state)) startStream()
-      else setEndedNote(detail.state)
+      else setEndedNote()
     } catch (error) {
       if (disposed || generation !== selectionGeneration || signal.aborted) return
       actionError.value = maintenanceCopy(error instanceof Error ? error.message : '维护详情加载失败')
@@ -252,7 +254,7 @@ export function useWorkerMaintenance(environmentId: MaybeRefOrGetter<number | nu
       updateOperationRow(detail)
       if (!isMaintenanceActive(detail.state)) {
         stopStream()
-        setEndedNote(detail.state)
+        setEndedNote()
         await finishCurrent(operationId)
         return
       }
@@ -273,7 +275,7 @@ export function useWorkerMaintenance(environmentId: MaybeRefOrGetter<number | nu
       updateOperationRow(detail)
       if (!isMaintenanceActive(detail.state)) {
         stopStream()
-        setEndedNote(detail.state)
+        setEndedNote()
         await finishCurrent(operationId)
       }
     } catch {
@@ -317,7 +319,7 @@ export function useWorkerMaintenance(environmentId: MaybeRefOrGetter<number | nu
         updateOperationRow(detail)
         if (!isMaintenanceActive(detail.state)) {
           stopStream()
-          setEndedNote(detail.state)
+          setEndedNote()
           await finishCurrent(operationId)
         }
       } catch {
@@ -376,7 +378,7 @@ export function useWorkerMaintenance(environmentId: MaybeRefOrGetter<number | nu
       if (operationResult.status === 'fulfilled' && operationResult.value.items.length) {
         operations.value = operationResult.value.items
       }
-      setEndedNote(detail.state)
+      setEndedNote()
       notifyChanged()
     } catch {
       /* 终态已由事件确认，详情补齐失败不阻断页面 */
@@ -385,9 +387,9 @@ export function useWorkerMaintenance(environmentId: MaybeRefOrGetter<number | nu
     }
   }
 
-  function setEndedNote(state: string) {
+  function setEndedNote() {
     streamState.value = 'ended'
-    streamNote.value = state === 'INTERRUPTED' ? '维护执行已中断，需核对远端状态' : '操作已结束'
+    streamNote.value = '操作已结束'
   }
 
   function updateOperationRow(detail: MaintenanceOperation) {
@@ -444,7 +446,7 @@ export function useWorkerMaintenance(environmentId: MaybeRefOrGetter<number | nu
       updateOperationRow(updated)
       if (!isMaintenanceActive(updated.state)) {
         stopStream()
-        setEndedNote(updated.state)
+        setEndedNote()
         await finishCurrent(updated.id)
       } else {
         streamNote.value = '已请求取消，等待安全检查点'
@@ -483,6 +485,25 @@ export function useWorkerMaintenance(environmentId: MaybeRefOrGetter<number | nu
     }
   }
 
+  async function setEnabled(enabled: boolean) {
+    const current = health.value
+    if (!current || enabledSaving.value) return
+    enabledSaving.value = true
+    actionError.value = ''
+    try {
+      const updated = await api.updateEmployee(current.employee_id, { enabled })
+      if (disposed || currentEnvironment() !== current.environment_id) return
+      health.value = updated.worker_health
+      notifyChanged()
+    } catch (error) {
+      if (!disposed && currentEnvironment() === current.environment_id) {
+        actionError.value = maintenanceCopy(error instanceof Error ? error.message : '调度状态更新失败')
+      }
+    } finally {
+      enabledSaving.value = false
+    }
+  }
+
   function clearActionError() {
     actionError.value = ''
   }
@@ -512,6 +533,8 @@ export function useWorkerMaintenance(environmentId: MaybeRefOrGetter<number | nu
     healthError,
     actionError,
     busyAction,
+    enabledSaving,
+    setEnabled,
     streamState,
     streamNote,
     selectedOperationId,

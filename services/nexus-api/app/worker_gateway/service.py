@@ -31,7 +31,8 @@ from app.models import (
     WorkerInstance,
     utcnow,
 )
-from app.worker_agent.dsh_acp.commands import MUTATIONS as DSH_MUTATIONS
+from app.runtime.redaction import redact_data
+from app.runtime.worker_readiness import compute_target_digest
 from app.worker_gateway.bus import ConnectionQueues, build_route_bus
 from app.worker_gateway.data_channel import DataChannel, http_frame_data, side_effect_http
 from app.worker_gateway.heartbeat import HeartbeatMonitor
@@ -47,7 +48,7 @@ from app.worker_gateway.protocol import (
 )
 
 # 有副作用且结果未知时不能盲重发。阶段 1 没有 OpenCode 对账，投递成功后就停在原命令上。
-SIDE_EFFECT_COMMANDS = frozenset({"prompt", "upload_file"}) | DSH_MUTATIONS
+SIDE_EFFECT_COMMANDS = frozenset({"prompt", "upload_file"})
 
 logger = logging.getLogger(__name__)
 
@@ -131,17 +132,32 @@ class WorkerGateway:
         # appending after the row moves.
         self._db_epochs: dict[str, int] = {}
 
-    async def enroll(self, session: AsyncSession, environment_id: int) -> EnrollResult:
+    async def enroll(
+        self,
+        session: AsyncSession,
+        environment_id: int,
+        *,
+        target_digest: str | None = None,
+        reuse_token: bool = False,
+    ) -> EnrollResult:
         environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
         if environment is None:
             raise WorkerGatewayError("unknown_environment", "执行环境不存在")
-        token = f"wtk_{token_urlsafe(32)}"
-        digest = gateway_key_digest(token)
-        token_ciphertext = self._token_ciphertext(token)
+        resolved_digest = (
+            target_digest if target_digest is not None else compute_target_digest(environment)
+        )
         existing = await session.scalar(
             select(WorkerInstance).where(WorkerInstance.environment_id == environment_id)
         )
         now = utcnow()
+        if reuse_token and existing is not None and existing.target_digest == resolved_digest:
+            existing_token = self._decrypt_token(existing.token_ciphertext)
+            if existing_token and verify_gateway_key(existing_token, existing.token_digest):
+                return EnrollResult(existing.id, environment_id, existing_token, existing.epoch, False)
+
+        token = f"wtk_{token_urlsafe(32)}"
+        digest = gateway_key_digest(token)
+        token_ciphertext = self._token_ciphertext(token)
         if existing is None:
             instance = WorkerInstance(
                 id=f"wrk_{token_hex(16)}",
@@ -150,6 +166,7 @@ class WorkerGateway:
                 token_ciphertext=token_ciphertext,
                 status="offline",
                 epoch=0,
+                target_digest=resolved_digest,
             )
             session.add(instance)
             await session.commit()
@@ -167,6 +184,9 @@ class WorkerGateway:
                 token_ciphertext=token_ciphertext,
                 epoch=new_epoch,
                 status="offline",
+                target_digest=resolved_digest,
+                observed_snapshot=None,
+                observed_at=None,
                 updated_at=now,
             )
         )
@@ -189,6 +209,17 @@ class WorkerGateway:
             return None
         return cipher.encrypt(token)
 
+    def _decrypt_token(self, ciphertext: str | None) -> str | None:
+        if not ciphertext:
+            return None
+        try:
+            cipher = CredentialCipher(self.settings.gateway_master_key)
+            if not cipher.available:
+                return None
+            return cipher.decrypt(ciphertext)
+        except CredentialError:
+            return None
+
     async def authenticate(self, session: AsyncSession, message: WorkerMessage, token: str) -> AuthOk:
         if message.type != "command" or message.payload.get("name") != "authenticate":
             raise WorkerGatewayError("unauthorized", "认证失败")
@@ -202,20 +233,24 @@ class WorkerGateway:
         now = utcnow()
         version = message.payload.get("agent_version")
         agent_version = version[:64] if isinstance(version, str) and version else instance.agent_version
+        raw_snapshot = message.payload.get("snapshot")
         worker_id = instance.id
         environment_id = instance.environment_id
+        values: dict[str, Any] = {
+            "epoch": new_epoch,
+            "status": "online",
+            "last_heartbeat_at": now,
+            "connected_at": now,
+            "agent_version": agent_version,
+            "updated_at": now,
+        }
+        values["observed_snapshot"] = redact_data(raw_snapshot) if isinstance(raw_snapshot, dict) else None
+        values["observed_at"] = now if isinstance(raw_snapshot, dict) else None
         session.expire(instance)
         result = await session.execute(
             update(WorkerInstance)
             .where(WorkerInstance.id == worker_id, WorkerInstance.epoch == expected)
-            .values(
-                epoch=new_epoch,
-                status="online",
-                last_heartbeat_at=now,
-                connected_at=now,
-                agent_version=agent_version,
-                updated_at=now,
-            )
+            .values(**values)
         )
         if result.rowcount != 1:
             await session.rollback()
@@ -263,7 +298,38 @@ class WorkerGateway:
         )
         await session.commit()
 
-    async def note_heartbeat(self, session: AsyncSession, worker_instance_id: str, epoch: int) -> bool:
+    async def note_heartbeat(
+        self,
+        session: AsyncSession,
+        worker_instance_id: str,
+        epoch: int,
+        *,
+        snapshot: dict[str, Any] | None = None,
+    ) -> bool:
+        now = utcnow()
+        values: dict[str, Any] = {"last_heartbeat_at": now, "updated_at": now}
+        if isinstance(snapshot, dict):
+            values["observed_snapshot"] = redact_data(snapshot)
+            values["observed_at"] = now
+        result = await session.execute(
+            update(WorkerInstance)
+            .where(
+                WorkerInstance.id == worker_instance_id,
+                WorkerInstance.epoch == epoch,
+                WorkerInstance.status == "online",
+            )
+            .values(**values)
+        )
+        await session.commit()
+        return result.rowcount == 1
+
+    async def update_observed_snapshot(
+        self,
+        session: AsyncSession,
+        worker_instance_id: str,
+        epoch: int,
+        snapshot: dict[str, Any],
+    ) -> bool:
         now = utcnow()
         result = await session.execute(
             update(WorkerInstance)
@@ -272,7 +338,11 @@ class WorkerGateway:
                 WorkerInstance.epoch == epoch,
                 WorkerInstance.status == "online",
             )
-            .values(last_heartbeat_at=now, updated_at=now)
+            .values(
+                observed_snapshot=redact_data(snapshot),
+                observed_at=now,
+                updated_at=now,
+            )
         )
         await session.commit()
         return result.rowcount == 1
@@ -295,14 +365,6 @@ class WorkerGateway:
             from app.worker_gateway.data_channel import encoded_body
 
             encoded_body(payload)
-        dsh_text = None
-        if name == "dsh_submit":
-            import hashlib
-            dsh_text = payload.get("text")
-            if not isinstance(dsh_text, str) or len(dsh_text.encode()) > 8 * 1024 * 1024:
-                raise WorkerGatewayError("invalid_message", "DSH 提交内容无效或过大")
-            payload = {key: value for key, value in payload.items() if key != "text"}
-            payload["text_sha256"] = hashlib.sha256(dsh_text.encode()).hexdigest()
         existing = await session.scalar(select(WorkerCommand).where(WorkerCommand.request_id == request_id))
         if existing is not None:
             self._require_same_command(existing, worker_instance_id, name, payload, session_id)
@@ -357,9 +419,6 @@ class WorkerGateway:
             return DispatchResult(stored, False, True, None)
         if name == "http":
             await DataChannel(self).stage_request(command)
-        if name == "dsh_submit" and online:
-            from app.worker_gateway.data_channel import request_key
-            await self.bus.put_text(request_key(request_id), dsh_text, timeout + 30)
         if not online:
             return DispatchResult(command, False, False, "offline")
         delivered, reason = await self._handoff(command.id, owner_only=False)
@@ -928,8 +987,15 @@ class WorkerGateway:
     async def _on_heartbeat(self, auth: AuthOk, message: WorkerMessage, monitor: HeartbeatMonitor) -> None:
         if message.payload.get("kind") == "pong":
             monitor.resolve(message.request_id)
+        raw_snapshot = message.payload.get("snapshot")
+        snapshot = raw_snapshot if isinstance(raw_snapshot, dict) else None
         async with SessionLocal() as session:
-            current = await self.note_heartbeat(session, auth.worker_instance_id, auth.epoch)
+            current = await self.note_heartbeat(
+                session,
+                auth.worker_instance_id,
+                auth.epoch,
+                snapshot=snapshot,
+            )
         if not current:
             raise ConnectionError("epoch_stale")
 

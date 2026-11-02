@@ -2,7 +2,7 @@ import { isRuntimeState, runtimeStatusLabel, runtimeStatusTone } from '@/feature
 
 const STATUS_LABEL: Record<string, string> = {
   OFFLINE: '离线', IDLE: '空闲', WORKING: '工作中', COLLABORATING: '协作中', NEED_HUMAN: '等待人工', WAIT_HUMAN: '需要人工处理', PAUSED: '已暂停', ERROR: '异常',
-  AVAILABLE: '正常', CHECKING: '检查中', UNAVAILABLE: '不可用', UNKNOWN: '未检查',
+  AVAILABLE: '正常', DRIFTED: '待同步', CHECKING: '检查中', UNAVAILABLE: '不可用', UNKNOWN: '未检查',
 }
 
 export function safeUUID(): string {
@@ -27,7 +27,7 @@ export const statusTagType = (status: string) => STATUS_TAG_TYPES[statusTone(sta
 
 export function statusTone(status: string): 'info' | 'success' | 'warning' | 'danger' | 'neutral' {
   if (['WORKING', 'COLLABORATING', 'AVAILABLE'].includes(status)) return 'success'
-  if (['WAIT_HUMAN', 'NEED_HUMAN', 'WAITING', 'PAUSED'].includes(status)) return 'warning'
+  if (['WAIT_HUMAN', 'NEED_HUMAN', 'WAITING', 'PAUSED', 'DRIFTED'].includes(status)) return 'warning'
   if (['ERROR', 'UNAVAILABLE'].includes(status)) return 'danger'
   if (['IDLE', 'OFFLINE', 'UNKNOWN'].includes(status)) return 'neutral'
   if (status === 'CHECKING') return 'info'

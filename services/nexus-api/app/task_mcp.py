@@ -73,7 +73,7 @@ def build_mcp_server() -> MCPServer:
         instructions=(
             "工程执行才创建任务。收到任务状态提示后先调用 nexus_task_get。"
             "等待状态先查 nexus_task_assistance；能根据已有上下文回答就调用 nexus_task_reply，"
-            "DSH 回合文本通过 nexus_task_input 续答。无法确定或需要新授权时在原对话询问人，"
+            "正常回合结束后可通过 nexus_task_input 续答。无法确定或需要新授权时在原对话询问人，"
             "取得明确答案后回传，不要求人去 AgentWork 操作。"
             "总结和候选经验只读。非法操作会返回 ok=false，不要改口说已经成功。"
         ),
@@ -241,7 +241,7 @@ def build_mcp_server() -> MCPServer:
     async def nexus_task_input(
         task_id: str, expected_session_id: str, expected_submission_id: str, text: str,
     ) -> dict[str, Any]:
-        """依据求助查询返回的执行会话和回合标识，向同一 OpenCode / DSH 会话发送补充执行指令，不新建任务。"""
+        """依据求助查询返回的执行会话和回合标识，向同一 OpenCode 会话发送补充执行指令，不新建任务。"""
         return await _call(
             "input", task_id=task_id, expected_session_id=expected_session_id,
             expected_submission_id=expected_submission_id, text=text,

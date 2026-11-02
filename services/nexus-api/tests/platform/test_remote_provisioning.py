@@ -3,6 +3,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -21,7 +22,15 @@ from app.main import app
 from app.models import AgentWorker, OpenCodeExecutionEnvironment, RuntimeSession, Task
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 from app.runtime.maintenance import submit_operation
-from app.runtime.remote_provisioning import RemoteProvisioner, managed_config
+from app.runtime.remote_provisioning import (
+    START_ALL_PATH,
+    RemoteProvisioner,
+    managed_config,
+    render_start_all_script,
+    render_worker_ctl_script,
+    worker_ctl_path,
+)
+from app.runtime.worker_readiness import compute_target_digest
 
 
 @pytest.fixture(autouse=True)
@@ -88,54 +97,69 @@ async def test_restart_finish_keeps_the_capability_record():
 
 
 @pytest.mark.asyncio
-async def test_channel_switch_keeps_capability(monkeypatch):
-    from app.runtime.worker_channel import mark_worker_channel
+async def test_ctl_and_start_all_scripts_are_non_systemd_and_target_digest_tracks_identity():
+    ctl = render_worker_ctl_script(7, port=4096)
+    start_all = render_start_all_script()
+    assert "systemctl" not in ctl and "systemd" not in ctl
+    assert "systemctl" not in start_all and "systemd" not in start_all
+    assert "app.worker_agent" in ctl
+    assert all(branch in ctl for branch in ("start)", "stop)", "restart)", "status)"))
+    assert "/opt/nexus/workers" in start_all
 
-    record = {
-        "desired_revision": "rev",
-        "applied_revision": "rev",
-        "runtime_status": "applied",
-        "error": "",
-    }
-    employee_id = await employee(status_detail={"capability": record})
+    base = SimpleNamespace(
+        mode="LINUX_REMOTE",
+        host="10.0.0.9",
+        port=22,
+        username="root",
+        workspace_root="/srv/project",
+        opencode_server_port=4096,
+    )
+    same = SimpleNamespace(
+        mode="LINUX_REMOTE",
+        host="10.0.0.9",
+        port=22,
+        username="root",
+        workspace_root="/srv/project/",
+        opencode_server_port=4096,
+    )
+    moved = SimpleNamespace(
+        mode="LINUX_REMOTE",
+        host="10.0.0.10",
+        port=22,
+        username="root",
+        workspace_root="/srv/project",
+        opencode_server_port=4096,
+    )
+    assert compute_target_digest(base) == compute_target_digest(same)
+    assert compute_target_digest(base) != compute_target_digest(moved)
 
-    async def environment_id():
-        async with SessionLocal() as db:
-            environment = await db.scalar(
-                select(OpenCodeExecutionEnvironment).where(
-                    OpenCodeExecutionEnvironment.employee_id == employee_id
-                )
-            )
-            return environment.id
 
-    target = await environment_id()
+@pytest.mark.parametrize("matching_process", [True, False])
+async def test_owned_listener_script_checks_each_process_before_foreign_tail(
+    tmp_path, monkeypatch, matching_process
+):
+    worker = RemoteProvisioner(SimpleNamespace(id=7, model_name="", opencode_path=""), {"id": "probe"})
+    proc = tmp_path / "proc"
+    for pid, mark in [("11", "7" if matching_process else "8"), ("22", "unrelated")]:
+        entry = proc / pid
+        entry.mkdir(parents=True)
+        (entry / "environ").write_bytes(f"NEXUS_WORKER_ENV_ID={mark}\0".encode())
 
-    async def switch():
-        return {"reloaded": True, "verified": True}
-
-    monkeypatch.setattr("app.runtime.worker_channel._mismatch", lambda _result: None)
-    async with SessionLocal() as db:
-        stored = await mark_worker_channel(db, target, switch=switch)
-        assert stored.worker_channel == "worker"
-        assert stored.status_detail["capability"] == record
-
-    employee_id = await employee(status_detail={"capability": record})
-    target = await environment_id()
-
-    async def fail():
-        raise RuntimeError("switch failed")
-
-    with pytest.raises(HTTPException):
-        async with SessionLocal() as db:
-            await mark_worker_channel(db, target, switch=fail)
-    async with SessionLocal() as db:
-        current = await db.scalar(
-            select(OpenCodeExecutionEnvironment).where(
-                OpenCodeExecutionEnvironment.employee_id == employee_id
-            )
+    async def execute(command, timeout=30):
+        args = shlex.split(command)
+        script = args[3].replace("pathlib.Path('/proc')", f"pathlib.Path({str(proc)!r})")
+        result = subprocess.run(
+            [sys.executable, "-I", "-c", script, str(tmp_path / "worker.lock"), "7"],
+            capture_output=True, text=True, check=True,
         )
-        assert current.worker_channel == "ssh"
-        assert current.status_detail["capability"] == record
+        return result.stdout.strip()
+
+    monkeypatch.setattr(worker, "_command", execute)
+    if matching_process:
+        await worker._require_owned_listener(interpreter=sys.executable)
+    else:
+        with pytest.raises(RuntimeError, match="未知进程"):
+            await worker._require_owned_listener(interpreter=sys.executable)
 
 
 @pytest.mark.asyncio
@@ -199,11 +223,11 @@ async def test_reservation_is_exclusive_and_blocks_manual_start():
 
 
 @pytest.mark.asyncio
-async def test_operation_blocks_configuration_delete_and_test_api():
+async def test_operation_blocks_mutation_until_canceled_and_cancels_immediately():
+    from app.runtime.maintenance import cancel_operation
+
     employee_id = await employee()
     env, op = await reserve(employee_id)
-    # ASGITransport does not run the lifespan executor; the queued operation stays
-    # the active maintenance lock for these guard assertions.
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -223,10 +247,24 @@ async def test_operation_blocks_configuration_delete_and_test_api():
         ]:
             response = await client.request(method, url, json=body)
             assert response.status_code == 409, response.text
-    from app.runtime.maintenance import cancel_operation
 
-    async with SessionLocal() as db:
-        await cancel_operation(db, op.id)
+        async with SessionLocal() as db:
+            canceled = await cancel_operation(db, op.id)
+            assert canceled.state == "CANCELED"
+            assert canceled.active_environment_id is None
+
+        unlocked = await client.put(
+            f"/api/agent-workers/{employee_id}/environment",
+            json={
+                "mode": "LINUX_REMOTE",
+                "name": "Linux",
+                "host": "test.invalid",
+                "username": "root",
+                "workspace_root": "/srv/project",
+                "model_name": "nexus-gateway/new-route",
+            },
+        )
+        assert unlocked.status_code == 200, unlocked.text
 
 
 @pytest.mark.asyncio
@@ -365,18 +403,24 @@ def _agent_install_worker(monkeypatch):
     monkeypatch.setattr(settings, "remote_pip_index_url", "https://pypi.example.invalid/simple")
     environment = SimpleNamespace(
         id=7,
+        mode="LINUX_REMOTE",
+        host="10.0.0.9",
+        port=22,
+        username="root",
         opencode_server_port=4096,
         workspace_root="/srv/project",
         ssh_password="secret",
         model_name="",
         opencode_path="/usr/local/bin/opencode",
+        repository_id=None,
+        skill_refs=[],
+        mcp_refs=[],
     )
     worker = RemoteProvisioner(environment, {"id": "op", "action": "deploy"})
     worker.home = "/root"
     worker.config_path = "/etc/nexus/opencode/7/opencode.jsonc"
-    worker._manage_process = AsyncMock()
+    worker._run_ctl = AsyncMock()
     worker._native_idle = AsyncMock(return_value=True)
-    worker._wait_opencode_ready = AsyncMock()
     calls = []
 
     class SSH:
@@ -408,10 +452,10 @@ async def test_failed_venv_does_not_rotate_the_worker_token(monkeypatch):
     worker, calls = _agent_install_worker(monkeypatch)
 
     class Gateway:
-        async def enroll(self, session, environment_id):
+        async def enroll(self, session, environment_id, *, target_digest=None):
             raise AssertionError("venv 失败不应轮换 token")
 
-    monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda: Gateway())
+    monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda *_a, **_kw: Gateway())
 
     async def command(self, text, timeout=30):
         calls.append((timeout, text))
@@ -439,23 +483,32 @@ async def test_enroll_happens_after_the_venv_and_writes_the_token(monkeypatch):
     worker, calls = _agent_install_worker(monkeypatch)
 
     class Gateway:
-        async def enroll(self, session, environment_id):
-            calls.append("enroll")
+        async def enroll(self, session, environment_id, *, target_digest=None):
+            calls.append(("enroll", target_digest))
             return SimpleNamespace(token="wtk_secret", worker_instance_id="wrk_test")
 
-    monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda: Gateway())
+    monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda *_a, **_kw: Gateway())
 
     async def emit(_event):
         return None
 
     await worker._install_worker(emit)
-    pip_at = next(i for i, item in enumerate(calls) if isinstance(item, tuple) and "pip install" in item[1])
-    enroll_at = calls.index("enroll")
+    pip_at = next(
+        i for i, item in enumerate(calls) if isinstance(item, tuple) and "pip install" in str(item[1])
+    )
+    enroll_at = next(i for i, item in enumerate(calls) if isinstance(item, tuple) and item[0] == "enroll")
     token_at = next(
         i for i, item in enumerate(calls) if isinstance(item, str) and ".env.tmp-" in item
     )
-    assert pip_at < enroll_at < token_at
+    ctl_at = next(
+        i for i, item in enumerate(calls) if isinstance(item, str) and f"{worker_ctl_path(7)}.tmp-" in item
+    )
+    start_all_at = next(
+        i for i, item in enumerate(calls) if isinstance(item, str) and f"{START_ALL_PATH}.tmp-" in item
+    )
+    assert pip_at < enroll_at < token_at < ctl_at < start_all_at
     assert calls[pip_at][0] == 300
+    worker._run_ctl.assert_awaited_once_with("restart")
 
 
 class _AtomicLocalSSH:
@@ -503,6 +556,19 @@ def _atomic_worker(secret: str = "ssh-canary-secret"):
         opencode_path="/usr/local/bin/opencode",
     )
     return RemoteProvisioner(environment, {"id": "op-atomic", "action": "deploy"})
+
+
+async def test_atomic_write_creates_missing_config_parent_without_chmod_existing_parent(tmp_path):
+    target = tmp_path / "config" / "skill" / "proof" / "SKILL.md"
+    tmp_path.chmod(0o755)
+    worker = _atomic_worker()
+    worker.ssh = _AtomicLocalSSH()
+
+    assert await worker._write_atomic_if_changed(str(target), b"# Proof\n", 0o600)
+    assert target.read_bytes() == b"# Proof\n"
+    assert target.stat().st_mode & 0o777 == 0o600
+    assert target.parent.stat().st_mode & 0o777 == 0o700
+    assert tmp_path.stat().st_mode & 0o777 == 0o755
 
 
 @pytest.mark.asyncio

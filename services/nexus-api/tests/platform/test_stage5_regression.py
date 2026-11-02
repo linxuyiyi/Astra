@@ -33,7 +33,6 @@ SSH_CALLS = {
     ("app/runtime/maintenance.py", ".open_session("),
     ("app/runtime/remote_provisioning.py", ".open_session("),
     ("app/runtime/ssh_client.py", ".open_session("),
-    ("app/runtime/worker_health.py", ".open_session("),
     ("app/executors/opencode_remote.py", ".open_session("),
 }
 

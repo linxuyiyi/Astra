@@ -30,10 +30,10 @@ test('colored semantics keep Element Plus type colors and no override class', ()
   assert.deepEqual(semanticTag('danger'), { type: 'danger', className: '' })
 })
 
-test('records and probe logs agree on failure, success, cancellation and interruption colors', () => {
+test('records and probe logs agree on failure, success, cancellation colors', () => {
   for (const [state, expected] of [
     ['FAILED', 'danger'], ['SUCCEEDED', 'success'], ['CANCELED', 'neutral'],
-    ['INTERRUPTED', 'attention'], ['RUNNING', 'progress'], ['UNKNOWN', 'neutral'],
+    ['RUNNING', 'progress'], ['UNKNOWN', 'neutral'],
   ] as const) {
     assert.equal(maintenanceSemanticTone(state), expected)
     assert.equal(maintenanceSemanticTone(state.toLowerCase()), expected)
@@ -41,6 +41,5 @@ test('records and probe logs agree on failure, success, cancellation and interru
   assert.equal(maintenanceSemanticTone('passed'), 'success')
   assert.equal(maintenanceSemanticTone('success'), 'success')
   assert.equal(maintenanceSemanticTone('RUNNING', 'canceled'), 'neutral')
-  assert.equal(maintenanceSemanticTone('RUNNING', 'interrupted'), 'attention')
   assert.equal(maintenanceSemanticTone('RUNNING', 'cancel_requested'), 'attention')
 })

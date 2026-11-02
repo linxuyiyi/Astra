@@ -5,7 +5,9 @@ from __future__ import annotations
 import errno
 import os
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from app.worker_agent.process_env import child_environ
 
@@ -64,6 +66,55 @@ def prepare_workspace_local(
         for origin, copied in planned:
             _write_regular_nofollow(origin, copied)
     return {"root": str(source), "target": str(destination), "created": str(created).lower()}
+
+
+def update_workspace_local(
+    workspace: str,
+    *,
+    branch: str = "",
+    gate: Callable[[], None] | None = None,
+) -> dict[str, Any]:
+    """在本地 Git 工作区干净且空闲的前提下执行远端快进更新。"""
+
+    root = Path(workspace)
+    if not root.is_dir() or not _git_ok(root):
+        raise RuntimeError("工作区不是有效的 Git 仓库")
+    top = _git(root, "rev-parse", "--show-toplevel").stdout.strip()
+    if os.path.realpath(top) != os.path.realpath(root):
+        raise RuntimeError("工作区不是 Git 仓库根目录")
+    status = _git(root, "status", "--porcelain")
+    if status.returncode != 0:
+        raise RuntimeError(status.stderr.strip() or "无法读取工作区 Git 状态")
+    if status.stdout.strip():
+        raise RuntimeError("工作区存在未提交变更，拒绝执行代码更新")
+    if gate is not None:
+        gate()
+    current_branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    target_branch = branch.strip() or ("" if current_branch == "HEAD" else current_branch)
+    if not target_branch:
+        raise RuntimeError("当前处于游离 HEAD 且未指定目标分支，拒绝更新")
+    fetch = _git_remote(root, "fetch", "--prune", "origin", target_branch)
+    if fetch.returncode != 0:
+        raise RuntimeError(fetch.stderr.strip() or "拉取远端分支失败")
+    if gate is not None:
+        gate()
+    if current_branch != target_branch:
+        checkout = _git(root, "checkout", "-B", target_branch, "FETCH_HEAD")
+        if checkout.returncode != 0:
+            raise RuntimeError(checkout.stderr.strip() or "切换到目标分支失败")
+    else:
+        merge = _git(root, "merge", "--ff-only", "FETCH_HEAD")
+        if merge.returncode != 0:
+            raise RuntimeError(
+                "本地分支包含未推送提交，无法快进更新，请重新执行一键部署或人工处理"
+            )
+    commit = _git(root, "rev-parse", "HEAD").stdout.strip()
+    final_branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    return {
+        "updated": True,
+        "branch": final_branch,
+        "commit": commit,
+    }
 
 
 def _reject_symlink_components(path: Path) -> None:
@@ -143,6 +194,31 @@ def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         env=child_environ(),
+    )
+
+
+def _git_remote(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    env = child_environ()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    return subprocess.run(
+        [
+            "git",
+            "-C",
+            str(cwd),
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "core.pager=cat",
+            "-c",
+            "credential.helper=",
+            *args,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env=env,
     )
 
 

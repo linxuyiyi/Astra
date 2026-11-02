@@ -1,46 +1,47 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
+from app.domain import EmployeeStatus, TaskStatus
 from app.event_bus import event_bus
-from app.models import AgentWorker, OpenCodeExecutionEnvironment, Task
-from app.runtime.capability import binding_names, dispatch_allowed
+from app.models import (
+    AgentWorker,
+    OpenCodeExecutionEnvironment,
+    Task,
+    WorkerInstance,
+    WorkerMaintenanceOperation,
+)
 from app.runtime.environment import environment_snapshot
-from app.runtime.maintenance import active_maintenance_exists
 from app.runtime.occupancy import occupying_exists, sync_employee_occupancy
+from app.runtime.worker_readiness import (
+    ACTIVE_MAINTENANCE_STATES,
+    build_desired_spec_from_context,
+    evaluate_worker_readiness,
+    load_readiness_context,
+    scheduling_block,
+)
 from app.services import TaskService
 from app.worker_presentation import worker_display_name
 
 
+def _active_maintenance_exists(environment_id):
+    return exists(
+        select(WorkerMaintenanceOperation.id).where(
+            WorkerMaintenanceOperation.environment_id == environment_id,
+            WorkerMaintenanceOperation.state.in_(tuple(ACTIVE_MAINTENANCE_STATES)),
+        )
+    )
+
+
 def runtime_assignment_block(environment, task) -> str | None:
-    """任务必须有仓库，且和 Worker 的仓库、已应用修订一致。"""
+    """任务必须绑定仓库，且与候选节点的仓库一致。"""
 
     if not task.repository_id:
         return "任务没有绑定仓库"
     if environment.repository_id != task.repository_id:
         return "任务仓库与 Worker 不一致"
-    if environment.runtime_engine == "dsh":
-        if not environment.model_name:
-            return "DSH 必须明确选择已登记的 Gateway 模型别名"
-        if environment.worker_channel != "worker":
-            return "DSH 必须使用 Worker Gateway"
-        health = (environment.status_detail or {}).get("dsh", {})
-        if not health.get("healthy"):
-            return "请先通过 DSH 固定版本与装配检查"
-        if environment.model_name not in health.get("models", []):
-            return "DSH 模型未通过 Gateway 目录检查"
-        if set(environment.skill_refs or []) != set(health.get("skill_hashes", {})):
-            return "DSH Skill 白名单与 Worker 装配不一致"
-        expected = {str(item.get("name")) for item in environment.mcp_refs or []}
-        if expected != set(health.get("mcp_names", [])):
-            return "DSH MCP 白名单与 Worker 装配不一致"
-        return None
-    names = binding_names(environment.skill_refs, environment.mcp_refs)
-    if not dispatch_allowed(environment.status_detail, bindings=names):
-        return "Worker 能力绑定尚未应用"
     return None
 
 
@@ -113,7 +114,7 @@ class Dispatcher:
                 AgentWorker.enabled.is_(True),
                 ~occupying_exists(AgentWorker.id),
                 AgentWorker.execution_environment.has(
-                    ~active_maintenance_exists(OpenCodeExecutionEnvironment.id)
+                    ~_active_maintenance_exists(OpenCodeExecutionEnvironment.id)
                 ),
             ]
             if task.employee_id:
@@ -121,7 +122,7 @@ class Dispatcher:
                 conditions.append(AgentWorker.id == task.employee_id)
             else:
                 conditions.append(AgentWorker.auto_claim.is_(True))
-            employees = (
+            employees = list(
                 (
                     await self.session.execute(
                         select(AgentWorker)
@@ -133,50 +134,72 @@ class Dispatcher:
                 .scalars()
                 .all()
             )
-            employee = None
+            environments = [
+                item.execution_environment
+                for item in employees
+                if item.execution_environment is not None
+            ]
+            context = await load_readiness_context(self.session, environments)
+            env_ids = [env.id for env in environments if env.id is not None]
+            instances_by_env = (
+                {
+                    row.environment_id: row
+                    for row in (
+                        await self.session.scalars(
+                            select(WorkerInstance).where(WorkerInstance.environment_id.in_(env_ids))
+                        )
+                    ).all()
+                }
+                if env_ids
+                else {}
+            )
+
+            chosen_employee: AgentWorker | None = None
             for candidate in employees:
+                candidate_env = candidate.execution_environment
                 if (
-                    not candidate.execution_environment
-                    or candidate.execution_environment.status != EnvironmentStatus.AVAILABLE
-                    or runtime_assignment_block(candidate.execution_environment, task) is not None
+                    candidate_env is None
+                    or runtime_assignment_block(candidate_env, task) is not None
                     or task.task_type not in candidate.task_types
                     or task.category_id not in candidate.category_ids
                 ):
                     continue
-                employee = await self.session.scalar(
+                desired = build_desired_spec_from_context(candidate_env, context)
+                readiness = evaluate_worker_readiness(
+                    desired,
+                    candidate_env,
+                    instances_by_env.get(candidate_env.id) if candidate_env.id is not None else None,
+                    employee_enabled=bool(candidate.enabled),
+                )
+                if not readiness["schedulable"]:
+                    continue
+
+                locked_employee = await self.session.scalar(
                     select(AgentWorker)
                     .options(selectinload(AgentWorker.execution_environment))
                     .where(*conditions, AgentWorker.id == candidate.id)
                     .with_for_update(skip_locked=True)
                     .execution_options(populate_existing=True)
                 )
-                if employee is not None:
-                    break
-            if not employee:
+                if locked_employee is None or locked_employee.execution_environment is None:
+                    continue
+                locked_env = locked_employee.execution_environment
+                if (
+                    runtime_assignment_block(locked_env, task) is not None
+                    or task.task_type not in locked_employee.task_types
+                    or task.category_id not in locked_employee.category_ids
+                    or await scheduling_block(self.session, locked_env) is not None
+                ):
+                    continue
+                chosen_employee = locked_employee
+                break
+
+            if chosen_employee is None:
                 await self.session.rollback()
                 continue
-            environment = employee.execution_environment
-            from fastapi import HTTPException
 
-            from app.runtime.remote_provisioning import guard_environment_write
-
-            try:
-                await guard_environment_write(self.session, environment)
-                from app.runtime.maintenance import scheduling_block
-
-                blocked = await scheduling_block(self.session, environment)
-                if (
-                    blocked
-                    or runtime_assignment_block(environment, task) is not None
-                    or task.task_type not in employee.task_types
-                    or task.category_id not in employee.category_ids
-                ):
-                    await self.session.rollback()
-                    return None
-            except HTTPException:
-                await self.session.rollback()
-                return None
-            task.employee_id = employee.id
+            environment = chosen_employee.execution_environment
+            task.employee_id = chosen_employee.id
             # Actual HEAD belongs to the prepared execution workspace; start()
             # already reads it there, outside this assignment transaction.
             task.base_commit = None
@@ -187,12 +210,12 @@ class Dispatcher:
                 task,
                 "TASK_ASSIGNED",
                 "work",
-                f"任务已分配给 {worker_display_name(employee)}",
-                {"auto_execute": employee.auto_execute},
+                f"任务已分配给 {worker_display_name(chosen_employee)}",
+                {"auto_execute": chosen_employee.auto_execute},
                 commit=False,
             )
-            task.current_progress = f"已分配给 {worker_display_name(employee)}，等待启动"
-            await sync_employee_occupancy(self.session, employee.id, preferred=task)
+            task.current_progress = f"已分配给 {worker_display_name(chosen_employee)}，等待启动"
+            await sync_employee_occupancy(self.session, chosen_employee.id, preferred=task)
             await self.session.commit()
             await self.session.refresh(task)
             await event_bus.publish({"type": "TASK_ASSIGNED", "task_id": task.id, "status": task.status})

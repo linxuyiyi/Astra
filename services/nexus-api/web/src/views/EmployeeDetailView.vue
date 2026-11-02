@@ -15,6 +15,7 @@
           <template v-else>历史 Worker（未关联数字员工）</template>
         </p>
         <div class="worker-hero__badges">
+          <SemanticTag :tone="readinessTone(health?.readiness)" :label="readinessLabel(health?.readiness)" />
           <SemanticTag :tone="schedulableTone(health)" :label="schedulableLabel(health)" />
           <ElButton v-if="blocking.length" link type="primary" :aria-expanded="showAllBlockers" @click="showAllBlockers = !showAllBlockers">
             {{ showAllBlockers ? '收起原因' : `查看原因（${blocking.length}）` }}
@@ -148,9 +149,9 @@
             <template #header><div class="worker-card__title"><h3>编码 Agent</h3></div></template>
             <ElDescriptions :column="1" border size="small">
               <ElDescriptionsItem label="编程工具">OpenCode</ElDescriptionsItem>
-              <ElDescriptionsItem label="执行引擎">{{ environment?.runtime_engine === 'dsh' ? 'DSH ACP' : 'OpenCode' }}</ElDescriptionsItem>
+              <ElDescriptionsItem label="执行引擎">OpenCode</ElDescriptionsItem>
               <ElDescriptionsItem label="编程模型">{{ environment?.model_name || '使用平台默认模型' }}</ElDescriptionsItem>
-              <ElDescriptionsItem v-if="environment?.runtime_engine !== 'dsh'" label="可执行文件">{{ environment?.opencode_path || '—' }}</ElDescriptionsItem>
+              <ElDescriptionsItem label="可执行文件">{{ environment?.opencode_path || '—' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="Server 端口">{{ environment?.opencode_server_port ?? '—' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="Worker 通道">{{ channelLabel(health?.connection?.channel) }}</ElDescriptionsItem>
             </ElDescriptions>
@@ -279,6 +280,8 @@ import {
   equipmentItems,
   equipmentStateLabel,
   equipmentTone,
+  readinessLabel,
+  readinessTone,
   runtimeHealthLabel,
   runtimeHealthTone,
   schedulableLabel,

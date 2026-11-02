@@ -229,7 +229,6 @@
               <ElFormItem label="编程工具">
                 <ElSelect v-model="form.environment.coding_tool" class="worker-config-control">
                   <ElOption value="opencode" label="OpenCode" />
-                  <ElOption value="dsh" label="DSH ACP（试用）" :disabled="form.environment.mode !== 'LINUX_REMOTE'" />
                 </ElSelect>
               </ElFormItem>
               <ElFormItem label="编程模型">
@@ -307,7 +306,7 @@ import { useAstraStore } from '@/stores/astra'
 import { isMaintenanceActive } from '@/features/workers/presentation'
 import type { Employee as DigitalEmployee } from '@/types'
 
-type CodingTool = 'opencode' | 'dsh'
+type CodingTool = 'opencode'
 
 const props = withDefaults(defineProps<{
   employee: Employee | null
@@ -400,7 +399,7 @@ const formRules = computed<FormRules>(() => ({
   'environment.host': [{ required: true, message: '请输入服务器地址', trigger: 'blur' }],
   'environment.port': [{ required: true, message: '请输入服务器端口', trigger: 'blur' }, { validator: portValidator, trigger: 'blur' }],
   'environment.username': [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  'environment.ssh_password': [{ required: form.environment.coding_tool !== 'dsh' && (props.creating || !props.employee?.execution_environment?.has_ssh_password), message: '请输入 SSH 密码', trigger: 'blur' }],
+  'environment.ssh_password': [{ required: props.creating || !props.employee?.execution_environment?.has_ssh_password, message: '请输入 SSH 密码', trigger: 'blur' }],
 }))
 
 function defaultCategoryId() {

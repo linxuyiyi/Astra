@@ -38,13 +38,10 @@ class RemoteOpenCodeServerConnection:
 
     async def __aenter__(self) -> OpenCodeServerClient:
         try:
-            from app.database import SessionLocal
-            from app.runtime.worker_channel import read_worker_channel
             from app.runtime.worker_client import WorkerOpenCodeClient
+            from app.runtime.worker_files import environment_uses_worker
 
-            async with SessionLocal() as session:
-                channel = await read_worker_channel(session, self.environment.id)
-            if channel != "worker":
+            if not await environment_uses_worker(self.environment):
                 raise RuntimeError("远程环境尚未安装 Worker")
             self.client = WorkerOpenCodeClient(self.settings, environment_id=self.environment.id)
             await self.client.health()

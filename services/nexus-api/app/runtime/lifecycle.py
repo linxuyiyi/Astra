@@ -67,7 +67,7 @@ from app.runtime.session_connection import (
 from app.runtime.session_state import SessionState, derive_session_state
 from app.runtime.submission import body_fetched_at, get_attempt, mark_body_fetched, put_attempt
 from app.runtime.wake_outbox import record_assistance_requests, record_wake
-from app.runtime.worker_channel import read_worker_channel
+from app.runtime.worker_files import environment_enrolled_in_gateway
 from app.runtime.workspace_changes import workspace_head_commit
 from app.runtime.workspace_files import materialize_task_attachments
 from app.services import TaskService
@@ -556,14 +556,6 @@ class RuntimeService:
         )
         await TaskService(self.session).transition(task, TaskStatus.RUNNING, commit=False)
 
-    async def _uses_dsh(self, task_id: str) -> bool:
-        task = await self.session.get(Task, task_id)
-        if task and task.current_session_id:
-            binding = await self._runtime_session(task)
-            return ((binding.runtime_engine if binding else
-                     (task.execution_environment_snapshot or {}).get("runtime_engine")) == "dsh")
-        return False
-
     async def start(self, task_id: str, *, restart: bool = False, expected_session_id: str | None = None):
         task = await self.lock_task(task_id)
         if expected_session_id and task.current_session_id != expected_session_id:
@@ -622,9 +614,6 @@ class RuntimeService:
         blocked = runtime_assignment_block(environment, task)
         if blocked:
             raise RuntimeStateError(blocked)
-        selected_engine = environment.runtime_engine or "opencode"
-        if old_binding and old_binding.runtime_engine != selected_engine:
-            raise RuntimeStateError("已有执行会话不能切换引擎，请新建任务")
         new_snapshot = environment_snapshot(environment)
         initial_id = message_id()
         reservation = {"pending_message_id": initial_id, "pending_attempt": 0}
@@ -647,21 +636,6 @@ class RuntimeService:
         await sync_employee_occupancy(self.session, employee.id, preferred=task)
         employee.status = EmployeeStatus.WORKING
         await self.session.commit()
-
-        if selected_engine == "dsh":
-            from app.runtime.dsh_lifecycle import DshLifecycle
-
-            try:
-                return await DshLifecycle(self).start(
-                    task, environment, initial_id, old_binding, restart=restart,
-                )
-            except Exception:
-                await self.session.rollback()
-                task = await self.lock_task(task_id)
-                task.runtime_connection = "UNAVAILABLE"
-                task.runtime_error = "DSH 启动或受理未确认，请重连核对后继续；禁止自动重跑"
-                await self.session.commit()
-                raise
 
         created_session_id: str | None = None
         new_workspace: str | None = None
@@ -913,8 +887,6 @@ class RuntimeService:
         self, task_id, body, *, native_action="prompt_async", expected_session_id=None,
         expected_submission_id=None, expected_source=None,
     ):
-        if await self._uses_dsh(task_id):
-            raise RuntimeStateError("DSH 输入必须通过绑定隔离的 Workbench API")
         if native_action not in {"prompt_async", "command"}:
             raise RuntimeStateError("不支持的 Session 输入")
 
@@ -1039,7 +1011,10 @@ class RuntimeService:
         # A previous abort/timeout must not invalidate its eventual ACK.
         await self._sync_session_state(task, SessionState(status=RuntimeSessionStatus.RUNNING.value))
         await self.session.commit()
-        use_worker = await read_worker_channel(self.session, environment.id) == "worker"
+        use_worker = (
+            environment.mode == ExecutionMode.LINUX_REMOTE
+            and await environment_enrolled_in_gateway(self.session, environment.id)
+        )
         if not use_worker:
             await self._note_body_fetched(task_id, outbound_id, new_attempt)
 
@@ -1168,9 +1143,6 @@ class RuntimeService:
         raise MessageHistoryIncomplete("消息没有读完，结果未知")
 
     async def deliver_first_submission(self, task_id: str):
-        if await self._uses_dsh(task_id):
-            from app.runtime.dsh_lifecycle import DshLifecycle
-            return await DshLifecycle(self).deliver(task_id)
         """Post the prompt reserved by start(). This is not a human retry."""
 
         task = await self.lock_task(task_id)
@@ -1216,8 +1188,6 @@ class RuntimeService:
         return await self._transmit_attempt(task, prompt, attempt)
 
     async def retry_submission(self, task_id: str, *, confirm_unknown: bool = False):
-        if await self._uses_dsh(task_id):
-            raise RuntimeStateError("DSH 提交结果未知时必须先重连核对，不能重新投递")
         """Human retry. Recovery, reconnect, dispatch, heartbeat, and timeout never call this."""
 
         task = await self.lock_task(task_id)
@@ -1291,7 +1261,10 @@ class RuntimeService:
         workspace = task.workspace
         environment = await resolve_environment(self.session, task)
         await self.session.commit()
-        use_worker = await read_worker_channel(self.session, environment.id) == "worker"
+        use_worker = (
+            environment.mode == ExecutionMode.LINUX_REMOTE
+            and await environment_enrolled_in_gateway(self.session, environment.id)
+        )
         record = get_attempt(task, pending_id, attempt) or {}
         request_id = record.get("request_id")
 
@@ -1624,9 +1597,6 @@ class RuntimeService:
             await self.session.rollback()
 
     async def stop(self, task_id, *, cancel_task: bool = True):
-        if await self._uses_dsh(task_id):
-            from app.runtime.dsh_lifecycle import DshLifecycle
-            return await DshLifecycle(self).stop(task_id, cancel_task=cancel_task)
         task = await self.lock_task(task_id)
         if _task_result_concluded(task):
             await self.session.rollback()
@@ -1717,9 +1687,6 @@ class RuntimeService:
             raise
 
     async def refresh(self, task_id, *, client=None):
-        if await self._uses_dsh(task_id):
-            from app.runtime.dsh_lifecycle import DshLifecycle
-            return await DshLifecycle(self).refresh(task_id)
         task = await self.session.get(Task, task_id)
         if not task:
             raise RuntimeStateError("任务不存在")
@@ -2006,9 +1973,6 @@ class RuntimeService:
 
     async def confirm_completion(self, task_id: str):
         """Close the business task only on explicit business confirmation."""
-        if await self._uses_dsh(task_id):
-            from app.runtime.dsh_lifecycle import DshLifecycle
-            return await DshLifecycle(self).confirm(task_id)
         task = await self.session.get(Task, task_id)
         if not task:
             raise RuntimeStateError("任务不存在")

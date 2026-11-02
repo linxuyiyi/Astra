@@ -33,8 +33,8 @@ def isolate_proxy_secret_cache():
 async def prepare_process_schema():
     """The process database URL is a fresh file. Create its schema before any lookup.
 
-    Standalone modules such as ``test_waiting_reason`` use their own engine, but
-    ``environment_uses_worker`` still reads ``worker_channel`` through SessionLocal.
+    Standalone modules such as ``test_waiting_reason`` use their own engine, while
+    ``environment_uses_worker`` queries ``WorkerInstance`` through SessionLocal.
     """
 
     import app.gateway.models  # noqa: F401 - register gateway tables

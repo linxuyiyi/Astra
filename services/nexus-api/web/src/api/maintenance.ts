@@ -5,17 +5,16 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
 export const MAINTENANCE_EVENT_PAGE_SIZE = 200
 
-export type MaintenanceAction = 'check' | 'deploy' | 'update' | 'restart' | 'disable' | 'restore'
+export type MaintenanceAction = 'check' | 'deploy' | 'update' | 'restart'
 
 export type MaintenanceState =
   | 'QUEUED'
-  | 'PREFLIGHT'
   | 'RUNNING'
-  | 'VERIFYING'
   | 'SUCCEEDED'
   | 'FAILED'
   | 'CANCELED'
-  | 'INTERRUPTED'
+
+export type WorkerReadiness = 'READY' | 'DRIFTED' | 'DEGRADED' | 'UNKNOWN'
 
 export interface WorkerBlocking {
   code: string
@@ -27,6 +26,7 @@ export interface WorkerBlocking {
 export interface WorkerEquipmentItem {
   key: string
   label: string
+  state: 'ready' | 'drifted' | 'degraded' | 'unknown'
   configured: boolean
   deployed: boolean
   verified: boolean | null
@@ -52,18 +52,25 @@ export interface WorkerHealth {
   environment_id: number
   employee_id: string
   enabled: boolean
+  readiness: WorkerReadiness
+  target_digest: string
+  target_matched: boolean
   connection: {
     channel: string
     state: string
     last_heartbeat_at: string | null
+    observed_at: string | null
+    epoch: number | null
   }
   runtime_health: {
     status: string
+    readiness: WorkerReadiness
+    last_error: string | null
     last_checked_at: string | null
     equipment: WorkerEquipmentItem[]
   }
   maintenance: {
-    state: MaintenanceState | string
+    state: MaintenanceState
     operation_id: string
     stage: string
     attempt?: number
@@ -130,8 +137,8 @@ export interface MaintenanceEvent {
 export interface MaintenanceOperation {
   id: string
   environment_id: number
-  action: MaintenanceAction | string
-  state: MaintenanceState | string
+  action: MaintenanceAction
+  state: MaintenanceState
   stage: string
   attempt: number
   requested_by: string

@@ -1,6 +1,6 @@
 # V1.4.9 Linux Agent Worker 部署
 
-Agent Worker 部署、更新和重启全部由 Nexus 服务端 Python 经 Paramiko SSH 控制。远端仅执行命令和短小的探测、校验、解包、信号及启动原语，SFTP 传输 wheel 和配置；不上传复杂安装脚本，不安装、探测或调用 systemd，不因 Worker 在线而改走另一套重启路径。
+Agent Worker 首次及配置同步部署由 Nexus 服务端 Python 经 Paramiko SSH 控制；在线检查、更新和重启通过 Worker Gateway 执行，离线重启通过轻量 SSH 唤醒。远端仅执行命令和短小的探测、校验、解包、信号及启动原语，SFTP 传输 wheel 和配置；不上传复杂安装脚本，不安装、探测或调用 systemd，远端标准入口为 `ctl.sh`，不保留历史通道切换。
 
 在「Agent Worker」选择 Linux 远程，填写 SSH、root 账号和绝对工作区。目标支持 Linux x86_64/aarch64，需要 timeout、SSH 及到所配镜像、Nexus 网关、Library MCP 和 Worker Gateway 的网络。缺失依赖通过目标既有 apt/dnf/yum 源安装，不改系统源，无自动 sudo 或系统运行库补丁。
 
@@ -12,18 +12,20 @@ Agent Worker 部署、更新和重启全部由 Nexus 服务端 Python 经 Parami
 4. 复用匹配版本 Node，否则安装目标架构固定 22.23.3 制品并验证 SHA256。普通制品要求 glibc >=2.28；其他 libc 要求显式提供可运行 Node，不注入 Alpine/musl loader。OpenCode 默认 1.18.35，直接取得目标原生 npm 平台包，验证来源、SHA512 与实际版本，不执行 opencode-ai postinstall 或其嵌套 npm 重试。
 5. 诊断并持久化部署用户的全局 pip/npm 默认源。检查 Git >=2.18，服务端判断工作区/origin/分支及干净状态，仅允许干净仓库快进；保留现有业务数据。仓库 token 通过临时 0600 文件和 askpass 使用后清理。
 6. 服务端合并并备份受管 provider、MCP、模型与技能配置，保留人工及无关字段；冲突或无效配置拒绝覆盖。上传 Worker wheel，复用未变化的 venv 和 token，写入私有环境文件。
-7. Nexus 通过 SSH 启动受管 OpenCode，等待真实 `/global/health` 后启动 Worker；验收实际版本、网关鉴权、MCP 和 Worker 回连后才报告成功。部署健康不等于模型生成任务成功。
+7. Nexus 通过 `ctl.sh` 启动单实例 Worker 守护，由守护托管 OpenCode 子进程并负责崩溃自愈；等待网关回连及完整观测快照与期望配置一致后才报告成功。部署健康不等于模型生成任务成功。
 
 ## 来源与全局包配置
 
 来源事实集中在 `app/config/worker_deployment.py`，没有 Shell 重复硬编码。平台统一安装器会为新配置填入所选来源；已有独立 Worker 源设置保留。可独立配置：
 
-| 配置 | Worker 原始默认 | 验证等级 |
+| 配置 | Worker 当前默认 | 验证等级 |
 | --- | --- | --- |
-| `NEXUS_REMOTE_PYTHON_SOURCE_URL` | `https://mirrors.tools.huawei.com/python/3.11.17/Python-3.11.17.tar.xz` | 官方资料支持 `/python` 根路径，固定文件按上游规则推导，内网未验证 |
-| `NEXUS_REMOTE_NODE_BASE_URL` | `https://mirrors.tools.huawei.com/nodejs` | 官方资料支持根路径，追加 `/v22.23.3/` 和架构包，内网未验证 |
-| `NEXUS_REMOTE_NPM_REGISTRY` | `https://mirrors.tools.huawei.com/npm/` | 官方文档列出，当前网络 TLS 失败 |
-| `NEXUS_REMOTE_PIP_INDEX_URL` | `https://mirrors.tools.huawei.com/pypi/simple` | 官方文档列出，当前网络 TLS 失败 |
+| `NEXUS_REMOTE_PYTHON_SOURCE_URL` | `https://mirrors.huaweicloud.com/python/3.11.17/Python-3.11.17.tar.xz` | 真实远端 HTTP 200，部署另验固定 SHA256 |
+| `NEXUS_REMOTE_NODE_BASE_URL` | `https://mirrors.huaweicloud.com/nodejs` | 真实远端固定版本校验清单 HTTP 200 |
+| `NEXUS_REMOTE_NPM_REGISTRY` | `https://mirrors.huaweicloud.com/repository/npm/` | 真实远端元数据与制品入口已核验 |
+| `NEXUS_REMOTE_PIP_INDEX_URL` | `https://mirrors.huaweicloud.com/repository/pypi/simple` | 真实远端 simple 索引 HTTP 200 |
+
+默认使用华为云公开镜像入口；`mirrors.tools.huawei.com` 在本次用户测试机无法解析。内网已有显式来源仍按管理员配置执行，不自动回退。npm 元数据中的相对制品路径仅解析到已配置 registry，再验证来源与摘要。
 
 上述路径依据：[华为 CodeArts](https://support.huaweicloud.com/usermanual-codeci/codeci_01_0008.html)、[华为 PyPI 配置](https://support.huaweicloud.com/intl/en-us/bestpractice-cce/cce_bestpractice_10079.html)。官方上游 Python/Node 制品已实际下载校验，但不是部署备用源。系统包仓库的华为内网位置未确认，代码不拼接猜测路径。
 

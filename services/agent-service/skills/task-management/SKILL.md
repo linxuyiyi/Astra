@@ -29,7 +29,7 @@ description: 仅在明确查询或操作 Nexus 任务、需要 Worker 工程执�
 收到来源为 `nexus-task` 的提示后，先调用 `nexus_task_get`。提示不是新的状态，也不要根据提示直接改状态。
 
 `WAITING` 表示任务等待处理，不代表必须找人。调用 `nexus_task_assistance(task_id)`，读取当前
-`session_id`、`submission_id`、`requests` 和 `output`。两种引擎的输出有 `next_cursor` 时继续分页读取，
+`session_id`、`submission_id`、`requests` 和 `output`。输出有 `next_cursor` 时继续分页读取，
 不能因为一页没有看到问题就声称无需协助。没有待回复请求时不要编造问题。
 
 向人汇报任务状态时使用工具返回的 `runtime_status_label` 中文名称，例如“执行中”“已完成”。
@@ -44,10 +44,9 @@ description: 仅在明确查询或操作 Nexus 任务、需要 Worker 工程执�
 2. 原生问题使用 `nexus_task_reply`：传查询得到的 `task_id`、`expected_session_id=session_id`、
    `request_id`、`kind="question"` 和 `answers`。每个问题对应一个字符串数组，按原问题顺序
    回答；多选保留各选项，单选只选一个，允许自定义答案的问题可以传明确文本。
-3. 权限使用 `kind="permission"` 和 `decision`：OpenCode 只选 `once` 或 `reject`；DSH
-   使用当前请求的 `options` 中 `kind` 为 `allow_once` 或 `reject_once` 的 `optionId`。
+3. 权限使用 `kind="permission"` 和 `decision`：OpenCode 只选 `once` 或 `reject`。
    不能选永久放行，不能把待人授权的操作说成已有授权。
-4. OpenCode / DSH 正常回合结束后，读原生 `output`，结合完整目标判断。有业务答案或补充执行指令且 `can_input=true` 时调用 `nexus_task_input`，
+4. OpenCode 正常回合结束后，读原生 `output`，结合完整目标判断。有业务答案或补充执行指令且 `can_input=true` 时调用 `nexus_task_input`，
    传 `expected_session_id=session_id`、`expected_submission_id=submission_id` 和真实答案 `text`，
    在同一执行会话继续；没有业务问题或补充执行需要时不要自动续跑。
 5. 缺少信息或必须新获授权时，在当前来源私聊/群聊里说明任务、具体问题、选项和你的建议，

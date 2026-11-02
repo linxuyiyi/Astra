@@ -38,15 +38,15 @@ export function semanticTag(tone: SemanticTone): SemanticTagConfig {
 }
 
 const MAINTENANCE_TONES: Record<string, SemanticTone> = {
-  QUEUED: 'neutral', PREFLIGHT: 'progress', RUNNING: 'progress', VERIFYING: 'progress',
+  QUEUED: 'neutral', RUNNING: 'progress',
   SUCCEEDED: 'success', SUCCESS: 'success', PASSED: 'success', FAILED: 'danger',
-  CANCELED: 'neutral', INTERRUPTED: 'attention',
+  CANCELED: 'neutral',
 }
 
 /** Records and log events share the same palette, including lowercase probe states. */
 export function maintenanceSemanticTone(state: string | null | undefined, eventType?: string): SemanticTone {
   if (eventType === 'canceled') return 'neutral'
-  if (eventType === 'interrupted' || eventType === 'cancel_requested') return 'attention'
+  if (eventType === 'cancel_requested') return 'attention'
   if (eventType === 'failed') return 'danger'
   return MAINTENANCE_TONES[String(state ?? '').toUpperCase()] ?? 'neutral'
 }

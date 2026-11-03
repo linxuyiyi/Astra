@@ -48,7 +48,7 @@
         </div>
       </div>
 
-      <ElTable v-loading="store.loading" :data="paged" row-key="id" :max-height="TABLE_MAX_HEIGHT" data-testid="task-table" @row-click="(row: Task) => openTask(row.id)">
+      <ElTable v-loading="store.loading" :data="paged" row-key="id" data-testid="task-table" @row-click="(row: Task) => openTask(row.id)">
         <ElTableColumn label="任务" min-width="280">
           <template #default="{ row }">
             <div class="task-title-cell">
@@ -149,7 +149,6 @@ import {
 import { useAstraStore } from '@/stores/astra'
 import { platformCopy, priorityLabel, taskTypeLabel } from '@/utils/format'
 import { workerDisplayName } from '@/utils/workerName'
-import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
 const store = useAstraStore()
 const route = useRoute()

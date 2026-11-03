@@ -37,7 +37,6 @@
       v-loading="loading"
       :data="paged"
       row-key="id"
-      :max-height="TABLE_MAX_HEIGHT"
       aria-label="任务分类列表"
       element-loading-text="正在加载任务分类"
       data-testid="category-table"
@@ -127,7 +126,6 @@ import type { TaskCategory, TaskCategoryWrite } from '@/api/types'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
 import CategoryEditorDrawer from '@/views/settings/CategoryEditorDrawer.vue'
-import { TABLE_MAX_HEIGHT } from '@/utils/table'
 import { useAstraStore } from '@/stores/astra'
 import SettingsHeaderActions from './SettingsHeaderActions.vue'
 

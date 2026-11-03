@@ -37,7 +37,6 @@
       v-loading="loading"
       :data="pagedKeys"
       row-key="id"
-      :max-height="TABLE_MAX_HEIGHT"
       element-loading-text="正在加载 Key"
       data-testid="gateway-keys-table"
     >
@@ -211,7 +210,6 @@ import {
   parseNumberList,
   tokenLimitText,
 } from '@/utils/gateway'
-import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
 const keys = ref<GatewayKey[]>([])
 const loading = ref(false)

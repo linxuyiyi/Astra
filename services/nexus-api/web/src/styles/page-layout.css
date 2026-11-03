@@ -263,7 +263,7 @@
   position: sticky;
   bottom: 0;
   z-index: 4;
-  background: var(--admin-page-bg, var(--astra-bg-panel));
+  background: var(--astra-bg-panel);
   padding-top: 4px;
 }
 

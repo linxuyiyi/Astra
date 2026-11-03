@@ -623,23 +623,61 @@ class RemoteProvisioner:
             if readable:
                 await self._require_owned_listener(interpreter=installed)
             return
+        await self._ensure_safe()
         probe = r"""
+port="$1"
 files=(/proc/net/tcp)
 if test -e /proc/net/tcp6; then files+=(/proc/net/tcp6); fi
-for file in "${files[@]}"; do
-  test -r "$file" || { echo '无法确认 OpenCode 监听状态，停止环境引导' >&2; exit 1; }
+inodes=$(awk -v port="$port" '$4 == "0A" && $2 ~ ":" port "$" {print $10}' "${files[@]}") || exit 1
+if test -z "$inodes"; then printf CLEAR; exit 0; fi
+pids=()
+starts=()
+for proc in /proc/[0-9]*; do
+  found=false
+  for fd in "$proc"/fd/*; do
+    target=$(readlink "$fd" 2>/dev/null) || continue
+    for inode in $inodes; do
+      if test "$target" = "socket:[$inode]"; then found=true; break; fi
+    done
+    if $found; then break; fi
+  done
+  if ! $found; then continue; fi
+  exe=$(readlink "$proc/exe") || exit 1
+  mapfile -d '' -t args < "$proc/cmdline"
+  name=${exe##*/}
+  is_opencode=false
+  case "$name" in
+    opencode|opencode.exe|opencode-*) is_opencode=true ;;
+    node|bun)
+      for arg in "${args[@]}"; do
+        if test "${arg##*/}" = opencode; then is_opencode=true; fi
+      done ;;
+  esac
+  serve=false
+  for arg in "${args[@]}"; do if test "$arg" = serve; then serve=true; fi; done
+  if ! $is_opencode || ! $serve; then printf FOREIGN; exit 0; fi
+  pids+=("${proc##*/}")
+  starts+=("$(awk '{print $22}' "$proc/stat")")
 done
-if awk -v port="$1" '$4 == "0A" && $2 ~ ":" port "$" { found=1 }
-  END { exit found ? 1 : 0 }' "${files[@]}"; then
-  printf CLEAR
-else
-  printf BLOCKED
-fi
+if test "${#pids[@]}" = 0; then printf UNKNOWN; exit 0; fi
+for i in "${!pids[@]}"; do
+  pid=${pids[$i]}
+  if test -e "/proc/$pid/stat"; then
+    test "$(awk '{print $22}' "/proc/$pid/stat")" = "${starts[$i]}" || exit 1
+    kill -TERM "$pid" || exit 1
+  fi
+done
+for attempt in {1..50}; do
+  if ! awk -v port="$port" '$4 == "0A" && $2 ~ ":" port "$" {found=1}
+    END {exit found ? 0 : 1}' "${files[@]}"; then printf STOPPED; exit 0; fi
+  sleep 0.1
+done
+printf STILL_LISTENING
 """
         port = f"{int(self.environment.opencode_server_port):04X}"
         state = await self._command("bash -c " + shlex.quote(probe) + " -- " + shlex.quote(port))
-        if state != "CLEAR":
-            raise RuntimeError("OpenCode 端口已有监听且尚无可用解释器确认原生状态，停止环境引导")
+        if state not in {"CLEAR", "STOPPED"}:
+            raise RuntimeError("端口监听进程不是可停止的历史 OpenCode，或停止后端口仍被占用")
 
     async def _require_owned_listener(self, *, interpreter: str):
         lock_file = f"{worker_state_dir(self.environment.id)}/worker.lock"

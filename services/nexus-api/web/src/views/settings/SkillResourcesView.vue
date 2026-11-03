@@ -39,7 +39,6 @@
       v-loading="loading"
       :data="paged"
       row-key="id"
-      :max-height="TABLE_MAX_HEIGHT"
       aria-label="技能列表"
       element-loading-text="正在加载技能列表"
       data-testid="skills-table"
@@ -119,7 +118,6 @@
       </template>
     </ElTable>
     <div class="admin-page__footer">
-      <span class="sync-hint">AgentScope {{ agentscopeAvailable ? '已连接' : '不可用' }}</span>
       <ElPagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
@@ -260,7 +258,6 @@ import {
 import type { SkillFile, SkillResource, SkillVersion } from "../../types";
 import { confirmDialog } from "../../composables/useConfirm";
 import { notify } from "../../composables/useToast";
-import { TABLE_MAX_HEIGHT } from "../../utils/table";
 import SettingsHeaderActions from "./SettingsHeaderActions.vue";
 
 const DEFAULT_MARKDOWN = `---
@@ -275,7 +272,6 @@ description: ""
 const items = ref<SkillResource[]>([]);
 const loading = ref(false);
 const error = ref("");
-const agentscopeAvailable = ref(false);
 const keyword = ref("");
 const sourceFilter = ref("");
 const statusFilter = ref("");
@@ -331,7 +327,6 @@ async function load() {
   try {
     const payload = await listSkillResources();
     items.value = payload.items;
-    agentscopeAvailable.value = payload.agentscope_available;
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : "技能列表加载失败";
   } finally {

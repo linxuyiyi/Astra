@@ -46,7 +46,7 @@
     </ElAlert>
 
     <div class="astra-table-panel">
-      <ElTable v-loading="store.loading || digitalLoading" :data="paged" row-key="id" :max-height="TABLE_MAX_HEIGHT" aria-label="Agent Worker 列表" @row-click="openDetail">
+      <ElTable v-loading="store.loading || digitalLoading" :data="paged" row-key="id" aria-label="Agent Worker 列表" @row-click="openDetail">
         <ElTableColumn label="Agent Worker" min-width="230" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="worker-cell">
@@ -178,7 +178,6 @@ import {
   type WorkerRow,
 } from '@/features/workers/presentation'
 import { useAstraStore } from '@/stores/astra'
-import { TABLE_MAX_HEIGHT } from '@/utils/table'
 import SettingsHeaderActions from '@/views/settings/SettingsHeaderActions.vue'
 
 type WorkerRowView = WorkerRow & { digital: DigitalEmployee | null }

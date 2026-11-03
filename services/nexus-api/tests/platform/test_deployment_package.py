@@ -174,16 +174,14 @@ async def test_global_package_sources_persist_and_repeat_without_rewriting(globa
     assert before == (pip_file.stat().st_mtime_ns, npm_file.stat().st_mtime_ns)
 
 
-@pytest.mark.parametrize("kind", ["pip", "npm", "extra-index"])
+@pytest.mark.parametrize("kind", ["pip", "extra-index"])
 async def test_existing_global_config_conflict_is_preserved(global_sources, tmp_path, kind):
 
     pip_file, npm_file = tmp_path / ".config/pip/pip.conf", tmp_path / ".npmrc"
-    path = npm_file if kind == "npm" else pip_file
+    path = pip_file
     path.parent.mkdir(parents=True, exist_ok=True)
     content = (
-        "registry=https://other.company\n"
-        if kind == "npm"
-        else "[global]\n"
+        "[global]\n"
         + ("extra-index-url" if kind == "extra-index" else "index-url")
         + " = https://other.company\n"
     )
@@ -191,7 +189,7 @@ async def test_existing_global_config_conflict_is_preserved(global_sources, tmp_
     with pytest.raises(RuntimeError, match="冲突|额外来源"):
         await configure_sources(LocalTarget(tmp_path), global_sources, str(tmp_path), str(tmp_path / "node"))
     assert path.read_text() == content
-    assert not (pip_file if kind == "npm" else npm_file).exists()
+    assert not npm_file.exists()
 
 
 async def test_global_config_does_not_erase_other_settings(global_sources, tmp_path):

@@ -97,7 +97,7 @@ const activeSectionLabel = computed(() => menuItems.find((item) => item.path ===
 .settings-content > .content-shell { flex: 1 1 auto; min-height: 0; }
 .settings-shell { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; border: none; border-radius: 0; }
 .settings-shell > .el-card__header { padding: 16px; flex: none; }
-.settings-shell :deep(.el-card__body) { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px; scrollbar-gutter: stable; }
+.settings-shell > :deep(.el-card__body) { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px; scrollbar-gutter: stable; }
 .settings-shell__header { display: flex; align-items: center; gap: 12px; min-height: 32px; }
 .settings-shell__title { color: var(--astra-text-primary); font-size: 16px; font-weight: 600; }
 .settings-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }

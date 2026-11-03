@@ -5,7 +5,6 @@
     element-loading-text="正在加载节点"
     :data="nodes"
     row-key="id"
-    :max-height="TABLE_MAX_HEIGHT"
     data-testid="gateway-node-table"
   >
     <ElTableColumn label="节点名称 / 地址" min-width="200">
@@ -84,7 +83,6 @@
 import { RouterLink } from 'vue-router'
 import { ElButton, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus'
 import type { GatewayNode, GatewayPool } from '@/api/gateway'
-import { TABLE_MAX_HEIGHT } from '@/utils/table'
 import {
   configStateLabel,
   healthStateLabel,

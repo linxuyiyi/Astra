@@ -810,3 +810,33 @@ async def test_probe_gateway_fails_when_home_is_unknown(tmp_path):
         await worker._probe_gateway(emit)
 
     assert not global_log.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["CLEAR", "STOPPED"])
+async def test_bootstrap_without_interpreter_accepts_clear_or_stopped_listener(state):
+    worker = RemoteProvisioner(
+        SimpleNamespace(id=7, opencode_server_port=4096, model_name="", opencode_path=""), {"id": "bootstrap"}
+    )
+    worker._ensure_safe = AsyncMock()
+    worker._command = AsyncMock(side_effect=["", state])
+
+    await worker._bootstrap_idle(interpreter_ready=False)
+
+    worker._ensure_safe.assert_awaited_once()
+    command = worker._command.call_args.args[0]
+    assert command.startswith("bash -c ")
+    assert command.endswith(" -- 1000")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["FOREIGN", "UNKNOWN", "STILL_LISTENING"])
+async def test_bootstrap_without_interpreter_rejects_unreleased_listener(state):
+    worker = RemoteProvisioner(
+        SimpleNamespace(id=7, opencode_server_port=4096, model_name="", opencode_path=""), {"id": "bootstrap"}
+    )
+    worker._ensure_safe = AsyncMock()
+    worker._command = AsyncMock(side_effect=["", state])
+
+    with pytest.raises(RuntimeError, match="历史 OpenCode"):
+        await worker._bootstrap_idle(interpreter_ready=False)

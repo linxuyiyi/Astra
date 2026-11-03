@@ -33,7 +33,6 @@ from app.event_bus import event_bus
 from app.library_service import KnowledgeService, LibraryPrincipal
 from app.models import (
     AgentWorker,
-    CodeRepository,
     Event,
     ExperienceEvidence,
     ExperienceReviewJob,
@@ -107,9 +106,7 @@ async def require_employee(employee_id: str, session: AsyncSession) -> AgentWork
         select(AgentWorker)
         .where(AgentWorker.id == employee_id)
         .options(
-            selectinload(AgentWorker.execution_environment).selectinload(
-                OpenCodeExecutionEnvironment.repository
-            )
+            selectinload(AgentWorker.execution_environment)
         )
     )
     if not employee:
@@ -244,7 +241,7 @@ async def employees_read_batch(
                 latest_operation=latest_op,
             )
         active_tasks = active_tasks_by_emp.get(employee.id, [])
-        repository_id = environment.repository_id if environment is not None else None
+        repository_url = environment.repository_url if environment is not None else None
         env_status = (
             worker_health["runtime_health"]["status"]
             if worker_health is not None
@@ -254,7 +251,7 @@ async def employees_read_batch(
             mode=environment.mode if environment is not None else None,
             environment_status=env_status,
             worker_status=instance.status if instance is not None else None,
-            repository_id=str(repository_id) if repository_id else None,
+            repository_url=repository_url,
             employee_status=employee.status,
             task_statuses=[item[1] for item in active_tasks],
             runtime_connections=[item[2] for item in active_tasks],
@@ -401,9 +398,7 @@ async def list_employees(session: AsyncSession = Depends(get_session)):
             await session.execute(
                 select(AgentWorker)
                 .options(
-                    selectinload(AgentWorker.execution_environment).selectinload(
-                        OpenCodeExecutionEnvironment.repository
-                    )
+                    selectinload(AgentWorker.execution_environment)
                 )
                 .order_by(AgentWorker.id)
             )
@@ -418,9 +413,11 @@ async def list_employees(session: AsyncSession = Depends(get_session)):
 async def create_employee(payload: EmployeeCreate, session: AsyncSession = Depends(get_session)):
     await validate_category_ids(payload.category_ids, session)
     environment_payload = payload.execution_environment.model_dump()
-    repository_id = environment_payload.get("repository_id")
-    if repository_id and await session.get(CodeRepository, repository_id) is None:
-        raise HTTPException(status_code=422, detail="代码仓库不存在")
+    git_token = environment_payload.pop("git_token", None)
+    if git_token:
+        from app.runtime.repository import cipher
+
+        environment_payload["git_token_ciphertext"] = cipher().encrypt(git_token)
     skill_refs = environment_payload.pop("skill_refs", None)
     mcp_refs = environment_payload.pop("mcp_refs", None)
     employee_payload = payload.model_dump(exclude={"execution_environment"})
@@ -513,12 +510,15 @@ async def update_employee_environment(
     mcp_refs = updates.pop("mcp_refs", None)
     if not updates.get("ssh_password"):
         updates.pop("ssh_password", None)
-    if "repository_id" not in provided:
-        updates.pop("repository_id", None)
-    elif updates.get("repository_id") and await session.get(
-        CodeRepository, updates["repository_id"]
-    ) is None:
-        raise HTTPException(status_code=422, detail="代码仓库不存在")
+    git_token = updates.pop("git_token", None)
+    if git_token is not None:
+        from app.runtime.repository import cipher
+
+        updates["git_token_ciphertext"] = cipher().encrypt(git_token) if git_token else None
+    if "repository_url" not in provided:
+        updates.pop("repository_url", None)
+    elif not updates["repository_url"]:
+        updates["git_token_ciphertext"] = None
     if "branch" not in provided:
         updates.pop("branch", None)
     for key, value in updates.items():
@@ -543,8 +543,6 @@ async def update_employee_environment(
 
     await session.commit()
     await session.refresh(environment)
-    if environment.repository_id:
-        environment.repository = await session.get(CodeRepository, environment.repository_id)
     session.add(
         Event(
             employee_id=employee.id,
@@ -709,8 +707,6 @@ async def create_related_tasks(payload: RelatedTaskCreate, session: AsyncSession
     created: list[Task] = []
     created_ids: list[str] = []
     for index, part in enumerate(payload.parts):
-        if await session.get(CodeRepository, part.repository_id) is None:
-            raise HTTPException(status_code=422, detail="仓库不存在")
         if part.depends_on is not None and part.depends_on >= index:
             raise HTTPException(status_code=422, detail="依赖必须指向更早的任务")
         task = await TaskService(session).create(
@@ -720,7 +716,6 @@ async def create_related_tasks(payload: RelatedTaskCreate, session: AsyncSession
                 title=part.title or payload.title,
                 description=payload.description,
                 acceptance_criteria=payload.acceptance_criteria,
-                repository_id=part.repository_id,
             ),
             commit=False,
         )
@@ -736,7 +731,6 @@ async def create_related_tasks(payload: RelatedTaskCreate, session: AsyncSession
         {
             "id": task.id,
             "title": task.title,
-            "repository_id": task.repository_id,
             "related_task_id": task.related_task_id,
             "status": task.status,
         }
@@ -752,7 +746,6 @@ async def get_related_tasks(task_id: str, session: AsyncSession = Depends(get_se
         {
             "id": task.id,
             "title": task.title,
-            "repository_id": task.repository_id,
             "related_task_id": task.related_task_id,
             "status": task.status,
             "base_commit": task.base_commit,
@@ -766,8 +759,6 @@ async def create_task(payload: TaskCreate, session: AsyncSession = Depends(get_s
     category = await session.get(TaskCategory, payload.category_id)
     if not category or not category.enabled:
         raise HTTPException(status_code=422, detail="请选择已启用的任务分类")
-    if payload.repository_id and await session.get(CodeRepository, payload.repository_id) is None:
-        raise HTTPException(status_code=422, detail="仓库不存在")
     if payload.employee_id:
         employee = await require_employee(payload.employee_id, session)
         if not employee.enabled:

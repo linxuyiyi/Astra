@@ -101,35 +101,13 @@ class AgentWorker(RuntimeProjection, Base):
     )
 
 
-class CodeRepository(Base):
-    __tablename__ = "t_nexus_code_repositories"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    url: Mapped[str] = mapped_column(Text)
-    branch: Mapped[str] = mapped_column(String(255), default="main", server_default="main")
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
-
-
-class GitCredential(Base):
-    __tablename__ = "t_nexus_git_credentials"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    repository_id: Mapped[str] = mapped_column(
-        ForeignKey("t_nexus_code_repositories.id"), unique=True, index=True
-    )
-    token_ciphertext: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
-
-
 class OpenCodeExecutionEnvironment(Base):
     __tablename__ = "t_nexus_opencode_execution_environments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     employee_id: Mapped[str] = mapped_column(ForeignKey("t_nexus_agent_workers.id"), unique=True, index=True)
-    repository_id: Mapped[str | None] = mapped_column(
-        ForeignKey("t_nexus_code_repositories.id"), nullable=True, index=True
-    )
+    repository_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    git_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     runtime_engine: Mapped[str] = mapped_column(String(16), default="opencode", server_default="opencode")
     mode: Mapped[str] = mapped_column(String(32), default="LOCAL", index=True)
     name: Mapped[str] = mapped_column(String(120), default="本地 Agent 工作环境")
@@ -153,7 +131,6 @@ class OpenCodeExecutionEnvironment(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
     employee: Mapped[AgentWorker] = relationship(back_populates="execution_environment")
-    repository: Mapped["CodeRepository | None"] = relationship(lazy="joined")
     worker_instance: Mapped["WorkerInstance | None"] = relationship(
         back_populates="environment", uselist=False, cascade="all, delete-orphan"
     )
@@ -163,12 +140,8 @@ class OpenCodeExecutionEnvironment(Base):
         return bool(self.ssh_password)
 
     @property
-    def repository_url(self) -> str | None:
-        return self.repository.url if self.repository is not None else None
-
-    @property
-    def repository_branch(self) -> str | None:
-        return self.branch or (self.repository.branch if self.repository is not None else None)
+    def has_git_token(self) -> bool:
+        return bool(self.git_token_ciphertext)
 
 
 class Task(RuntimeProjection, Base):
@@ -198,9 +171,6 @@ class Task(RuntimeProjection, Base):
     source_channel_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True, unique=True)
     workspace: Mapped[str | None] = mapped_column(Text, nullable=True)
-    repository_id: Mapped[str | None] = mapped_column(
-        ForeignKey("t_nexus_code_repositories.id"), nullable=True, index=True
-    )
     related_task_id: Mapped[str | None] = mapped_column(
         ForeignKey("t_nexus_tasks.id"), nullable=True, index=True
     )

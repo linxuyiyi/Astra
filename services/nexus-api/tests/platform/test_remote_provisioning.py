@@ -412,7 +412,7 @@ def _agent_install_worker(monkeypatch):
         ssh_password="secret",
         model_name="",
         opencode_path="/usr/local/bin/opencode",
-        repository_id=None,
+        repository_url=None,
         skill_refs=[],
         mcp_refs=[],
     )

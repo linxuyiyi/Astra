@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
@@ -13,7 +12,6 @@ from .agentscope import AgentScopeClient, AgentScopeError
 from .auth import require_internal
 from .db import connect, employee_from_row
 from .resources import RETIRE_PREFIX, sync_employee_resources
-from .task_skill import TASK_SKILL_ID, TASK_SKILL_NAME, skill_directory, task_mcp_headers, task_mcp_url
 from .tool_policy import employee_tool_policy, require_employee_tool
 
 logger = logging.getLogger("nexus.schedule_resources")
@@ -103,10 +101,6 @@ async def schedule_policy(client, context, tool_name="", mcp_ref=""):
     }
 
 
-def is_task_skill(item):
-    return bool(re.fullmatch(re.escape(TASK_SKILL_NAME) + r"(?: \(\d+\))?", str(item.get("name", ""))))
-
-
 async def prepare_schedule(client, context, store):
     employee, source = await schedule_employee(client, context)
     scoped = ScheduleResourceClient(client, context.user_id)
@@ -131,31 +125,6 @@ async def prepare_schedule(client, context, store):
     if not result["ok"]:
         # 详细且脱敏的资源状态已由通用同步器保留，接口不输出 MCP 凭据。
         raise HTTPException(502, "日程员工资源尚未同步完成")
-    installed = await scoped.list_workspace_skills(context.agent_id, context.session_id)
-    tasks = [item for item in installed if is_task_skill(item)]
-    if TASK_SKILL_ID in employee["skills"]:
-        if not tasks:
-            try:
-                await scoped.upload_workspace_skill(
-                    context.agent_id,
-                    context.session_id,
-                    skill_directory(),
-                )
-            except AgentScopeError as exc:
-                # 技能说明和 MCP 连接是两件事，重复上传失败不挡住任务工具。
-                logger.warning("日程会话任务技能未上传：%s", exc.detail)
-        headers = task_mcp_headers(employee["id"], context.session_id)
-        headers["X-Nexus-Schedule-User-Id"] = context.user_id
-        headers["X-Nexus-Schedule-Agent-Id"] = context.agent_id
-        await scoped.add_workspace_mcp(
-            context.agent_id, context.session_id, url=task_mcp_url(), headers=headers
-        )
-    else:
-        for item in tasks:
-            await scoped.remove_workspace_skill(context.agent_id, context.session_id, item["name"])
-        installed_mcps = await scoped.list_workspace_mcp(context.agent_id, context.session_id)
-        if any(item.get("name") == "nexus-task" for item in installed_mcps):
-            await scoped.remove_workspace_mcp(context.agent_id, context.session_id)
     await scoped.set_permission_mode(
         context.agent_id, context.session_id, "bypass" if employee["mcps"] else "dont_ask"
     )

@@ -31,7 +31,6 @@ def _task(**overrides):
         category_id="testing",
         status=TaskStatus.RUNNING,
         employee_id="E1",
-        repository_id="repo-1",
         claimed_at=datetime.now(UTC),
         current_session_id="ses",
         workspace="/tmp/workspaces/E1",
@@ -62,7 +61,7 @@ async def _ready(session):
             mode="LOCAL",
             name="local",
             workspace_root="/tmp/workspaces/E1",
-            repository_id="repo-1",
+            repository_url='https://git.example/org/repo.git',
             status=EnvironmentStatus.AVAILABLE,
         )
     )
@@ -332,7 +331,7 @@ async def test_continue_reuses_the_worker_worktree_and_session(session):
             mode="LOCAL",
             name="other",
             workspace_root="/tmp/workspaces/E2",
-            repository_id="repo-1",
+            repository_url='https://git.example/org/repo.git',
             status=EnvironmentStatus.AVAILABLE,
         )
     )
@@ -343,7 +342,7 @@ async def test_continue_reuses_the_worker_worktree_and_session(session):
             task_type="ISSUE",
             category_id="testing",
             status=TaskStatus.PENDING,
-            repository_id="repo-1",
+
         )
     )
     await session.commit()

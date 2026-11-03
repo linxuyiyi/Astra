@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import gzip
 import hashlib
 import io
 import json
@@ -36,13 +37,13 @@ def registry():
             state["calls"].append(self.path)
             content = f"#!/bin/sh\nprintf '{state['binary_version']}\\n'\n".encode()
             archive = io.BytesIO()
-            with tarfile.open(fileobj=archive, mode="w:gz") as packed:
+            with tarfile.open(fileobj=archive, mode="w") as packed:
                 item = tarfile.TarInfo("package/bin/opencode")
                 item.mode, item.size = 0o755, len(content)
                 if state["symlink"]:
                     item.type, item.linkname = tarfile.SYMTYPE, "/bin/sh"
                 packed.addfile(item, io.BytesIO(content))
-            data = archive.getvalue()
+            data = gzip.compress(archive.getvalue(), mtime=0)
             if self.path == "/archive.tgz":
                 if state["redirect"]:
                     self.send_response(302)

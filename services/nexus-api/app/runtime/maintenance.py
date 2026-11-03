@@ -250,7 +250,7 @@ def _validate_action(environment: OpenCodeExecutionEnvironment, action: str) -> 
                 409,
                 "请先配置 NEXUS_MCP_TRANSPORT=streamable-http 并启动数字图书馆 HTTP 服务",
             )
-    if action == MaintenanceAction.UPDATE.value and not environment.repository_id:
+    if action == MaintenanceAction.UPDATE.value and not environment.repository_url:
         raise HTTPException(409, "更新需要先绑定工程仓库")
 
 
@@ -262,7 +262,7 @@ def _target_revision(environment: OpenCodeExecutionEnvironment) -> dict[str, Any
         "worker_agent_version": WORKER_AGENT_VERSION,
         "model_name": environment.model_name,
         "opencode_path": environment.opencode_path,
-        "repository_id": environment.repository_id,
+        "repository_url": environment.repository_url,
         "branch": environment.branch,
         "skills": list(environment.skill_refs or []),
         "mcp": [

@@ -204,7 +204,9 @@ class FakeAgentScope:
                         {
                             "name": record["name"],
                             "is_stateful": False,
-                            "mcp_config": {"type": "http_mcp", "url": "http://library/mcp", "headers": {}},
+                            "mcp_config": json.loads(json.dumps(record.get("mcp_config") or {
+                                "type": "http_mcp", "url": "http://library/mcp", "headers": {}
+                            })),
                             "is_healthy": True,
                             "tools": [{"name": "library_tool", "description": "库工具"}],
                         }
@@ -261,7 +263,7 @@ def test_skill_crud_versions_restore_and_restart(tmp_path, monkeypatch, fake):
         assert any(item["id"] == skill_id for item in listed["items"])
         public = client.get("/api/v1/skills").json()
         assert {"id": skill_id, "name": "发布检查"} in public["items"]
-        assert {"id": "task-management", "name": "任务管理"} in public["items"]
+        assert all(item["id"] != "task-management" for item in public["items"])
         assert all(set(item) == {"id", "name"} for item in public["items"])
 
         edited = client.patch(
@@ -462,7 +464,6 @@ def test_employee_binds_mcp_and_unbind_removes_it(tmp_path, monkeypatch, fake):
         session_id = sent.json()["agentscope"]["session_id"]
         assert {item["name"] for item in fake.workspace(agent_id, session_id)[1]} == {
             mcp["runtime_name"],
-            "nexus-schedule",
         }
 
         updated = client.patch(
@@ -470,9 +471,7 @@ def test_employee_binds_mcp_and_unbind_removes_it(tmp_path, monkeypatch, fake):
             json=employee_body(mcps=[]),
         )
         assert updated.status_code == 200, updated.text
-        assert [item["name"] for item in fake.workspace(agent_id, session_id)[1]] == [
-            "nexus-schedule"
-        ]
+        assert fake.workspace(agent_id, session_id)[1] == []
         assert client.delete(f"/api/v1/config/mcps/{mcp['id']}").status_code == 200
 
 
@@ -860,3 +859,52 @@ def test_unbind_intent_survives_a_sync_crash(tmp_path, monkeypatch, fake):
         assert retried.status_code == 200, retried.text
         assert retried.json()["sync"]["status"] == "applied"
         assert fake.workspace(agent_id, mailbox)[0] == []
+
+
+@pytest.mark.parametrize("condition,expected", [("failed", "error"), ("running", "pending")])
+def test_employee_save_persists_final_resource_sync_snapshot(
+    tmp_path, monkeypatch, fake, condition, expected
+):
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    with TestClient(create_app()) as client:
+        attach(client, fake)
+        employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
+        original_revision = employee["capability"]["applied_revision"]
+        conversation = client.post(
+            f"/api/v1/employees/{employee['id']}/conversations",
+            headers={"X-Owner-Id": "owner-a"},
+            json={"name": "私聊"},
+        ).json()
+        sent = client.post(
+            f"/api/v1/conversations/{conversation['id']}/messages",
+            headers={"X-Owner-Id": "owner-a"},
+            json={"text": "初始化测试会话"},
+        )
+        assert sent.status_code == 200, sent.text
+        session_id = sent.json()["agentscope"]["session_id"]
+        original_handler = fake.handler
+
+        def fail_private(request):
+            if (
+                condition == "failed"
+                and request.url.path == "/workspace/mcp/from-library"
+                and request.url.params.get("session_id") == session_id
+            ):
+                return httpx.Response(503, json={"detail": "private workspace unavailable"})
+            return original_handler(request)
+
+        if condition == "running":
+            fake.statuses[session_id] = "running"
+        fake.handler = fail_private
+        attach(client, fake)
+        response = client.patch(f"/api/v1/employees/{employee['id']}", json=employee_body(mcps=["ext-mcp"]))
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["sync"]["status"] == expected, result
+        saved = result["employee"]["capability"]
+        assert saved["runtime_status"] == expected, saved
+        assert saved["applied_revision"] == original_revision
+        current = next(
+            item for item in client.get("/api/v1/employees").json()["items"] if item["id"] == employee["id"]
+        )
+        assert current["capability"] == saved

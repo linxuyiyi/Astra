@@ -130,26 +130,6 @@ def register_task_hint(app, deliver) -> None:
         return {"ok": True}
 
 
-NEXUS_TASK_MCP_PREFIX = "mcp__nexus-task__"
-NEXUS_SCHEDULE_MCP_PREFIX = "mcp__nexus-schedule__"
-
-
-def allow_nexus_task_mcp(mcp_tool_class, decision_class, behavior_class) -> None:
-    """任务和日程 MCP 都是平台内置能力，在 dont_ask 下显式放行。"""
-
-    original = mcp_tool_class.check_permissions
-
-    allowed = (NEXUS_TASK_MCP_PREFIX, NEXUS_SCHEDULE_MCP_PREFIX)
-
-    async def check_permissions(self, *args, **kwargs):
-        name = str(getattr(self, "name", ""))
-        if name.startswith(allowed):
-            return decision_class(behavior=behavior_class.ALLOW, message="允许数字员工使用平台工具")
-        return await original(self, *args, **kwargs)
-
-    mcp_tool_class.check_permissions = check_permissions
-
-
 # 任务规划和临时 Agent 会把岗位员工带偏。团队协作留下 TeamCreate、TeamSay、
 # TeamDelete 和 AgentInvite。AgentCreate 会造出 source=team 的临时 Agent，继续卸掉。
 REMOVED_AGENT_TOOLS = (
@@ -431,12 +411,11 @@ def main() -> None:
         IsolationPolicy,
     )
     from agentscope.message import HintBlock, Msg
-    from agentscope.permission import PermissionBehavior, PermissionDecision
     from agentscope.rag import QdrantStore
-    from agentscope.tool import FunctionTool, MCPTool
+    from agentscope.permission import PermissionBehavior, PermissionDecision
+    from agentscope.tool import FunctionTool
 
     install_card_context_size()
-    allow_nexus_task_mcp(MCPTool, PermissionDecision, PermissionBehavior)
 
     async def mailbox_lookup(agent_id: str) -> str | None:
         async with httpx.AsyncClient(timeout=10) as client:

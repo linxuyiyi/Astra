@@ -17,7 +17,6 @@
         <ElSelect v-model="sourceFilter" class="admin-page__select" aria-label="技能来源" placeholder="来源：全部" clearable>
           <ElOption value="nexus" label="Nexus 自建" />
           <ElOption value="agentscope" label="AgentScope" />
-          <ElOption value="builtin" label="内置" />
         </ElSelect>
         <ElSelect v-model="statusFilter" class="admin-page__select" aria-label="启用状态" placeholder="状态：全部" clearable>
           <ElOption value="enabled" label="已启用" />
@@ -341,7 +340,7 @@ async function load() {
 }
 
 function sourceLabel(source: string) {
-  return source === "nexus" ? "Nexus 自建" : source === "agentscope" ? "AgentScope" : "内置";
+  return source === "nexus" ? "Nexus 自建" : "AgentScope";
 }
 
 function sourceTagType(source: string) {

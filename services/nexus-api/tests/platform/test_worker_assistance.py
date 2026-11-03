@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.models import Event, Task
 from app.task_mcp import build_mcp_server
-from app.task_tools import TaskTools, nexus_employee_id, nexus_session_id
+from app.task_tools import TaskTools
 from tests.platform.test_session_workspace import runtime  # noqa: F401, F811
 
 
@@ -44,13 +44,7 @@ async def assistance(runtime, monkeypatch):  # noqa: F811
         return runtime.native.pending_permissions
 
     monkeypatch.setattr(runtime.native, "permissions", permissions)
-    tokens = [(nexus_employee_id, nexus_employee_id.set("owner")),
-              (nexus_session_id, nexus_session_id.set("chat-owner"))]
-    try:
-        yield runtime, TaskTools(runtime.session)
-    finally:
-        for variable, token in tokens:
-            variable.reset(token)
+    yield runtime, TaskTools(runtime.session)
 
 
 def test_mcp_exposes_employee_assistance_tools():
@@ -127,12 +121,11 @@ async def test_only_one_time_permission_decisions(assistance, decision, ok):
 
 
 @pytest.mark.parametrize("field,value", [
-    ("responsible_employee_id", "another"), ("source_session_id", "another-chat"),
     ("current_session_id", "new-session"), ("status", "SUCCEEDED"), ("status", "CANCELED"),
     ("status", "FAILED"), ("pending_message_id", "inflight"),
     ("suspension", {"cancel_token": {"id": "cancel"}}),
 ])
-async def test_stale_or_unauthorized_reply_never_writes(assistance, field, value):
+async def test_stale_reply_never_writes(assistance, field, value):
     r, tools = assistance
     setattr(r.task, field, value)
     await r.session.commit()
@@ -152,13 +145,9 @@ async def test_same_employee_multiple_tasks_cannot_answer_foreign_request(assist
     assert result["ok"] is False and r.replies == []
 
 
-async def test_source_session_is_required_even_for_same_employee(assistance):
+async def test_assistance_does_not_require_caller_source_session(assistance):
     r, tools = assistance
-    token = nexus_session_id.set("")
-    try:
-        assert (await tools.assistance("T1"))["ok"] is False
-    finally:
-        nexus_session_id.reset(token)
+    assert (await tools.assistance("T1"))["ok"] is True
     assert r.replies == []
 
 

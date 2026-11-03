@@ -227,14 +227,9 @@ def test_worker_assistance_starts_new_authorized_employee_discussion(setup, monk
     old = wait_done(owner, cid)["channel"]["discussion"]
     original_calls = len(fake.calls)
 
-    async def attach(*args, **kwargs):
-        pass  # 这里只替换外部 AgentScope 资源安装，讨论、身份与队列使用真实实现。
-
-    monkeypatch.setattr("nexus_api.task_skill.attach_task_capability", attach)
     with connect() as db:
         sid = db.execute(text("""SELECT agentscope_session_id FROM t_nexus_channel_members
             WHERE channel_id=:c AND employee_id='dev'"""), {"c": cid}).scalar()
-        db.execute(text("UPDATE t_nexus_employees SET skills_json='[\"task-management\"]' WHERE id='dev'"))
         if revoked:
             db.execute(text("""UPDATE t_nexus_channel_members SET membership_active=0
                 WHERE channel_id=:c AND member_type='human' AND member_id=:u"""), {"c": cid, "u": uid})
@@ -494,8 +489,10 @@ def test_tool_policy_checks_human_and_employee_and_retired_binding(setup):
         db.commit()
     policy = app.state.collaboration.policy(sid)
     assert policy["allowed_tools"] == ["Bash", "contact_employee"]
-    assert policy["task_allowed"]
-    assert app.state.collaboration.policy(sid, "Bash", policy["discussion_id"])["task_allowed"]
+    assert policy["mcp_refs"] == {}
+    assert app.state.collaboration.policy(sid, "Bash", policy["discussion_id"])["allowed_tools"] == [
+        "Bash", "contact_employee"
+    ]
     assert (
         owner.patch(f"/api/v1/channels/{cid}", json={"name": "群组", "member_ids": ["dev"]}).status_code
         == 200

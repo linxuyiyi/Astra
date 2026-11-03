@@ -22,6 +22,12 @@ async def session():
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as value:
+        from nexus_api.db_models import employees
+        await value.execute(employees.insert().values(
+            id="qa-owner", name="QA", domain="QA", description="", instructions="", avatar="robot",
+            enabled=1, knowledge_json="[]", skills_json="[]", tools_json="[]", created_at="t", updated_at="t",
+        ))
+        await value.commit()
         yield value
     await engine.dispose()
 
@@ -32,24 +38,19 @@ def _create(**overrides) -> TaskCreate:
 
 @pytest.mark.parametrize("state", list(TaskStatus))
 async def test_employee_task_results_supply_chinese_labels_and_original_codes(session, state):
-    from app.task_tools import nexus_employee_id
 
     task = await TaskService(session).create(_create(responsible_employee_id="emp_1"))
     task.status = state.value
     await session.commit()
-    token = nexus_employee_id.set("emp_1")
-    try:
-        tools = TaskTools(session)
-        listed = await tools.list()
-        responses = [listed["tasks"][0]]
-        for method in (tools.get, tools.logs, tools.result, tools.summary):
-            responses.append(await method(task.id))
-        responses.append(tools._refuse(task, "测试拒绝"))
-        for result in responses:
-            assert result["status"] == state.value
-            assert result["runtime_status_label"] == TASK_STATUS[state.value]["label"]
-    finally:
-        nexus_employee_id.reset(token)
+    tools = TaskTools(session)
+    listed = await tools.list()
+    responses = [listed["tasks"][0]]
+    for method in (tools.get, tools.logs, tools.result, tools.summary):
+        responses.append(await method(task.id))
+    responses.append(tools._refuse(task, "测试拒绝"))
+    for result in responses:
+        assert result["status"] == state.value
+        assert result["runtime_status_label"] == TASK_STATUS[state.value]["label"]
 
 
 async def test_same_idempotency_key_returns_the_existing_task(session):
@@ -117,14 +118,9 @@ async def test_retry_pending_does_not_start(session):
 
 
 async def test_refused_start_returns_ok_false_after_rollback(session):
-    from app.task_tools import nexus_employee_id
 
-    token = nexus_employee_id.set("emp_1")
-    try:
-        task = await TaskService(session).create(_create(responsible_employee_id="emp_1"))
-        result = await TaskTools(session).start(task.id)
-    finally:
-        nexus_employee_id.reset(token)
+    task = await TaskService(session).create(_create(responsible_employee_id="emp_1"))
+    result = await TaskTools(session).start(task.id)
 
     assert result["ok"] is False
     assert result["task_id"] == task.id
@@ -197,75 +193,70 @@ def test_task_mcp_structured_output_accepts_dict_annotations():
     assert all(tool.output_schema for tool in tools)
 
 
-async def test_task_tools_require_owner_and_hide_transport_errors(session, monkeypatch):
+async def test_task_tools_use_explicit_filters_and_hide_transport_errors(session, monkeypatch):
     from app.executors.errors import OpenCodeServerUnavailable
-    from app.task_tools import nexus_employee_id
 
-    mine = nexus_employee_id.set("emp_1")
-    try:
-        owned = await TaskService(session).create(_create(title="自己的", responsible_employee_id="emp_1"))
-        other = await TaskService(session).create(_create(title="别人的", responsible_employee_id="emp_2"))
-        listed = await TaskTools(session).list()
-        assert listed["ok"] is True
-        assert [item["task_id"] for item in listed["tasks"]] == [owned.id]
-        hidden = await TaskTools(session).get(other.id)
-        assert hidden == {"ok": False, "error": "任务不存在"}
-        updated = await TaskTools(session).update(other.id, title="改掉")
-        assert updated["ok"] is False
-        current = await session.get(Task, other.id)
-        assert current.title == "别人的"
+    owned = await TaskService(session).create(_create(title="自己的", responsible_employee_id="emp_1"))
+    other = await TaskService(session).create(_create(title="别人的", responsible_employee_id="emp_2"))
+    listed = await TaskTools(session).list(responsible_employee_id="emp_1")
+    assert listed["ok"] is True
+    assert [item["task_id"] for item in listed["tasks"]] == [owned.id]
+    hidden = await TaskTools(session).get(other.id)
+    assert hidden["ok"] is True
+    updated = await TaskTools(session).update(other.id, title="改掉")
+    assert updated["ok"] is True
+    current = await session.get(Task, other.id)
+    assert current.title == "改掉"
 
-        async def explode(_self, _task_id):
-            raise OpenCodeServerUnavailable("ssh root@secret-host password=hunter2")
+    async def explode(_self, _task_id):
+        raise OpenCodeServerUnavailable("ssh root@secret-host password=hunter2")
 
-        monkeypatch.setattr("app.runtime.lifecycle.RuntimeService.start", explode)
-        failed = await TaskTools(session).start(owned.id)
-        assert failed["ok"] is False
-        assert failed["failure_code"] == "SSH_AUTH_FAILED"
-        assert failed["error"] == "SSH 认证失败"
-        rendered = str(failed)
-        assert "hunter2" not in rendered
-        assert "secret-host" not in rendered
+    monkeypatch.setattr("app.runtime.lifecycle.RuntimeService.start", explode)
+    failed = await TaskTools(session).start(owned.id)
+    assert failed["ok"] is False
+    assert failed["failure_code"] == "SSH_AUTH_FAILED"
+    assert failed["error"] == "SSH 认证失败"
+    rendered = str(failed)
+    assert "hunter2" not in rendered
+    assert "secret-host" not in rendered
 
-        async def time_out(_self, _task_id):
-            raise TimeoutError("password=hunter2 at 10.1.2.3")
+    async def time_out(_self, _task_id):
+        raise TimeoutError("password=hunter2 at 10.1.2.3")
 
-        monkeypatch.setattr("app.runtime.lifecycle.RuntimeService.start", time_out)
-        timed = await TaskTools(session).start(owned.id)
-        assert timed["failure_code"] == "EXECUTION_TIMEOUT"
-        assert "hunter2" not in str(timed)
+    monkeypatch.setattr("app.runtime.lifecycle.RuntimeService.start", time_out)
+    timed = await TaskTools(session).start(owned.id)
+    assert timed["failure_code"] == "EXECUTION_TIMEOUT"
+    assert "hunter2" not in str(timed)
 
-        async def conflict(_self, _task_id):
-            raise RuntimeError("端口冲突：该 Serve 属于另一员工或工作空间 password=hunter2")
+    async def conflict(_self, _task_id):
+        raise RuntimeError("端口冲突：该 Serve 属于另一员工或工作空间 password=hunter2")
 
-        monkeypatch.setattr("app.runtime.lifecycle.RuntimeService.start", conflict)
-        blocked = await TaskTools(session).start(owned.id)
-        assert blocked["failure_code"] == "WORKSPACE_CONFLICT"
-        assert "hunter2" not in str(blocked)
+    monkeypatch.setattr("app.runtime.lifecycle.RuntimeService.start", conflict)
+    blocked = await TaskTools(session).start(owned.id)
+    assert blocked["failure_code"] == "WORKSPACE_CONFLICT"
+    assert "hunter2" not in str(blocked)
 
-        async def offline(_self, _task_id):
-            raise OpenCodeServerUnavailable("connection refused")
+    async def offline(_self, _task_id):
+        raise OpenCodeServerUnavailable("connection refused")
 
-        monkeypatch.setattr("app.runtime.lifecycle.RuntimeService.start", offline)
-        unreachable = await TaskTools(session).start(owned.id)
-        assert unreachable["failure_code"] == "ENVIRONMENT_UNREACHABLE"
-        assert unreachable["hint"]
+    monkeypatch.setattr("app.runtime.lifecycle.RuntimeService.start", offline)
+    unreachable = await TaskTools(session).start(owned.id)
+    assert unreachable["failure_code"] == "ENVIRONMENT_UNREACHABLE"
+    assert unreachable["hint"]
 
-        async def unknown(_self, _task_id):
-            raise RuntimeError("token=abc secret-host")
+    async def unknown(_self, _task_id):
+        raise RuntimeError("token=abc secret-host")
 
-        monkeypatch.setattr("app.runtime.lifecycle.RuntimeService.start", unknown)
-        generic = await TaskTools(session).start(owned.id)
-        assert generic["failure_code"] == "ENVIRONMENT_UNAVAILABLE"
-        assert generic["error"] == "执行环境暂时不可用"
-        assert "abc" not in str(generic)
-        assert "secret-host" not in str(generic)
-    finally:
-        nexus_employee_id.reset(mine)
+    monkeypatch.setattr("app.runtime.lifecycle.RuntimeService.start", unknown)
+    generic = await TaskTools(session).start(owned.id)
+    assert generic["failure_code"] == "ENVIRONMENT_UNAVAILABLE"
+    assert generic["error"] == "执行环境暂时不可用"
+    assert "abc" not in str(generic)
+    assert "secret-host" not in str(generic)
 
     anonymous = await TaskTools(session).list()
-    assert anonymous["ok"] is False
-    assert anonymous["tasks"] == []
+    assert anonymous["ok"] is True
+    assert len(anonymous["tasks"]) == 2
 
 
 async def test_running_replaces_waiting_progress(session):
@@ -285,38 +276,6 @@ def test_opencode_model_names():
     assert direct_model(None, "deepseek/deepseek-flash") == "deepseek/deepseek-flash"
 
 
-async def test_group_task_cannot_override_server_side_source(session):
-    from app.task_tools import nexus_channel_id, nexus_session_id
-
-    channel = nexus_channel_id.set("ch_group")
-    session_token = nexus_session_id.set("ses_group")
-    try:
-        for overrides in (
-            {"source_channel_id": "ch_other"},
-            {"source_session_id": "ses_other"},
-            {"source_conversation_id": "conv-other"},
-        ):
-            result = await TaskTools(None).create(
-                task_type="ENGINEERING",
-                category_id="cat",
-                title="标题",
-                description="描述",
-                **overrides,
-            )
-            assert result == {"ok": False, "error": "不能覆盖服务端群调用来源"}
-        allowed = await TaskTools(session).create(
-            task_type="ENGINEERING",
-            category_id="cat",
-            title="标题",
-            description="描述",
-            source_channel_id="ch_group",
-            source_session_id="ses_group",
-        )
-    finally:
-        nexus_session_id.reset(session_token)
-        nexus_channel_id.reset(channel)
-    # 允许的值继续进入分类校验，而不是被来源检查误伤。
-    assert allowed == {"ok": False, "error": "请选择已启用的任务分类"}
 
 
 async def test_task_categories_only_return_enabled_choices(session):
@@ -348,195 +307,67 @@ async def test_task_mcp_exposes_categories_and_enum_types():
     ]
 
 
-@pytest.mark.parametrize("mode", ["worker", "explicit", "missing", "mismatch"])
-async def test_task_mcp_selects_executable_repository(session, mode):
-    from app.models import CodeRepository, OpenCodeExecutionEnvironment, TaskCategory
-    from app.task_tools import nexus_employee_id
-
-    session.add_all(
-        [
-            CodeRepository(id="repo-a", url="file:///qa/a", branch="main"),
-            CodeRepository(id="repo-b", url="file:///qa/b", branch="main"),
-            TaskCategory(id="qa-cat", name="QA"),
-            AgentWorker(
-                id="qa-worker", name="QA", role="QA", task_types=["REQUIREMENT"], category_ids=["qa-cat"]
-            ),
-        ]
-    )
-    await session.flush()
-    session.add(OpenCodeExecutionEnvironment(employee_id="qa-worker", repository_id="repo-a"))
-    await session.commit()
-    token = nexus_employee_id.set("qa-owner")
-    try:
-        kwargs = {"worker_id": "qa-worker"} if mode in ["worker", "mismatch"] else {}
-        if mode in ["explicit", "mismatch"]:
-            kwargs["repository_id"] = "repo-b"
-        result = await TaskTools(session).create(
-            task_type="REQUIREMENT", category_id="qa-cat", title="QA", description="QA", **kwargs
-        )
-        if mode in ["missing", "mismatch"]:
-            assert result["ok"] is False
-            assert await session.scalar(select(Task.id)) is None
-        else:
-            assert result["ok"] is True
-            task = await session.get(Task, result["task_id"])
-            assert task.repository_id == ("repo-a" if mode == "worker" else "repo-b")
-    finally:
-        nexus_employee_id.reset(token)
 
 
-async def test_repositories_do_not_leak_credentials_and_task_keys_include_target(session):
-    from app.models import CodeRepository, GitCredential, TaskCategory
-    from app.task_tools import nexus_employee_id, nexus_session_id
-
-    session.add_all(
-        [
-            CodeRepository(id="repo-a", url="file:///qa/a", branch="main"),
-            CodeRepository(id="repo-b", url="file:///qa/b", branch="release"),
-            GitCredential(repository_id="repo-a", token_ciphertext="private-ciphertext"),
-            TaskCategory(id="qa-cat", name="QA"),
-        ]
-    )
-    await session.commit()
-    repositories = await TaskTools(session).repositories()
-    assert repositories["repositories"] == [
-        {"id": "repo-a", "url": "file:///qa/a", "branch": "main"},
-        {"id": "repo-b", "url": "file:///qa/b", "branch": "release"},
-    ]
-    tokens = [
-        (nexus_employee_id, nexus_employee_id.set("qa-owner")),
-        (nexus_session_id, nexus_session_id.set("qa-session")),
-    ]
-    try:
-        tools = TaskTools(session)
-        a = await tools.create(
-            task_type="REQUIREMENT",
-            category_id="qa-cat",
-            title="same",
-            description="same",
-            repository_id="repo-a",
-        )
-        b = await tools.create(
-            task_type="REQUIREMENT",
-            category_id="qa-cat",
-            title="same",
-            description="same",
-            repository_id="repo-b",
-        )
-        repeat = await tools.create(
-            task_type="REQUIREMENT",
-            category_id="qa-cat",
-            title="same",
-            description="same",
-            repository_id="repo-a",
-        )
-        assert a["task_id"] != b["task_id"]
-        assert repeat["task_id"] == a["task_id"]
-        assert a["repository_id"] == "repo-a"
-    finally:
-        for var, token in tokens:
-            var.reset(token)
 
 
-async def test_task_reassignment_preserves_repository(session):
-    from app.models import CodeRepository, OpenCodeExecutionEnvironment
-    from app.task_tools import nexus_employee_id
-
-    session.add_all(
-        [
-            CodeRepository(id="repo-a", url="file:///qa/a", branch="main"),
-            CodeRepository(id="repo-b", url="file:///qa/b", branch="main"),
-            AgentWorker(
-                id="worker-b", name="B", role="QA", task_types=["REQUIREMENT"], category_ids=["qa-cat"]
-            ),
-        ]
-    )
-    await session.flush()
-    session.add(OpenCodeExecutionEnvironment(employee_id="worker-b", repository_id="repo-b"))
-    task = await TaskService(session).create(
-        _create(
-            task_type="REQUIREMENT",
-            category_id="qa-cat",
-            repository_id="repo-a",
-            responsible_employee_id="qa-owner",
-        )
-    )
-    token = nexus_employee_id.set("qa-owner")
-    try:
-        result = await TaskTools(session).assign(task.id, "worker-b")
-    finally:
-        nexus_employee_id.reset(token)
-    assert result["ok"] is False
-    assert task.repository_id == "repo-a"
-    assert task.employee_id is None
 
 
-async def test_summary_uses_real_review_and_preserves_ownership(session):
+async def test_summary_uses_real_review_for_the_requested_task(session):
     from app.models import ExperienceReviewJob, KnowledgeItem
-    from app.task_tools import nexus_channel_id, nexus_conversation_id, nexus_employee_id
 
     task = await TaskService(session).create(
         _create(responsible_employee_id="emp_1", source_channel_id="group-a", source_conversation_id="conv-a")
     )
     other = await TaskService(session).create(_create(responsible_employee_id="emp_2"))
-    token = nexus_employee_id.set("emp_1")
-    try:
-        tools = TaskTools(session)
-        assert (await tools.summary(task.id))["review"] is None
-        event = await session.scalar(select(Event).where(Event.task_id == task.id))
-        now = datetime.now(UTC)
-        session.add(
-            ExperienceReviewJob(
-                id="review-real",
-                confirmation_event_id=event.id,
-                review_key="review-real",
-                task_id=task.id,
-                task_id_snapshot=task.id,
-                root_session_id="native-1",
-                confirmed_at=now,
-                status="SUCCEEDED",
-                phase="WRITING",
-                candidate_ids=["know-own", "know-other"],
-                lease_token="never-expose-lease",
-                source_snapshot={"runtime_context": "never-expose-context"},
-            )
+    tools = TaskTools(session)
+    assert (await tools.summary(task.id))["review"] is None
+    event = await session.scalar(select(Event).where(Event.task_id == task.id))
+    now = datetime.now(UTC)
+    session.add(
+        ExperienceReviewJob(
+            id="review-real",
+            confirmation_event_id=event.id,
+            review_key="review-real",
+            task_id=task.id,
+            task_id_snapshot=task.id,
+            root_session_id="native-1",
+            confirmed_at=now,
+            status="SUCCEEDED",
+            phase="WRITING",
+            candidate_ids=["know-own", "know-other"],
+            lease_token="never-expose-lease",
+            source_snapshot={"runtime_context": "never-expose-context"},
         )
-        session.add_all(
-            [
-                KnowledgeItem(
-                    id="know-own",
-                    title="本任务经验",
-                    source_task_id=task.id,
-                    status="candidate",
-                    summary="尚待审核",
-                    created_by="tester",
-                    updated_by="tester",
-                ),
-                KnowledgeItem(
-                    id="know-other",
-                    title="其他任务经验",
-                    source_task_id=other.id,
-                    created_by="tester",
-                    updated_by="tester",
-                ),
-            ]
-        )
-        await session.commit()
-        result = await tools.summary(task.id)
-        assert result["review"]["status"] == "SUCCEEDED"
-        assert [k["id"] for k in result["candidates"]] == ["know-own"]
-        assert result["candidates"][0]["status"] == "candidate"
-        assert result["candidates"][0]["url"] == "/library?knowledge=know-own"
-        assert "never-expose" not in str(result)
-        assert not (await tools.summary(other.id))["ok"]
-        for context in (nexus_channel_id, nexus_conversation_id):
-            mismatch = context.set("foreign")
-            try:
-                assert not (await tools.summary(task.id))["ok"]
-            finally:
-                context.reset(mismatch)
-    finally:
-        nexus_employee_id.reset(token)
+    )
+    session.add_all(
+        [
+            KnowledgeItem(
+                id="know-own",
+                title="本任务经验",
+                source_task_id=task.id,
+                status="candidate",
+                summary="尚待审核",
+                created_by="tester",
+                updated_by="tester",
+            ),
+            KnowledgeItem(
+                id="know-other",
+                title="其他任务经验",
+                source_task_id=other.id,
+                created_by="tester",
+                updated_by="tester",
+            ),
+        ]
+    )
+    await session.commit()
+    result = await tools.summary(task.id)
+    assert result["review"]["status"] == "SUCCEEDED"
+    assert [k["id"] for k in result["candidates"]] == ["know-own"]
+    assert result["candidates"][0]["status"] == "candidate"
+    assert result["candidates"][0]["url"] == "/library?knowledge=know-own"
+    assert "never-expose" not in str(result)
+    assert (await tools.summary(other.id))["ok"]
 
 
 async def test_summary_is_registered_as_a_readonly_task_tool():
@@ -547,24 +378,21 @@ async def test_summary_is_registered_as_a_readonly_task_tool():
     assert set(tools["nexus_task_summary"].input_schema["properties"]) == {"task_id"}
 
 
-async def test_schedule_task_access_stays_in_its_execution_session(session):
-    from app.task_tools import nexus_employee_id, nexus_schedule_user_id, nexus_session_id
+async def test_task_creation_and_assignment_use_category_without_repository(session):
+    from app.models import TaskCategory
 
-    own = await TaskService(session).create(
-        _create(responsible_employee_id="emp_1", source_session_id="ses_1")
-    )
-    foreign = await TaskService(session).create(
-        _create(responsible_employee_id="emp_1", source_session_id="ses_2")
-    )
-    tokens = [(nexus_employee_id, nexus_employee_id.set("emp_1")),
-              (nexus_schedule_user_id, nexus_schedule_user_id.set("nexus-schedule-" + "a" * 64)),
-              (nexus_session_id, nexus_session_id.set("ses_1"))]
-    try:
-        tools = TaskTools(session)
-        listed = await tools.list()
-        assert [task["task_id"] for task in listed["tasks"]] == [own.id]
-        assert (await tools.get(own.id))["ok"] is True
-        assert (await tools.get(foreign.id)) == {"ok": False, "error": "任务不存在"}
-    finally:
-        for variable, token in reversed(tokens):
-            variable.reset(token)
+    session.add(TaskCategory(id="category-only", name="测试系统"))
+    session.add(AgentWorker(id="category-worker", name="Worker", role="开发",
+                           task_types=["REQUIREMENT"], category_ids=["category-only"]))
+    await session.commit()
+    tools = TaskTools(session)
+    result = await tools.create(task_type="REQUIREMENT", category_id="category-only", title="实现 MCP",
+                                description="只按分类派发", responsible_employee_id="qa-owner",
+                                source_session_id="source-session")
+    assert result["ok"] is True
+    assert "repository_id" not in result
+    assert (await tools.assign(result["task_id"], "category-worker"))["ok"] is True
+    repeated = await tools.create(task_type="REQUIREMENT", category_id="category-only", title="实现 MCP",
+                                  description="只按分类派发", responsible_employee_id="qa-owner",
+                                  source_session_id="source-session")
+    assert repeated["task_id"] == result["task_id"]

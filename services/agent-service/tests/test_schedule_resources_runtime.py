@@ -33,7 +33,7 @@ def test_official_schedule_resources_complete_and_release(
     monkeypatch.setenv("NEXUS_AGENTSCOPE_USER_ID", "nexus")
 
     async def scenario():
-        from agent_service import allow_nexus_task_mcp, without_team_and_task_tools
+        from agent_service import without_team_and_task_tools
         from agentscope.app import create_app
         from agentscope.app._service import _chat
         from agentscope.app._service._toolkit import get_toolkit
@@ -49,8 +49,6 @@ def test_official_schedule_resources_complete_and_release(
         from agentscope.mcp import MCPClient
         from agentscope.message import TextBlock, ToolCallBlock
         from agentscope.model import ChatModelBase, ChatResponse
-        from agentscope.permission import PermissionBehavior, PermissionDecision
-        from agentscope.tool import MCPTool
         from agentscope_sql import create_storage, initialize_database
         from app.config.settings import get_settings
         from app.sql_storage import create_test_schema
@@ -58,7 +56,7 @@ def test_official_schedule_resources_complete_and_release(
         from mcp.server.fastmcp import FastMCP
         from nexus_api.agentscope import AgentScopeClient
         from nexus_api.db import connect, utcnow
-        from nexus_api.resources import ResourceStore
+        from nexus_api.resources import ResourceStore, create_skill
         from nexus_api.schedule_resources import schedule_resources_router
         from nexus_api.schedules import schedule_user_id
         from schedule_access import ScheduleResourceAccessPolicy
@@ -152,9 +150,7 @@ def test_official_schedule_resources_complete_and_release(
             monkeypatch.setattr(httpx, "AsyncClient", client)
             nexus_app.state.agentscope = AgentScopeClient("http://agent.test", "nexus")
             monkeypatch.setattr(_chat.ChatService, "run", _chat.ChatService.run)
-            monkeypatch.setattr(MCPTool, "check_permissions", MCPTool.check_permissions)
             install_schedule_preparation(_chat.ChatService, "http://nexus.test")
-            allow_nexus_task_mcp(MCPTool, PermissionDecision, PermissionBehavior)
             monkeypatch.setattr(
                 _chat,
                 "get_toolkit",
@@ -235,6 +231,10 @@ def test_official_schedule_resources_complete_and_release(
                     ),
                 )
                 await storage.upsert_mcp("nexus", library)
+                task_mcp = MCPRecord(user_id="nexus", client=MCPClient(
+                    name="nexus-task", is_stateful=False, mcp_config={"type": "http_mcp", "url": mcp_url},
+                ))
+                await storage.upsert_mcp("nexus", task_mcp)
                 library_skill = SkillRecord(
                     user_id="nexus",
                     name="日程验证技能",
@@ -259,6 +259,10 @@ def test_official_schedule_resources_complete_and_release(
                     download=download
                 )
                 with connect() as db:
+                    task_skill_id = create_skill(
+                        db, nexus_app.state.resources,
+                        {"SKILL.md": (ROOT / "services/agent-service/skills/task-management/SKILL.md").read_bytes()},
+                    )
                     db.execute(
                         text("""INSERT INTO t_nexus_employees
                         (id,name,domain,description,instructions,avatar,enabled,knowledge_json,
@@ -266,8 +270,8 @@ def test_official_schedule_resources_complete_and_release(
                         VALUES ('emp-schedule','日程员工','测试','','','🤖',1,'[]',
                         :k,'[]',:m,:a,:t,:t)"""),
                         {
-                            "k": json.dumps(["task-management", library_skill.id]),
-                            "m": json.dumps([library.id]),
+                            "k": json.dumps([task_skill_id, library_skill.id]),
+                            "m": json.dumps([library.id, task_mcp.id]),
                             "a": agent.id,
                             "t": utcnow(),
                         },

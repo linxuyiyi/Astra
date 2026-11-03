@@ -1,6 +1,6 @@
-"""Nexus 全新部署初始 schema；不提供历史库升级。"""
+"""Nexus 全新空库初始化；不提供旧版本兼容或数据迁移。"""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import mysql
@@ -58,7 +58,7 @@ def upgrade():
         sa.Column(
             "owner_uid",
             sa.String(length=160).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=160), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column(
@@ -81,26 +81,6 @@ def upgrade():
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
-        "t_nexus_channel_humans",
-        sa.Column(
-            "channel_id",
-            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
-            nullable=False,
-        ),
-        sa.Column(
-            "user_uid",
-            sa.String(length=160).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=160), "mysql"),
-            nullable=False,
-        ),
-        sa.Column(
-            "display_name",
-            sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("''"),
-            nullable=False,
-        ),
-        sa.PrimaryKeyConstraint("channel_id", "user_uid"),
-    )
-    op.create_table(
         "t_nexus_channel_members",
         sa.Column(
             "channel_id",
@@ -110,6 +90,31 @@ def upgrade():
         sa.Column(
             "employee_id",
             sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            server_default=sa.text("('')"),
+            nullable=False,
+        ),
+        sa.Column(
+            "member_type",
+            sa.String(length=16).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=16), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "member_id",
+            sa.String(length=160).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=160), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "role",
+            sa.String(length=16).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=16), "mysql"),
+            server_default=sa.text("'member'"),
+            nullable=False,
+        ),
+        sa.Column("membership_active", sa.Integer(), server_default=sa.text("1"), nullable=False),
+        sa.Column("read_seq", sa.Integer(), server_default=sa.text("0"), nullable=False),
+        sa.Column(
+            "last_seen",
+            sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column(
@@ -120,10 +125,10 @@ def upgrade():
         sa.Column(
             "last_delivered_message_id",
             sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
-        sa.PrimaryKeyConstraint("channel_id", "employee_id"),
+        sa.PrimaryKeyConstraint("channel_id", "member_type", "member_id"),
     )
     op.create_table(
         "t_nexus_channels",
@@ -138,16 +143,30 @@ def upgrade():
             nullable=False,
         ),
         sa.Column("description", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
+        sa.Column("next_seq", sa.Integer(), server_default=sa.text("0"), nullable=False),
+        sa.Column("generation", sa.Integer(), server_default=sa.text("0"), nullable=False),
+        sa.Column(
+            "lease_token",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            server_default=sa.text("('')"),
+            nullable=False,
+        ),
+        sa.Column(
+            "lease_until",
+            sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
+            server_default=sa.text("('')"),
+            nullable=False,
+        ),
         sa.Column(
             "record_agent_id",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column(
             "record_session_id",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column(
@@ -160,15 +179,6 @@ def upgrade():
             sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
             nullable=False,
         ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_table(
-        "t_nexus_code_repositories",
-        sa.Column("id", sa.String(length=64), nullable=False),
-        sa.Column("url", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
-        sa.Column("branch", sa.String(length=255), server_default="main", nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
@@ -207,7 +217,7 @@ def upgrade():
         sa.Column(
             "workspace_id",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column(
@@ -224,6 +234,60 @@ def upgrade():
     )
     op.create_index(
         "ux_private_conversation", "t_nexus_conversations", ["owner_id", "employee_id", "kind"], unique=True
+    )
+    op.create_table(
+        "t_nexus_discussions",
+        sa.Column(
+            "id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "channel_id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "message_id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "initiator_id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column("generation", sa.Integer(), nullable=False),
+        sa.Column(
+            "state",
+            sa.String(length=32).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=32), "mysql"),
+            nullable=False,
+        ),
+        sa.Column("participants_json", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
+        sa.Column("turns", sa.Integer(), server_default=sa.text("0"), nullable=False),
+        sa.Column("tokens", sa.Integer(), server_default=sa.text("0"), nullable=False),
+        sa.Column(
+            "active_employee_id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            server_default=sa.text("('')"),
+            nullable=False,
+        ),
+        sa.Column(
+            "detail",
+            sa.Text().with_variant(mysql.LONGTEXT(), "mysql"),
+            server_default=sa.text("('')"),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_at",
+            sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
+            nullable=False,
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("message_id"),
+    )
+    op.create_index(
+        op.f("ix_t_nexus_discussions_channel_id"), "t_nexus_discussions", ["channel_id"], unique=False
     )
     op.create_table(
         "t_nexus_employees",
@@ -278,7 +342,7 @@ def upgrade():
         sa.Column(
             "model_route_id",
             sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column(
@@ -504,6 +568,103 @@ def upgrade():
         unique=False,
     )
     op.create_table(
+        "t_nexus_group_audit",
+        sa.Column(
+            "id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "channel_id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "actor_id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "action",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "target_id",
+            sa.String(length=160).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=160), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_at",
+            sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
+            nullable=False,
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_table(
+        "t_nexus_group_events",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column(
+            "channel_id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column("payload_json", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
+            nullable=False,
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_t_nexus_group_events_channel_id"), "t_nexus_group_events", ["channel_id"], unique=False
+    )
+    op.create_table(
+        "t_nexus_group_invites",
+        sa.Column(
+            "token_hash",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "channel_id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_by",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "expires_at",
+            sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "used_by",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            server_default=sa.text("('')"),
+            nullable=False,
+        ),
+        sa.PrimaryKeyConstraint("token_hash"),
+    )
+    op.create_table(
+        "t_nexus_identity_profiles",
+        sa.Column(
+            "id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "display_name",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=False,
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_table(
         "t_nexus_im_bindings",
         sa.Column(
             "employee_id",
@@ -518,13 +679,13 @@ def upgrade():
         sa.Column(
             "external_key",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column(
             "owner_uid",
             sa.String(length=160).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=160), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column(
@@ -574,20 +735,20 @@ def upgrade():
         sa.Column(
             "session_id",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column("accepted", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column(
             "claim_token",
             sa.String(length=160).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=160), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column(
             "claim_until",
             sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("provider", "event_id"),
@@ -623,7 +784,7 @@ def upgrade():
         sa.Column(
             "lease_until",
             sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column(
@@ -738,7 +899,7 @@ def upgrade():
             server_default=sa.text("('')"),
             nullable=False,
         ),
-        sa.Column("timeout", sa.Float(), server_default=sa.text("30"), nullable=False),
+        sa.Column("timeout", sa.Float(), server_default=sa.text("(30)"), nullable=False),
         sa.Column(
             "runtime_name",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
@@ -785,10 +946,40 @@ def upgrade():
         sa.Column("text", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
         sa.Column("attachments_json", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
         sa.Column("accepted", sa.Integer(), server_default=sa.text("0"), nullable=False),
+        sa.Column("seq", sa.Integer(), nullable=True),
+        sa.Column(
+            "sender_type",
+            sa.String(length=16).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=16), "mysql"),
+            server_default=sa.text("'human'"),
+            nullable=False,
+        ),
+        sa.Column(
+            "sender_name",
+            sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
+            server_default=sa.text("('')"),
+            nullable=False,
+        ),
+        sa.Column(
+            "native_json",
+            sa.Text().with_variant(mysql.LONGTEXT(), "mysql"),
+            server_default=sa.text("('{}')"),
+            nullable=False,
+        ),
+        sa.Column(
+            "discussion_id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            server_default=sa.text("('')"),
+            nullable=False,
+        ),
+        sa.Column(
+            "client_id",
+            sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
+            nullable=True,
+        ),
         sa.Column(
             "speaker_uid",
             sa.String(length=160).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=160), "mysql"),
-            server_default=sa.text("''"),
+            server_default=sa.text("('')"),
             nullable=False,
         ),
         sa.Column(
@@ -797,6 +988,8 @@ def upgrade():
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("channel_id", "seq", name="uq_group_seq"),
+        sa.UniqueConstraint("channel_id", "speaker_uid", "client_id", name="uq_group_client"),
     )
     op.create_table(
         "t_nexus_peer_deliveries",
@@ -820,7 +1013,11 @@ def upgrade():
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
             nullable=False,
         ),
-        sa.Column("message_key", sa.Text().with_variant(mysql.LONGTEXT(collation="utf8mb4_bin"), "mysql"), nullable=False),
+        sa.Column(
+            "message_key",
+            sa.Text().with_variant(mysql.LONGTEXT(collation="utf8mb4_bin"), "mysql"),
+            nullable=False,
+        ),
         sa.Column(
             "created_at",
             sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
@@ -1037,6 +1234,7 @@ def upgrade():
         "t_nexus_gateway_routes",
         sa.Column("id", sa.String(length=64), nullable=False),
         sa.Column("model", sa.String(length=200), nullable=False),
+        sa.Column("model_type", sa.String(length=16), server_default="CHAT", nullable=False),
         sa.Column("pool_id", sa.String(length=64), nullable=False),
         sa.Column("target_model", sa.String(length=200), nullable=True),
         sa.Column("description", sa.Text(), nullable=False),
@@ -1054,28 +1252,12 @@ def upgrade():
         op.f("ix_t_nexus_gateway_routes_pool_id"), "t_nexus_gateway_routes", ["pool_id"], unique=False
     )
     op.create_table(
-        "t_nexus_git_credentials",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("repository_id", sa.String(length=64), nullable=False),
-        sa.Column("token_ciphertext", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["repository_id"],
-            ["t_nexus_code_repositories.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_t_nexus_git_credentials_repository_id"),
-        "t_nexus_git_credentials",
-        ["repository_id"],
-        unique=True,
-    )
-    op.create_table(
         "t_nexus_opencode_execution_environments",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("employee_id", sa.String(length=64), nullable=False),
-        sa.Column("repository_id", sa.String(length=64), nullable=True),
+        sa.Column("repository_url", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
+        sa.Column("git_token_ciphertext", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
+        sa.Column("runtime_engine", sa.String(length=16), server_default="opencode", nullable=False),
         sa.Column("mode", sa.String(length=32), nullable=False),
         sa.Column("name", sa.String(length=120), nullable=False),
         sa.Column("description", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
@@ -1091,7 +1273,6 @@ def upgrade():
         sa.Column("skill_refs", sa.JSON(), server_default=sa.text("('[]')"), nullable=False),
         sa.Column("mcp_refs", sa.JSON(), server_default=sa.text("('[]')"), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("worker_channel", sa.String(length=16), server_default="ssh", nullable=False),
         sa.Column("status_detail", sa.JSON(), nullable=False),
         sa.Column("labels", sa.JSON(), nullable=False),
         sa.Column(
@@ -1102,10 +1283,6 @@ def upgrade():
         sa.ForeignKeyConstraint(
             ["employee_id"],
             ["t_nexus_agent_workers.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["repository_id"],
-            ["t_nexus_code_repositories.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -1119,12 +1296,6 @@ def upgrade():
         op.f("ix_t_nexus_opencode_execution_environments_mode"),
         "t_nexus_opencode_execution_environments",
         ["mode"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_opencode_execution_environments_repository_id"),
-        "t_nexus_opencode_execution_environments",
-        ["repository_id"],
         unique=False,
     )
     op.create_index(
@@ -1155,7 +1326,6 @@ def upgrade():
         sa.Column("source_channel_id", sa.String(length=64), nullable=True),
         sa.Column("idempotency_key", sa.String(length=160), nullable=True),
         sa.Column("workspace", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("repository_id", sa.String(length=64), nullable=True),
         sa.Column("related_task_id", sa.String(length=64), nullable=True),
         sa.Column("base_commit", sa.String(length=64), nullable=True),
         sa.Column("last_message_id", sa.String(length=160), nullable=True),
@@ -1211,10 +1381,6 @@ def upgrade():
             ["related_task_id"],
             ["t_nexus_tasks.id"],
         ),
-        sa.ForeignKeyConstraint(
-            ["repository_id"],
-            ["t_nexus_code_repositories.id"],
-        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("idempotency_key"),
         sa.UniqueConstraint("source", "external_task_id", name="uq_task_source_external"),
@@ -1230,7 +1396,6 @@ def upgrade():
     op.create_index(
         op.f("ix_t_nexus_tasks_related_task_id"), "t_nexus_tasks", ["related_task_id"], unique=False
     )
-    op.create_index(op.f("ix_t_nexus_tasks_repository_id"), "t_nexus_tasks", ["repository_id"], unique=False)
     op.create_index(
         op.f("ix_t_nexus_tasks_responsible_employee_id"),
         "t_nexus_tasks",
@@ -1416,8 +1581,19 @@ def upgrade():
         op.f("ix_t_nexus_gateway_probe_runs_node_id"), "t_nexus_gateway_probe_runs", ["node_id"], unique=False
     )
     op.create_table(
+        "t_nexus_gateway_speech_input",
+        sa.Column("id", sa.String(length=16), nullable=False),
+        sa.Column("route_id", sa.String(length=64), nullable=True),
+        sa.ForeignKeyConstraint(["route_id"], ["t_nexus_gateway_routes.id"], ondelete="SET NULL"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_table(
         "t_nexus_runtime_sessions",
         sa.Column("id", sa.String(length=160), nullable=False),
+        sa.Column("runtime_engine", sa.String(length=16), server_default="opencode", nullable=False),
+        sa.Column("native_session_id", sa.String(length=160), nullable=True),
+        sa.Column("engine_metadata", sa.JSON(), nullable=True),
+        sa.Column("fencing_token", sa.Integer(), server_default="0", nullable=False),
         sa.Column("task_id", sa.String(length=64), nullable=False),
         sa.Column("employee_id", sa.String(length=64), nullable=False),
         sa.Column("workspace", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
@@ -1486,6 +1662,9 @@ def upgrade():
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("epoch", sa.Integer(), nullable=False),
         sa.Column("agent_version", sa.String(length=64), nullable=True),
+        sa.Column("target_digest", sa.String(length=64), nullable=True),
+        sa.Column("observed_snapshot", sa.JSON(), nullable=True),
+        sa.Column("observed_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
         sa.Column(
             "last_heartbeat_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True
         ),
@@ -1518,9 +1697,6 @@ def upgrade():
         sa.Column("lease_owner", sa.String(length=120), nullable=True),
         sa.Column("lease_until", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
         sa.Column("cancel_requested", sa.Boolean(), server_default="0", nullable=False),
-        sa.Column("danger_dispatched", sa.Boolean(), server_default="0", nullable=False),
-        sa.Column("reconcile_required", sa.Boolean(), server_default="0", nullable=False),
-        sa.Column("reconcile_only", sa.Boolean(), server_default="0", nullable=False),
         sa.Column("target_revision", sa.JSON(), nullable=False),
         sa.Column("before_snapshot", sa.JSON(), nullable=False),
         sa.Column("after_snapshot", sa.JSON(), nullable=False),
@@ -2160,7 +2336,7 @@ def upgrade():
         sa.column("created_at", sa.DateTime()),
         sa.column("updated_at", sa.DateTime()),
     )
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     op.bulk_insert(
         pools,
         [
@@ -2178,4 +2354,4 @@ def upgrade():
 
 
 def downgrade():
-    raise RuntimeError("全新部署 init 不自动删除业务表；请备份后使用新的空数据库")
+    raise RuntimeError("全新部署 init 不自动删除业务表；请使用新的空数据库")

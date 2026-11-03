@@ -156,7 +156,7 @@ async def runtime(tmp_path, monkeypatch):
             name="test",
             workspace_root=str(workspace),
             opencode_server_port=54197,
-            repository_id="repo-session",
+            repository_url='https://git.example/org/repo.git',
             status="AVAILABLE",
         )
         session.add_all([employee, environment])
@@ -167,7 +167,7 @@ async def runtime(tmp_path, monkeypatch):
             task_type="ISSUE",
             status="FAILED",
             employee_id="E1",
-            repository_id="repo-session",
+
             current_session_id="ses_current",
             workspace=str(workspace),
             execution_environment_snapshot=environment_snapshot(environment),

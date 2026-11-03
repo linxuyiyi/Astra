@@ -50,7 +50,6 @@ from .resources import (
     MCP_AUTH_NONE,
     MCP_TRANSPORT_HTTP,
     SOURCE_AGENTSCOPE,
-    SOURCE_BUILTIN,
     SOURCE_NEXUS,
     ResourceError,
     ResourceStore,
@@ -83,14 +82,7 @@ from .resources import (
     update_mcp,
     update_skill,
 )
-from .schedule_skill import attach_schedule_mcp
 from .sql import insert_record
-from .task_skill import (
-    TASK_SKILL_ID,
-    attach_task_capability,
-    skill_directory,
-    sync_task_capability,
-)
 
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 MAX_ATTACHMENTS = 6
@@ -136,8 +128,10 @@ class EmployeeBody(BaseModel):
     description: str = Field(min_length=1)
     instructions: str = Field(min_length=1)
     avatar: str = Field(
-        default=DEFAULT_AVATAR, max_length=64,
-        description="员工形象目录中的稳定 ID", json_schema_extra={"enum": sorted(AVATAR_IDS)},
+        default=DEFAULT_AVATAR,
+        max_length=64,
+        description="员工形象目录中的稳定 ID",
+        json_schema_extra={"enum": sorted(AVATAR_IDS)},
     )
 
     @field_validator("avatar")
@@ -378,13 +372,8 @@ def employee_prompt(body: EmployeeBody | dict[str, Any]) -> str:
         f"工作指令：\n{instructions}\n"
         "需要其他员工协助时调用 contact_employee；对方的回复由对方自己产生。"
     )
-    skills = body.skills if isinstance(body, EmployeeBody) else list(body.get("skills") or [])
-    employee_id = None if isinstance(body, EmployeeBody) else body.get("id")
-    if TASK_SKILL_ID in skills and employee_id:
-        text += (
-            f"\n你的员工编号是 {employee_id}。"
-            "需要工程执行时使用任务工具；收到任务状态提示后先查询该任务，再决定下一步。"
-        )
+    if isinstance(body, dict) and body.get("id"):
+        text += f"\n你的员工编号是 {body['id']}。"
     return text
 
 
@@ -648,11 +637,7 @@ def session_transcript(remote: list[Any], employee_id: str) -> list[dict[str, An
         name = message.get("name") if isinstance(message.get("name"), str) else ""
         created = message.get("created_at")
         raw_finished = message.get("finished_at")
-        finished_at = (
-            canonical_timestamp(raw_finished)
-            if isinstance(raw_finished, str)
-            else raw_finished
-        )
+        finished_at = canonical_timestamp(raw_finished) if isinstance(raw_finished, str) else raw_finished
         usage = message.get("usage") if isinstance(message.get("usage"), dict) else None
         found.append(
             {
@@ -1173,8 +1158,6 @@ def create_app() -> FastAPI:
             except AgentScopeError:
                 catalog = None
         for ref in requested:
-            if ref == TASK_SKILL_ID:
-                continue
             if is_nexus_skill(ref):
                 row = skill_row(connection, ref)
                 if row is None:
@@ -1250,129 +1233,37 @@ def create_app() -> FastAPI:
         )
         return skills, knowledge, tools, mcps
 
-    def task_sessions(connection, employee: dict[str, Any]) -> list[dict[str, str]]:
-        found: list[dict[str, str]] = []
-        seen: set[str] = set()
-
-        def add(
-            session_id: str | None,
-            *,
-            conversation_id: str = "",
-            channel_id: str = "",
-            discussion_id: str = "",
-        ) -> None:
-            value = (session_id or "").strip()
-            if not value or value in seen:
-                return
-            seen.add(value)
-            found.append(
-                {
-                    "session_id": value,
-                    "conversation_id": conversation_id,
-                    "channel_id": channel_id,
-                    "discussion_id": discussion_id,
-                }
-            )
-
-        add(employee.get("mailbox_session_id"))
-        conversations = (
-            connection.execute(
-                sql_text(
-                    "SELECT id, agentscope_session_id FROM t_nexus_conversations WHERE employee_id = :p0"
-                ),
-                {"p0": employee["id"]},
-            )
-            .mappings()
-            .fetchall()
-        )
-        for row in conversations:
-            add(row["agentscope_session_id"], conversation_id=row["id"])
-        members = (
-            connection.execute(
-                sql_text(
-                    """
-                    SELECT channel_id, agentscope_session_id FROM t_nexus_channel_members
-                    WHERE employee_id = :p0
-                    """
-                ),
-                {"p0": employee["id"]},
-            )
-            .mappings()
-            .fetchall()
-        )
-        for row in members:
-            running = (
-                connection.execute(
-                    sql_text(
-                        """
-                        SELECT d.id FROM t_nexus_discussions d
-                        JOIN t_nexus_channels c
-                          ON c.id = d.channel_id AND c.generation = d.generation
-                        WHERE d.channel_id = :p0 AND d.state = 'running'
-                          AND d.active_employee_id = :p1
-                        ORDER BY d.created_at DESC LIMIT 1
-                        """
-                    ),
-                    {"p0": row["channel_id"], "p1": employee["id"]},
-                )
-                .mappings()
-                .first()
-            )
-            add(
-                row["agentscope_session_id"],
-                channel_id=row["channel_id"],
-                discussion_id=running["id"] if running else "",
-            )
-        return found
-
-    async def sync_agent(
-        client: AgentScopeClient,
-        employee: dict[str, Any],
-        connection,
-        store: ResourceStore,
-    ) -> dict[str, Any]:
+    async def sync_agent(client, employee, connection, store) -> dict[str, Any]:
         platform_prompt = store.get_setting(connection, "platform_prompt")
-        prompt = system_prompt(employee, platform_prompt)
         agent_id = employee["agentscope_agent_id"]
         mailbox = employee["mailbox_session_id"]
         try:
             invite = employee["domain"] or employee["name"]
             if agent_id:
-                await client.update_agent(agent_id, employee["name"], prompt, invite)
+                await client.update_agent(
+                    agent_id, employee["name"], system_prompt(employee, platform_prompt), invite
+                )
             elif client.configured:
-                agent_id = await client.create_agent(employee["name"], prompt, invite)
+                agent_id = await client.create_agent(
+                    employee["name"], system_prompt(employee, platform_prompt), invite
+                )
             else:
                 raise AgentScopeError("AgentScope 未连接，员工目录已保存，Agent 尚未创建")
             if not mailbox and agent_id:
-                config = await model_for(client, employee)
                 mailbox = await client.create_session(
                     agent_id,
                     f"{employee['name']}的邮箱",
-                    chat_model_config=config,
+                    chat_model_config=await model_for(client, employee),
                     knowledge_base_ids=bound_knowledge(employee),
                 )
-            detail = ""
-            task_sync: dict[str, Any] = {"status": "applied", "detail": "", "failures": [], "sessions": 0}
-            if agent_id and mailbox:
-                await client.set_permission_mode(agent_id, mailbox, UNATTENDED_PERMISSION)
-                current = {**employee, "agentscope_agent_id": agent_id, "mailbox_session_id": mailbox}
-                synced = await sync_employee_skills(client, current, [mailbox], connection, store)
-                detail = str(synced.get("detail") or "")
-                task_sync = await sync_task_capability(
-                    client,
-                    current,
-                    task_sessions(connection, current),
-                )
-                if task_sync.get("status") == "error":
-                    detail = "；".join(
-                        dict.fromkeys(part for part in (detail, str(task_sync.get("detail") or "")) if part)
-                    )[:800]
+            current = {**employee, "agentscope_agent_id": agent_id, "mailbox_session_id": mailbox}
+            resources = await sync_employee_skills(client, current, [mailbox], connection, store)
             return {
                 "ok": True,
                 "agent_id": agent_id,
                 "mailbox_session_id": mailbox,
-                "detail": detail,
-                "task_sync": task_sync,
+                "detail": str(resources.get("detail") or ""),
+                "resources": resources,
             }
         except AgentScopeError as exc:
             return {
@@ -1380,16 +1271,10 @@ def create_app() -> FastAPI:
                 "agent_id": agent_id,
                 "mailbox_session_id": mailbox,
                 "detail": exc.detail,
-                "task_sync": {"status": "pending", "detail": exc.detail, "failures": []},
+                "resources": {"ok": False, "status": "pending", "detail": exc.detail, "sessions": 0},
             }
 
-    async def store_capability(
-        connection,
-        client: AgentScopeClient,
-        employee: dict[str, Any],
-        *,
-        task_sync: dict[str, Any] | None = None,
-    ) -> None:
+    async def store_capability(connection, client, employee, *, resource_sync=None) -> None:
         local_skills = local_skill_rows(connection, employee.get("skills") or [])
         local_mcps = local_mcp_rows(connection, employee.get("mcps") or [])
         record = await inspect_employee(
@@ -1397,32 +1282,27 @@ def create_app() -> FastAPI:
             employee,
             utcnow(),
             custom_skills={
-                skill_id: str(row["name"]) for skill_id, row in local_skills.items() if bool(row["enabled"])
+                key: str(row["name"]) for key, row in local_skills.items() if bool(row["enabled"])
             },
             custom_mcps={
-                mcp_id: str(row["runtime_name"]) for mcp_id, row in local_mcps.items() if bool(row["enabled"])
+                key: str(row["runtime_name"]) for key, row in local_mcps.items() if bool(row["enabled"])
             },
         )
-        current = employee.get("capability") if isinstance(employee.get("capability"), dict) else {}
-        if task_sync is None and isinstance(current.get("task"), dict):
-            task_sync = current["task"]
-        if task_sync:
-            record["task"] = task_sync
-            if task_sync.get("status") == "error":
-                record["runtime_status"] = "error"
-                record["error"] = "；".join(
-                    dict.fromkeys(
-                        part
-                        for part in (
-                            str(record.get("error") or ""),
-                            str(task_sync.get("detail") or ""),
-                        )
-                        if part
-                    )
-                )[:800]
+        if resource_sync and resource_sync.get("status") != "applied":
+            if resource_sync.get("status") == "error" or record["runtime_status"] != "error":
+                record["runtime_status"] = resource_sync["status"]
+            record["error"] = "；".join(
+                dict.fromkeys(
+                    part
+                    for part in (str(record.get("error") or ""), str(resource_sync.get("detail") or ""))
+                    if part
+                )
+            )[:800]
+        if record["runtime_status"] != "applied":
+            record["applied_revision"] = str((employee.get("capability") or {}).get("applied_revision") or "")
         connection.execute(
-            sql_text("UPDATE t_nexus_employees SET capability_json = :p0 WHERE id = :p1"),
-            {"p0": json.dumps(record, ensure_ascii=False), "p1": employee["id"]},
+            sql_text("UPDATE t_nexus_employees SET capability_json=:c WHERE id=:i"),
+            {"c": json.dumps(record, ensure_ascii=False), "i": employee["id"]},
         )
         connection.commit()
 
@@ -1795,53 +1675,8 @@ def create_app() -> FastAPI:
                 )
             )
             latest = load_employee(connection, employee["id"])
-            await store_capability(connection, client, latest)
+            await store_capability(connection, client, latest, resource_sync=results[-1])
         return combined_sync(results)
-
-    def builtin_skill_detail(connection) -> dict[str, Any]:
-        bound = bound_employees(connection, "skills", TASK_SKILL_ID)
-        directory = skill_directory()
-        files: list[dict[str, Any]] = []
-        if directory.is_dir():
-            for path in sorted(directory.rglob("*")):
-                if path.is_file():
-                    data = path.read_bytes()
-                    try:
-                        text = data.decode("utf-8")
-                    except UnicodeDecodeError:
-                        text = base64.b64encode(data).decode("ascii")
-                        encoding = "base64"
-                    else:
-                        encoding = "utf8"
-                    files.append(
-                        {
-                            "path": path.relative_to(directory).as_posix(),
-                            "size": len(data),
-                            "content": text,
-                            "encoding": encoding,
-                        }
-                    )
-        return {
-            "id": TASK_SKILL_ID,
-            "name": "任务管理",
-            "description": "内置任务技能，随任务能力挂载。",
-            "source": SOURCE_BUILTIN,
-            "version": "内置",
-            "enabled": True,
-            "editable": False,
-            "files": files,
-            "versions": [],
-            "employees": [
-                {"id": item["id"], "name": item["name"], "enabled": item["enabled"]} for item in bound
-            ],
-            "sync": {
-                "status": "applied",
-                "detail": "由任务能力挂载逻辑维护",
-                "applied": len(bound),
-                "pending": 0,
-                "error": 0,
-            },
-        }
 
     @app.get("/api/v1/skills")
     async def skills(
@@ -1999,8 +1834,6 @@ def create_app() -> FastAPI:
                 all_employees(connection),
             )
             return {"skill": detail}
-        if skill_id == TASK_SKILL_ID:
-            return {"skill": builtin_skill_detail(connection)}
         if is_nexus_skill(skill_id):
             raise HTTPException(status_code=404, detail="技能不存在")
         try:
@@ -2125,18 +1958,6 @@ def create_app() -> FastAPI:
         request: Request,
         connection=Depends(database),
     ) -> dict[str, Any]:
-        if skill_id == TASK_SKILL_ID:
-            client = client_of(request)
-            results = []
-            for employee in bound_employees(connection, "skills", TASK_SKILL_ID):
-                result = await sync_task_capability(
-                    client,
-                    employee,
-                    task_sessions(connection, employee),
-                )
-                results.append(result)
-                await store_capability(connection, client, employee, task_sync=result)
-            return {"sync": combined_sync(results)}
         if skill_row(connection, skill_id) is None and is_nexus_skill(skill_id):
             raise HTTPException(status_code=404, detail="技能不存在")
         return {"sync": await sync_bound(request, connection, "skills", skill_id)}
@@ -2392,11 +2213,15 @@ def create_app() -> FastAPI:
     ) -> dict[str, str]:
         employee = load_employee(connection, employee_id)
         if session_id.strip():
-            group = connection.execute(
-                sql_text("""SELECT channel_id FROM t_nexus_channel_members WHERE employee_id=:e
+            group = (
+                connection.execute(
+                    sql_text("""SELECT channel_id FROM t_nexus_channel_members WHERE employee_id=:e
                     AND agentscope_session_id=:s AND member_type='employee'"""),
-                {"e": employee_id, "s": session_id.strip()},
-            ).mappings().first()
+                    {"e": employee_id, "s": session_id.strip()},
+                )
+                .mappings()
+                .first()
+            )
             if group:
                 return {"channel_id": group["channel_id"]}
         if not employee["enabled"]:
@@ -2413,18 +2238,6 @@ def create_app() -> FastAPI:
             target = employee["mailbox_session_id"]
             if not target:
                 raise HTTPException(status_code=404, detail="员工还没有邮箱")
-        conversation = connection.execute(
-            sql_text("SELECT id FROM t_nexus_conversations "
-                     "WHERE employee_id=:e AND agentscope_session_id=:s"),
-            {"e": employee_id, "s": target},
-        ).mappings().first()
-        if conversation and "task-management" in employee["skills"]:
-            try:
-                await attach_task_capability(
-                    client_of(request), employee, target, conversation_id=conversation["id"], strict=True,
-                )
-            except AgentScopeError as exc:
-                raise HTTPException(503, "任务求助能力尚未更新，稍后重试唤醒") from exc
         return {"agent_id": agent_id, "session_id": target}
 
     @app.get("/api/v1/internal/mailbox")
@@ -2487,27 +2300,17 @@ def create_app() -> FastAPI:
         sync = await sync_agent(client, employee, connection, request.app.state.resources)
         save_agent_link(connection, employee["id"], sync)
         employee = load_employee(connection, employee["id"])
-        await store_capability(connection, client, employee, task_sync=sync.get("task_sync"))
+        await store_capability(connection, client, employee, resource_sync=sync["resources"])
         employee = load_employee(connection, employee["id"])
-        task_sync = sync.get("task_sync") or {}
-        task_error = task_sync.get("status") == "error"
-        detail = "；".join(
-            dict.fromkeys(
-                part
-                for part in (str(sync.get("detail") or ""), str(task_sync.get("detail") or ""))
-                if part
-            )
-        )[:800]
+        capability = employee["capability"]
         return {
             "employee": employee,
             "agentscope": {"ok": sync["ok"], "detail": sync["detail"]},
             "sync": {
-                "status": (
-                    "applied"
-                    if sync["ok"] and not task_error
-                    else ("error" if task_error else "pending")
-                ),
-                "detail": detail,
+                **sync["resources"],
+                "status": capability["runtime_status"],
+                "ok": capability["runtime_status"] == "applied",
+                "detail": capability["error"],
             },
         }
 
@@ -2570,8 +2373,6 @@ def create_app() -> FastAPI:
         sync = await sync_agent(client, employee, connection, request.app.state.resources)
         save_agent_link(connection, employee_id, sync)
         employee = load_employee(connection, employee_id)
-        await store_capability(connection, client, employee, task_sync=sync.get("task_sync"))
-        employee = load_employee(connection, employee_id)
         previous_knowledge = bound_knowledge(current)
         route_id = str(employee.get("model_route_id") or "")
         if route_id and route_id != previous_route and employee["agentscope_agent_id"] and client.configured:
@@ -2600,27 +2401,17 @@ def create_app() -> FastAPI:
             request.app.state.resources,
             previous=current,
         )
-        task_sync = sync.get("task_sync") or {}
-        if task_sync.get("status") == "error":
-            resource_sync = {
-                **resource_sync,
-                "ok": False,
-                "status": "error",
-                "detail": "；".join(
-                    dict.fromkeys(
-                        part
-                        for part in (
-                            str(resource_sync.get("detail") or ""),
-                            str(task_sync.get("detail") or ""),
-                        )
-                        if part
-                    )
-                )[:800],
-            }
+        await store_capability(connection, client, employee, resource_sync=resource_sync)
+        employee = load_employee(connection, employee_id)
         return {
             "employee": employee,
             "agentscope": {"ok": sync["ok"], "detail": sync["detail"]},
-            "sync": resource_sync,
+            "sync": {
+                **resource_sync,
+                "status": employee["capability"]["runtime_status"],
+                "ok": employee["capability"]["runtime_status"] == "applied",
+                "detail": employee["capability"]["error"],
+            },
         }
 
     @app.delete("/api/v1/employees/{employee_id}")
@@ -3007,13 +2798,6 @@ def create_app() -> FastAPI:
                     connection,
                     request.app.state.resources,
                 )
-                await attach_task_capability(
-                    client,
-                    employee,
-                    session_id,
-                    conversation_id=conversation_id,
-                )
-                await attach_schedule_mcp(client, employee, session_id, conversation_id)
                 files: list[tuple[str, str, bytes]] = []
                 for item in attachments:
                     files.append((item["name"], item["type"], Path(item["path"]).read_bytes()))
@@ -3100,7 +2884,6 @@ def create_app() -> FastAPI:
             {"p0": session_id, "p1": workspace_id, "p2": utcnow(), "p3": conversation_id},
         )
         connection.commit()
-        await attach_schedule_mcp(client, employee, session_id, conversation_id)
         await sync_employee_skills(
             client,
             employee,
@@ -3180,9 +2963,6 @@ def create_app() -> FastAPI:
                 connection,
                 request.app.state.resources,
             )
-            await client_of(request).remove_workspace_mcp(
-                target["agentscope_agent_id"], target["mailbox_session_id"]
-            )
             return await hand_off(
                 connection,
                 client_of(request),
@@ -3232,9 +3012,6 @@ def create_app() -> FastAPI:
                 [target["mailbox_session_id"]],
                 connection,
                 request.app.state.resources,
-            )
-            await client_of(request).remove_workspace_mcp(
-                target["agentscope_agent_id"], target["mailbox_session_id"]
             )
             return await hand_off(
                 connection,
@@ -3413,7 +3190,6 @@ def create_app() -> FastAPI:
                     connection,
                     request.app.state.resources,
                 )
-                await attach_schedule_mcp(client, employee, claimed, current["id"])
                 return claimed
 
         prior_reply: dict[str, Any] = {"cursor": None, "known": set()}
@@ -3433,19 +3209,6 @@ def create_app() -> FastAPI:
                 for item in existing
                 if isinstance(item, dict) and item.get("role") == "assistant" and item.get("id")
             }
-            private = (
-                connection.execute(
-                    sql_text(
-                        "SELECT id FROM t_nexus_conversations "
-                        "WHERE agentscope_session_id = :p0 AND kind = 'private'"
-                    ),
-                    {"p0": session_id},
-                )
-                .mappings()
-                .fetchone()
-            )
-            if private is not None:
-                await attach_schedule_mcp(client, employee, session_id, private["id"])
             await client.trigger_chat(
                 agent_id,
                 session_id,

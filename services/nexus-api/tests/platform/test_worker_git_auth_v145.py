@@ -338,7 +338,6 @@ async def test_deploy_uses_written_credential_revision(monkeypatch):
         lease=lease,
     )
     # 已写入凭据版本只由 Worker 快照上报，部署完成不伪造环境表观测态。
-    provisioner.git_repository_id = "repo"
     provisioner.git_credential_revision = "written-actual"
     provisioner.verified_evaluation = {
         "readiness": "READY",
@@ -372,7 +371,7 @@ async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkey
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
         id=77, mode="LINUX_REMOTE", host="node.invalid", port=22, username="nexus",
-        repository_id=None, skill_refs=[], mcp_refs=[],
+        repository_url=None, skill_refs=[], mcp_refs=[],
         employee_id="gitrot",
         workspace_root="/srv/project",
         opencode_server_port=14096,
@@ -385,7 +384,6 @@ async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkey
     provisioner.config_path = "/etc/nexus/opencode/77/opencode.jsonc"
     provisioner.target_binary = "/root/.local/share/nexus/workers/77/bin/opencode"
     provisioner.git_token = "pat-rotated"
-    provisioner.git_repository_id = "repo"
     provisioner.git_credential_revision = "revision"
     provisioner.installer_meta = {
         "changed": {
@@ -460,7 +458,7 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
         id=88, mode="LINUX_REMOTE", host="node.invalid", port=22, username="nexus",
-        repository_id=None, skill_refs=[], mcp_refs=[],
+        repository_url=None, skill_refs=[], mcp_refs=[],
         employee_id="gitwire",
         workspace_root=str(workspace),
         opencode_server_port=14096,
@@ -473,7 +471,6 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
     provisioner.config_path = "/etc/nexus/opencode/88/opencode.jsonc"
     provisioner.target_binary = "/root/.local/share/nexus/workers/88/bin/opencode"
     provisioner.git_token = "pat-correct-one"
-    provisioner.git_repository_id = "repo"
     provisioner.git_credential_revision = "revision"
     provisioner.installer_meta = {
         "changed": {

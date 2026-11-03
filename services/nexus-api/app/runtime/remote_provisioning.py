@@ -36,8 +36,6 @@ from app.gateway.security import CredentialCipher, gateway_key_digest
 from app.gateway.service import GatewayControlService
 from app.gateway.urls import client_gateway_base
 from app.models import (
-    CodeRepository,
-    GitCredential,
     OpenCodeExecutionEnvironment,
     WorkerInstance,
 )
@@ -467,7 +465,6 @@ class RemoteProvisioner:
         self.home: str | None = None
         self.git_token: str | None = None
         self.git_credential_revision: str | None = None
-        self.git_repository_id: str | None = None
         self.installer_meta: dict = {}
         self.install_lock = None
         self.verified_evaluation: dict | None = None
@@ -779,25 +776,17 @@ fi
             }
         )
         token_file = ""
-        if self.environment.repository_id:
-            async with SessionLocal() as db:
-                repository = await db.get(CodeRepository, self.environment.repository_id)
-                credential = await db.scalar(
-                    select(GitCredential).where(
-                        GitCredential.repository_id == self.environment.repository_id
-                    )
-                )
-            if repository is None or credential is None:
-                raise RuntimeError("绑定的仓库没有凭据")
-            token = cipher().decrypt(credential.token_ciphertext)
-            self.secrets.append(token)
-            self.git_token = token
-            self.git_credential_revision = credential_revision(credential.token_ciphertext)
-            self.git_repository_id = repository.id
-            token_file = stem + ".token"
+        if self.environment.repository_url:
+            ciphertext = self.environment.git_token_ciphertext
+            if ciphertext:
+                token = cipher().decrypt(ciphertext)
+                self.secrets.append(token)
+                self.git_token = token
+                self.git_credential_revision = credential_revision(ciphertext)
+                token_file = stem + ".token"
             payload["repository"] = {
-                "url": repository.url,
-                "branch": self.environment.branch or repository.branch,
+                "url": self.environment.repository_url,
+                "branch": self.environment.branch or "main",
             }
         manifest = deployment_manifest(self.settings)
         await self.step(emit, "部署配置", "passed", "已准备员工专属网关与图书馆配置")

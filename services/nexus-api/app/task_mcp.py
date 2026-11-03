@@ -10,58 +10,14 @@ from starlette.responses import JSONResponse
 
 from app.config.settings import get_settings
 from app.database import SessionLocal
-from app.task_tools import (
-    TaskTools,
-    nexus_actor_id,
-    nexus_channel_id,
-    nexus_conversation_id,
-    nexus_discussion_id,
-    nexus_employee_id,
-    nexus_schedule_agent_id,
-    nexus_schedule_user_id,
-    nexus_session_id,
-)
+from app.task_tools import TaskTools
 
 
-class NexusIdentityMiddleware(BaseHTTPMiddleware):
-    """连接和工具发现只带入上下文，不要求群讨论或租约仍然存在。
-
-    AgentScope 在工作区挂接、列出 MCP 工具时也会请求这个服务；这些阶段
-    没有正在进行的业务操作，不能按工具调用去拒绝。真正的会话、员工、
-    讨论和日程归属校验由每个工具调用执行。
-    """
-
+class HealthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         if request.url.path == "/health":
             return JSONResponse({"ok": True})
-        tokens = [
-            (
-                nexus_schedule_user_id,
-                nexus_schedule_user_id.set(request.headers.get("x-nexus-schedule-user-id", "")),
-            ),
-            (
-                nexus_schedule_agent_id,
-                nexus_schedule_agent_id.set(request.headers.get("x-nexus-schedule-agent-id", "")),
-            ),
-            (nexus_discussion_id, nexus_discussion_id.set(request.headers.get("x-nexus-discussion-id", ""))),
-            (
-                nexus_employee_id,
-                nexus_employee_id.set(
-                    (request.headers.get("x-nexus-employee-id") or "").strip()
-                ),
-            ),
-            (nexus_session_id, nexus_session_id.set(request.headers.get("x-nexus-session-id", ""))),
-            (
-                nexus_conversation_id,
-                nexus_conversation_id.set(request.headers.get("x-nexus-conversation-id", "")),
-            ),
-            (nexus_channel_id, nexus_channel_id.set(request.headers.get("x-nexus-channel-id", ""))),
-        ]
-        try:
-            return await call_next(request)
-        finally:
-            for variable, token in tokens:
-                variable.reset(token)
+        return await call_next(request)
 
 
 def build_mcp_server() -> MCPServer:
@@ -80,33 +36,12 @@ def build_mcp_server() -> MCPServer:
     )
 
     async def _call(name: str, **kwargs):
-        from nexus_api.group_task_auth import authorize_task_source
-
-        try:
-            actor = await authorize_task_source(
-                nexus_session_id.get(),
-                nexus_employee_id.get(),
-                nexus_channel_id.get(),
-                nexus_discussion_id.get(),
-                nexus_schedule_user_id.get(),
-                nexus_schedule_agent_id.get(),
-                nexus_conversation_id.get(),
-            )
-        except PermissionError as exc:
-            reason = str(exc).strip()
-            message = "当前会话没有可执行该任务操作的业务上下文"
-            if reason:
-                message += f"：{reason}"
-            return {"ok": False, "error": message}
-        token = nexus_actor_id.set(actor)
-        try:
-            async with SessionLocal() as session:
-                return await getattr(TaskTools(session), name)(**kwargs)
-        finally:
-            nexus_actor_id.reset(token)
+        async with SessionLocal() as session:
+            return await getattr(TaskTools(session), name)(**kwargs)
 
     @server.tool(name="nexus_task_create", structured_output=True)
     async def nexus_task_create(
+        employee_id: str,
         task_type: Literal["ISSUE", "REQUIREMENT"],
         category_id: str,
         title: str,
@@ -114,15 +49,20 @@ def build_mcp_server() -> MCPServer:
         acceptance_criteria: list[str] | None = None,
         priority: str = "MEDIUM",
         worker_id: str | None = None,
-        repository_id: str | None = None,
         idempotency_key: str | None = None,
+        source_session_id: str | None = None,
+        source_conversation_id: str | None = None,
+        source_channel_id: str | None = None,
     ) -> dict[str, Any]:
-        """创建新的工程任务，相同会话和相同内容不会再建第二条。
+        """为 employee_id 指定的数字员工创建工程任务，只检查员工是否存在。
+
+        source_* 为可选的通知回传信息，不用于权限判断。提供来源会话时，相同内容不会重复创建。
 
         同一工作的补充指令应查询原任务并使用 nexus_task_input，不要重新创建。
         """
         return await _call(
             "create",
+            responsible_employee_id=employee_id,
             task_type=task_type,
             category_id=category_id,
             title=title,
@@ -130,14 +70,11 @@ def build_mcp_server() -> MCPServer:
             acceptance_criteria=acceptance_criteria,
             priority=priority,
             worker_id=worker_id,
-            repository_id=repository_id,
             idempotency_key=idempotency_key,
+            source_session_id=source_session_id,
+            source_conversation_id=source_conversation_id,
+            source_channel_id=source_channel_id,
         )
-
-    @server.tool(name="nexus_task_repositories", structured_output=True)
-    async def nexus_task_repositories() -> dict[str, Any]:
-        """查询已登记的仓库 ID、地址与分支，不返回凭据。创建任务必须选仓库或已绑定仓库的 Worker。"""
-        return await _call("repositories")
 
     @server.tool(name="nexus_task_categories", structured_output=True)
     async def nexus_task_categories() -> dict[str, Any]:
@@ -150,9 +87,11 @@ def build_mcp_server() -> MCPServer:
         return await _call("get", task_id=task_id)
 
     @server.tool(name="nexus_task_list", structured_output=True)
-    async def nexus_task_list(status: str | None = None, limit: int = 20) -> dict[str, Any]:
-        """列出当前责任员工的任务。"""
-        return await _call("list", status=status, limit=limit)
+    async def nexus_task_list(
+        employee_id: str | None = None, status: str | None = None, limit: int = 20
+    ) -> dict[str, Any]:
+        """列出任务，可按责任员工 ID 和状态筛选。"""
+        return await _call("list", responsible_employee_id=employee_id, status=status, limit=limit)
 
     @server.tool(name="nexus_task_update", structured_output=True)
     async def nexus_task_update(
@@ -227,24 +166,38 @@ def build_mcp_server() -> MCPServer:
 
     @server.tool(name="nexus_task_reply", structured_output=True)
     async def nexus_task_reply(
-        task_id: str, expected_session_id: str, request_id: str,
-        kind: Literal["question", "permission"], answers: list[list[str]] | None = None,
+        task_id: str,
+        expected_session_id: str,
+        request_id: str,
+        kind: Literal["question", "permission"],
+        answers: list[list[str]] | None = None,
         decision: str | None = None,
     ) -> dict[str, Any]:
         """回复查询所得请求。问题按顺序传 answers；权限选一次性 decision，不能编造授权。"""
         return await _call(
-            "reply", task_id=task_id, expected_session_id=expected_session_id,
-            request_id=request_id, kind=kind, answers=answers, decision=decision,
+            "reply",
+            task_id=task_id,
+            expected_session_id=expected_session_id,
+            request_id=request_id,
+            kind=kind,
+            answers=answers,
+            decision=decision,
         )
 
     @server.tool(name="nexus_task_input", structured_output=True)
     async def nexus_task_input(
-        task_id: str, expected_session_id: str, expected_submission_id: str, text: str,
+        task_id: str,
+        expected_session_id: str,
+        expected_submission_id: str,
+        text: str,
     ) -> dict[str, Any]:
         """依据求助查询返回的执行会话和回合标识，向同一 OpenCode 会话发送补充执行指令，不新建任务。"""
         return await _call(
-            "input", task_id=task_id, expected_session_id=expected_session_id,
-            expected_submission_id=expected_submission_id, text=text,
+            "input",
+            task_id=task_id,
+            expected_session_id=expected_session_id,
+            expected_submission_id=expected_submission_id,
+            text=text,
         )
 
     @server.tool(name="nexus_task_confirm", structured_output=True)
@@ -271,7 +224,7 @@ def main() -> None:
         json_response=True,
         host=settings.task_mcp_host,
     )
-    app.add_middleware(NexusIdentityMiddleware)
+    app.add_middleware(HealthMiddleware)
     uvicorn.run(app, host=settings.task_mcp_host, port=settings.task_mcp_port)
 
 

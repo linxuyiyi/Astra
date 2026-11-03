@@ -31,7 +31,7 @@ def test_offline_worker_is_not_shown_available_and_does_not_encode_a_task_change
         mode="LINUX_REMOTE",
         environment_status="AVAILABLE",
         worker_status="offline",
-        repository_id=None,
+        repository_url=None,
         employee_status="WORKING",
         task_statuses=["RUNNING"],
         runtime_connections=["CONNECTED"],
@@ -49,13 +49,13 @@ def test_waiting_human_and_repository_stay_separate_from_worker_health():
         mode="LINUX_REMOTE",
         environment_status="AVAILABLE",
         worker_status="online",
-        repository_id="repo-1",
+        repository_url='https://git.example/org/repo.git',
         employee_status="WAIT_HUMAN",
         task_statuses=["WAITING"],
         runtime_connections=["CONNECTED"],
     )
     assert health["availability"] == "AVAILABLE"
     assert health["opencode_reachable"] is True
-    assert health["repository_bound"] is True
+    assert health["repository_configured"] is True
     assert health["waiting_human"] is True
     assert health["executing"] is False

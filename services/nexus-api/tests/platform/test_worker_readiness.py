@@ -9,14 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.config.settings import Settings
 from app.domain import EmployeeStatus, TaskStatus, WorkerReadiness
 from app.gateway.models import GatewayPool, GatewayRoute
-from app.models import (
-    AgentWorker,
-    Base,
-    CodeRepository,
-    OpenCodeExecutionEnvironment,
-    Task,
-    WorkerInstance,
-)
+from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, Task, WorkerInstance
 from app.runtime.dispatcher import Dispatcher
 from app.runtime.worker_readiness import (
     build_desired_spec,
@@ -114,13 +107,6 @@ async def _seed_ready_remote_worker(session, tmp_path, *, worker_id: str = "emp-
                 enabled=True,
             )
         )
-        session.add(
-            CodeRepository(
-                id="repo-1",
-                url="https://git.internal/org/app.git",
-                branch="main",
-            )
-        )
     employee = AgentWorker(
         id=worker_id,
         name=f"Worker {worker_id}",
@@ -145,7 +131,7 @@ async def _seed_ready_remote_worker(session, tmp_path, *, worker_id: str = "emp-
         workspace_root=f"/srv/workspaces/{worker_id}",
         opencode_server_port=14096,
         model_name="nexus-gateway/gpt-5.4",
-        repository_id="repo-1",
+        repository_url='https://git.internal/org/app.git',
         branch="main",
         skill_refs=["code-audit"],
         mcp_refs=[{"name": "jira-mcp", "url": "http://mcp.internal:9100/sse"}],
@@ -399,7 +385,7 @@ async def test_dispatcher_skips_drifted_or_offline_worker_and_assigns_healthy_pe
         task_type="ISSUE",
         category_id="backend",
         status=TaskStatus.PENDING,
-        repository_id="repo-1",
+
     )
     db_session.add(task)
     await db_session.commit()

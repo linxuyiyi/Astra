@@ -22,7 +22,6 @@ from sqlalchemy.sql.dml import Update
 
 from app.models import (
     AgentWorker,
-    CodeRepository,
     OpenCodeExecutionEnvironment,
     Task,
     TaskCategory,
@@ -59,7 +58,6 @@ async def mysql_case(monkeypatch):
         )
         assert migrated.returncode == 0, migrated.stderr
         async with factory() as session:
-            session.add(CodeRepository(id="repo", url="https://example.invalid/repo"))
             session.add(TaskCategory(id="cat", name="cat"))
             for index in (1, 2):
                 session.add(
@@ -78,7 +76,7 @@ async def mysql_case(monkeypatch):
                     OpenCodeExecutionEnvironment(
                         id=index,
                         employee_id=f"E{index}",
-                        repository_id="repo",
+                        repository_url='https://example.invalid/repo',
                         mode="LOCAL",
                         status="AVAILABLE",
                         workspace_root="/tmp/unused-test-workspace",
@@ -91,7 +89,7 @@ async def mysql_case(monkeypatch):
                         title=f"T{index}",
                         task_type="ISSUE",
                         category_id="cat",
-                        repository_id="repo",
+
                         status="PENDING",
                     )
                 )

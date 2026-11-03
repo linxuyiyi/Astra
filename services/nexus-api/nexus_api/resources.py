@@ -29,14 +29,11 @@ from .sql import upsert_record
 
 SKILL_ID_PREFIX = "nsk_"
 MCP_ID_PREFIX = "nmp_"
-TASK_SKILL_ID = "task-management"
-TASK_SKILL_NAME = "任务管理"
 MAX_SKILL_FILES = 100
 MAX_SKILL_FILE_BYTES = 50 * 1024 * 1024
 MAX_SKILL_TOTAL_BYTES = 500 * 1024 * 1024
 SOURCE_NEXUS = "nexus"
 SOURCE_AGENTSCOPE = "agentscope"
-SOURCE_BUILTIN = "builtin"
 MCP_TRANSPORT_HTTP = "http"
 MCP_AUTH_NONE = "none"
 MCP_AUTH_BEARER = "bearer"
@@ -565,30 +562,6 @@ def external_skill_payload(
     }
 
 
-def builtin_skill_payload(bound: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "id": TASK_SKILL_ID,
-        "name": TASK_SKILL_NAME,
-        "description": "把需要改代码、跑工程或交付工作区结果的请求做成 Nexus 任务",
-        "source": SOURCE_BUILTIN,
-        "version": "内置",
-        "revision": 0,
-        "runtime_name": TASK_SKILL_NAME,
-        "files": [],
-        "enabled": True,
-        "editable": False,
-        "employees": employee_brief(bound),
-        "sync": {
-            "status": "applied" if bound else "unbound",
-            "detail": "由任务能力挂载逻辑维护",
-            "applied": len(bound),
-            "pending": 0,
-            "error": 0,
-            "last_synced_at": "",
-        },
-    }
-
-
 def mcp_payload(row, bound: list[dict[str, Any]], sync: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -740,11 +713,15 @@ def _retire_skill_name(connection, skill_id: str, name: str) -> None:
         if skill_id not in (employee.get("skills") or []):
             continue
         # 官方日程会话不登记聊天绑定，但实际安装记录也必须收到改名回收待办。
-        installed_sessions = connection.execute(
-            sql_text("""SELECT session_id FROM t_nexus_resource_sync
+        installed_sessions = (
+            connection.execute(
+                sql_text("""SELECT session_id FROM t_nexus_resource_sync
                 WHERE employee_id=:e AND resource_type='skill' AND resource_id=:r"""),
-            {"e": employee["id"], "r": skill_id},
-        ).scalars().all()
+                {"e": employee["id"], "r": skill_id},
+            )
+            .scalars()
+            .all()
+        )
         for session_id in dict.fromkeys([*employee_session_ids(connection, employee), *installed_sessions]):
             _set_sync(
                 connection,
@@ -783,7 +760,7 @@ def register_resource_removals(
     removed_skills = [
         ref
         for ref in dict.fromkeys(str(item) for item in previous_skills)
-        if ref and ref != TASK_SKILL_ID and ref not in desired_skill_refs
+        if ref and ref not in desired_skill_refs
     ]
     removed_mcps = [
         ref
@@ -1037,8 +1014,7 @@ async def _sync_one_session(
     active_skill_refs = [
         item
         for item in desired_skills
-        if item == TASK_SKILL_ID
-        or (item in local_skills and bool(local_skills[item]["enabled"]))
+        if (item in local_skills and bool(local_skills[item]["enabled"]))
         or (
             item not in local_skills
             and not is_nexus_skill(item)
@@ -1055,17 +1031,13 @@ async def _sync_one_session(
             and bool(external_mcps.get(item, {}).get("enabled", True))
         )
     ]
-    # 任务技能由 task_skill.py 单独维护，不在通用同步里重复上传。
-    generic_skill_refs = [item for item in active_skill_refs if item != TASK_SKILL_ID]
+    generic_skill_refs = active_skill_refs
 
     installed_skill_items = await client.list_workspace_skills(agent_id, session_id)
     installed_mcp_items = await client.list_workspace_mcp(agent_id, session_id)
     installed_skills = _installed_names(installed_skill_items)
     installed_mcps = _installed_names(installed_mcp_items)
-
     def skill_runtime_names(ref: str) -> list[str]:
-        if ref == TASK_SKILL_ID:
-            return []
         if is_nexus_skill(ref):
             row = local_skills.get(ref)
             return _matching_skill_names(str(row["name"]), installed_skills) if row is not None else []
@@ -1095,8 +1067,6 @@ async def _sync_one_session(
         stale_mcp_names.extend(mcp_runtime_names(ref))
     # 绑定仍在但资源被停用：从运行环境收回。
     for ref in desired_skills:
-        if ref == TASK_SKILL_ID:
-            continue
         if is_nexus_skill(ref):
             row = local_skills.get(ref)
             if row is not None and not bool(row["enabled"]):
@@ -1266,8 +1236,6 @@ async def _sync_one_session(
     needs_permission_mode = bool(active_mcp_refs)
     if not mutating and not needs_permission_mode:
         for ref in desired_skills:
-            if ref == TASK_SKILL_ID:
-                continue
             _set_sync(
                 connection,
                 "skill",
@@ -1308,8 +1276,6 @@ async def _sync_one_session(
     if mutating and state == "running":
         detail = "会话正在运行，等待下一次同步"
         for ref in desired_skills:
-            if ref == TASK_SKILL_ID:
-                continue
             _set_sync(
                 connection,
                 "skill",
@@ -1335,8 +1301,6 @@ async def _sync_one_session(
         return {"status": "running", "detail": detail}
     if not mutating:
         for ref in desired_skills:
-            if ref == TASK_SKILL_ID:
-                continue
             _set_sync(
                 connection,
                 "skill",
@@ -1435,8 +1399,6 @@ async def _sync_one_session(
         _secret_values(local_mcps.values(), store),
     )
     for ref in desired_skills:
-        if ref == TASK_SKILL_ID:
-            continue
         if is_nexus_skill(ref):
             revision = int(local_skills[ref]["revision"]) if ref in local_skills else 0
             disabled = ref in local_skills and not bool(local_skills[ref]["enabled"])
@@ -1941,7 +1903,7 @@ async def skill_catalog(
     items: list[dict[str, Any]] = []
     external_available = False
     external_by_name: set[str] = set()
-    if source not in {SOURCE_NEXUS, SOURCE_BUILTIN}:
+    if source != SOURCE_NEXUS:
         try:
             records = await client.list_skill_records()
             external_available = True
@@ -1963,9 +1925,6 @@ async def skill_catalog(
                 items.append(external_skill_payload(record, bound, sync))
         except AgentScopeError:
             external_available = False
-    if source in {"", SOURCE_BUILTIN}:
-        bound_builtin = employees_for(employees, "skills", TASK_SKILL_ID)
-        items.append(builtin_skill_payload(bound_builtin))
     if source in {"", SOURCE_NEXUS}:
         for row in local_rows:
             bound = employees_for(employees, "skills", row["id"])

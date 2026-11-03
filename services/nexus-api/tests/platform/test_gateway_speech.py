@@ -319,7 +319,7 @@ async def test_worker_main_model_cannot_resolve_asr_route():
         await session.commit()
         environment = SimpleNamespace(
             model_name=model, mode="LOCAL", workspace_root="/tmp/worker", opencode_server_port=14096,
-            repository_id=None, skill_refs=[], mcp_refs=[],
+            repository_url=None, skill_refs=[], mcp_refs=[],
         )
         desired = (await build_desired_spec(session, environment))["model"]
         assert desired["resolved"] is False

@@ -47,7 +47,7 @@ def _environment():
         mode="LOCAL",
         name="local",
         workspace_root="/tmp/workspaces",
-        repository_id="repo-1",
+        repository_url='https://git.example/org/repo.git',
         status=EnvironmentStatus.AVAILABLE,
     )
 
@@ -63,7 +63,6 @@ def _task(**overrides):
         claimed_at=datetime.now(UTC),
         current_session_id="ses_1",
         pending_attempt=1,
-        repository_id="repo-1",
     )
     values.update(overrides)
     return Task(**values)
@@ -145,7 +144,7 @@ async def test_human_release_then_dispatch(session):
             task_type="ISSUE",
             category_id="testing",
             status=TaskStatus.PENDING,
-            repository_id="repo-1",
+
         )
     )
     await session.commit()

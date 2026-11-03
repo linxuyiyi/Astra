@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from cryptography.fernet import Fernet
 from fastapi import HTTPException
 from sqlalchemy import select, update
 
@@ -21,7 +22,6 @@ from app.gateway.security import CredentialCipher, gateway_key_digest
 from app.main import app
 from app.models import (
     AgentWorker,
-    CodeRepository,
     OpenCodeExecutionEnvironment,
     Task,
     TaskCategory,
@@ -56,6 +56,7 @@ ACTOR_HEADERS = {"X-Owner-Id": "admin-test"}
 @pytest.fixture(autouse=True)
 def maintenance_settings(monkeypatch):
     settings = get_settings()
+    monkeypatch.setattr(settings, "gateway_master_key", Fernet.generate_key().decode())
     monkeypatch.setattr(settings, "mcp_transport", "streamable-http")
     monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:8110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:8201/mcp")
@@ -70,7 +71,6 @@ async def make_environment(
     await init_database()
     suffix = uuid4().hex[:10]
     employee_id = f"{employee_prefix}-{suffix}"
-    repo_id = f"repo-{suffix}"
     route_id = f"route-{suffix}"
     async with SessionLocal() as db:
         db.add(
@@ -86,19 +86,11 @@ async def make_environment(
                 task_types=["ISSUE"],
             )
         )
-        if with_repo:
-            db.add(
-                CodeRepository(
-                    id=repo_id,
-                    url="https://example.test/org/repo.git",
-                    branch="main",
-                )
-            )
         db.add(GatewayRoute(id=route_id, model=route_id, pool_id="pool-1", enabled=True))
         await db.flush()
         values = dict(
             employee_id=employee_id,
-            repository_id=repo_id if with_repo else None,
+            repository_url='https://example.test/org/repo.git' if with_repo else None,
             mode="LINUX_REMOTE",
             name="Linux Worker",
             host="10.0.0.9",
@@ -804,7 +796,7 @@ async def test_list_workers_embeds_health_and_patch_enabled_plus_put_environment
                 "opencode_server_port": env_data["opencode_server_port"],
                 "opencode_path": env_data["opencode_path"],
                 "model_name": env_data["model_name"],
-                "repository_id": env_data["repository_id"],
+
                 "labels": ["canary"],
                 "skill_refs": [],
                 "mcp_refs": [],
@@ -827,7 +819,7 @@ async def test_list_workers_embeds_health_and_patch_enabled_plus_put_environment
                 "opencode_server_port": env_data["opencode_server_port"],
                 "opencode_path": env_data["opencode_path"],
                 "model_name": env_data["model_name"],
-                "repository_id": env_data["repository_id"],
+
                 "skill_refs": ["new-skill-pending-sync"],
                 "mcp_refs": [],
             },
@@ -852,7 +844,7 @@ async def test_list_workers_embeds_health_and_patch_enabled_plus_put_environment
                 "opencode_server_port": env_data["opencode_server_port"],
                 "opencode_path": env_data["opencode_path"],
                 "model_name": env_data["model_name"],
-                "repository_id": env_data["repository_id"],
+
                 "skill_refs": [],
                 "mcp_refs": [],
             },
@@ -903,8 +895,7 @@ async def test_dispatcher_skips_drifted_worker_and_assigns_healthy_colleague():
     async with SessionLocal() as db:
         drifted_env = await db.get(OpenCodeExecutionEnvironment, drifted_env_id)
         ready_env = await db.get(OpenCodeExecutionEnvironment, ready_env_id)
-        ready_env.repository_id = drifted_env.repository_id
-        shared_repo_id = drifted_env.repository_id
+        ready_env.repository_url = drifted_env.repository_url
         await db.commit()
 
     await enroll_ready_worker(drifted_env_id, online=True)
@@ -926,7 +917,7 @@ async def test_dispatcher_skips_drifted_worker_and_assigns_healthy_colleague():
                 title="dispatch-skip-drifted",
                 task_type="ISSUE",
                 category_id=cat_id,
-                repository_id=shared_repo_id,
+
                 status="PENDING",
             )
         )

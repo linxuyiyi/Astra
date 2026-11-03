@@ -1,7 +1,6 @@
 import { workerFacingMessage } from '@/utils/format'
 import type {
   AstraEvent,
-  CodeRepository,
   DashboardActivity,
   DashboardAttention,
   DashboardEmployees,
@@ -77,9 +76,6 @@ export const api = {
     request<{ deleted: string }>(`/api/agent-workers/${id}`, { method: 'DELETE' }),
   updateEnvironment: (id: string, body: Record<string, unknown>) =>
     request<ExecutionEnvironment>(`/api/agent-workers/${id}/environment`, { method: 'PUT', body: JSON.stringify(body) }),
-  repositories: () => request<CodeRepository[]>('/api/repositories'),
-  createRepository: (body: { url: string; branch: string; token: string }) =>
-    request<CodeRepository>('/api/repositories', { method: 'POST', body: JSON.stringify(body) }),
   tasks: (query = '') => request<Task[]>(`/api/tasks${query}`),
   task: (id: string) => request<Task>(`/api/tasks/${id}`),
   taskWorkspace: (id: string) => request<TaskWorkspaceBinding>(`/api/tasks/${id}/workspace`),

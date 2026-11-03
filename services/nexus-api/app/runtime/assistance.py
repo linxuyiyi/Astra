@@ -13,20 +13,12 @@ from app.services import TaskService
 
 
 class WorkerAssistance:
-    def __init__(self, runtime, *, employee_id, source_session_id):
+    def __init__(self, runtime):
         self.runtime = runtime
         self.db = runtime.session
-        self.employee_id = employee_id
-        self.source_session_id = source_session_id
 
     async def context(self, task_id, expected_session_id=None):
         task = await self.runtime.lock_task(task_id)
-        if (
-            not self.employee_id or not self.source_session_id
-            or task.responsible_employee_id != self.employee_id
-            or task.source_session_id != self.source_session_id
-        ):
-            raise RuntimeStateError("任务不属于当前员工及来源对话")
         if task.status not in {"RUNNING", "WAITING"}:
             raise RuntimeStateError("当前任务不能处理任务执行端的求助")
         if expected_session_id and task.current_session_id != expected_session_id:
@@ -155,5 +147,4 @@ class WorkerAssistance:
         return await self.runtime.send(
             task_id, {"parts": [{"type": "text", "text": text}]},
             expected_session_id=binding.id, expected_submission_id=expected_submission_id,
-            expected_source=(self.employee_id, self.source_session_id),
         )

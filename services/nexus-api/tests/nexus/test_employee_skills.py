@@ -122,16 +122,17 @@ def test_create_installs_employee_skills_in_mailbox(tmp_path, monkeypatch):
     assert mailbox[0]["skill_ids"] == [SKILL_ID]
 
 
-def test_task_skill_only_does_not_use_the_library(tmp_path, monkeypatch):
+def test_task_named_skill_uses_the_library_like_any_other_skill(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
     fake = FakeAgentScope(workspace_skills=[{"name": "任务管理"}])
+    fake.catalog = [{"id": "task-management", "name": "任务管理"}]
     with TestClient(create_app()) as test_client:
         _client(test_client, fake)
         created = test_client.post("/api/v1/employees", json=employee_body(skills=["task-management"]))
         assert created.status_code == 201, created.text
         assert created.json()["employee"]["skills"] == ["task-management"]
 
-    assert fake.from_library == []
+    assert fake.from_library[0]["skill_ids"] == ["task-management"]
 
 
 def test_private_send_and_rebind_sync_existing_employee_skills(tmp_path, monkeypatch):

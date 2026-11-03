@@ -973,7 +973,7 @@ class Collaboration:
                     c=cid, u=initiator,
                 )
                 employee = self.load_employee(db, source["responsible_employee_id"])
-                if authorized and employee["enabled"] and "task-management" in employee["skills"]:
+                if authorized and employee["enabled"]:
                     did = new_id("dis")
                     body += "\n责任员工将先核实并处理，需要补充信息时会在群内提问。"
             message = append_message(
@@ -1369,15 +1369,7 @@ class Collaboration:
                 await self.sync_resources(
                     self.app.state.agentscope, e, [session_id], db, self.app.state.resources
                 )
-                from .task_skill import attach_task_capability
 
-                await attach_task_capability(
-                    self.app.state.agentscope,
-                    e,
-                    session_id,
-                    channel_id=d["channel_id"],
-                    discussion_id=d["id"],
-                )
                 history = [
                     dict(r)
                     for r in db.execute(

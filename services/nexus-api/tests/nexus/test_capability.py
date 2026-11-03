@@ -27,16 +27,16 @@ def test_unavailable_catalog_keeps_applied_empty(tmp_path, monkeypatch):
                 "domain": "测试",
                 "description": "负责",
                 "instructions": "直接回答",
-                "skills": ["task-management"],
+                "skills": [],
                 "knowledge": [],
                 "tools": [],
             },
         )
     assert response.status_code == 201, response.text
     capability = response.json()["employee"]["capability"]
-    assert capability["desired_revision"] == binding_revision(["task-management"])
+    assert capability["desired_revision"] == binding_revision([])
     assert capability["applied_revision"] == ""
-    assert capability["runtime_status"] == "error"
+    assert capability["runtime_status"] == "pending"
     assert capability["error"]
 
 

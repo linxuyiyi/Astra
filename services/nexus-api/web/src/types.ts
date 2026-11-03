@@ -32,7 +32,7 @@ export interface ResourceCatalog {
   items: SkillItem[];
 }
 
-export type ResourceSource = "nexus" | "agentscope" | "builtin";
+export type ResourceSource = "nexus" | "agentscope";
 
 export interface ResourceEmployee {
   id: string;

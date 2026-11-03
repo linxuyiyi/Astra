@@ -7,7 +7,6 @@ import json
 from typing import Any
 
 from .agentscope import AgentScopeClient, AgentScopeError
-from .task_skill import TASK_SKILL_ID, TASK_SKILL_NAME
 
 
 def binding_revision(names: list[str]) -> str:
@@ -53,7 +52,7 @@ def settle(
     error: str,
     checked_at: str,
 ) -> dict[str, Any]:
-    record = dict(current or {})
+    record = {"applied_revision": str((current or {}).get("applied_revision") or "")}
     previous = str(record.get("applied_revision") or "")
     record["desired_revision"] = desired
     record["checked_at"] = checked_at
@@ -110,9 +109,7 @@ async def inspect_employee(
     skill_names = _skill_names(catalog_items)
     catalog = _names(catalog_items)
     mcp_by_id = {
-        str(item.get("id") or ""): str(item.get("name") or "")
-        for item in user_mcp
-        if item.get("id")
+        str(item.get("id") or ""): str(item.get("name") or "") for item in user_mcp if item.get("id")
     }
     workspace_skills = _names(workspace_skill_items)
     mcp_names = _names(workspace_mcp)
@@ -126,14 +123,6 @@ async def inspect_employee(
     expected_mcps: list[str] = []
     missing: list[str] = []
     for skill_id in skill_ids:
-        if skill_id == TASK_SKILL_ID:
-            name = next(
-                (item for item in (TASK_SKILL_NAME, TASK_SKILL_ID) if item in workspace_skills),
-                TASK_SKILL_NAME,
-            )
-            expected_skills.append(name)
-            catalog.add(name)
-            continue
         if skill_id.startswith("nsk_"):
             name = custom_skills.get(skill_id, "")
             if name:

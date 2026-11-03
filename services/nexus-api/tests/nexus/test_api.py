@@ -68,7 +68,7 @@ def test_health_and_runtime_report_pinned_version(client):
 
 def test_skill_catalog_is_empty_when_service_is_down(client):
     payload = client.get("/api/v1/skills").json()
-    assert payload == {"available": False, "items": [{"id": "task-management", "name": "任务管理"}]}
+    assert payload == {"available": False, "items": []}
 
 
 def test_employee_crud_rejects_duplicates_and_model_is_absent(client):
@@ -339,10 +339,10 @@ def test_new_skills_are_rejected_when_catalog_is_unavailable(client):
     assert "技能" in response.json()["detail"]
 
 
-def test_builtin_task_skill_can_be_saved_when_catalog_is_down(client):
+def test_unregistered_task_skill_is_rejected_when_catalog_is_down(client):
     response = client.post("/api/v1/employees", json=employee_body(skills=["task-management"]))
-    assert response.status_code == 201
-    assert response.json()["employee"]["skills"] == ["task-management"]
+    assert response.status_code == 422
+    assert "技能" in response.json()["detail"]
 
 
 def test_wake_target_uses_mailbox_and_rejects_foreign_session(client):
@@ -386,37 +386,6 @@ def test_wake_target_uses_mailbox_and_rejects_foreign_session(client):
     assert foreign.status_code == 404
 
 
-@pytest.mark.parametrize("unavailable", [False, True])
-def test_private_task_wake_refreshes_assistance_before_delivery(client, monkeypatch, unavailable):
-    from nexus_api.db import connect
-
-    employee = client.post(
-        "/api/v1/employees", json=employee_body(skills=["task-management"]),
-    ).json()["employee"]
-    conversation = client.post(f"/api/v1/employees/{employee['id']}/conversations",
-                               json={"name": "求助来源"}).json()
-    with connect() as db:
-        db.execute(sql_text("UPDATE t_nexus_employees SET agentscope_agent_id='agent-task' WHERE id=:i"),
-                   {"i": employee["id"]})
-        db.execute(
-            sql_text("UPDATE t_nexus_conversations SET agentscope_session_id='session-task' WHERE id=:i"),
-            {"i": conversation["id"]},
-        )
-        db.commit()
-    calls = []
-
-    async def attach(_client, staff, sid, **kwargs):
-        calls.append((staff["id"], sid, kwargs))
-        if unavailable:
-            raise AgentScopeError("unavailable")
-
-    monkeypatch.setattr("nexus_api.main.attach_task_capability", attach)
-    response = client.get("/api/v1/internal/wake-target",
-                          params={"employee_id": employee["id"], "session_id": "session-task"})
-    assert response.status_code == (503 if unavailable else 200), response.text
-    assert calls == [
-        (employee["id"], "session-task", {"conversation_id": conversation["id"], "strict": True}),
-    ]
 
 
 def test_new_knowledge_and_tools_are_rejected_when_catalog_is_unavailable(client):
@@ -626,13 +595,7 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
             and request.method == "POST"
             and b"nexus-schedule" in request.content
         ]
-        assert len(schedule_mcp_calls) == 2
-        schedule_payload = json.loads(schedule_mcp_calls[0].content.decode())
-        assert schedule_payload["name"] == "nexus-schedule"
-        headers = schedule_payload["mcp_config"]["headers"]
-        assert headers["X-Nexus-Employee-Id"] == employee["id"]
-        assert headers["X-Nexus-Session-Id"]
-        assert "Authorization" not in headers
+        assert schedule_mcp_calls == []
 
 
 def test_peer_hint_returns_limit_text_without_delivering():
@@ -1184,8 +1147,7 @@ def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path
             "/api/v1/employees",
             json=employee_body(name="王五", domain="测试工程师"),
         ).json()["employee"]
-        assert patched
-        assert patched[0]["permission_mode"] == "dont_ask"
+        assert patched == []
         headers = {"X-Owner-Id": "browser-a"}
         first = test_client.post(
             f"/api/v1/employees/{star['id']}/conversations",
@@ -1398,33 +1360,6 @@ def test_private_chat_uses_dont_ask(tmp_path, monkeypatch):
     assert private[0][1]["permission_mode"] == "dont_ask"
 
 
-def test_dont_ask_allows_platform_mcp_tools():
-    import asyncio
-
-    module = load_agent_service("nexus_agent_service_task_permission")
-
-    class Behavior:
-        ALLOW = "ALLOW"
-
-    class Decision:
-        def __init__(self, behavior, message) -> None:
-            self.behavior = behavior
-            self.message = message
-
-    class Tool:
-        def __init__(self, name: str) -> None:
-            self.name = name
-
-        async def check_permissions(self, *_args, **_kwargs):
-            return "original"
-
-    module.allow_nexus_task_mcp(Tool, Decision, Behavior)
-    allowed = asyncio.run(Tool("mcp__nexus-task__nexus_task_get").check_permissions())
-    scheduled = asyncio.run(Tool("mcp__nexus-schedule__schedule_create").check_permissions())
-    other = asyncio.run(Tool("mcp__other__bash").check_permissions())
-    assert allowed.behavior == Behavior.ALLOW
-    assert scheduled.behavior == Behavior.ALLOW
-    assert other == "original"
 
 
 def test_task_hint_body_accepts_json_at_module_level():
@@ -1462,42 +1397,6 @@ def test_task_hint_body_accepts_json_at_module_level():
     assert any(item[0] == "body" for item in locations)
 
 
-def test_new_employee_attaches_task_capability_with_the_new_agent_id(tmp_path, monkeypatch):
-    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
-    attached: list[tuple[str, str | None]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/agent/" and request.method == "POST":
-            body = json.loads(request.content.decode())
-            return httpx.Response(201, json={"agent_id": f"agent-{body['name']}"})
-        if request.url.path == "/sessions/" and request.method == "POST":
-            body = json.loads(request.content.decode())
-            return httpx.Response(201, json={"session_id": f"session-{body['agent_id']}"})
-        if request.method == "PATCH" and request.url.path.startswith("/sessions/"):
-            return httpx.Response(200, json={})
-        if request.url.path in {"/workspace/skill/upload", "/workspace/mcp"} and request.method == "POST":
-            attached.append((request.url.path, request.url.params.get("agent_id")))
-            return httpx.Response(200, json={})
-        if request.url.path == "/workspace/mcp" and request.method == "GET":
-            return httpx.Response(200, json=[])
-        if request.url.path == "/skill":
-            return httpx.Response(200, json=[])
-        return httpx.Response(404, json={"detail": "missing"})
-
-    application = create_app()
-    with TestClient(application) as test_client:
-        test_client.app.state.agentscope = AgentScopeClient(
-            "http://agentscope.test",
-            "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
-        )
-        created = test_client.post("/api/v1/employees", json=employee_body(skills=["task-management"]))
-        assert created.status_code == 201, created.text
-        employee = created.json()["employee"]
-
-    assert employee["agentscope_agent_id"] == "agent-星河"
-    assert ("/workspace/skill/upload", "agent-星河") in attached
-    assert ("/workspace/mcp", "agent-星河") not in attached
 
 
 def test_disabled_employee_defers_wake(client):
@@ -1523,178 +1422,8 @@ def test_disabled_employee_defers_wake(client):
     assert "禁用" in deferred.json()["detail"]
 
 
-def test_task_skill_is_revoked_and_restored_on_existing_sessions(tmp_path, monkeypatch):
-    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
-    calls: list[tuple[str, str, str | None]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(
-            (
-                request.method,
-                request.url.path,
-                request.url.params.get("session_id"),
-            )
-        )
-        if request.url.path == "/agent/" and request.method == "POST":
-            body = json.loads(request.content.decode())
-            return httpx.Response(201, json={"agent_id": f"agent-{body['name']}"})
-        if request.method == "PATCH" and request.url.path.startswith("/agent/"):
-            return httpx.Response(200, json={})
-        if request.url.path == "/sessions/" and request.method == "POST":
-            body = json.loads(request.content.decode())
-            return httpx.Response(201, json={"session_id": f"session-{body['agent_id']}"})
-        if request.method == "PATCH" and request.url.path.startswith("/sessions/"):
-            return httpx.Response(200, json={})
-        if request.url.path == "/skill":
-            return httpx.Response(200, json=[])
-        if request.method == "GET" and request.url.path == "/workspace/skill":
-            return httpx.Response(200, json=[{"name": "任务管理", "dir": "task-management"}])
-        if request.method == "GET" and request.url.path == "/workspace/mcp":
-            return httpx.Response(
-                200,
-                json=[
-                    {
-                        "name": "nexus-task",
-                        "is_healthy": True,
-                        "tools": [{"name": "nexus_task_get"}],
-                    }
-                ],
-            )
-        if request.url.path in {"/workspace/skill/upload", "/workspace/mcp"} or request.method == "DELETE":
-            return httpx.Response(200, json={})
-        return httpx.Response(404, json={"detail": "missing"})
-
-    application = create_app()
-    with TestClient(application) as test_client:
-        test_client.app.state.agentscope = AgentScopeClient(
-            "http://agentscope.test",
-            "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
-        )
-        created = test_client.post("/api/v1/employees", json=employee_body(skills=["task-management"]))
-        assert created.status_code == 201, created.text
-        employee = created.json()["employee"]
-        from nexus_api.db import connect
-        from nexus_api.main import db_path
-
-        connection = connect(db_path())
-        connection.execute(
-            sql_text(
-                """
-                INSERT INTO t_nexus_conversations (
-                    id, employee_id, owner_id, name, agentscope_session_id, created_at,
-                updated_at
-                ) VALUES ('conv_1', :p0, 'owner', '对话', 'ses_chat', 't', 't')
-                """
-            ),
-            {"p0": employee["id"]},
-        )
-        connection.commit()
-        connection.close()
-        calls.clear()
-        removed = test_client.patch(
-            f"/api/v1/employees/{employee['id']}",
-            json=employee_body(skills=[]),
-        )
-        assert removed.status_code == 200, removed.text
-        revoked = set(calls)
-        assert ("DELETE", "/workspace/skill/任务管理", employee["mailbox_session_id"]) in revoked
-        assert ("DELETE", "/workspace/mcp/nexus-task", employee["mailbox_session_id"]) in revoked
-        assert ("DELETE", "/workspace/mcp/nexus-task", "ses_chat") in revoked
-        calls.clear()
-        restored = test_client.patch(
-            f"/api/v1/employees/{employee['id']}",
-            json=employee_body(skills=["task-management"]),
-        )
-        assert restored.status_code == 200, restored.text
-        mcp_calls = [item for item in calls if item[0] == "POST" and item[1] == "/workspace/mcp"]
-        assert {item[2] for item in mcp_calls} == {"ses_chat"}
 
 
-def test_task_mcp_discovery_error_is_visible_on_employee_capability(tmp_path, monkeypatch):
-    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
-    monkeypatch.setenv("NEXUS_TASK_MCP_URL", "http://task.test/mcp")
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/agent/" and request.method == "POST":
-            return httpx.Response(201, json={"agent_id": "agent-task"})
-        if request.url.path == "/sessions/" and request.method == "POST":
-            return httpx.Response(201, json={"session_id": "session-mail"})
-        if request.method == "PATCH" and request.url.path.startswith("/sessions/"):
-            return httpx.Response(200, json={})
-        if request.url.path == "/skill":
-            return httpx.Response(200, json=[])
-        if request.url.path == "/workspace/skill":
-            if request.method == "GET":
-                return httpx.Response(
-                    200,
-                    json=[{"name": "任务管理", "dir": "task-management"}],
-                )
-            return httpx.Response(201, json={})
-        if request.url.path == "/workspace/mcp":
-            if request.method == "POST":
-                return httpx.Response(201, json={})
-            return httpx.Response(
-                200,
-                json=[
-                    {
-                        "name": "nexus-task",
-                        "is_healthy": False,
-                        "error": "连接被拒绝",
-                        "tools": [],
-                    }
-                ],
-            )
-        if request.url.path.endswith("/status"):
-            return httpx.Response(200, json={"status": "idle"})
-        return httpx.Response(200, json={})
-
-    application = create_app()
-    with TestClient(application) as test_client:
-        test_client.app.state.agentscope = AgentScopeClient(
-            "http://agentscope.test",
-            "nexus",
-            httpx.AsyncClient(
-                transport=httpx.MockTransport(handler),
-                base_url="http://agentscope.test",
-            ),
-        )
-        created = test_client.post(
-            "/api/v1/employees",
-            json=employee_body(skills=["task-management"]),
-        )
-        assert created.status_code == 201, created.text
-        employee = created.json()["employee"]
-        from nexus_api.db import connect
-        from nexus_api.main import db_path
-
-        connection = connect(db_path())
-        connection.execute(
-            sql_text(
-                """
-                INSERT INTO t_nexus_conversations (
-                    id, employee_id, owner_id, name, agentscope_session_id,
-                    created_at, updated_at
-                ) VALUES ('conv_task', :p0, 'owner', '任务对话', 'session-chat', 't', 't')
-                """
-            ),
-            {"p0": employee["id"]},
-        )
-        connection.commit()
-        connection.close()
-
-        updated = test_client.patch(
-            f"/api/v1/employees/{employee['id']}",
-            json=employee_body(skills=["task-management"]),
-        )
-        assert updated.status_code == 200, updated.text
-        payload = updated.json()
-        assert payload["sync"]["status"] == "error"
-        assert "任务 MCP 连接或工具发现失败" in payload["sync"]["detail"]
-        capability = payload["employee"]["capability"]
-        assert capability["runtime_status"] == "error"
-        assert "任务 MCP 连接或工具发现失败" in capability["error"]
-        assert capability["task"]["status"] == "error"
 
 
 def test_employee_avatar_persists_and_metadata_edits_do_not_change_it(client):

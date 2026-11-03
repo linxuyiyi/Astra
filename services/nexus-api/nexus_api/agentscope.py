@@ -539,7 +539,7 @@ class AgentScopeClient:
         *,
         url: str,
         headers: dict[str, str],
-        name: str = "nexus-task",
+        name: str,
         timeout: float = 30.0,
     ) -> None:
         payload = {
@@ -646,7 +646,7 @@ class AgentScopeClient:
             raise AgentScopeError("AgentScope 技能列表不是数组")
         return [item for item in payload if isinstance(item, dict)]
 
-    async def remove_workspace_mcp(self, agent_id: str, session_id: str, name: str = "nexus-task") -> None:
+    async def remove_workspace_mcp(self, agent_id: str, session_id: str, name: str) -> None:
         try:
             await self.request(
                 "DELETE",

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from nexus_api import schedule_mcp, schedule_skill
+from nexus_api import schedule_mcp
 
 INITIALIZE = {
     "jsonrpc": "2.0",
@@ -124,64 +124,19 @@ def test_health_and_discovery_do_not_require_bearer_or_session_headers():
         assert {"schedule_create", "schedule_list", "schedule_view"} <= names
 
 
-@pytest.mark.asyncio
-async def test_attach_schedule_mcp_has_no_shared_key_and_reuses_agentscope_idempotency():
-    class Client:
-        configured = True
-
-        def __init__(self):
-            self.calls = []
-
-        async def add_workspace_mcp(self, agent_id, session_id, **kwargs):
-            self.calls.append((agent_id, session_id, kwargs))
-
-        async def list_workspace_mcp(self, agent_id, session_id):
-            return [{"name": "nexus-schedule", "is_healthy": True, "tools": [{"name": "schedule_list"}]}]
-
-    client = Client()
-    employee = {"id": "emp-1", "agentscope_agent_id": "agent-1"}
-    await schedule_skill.attach_schedule_mcp(client, employee, "ses-1", "conv-1")
-    await schedule_skill.attach_schedule_mcp(client, employee, "ses-1", "conv-1")
-    assert len(client.calls) == 2
-    agent_id, session_id, kwargs = client.calls[0]
-    assert (agent_id, session_id) == ("agent-1", "ses-1")
-    assert kwargs["name"] == "nexus-schedule"
-    assert kwargs["url"] == "http://schedule-mcp.test/mcp"
-    assert "Authorization" not in kwargs["headers"]
-    assert kwargs["headers"]["X-Nexus-Conversation-Id"] == "conv-1"
 
 
-@pytest.mark.asyncio
-async def test_attach_schedule_mcp_returns_and_logs_failure(caplog):
-    class Client:
-        configured = True
-        items = []
-
-        async def add_workspace_mcp(self, *args, **kwargs):
-            pass
-
-        async def list_workspace_mcp(self, agent_id, session_id):
-            return self.items
-
-    client = Client()
-    employee = {"id": "emp-1", "agentscope_agent_id": "agent-1"}
-    assert "没有返回" in await schedule_skill.attach_schedule_mcp(client, employee, "s")
-    client.items = [{"name": "nexus-schedule", "is_healthy": False, "error": "boom"}]
-    assert await schedule_skill.attach_schedule_mcp(client, employee, "s") == "boom"
-    client.items = [{"name": "nexus-schedule", "is_healthy": True, "tools": []}]
-    assert "空列表" in await schedule_skill.attach_schedule_mcp(client, employee, "s")
-    assert "日程 MCP 不可用" in caplog.text
 
 
-def test_require_employee_tool_allows_schedule_ref_only_when_allowed():
+def test_require_employee_tool_requires_explicit_binding_for_any_mcp_name():
     from fastapi import HTTPException
 
     from nexus_api.tool_policy import require_employee_tool
 
-    policy = {"allowed_tools": [], "mcp_refs": {}, "skill_viewer": False, "schedule_allowed": True}
-    require_employee_tool(policy, "mcp__nexus-schedule__schedule_list", "__schedule__")
-    with pytest.raises(HTTPException):
-        require_employee_tool(policy, "mcp__evil__x", "__schedule__")
-    with pytest.raises(HTTPException):
-        denied = {**policy, "schedule_allowed": False}
-        require_employee_tool(denied, "mcp__nexus-schedule__schedule_list", "__schedule__")
+    policy = {"allowed_tools": [], "mcp_refs": {}, "skill_viewer": True}
+    for name, legacy_ref in (("nexus-task", "__task__"), ("nexus-schedule", "__schedule__")):
+        tool = f"mcp__{name}__lookup"
+        with pytest.raises(HTTPException):
+            require_employee_tool(policy, tool, legacy_ref)
+        bound = {**policy, "mcp_refs": {"registered-id": name}}
+        require_employee_tool(bound, tool, "registered-id")

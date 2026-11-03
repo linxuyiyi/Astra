@@ -85,8 +85,7 @@ async def verify_mcp() -> None:
     """部署验收：直接执行 MCP 协议，并通过 AgentScope 工作区真实注册和连接。"""
 
     from nexus_api.agentscope import AgentScopeClient, AgentScopeError
-    from nexus_api.schedule_skill import schedule_mcp_url
-    from nexus_api.task_skill import task_mcp_url
+    from nexus_api.mcp_endpoints import schedule_mcp_url, task_mcp_url
 
     settings = get_settings()
     if settings.mcp_transport != "streamable-http":

@@ -43,7 +43,6 @@
       v-loading="loading"
       :data="paged"
       row-key="id"
-      :max-height="TABLE_MAX_HEIGHT"
       element-loading-text="正在加载员工列表"
       data-testid="employees-table"
     >
@@ -288,7 +287,6 @@ import SettingsHeaderActions from "./settings/SettingsHeaderActions.vue";
 import { deleteEmployee, getKnowledge, getMcps, getSkills, getTools, listEmployees, saveEmployee } from "../api";
 import { gatewayApi, type GatewayRoute } from "../api/gateway";
 import type { Employee, ResourceCatalog } from "../types";
-import { TABLE_MAX_HEIGHT } from "../utils/table";
 import { formatToolLabel, isMcpTool } from "../utils/tools";
 
 const router = useRouter();

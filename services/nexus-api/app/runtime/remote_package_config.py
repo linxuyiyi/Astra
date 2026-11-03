@@ -1,4 +1,4 @@
-"""Validate and persist the SSH user's package sources before either file changes."""
+"""配置 SSH 用户的包来源，保留现有 npm 设置。"""
 
 from __future__ import annotations
 
@@ -37,8 +37,6 @@ async def configure_sources(worker, manifest: dict, home: str, node_root: str) -
     env = await environment(worker)
     for key, expected in [
         ("PIP_INDEX_URL", pip_index),
-        ("NPM_CONFIG_REGISTRY", registry),
-        ("npm_config_registry", registry),
     ]:
         if env.get(key) and env[key].rstrip("/") != expected:
             raise RuntimeError(f"{key} 与固定镜像冲突，已保留原配置，请管理员核对")
@@ -46,9 +44,6 @@ async def configure_sources(worker, manifest: dict, home: str, node_root: str) -
         if env.get(key):
             raise RuntimeError(f"{key} 引入额外来源，请管理员核对")
     _check_trusted(env.get("PIP_TRUSTED_HOST", ""), trusted, "PIP_TRUSTED_HOST")
-    for key, value in env.items():
-        if key.lower() == "npm_config_strict_ssl" and value.strip().lower() != "true":
-            raise RuntimeError("npm strict-ssl 必须保持 true，未覆盖")
     if env.get("PIP_CONFIG_FILE") == "/dev/null":
         raise RuntimeError("PIP_CONFIG_FILE 禁用了全局配置，请管理员核对")
     pip_paths = _pip_paths(home)
@@ -88,17 +83,12 @@ async def configure_sources(worker, manifest: dict, home: str, node_root: str) -
         for line in raw.decode().splitlines():
             if line.lstrip().startswith(("#", ";")):
                 continue
-            key, separator, value = line.strip().partition("=")
+            key, separator, _ = line.strip().partition("=")
             if not separator:
                 continue
-            key, value = key.strip().lower(), value.strip()
-            if key == "strict-ssl" and value.lower() != "true":
-                raise RuntimeError(f"npm strict-ssl 必须保持 true：{path}，未覆盖")
-            if key == "registry" or key.endswith(":registry"):
-                if value.rstrip("/") != registry:
-                    raise RuntimeError(f"npm 已有镜像与固定镜像冲突：{path}，未覆盖")
-                npm_found = npm_found or key == "registry"
-    # Validate the complete configuration before changing either file.
+            if key.strip().lower() == "registry":
+                npm_found = True
+    # 保留自有 npm 配置；未配置 registry 时才补充部署默认值。
     await worker._ensure_safe()
     if not pip_found or (trusted and not trust_found):
         path = home + "/.config/pip/pip.conf"

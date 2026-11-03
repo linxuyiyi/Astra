@@ -30,7 +30,7 @@
           <ElButton :icon="RotateCcw" @click="resetFilters">重置</ElButton>
         </div>
       </div>
-      <ElTable v-loading="loading" :data="rows" row-key="id" :max-height="TABLE_MAX_HEIGHT" element-loading-text="正在加载日程列表" data-testid="schedules-table">
+      <ElTable v-loading="loading" :data="rows" row-key="id" element-loading-text="正在加载日程列表" data-testid="schedules-table">
         <ElTableColumn label="日程" min-width="220">
           <template #default="{ row }">
             <ElButton class="schedule-title" link type="primary" :title="row.data.name" @click="openHistory(row as EmployeeSchedule)">{{ row.data.name }}</ElButton>
@@ -132,7 +132,6 @@ import type { Employee } from '@/types';
 import RowMenu from '@/components/astra/RowMenu.vue';
 import SemanticTag from '@/components/astra/SemanticTag.vue';
 import { confirmDialog } from '@/composables/useConfirm';
-import { TABLE_MAX_HEIGHT } from '@/utils/table';
 
 const rows = ref<EmployeeSchedule[]>([]), choices = ref<Employee[]>([]);
 const loading = ref(false), error = ref(''), page = ref(1), pageSize = ref(20), total = ref(0), busy = ref('');

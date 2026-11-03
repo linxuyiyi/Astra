@@ -84,7 +84,6 @@
         element-loading-text="正在加载知识"
         :data="page.items"
         row-key="id"
-        :max-height="TABLE_MAX_HEIGHT_DENSE"
         @row-click="onRowClick"
         @selection-change="onSelectionChange"
       >
@@ -156,7 +155,6 @@ import { ElButton, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElInput,
 import type { TableInstance } from 'element-plus'
 import type { KnowledgeListItem, KnowledgePage, KnowledgeStatus, VerificationStatus } from '@/api/types'
 import type { RowMenuItem } from '@/components/astra/RowMenu.vue'
-import { TABLE_MAX_HEIGHT_DENSE } from '@/utils/table'
 
 // 只保留最常用的查询条件：类型、状态、排序与关键词。
 // 来源与标签筛选随「更多筛选」一并取消，filters 里也不再保留这两个维度。

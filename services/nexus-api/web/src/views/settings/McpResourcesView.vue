@@ -25,7 +25,7 @@
       </div>
     </div>
 
-    <ElTable v-loading="loading" :data="paged" row-key="id" :max-height="TABLE_MAX_HEIGHT" aria-label="MCP 列表" element-loading-text="正在加载 MCP 列表" data-testid="mcps-table">
+    <ElTable v-loading="loading" :data="paged" row-key="id" aria-label="MCP 列表" element-loading-text="正在加载 MCP 列表" data-testid="mcps-table">
       <ElTableColumn label="名称" min-width="170">
         <template #default="{ row }">
           <div class="name-cell">
@@ -260,7 +260,6 @@ import {
 import type { McpResource, McpTestResult } from "../../types";
 import { confirmDialog } from "../../composables/useConfirm";
 import { notify } from "../../composables/useToast";
-import { TABLE_MAX_HEIGHT } from "../../utils/table";
 import SettingsHeaderActions from "./SettingsHeaderActions.vue";
 
 const items = ref<McpResource[]>([]);

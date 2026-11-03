@@ -118,7 +118,7 @@ async def test_http_user_defaults_are_idempotent_and_same_origin_only(tmp_path, 
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
 
 
-@pytest.mark.parametrize("where", ["environment", "install", "global", "default", "npm"])
+@pytest.mark.parametrize("where", ["environment", "install", "global", "default"])
 async def test_conflicting_source_or_tls_setting_never_writes(tmp_path, monkeypatch, where):
     monkeypatch.setattr(
         "app.runtime.remote_package_config._pip_paths", lambda home: [home + "/.pip/pip.conf"]
@@ -130,10 +130,8 @@ async def test_conflicting_source_or_tls_setting_never_writes(tmp_path, monkeypa
         path.parent.mkdir()
         section = "DEFAULT" if where == "default" else where
         path.write_text(f"[{section}]\ntrusted-host = mirror.test\n")
-    if where == "npm":
-        (tmp_path / ".npmrc").write_text("strict-ssl=false\n")
     before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
-    with pytest.raises(RuntimeError, match="可信主机|strict-ssl"):
+    with pytest.raises(RuntimeError, match="可信主机"):
         await configure_sources(
             LocalTarget(tmp_path, env=env), manifest, str(tmp_path), str(tmp_path / "node")
         )
@@ -263,3 +261,14 @@ def test_real_npm_ci_rewrites_public_registry_without_changing_locked_version(tm
     )
     assert mismatch.returncode != 0
     assert path.read_bytes() == before
+
+
+async def test_owned_npm_configuration_does_not_block_deployment(tmp_path):
+    manifest = {"pip_index_url": "https://pypi.org/simple", "npm_registry": "https://registry.npmjs.org"}
+    npmrc = tmp_path / ".npmrc"
+    content = "strict-ssl=false\nregistry=http://company.internal/npm\n"
+    npmrc.write_text(content)
+    target = LocalTarget(tmp_path, env={"npm_config_strict_ssl": "false",
+                                      "NPM_CONFIG_REGISTRY": "http://company.internal/npm"})
+    await configure_sources(target, manifest, str(tmp_path), str(tmp_path / "node"))
+    assert npmrc.read_text() == content

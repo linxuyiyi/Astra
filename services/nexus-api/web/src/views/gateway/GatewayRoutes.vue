@@ -64,7 +64,6 @@
       v-loading="loading"
       :data="pagedRoutes"
       row-key="id"
-      :max-height="TABLE_MAX_HEIGHT"
       element-loading-text="正在加载路由"
       data-testid="gateway-route-table"
     >
@@ -212,7 +211,6 @@ import GatewayHeaderActions from '@/views/gateway/GatewayHeaderActions.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
 import { errorMessage } from '@/utils/gateway'
-import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
 const pools = ref<GatewayPool[]>([])
 const routes = ref<GatewayRoute[]>([])

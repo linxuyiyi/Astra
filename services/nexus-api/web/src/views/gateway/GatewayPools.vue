@@ -43,7 +43,6 @@
       v-loading="loading"
       :data="pagedPools"
       row-key="id"
-      :max-height="TABLE_MAX_HEIGHT"
       element-loading-text="正在加载资源池"
       data-testid="gateway-pool-table"
     >
@@ -169,7 +168,6 @@ import GatewayHeaderActions from '@/views/gateway/GatewayHeaderActions.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
 import { errorMessage } from '@/utils/gateway'
-import { TABLE_MAX_HEIGHT } from '@/utils/table'
 
 const pools = ref<GatewayPool[]>([])
 const nodes = ref<GatewayNode[]>([])

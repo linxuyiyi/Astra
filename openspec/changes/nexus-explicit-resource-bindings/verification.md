@@ -13,4 +13,4 @@
 
 代码与契约未发现未实现项；公司部署未验收，未切换现有本地环境。详细测试结果和限制见 `evidence.md`。
 
-Spec 核对结果：6 项 Requirement 与全部 Scenario 均有实现和验证对应；两项新 capability 已同步，历史 capability 未修改。无未完成代码任务；变更目录保留供后续审阅。
+Spec 核对结果：5 项 Requirement 与全部 Scenario 均有实现和验证对应；两项新 capability 已同步，历史 capability 未修改。无未完成代码任务；变更目录保留供后续审阅。

@@ -18,3 +18,10 @@ Skill/MCP 独立登记和绑定；内网 Task MCP 显式传员工编号、只检
 ## 边界
 
 未切换现有本地实例，未修改其数据库、员工、会话和运行配置。MySQL 测试为独立临时实例；没有把本地验证视作公司 Linux Worker 完整部署验收。跳过项未计入通过数。
+
+## 发布
+
+- 代码提交：`00f1ec03ed4a32bafe0d41fb84345fdf8136088a`（此前资源解耦提交为 `8273ad4c9`）。
+- 仓库：`git@github.com:linxuyiyi/Astra.git`；分支：`codex/fix-employee-mcp-sync-20261103`。
+- 通过 `git ls-remote origin refs/heads/codex/fix-employee-mcp-sync-20261103` 核对远端代码提交一致。
+- 主工作区仍为 `v1.4.9`，HEAD `775101c577b6a171aee1bebb23a5446e37e5c427`，未切换主分支。

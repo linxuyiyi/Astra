@@ -66,7 +66,6 @@ class TaskService:
             source_conversation_id=payload.source_conversation_id,
             source_channel_id=payload.source_channel_id,
             idempotency_key=payload.idempotency_key,
-            repository_id=payload.repository_id,
             status=TaskStatus.PENDING,
             current_progress="等待领取",
             last_activity_at=datetime.now(UTC),

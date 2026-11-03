@@ -202,22 +202,22 @@
                 <ElInput v-model.trim="form.environment.repository_url" placeholder="https://codeup.aliyun.com/group/project.git" />
               </ElFormItem>
               <ElFormItem label="目标分支">
-                <ElInput v-model.trim="form.environment.repository_branch" maxlength="255" placeholder="main" />
+                <ElInput v-model.trim="form.environment.branch" maxlength="255" placeholder="main" />
               </ElFormItem>
             </div>
-            <ElFormItem label="Codeup 账号 / Token">
+            <ElFormItem label="Git 访问令牌（可选）">
               <ElInput
-                v-model="form.environment.repository_token"
+                v-model="form.environment.git_token"
                 type="password"
                 show-password
                 autocomplete="new-password"
                 :placeholder="repositoryTokenPlaceholder"
               />
             </ElFormItem>
-            <div v-if="form.environment.repository_id" class="repository-bound">
-              <ElTag size="small" type="success" effect="plain">已绑定仓库</ElTag>
-              <span>{{ form.environment.repository_url || `仓库 ${form.environment.repository_id}` }}</span>
-              <ElButton link type="danger" @click="clearRepository">解除绑定</ElButton>
+            <div v-if="form.environment.repository_url" class="repository-bound">
+              <ElTag size="small" type="success" effect="plain">Worker Git 配置</ElTag>
+              <span>{{ form.environment.repository_url }}</span>
+              <ElButton link type="danger" @click="clearRepository">清空</ElButton>
             </div>
           </div>
 
@@ -338,10 +338,9 @@ const emptyEnvironment = () => ({
   opencode_path: 'opencode',
   model_name: '',
   workspace_root: '',
-  repository_id: null as string | null,
   repository_url: '',
-  repository_branch: 'main',
-  repository_token: '',
+  branch: 'main',
+  git_token: '',
   coding_tool: 'opencode' as CodingTool,
 })
 
@@ -379,9 +378,9 @@ const digitalSummary = computed(() => {
   return { found: false, name: '', domain: '', description: '', avatar: '' }
 })
 const repositoryTokenPlaceholder = computed(() =>
-  form.environment.repository_id && form.environment.repository_url === (selectedEnvironment.value?.repository_url ?? '')
+  selectedEnvironment.value?.has_git_token
     ? '已配置，留空保持不变'
-    : '请输入 Codeup Token / 访问令牌',
+    : '公共仓库可留空',
 )
 
 const portValidator = (_rule: unknown, value: unknown, callback: (error?: Error) => void) => {
@@ -429,10 +428,9 @@ function fill(employee?: Employee) {
           opencode_path: environment.opencode_path || 'opencode',
           model_name: environment.model_name ?? '',
           workspace_root: environment.workspace_root,
-          repository_id: environment.repository_id ?? null,
           repository_url: environment.repository_url ?? '',
-          repository_branch: environment.repository_branch ?? environment.branch ?? 'main',
-          repository_token: '',
+          branch: environment.branch ?? 'main',
+          git_token: '',
           coding_tool: (environment.runtime_engine || 'opencode') as CodingTool,
         }
       : emptyEnvironment(),
@@ -463,10 +461,9 @@ function snapshot(): string {
       opencode_path: form.environment.opencode_path,
       model_name: form.environment.model_name,
       workspace_root: form.environment.workspace_root,
-      repository_id: form.environment.repository_id,
       repository_url: form.environment.repository_url,
-      repository_branch: form.environment.repository_branch,
-      repository_token: form.environment.repository_token,
+      branch: form.environment.branch,
+      git_token: form.environment.git_token,
       coding_tool: form.environment.coding_tool,
     },
   })
@@ -489,7 +486,7 @@ function onDigitalEmployeeChange(id: string) {
   }
 }
 
-function environmentPayload(repositoryId: string | null) {
+function environmentPayload() {
   const remote = form.environment.mode === 'LINUX_REMOTE'
   return {
     mode: form.environment.mode,
@@ -504,8 +501,9 @@ function environmentPayload(repositoryId: string | null) {
     opencode_path: form.environment.opencode_path.trim() || 'opencode',
     model_name: form.environment.model_name.trim() || null,
     workspace_root: form.environment.workspace_root.trim(),
-    repository_id: repositoryId,
-    branch: repositoryId ? form.environment.repository_branch.trim() || 'main' : null,
+    repository_url: form.environment.repository_url.trim() || null,
+    git_token: form.environment.git_token || null,
+    branch: form.environment.branch.trim() || 'main',
     labels: [...(selectedEnvironment.value?.labels ?? [])],
   }
 }
@@ -541,34 +539,15 @@ function normalizedEnvironment(value: Record<string, unknown> | ReturnType<typeo
     opencode_path: data.opencode_path ?? 'opencode',
     model_name: data.model_name ?? null,
     workspace_root: data.workspace_root ?? '',
-    repository_id: data.repository_id ?? null,
-    branch: data.branch ?? null,
+    repository_url: data.repository_url ?? null,
+    branch: data.branch ?? 'main',
   }
 }
 
-async function resolveRepositoryId(): Promise<string | null> {
-  const url = form.environment.repository_url.trim()
-  const current = selectedEnvironment.value
-  if (!url) return null
-  const token = form.environment.repository_token.trim()
-  if (current?.repository_id && url === (current.repository_url ?? '') && !token) {
-    return current.repository_id
-  }
-  if (!token) {
-    throw new Error('填写代码仓库地址后，需要提供 Codeup Token / 访问令牌才能完成绑定')
-  }
-  const created = await api.createRepository({
-    url,
-    branch: form.environment.repository_branch.trim() || 'main',
-    token,
-  })
-  return created.id
-}
-
-function environmentChanged(repositoryId: string | null) {
+function environmentChanged() {
   if (!selectedEnvironment.value) return true
-  if (form.environment.ssh_password || form.environment.repository_token) return true
-  return JSON.stringify(normalizedEnvironment(environmentPayload(repositoryId)))
+  if (form.environment.ssh_password || form.environment.git_token) return true
+  return JSON.stringify(normalizedEnvironment(environmentPayload()))
     !== JSON.stringify(normalizedEnvironment(selectedEnvironment.value as unknown as Record<string, unknown>))
 }
 
@@ -603,26 +582,24 @@ async function save(deployRequested = false) {
   saving.value = true
   let savedId = ''
   try {
-    const repositoryId = await resolveRepositoryId()
     let employeeId = props.employee?.id ?? ''
     if (props.creating) {
       const created = await api.createEmployee({
         id: newWorkerId(),
         ...employeePayload(),
-        execution_environment: environmentPayload(repositoryId),
+        execution_environment: environmentPayload(),
       })
       employeeId = created.id
     } else {
       await api.updateEmployee(employeeId, employeePayload())
-      if (environmentChanged(repositoryId)) {
-        await api.updateEnvironment(employeeId, environmentPayload(repositoryId))
+      if (environmentChanged()) {
+        await api.updateEnvironment(employeeId, environmentPayload())
       }
     }
     savedId = employeeId
     await store.refresh()
     form.environment.ssh_password = ''
-    form.environment.repository_token = ''
-    form.environment.repository_id = repositoryId
+    form.environment.git_token = ''
     originalSnapshot.value = snapshot()
     message.value = deployRequested ? '配置已保存，正在提交一键部署。' : '配置已保存。'
     messageIsError.value = false
@@ -657,10 +634,9 @@ async function toggleRuntime() {
 }
 
 function clearRepository() {
-  form.environment.repository_id = null
   form.environment.repository_url = ''
-  form.environment.repository_branch = 'main'
-  form.environment.repository_token = ''
+  form.environment.branch = 'main'
+  form.environment.git_token = ''
 }
 
 function reset() {

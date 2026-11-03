@@ -18,7 +18,7 @@ description: 仅在明确查询或操作 Nexus 任务、需要 Worker 工程执�
 - `source_session_id`、`source_conversation_id`、`source_channel_id`：可选的通知来源信息，有对应信息时传入，不用于权限判断
 - `task_type`：缺陷用 `ISSUE`，需求用 `REQUIREMENT`
 - `category_id`：先调用 `nexus_task_categories`，使用返回的已启用分类 ID
-- `repository_id`：先调用 `nexus_task_repositories` 选择已登记仓库；用户明确指定 `worker_id` 时可省略仓库，工具使用该 Worker 的绑定。没有目标不能创建，不猜仓库。
+- 任务仅选择分类；平台按分类派给 Worker，Git 地址和分支由 Worker 自身配置管理。
 - `title`、`description`
 - `acceptance_criteria`：可以验收的结果
 

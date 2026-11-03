@@ -307,112 +307,10 @@ async def test_task_mcp_exposes_categories_and_enum_types():
     ]
 
 
-@pytest.mark.parametrize("mode", ["worker", "explicit", "missing", "mismatch"])
-async def test_task_mcp_selects_executable_repository(session, mode):
-    from app.models import CodeRepository, OpenCodeExecutionEnvironment, TaskCategory
-
-    session.add_all(
-        [
-            CodeRepository(id="repo-a", url="file:///qa/a", branch="main"),
-            CodeRepository(id="repo-b", url="file:///qa/b", branch="main"),
-            TaskCategory(id="qa-cat", name="QA"),
-            AgentWorker(
-                id="qa-worker", name="QA", role="QA", task_types=["REQUIREMENT"], category_ids=["qa-cat"]
-            ),
-        ]
-    )
-    await session.flush()
-    session.add(OpenCodeExecutionEnvironment(employee_id="qa-worker", repository_id="repo-a"))
-    await session.commit()
-    kwargs = {"worker_id": "qa-worker"} if mode in ["worker", "mismatch"] else {}
-    if mode in ["explicit", "mismatch"]:
-        kwargs["repository_id"] = "repo-b"
-    result = await TaskTools(session).create(
-        task_type="REQUIREMENT", category_id="qa-cat", title="QA", description="QA",
-        responsible_employee_id="qa-owner", **kwargs
-    )
-    if mode in ["missing", "mismatch"]:
-        assert result["ok"] is False
-        assert await session.scalar(select(Task.id)) is None
-    else:
-        assert result["ok"] is True
-        task = await session.get(Task, result["task_id"])
-        assert task.repository_id == ("repo-a" if mode == "worker" else "repo-b")
 
 
-async def test_repositories_do_not_leak_credentials_and_task_keys_include_target(session):
-    from app.models import CodeRepository, GitCredential, TaskCategory
-
-    session.add_all(
-        [
-            CodeRepository(id="repo-a", url="file:///qa/a", branch="main"),
-            CodeRepository(id="repo-b", url="file:///qa/b", branch="release"),
-            GitCredential(repository_id="repo-a", token_ciphertext="private-ciphertext"),
-            TaskCategory(id="qa-cat", name="QA"),
-        ]
-    )
-    await session.commit()
-    repositories = await TaskTools(session).repositories()
-    assert repositories["repositories"] == [
-        {"id": "repo-a", "url": "file:///qa/a", "branch": "main"},
-        {"id": "repo-b", "url": "file:///qa/b", "branch": "release"},
-    ]
-    tools = TaskTools(session)
-    a = await tools.create(
-        task_type="REQUIREMENT",
-        category_id="qa-cat",
-        title="same",
-        description="same",
-        responsible_employee_id="qa-owner", source_session_id="qa-session",
-        repository_id="repo-a",
-    )
-    b = await tools.create(
-        task_type="REQUIREMENT",
-        category_id="qa-cat",
-        title="same",
-        description="same",
-        responsible_employee_id="qa-owner", source_session_id="qa-session",
-        repository_id="repo-b",
-    )
-    repeat = await tools.create(
-        task_type="REQUIREMENT",
-        category_id="qa-cat",
-        title="same",
-        description="same",
-        responsible_employee_id="qa-owner", source_session_id="qa-session",
-        repository_id="repo-a",
-    )
-    assert a["task_id"] != b["task_id"]
-    assert repeat["task_id"] == a["task_id"]
-    assert a["repository_id"] == "repo-a"
 
 
-async def test_task_reassignment_preserves_repository(session):
-    from app.models import CodeRepository, OpenCodeExecutionEnvironment
-
-    session.add_all(
-        [
-            CodeRepository(id="repo-a", url="file:///qa/a", branch="main"),
-            CodeRepository(id="repo-b", url="file:///qa/b", branch="main"),
-            AgentWorker(
-                id="worker-b", name="B", role="QA", task_types=["REQUIREMENT"], category_ids=["qa-cat"]
-            ),
-        ]
-    )
-    await session.flush()
-    session.add(OpenCodeExecutionEnvironment(employee_id="worker-b", repository_id="repo-b"))
-    task = await TaskService(session).create(
-        _create(
-            task_type="REQUIREMENT",
-            category_id="qa-cat",
-            repository_id="repo-a",
-            responsible_employee_id="qa-owner",
-        )
-    )
-    result = await TaskTools(session).assign(task.id, "worker-b")
-    assert result["ok"] is False
-    assert task.repository_id == "repo-a"
-    assert task.employee_id is None
 
 
 async def test_summary_uses_real_review_for_the_requested_task(session):
@@ -478,3 +376,23 @@ async def test_summary_is_registered_as_a_readonly_task_tool():
     tools = {t.name: t for t in await build_mcp_server().list_tools()}
     assert "nexus_task_summary" in tools
     assert set(tools["nexus_task_summary"].input_schema["properties"]) == {"task_id"}
+
+
+async def test_task_creation_and_assignment_use_category_without_repository(session):
+    from app.models import TaskCategory
+
+    session.add(TaskCategory(id="category-only", name="测试系统"))
+    session.add(AgentWorker(id="category-worker", name="Worker", role="开发",
+                           task_types=["REQUIREMENT"], category_ids=["category-only"]))
+    await session.commit()
+    tools = TaskTools(session)
+    result = await tools.create(task_type="REQUIREMENT", category_id="category-only", title="实现 MCP",
+                                description="只按分类派发", responsible_employee_id="qa-owner",
+                                source_session_id="source-session")
+    assert result["ok"] is True
+    assert "repository_id" not in result
+    assert (await tools.assign(result["task_id"], "category-worker"))["ok"] is True
+    repeated = await tools.create(task_type="REQUIREMENT", category_id="category-only", title="实现 MCP",
+                                  description="只按分类派发", responsible_employee_id="qa-owner",
+                                  source_session_id="source-session")
+    assert repeated["task_id"] == result["task_id"]

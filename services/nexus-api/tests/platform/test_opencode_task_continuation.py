@@ -95,7 +95,10 @@ async def test_input_revalidates_after_native_io(assistance, monkeypatch, change
 
     monkeypatch.setattr(r.native, "status", status)
     result = await tools.input("T1", current["session_id"], current["submission_id"], "continue")
-    assert not result["ok"] and len(r.native.sent) == 1
+    if changed == "source":
+        assert result["ok"] and len(r.native.sent) == 2
+    else:
+        assert not result["ok"] and len(r.native.sent) == 1
 
 
 def test_confirm_remains_available():

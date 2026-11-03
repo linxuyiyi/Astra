@@ -609,11 +609,6 @@ class RuntimeService:
                 raise RuntimeStateError(blocked)
         except HTTPException as exc:
             raise RuntimeStateError(str(exc.detail)) from exc
-        from app.runtime.dispatcher import runtime_assignment_block
-
-        blocked = runtime_assignment_block(environment, task)
-        if blocked:
-            raise RuntimeStateError(blocked)
         new_snapshot = environment_snapshot(environment)
         initial_id = message_id()
         reservation = {"pending_message_id": initial_id, "pending_attempt": 0}
@@ -885,7 +880,7 @@ class RuntimeService:
 
     async def send(
         self, task_id, body, *, native_action="prompt_async", expected_session_id=None,
-        expected_submission_id=None, expected_source=None,
+        expected_submission_id=None,
     ):
         if native_action not in {"prompt_async", "command"}:
             raise RuntimeStateError("不支持的 Session 输入")
@@ -901,8 +896,6 @@ class RuntimeService:
             raise RuntimeStateError("当前 Session 已切换，请刷新 Workspace")
         if expected_submission_id and task.last_message_id != expected_submission_id:
             raise RuntimeStateError("当前回合已变化，请重新查询求助")
-        if expected_source and (task.responsible_employee_id, task.source_session_id) != expected_source:
-            raise RuntimeStateError("任务不属于当前员工及来源对话")
         if task.pending_message_id:
             raise RuntimeStateError("上次输入尚未确认，请重连核对 Session 后再发送")
         if _task_result_concluded(task):
@@ -956,9 +949,6 @@ class RuntimeService:
         if expected_submission_id and task.last_message_id != expected_submission_id:
             await self.session.rollback()
             raise RuntimeStateError("当前回合已变化，请重新查询求助")
-        if expected_source and (task.responsible_employee_id, task.source_session_id) != expected_source:
-            await self.session.rollback()
-            raise RuntimeStateError("任务不属于当前员工及来源对话")
         employee = await self.session.scalar(
             select(AgentWorker)
             .where(AgentWorker.id == employee_id)
@@ -2064,7 +2054,6 @@ class RuntimeService:
                     "description": task.description,
                     "task_type": task.task_type,
                     "category_id": task.category_id,
-                    "repository_id": task.repository_id,
                     "employee_id": task.employee_id,
                 },
                 "root_session_id": session_id,

@@ -6,7 +6,6 @@ import stat
 import subprocess
 import sys
 import textwrap
-import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -86,7 +85,7 @@ def _environment(employee_id="E1", **overrides):
         mode="LOCAL",
         name="local",
         workspace_root="/tmp/workspaces/" + employee_id,
-        repository_id="repo-1",
+        repository_url='https://git.example/org/repo.git',
         status=EnvironmentStatus.AVAILABLE,
         status_detail={},
     )
@@ -101,7 +100,6 @@ def _task(task_id, **overrides):
         task_type="ISSUE",
         category_id="testing",
         status=TaskStatus.PENDING,
-        repository_id="repo-1",
     )
     values.update(overrides)
     return Task(**values)
@@ -152,7 +150,7 @@ async def test_claim_defers_worker_head_read_until_workspace_preparation(session
     assert claimed is not None
     assert claimed.base_commit is None
     assert "base_commit" not in claimed.execution_environment_snapshot
-    assert claimed.execution_environment_snapshot["repository_id"] == "repo-1"
+    assert claimed.execution_environment_snapshot["repository_url"] == "https://git.example/org/repo.git"
 
 
 @pytest.mark.asyncio
@@ -162,27 +160,15 @@ async def test_start_reuses_the_assignment_checks_and_merges_the_snapshot(sessio
     session.add(
         _task(
             "T-start",
-            repository_id=None,
             status=TaskStatus.WAITING,
             employee_id="E1",
             execution_environment_snapshot={"kept_marker": "stay", "model_name": "old"},
         )
     )
     await session.commit()
-    with pytest.raises(RuntimeStateError, match="任务没有绑定仓库"):
-        await RuntimeService(session).start("T-start")
-
-    task = await session.get(Task, "T-start")
-    task.repository_id = "repo-1"
     environment = await session.scalar(
         select(OpenCodeExecutionEnvironment).where(OpenCodeExecutionEnvironment.employee_id == "E1")
     )
-    environment.repository_id = "repo-other"
-    await session.commit()
-    with pytest.raises(RuntimeStateError, match="任务仓库与 Worker 不一致"):
-        await RuntimeService(session).start("T-start")
-
-    environment.repository_id = "repo-1"
     environment.skill_refs = ["review"]
     environment.status_detail = {
         "local_observation": {
@@ -226,7 +212,7 @@ async def test_start_reuses_the_assignment_checks_and_merges_the_snapshot(sessio
     assert started.base_commit == "abc123"
     snapshot = started.execution_environment_snapshot
     assert snapshot["kept_marker"] == "stay"
-    assert snapshot["repository_id"] == "repo-1"
+    assert snapshot["repository_url"] == "https://git.example/org/repo.git"
     assert snapshot["base_commit"] == "abc123"
     assert snapshot["opencode_version"] == "1.2.3"
     assert started.current_session_id == "ses-new"
@@ -442,11 +428,6 @@ def test_remote_install_clones_with_askpass_and_checks_an_existing_workspace(tmp
 def test_related_tasks_stay_in_one_transaction(monkeypatch):
     monkeypatch.setattr(get_settings(), "gateway_master_key", Fernet.generate_key().decode())
     with TestClient(app) as client:
-        registered = client.post(
-            "/api/repositories",
-            json={"url": "https://git.example/org/fix-b3.git", "branch": "main", "token": "token-b3"},
-        )
-        assert registered.status_code == 201, registered.text
         failed = client.post(
             "/api/tasks/related",
             json={
@@ -456,8 +437,8 @@ def test_related_tasks_stay_in_one_transaction(monkeypatch):
                 "description": "必须一起回滚",
                 "acceptance_criteria": [{"content": "没有残留"}],
                 "parts": [
-                    {"repository_id": registered.json()["id"], "title": "fix-b3-parent"},
-                    {"repository_id": "missing-repo", "title": "fix-b3-child"},
+                    { "title": "fix-b3-parent"},
+                    {"title": "fix-b3-child", "depends_on": 99},
                 ],
             },
         )
@@ -467,32 +448,6 @@ def test_related_tasks_stay_in_one_transaction(monkeypatch):
         assert "fix-b3-parent" not in [item["title"] for item in listed.json()]
 
 
-def test_clone_route_runs_git_off_the_event_loop(monkeypatch, tmp_path):
-    monkeypatch.setattr(get_settings(), "gateway_master_key", Fernet.generate_key().decode())
-    seen: dict[str, object] = {}
-
-    def fake_clone(url, branch, destination, token, runner=None):
-        seen["main"] = threading.current_thread() is threading.main_thread()
-        seen["url"] = url
-        seen["token"] = token
-        seen["destination"] = destination
-
-    monkeypatch.setattr("app.api.repository_routes.clone_repository", fake_clone)
-    with TestClient(app) as client:
-        registered = client.post(
-            "/api/repositories",
-            json={"url": "https://git.example/org/clone-b3.git", "branch": "main", "token": PAT},
-        )
-        assert registered.status_code == 201, registered.text
-        cloned = client.post(
-            f"/api/repositories/{registered.json()['id']}/clone",
-            json={"destination": str(tmp_path / "checkout")},
-        )
-        assert cloned.status_code == 200, cloned.text
-        assert PAT not in cloned.text
-    assert seen["main"] is False
-    assert seen["token"] == PAT
-    assert seen["url"] == "https://git.example/org/clone-b3.git"
 
 
 @pytest.mark.asyncio

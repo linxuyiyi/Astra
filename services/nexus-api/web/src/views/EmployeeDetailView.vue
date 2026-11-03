@@ -137,8 +137,8 @@
             <template #header><div class="worker-card__title"><h3>工程信息</h3></div></template>
             <ElDescriptions :column="1" border size="small">
               <ElDescriptionsItem label="工作空间">{{ environment?.workspace_root || '—' }}</ElDescriptionsItem>
-              <ElDescriptionsItem label="仓库地址">{{ repository.url || environment?.repository_url || '未绑定仓库' }}</ElDescriptionsItem>
-              <ElDescriptionsItem label="目标分支">{{ environment?.repository_branch || environment?.branch || '—' }}</ElDescriptionsItem>
+              <ElDescriptionsItem label="仓库地址">{{ repository.url || environment?.repository_url || '未配置 Git 地址' }}</ElDescriptionsItem>
+              <ElDescriptionsItem label="目标分支">{{ environment?.branch || '—' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="仓库认证">{{ repository.authentication || '未核验' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="当前提交">{{ repository.commit || '未核验' }}</ElDescriptionsItem>
               <ElDescriptionsItem label="工作区">{{ dirtyLabel(repository.dirty) }}</ElDescriptionsItem>

@@ -163,7 +163,6 @@ export function serverAddress(environment: ExecutionEnvironment | null | undefin
 export interface WorkerRepositoryView {
   available: boolean
   configured: boolean
-  id: string | null
   url: string | null
   targetBranch: string | null
   branch: string | null
@@ -178,13 +177,11 @@ export function workerRepository(
   health: WorkerHealth | null,
 ): WorkerRepositoryView {
   const repository = health?.repository ?? null
-  const id = repository?.id ?? environment?.repository_id ?? null
-  const url = repository?.url ?? null
+  const url = repository?.url ?? environment?.repository_url ?? null
   const targetBranch = repository?.target_branch ?? environment?.branch ?? null
   return {
     available: Boolean(health),
-    configured: Boolean(repository || id || targetBranch),
-    id,
+    configured: Boolean(url),
     url: url ? maintenanceCopy(url) : null,
     targetBranch,
     branch: repository?.branch ?? null,
@@ -196,10 +193,9 @@ export function workerRepository(
 }
 
 export function repositorySummary(repository: WorkerRepositoryView): string {
-  if (!repository.configured) return repository.available ? '未绑定代码仓库' : '未获取'
+  if (!repository.configured) return repository.available ? '未配置 Git 地址' : '未获取'
   if (repository.url) return repository.url
-  if (repository.id) return `仓库 ${repository.id}`
-  return repository.targetBranch ? `分支 ${repository.targetBranch}` : '已绑定仓库'
+  return repository.targetBranch ? `分支 ${repository.targetBranch}` : '已配置 Git'
 }
 
 export function equipmentItems(health: WorkerHealth | null): WorkerEquipmentItem[] {

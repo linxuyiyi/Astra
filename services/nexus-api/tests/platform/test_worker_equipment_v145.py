@@ -12,14 +12,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 import app.gateway.models  # noqa: F401 - 注册 GatewayRoute 表
 from app.domain import EnvironmentStatus
 from app.gateway.models import GatewayRoute
-from app.models import (
-    AgentWorker,
-    Base,
-    CodeRepository,
-    GitCredential,
-    OpenCodeExecutionEnvironment,
-    WorkerInstance,
-)
+from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, WorkerInstance
 from app.runtime.worker_health import probe_online_worker
 from app.runtime.worker_readiness import (
     _skills_content_revision,
@@ -68,18 +61,11 @@ async def _seed(session, tmp_path: Path) -> OpenCodeExecutionEnvironment:
         encoding="utf-8",
     )
     session.add(AgentWorker(id="emp-1", name="Employee", role="build"))
-    session.add(
-        CodeRepository(
-            id="repo-1",
-            url="https://user:pass@example.test/org/repo.git?token=query-canary",
-            branch="main",
-        )
-    )
-    session.add(GitCredential(repository_id="repo-1", token_ciphertext="cipher-canary-value"))
     session.add(GatewayRoute(id="route-1", model="route-1", pool_id="pool-1", enabled=True))
     environment = OpenCodeExecutionEnvironment(
         employee_id="emp-1",
-        repository_id="repo-1",
+        repository_url="https://user:pass@example.test/org/repo.git?token=query-canary",
+        git_token_ciphertext="cipher-canary-value",
         mode="LINUX_REMOTE",
         name="Linux",
         host="worker.test",
@@ -110,8 +96,7 @@ def _desired() -> dict:
         "worker_agent": {"version": WORKER_AGENT_VERSION},
         "model": {"name": "nexus-gateway/route-1", "route": "route-1", "provider": "nexus-gateway"},
         "repository": {
-            "id": "repo-1",
-            "url": "https://example.test/org/repo.git",
+                "url": "https://example.test/org/repo.git",
             "target_branch": "main",
             "authentication": "none",
             "credential_revision": None,
@@ -135,12 +120,8 @@ def _desired() -> dict:
 def _observation(desired: dict | None = None) -> dict:
     want = desired or _desired()
     skills = [item["name"] for item in want["skills"]["items"]]
-    content_hashes = {
-        item["name"]: item["content_hash"] for item in want["skills"]["items"] if item["name"]
-    }
-    endpoints = {
-        item["name"]: item["url"] for item in want["mcp"]["items"] if item["name"]
-    }
+    content_hashes = {item["name"]: item["content_hash"] for item in want["skills"]["items"] if item["name"]}
+    endpoints = {item["name"]: item["url"] for item in want["mcp"]["items"] if item["name"]}
     return {
         "opencode": {"status": "healthy", "version": want["opencode"]["version"], "error": None},
         "model": {
@@ -184,18 +165,26 @@ def _observation(desired: dict | None = None) -> dict:
 
 def health_status(observation: dict, desired: dict) -> EnvironmentStatus:
     environment = OpenCodeExecutionEnvironment(
-        id=1, mode="LINUX_REMOTE", host="fixture.invalid", port=22,
-        username="nexus", workspace_root="/srv/project", opencode_server_port=14096,
+        id=1,
+        mode="LINUX_REMOTE",
+        host="fixture.invalid",
+        port=22,
+        username="nexus",
+        workspace_root="/srv/project",
+        opencode_server_port=14096,
     )
     digest = compute_target_digest(environment)
     worker = WorkerInstance(
-        id="fixture", environment_id=1, status="online", epoch=1,
-        target_digest=digest, agent_version=WORKER_AGENT_VERSION,
+        id="fixture",
+        environment_id=1,
+        status="online",
+        epoch=1,
+        target_digest=digest,
+        agent_version=WORKER_AGENT_VERSION,
         observed_snapshot={**observation, "spec_revision": desired.get("revision")},
     )
     result = evaluate_worker_readiness({**desired, "target_digest": digest}, environment, worker)
     return EnvironmentStatus(result["runtime_health"]["status"])
-
 
 
 @pytest.mark.asyncio
@@ -218,9 +207,7 @@ async def test_desired_uses_db_and_skill_content_changes_revision(session, tmp_p
         assert secret not in serialized
     assert "stale-model-must-not-win" not in serialized
 
-    (tmp_path / "worker-skills" / "review" / "SKILL.md").write_text(
-        "# Review\n\nchanged\n", encoding="utf-8"
-    )
+    (tmp_path / "worker-skills" / "review" / "SKILL.md").write_text("# Review\n\nchanged\n", encoding="utf-8")
     second = await desired_equipment(session, environment, settings)
 
     assert second["skills"]["items"][0]["content_hash"] != first["skills"]["items"][0]["content_hash"]
@@ -268,7 +255,6 @@ def test_healthy_projection_and_fixed_shapes():
 
     payload = repository_payload(desired, observation)
     assert set(payload) == {
-        "id",
         "url",
         "target_branch",
         "branch",
@@ -278,7 +264,6 @@ def test_healthy_projection_and_fixed_shapes():
         "error",
     }
     assert payload == {
-        "id": "repo-1",
         "url": "https://example.test/org/repo.git",
         "target_branch": "main",
         "branch": "main",
@@ -343,9 +328,7 @@ def test_skill_missing_marks_drifted_pending_deploy():
         "error": None,
     }
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation)}[
-        "skills"
-    ]
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}["skills"]
 
     assert row["verified"] is False
     assert row["state"] == "drifted"
@@ -383,9 +366,7 @@ def test_model_configuration_does_not_depend_on_gateway_authentication():
     assert health_status(observation, desired) == EnvironmentStatus.AVAILABLE
     desired["model"]["resolved"] = False
     assert health_status(observation, desired) != EnvironmentStatus.AVAILABLE
-    model = next(
-        row for row in equipment_rows(desired, observation) if row["key"] == "model"
-    )
+    model = next(row for row in equipment_rows(desired, observation) if row["key"] == "model")
     assert model["verified"] is False
 
 
@@ -510,9 +491,7 @@ def test_wrong_git_identity_marks_drifted(field, value, fragment):
     observation = _observation(desired)
     observation["repository"][field] = value
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation)}[
-        "git"
-    ]
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}["git"]
 
     assert row["verified"] is False
     assert row["state"] == "drifted"
@@ -526,9 +505,7 @@ def test_same_skill_name_with_old_content_marks_drifted():
     observation = _observation(desired)
     observation["skills"]["content_hashes"]["review"] = "old-content-hash"
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation)}[
-        "skills"
-    ]
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}["skills"]
 
     assert row["verified"] is False
     assert row["state"] == "drifted"
@@ -538,16 +515,12 @@ def test_same_skill_name_with_old_content_marks_drifted():
 
 def test_managed_skill_revision_ignores_unmanaged_extra_skills():
     desired = _desired()
-    expected = _skills_content_revision(
-        [{"name": "review", "content_hash": "skill-hash"}]
-    )
+    expected = _skills_content_revision([{"name": "review", "content_hash": "skill-hash"}])
     desired["skills"]["content_revision"] = expected
     observation = _observation(desired)
     observation["skills"]["content_hashes"]["extra-unmanaged"] = "extra-hash-v1"
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation)}[
-        "skills"
-    ]
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}["skills"]
 
     assert row["desired_revision"] == expected
     assert row["actual_revision"] == expected
@@ -555,18 +528,12 @@ def test_managed_skill_revision_ignores_unmanaged_extra_skills():
     assert row["diff"] == []
 
     observation["skills"]["content_hashes"]["extra-unmanaged"] = "extra-hash-v2"
-    unchanged = {
-        item["key"]: item
-        for item in equipment_rows(desired, observation)
-    }["skills"]
+    unchanged = {item["key"]: item for item in equipment_rows(desired, observation)}["skills"]
     assert unchanged["actual_revision"] == expected
     assert unchanged["verified"] is True
 
     observation["skills"]["content_hashes"]["review"] = "skill-hash-drifted"
-    drifted = {
-        item["key"]: item
-        for item in equipment_rows(desired, observation)
-    }["skills"]
+    drifted = {item["key"]: item for item in equipment_rows(desired, observation)}["skills"]
     assert drifted["actual_revision"] != expected
     assert drifted["verified"] is False
 
@@ -576,9 +543,7 @@ def test_same_mcp_name_with_wrong_url_marks_drifted():
     observation = _observation(desired)
     observation["mcp"]["endpoints"]["nexus-library"] = "https://wrong.example.test/mcp"
 
-    row = {item["key"]: item for item in equipment_rows(desired, observation)}[
-        "mcp"
-    ]
+    row = {item["key"]: item for item in equipment_rows(desired, observation)}["mcp"]
 
     assert row["verified"] is False
     assert row["state"] == "drifted"

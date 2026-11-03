@@ -51,7 +51,7 @@ def new_task(**overrides) -> TaskCreate:
         "acceptance_criteria": [{"content": "接口恢复正常"}],
         "priority": Priority.HIGH,
         "completion_policy": "AUTO",
-        "repository_id": "repo-1",
+
     }
     payload.update(overrides)
     return TaskCreate(**payload)
@@ -131,7 +131,7 @@ async def test_dispatcher_matches_type_and_category_and_limits_one_task(session,
             opencode_path="opencode",
             model_name="deepseek/deepseek-v4-flash",
             workspace_root=str(workspace),
-            repository_id="repo-1",
+            repository_url='https://git.example/org/repo.git',
             status=EnvironmentStatus.AVAILABLE,
         )
     )
@@ -181,7 +181,7 @@ async def test_dispatcher_claims_task_assigned_to_employee_without_auto_claim(se
             opencode_path="opencode",
             model_name="opencode/space-bunny-free",
             workspace_root=str(workspace),
-            repository_id="repo-1",
+            repository_url='https://git.example/org/repo.git',
             status=EnvironmentStatus.AVAILABLE,
         )
     )
@@ -258,7 +258,7 @@ async def _assigned_task(session, tmp_path, *, auto_execute: bool, employee_id: 
             name="员工固定工作空间",
             opencode_path="opencode",
             workspace_root=str(workspace),
-            repository_id="repo-1",
+            repository_url='https://git.example/org/repo.git',
             status=EnvironmentStatus.AVAILABLE,
         )
     )

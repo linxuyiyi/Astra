@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.models import Base, CodeRepository, Task, TaskCategory
+from app.models import Base, Task, TaskCategory
 from app.task_mcp import HealthMiddleware, build_mcp_server
 from nexus_api.db_models import employees
 
@@ -36,7 +36,6 @@ async def mcp(monkeypatch):
         db.add_all(
             [
                 TaskCategory(id="cat-plain", name="测试"),
-                CodeRepository(id="repo-plain", url="file:///test/repo", branch="main"),
             ]
         )
         await db.commit()
@@ -50,7 +49,7 @@ def create_args(**overrides):
         "employee_id": "emp-plain",
         "task_type": "REQUIREMENT",
         "category_id": "cat-plain",
-        "repository_id": "repo-plain",
+
         "title": "独立 MCP 创建任务",
         "description": "完成开发",
         **overrides,
@@ -95,16 +94,18 @@ async def test_sources_are_optional_notification_metadata_and_idempotency_is_pre
         assert task.source_session_id == "session-for-notification"
         assert task.source_conversation_id == "conversation-note"
     schema = {tool.name: tool.input_schema for tool in await server.list_tools()}
+    assert "nexus_task_repositories" not in schema
+    assert "repository_id" not in schema["nexus_task_create"]["properties"]
     assert "employee_id" in schema["nexus_task_create"]["required"]
     assert "source_session_id" not in schema["nexus_task_create"]["required"]
 
 
-async def test_repository_and_task_state_checks_remain_business_rules(mcp):
+async def test_category_and_task_state_checks_remain_business_rules(mcp):
     server, _ = mcp
     result = (
-        await server.call_tool("nexus_task_create", create_args(repository_id="missing"))
+        await server.call_tool("nexus_task_create", create_args(category_id="missing"))
     ).structured_content
-    assert result == {"ok": False, "error": "仓库不存在"}
+    assert result == {"ok": False, "error": "请选择已启用的任务分类"}
     result = (await server.call_tool("nexus_task_get", {"task_id": "missing"})).structured_content
     assert result == {"ok": False, "error": "任务不存在"}
 

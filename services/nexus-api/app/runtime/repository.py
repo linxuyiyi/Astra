@@ -1,18 +1,12 @@
-"""仓库地址、加密 PAT、进程内 git clone，以及 Worker 复制。
+"""Worker Git 凭据、工作区事实与 Worker 复制。
 
-PAT 只在 askpass 子进程的环境里出现一次。URL、命令参数、日志和配置都不写明文。
+Git 凭据仅提供加解密入口；实际 Git 操作由 Worker 的部署和运行逻辑处理。
 """
 
 from __future__ import annotations
 
-import os
-import stat
 import subprocess
-import tempfile
-from collections.abc import Callable
 from pathlib import Path
-from urllib.parse import urlsplit
-from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,85 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.settings import get_settings
 from app.domain import EmployeeStatus, EnvironmentStatus
 from app.gateway.security import CredentialCipher
-from app.models import AgentWorker, CodeRepository, GitCredential, OpenCodeExecutionEnvironment, Task
-
-Runner = Callable[[list[str], dict[str, str]], tuple[int, str, str]]
-
-_ASKPASS = """#!/bin/sh
-case "$1" in
-  *Username*) printf '%s\\n' git ;;
-  *) printf '%s\\n' "$NEXUS_GIT_TOKEN" ;;
-esac
-"""
+from app.models import AgentWorker, OpenCodeExecutionEnvironment, Task
 
 
-class CloneError(RuntimeError):
-    pass
-
-
-class RepositoryBindingError(RuntimeError):
+class WorkerCopyError(RuntimeError):
     pass
 
 
 def cipher() -> CredentialCipher:
     return CredentialCipher(get_settings().gateway_master_key)
-
-
-def assert_clean_url(url: str, token: str = "") -> None:
-    if token and token in url:
-        raise CloneError("仓库地址不能包含凭据")
-    location = urlsplit(url)
-    if location.username or location.password:
-        raise CloneError("仓库地址不能包含凭据")
-
-
-def redact_secret(text: str, secret: str) -> str:
-    if secret:
-        return text.replace(secret, "[已隐藏]")
-    return text
-
-
-def _default_runner(command: list[str], env: dict[str, str]) -> tuple[int, str, str]:
-    completed = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
-    return completed.returncode, completed.stderr, completed.stdout
-
-
-def clone_repository(
-    url: str,
-    branch: str,
-    destination: str,
-    token: str,
-    *,
-    runner: Runner | None = None,
-) -> None:
-    """真实的 git clone。不调用 git init，也不把 PAT 写进 URL。"""
-
-    assert_clean_url(url, token)
-    run = runner or _default_runner
-    command = [
-        "git",
-        "-c",
-        "credential.helper=",
-        "clone",
-        "--branch",
-        branch,
-        "--",
-        url,
-        destination,
-    ]
-    with tempfile.TemporaryDirectory() as directory:
-        script = Path(directory) / "askpass"
-        script.write_text(_ASKPASS, encoding="utf-8")
-        script.chmod(stat.S_IRUSR | stat.S_IXUSR)
-        env = os.environ.copy()
-        env["GIT_ASKPASS"] = str(script)
-        env["GIT_TERMINAL_PROMPT"] = "0"
-        if token:
-            env["NEXUS_GIT_TOKEN"] = token
-        code, err, out = run(command, env)
-    if code:
-        message = redact_secret((err or out or "git clone 失败").strip(), token)
-        raise CloneError(message or "git clone 失败")
 
 
 def read_base_commit(workspace: str) -> str:
@@ -179,35 +103,6 @@ async def related_tasks(session: AsyncSession, task_id: str) -> list[Task]:
     return dependency_order(list(group.values()))
 
 
-async def create_repository(session: AsyncSession, *, url: str, branch: str, token: str) -> CodeRepository:
-    assert_clean_url(url, token)
-    repository = CodeRepository(id=uuid4().hex, url=url, branch=branch or "main")
-    session.add(repository)
-    await session.flush()
-    session.add(GitCredential(repository_id=repository.id, token_ciphertext=cipher().encrypt(token)))
-    await session.commit()
-    await session.refresh(repository)
-    return repository
-
-
-async def bind_repository(
-    session: AsyncSession,
-    environment: OpenCodeExecutionEnvironment,
-    repository_id: str,
-) -> OpenCodeExecutionEnvironment:
-    repository = await session.get(CodeRepository, repository_id)
-    if repository is None:
-        raise RepositoryBindingError("仓库不存在")
-    current = environment.repository_id
-    if current and current != repository.id:
-        raise RepositoryBindingError("Worker 已绑定仓库")
-    environment.repository_id = repository.id
-    environment.branch = repository.branch
-    await session.commit()
-    await session.refresh(environment)
-    return environment
-
-
 async def free_opencode_port(session: AsyncSession, host: str | None, preferred: int = 14096) -> int:
     query = select(OpenCodeExecutionEnvironment.opencode_server_port)
     if host is None:
@@ -221,7 +116,7 @@ async def free_opencode_port(session: AsyncSession, host: str | None, preferred:
     while port in used and port <= 65535:
         port += 1
     if port > 65535 or port in used:
-        raise RepositoryBindingError("没有可用的 OpenCode 端口")
+        raise WorkerCopyError("没有可用的 OpenCode 端口")
     return port
 
 
@@ -235,9 +130,9 @@ async def copy_worker(
 ) -> AgentWorker:
     environment = source.execution_environment
     if environment is None:
-        raise RepositoryBindingError("员工尚未配置 Agent 工作环境")
+        raise WorkerCopyError("员工尚未配置 Agent 工作环境")
     if await session.get(AgentWorker, new_id):
-        raise RepositoryBindingError("员工 ID 已存在")
+        raise WorkerCopyError("员工 ID 已存在")
     employee = AgentWorker(
         id=new_id,
         name=name,
@@ -271,7 +166,8 @@ async def copy_worker(
             model_name=environment.model_name,
             workspace_root=fresh_workspace(environment.workspace_root, employee.id),
             branch=environment.branch,
-            repository_id=environment.repository_id,
+            repository_url=environment.repository_url,
+            git_token_ciphertext=None,
             skill_refs=list(environment.skill_refs or []),
             mcp_refs=[dict(item) for item in environment.mcp_refs or [] if isinstance(item, dict)],
             labels=list(environment.labels or []),

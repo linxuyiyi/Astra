@@ -25,8 +25,6 @@ from app.config.settings import Settings, get_settings
 from app.domain import EnvironmentStatus, ExecutionMode, MaintenanceState, WorkerReadiness
 from app.gateway.models import GatewayRoute
 from app.models import (
-    CodeRepository,
-    GitCredential,
     OpenCodeExecutionEnvironment,
     WorkerInstance,
     WorkerMaintenanceOperation,
@@ -51,8 +49,6 @@ class ReadinessLookupContext:
 
     ordered_chat_routes: list[str] = field(default_factory=list)
     enabled_chat_routes: set[str] = field(default_factory=set)
-    repositories: dict[str, CodeRepository] = field(default_factory=dict)
-    credential_ciphertext_by_repo: dict[str, str] = field(default_factory=dict)
     skill_bodies: dict[str, str] = field(default_factory=dict)
 
 
@@ -131,25 +127,6 @@ async def load_readiness_context(
             )
         ).all()
     ]
-    repo_ids = sorted({_text(env.repository_id) for env in env_list if _text(env.repository_id)})
-    repositories: dict[str, CodeRepository] = {}
-    credentials: dict[str, str] = {}
-    if repo_ids:
-        repo_rows = (
-            await session.scalars(select(CodeRepository).where(CodeRepository.id.in_(repo_ids)))
-        ).all()
-        repositories = {row.id: row for row in repo_rows}
-        cred_rows = (
-            await session.scalars(
-                select(GitCredential).where(GitCredential.repository_id.in_(repo_ids))
-            )
-        ).all()
-        credentials = {
-            row.repository_id: str(row.token_ciphertext)
-            for row in cred_rows
-            if row.token_ciphertext
-        }
-
     skill_names = sorted(
         {
             str(name).strip()
@@ -168,8 +145,6 @@ async def load_readiness_context(
     return ReadinessLookupContext(
         ordered_chat_routes=ordered_routes,
         enabled_chat_routes=set(ordered_routes),
-        repositories=repositories,
-        credential_ciphertext_by_repo=credentials,
         skill_bodies=skill_bodies,
     )
 
@@ -423,7 +398,7 @@ def _evaluate_local_readiness(
     rows = build_equipment_rows(desired, observation)
     repo_summary = build_repository_summary(desired, observation)
 
-    if not _text(environment.repository_id):
+    if not _text(environment.repository_url):
         readiness = WorkerReadiness.DRIFTED.value
         blockers.append({"code": "repository_missing", "message": "尚未绑定 Git 仓库"})
     elif environment.status == EnvironmentStatus.UNAVAILABLE:
@@ -529,7 +504,6 @@ def build_repository_summary(
     else:
         error = _text(observed.get("error")) or "Git 仓库探测失败"
     return {
-        "id": repository.get("id"),
         "url": actual_url or desired_url or None,
         "target_branch": repository.get("target_branch"),
         "branch": _text(observed.get("branch")) or None,
@@ -1003,24 +977,12 @@ def _desired_model(
 def _desired_repository(
     environment: OpenCodeExecutionEnvironment, context: ReadinessLookupContext
 ) -> dict[str, Any] | None:
-    repository_id = _text(environment.repository_id)
-    if not repository_id:
+    if not _text(environment.repository_url):
         return None
-    repository = context.repositories.get(repository_id)
-    if repository is None:
-        return {
-            "id": repository_id,
-            "url": None,
-            "target_branch": _text(environment.branch),
-            "authentication": "missing",
-            "credential_revision": None,
-            "error": "绑定的仓库不存在",
-        }
-    ciphertext = context.credential_ciphertext_by_repo.get(repository_id, "")
+    ciphertext = _text(environment.git_token_ciphertext)
     return {
-        "id": repository.id,
-        "url": sanitize_url(repository.url),
-        "target_branch": _text(environment.branch) or _text(repository.branch) or "main",
+        "url": sanitize_url(environment.repository_url),
+        "target_branch": _text(environment.branch) or "main",
         "authentication": "token" if ciphertext else "none",
         "credential_revision": _hash(ciphertext) if ciphertext else None,
         "error": None,

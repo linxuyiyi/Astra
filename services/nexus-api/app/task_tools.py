@@ -13,11 +13,9 @@ from app.domain import Priority, TaskStatus, TaskType
 from app.executors.errors import OpenCodeExecutionTimeout, OpenCodeServerUnavailable
 from app.models import (
     AgentWorker,
-    CodeRepository,
     Event,
     ExperienceReviewJob,
     KnowledgeItem,
-    OpenCodeExecutionEnvironment,
     RuntimeSession,
     Task,
     TaskCategory,
@@ -100,7 +98,6 @@ class TaskTools:
         acceptance_criteria: list[str] | None = None,
         priority: str = "MEDIUM",
         worker_id: str | None = None,
-        repository_id: str | None = None,
         responsible_employee_id: str | None = None,
         source_session_id: str | None = None,
         source_conversation_id: str | None = None,
@@ -127,27 +124,8 @@ class TaskTools:
             refusal = await self._worker_refusal(assignee, kind.value, category_id)
             if refusal:
                 return {"ok": False, "error": refusal}
-        repository_id = _text(repository_id) or None
-        if assignee:
-            bound = await self.session.scalar(
-                select(OpenCodeExecutionEnvironment.repository_id).where(
-                    OpenCodeExecutionEnvironment.employee_id == assignee
-                )
-            )
-            if not bound:
-                return {"ok": False, "error": "指定 Worker 未绑定仓库"}
-            if repository_id and repository_id != bound:
-                return {"ok": False, "error": "任务仓库与指定 Worker 不一致"}
-            repository_id = bound
-        if not repository_id:
-            return {
-                "ok": False,
-                "error": "请通过 nexus_task_repositories 选择仓库，或指定已绑定仓库的 Worker",
-            }
-        if await self.session.get(CodeRepository, repository_id) is None:
-            return {"ok": False, "error": "仓库不存在"}
         key = _text(idempotency_key) or _derived_key(
-            session_id, kind.value, category_id, title, description, repository_id
+            session_id, kind.value, category_id, title, description
         )
         try:
             payload = TaskCreate(
@@ -158,7 +136,6 @@ class TaskTools:
                 description=description.strip(),
                 acceptance_criteria=[AcceptanceCriterion(content=item) for item in acceptance_criteria or []],
                 employee_id=assignee,
-                repository_id=repository_id,
                 responsible_employee_id=employee or None,
                 source_session_id=session_id or None,
                 source_conversation_id=conversation_id or None,
@@ -171,14 +148,6 @@ class TaskTools:
         task = await TaskService(self.session).create(payload)
         return self._ok(task)
 
-    async def repositories(self) -> dict[str, Any]:
-        rows = (
-            await self.session.scalars(select(CodeRepository).order_by(CodeRepository.id).limit(200))
-        ).all()
-        return {
-            "ok": True,
-            "repositories": [{"id": row.id, "url": row.url, "branch": row.branch} for row in rows],
-        }
 
     async def categories(self) -> dict[str, Any]:
         rows = (
@@ -263,16 +232,6 @@ class TaskTools:
         refusal = await self._worker_refusal(worker_id, task.task_type, task.category_id or "")
         if refusal:
             return self._refuse(task, refusal)
-        repository_id = await self.session.scalar(
-            select(OpenCodeExecutionEnvironment.repository_id).where(
-                OpenCodeExecutionEnvironment.employee_id == worker_id
-            )
-        )
-        if not repository_id:
-            return self._refuse(task, "指定 Worker 未绑定仓库")
-        if task.repository_id and task.repository_id != repository_id:
-            return self._refuse(task, "任务仓库与指定 Worker 不一致")
-        task.repository_id = repository_id
         task.employee_id = worker_id
         await TaskService(self.session).add_event(
             task, "TASK_ASSIGNED", "work", "已指定 Worker", {"worker_id": worker_id}
@@ -596,7 +555,6 @@ class TaskTools:
             "runtime_status_label": task.runtime_status_label,
             "task_type": task.task_type,
             "category_id": task.category_id,
-            "repository_id": task.repository_id,
             "worker_id": task.employee_id,
             "responsible_employee_id": task.responsible_employee_id,
             "source_session_id": task.source_session_id,
@@ -615,9 +573,8 @@ def _derived_key(
     category_id: str,
     title: str,
     description: str,
-    repository_id: str,
 ) -> str | None:
     if not session_id:
         return None
-    raw = f"{session_id}\n{task_type}\n{category_id}\n{title.strip()}\n{description.strip()}\n{repository_id}"
+    raw = f"{session_id}\n{task_type}\n{category_id}\n{title.strip()}\n{description.strip()}"
     return f"{session_id}:{hashlib.sha256(raw.encode()).hexdigest()[:32]}"

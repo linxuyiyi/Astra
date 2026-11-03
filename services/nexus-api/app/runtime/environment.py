@@ -39,7 +39,7 @@ def environment_snapshot(environment: OpenCodeExecutionEnvironment) -> dict:
         "opencode_path": environment.opencode_path,
         "model_name": environment.model_name,
         "workspace_root": environment.workspace_root,
-        "repository_id": environment.repository_id,
+        "repository_url": environment.repository_url,
         "labels": list(environment.labels or []),
         "skill_refs": list(environment.skill_refs or []),
         "mcp_names": [str(x.get("name")) for x in environment.mcp_refs or []],

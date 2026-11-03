@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.database import SessionLocal
 from app.domain import TaskStatus
 from app.main import app
-from app.models import AgentWorker, CodeRepository, OpenCodeExecutionEnvironment, RuntimeSession, Task
+from app.models import AgentWorker, OpenCodeExecutionEnvironment, RuntimeSession, Task
 
 
 def task_payload(**overrides):
@@ -433,13 +433,6 @@ def test_one_digital_employee_can_own_multiple_agent_workers(tmp_path):
 def test_worker_environment_exposes_bound_repository_read(tmp_path):
     async def seed_repository():
         async with SessionLocal() as session:
-            session.add(
-                CodeRepository(
-                    id="repo-api-read",
-                    url="https://example.com/nexus/repository.git",
-                    branch="release",
-                )
-            )
             await session.commit()
 
     asyncio.run(seed_repository())
@@ -476,15 +469,15 @@ def test_worker_environment_exposes_bound_repository_read(tmp_path):
                 "opencode_server_port": 56399,
                 "opencode_path": sys.executable,
                 "workspace_root": str(tmp_path / "repository-worker"),
-                "repository_id": "repo-api-read",
+                "repository_url": "https://example.com/nexus/repository.git",
                 "branch": "release",
             },
         )
         assert updated.status_code == 200, updated.text
         environment = updated.json()
-        assert environment["repository_id"] == "repo-api-read"
+        assert "repository_id" not in environment
         assert environment["repository_url"] == "https://example.com/nexus/repository.git"
-        assert environment["repository_branch"] == "release"
+        assert environment["branch"] == "release"
 
         workers = client.get("/api/agent-workers").json()
         worker = next(item for item in workers if item["id"] == "worker-repository-read")

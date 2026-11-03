@@ -52,7 +52,7 @@ def _provisioner(monkeypatch):
         workspace_root="/srv/container workspace",
         model_name="nexus-gateway/test",
         opencode_path="/managed/bin/opencode",
-        repository_id=None,
+        repository_url=None,
         skill_refs=[],
         mcp_refs=[],
     )

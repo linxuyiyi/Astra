@@ -63,44 +63,6 @@ def test_initial_schema_is_complete_and_repeatable(tmp_path):
         engine.dispose()
 
 
-def test_published_init_upgrades_without_losing_routes(tmp_path):
-    database = tmp_path / "published.db"
-    environment = {**os.environ, "ASTRA_DATABASE_URL": f"sqlite+aiosqlite:///{database}"}
-    first = subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "0001_init"],
-        cwd=SERVICE, env=environment, text=True, capture_output=True, timeout=30,
-    )
-    assert first.returncode == 0, first.stderr
-    with sqlite3.connect(database) as connection:
-        connection.execute("""
-            INSERT INTO t_nexus_gateway_routes
-            (id, model, pool_id, description, enabled, created_at, updated_at)
-            VALUES ('route-retained', 'retained-model', 'gp_default', '', 1, datetime('now'), datetime('now'))
-        """)
-    from app.gateway.models import GatewayNode, GatewayPool
-
-    old_engine = create_engine(f"sqlite:///{database}")
-    with old_engine.begin() as connection:
-        connection.execute(GatewayPool.__table__.insert().values(id="embed-pool", name="Embedding"))
-        connection.execute(GatewayNode.__table__.insert().values(
-            id="embed-node", name="Embedding", pool_id="embed-pool",
-            base_url="http://embedding.test", probe_strategy="EMBEDDING",
-        ))
-        connection.execute(text("""
-            INSERT INTO t_nexus_gateway_routes
-            (id, model, pool_id, description, enabled, created_at, updated_at)
-            VALUES ('embed-route', 'embedding', 'embed-pool', '', 1, datetime('now'), datetime('now'))
-        """))
-    old_engine.dispose()
-    result = upgrade(database)
-    assert result.returncode == 0, result.stderr
-    with sqlite3.connect(database) as connection:
-        assert connection.execute(
-            "SELECT model, model_type FROM t_nexus_gateway_routes WHERE id='route-retained'"
-        ).fetchone() == ("retained-model", "CHAT")
-        assert connection.execute(
-            "SELECT model_type FROM t_nexus_gateway_routes WHERE id='embed-route'"
-        ).fetchone() == ("EMBEDDING",)
 
 
 @pytest.mark.parametrize("version", [None, "0058_drop_pool_route_weight"])
@@ -145,136 +107,10 @@ def test_incomplete_current_schema_is_not_silently_accepted(tmp_path):
     assert "新的空数据库" in outcome.stderr
 
 
-def test_local_auth_cleanup_preserves_business_owner_ids(tmp_path):
-    database = tmp_path / "local-auth.db"
-    first = subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "0003_gateway_speech"],
-        cwd=SERVICE,
-        env={**os.environ, "ASTRA_DATABASE_URL": f"sqlite+aiosqlite:///{database}"},
-        text=True,
-        capture_output=True,
-        timeout=30,
-    )
-    assert first.returncode == 0, first.stderr
-    with sqlite3.connect(database) as connection:
-        connection.execute("""INSERT INTO t_nexus_users
-            (id,username,display_name,password_hash,permissions_json,enabled,created_at)
-            VALUES ('old-uid','local','临时用户','removed-secret','["*"]',1,'2026-10-24')""")
-        connection.execute("INSERT INTO t_nexus_auth_sessions VALUES ('old-token','old-uid','2999-01-01')")
-        connection.execute("""INSERT INTO t_nexus_conversations
-            (id,employee_id,owner_id,name,created_at,updated_at)
-            VALUES ('conv-retained','emp','old-uid','保留','2026-10-24','2026-10-24')""")
-        connection.execute("""INSERT INTO t_nexus_channel_members
-            (channel_id,member_type,member_id,role)
-            VALUES ('group-retained','human','old-uid','owner')""")
-    result = upgrade(database)
-    assert result.returncode == 0, result.stderr
-    with sqlite3.connect(database) as connection:
-        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        assert not {"t_nexus_users", "t_nexus_auth_sessions"} & tables
-        assert connection.execute("SELECT * FROM t_nexus_identity_profiles").fetchall() == []
-        assert connection.execute("SELECT owner_id FROM t_nexus_conversations").fetchone() == ("old-uid",)
-        assert connection.execute("SELECT member_id,role FROM t_nexus_channel_members").fetchone() == (
-            "old-uid",
-            "owner",
-        )
 
 
-def test_released_init_upgrade_preserves_opencode_binding(tmp_path):
-    database = tmp_path / "released.db"
-    initial = subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "0001_init"], cwd=SERVICE,
-        env={**os.environ, "ASTRA_DATABASE_URL": f"sqlite+aiosqlite:///{database}"},
-        text=True, capture_output=True, timeout=30,
-    )
-    assert initial.returncode == 0, initial.stderr
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            "INSERT INTO t_nexus_opencode_execution_environments "
-            "(id,employee_id,mode,name,description,port,opencode_server_port,opencode_path,"
-            "workspace_root,status,status_detail,labels,created_at,updated_at) "
-            "VALUES (1,'worker','LINUX_REMOTE','原环境','',22,4096,'opencode',"
-            "'/agentwork','READY','{}','{}','2026-10-23','2026-10-23')"
-        )
-        connection.execute(
-            "INSERT INTO t_nexus_runtime_sessions "
-            "(id,task_id,employee_id,workspace,environment,status,tool_usage,usage_by_day,"
-            "model_usage,created_at,total_tokens) VALUES "
-            "('ses_original','task','worker','/agentwork/task','{}','SUCCEEDED','{}','{}',"
-            "'{}','2026-10-23',123)"
-        )
-    outcome = upgrade(database)
-    assert outcome.returncode == 0, outcome.stderr
-    with sqlite3.connect(database) as connection:
-        assert connection.execute(
-            "SELECT runtime_engine FROM t_nexus_opencode_execution_environments WHERE id=1"
-        ).fetchone() == ("opencode",)
-        assert connection.execute(
-            "SELECT id,native_session_id,runtime_engine,fencing_token,status,total_tokens,workspace "
-            "FROM t_nexus_runtime_sessions"
-        ).fetchone() == (
-            "ses_original", "ses_original", "opencode", 0, "SUCCEEDED", 123, "/agentwork/task"
-        )
-    assert upgrade(database).returncode == 0
 
 
-def test_worker_readiness_convergence_migration_cleans_interrupted_locks(tmp_path):
-    database = tmp_path / "worker-convergence.db"
-    initial = subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "0006_employee_avatars"],
-        cwd=SERVICE,
-        env={**os.environ, "ASTRA_DATABASE_URL": f"sqlite+aiosqlite:///{database}"},
-        text=True,
-        capture_output=True,
-        timeout=30,
-    )
-    assert initial.returncode == 0, initial.stderr
-    with sqlite3.connect(database) as connection:
-        connection.execute(
-            "INSERT INTO t_nexus_opencode_execution_environments "
-            "(id,employee_id,mode,name,description,port,opencode_server_port,opencode_path,"
-            "workspace_root,status,worker_channel,status_detail,labels,created_at,updated_at) "
-            "VALUES (7,'worker-7','LINUX_REMOTE','节点7','',22,14096,'opencode',"
-            "'/agentwork','AVAILABLE','worker','{}','[]','2026-10-25','2026-10-25')"
-        )
-        connection.execute(
-            "INSERT INTO t_nexus_worker_instances "
-            "(id,environment_id,token_digest,status,epoch,created_at,updated_at) "
-            "VALUES ('wrk_7',7,'digest','online',3,'2026-10-25','2026-10-25')"
-        )
-        connection.execute(
-            "INSERT INTO t_nexus_worker_maintenance_operations "
-            "(id,environment_id,action,state,stage,requested_by,attempt,cancel_requested,"
-            "danger_dispatched,reconcile_required,reconcile_only,target_revision,before_snapshot,"
-            "after_snapshot,active_environment_id,requested_at,created_at,updated_at) "
-            "VALUES ('mnt_7',7,'deploy','INTERRUPTED','interrupted','admin',1,0,"
-            "1,1,0,'{}','{}','{}',7,'2026-10-25','2026-10-25','2026-10-25')"
-        )
-    outcome = upgrade(database)
-    assert outcome.returncode == 0, outcome.stderr
-    with sqlite3.connect(database) as connection:
-        env_cols = {
-            row[1]
-            for row in connection.execute(
-                "PRAGMA table_info(t_nexus_opencode_execution_environments)"
-            )
-        }
-        assert "worker_channel" not in env_cols
-        inst_cols = {
-            row[1] for row in connection.execute("PRAGMA table_info(t_nexus_worker_instances)")
-        }
-        assert {"target_digest", "observed_snapshot", "observed_at"} <= inst_cols
-        op_cols = {
-            row[1]
-            for row in connection.execute(
-                "PRAGMA table_info(t_nexus_worker_maintenance_operations)"
-            )
-        }
-        assert not ({"danger_dispatched", "reconcile_required", "reconcile_only"} & op_cols)
-        assert connection.execute(
-            "SELECT state, stage, active_environment_id "
-            "FROM t_nexus_worker_maintenance_operations WHERE id='mnt_7'"
-        ).fetchone() == ("FAILED", "failed", None)
 
 
 def test_all_revision_identifiers_fit_published_version_column():
@@ -286,5 +122,21 @@ def test_all_revision_identifiers_fit_published_version_column():
     config = Config(str(SERVICE / "alembic.ini"))
     config.set_main_option("script_location", str(SERVICE / "alembic"))
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_current_head() == CURRENT_REVISION == "0007_worker_readiness"
+    assert scripts.get_current_head() == CURRENT_REVISION == "0001_init"
+    assert len(list(scripts.walk_revisions())) == 1
     assert all(len(r.revision) <= VERSION.c.version_num.type.length for r in scripts.walk_revisions())
+
+
+def test_fresh_schema_has_worker_git_fields_without_repository_registry(tmp_path):
+    database = tmp_path / "worker-git.db"
+    result = upgrade(database)
+    assert result.returncode == 0, result.stderr
+    with sqlite3.connect(database) as db:
+        tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        assert "t_nexus_code_repositories" not in tables
+        assert "t_nexus_git_credentials" not in tables
+        fields = {row[1] for row in db.execute("PRAGMA table_info(t_nexus_opencode_execution_environments)")}
+        assert {"repository_url", "branch", "git_token_ciphertext"} <= fields
+        assert "repository_id" not in fields
+        task_fields = {row[1] for row in db.execute("PRAGMA table_info(t_nexus_tasks)")}
+        assert "repository_id" not in task_fields

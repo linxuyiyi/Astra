@@ -40,9 +40,8 @@ export interface ExecutionEnvironment {
   opencode_path: string
   model_name: string | null
   workspace_root: string
-  repository_id?: string | null
   repository_url?: string | null
-  repository_branch?: string | null
+  has_git_token: boolean
   branch?: string | null
   status: 'UNKNOWN' | 'CHECKING' | 'AVAILABLE' | 'UNAVAILABLE' | 'DRIFTED'
   status_detail: Record<string, unknown>
@@ -102,12 +101,6 @@ export interface EmployeeUsage {
 
 export interface TaskUsage { summary: UsageSummary; tools: ToolUsage[]; sessions: number }
 
-export interface CodeRepository {
-  id: string
-  url: string
-  branch: string
-}
-
 export interface Employee extends RuntimeProjection {
   id: string
   digital_employee_id: string | null
@@ -132,7 +125,7 @@ export interface Employee extends RuntimeProjection {
   channel_health: {
     worker_online: boolean
     opencode_reachable: boolean
-    repository_bound: boolean
+    repository_configured: boolean
     executing: boolean
     waiting_human: boolean
     availability: string
@@ -159,7 +152,6 @@ export interface Task extends RuntimeProjection {
   external_task_id: string | null
   task_type: TaskType
   category_id: string | null
-  repository_id: string | null
   title: string
   description: string
   acceptance_criteria: AcceptanceCriterion[]

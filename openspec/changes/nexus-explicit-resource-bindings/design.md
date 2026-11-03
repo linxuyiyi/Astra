@@ -13,10 +13,18 @@
 - source_* 是可选通知元数据，不作为认证、授权或创建前置条件。查询和后续控制按任务 ID 处理，列表可按员工 ID 筛选。
 - 仓库、分类、任务状态、当前执行 Session 和请求/回合标识等业务有效性规则继续走已有 TaskService/RuntimeService。
 - 最后保存并返回统一同步结果，失败/待处理保留上次 applied_revision。
-- 旧特殊技能 ID 通过一次性普通资源登记和绑定替换处理，不增加长期兼容分支。
+- 全新空库直接登记实际 Skill/MCP；不实现旧特殊 ID 转换或数据兼容。
 
 ## Risks / Trade-offs
 
 - Task MCP 面向内部可信网络，接口不提供用户或员工访问权限隔离；这是本次明确约定。
 - 工具 employee_id 参数需要调用方按新 schema 传入；旧隐式来源鉴权链删除，不提供双轨。
 - 公司环境未连接，不能把本地验证描述为公司环境验收。
+
+## 分类派工与 Worker Git 配置（用户追加约定）
+
+- 删除 CodeRepository/GitCredential 独立台账与任务 repository_id。任务页面、API、MCP 均不提供仓库选择和仓库查询。
+- Worker 执行环境直接存 repository_url、branch、加密 git_token_ciphertext；写入可选 git_token，读取只返回 has_git_token。
+- Dispatcher 仅按现有任务类型/分类、Worker 运行与占用状态选择，不匹配仓库。
+- Worker 的 Git 部署和更新继续使用既有 Git 执行逻辑，只从自身配置取值，不验证 Git 与分类的一致性。
+- 按用户最新明确要求，仅面向全新空库初始化：当前 init 直接使用新结构，不做旧库升级、数据回填或兼容链。

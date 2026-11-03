@@ -35,7 +35,8 @@ class ExecutionEnvironmentWrite(BaseModel):
     opencode_path: str = Field(default="opencode", min_length=1)
     model_name: str | None = Field(default=None, max_length=255)
     workspace_root: str = Field(default="./workspaces", min_length=1)
-    repository_id: str | None = Field(default=None, max_length=64)
+    repository_url: str | None = Field(default=None, max_length=4096)
+    git_token: str | None = Field(default=None, max_length=4096)
     branch: str | None = Field(default=None, max_length=255)
     labels: list[str] = Field(default_factory=list)
     skill_refs: list[str] | None = None
@@ -75,9 +76,8 @@ class ExecutionEnvironmentRead(ORMModel):
     opencode_path: str
     model_name: str | None
     workspace_root: str
-    repository_id: str | None = None
     repository_url: str | None = None
-    repository_branch: str | None = None
+    has_git_token: bool = False
     branch: str | None = None
     skill_refs: list[str] = Field(default_factory=list)
     mcp_refs: list[dict[str, Any]] = Field(default_factory=list)
@@ -181,7 +181,7 @@ class ChannelHealth(BaseModel):
     runtime_reachable: bool = False
     worker_online: bool
     opencode_reachable: bool
-    repository_bound: bool
+    repository_configured: bool
     executing: bool
     waiting_human: bool
     availability: str
@@ -212,7 +212,7 @@ class EmployeeRead(RuntimeRead):
         default_factory=lambda: ChannelHealth(
             worker_online=True,
             opencode_reachable=False,
-            repository_bound=False,
+            repository_configured=False,
             executing=False,
             waiting_human=False,
             availability="UNKNOWN",
@@ -227,12 +227,7 @@ class AcceptanceCriterion(BaseModel):
     content: str = Field(min_length=1, max_length=500)
 
 
-
-
-
-
 class RelatedTaskPart(BaseModel):
-    repository_id: str = Field(min_length=1)
     title: str | None = Field(default=None, min_length=1, max_length=240)
     depends_on: int | None = Field(default=None, ge=0)
 
@@ -261,7 +256,6 @@ class TaskCreate(BaseModel):
     source_conversation_id: str | None = None
     source_channel_id: str | None = None
     idempotency_key: str | None = None
-    repository_id: str | None = None
     priority: Priority = Priority.MEDIUM
     # Kept in the API for stored tasks; all new tasks close explicitly.
     completion_policy: CompletionPolicy = CompletionPolicy.MANUAL_CONFIRM
@@ -305,7 +299,6 @@ class TaskRead(RuntimeRead):
     source_conversation_id: str | None = None
     source_channel_id: str | None = None
     idempotency_key: str | None = None
-    repository_id: str | None = None
     related_task_id: str | None = None
     base_commit: str | None = None
     current_session_id: str | None
@@ -335,22 +328,6 @@ class TaskRead(RuntimeRead):
     updated_at: datetime
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class EventRead(ORMModel):
     id: int
     task_id: str | None
@@ -360,20 +337,3 @@ class EventRead(ORMModel):
     message: str
     detail: dict[str, Any]
     created_at: datetime
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

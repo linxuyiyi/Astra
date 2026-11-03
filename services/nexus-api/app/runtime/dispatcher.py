@@ -35,16 +35,6 @@ def _active_maintenance_exists(environment_id):
     )
 
 
-def runtime_assignment_block(environment, task) -> str | None:
-    """任务必须绑定仓库，且与候选节点的仓库一致。"""
-
-    if not task.repository_id:
-        return "任务没有绑定仓库"
-    if environment.repository_id != task.repository_id:
-        return "任务仓库与 Worker 不一致"
-    return None
-
-
 def _parent_open(status) -> bool:
     value = status.value if hasattr(status, "value") else status
     return value != TaskStatus.SUCCEEDED.value
@@ -92,9 +82,6 @@ class Dispatcher:
                 .execution_options(populate_existing=True)
             )
             if task is None:
-                await self.session.rollback()
-                continue
-            if not task.repository_id:
                 await self.session.rollback()
                 continue
             if task.related_task_id:
@@ -159,7 +146,6 @@ class Dispatcher:
                 candidate_env = candidate.execution_environment
                 if (
                     candidate_env is None
-                    or runtime_assignment_block(candidate_env, task) is not None
                     or task.task_type not in candidate.task_types
                     or task.category_id not in candidate.category_ids
                 ):
@@ -185,8 +171,7 @@ class Dispatcher:
                     continue
                 locked_env = locked_employee.execution_environment
                 if (
-                    runtime_assignment_block(locked_env, task) is not None
-                    or task.task_type not in locked_employee.task_types
+                    task.task_type not in locked_employee.task_types
                     or task.category_id not in locked_employee.category_ids
                     or await scheduling_block(self.session, locked_env) is not None
                 ):

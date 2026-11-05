@@ -950,6 +950,7 @@ async def test_admin_lists_and_native_workspace_binding(setup_runtime, monkeypat
 
     from app.api import workspace_routes
     from app.main import app
+    from app.worker_gateway import service
 
     worker_id, _, _ = setup_runtime
     async with SessionLocal() as db:
@@ -985,6 +986,9 @@ async def test_admin_lists_and_native_workspace_binding(setup_runtime, monkeypat
         assert worker.id == worker_id
         yield RunningOpenCode()
 
+    gateway = WorkerGateway(bus=MemoryRouteBus())
+    await gateway.bus.set_owner(worker_id, "test", 0)
+    monkeypatch.setattr(service, "get_gateway", lambda: gateway)
     monkeypatch.setattr(workspace_routes, "connect", connect)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         tasks = await client.get("/api/tasks", params={"q": task_id, "limit": 1})
@@ -1014,6 +1018,7 @@ async def test_admin_lists_and_native_workspace_binding(setup_runtime, monkeypat
             worker = await db.get(AgentWorker, worker_id)
             worker.status = "OFFLINE"
             await db.commit()
+        await gateway.bus.clear_owner(worker_id, 0, "test")
         binding = (await client.get(f"/api/tasks/{task_id}/workspace")).json()
         assert binding["runtime"]["workspace_ui"] is None
         assert "Worker 不在线" in binding["runtime"]["workspace_ui_error"]
@@ -1033,8 +1038,8 @@ async def test_native_sse_drives_task_without_browser_or_periodic_native_reads(s
         first_read.set()
         return await status(directory, session_id)
 
-    async def native_events(_directory):
-        yield {"type": "server.connected"}
+    async def native_events(_directory, *, on_subscribed):
+        on_subscribed()
         while True:
             yield await events.get()
 
@@ -1047,6 +1052,7 @@ async def test_native_sse_drives_task_without_browser_or_periodic_native_reads(s
         task = await create_task(db, setup_runtime)
         task = await RuntimeService(db).start(task.id)
         task_id, sid = task.id, task.current_session_id
+        native.sessions[sid]["status"] = "idle"
 
     async def wait_reason(reason):
         async with asyncio.timeout(2):
@@ -1060,6 +1066,7 @@ async def test_native_sse_drives_task_without_browser_or_periodic_native_reads(s
     watcher = asyncio.create_task(recovery.watch_session(task_id))
     try:
         await asyncio.wait_for(first_read.wait(), 2)
+        assert (await wait_reason("confirmation")).status == "WAITING"
         await events.put({"type": "session.idle", "properties": {"sessionID": "old-session"}})
         await events.put({"type": "server.heartbeat"})
         await asyncio.sleep(0.09)
@@ -1122,7 +1129,7 @@ async def test_supervisor_retries_pending_submission_without_an_sse_event(setup_
     _, _, native = setup_runtime
     native.fail_send = True
 
-    async def silent_events(_directory):
+    async def silent_events(_directory, *, on_subscribed):
         await asyncio.Future()
         yield {}
 
@@ -1229,7 +1236,14 @@ async def test_worker_console_reports_all_occupancy_independently_of_connection(
         health = (await client.get(f"{root}/health")).json()
         assert health["connection"]["state"] == "offline"
         assert any(item["code"] == "occupied_task" for item in health["blocking"])
+        assert not (await client.get(root)).json()["online"]
+        online_before = (await client.get("/api/metrics")).json()["online_employees"]
         await gateway.bus.set_owner(worker_id, "test", 2)
+        paused = (await client.get(root)).json()
+        assert paused["status"] == "PAUSED" and paused["online"]
+        assert (await client.get("/api/metrics")).json()["online_employees"] == online_before + 1
+        task_connection = (await client.get(f"/api/tasks/{expected[0]['id']}")).json()
+        assert task_connection["worker_online"] and task_connection["status"] == "RUNNING"
         resumed = (await client.post(f"{root}/resume")).json()
         assert resumed["status"] == "WORKING" and resumed["enabled"]
         assert resumed["occupied_tasks"] == expected
@@ -1312,3 +1326,169 @@ async def test_completed_task_restart_is_rejected_by_rest_and_mcp(setup_runtime)
         worker = (await client.get(f"/api/workers/{worker_id}")).json()
         assert worker["status"] == "IDLE" and worker["occupied_tasks"] == []
         assert native.creates == 1 and native.aborts == 0
+
+
+async def test_task_criteria_ids_survive_edits_and_reordering(setup_runtime):
+    import httpx
+
+    from app.main import app
+
+    worker_id, category, _ = setup_runtime
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        created = await client.post("/api/tasks", json={
+            "task_type": "ISSUE", "category_id": category, "title": "验收项回归",
+            "description": "测试验收项身份", "agent_worker_id": worker_id,
+            "acceptance_criteria": [{"content": "甲"}, {"content": "乙"}],
+        })
+        assert created.status_code == 201
+        before = created.json()
+        a, b = before["acceptance_criteria"]
+        path = f"/api/tasks/{before['id']}"
+        edited = await client.patch(path, json={"acceptance_criteria": [
+            {"id": b["id"], "content": "乙修订"}, {"content": "新增"}, a,
+        ]})
+        assert edited.status_code == 200
+        rows = (await client.get(path)).json()["acceptance_criteria"]
+        assert rows[0] == {"id": b["id"], "content": "乙修订"} and rows[2] == a
+        assert len({item["id"] for item in rows if item["id"]}) == 3
+
+
+async def test_active_review_protects_source_worker_only_until_finished(setup_runtime, monkeypatch):
+    import httpx
+
+    from app.main import app
+    from app.schemas import WorkerWrite
+
+    worker_id, _, native = setup_runtime
+    monkeypatch.setattr(get_settings(), "experience_review_enabled", True)
+    async with SessionLocal() as db:
+        task = await create_task(db, setup_runtime)
+        runtime = RuntimeService(db)
+        await runtime.start(task.id)
+        native.sessions[task.current_session_id]["status"] = "idle"
+        await runtime.refresh(task.id)
+        await runtime.confirm_completion(task.id)
+        job = await db.scalar(select(ExperienceReviewJob).where(ExperienceReviewJob.task_id == task.id))
+        job_id = job.id
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        path = f"/api/workers/{worker_id}"
+        worker = (await client.get(path)).json()
+        assert worker["status"] == "IDLE" and not worker["occupied_tasks"]
+        config = {key: worker[key] for key in WorkerWrite.model_fields if key in worker}
+        renamed = await client.put(path, json={**config, "name": "新名称", "enabled": False})
+        assert renamed.status_code == 200
+        for result in (await client.delete(path), await client.put(path, json={**config, "branch": "next"})):
+            assert result.status_code == 409 and "未完成经验复盘" in result.json()["detail"]
+        async with SessionLocal() as db:
+            job = await db.get(ExperienceReviewJob, job_id)
+            job.status = "SUCCEEDED"
+            await db.commit()
+        assert (await client.put(path, json={**config, "branch": "next"})).status_code == 200
+        assert (await client.delete(path)).status_code == 200
+
+
+async def test_event_and_maintenance_history_use_bounded_id_windows(setup_runtime):
+    import httpx
+
+    from app.main import app
+    from app.models import Event, WorkerMaintenanceEvent
+
+    worker_id, _, _ = setup_runtime
+    async with SessionLocal() as db:
+        task = await create_task(db, setup_runtime)
+        task_id = task.id
+        operation = WorkerMaintenanceOperation(
+            id=f"{worker_id}-log", agent_worker_id=worker_id, action="deploy", state="SUCCEEDED",
+        )
+        db.add(operation)
+        await db.flush()
+        db.add_all(Event(task_id=task_id, event_type="TEST", message=str(i)) for i in range(1200))
+        db.add_all(WorkerMaintenanceEvent(
+            operation_id=operation.id, attempt=1, type="step", message=str(i),
+        ) for i in range(1200))
+        await db.commit()
+        operation_id = operation.id
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        path = f"/api/tasks/{task_id}/events"
+        latest = (await client.get(path)).json()
+        assert len(latest) == 100 and latest[0]["message"] == "1199"
+        previous = (await client.get(path, params={"before_id": latest[-1]["id"]})).json()
+        assert len(previous) == 100 and previous[0]["message"] == "1099"
+        async with SessionLocal() as db:
+            db.add(Event(task_id=task_id, event_type="TEST", message="increment"))
+            await db.commit()
+        delta = (await client.get(path, params={"after_id": latest[0]["id"]})).json()
+        assert [row["message"] for row in delta] == ["increment"]
+        op_path = f"/api/maintenance/{operation_id}"
+        tail = (await client.get(op_path)).json()["events"]
+        assert len(tail) == 100 and tail[0]["message"] == "1100"
+        history = (await client.get(f"{op_path}/events/page", params={"before_id": tail[0]["id"]})).json()
+        assert len(history["items"]) == 200
+        assert history["items"][-1]["message"] == "1099"
+        assert history["next_cursor"] == history["items"][0]["id"]
+
+
+async def test_mysql_cancel_replies_while_workspace_preparation_holds_lock(monkeypatch):
+    import os
+
+    import httpx
+    from sqlalchemy.engine import make_url
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.database import get_session
+    from app.main import app
+    from app.runtime import lifecycle
+
+    url = os.environ.get("ASTRA_TEST_MYSQL_URL")
+    if not url:
+        pytest.skip("需要 ASTRA_TEST_MYSQL_URL 指向已初始化的隔离 MySQL")
+    engine = create_async_engine(make_url(url).set(drivername="mysql+asyncmy"))
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    worker_id, task_id = f"lock-worker-{uuid4().hex}", f"lock-task-{uuid4().hex}"
+    preparing, release = asyncio.Event(), asyncio.Event()
+
+    async def get_test_session():
+        async with factory() as db:
+            yield db
+
+    async def slow_prepare(*_args):
+        preparing.set()
+        await release.wait()
+        raise RuntimeError("准备失败")
+
+    async def start():
+        async with factory() as db:
+            with pytest.raises(RuntimeError, match="准备失败"):
+                await RuntimeService(db).start(task_id)
+
+    monkeypatch.setitem(app.dependency_overrides, get_session, get_test_session)
+    monkeypatch.setattr(lifecycle, "prepare_workspace", slow_prepare)
+    async with factory() as db:
+        db.add(AgentWorker(id=worker_id, name=worker_id, status="IDLE", mode="LINUX_REMOTE"))
+        await db.flush()
+        db.add(Task(
+            id=task_id, title=task_id, description="准备延迟", task_type="ISSUE", agent_worker_id=worker_id,
+        ))
+        await db.commit()
+
+    try:
+        running = asyncio.create_task(start())
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            path = f"/api/tasks/{task_id}/stop"
+            try:
+                await asyncio.wait_for(preparing.wait(), 3)
+                refused = await asyncio.wait_for(client.post(path), 1)
+                assert refused.status_code == 409 and "重试停止" in refused.json()["detail"]
+                async with factory() as db:
+                    assert (await db.get(Task, task_id)).status == "RUNNING"
+                    assert (await db.get(AgentWorker, worker_id)).status == "WORKING"
+            finally:
+                release.set()
+                await running
+            assert (await client.post(path)).json()["status"] == "CANCELED"
+            async with factory() as db:
+                assert (await db.get(AgentWorker, worker_id)).status == "IDLE"
+    finally:
+        await engine.dispose()

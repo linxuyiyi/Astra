@@ -22,7 +22,7 @@ const worker = {
   task_types: ['ISSUE'], category_ids: [], status: 'OFFLINE', runtime_engine: 'opencode', mode: 'LINUX_REMOTE',
   host: 'fixture.invalid', port: 22, username: 'nexus', workspace_root: '/srv/project', model_name: 'route-test',
   repository_url: 'https://git.fixture/project', branch: 'main', skill_refs: [], mcp_refs: [],
-  has_ssh_password: true, has_git_token: false, epoch: 3, last_heartbeat_at: timestamp, agent_version: '1.5.0',
+  online: false, has_ssh_password: true, has_git_token: false, epoch: 3, last_heartbeat_at: timestamp, agent_version: '1.5.0',
   created_at: timestamp, updated_at: timestamp,
   occupied_tasks: [{ id: 'T-A', title: '研发占用任务' }, { id: 'T-B', title: '等待验收任务' }],
 }
@@ -50,6 +50,7 @@ const health = () => ({
     equipment('skills', 'Skill', 'drifted', { diff: ['Skill qa 文件缺失'] }),
     equipment('git', 'Git 仓库', 'ready'),
   ] },
+  maintenance: history.find(row => row.state === 'RUNNING') ?? null,
   repository: { authentication_verified: true, url: worker.repository_url, branch: 'main', commit: 'abcdef0123456789', dirty: true },
 })
 const operation = (id, action, state, fields = {}) => ({
@@ -62,6 +63,7 @@ const history = [
 ]
 let lastWorkerQuery, lastMaintenanceQuery, deployed = false, streams = 0
 let workerReads = 0, healthReads = 0, failHealth = false
+let historyBefore
 let holdHealth
 await page.route('**/api/**', async route => {
   const req = route.request(), url = new URL(req.url()), pathname = url.pathname, q = url.searchParams
@@ -103,16 +105,27 @@ await page.route('**/api/**', async route => {
   } else if (pathname.startsWith('/api/maintenance/')) {
     const [, , , id, action] = pathname.split('/')
     const row = history.find(item => item.id === id)
-    if (action === 'events') {
+    if (action === 'events' && !pathname.endsWith('/page')) {
       if (id === 'op-deploy') streams++
-      const frames = [
-        { id: 1, name: '部署配置', message: '准备运行环境', attempt: 1, type: 'started', state: 'RUNNING' },
-        { id: 2, name: '就绪验收', message: '当前连接代次验证通过', attempt: 1, type: 'finished', state: 'SUCCEEDED' },
-      ]
+      const frames = Array.from({ length: 1050 }, (_, n) => ({
+        id: n + 1, name: '部署日志', message: '日志 ' + (n + 1), attempt: 1, type: 'step', state: 'RUNNING',
+      }))
+      frames.at(-1).message = '当前连接代次验证通过'
       if (id === 'op-deploy') Object.assign(row, { state: 'SUCCEEDED', stage: 'completed' })
-      const body = (id === 'op-deploy' ? frames : []).map(frame =>
+      const after = Number(q.get('after_id'))
+      const selected = id !== 'op-deploy' ? [] : after === 0 ? frames : [
+        frames.at(-1), { ...frames.at(-1), id: 1051, message: '续订追加日志' },
+      ]
+      const body = selected.map(frame =>
         'id: ' + frame.id + '\nevent: message\ndata: ' + JSON.stringify({ ...frame, created_at: timestamp }) + '\n\n').join('')
-      return route.fulfill({ contentType: 'text/event-stream', body: body + 'event: end\ndata: {}\n\n' })
+      return route.fulfill({ contentType: 'text/event-stream', body: body + (id === 'op-deploy' && after === 0 ? '' : 'event: end\ndata: {}\n\n') })
+    }
+    if (action === 'events' && pathname.endsWith('/page')) {
+      historyBefore = Number(q.get('before_id'))
+      const items = Array.from({ length: 200 }, (_, n) => ({
+        id: historyBefore - 200 + n, message: '历史日志 ' + n, attempt: 1, type: 'step', created_at: timestamp,
+      }))
+      return route.fulfill({ json: { items, next_cursor: items[0].id } })
     }
     if (action === 'confirm-stopped') row.stage = 'stopped_confirmed'
     json = row
@@ -146,6 +159,12 @@ try {
   await list.getByRole('button', { name: '查看 构建 Worker 01', exact: true }).waitFor()
   assert.equal(lastWorkerQuery.status, 'OFFLINE')
   assert.equal(lastWorkerQuery.offset, '0')
+  await page.waitForFunction(() => !document.querySelector('[data-testid=worker-list] .el-loading-mask'))
+  worker.online = true
+  await page.clock.fastForward(8_001)
+  await list.getByRole('row').filter({ hasText: worker.name }).getByText('在线', { exact: true }).waitFor()
+  assert.equal(lastWorkerQuery.q, '构建')
+  worker.online = false
   await list.getByRole('link', { name: '研发占用任务' }).click()
   await page.getByTestId('task-detail').getByRole('heading', { name: '研发占用任务' }).waitFor()
   await page.goBack()
@@ -215,6 +234,11 @@ try {
   assert.equal(await detail.getByRole('button', { name: '删除', exact: true }).isEnabled(), true)
 
   const maintenance = detail.getByTestId('worker-maintenance')
+  const externalOperation = operation('op-external', 'deploy', 'RUNNING', { error_message: '外部用户发起' })
+  history.unshift(externalOperation)
+  await page.clock.fastForward(10_001)
+  await maintenance.getByText('外部用户发起', { exact: true }).waitFor()
+  externalOperation.state = 'SUCCEEDED'
   await maintenance.locator('.el-select').filter({ has: page.getByRole('combobox', { name: '运维操作类型' }) }).click()
   await page.getByRole('option', { name: '检查', exact: false }).first().click()
   await maintenance.locator('.el-pager li').filter({ hasText: /^2$/ }).click()
@@ -231,9 +255,20 @@ try {
   const operationDetail = page.getByTestId('worker-maintenance-detail')
   const log = operationDetail.getByRole('log')
   await log.getByText('当前连接代次验证通过').waitFor()
-  assert.deepEqual(await log.locator('.log-message').allTextContents(), ['准备运行环境', '当前连接代次验证通过'])
+  assert.equal(await log.locator('.log-message').count(), 500)
+  assert.equal(await log.locator('.log-message').first().textContent(), '日志 551')
+  await operationDetail.getByRole('button', { name: '更早日志' }).click()
+  await log.getByText('历史日志 0', { exact: true }).waitFor()
+  assert.equal(historyBefore, 551)
+  assert.equal(await log.locator('.log-message').count(), 200)
+  await operationDetail.getByRole('button', { name: '返回最新' }).click()
+  await log.getByText('当前连接代次验证通过').waitFor()
   assert.equal(deployed, true)
-  assert.equal(streams, 1)
+  await operationDetail.getByRole('button', { name: '重试读取' }).click()
+  await log.getByText('续订追加日志', { exact: true }).waitFor()
+  assert.equal(await log.getByText('当前连接代次验证通过', { exact: true }).count(), 1)
+  assert.equal(await log.locator('.log-message').count(), 500)
+  assert.equal(streams, 2)
   const readsAfterLeave = healthReads
   await page.clock.fastForward(25_000)
   assert.equal(healthReads, readsAfterLeave)

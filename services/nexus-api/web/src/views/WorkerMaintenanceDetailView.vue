@@ -27,11 +27,15 @@
     <section class="astra-table-panel log-panel" v-loading="loading">
       <header class="log-heading">
         <h3>执行日志</h3>
-        <span v-if="streaming && operation && maintenanceActive(operation.state)">实时更新</span>
+        <div>
+          <span v-if="!history && streaming && operation && maintenanceActive(operation.state)">实时更新</span>
+          <el-button :loading="loadingHistory" :disabled="historyCursor === null || !visibleEvents.length" @click="older">更早日志</el-button>
+          <el-button v-if="history" @click="latest">返回最新</el-button>
+        </div>
       </header>
       <div ref="log" class="log-body" role="log" aria-label="运维执行日志">
-        <el-empty v-if="!loading && !events.length" :image-size="72" description="暂无执行日志" />
-        <div v-for="event in events" :key="event.id" class="log-line">
+        <el-empty v-if="!loading && !visibleEvents.length" :image-size="72" description="暂无执行日志" />
+        <div v-for="event in visibleEvents" :key="event.id" class="log-line">
           <time>{{ formatTime(event.created_at) }}</time>
           <SemanticTag :tone="maintenanceSemanticTone(event.state, event.type)" :label="logState(event)" />
           <span class="log-name">{{ event.name || event.stage || '—' }}</span>
@@ -49,7 +53,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
 import SemanticTag from '@/components/astra/SemanticTag.vue'
 import { api } from '@/api/client'
-import { cancelMaintenance, confirmMaintenanceStopped, getMaintenanceOperation, redactMaintenanceText, retryMaintenance, subscribeMaintenanceEvents, type MaintenanceEvent, type MaintenanceOperation, type MaintenanceState } from '@/api/maintenance'
+import { cancelMaintenance, confirmMaintenanceStopped, getMaintenanceOperation, listOlderMaintenanceEvents, redactMaintenanceText, retryMaintenance, subscribeMaintenanceEvents, type MaintenanceEvent, type MaintenanceOperation, type MaintenanceState } from '@/api/maintenance'
 import type { Worker } from '@/api/types'
 import { maintenanceActions, maintenanceActive, maintenanceStates } from '@/features/workers/maintenance'
 import { maintenanceSemanticTone } from '@/features/workers/semantic'
@@ -62,6 +66,13 @@ const operationId = computed(() => String(route.params.operationId))
 const worker = ref<Worker>()
 const operation = ref<MaintenanceOperation>()
 const events = ref<MaintenanceEvent[]>([])
+const logLimit = 500
+const history = ref<MaintenanceEvent[]>()
+const historyCursor = ref<number | null>()
+const visibleEvents = computed(() => history.value ?? events.value)
+const loadingHistory = ref(false)
+let cursor: number | undefined
+let historyRequest: AbortController | undefined
 const log = ref<HTMLElement>()
 const loading = ref(false)
 const streaming = ref(false)
@@ -76,6 +87,8 @@ function logState(event: MaintenanceEvent) {
   return maintenanceStates[state as MaintenanceState] || '记录'
 }
 function append(event: MaintenanceEvent) {
+  if (event.id <= (cursor ?? 0)) return
+  cursor = event.id
   if (operation.value?.attempt === event.attempt) {
     if (event.type === 'started' && operation.value.state === 'QUEUED') {
       operation.value.state = 'RUNNING'
@@ -84,9 +97,41 @@ function append(event: MaintenanceEvent) {
     if (event.type === 'cancel_requested') operation.value.cancel_requested = true
   }
   const viewport = log.value
-  const follow = !viewport || viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 32
+  const follow = !history.value && (!viewport || viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 32)
   events.value.push(event)
+  if (events.value.length > logLimit) events.value.shift()
   if (follow) void nextTick(() => { if (log.value) log.value.scrollTop = log.value.scrollHeight })
+}
+async function older() {
+  const before = historyCursor.value ?? visibleEvents.value[0]?.id
+  if (before === undefined || historyCursor.value === null || historyRequest) return
+  const controller = new AbortController()
+  historyRequest = controller
+  loadingHistory.value = true
+  try {
+    const result = await listOlderMaintenanceEvents(operationId.value, before, controller.signal)
+    if (controller.signal.aborted) return
+    if (result.items.length) {
+      history.value = result.items
+      if (log.value) log.value.scrollTop = 0
+    }
+    historyCursor.value = result.next_cursor
+  } catch (reason) {
+    if (!controller.signal.aborted) ElMessage.error(String(reason))
+  } finally {
+    if (historyRequest === controller) {
+      historyRequest = undefined
+      loadingHistory.value = false
+    }
+  }
+}
+function latest() {
+  historyRequest?.abort()
+  historyRequest = undefined
+  loadingHistory.value = false
+  history.value = undefined
+  historyCursor.value = undefined
+  void nextTick(() => { if (log.value) log.value.scrollTop = log.value.scrollHeight })
 }
 async function observe() {
   stream?.abort()
@@ -106,11 +151,16 @@ async function observe() {
     if (row.agent_worker_id !== parentId) throw new Error('此操作不属于当前 Worker')
     operation.value = row
     worker.value = selectedWorker
+    if (cursor === undefined) {
+      events.value = row.events ?? []
+      cursor = events.value.at(-1)?.id ?? 0
+      if (!history.value) void nextTick(() => { if (log.value) log.value.scrollTop = log.value.scrollHeight })
+    }
     loading.value = false
     streaming.value = true
     await subscribeMaintenanceEvents(id, {
       signal: controller.signal,
-      afterId: events.value.at(-1)?.id ?? 0,
+      afterId: cursor,
       onEvent: append,
     })
     const final = await getMaintenanceOperation(id, controller.signal)
@@ -149,9 +199,14 @@ watch([workerId, operationId], () => {
   operation.value = undefined
   worker.value = undefined
   events.value = []
+  cursor = undefined
+  latest()
   void observe()
 }, { immediate: true })
-onUnmounted(() => stream?.abort())
+onUnmounted(() => {
+  stream?.abort()
+  historyRequest?.abort()
+})
 </script>
 
 <style scoped>

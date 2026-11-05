@@ -469,7 +469,7 @@ async def test_worker_sse_reconnects_after_native_stream_closes(monkeypatch):
     incoming.expires_at = int(manager.clock()) + 30
     manager._start_events(Transport(), incoming, 1)
     await asyncio.wait_for(manager.event_tasks[directory], 2)
-    assert [item["seq"] for item in received] == [1, 2, 3]
+    assert [item["seq"] for item in received] == [1, 2, 3, 4, 5]
     assert [item["event"]["type"] for item in received] == [
-        "server.connected", "astra.event_gap", "session.idle",
+        "astra.stream_ready", "server.connected", "astra.event_gap", "astra.stream_ready", "session.idle",
     ]

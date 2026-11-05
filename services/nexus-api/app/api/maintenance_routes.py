@@ -20,6 +20,7 @@ from app.runtime.maintenance import (
     event_payload,
     event_stream,
     events_after,
+    events_before,
     list_operations,
     operation_detail,
     operation_payload,
@@ -76,17 +77,19 @@ async def maintenance_detail(operation_id: str, session: AsyncSession = Depends(
 async def maintenance_event_page(
     operation_id: str,
     after_id: int = Query(default=0, ge=0),
+    before_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=200, ge=1, le=500),
     session: AsyncSession = Depends(get_session),
 ):
     if await session.get(WorkerMaintenanceOperation, operation_id) is None:
         raise HTTPException(404, "维护操作不存在")
-    events = await events_after(session, operation_id, after_id, limit=limit)
-    items = [event_payload(item) for item in events]
-    return {
-        "items": items,
-        "next_cursor": items[-1]["id"] if len(items) == limit else None,
-    }
+    if before_id is None:
+        events = await events_after(session, operation_id, after_id, limit=limit)
+        cursor = events[-1].id if len(events) == limit else None
+    else:
+        events = await events_before(session, operation_id, before_id, limit=limit)
+        cursor = events[0].id if len(events) == limit else None
+    return {"items": [event_payload(item) for item in events], "next_cursor": cursor}
 
 
 @router.get("/api/maintenance/{operation_id}/events")

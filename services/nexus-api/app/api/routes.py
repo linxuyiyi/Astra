@@ -24,6 +24,7 @@ from app.models import (
     TaskCategory,
     TaskWakeOutbox,
 )
+from app.runtime.worker_connection import worker_connections
 from app.schemas import (
     EventRead,
     TaskCategoryCreate,
@@ -200,8 +201,14 @@ async def create_task(payload: TaskCreate, session=Depends(get_session)):
 @router.get("/tasks/{task_id}", response_model=TaskRead)
 async def get_task(task_id: str, session=Depends(get_session)):
     task = await require_task(task_id, session)
-    worker_name = await session.scalar(select(AgentWorker.name).where(AgentWorker.id == task.agent_worker_id))
-    return task_read(task, worker_name)
+    worker = await session.get(AgentWorker, task.agent_worker_id) if task.agent_worker_id else None
+    if worker is None:
+        return task_read(task, None)
+    online = await worker_connections([worker])
+    return task_read(task, worker.name).model_copy(update={
+        "worker_online": online[worker.id],
+        "worker_last_heartbeat_at": worker.last_heartbeat_at,
+    })
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskRead)
@@ -274,13 +281,22 @@ async def delete_task(task_id: str, session=Depends(get_session)):
 
 
 @router.get("/tasks/{task_id}/events", response_model=list[EventRead])
-async def task_events(task_id: str, session: AsyncSession = Depends(get_session)):
+async def task_events(
+    task_id: str,
+    limit: int = Query(100, ge=1, le=200),
+    after_id: int | None = Query(None, ge=0),
+    before_id: int | None = Query(None, ge=1),
+    session: AsyncSession = Depends(get_session),
+):
     await require_task(task_id, session)
-    return (
-        (await session.execute(select(Event).where(Event.task_id == task_id).order_by(Event.created_at)))
-        .scalars()
-        .all()
-    )
+    query = select(Event).where(Event.task_id == task_id)
+    if after_id is not None:
+        query = query.where(Event.id > after_id).order_by(Event.id)
+    else:
+        if before_id is not None:
+            query = query.where(Event.id < before_id)
+        query = query.order_by(Event.id.desc())
+    return (await session.scalars(query.limit(limit))).all()
 
 
 @router.get("/events", response_model=list[EventRead])

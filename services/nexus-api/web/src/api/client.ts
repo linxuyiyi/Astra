@@ -130,7 +130,8 @@ export const api = {
     return result
   },
   events: (limit = 50) => request<AstraEvent[]>(`/api/events?limit=${limit}`),
-  taskEvents: (id: string, signal?: AbortSignal) => request<AstraEvent[]>(`/api/tasks/${id}/events`, { signal }),
+  taskEvents: (id: string, query: URLSearchParams, signal?: AbortSignal) =>
+    request<AstraEvent[]>(`/api/tasks/${id}/events?${query}`, { signal }),
   taskAction: (
     id: string,
     action: string,

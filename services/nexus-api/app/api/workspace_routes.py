@@ -692,7 +692,9 @@ async def reconnect_task(task_id: str, session=Depends(get_session)):
 async def task_workspace(task_id: str, session=Depends(get_session)):
     task = await require_task(task_id, session)
     worker = await resolve_environment(session, task) if task.agent_worker_id else None
-    worker_online = bool(worker and (worker.mode == ExecutionMode.LOCAL or worker.status != "OFFLINE"))
+    from app.runtime.worker_connection import worker_connections
+
+    worker_online = (await worker_connections([worker]))[worker.id] if worker else False
     version, ui, error = "unknown", None, None
     if task.current_session_id:
         if not worker_online:

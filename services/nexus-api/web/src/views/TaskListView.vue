@@ -2,12 +2,12 @@
   <section class="astra-page" data-testid="task-list">
     <AstraPageHeader title="任务大厅" description="查看任务进展、处理执行并确认验收">
       <template #actions>
-        <el-button :icon="RefreshCw" :loading="loading" @click="load">刷新</el-button>
+        <el-button :icon="RefreshCw" :loading="loading" @click="load()">刷新</el-button>
         <el-button type="primary" :icon="Plus" @click="creating = true">创建任务</el-button>
       </template>
     </AstraPageHeader>
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false">
-      <el-button @click="load">重试</el-button>
+      <el-button @click="load()">重试</el-button>
     </el-alert>
     <form class="admin-page__toolbar" aria-label="任务筛选" @submit.prevent="applyFilters">
       <el-select v-model="filter" class="admin-page__select" aria-label="任务状态" clearable placeholder="状态：全部" @change="applyFilters">
@@ -41,6 +41,7 @@
       </el-table>
     </div>
     <div class="admin-page__footer">
+      <span v-if="lastUpdated" class="last-updated">上次更新 {{ lastUpdated }}</span>
       <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50]" :total="total" layout="total, sizes, prev, pager, next" aria-label="任务分页" />
     </div>
     <TaskCreateDrawer :open="creating || !!editing" :task="editing" @close="closeDrawer" @created="created" @saved="saved" />
@@ -58,6 +59,7 @@ import { semanticTone } from '@/features/workers/semantic'
 import RowMenu from '@/components/astra/RowMenu.vue'
 import TaskCreateDrawer from '@/components/task/TaskCreateDrawer.vue'
 import { api } from '@/api/client'
+import { useVisibleRefresh } from '@/composables/useVisibleRefresh'
 import type { Task } from '@/api/types'
 import { runTaskAction, taskActions } from '@/features/tasks/actions'
 import { statusLabel, statusTone, formatTime } from '@/utils/format'
@@ -68,6 +70,7 @@ const tasks = ref<Task[]>([])
 const loading = ref(false)
 const acting = ref(false)
 const error = ref('')
+const lastUpdated = ref('')
 const filter = ref(String(route.query.status || ''))
 const search = ref('')
 const keyword = ref('')
@@ -79,12 +82,12 @@ const editing = ref<Task>()
 const statuses = ['PENDING', 'RUNNING', 'WAITING', 'SUCCEEDED', 'CANCELED']
 let request: AbortController | undefined
 
-async function load() {
+async function load(background = false) {
+  if (background && request) return
   request?.abort()
   const controller = new AbortController()
   request = controller
-  loading.value = true
-  error.value = ''
+  loading.value = !background
   const query = new URLSearchParams({
     limit: String(pageSize.value),
     offset: String((page.value - 1) * pageSize.value),
@@ -96,10 +99,15 @@ async function load() {
     if (request !== controller) return
     tasks.value = result.items
     total.value = result.total
+    lastUpdated.value = new Date().toLocaleTimeString('zh-CN')
+    error.value = ''
   } catch (reason) {
-    if (!controller.signal.aborted) error.value = String(reason)
+    if (!controller.signal.aborted) error.value = `刷新失败：${String(reason)}`
   } finally {
-    if (request === controller) loading.value = false
+    if (request === controller) {
+      request = undefined
+      loading.value = false
+    }
   }
 }
 
@@ -152,7 +160,14 @@ watch(() => route.query.status, (value) => {
   filter.value = String(value || '')
   applyFilters()
 })
-watch([page, pageSize], load)
-onMounted(load)
+watch([page, pageSize], () => load())
+onMounted(() => load())
+useVisibleRefresh(() => {
+  if (!(creating.value || editing.value || acting.value)) void load(true)
+}, 8000)
 onUnmounted(() => request?.abort())
 </script>
+
+<style scoped>
+.last-updated { margin-right: auto; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
+</style>

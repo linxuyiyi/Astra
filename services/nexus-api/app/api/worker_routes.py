@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.runtime.occupancy import OCCUPYING_STATUSES, occupying_exists, sync_worker_occupancy
 from app.runtime.repository import cipher
+from app.runtime.worker_connection import worker_connections
 from app.schemas import WorkerCreate, WorkerOccupiedTask, WorkerRead, WorkerWrite
 
 router = APIRouter(prefix="/api/workers")
@@ -39,6 +40,10 @@ async def guard_worker(session, worker):
     )
     if occupied or maintenance:
         raise HTTPException(409, "Worker 有未释放任务或维护操作，不能修改执行配置")
+    from app.runtime.experience_review.coordinator import source_worker_in_use
+
+    if await source_worker_in_use(session, worker.id):
+        raise HTTPException(409, "Worker 仍是未完成经验复盘的来源，不能删除或修改执行配置")
 
 
 async def worker_reads(session, workers):
@@ -55,8 +60,12 @@ async def worker_reads(session, workers):
     occupied = {}
     for worker_id, task_id, title in tasks:
         occupied.setdefault(worker_id, []).append(WorkerOccupiedTask(id=task_id, title=title))
+    online = await worker_connections(workers)
     return [
-        WorkerRead.model_validate(worker).model_copy(update={"occupied_tasks": occupied.get(worker.id, [])})
+        WorkerRead.model_validate(worker).model_copy(update={
+            "occupied_tasks": occupied.get(worker.id, []),
+            "online": online[worker.id],
+        })
         for worker in workers
     ]
 
@@ -110,7 +119,7 @@ async def create_worker(payload: WorkerCreate, session=Depends(get_session)):
     except IntegrityError as exc:
         await session.rollback()
         raise HTTPException(409, "Worker ID 已存在") from exc
-    return worker
+    return (await worker_reads(session, [worker]))[0]
 
 
 @router.get("/{worker_id}", response_model=WorkerRead)

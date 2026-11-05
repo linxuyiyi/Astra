@@ -3,6 +3,7 @@
     <AstraPageHeader :title="worker?.name || 'Worker 详情'" :description="worker?.description">
       <template v-if="worker">
         <SemanticTag :tone="semanticTone(statusTone(worker.status))" :label="statusLabel(worker.status)" />
+        <span>连接 {{ worker.online === null ? '未知' : worker.online ? '在线' : '离线' }}</span>
         <span>任务调度 {{ worker.enabled ? '已启用' : '已停用' }}</span>
         <span v-if="lastUpdated">更新于 {{ lastUpdated }}</span>
       </template>
@@ -62,7 +63,7 @@ const refreshError = ref('')
 const actionError = ref('')
 const lastUpdated = ref('')
 const executionLocked = computed(() => Boolean(worker.value?.occupied_tasks.length ||
-  health.value?.blocking.some(item => item.code === 'maintenance_active' || item.code === 'occupied_task')))
+  health.value?.blocking.some(item => ['maintenance_active', 'occupied_task', 'review_active'].includes(item.code))))
 let request: AbortController | undefined
 let timer: ReturnType<typeof setInterval> | undefined
 
@@ -125,7 +126,7 @@ async function remove() {
   acting.value = true
   actionError.value = ''
   try {
-    await ElMessageBox.confirm('删除此 Worker 配置？有未释放任务或维护操作时不能删除。', '删除 Worker', { type: 'warning' })
+    await ElMessageBox.confirm('删除此 Worker 配置？有未释放任务、维护操作或未完成复盘时不能删除。', '删除 Worker', { type: 'warning' })
     if (id.value !== workerId) return
     await api.deleteWorker(workerId)
     if (id.value === workerId) await router.push({ name: 'settings-workers' })

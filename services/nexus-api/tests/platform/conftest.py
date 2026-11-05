@@ -62,6 +62,16 @@ async def clear_worker_maintenance(prepare_process_schema):
 
 
 @pytest.fixture(autouse=True)
+async def isolate_worker_gateway(monkeypatch):
+    from app.worker_gateway import service
+
+    monkeypatch.setattr(service, "_gateway", None)
+    yield
+    if service._gateway is not None:
+        await service._gateway.aclose()
+
+
+@pytest.fixture(autouse=True)
 def keep_redis_url_stable():
     """全量跑时，前面的用例清掉缓存或改掉环境变量后，把 Redis URL 还回来。"""
 

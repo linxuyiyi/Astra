@@ -130,6 +130,7 @@ const blocking = computed(() =>
 )
 let request: AbortController | undefined
 let timer: ReturnType<typeof setInterval> | undefined
+let refreshTick = 0
 
 async function load(background = false) {
   if (background && (request || document.hidden)) return
@@ -189,10 +190,17 @@ async function submit(action: MaintenanceAction) {
   }
 }
 watch([page, pageSize], () => load())
+watch(() => props.health?.maintenance, (current, previous) => {
+  if (current && (current.operation_id !== previous?.operation_id || current.state !== previous?.state)) {
+    void load(true)
+  }
+})
 onMounted(() => {
   void load()
   timer = setInterval(() => {
-    if (operations.value.some(operation => maintenanceActive(operation.state))) void load(true)
+    if (!document.hidden && (++refreshTick % 3 === 0 || operations.value.some(operation => maintenanceActive(operation.state)))) {
+      void load(true)
+    }
   }, 3000)
 })
 onUnmounted(() => {

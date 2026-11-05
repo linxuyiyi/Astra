@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -15,16 +16,33 @@ def new_task_id():
     return f"T-{datetime.now(UTC):%Y%m%d}-{uuid4().hex[:8].upper()}"
 
 
+def acceptance_criteria(items, *, creating=False):
+    reserved = {item.get("id") for item in items}
+    seen = set()
+    result = []
+    sequence = 1
+    for item in items:
+        key = item.get("id")
+        if not key or key in seen:
+            if creating:
+                while f"AC-{sequence:02d}" in reserved or f"AC-{sequence:02d}" in seen:
+                    sequence += 1
+                key = f"AC-{sequence:02d}"
+                sequence += 1
+            else:
+                key = f"AC-{uuid4().hex}"
+        seen.add(key)
+        result.append({"id": key, "content": item["content"]})
+    return result
+
+
 class TaskService:
     def __init__(self, session):
         self.session = session
 
     async def create(self, payload, *, commit=True):
         data = payload.model_dump(mode="json")
-        data["acceptance_criteria"] = [
-            {"id": item["id"] or f"AC-{i:02d}", "content": item["content"]}
-            for i, item in enumerate(data["acceptance_criteria"], 1)
-        ]
+        data["acceptance_criteria"] = acceptance_criteria(data["acceptance_criteria"], creating=True)
         task = Task(id=new_task_id(), **data, status="PENDING", current_progress="等待领取")
         self.session.add(task)
         await self.add_event(task, "TASK_CREATED", "work", "任务已创建", commit=False)
@@ -60,6 +78,8 @@ class TaskService:
         data = payload.model_dump(exclude_unset=True, mode="json")
         if "agent_worker_id" in data and (task.status != "PENDING" or task.claimed_at):
             raise ValueError("只有待领取任务可以调整 Worker")
+        if "acceptance_criteria" in data:
+            data["acceptance_criteria"] = acceptance_criteria(data["acceptance_criteria"] or [])
         for key, value in data.items():
             setattr(task, key, value)
         await self.add_event(task, "TASK_UPDATED", "work", "任务信息已更新", {"fields": list(data)})
@@ -125,9 +145,13 @@ class TaskService:
 
 async def dashboard_metrics(session):
     tasks = dict((await session.execute(select(Task.status, func.count()).group_by(Task.status))).all())
-    workers = dict(
-        (await session.execute(select(AgentWorker.status, func.count()).group_by(AgentWorker.status))).all()
-    )
+    from app.runtime.worker_connection import worker_connections
+
+    rows = (await session.execute(
+        select(AgentWorker.id, AgentWorker.status, AgentWorker.mode, AgentWorker.epoch)
+    )).all()
+    workers = Counter(worker.status for worker in rows)
+    online = await worker_connections(rows)
     return {
         "task_status_distribution": tasks,
         "employee_status_distribution": workers,
@@ -135,5 +159,5 @@ async def dashboard_metrics(session):
         "pending_tasks": tasks.get("PENDING", 0),
         "waiting_tasks": tasks.get("WAITING", 0),
         "idle_employees": workers.get("IDLE", 0),
-        "online_employees": workers.get("IDLE", 0) + workers.get("WORKING", 0),
+        "online_employees": sum(online.values()),
     }

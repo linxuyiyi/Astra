@@ -144,8 +144,8 @@ const fileList = ref<UploadUserFile[]>([])
 
 const priorities: TaskPriority[] = ['VERY_HIGH', 'HIGH', 'MEDIUM', 'LOW']
 function criteriaFrom(task?: Task | null) {
-  const source = task?.acceptance_criteria.length ? task.acceptance_criteria : [{ id: safeUUID(), content: '' }]
-  return source.map((item) => ({ key: item.id || safeUUID(), content: item.content }))
+  const source = task?.acceptance_criteria.length ? task.acceptance_criteria : [{ id: undefined, content: '' }]
+  return source.map(({ id, content }) => ({ key: safeUUID(), id, content }))
 }
 function initialForm(task?: Task | null) {
   return {
@@ -227,7 +227,7 @@ async function requestClose() {
 onBeforeRouteLeave(() => requestClose())
 onBeforeRouteUpdate((to, from) => to.params.id === from.params.id || requestClose())
 
-function addCriterion() { form.criteria.push({ key: safeUUID(), content: '' }) }
+function addCriterion() { form.criteria.push({ key: safeUUID(), id: undefined, content: '' }) }
 function removeCriterion(index: number) { form.criteria.splice(index, 1) }
 function moveCriterion(index: number, direction: number) {
   const target = index + direction
@@ -260,7 +260,7 @@ async function submit() {
   createError.value = ''
   try {
     if (!await formRef.value?.validate().catch(() => false) || version !== formVersion.value) return
-    const acceptance_criteria = form.criteria.filter((item) => item.content.trim()).map((item) => ({ content: item.content }))
+    const acceptance_criteria = form.criteria.filter((item) => item.content.trim()).map((item) => ({ id: item.id, content: item.content }))
     if (editingTask) {
       const body: Record<string, unknown> = {
         title: form.title,

@@ -9,6 +9,9 @@
         <dl class="task-context" aria-label="任务执行上下文">
           <div><dt>Task ID</dt><dd><IdDisplay :value="task.id" /></dd></div>
           <div><dt>AgentWorker</dt><dd>{{ task.worker_name || (task.agent_worker_id ? '不可用' : '未分配') }}</dd></div>
+          <div v-if="task.worker_online === true">
+            <dt>连接</dt><dd>在线<span v-if="task.worker_last_heartbeat_at"> · 最近心跳 {{ formatTime(task.worker_last_heartbeat_at) }}</span></dd>
+          </div>
           <div><dt>Session ID</dt><dd><IdDisplay v-if="task.current_session_id" :value="task.current_session_id" /><span v-else>—</span></dd></div>
           <div><dt>Git 仓库</dt><dd :title="repo?.name">{{ repo?.name || (repoError ? '暂不可读' : '—') }}</dd></div>
           <div><dt>当前分支</dt><dd :title="repo?.branch">{{ repo?.branch || (repo?.commit ? '分离 HEAD' : '—') }}</dd></div>
@@ -21,6 +24,9 @@
           <RowMenu :aria-label="task.title" :items="secondaryActions" :disabled="acting" @command="act" />
         </template>
       </AstraPageHeader>
+      <p v-if="task.worker_online === false" class="task-connection" role="status">
+        Worker 离线<span v-if="task.worker_last_heartbeat_at"> · 最近心跳 {{ formatTime(task.worker_last_heartbeat_at) }}</span>
+      </p>
       <el-alert v-if="task.pending_message_id" title="提交尚未确认，连接恢复后自动重发，可能重复执行。" type="warning" :closable="false" />
       <el-tabs v-model="tab" class="task-tabs">
         <el-tab-pane label="原生工作区" name="workspace" class="task-pane">
@@ -42,7 +48,11 @@
           </template>
         </el-tab-pane>
         <el-tab-pane label="事件" name="events" class="task-pane task-pane--events">
-          <el-alert v-if="contentError" :title="contentError" type="error" :closable="false"><el-button @click="loadTab">重试</el-button></el-alert>
+          <el-alert v-if="contentError" :title="contentError" type="error" :closable="false"><el-button @click="loadTab()">重试</el-button></el-alert>
+          <div class="event-pages">
+            <el-button :disabled="!hasOlderEvents" @click="loadTab('older')">更早事件</el-button>
+            <el-button v-if="browsingEvents" @click="loadTab('latest')">返回最新</el-button>
+          </div>
           <el-table :data="events" height="100%" row-key="id">
             <el-table-column label="时间" width="180">
               <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
@@ -52,7 +62,7 @@
           </el-table>
         </el-tab-pane>
         <el-tab-pane label="经验复盘" name="review" class="task-pane task-pane--scroll">
-          <el-alert v-if="contentError" :title="contentError" type="error" :closable="false"><el-button @click="loadTab">重试</el-button></el-alert>
+          <el-alert v-if="contentError" :title="contentError" type="error" :closable="false"><el-button @click="loadTab()">重试</el-button></el-alert>
           <el-empty v-else-if="!reviews.length" description="确认完成后按平台开关触发复盘" />
           <el-card v-for="job in reviews" :key="job.id" shadow="never">
             <p>{{ job.status }} · {{ job.phase }}</p>
@@ -88,6 +98,10 @@ const id = computed(() => String(route.params.id))
 const task = ref<Task>()
 const binding = ref<TaskWorkspaceBinding>()
 const events = ref<AstraEvent[]>([])
+const eventLimit = 100
+const hasOlderEvents = ref(false)
+const browsingEvents = ref(false)
+let eventCursor: number | undefined
 const reviews = ref<ExperienceReviewJob[]>([])
 const loading = ref(true)
 const checkingWorkspace = ref(false)
@@ -115,6 +129,7 @@ const frameUrl = computed(() => {
 })
 const workspaceMessage = computed(() => {
   if (task.value?.waiting_reason === 'session_missing') return '原生 Session 已不存在，请重新开始'
+  if (task.value?.worker_online === false) return 'Worker 离线，等待连接恢复'
   if (!task.value?.current_session_id) return '任务尚未创建原生会话'
   return workspaceError.value || binding.value?.runtime.workspace_ui_error || '工作区暂不可用，请重试'
 })
@@ -158,15 +173,40 @@ async function loadRepo() {
     if (repoRequest === controller) repoRequest = undefined
   }
 }
-async function loadTab() {
+async function loadTab(mode: 'auto' | 'older' | 'latest' = 'auto') {
   const name = tab.value
   if (tabRequest || (name !== 'events' && name !== 'review')) return
+  if (name === 'events' && mode === 'auto' && browsingEvents.value) return
   const controller = new AbortController()
   tabRequest = controller
   try {
     if (name === 'events') {
-      const result = await api.taskEvents(id.value, controller.signal)
-      if (!controller.signal.aborted) events.value = result
+      const query = new URLSearchParams({ limit: String(eventLimit) })
+      const before = mode === 'older' ? events.value.at(-1)?.id : undefined
+      const after = mode === 'auto' ? eventCursor : undefined
+      if (before !== undefined) query.set('before_id', String(before))
+      if (after !== undefined) query.set('after_id', String(after))
+      const result = await api.taskEvents(id.value, query, controller.signal)
+      if (controller.signal.aborted) return
+      if (before !== undefined) {
+        if (result.length) {
+          events.value = result
+          browsingEvents.value = true
+        }
+        hasOlderEvents.value = result.length === eventLimit
+      } else if (after !== undefined) {
+        if (result.length) {
+          eventCursor = result.at(-1)!.id
+          const merged = [...result.reverse(), ...events.value]
+          hasOlderEvents.value ||= merged.length > eventLimit
+          events.value = merged.slice(0, eventLimit)
+        }
+      } else {
+        events.value = result
+        eventCursor = result[0]?.id ?? 0
+        browsingEvents.value = false
+        hasOlderEvents.value = result.length === eventLimit
+      }
     } else {
       const result = await api.experienceReviewJobs(id.value, controller.signal)
       if (!controller.signal.aborted) reviews.value = result
@@ -199,8 +239,8 @@ async function load() {
       repo.value = undefined
       repoError.value = false
     }
-    if (changed || next.status !== previous?.status || next.current_progress !== previous?.current_progress) {
-      if (!frameUrl.value) void loadWorkspace()
+    if (changed || next.status !== previous?.status || next.current_progress !== previous?.current_progress || next.worker_online !== previous?.worker_online) {
+      if (!frameUrl.value && next.worker_online !== false) void loadWorkspace()
       void loadRepo()
     }
   } catch (reason) {
@@ -272,6 +312,8 @@ watch(id, () => {
   checkingWorkspace.value = repoError.value = editing.value = false
   error.value = contentError.value = workspaceError.value = ''
   events.value = []
+  eventCursor = undefined
+  browsingEvents.value = hasOlderEvents.value = false
   reviews.value = []
   loading.value = true
   void load()
@@ -311,6 +353,8 @@ onUnmounted(() => {
 .task-tabs :deep(.el-tabs__content) { flex: 1; min-height: 0; overflow: hidden; }
 .task-pane { height: 100%; min-height: 0; }
 .task-pane--events { display: flex; flex-direction: column; }
+.event-pages { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.task-connection { margin: 0; color: var(--astra-warning); }
 .task-context { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; min-width: 0; }
 .task-context div { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .task-context dt { color: var(--astra-text-muted); white-space: nowrap; }

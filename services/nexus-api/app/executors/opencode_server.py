@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -132,7 +132,9 @@ class OpenCodeServerClient:
             )
         return {"healthy": True, "version": version}
 
-    async def events(self, directory: WorkspacePath) -> AsyncIterator[dict[str, Any]]:
+    async def events(
+        self, directory: WorkspacePath, *, on_subscribed: Callable[[], None] | None = None
+    ) -> AsyncIterator[dict[str, Any]]:
         async with httpx.AsyncClient(auth=self.auth, timeout=self._timeout(stream=True)) as client:
             async with client.stream(
                 "GET",
@@ -140,6 +142,8 @@ class OpenCodeServerClient:
                 params={"directory": str(directory)},
             ) as response:
                 response.raise_for_status()
+                if on_subscribed:
+                    on_subscribed()
                 async for line in response.aiter_lines():
                     if not line.startswith("data: "):
                         continue

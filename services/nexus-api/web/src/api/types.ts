@@ -58,6 +58,7 @@ export interface Worker {
   last_heartbeat_at: string | null
   agent_version: string | null
   occupied_tasks: WorkerOccupiedTask[]
+  online: boolean | null
   created_at: string
   updated_at: string
 }
@@ -82,6 +83,8 @@ export interface Task {
   external_reference_id: string | null
   agent_worker_id: string | null
   worker_name?: string | null
+  worker_online?: boolean | null
+  worker_last_heartbeat_at?: string | null
   current_session_id: string | null
   workspace: string | null
   last_message_id: string | null

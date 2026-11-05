@@ -73,6 +73,7 @@ class WorkerRead(ORMModel):
     epoch: int
     last_heartbeat_at: datetime | None
     agent_version: str | None
+    online: bool | None = None
     occupied_tasks: list[WorkerOccupiedTask] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
@@ -157,6 +158,8 @@ class TaskRead(ORMModel):
     status: str
     agent_worker_id: str | None
     worker_name: str | None = None
+    worker_online: bool | None = None
+    worker_last_heartbeat_at: datetime | None = None
     current_session_id: str | None
     workspace: str | None
     last_message_id: str | None

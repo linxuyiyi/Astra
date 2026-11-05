@@ -38,6 +38,7 @@ from app.runtime.occupancy import (
 )
 from app.runtime.redaction import redact_data, redact_text
 from app.runtime.worker_client import WorkerOpenCodeClient
+from app.runtime.worker_connection import worker_connections
 from app.runtime.worker_health import (
     probe_online_worker,
 )
@@ -680,22 +681,21 @@ async def events_after(
     )
 
 
+async def events_before(session, operation_id: str, before_id: int | None, *, limit: int):
+    query = select(WorkerMaintenanceEvent).where(WorkerMaintenanceEvent.operation_id == operation_id)
+    if before_id is not None:
+        query = query.where(WorkerMaintenanceEvent.id < before_id)
+    rows = (await session.scalars(query.order_by(WorkerMaintenanceEvent.id.desc()).limit(limit))).all()
+    return list(reversed(rows))
+
+
 async def operation_detail(session, operation_id: str) -> dict[str, Any] | None:
     operation = await session.get(WorkerMaintenanceOperation, operation_id)
     if operation is None:
         return None
-    events = list(
-        (
-            await session.scalars(
-                select(WorkerMaintenanceEvent)
-                .where(WorkerMaintenanceEvent.operation_id == operation_id)
-                .order_by(WorkerMaintenanceEvent.id.desc())
-                .limit(100)
-            )
-        ).all()
-    )
+    events = await events_before(session, operation_id, None, limit=100)
     payload = operation_payload(operation)
-    payload["events"] = [event_payload(item) for item in reversed(events)]
+    payload["events"] = [event_payload(item) for item in events]
     return payload
 
 
@@ -1325,11 +1325,9 @@ async def environment_health(session, agent_worker_id):
     tasks = (await session.scalars(select(Task.id).where(occupying_clause(worker.id)))).all()
     desired = await build_desired_spec(session, worker)
     gateway = get_gateway()
-    owner = await gateway.bus.get_owner(worker.id)
-    local = worker.mode == ExecutionMode.LOCAL and get_settings().executor_type == "opencode_server"
-    online = (local and worker.status != "OFFLINE") or bool(owner and owner[1] == worker.epoch)
+    online = (await worker_connections([worker], bus=gateway.bus))[worker.id]
     observation = await gateway.observed_snapshot(worker) if online else None
-    return evaluate_worker_readiness(
+    health = evaluate_worker_readiness(
         desired,
         worker,
         observation=observation,
@@ -1337,3 +1335,8 @@ async def environment_health(session, agent_worker_id):
         latest_operation=operation,
         online=online,
     )
+    from app.runtime.experience_review.coordinator import source_worker_in_use
+
+    if await source_worker_in_use(session, worker.id):
+        health["blocking"].append({"code": "review_active", "message": "Worker 仍是未完成经验复盘的来源"})
+    return health

@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from app.config.settings import get_settings
 from app.executors.errors import OpenCodeExecutionError, OpenCodeSessionNotFound
@@ -44,10 +45,17 @@ class RuntimeService:
     def __init__(self, session):
         self.session = session
 
-    async def lock_task(self, task_id):
-        task = await self.session.scalar(
-            select(Task).where(Task.id == task_id).with_for_update().execution_options(populate_existing=True)
-        )
+    async def lock_task(self, task_id, *, nowait=False):
+        try:
+            task = await self.session.scalar(
+                select(Task).where(Task.id == task_id)
+                .with_for_update(nowait=nowait)
+                .execution_options(populate_existing=True)
+            )
+        except OperationalError as exc:
+            if nowait and exc.orig.args[:1] == (3572,):  # MySQL ER_LOCK_NOWAIT
+                raise RuntimeStateError("任务正在处理，请稍后重试停止") from exc
+            raise
         if task is None:
             raise RuntimeStateError("任务不存在")
         return task
@@ -366,7 +374,7 @@ class RuntimeService:
             await asyncio.sleep(0.1)
 
     async def stop(self, task_id, *, cancel_task=True):
-        task = await self.lock_task(task_id)
+        task = await self.lock_task(task_id, nowait=True)
         if task.status in {"SUCCEEDED", "CANCELED"}:
             await self.session.commit()
             return task

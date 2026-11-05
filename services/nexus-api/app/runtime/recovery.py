@@ -46,23 +46,26 @@ def _needs_reconcile(event, sessions):
 async def _watch_events(task_id, worker, binding, sessions, wake):
     consumer = f"task:{task_id}:{uuid4().hex}"
     disconnected = False
+
+    def subscribed():
+        nonlocal disconnected
+        disconnected = False
+        wake.set()
+
     while True:
-        first = True
         try:
             async with connect(worker) as client:
                 directory = Path(binding.workspace)
                 stream = (
-                    client.events(directory, consumer=consumer)
+                    client.events(directory, consumer=consumer, on_subscribed=subscribed)
                     if getattr(client, "records_fetch", False)
-                    else client.events(directory)
+                    else client.events(directory, on_subscribed=subscribed)
                 )
                 async for event in stream:
                     if event.get("type") == "astra.keepalive":
                         continue
-                    relevant = _needs_reconcile(event, sessions)
-                    if first or relevant:
+                    if _needs_reconcile(event, sessions):
                         wake.set()
-                    first = False
                     disconnected = False
         except Exception as exc:
             if not disconnected:

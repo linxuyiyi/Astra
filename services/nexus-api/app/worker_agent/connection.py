@@ -798,6 +798,7 @@ class WorkerConnectionManager:
                     try:
                         async with client.stream("GET", url, params={"directory": directory}) as response:
                             response.raise_for_status()
+                            await emit({"type": "astra.stream_ready"})
                             lines = response.aiter_lines()
                             while active():
                                 if directory in self.paused_directories:

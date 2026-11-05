@@ -24,7 +24,7 @@
           :value="c.id"
           :label="c.name" /></el-select
     ></el-form-item>
-    <el-alert v-if="executionLocked" title="有未释放任务或维护操作，执行配置暂不可修改。" type="warning" :closable="false" />
+    <el-alert v-if="executionLocked" title="有未释放任务、维护操作或未完成复盘，执行配置暂不可修改。" type="warning" :closable="false" />
     <el-form-item label="运行方式"
       ><el-select v-model="form.mode" :disabled="executionLocked"
         ><el-option value="LINUX_REMOTE" label="Linux 远程 Worker" /><el-option

@@ -101,6 +101,17 @@ async def enqueue_in_transaction(
     return job
 
 
+async def source_worker_in_use(session: AsyncSession, worker_id: str) -> bool:
+    return bool(await session.scalar(
+        select(ExperienceReviewJob.id)
+        .where(
+            ExperienceReviewJob.status.in_(ACTIVE_STATUSES),
+            ExperienceReviewJob.agent_worker_id_snapshot == worker_id,
+        )
+        .limit(1)
+    ))
+
+
 async def claim_job(session: AsyncSession, job_id: str, owner: str) -> ExperienceReviewJob | None:
     now = _now()
     token = uuid4().hex

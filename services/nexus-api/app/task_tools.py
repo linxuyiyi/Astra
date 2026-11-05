@@ -21,6 +21,7 @@ from app.models import (
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 from app.schemas import AcceptanceCriterion, TaskCreate
 from app.services import TaskService
+from app.services import acceptance_criteria as normalize_criteria
 from app.state_machine import InvalidTransition
 from nexus_api.db_models import employees
 
@@ -199,10 +200,14 @@ class TaskTools:
         if description:
             task.description = description.strip()
         if acceptance_criteria is not None:
-            task.acceptance_criteria = [
-                {"id": f"AC-{index:02d}", "content": item}
-                for index, item in enumerate(acceptance_criteria, start=1)
-            ]
+            by_content = {}
+            for item in task.acceptance_criteria:
+                by_content.setdefault(item["content"], []).append(item.get("id"))
+            items = []
+            for content in acceptance_criteria:
+                retained = by_content.get(content)
+                items.append({"id": retained.pop(0) if retained else None, "content": content})
+            task.acceptance_criteria = normalize_criteria(items)
         await self.session.commit()
         await self.session.refresh(task)
         return self._ok(task)

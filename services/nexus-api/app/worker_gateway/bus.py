@@ -320,6 +320,9 @@ class MemoryRouteBus:
             return None
         return current[0], current[1]
 
+    async def get_owners(self, worker_ids):
+        return {worker_id: await self.get_owner(worker_id) for worker_id in worker_ids}
+
     async def touch_owner(self, agent_worker_id: str, owner_id: str, epoch: int) -> bool:
         current = self._live_owner(agent_worker_id)
         if current is None or current[0] != owner_id or current[1] != epoch:
@@ -558,6 +561,17 @@ class RedisRouteBus:
             return None
         owner, _, epoch = raw.rpartition("|")
         return owner, int(epoch)
+
+    async def get_owners(self, worker_ids):
+        if not worker_ids:
+            return {}
+        values = await self._connection().mget([self._owner_key(worker_id) for worker_id in worker_ids])
+        owners = {}
+        for worker_id, raw in zip(worker_ids, values, strict=True):
+            if raw:
+                owner, _, epoch = raw.rpartition("|")
+                owners[worker_id] = (owner, int(epoch))
+        return owners
 
     async def touch_owner(self, agent_worker_id: str, owner_id: str, epoch: int) -> bool:
         result = await self._connection().eval(

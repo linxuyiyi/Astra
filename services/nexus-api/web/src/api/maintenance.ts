@@ -226,6 +226,12 @@ export function getMaintenanceOperation(
   return request<MaintenanceOperation>(`/api/maintenance/${encodeURIComponent(operationId)}`, { signal })
 }
 
+export function listOlderMaintenanceEvents(
+  operationId: string, beforeId: number, signal?: AbortSignal,
+): Promise<{ items: MaintenanceEvent[]; next_cursor: number | null }> {
+  return request(`/api/maintenance/${encodeURIComponent(operationId)}/events/page?before_id=${beforeId}`, { signal })
+}
+
 export function cancelMaintenance(operationId: string): Promise<MaintenanceOperation> {
   return request<MaintenanceOperation>(
     `/api/maintenance/${encodeURIComponent(operationId)}/cancel`,

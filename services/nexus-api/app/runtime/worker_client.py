@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 from uuid import uuid4
 
@@ -187,7 +187,8 @@ class WorkerOpenCodeClient(WorkerCommandTransport, OpenCodeServerClient):
         return {"healthy": True, "version": version}
 
     async def events(
-        self, directory: WorkspacePath, *, consumer: str | None = None
+        self, directory: WorkspacePath, *, consumer: str | None = None,
+        on_subscribed: Callable[[], None] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         folder = str(directory)
         worker_id, epoch = await self._online()
@@ -197,6 +198,8 @@ class WorkerOpenCodeClient(WorkerCommandTransport, OpenCodeServerClient):
         # the directory as unused and deletes the log.
         await log.touch_cursor(worker_id=worker_id, epoch=epoch, directory=folder, consumer=holder, seq=0)
         await self.run_command("subscribe_events", {"directory": folder})
+        if on_subscribed:
+            on_subscribed()
         seen = 0
         offline_deadline: float | None = None
         while True:
@@ -257,7 +260,12 @@ class WorkerOpenCodeClient(WorkerCommandTransport, OpenCodeServerClient):
                         gap["reason"] = item["reason"]
                     yield gap
                 elif isinstance(item.get("event"), dict):
-                    yield item["event"]
+                    event = item["event"]
+                    if event.get("type") == "astra.stream_ready":
+                        if on_subscribed:
+                            on_subscribed()
+                        continue
+                    yield event
             if not delivered:
                 await log.touch_cursor(
                     worker_id=worker_id, epoch=epoch, directory=folder, consumer=holder, seq=seen

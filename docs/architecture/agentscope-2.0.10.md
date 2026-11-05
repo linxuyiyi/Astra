@@ -103,15 +103,27 @@ Nexus 自建技能保存在 `data/skills/<id>/<version>/`，通过 `/workspace/s
 | PATCH | `/mcp/{mcp_id}` | 改名、启停或重渲染凭据 |
 | DELETE | `/mcp/{mcp_id}` | 从库中删除，不收回已装入 workspace 的副本 |
 | GET | `/workspace/mcp` | 列出工作区 MCP，返回 `is_healthy`、`tools` 和 `error` |
-| POST | `/workspace/mcp` | 按 `MCPClient` 配置直接装入工作区 |
+| POST | `/workspace/mcp` | 按 `MCPClient` 配置直接装入工作区，首次使用该名称时顺带写入当前 User 的库 |
 | POST | `/workspace/mcp/from-library` | 按库 id 装入工作区 |
 | DELETE | `/workspace/mcp/{mcp_name}` | 从工作区移除 |
 
-Nexus 自建 MCP 保存 URL、非敏感请求头、超时和服务端加密的 Token，装入时拼成 `HttpMCPConfig`；AgentScope 已安装 MCP 只保存库 id，绑定走 `from-library`。连接测试通过 `/workspace/mcp` 的实时状态获取 Tool 列表，不另写 MCP 客户端。
+AgentScope 2.0.10 没有独立的库创建接口。Agent Service 通过内部 `PUT /nexus/mcp-registry/{name}` 调用官方 Storage，在 `NEXUS_AGENTSCOPE_USER_ID`（默认 `nexus`）下按稳定运行名写入记录。Nexus 创建、编辑和手动同步均先登记，即使没有员工绑定也能完成。配置和修订号由 Nexus 管理，AgentScope 库记录复用原 ID。管理页分别展示库登记和员工会话同步状态。未绑定资源删除时先删除平台库记录。
 
-注意 `dont_ask` 权限模式会把 MCP Tool 的 PASSTHROUGH 权限转成 DENY。绑定 MCP 的会话使用 AgentScope 官方的 `bypass` 模式，否则员工能看见 Tool 却永远调不到。任务技能自带的 `nexus-task` MCP 仍由 `task_skill.py` 按会话挂接；它属于标准 HTTP MCP，不使用共享 Bearer key。
+员工私聊从平台库按 ID 挂载。日程使用相同的库 ID，工作区仍使用安排者的 User 和 Session。连接测试在临时工作区直接挂载，不写库。绑定 MCP 的会话继续使用 AgentScope 的 `bypass` 权限模式，工具调用仍按员工、会话、任务或日程来源校验。
 
-`GET /workspace/mcp` 会实际执行 MCP `initialize`/`tools/list`，因此 Nexus 内置 MCP 的连接与工具发现不能要求正在运行的群讨论或讨论租约；员工、会话、任务和日程来源检查在工具调用时执行。
+Task 与 Schedule 是部署管理的独立 HTTP MCP。安装器用同一内部入口登记，随后在校验工作区验证工具发现。员工仍须显式绑定这些资源。Library 的 Worker 连接由 OpenCode 部署配置提供。若另在 Nexus 新建 Library MCP 供员工使用，其登记与其他自建资源相同。
+
+### 清理旧版日程副本
+
+更新 Nexus 和 Agent Service 后，在 MCP 管理页同步涉及的自建资源，确认平台库登记成功。使用已配置 `AGENTSCOPE_SQL_URL` 的 Agent Service 环境运行下列命令预览候选，再添加 `--apply` 执行。
+
+```bash
+.venv-agentscope/bin/python cleanup_schedule_mcp_duplicates.py \
+  nexus_nexus_library_97d5717d nexus_nexus_vision_b4054028 \
+  nexus_test_system_40e02091 nexus_wetask_cf0ae0d0
+```
+
+脚本只删除命令中指定、已有平台登记且归属日程 User 的记录。会话资源按日程准备流程继续挂载同一平台库记录。
 
 ## Knowledge
 

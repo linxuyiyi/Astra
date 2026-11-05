@@ -54,9 +54,10 @@ def test_official_schedule_resources_complete_and_release(
         from app.sql_storage import create_test_schema
         from group_security import AgentServiceKeyMiddleware, secure_group_toolkit
         from mcp.server.fastmcp import FastMCP
+        from mcp_registry import register_mcp_registry
         from nexus_api.agentscope import AgentScopeClient
         from nexus_api.db import connect, utcnow
-        from nexus_api.resources import ResourceStore, create_skill
+        from nexus_api.resources import ResourceStore, create_mcp, create_skill, mcp_row, register_nexus_mcp
         from nexus_api.schedule_resources import schedule_resources_router
         from nexus_api.schedules import schedule_user_id
         from schedule_access import ScheduleResourceAccessPolicy
@@ -112,6 +113,7 @@ def test_official_schedule_resources_complete_and_release(
                 enable_scheduler=False,
                 enable_channel_worker=False,
             )
+            register_mcp_registry(agent_app, "nexus")
             register_schedule_resources(agent_app)
             agent_app.add_middleware(AgentServiceKeyMiddleware)
             nexus_app = FastAPI()
@@ -180,7 +182,7 @@ def test_official_schedule_resources_complete_and_release(
                     names = [t["function"]["name"] for t in tools or []]
                     schemas.append(names)
                     assert "Skill" in names
-                    assert "mcp__library__probe" in names
+                    assert f"mcp__{runtime_name}__probe" in names
                     assert "mcp__nexus-task__nexus_task_list" in names
                     assert "Bash" not in names
                     outputs = [
@@ -193,7 +195,7 @@ def test_official_schedule_resources_complete_and_release(
                             input='{"skill":"日程验证技能"}',
                         ),
                         ToolCallBlock(
-                            id=uuid4().hex, name="mcp__library__probe", input="{}"
+                            id=uuid4().hex, name=f"mcp__{runtime_name}__probe", input="{}"
                         ),
                         ToolCallBlock(
                             id=uuid4().hex,
@@ -222,19 +224,25 @@ def test_official_schedule_resources_complete_and_release(
                     api_key="test-only", base_url="http://127.0.0.1:1/v1"
                 )
                 await storage.upsert_credential("nexus", credential)
-                library = MCPRecord(
-                    user_id="nexus",
-                    client=MCPClient(
-                        name="library",
-                        is_stateful=False,
-                        mcp_config={"type": "http_mcp", "url": mcp_url},
-                    ),
-                )
-                await storage.upsert_mcp("nexus", library)
-                task_mcp = MCPRecord(user_id="nexus", client=MCPClient(
-                    name="nexus-task", is_stateful=False, mcp_config={"type": "http_mcp", "url": mcp_url},
-                ))
-                await storage.upsert_mcp("nexus", task_mcp)
+                task_mcp_id = await nexus_app.state.agentscope.register_mcp("nexus-task", mcp_url, {})
+                with connect() as db:
+                    local_mcp_id = create_mcp(
+                        db, nexus_app.state.resources, name="验证 MCP", description="",
+                        url=mcp_url, transport="streamable-http", headers=[], auth_type="none",
+                        auth_header="", token="", timeout=10,
+                    )
+                    local_mcp = mcp_row(db, local_mcp_id)
+                runtime_name = local_mcp["runtime_name"]
+                # 在无绑定时登记，并验证重复登记保留官方库 ID。
+                assert (await register_nexus_mcp(
+                    nexus_app.state.agentscope, local_mcp, nexus_app.state.resources
+                ))["status"] == "applied"
+                canonical = await storage.get_mcp_by_name("nexus", runtime_name)
+                assert canonical.client.mcp_config.url == mcp_url
+                assert (await register_nexus_mcp(
+                    nexus_app.state.agentscope, local_mcp, nexus_app.state.resources
+                ))["status"] == "applied"
+                assert (await storage.get_mcp_by_name("nexus", runtime_name)).id == canonical.id
                 library_skill = SkillRecord(
                     user_id="nexus",
                     name="日程验证技能",
@@ -271,13 +279,26 @@ def test_official_schedule_resources_complete_and_release(
                         :k,'[]',:m,:a,:t,:t)"""),
                         {
                             "k": json.dumps([task_skill_id, library_skill.id]),
-                            "m": json.dumps([library.id, task_mcp.id]),
+                            "m": json.dumps([local_mcp_id, task_mcp_id]),
                             "a": agent.id,
                             "t": utcnow(),
                         },
                     )
                     db.commit()
                 owner = schedule_user_id("alice")
+                # 模拟旧版从日程 Workspace 注入时产生的副本，核对修复脚本只删除副本。
+                from cleanup_schedule_mcp_duplicates import cleanup
+
+                await storage.upsert_mcp(owner, MCPRecord(
+                    user_id=owner,
+                    client=MCPClient(name=runtime_name, is_stateful=False, mcp_config={"type": "http_mcp", "url": mcp_url}),
+                ))
+                await cleanup([runtime_name], apply=False)
+                assert await storage.get_mcp_by_name(owner, runtime_name)
+                await cleanup([runtime_name], apply=True)
+                assert await storage.get_mcp_by_name(owner, runtime_name) is None
+                assert await storage.get_mcp_by_name("nexus", runtime_name)
+
                 async with client(
                     base_url="http://agent.test",
                     headers={
@@ -379,6 +400,10 @@ def test_official_schedule_resources_complete_and_release(
                         recovered_reply.model_dump()
                     )
                     assert len(models) == 3
+                    assert await storage.list_mcps(owner) == []
+                    assert (await storage.get_mcp_by_name("nexus", runtime_name)).id == canonical.id
+                    await nexus_app.state.agentscope.unregister_mcp(runtime_name)
+                    assert await storage.get_mcp_by_name("nexus", runtime_name) is None
                     other = await http.get(
                         "/nexus/schedule-session",
                         params={"agent_id": agent.id, "session_id": sessions[0].id},

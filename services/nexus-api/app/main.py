@@ -68,6 +68,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
+    expose_headers=["X-Total-Count"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

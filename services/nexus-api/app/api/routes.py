@@ -5,7 +5,7 @@ import json
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import SessionLocal, get_session
 from app.models import (
+    AgentWorker,
     Event,
     ExperienceEvidence,
     ExperienceReviewJob,
@@ -143,6 +144,7 @@ async def validate_task_worker(session, worker_id, task_type, category_id):
 
 @router.get("/tasks", response_model=list[TaskRead])
 async def list_tasks(
+    response: Response,
     status: str | None = None,
     agent_worker_id: str | None = None,
     origin_employee_id: str | None = None,
@@ -169,7 +171,21 @@ async def list_tasks(
             query = query.where(getattr(Task, key) == value)
     if q:
         query = query.where(Task.title.ilike(f"%{q}%") | Task.id.ilike(f"%{q}%"))
-    return (await session.scalars(query.order_by(Task.created_at.desc()).offset(offset).limit(limit))).all()
+    response.headers["X-Total-Count"] = str(
+        await session.scalar(select(func.count()).select_from(query.subquery()))
+    )
+    rows = await session.execute(
+        query.add_columns(AgentWorker.name)
+        .outerjoin(AgentWorker, AgentWorker.id == Task.agent_worker_id)
+        .order_by(Task.created_at.desc(), Task.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return [task_read(task, worker_name) for task, worker_name in rows]
+
+
+def task_read(task, worker_name):
+    return TaskRead.model_validate(task).model_copy(update={"worker_name": worker_name})
 
 
 @router.post("/tasks", response_model=TaskRead, status_code=201)
@@ -183,7 +199,9 @@ async def create_task(payload: TaskCreate, session=Depends(get_session)):
 
 @router.get("/tasks/{task_id}", response_model=TaskRead)
 async def get_task(task_id: str, session=Depends(get_session)):
-    return await require_task(task_id, session)
+    task = await require_task(task_id, session)
+    worker_name = await session.scalar(select(AgentWorker.name).where(AgentWorker.id == task.agent_worker_id))
+    return task_read(task, worker_name)
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskRead)

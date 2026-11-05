@@ -8,19 +8,20 @@ import json
 import re
 import time
 from pathlib import Path, PurePosixPath
-from typing import Annotated, Any
+from typing import Any
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from app.api.routes import require_task
-from app.config.settings import REPO_ROOT
+from app.config.settings import SERVICE_ROOT
 from app.database import get_session
 from app.domain import ExecutionMode, TaskStatus
 from app.executors.errors import OpenCodeSessionNotFound
+from app.identity import request_uid
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 from app.runtime.session_connection import connect, resolve_environment, session_tree
 from app.runtime.workspace_changes import collect_workspace_changes, workspace_diff
@@ -109,7 +110,6 @@ REPLY = re.compile(r"^/(question|permission)/([^/]+)/(reply|reject)$")
 # 原生 Workspace UI 直接按 Session 回答权限请求，与 /permission/{id}/reply 等价。
 PERMISSION_REPLY = re.compile(r"^/session/([^/]+)/permissions/([^/]+)$")
 OPENCODE_VERSION = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
-RETIRED_WORKSPACE_UI = "版本未知/界面已退役"
 _SECRET_SEGMENTS = frozenset({"provider", "model", "config"})
 # Exact names after '-' / '_' normalization. `key` stays exact so fields such as
 # setCacheKey are left for the Workspace UI.
@@ -567,7 +567,7 @@ def _scope_session_active(data, allowed: set[str]):
 
 
 def workspace_ui_bundle(version: str) -> Path:
-    root = REPO_ROOT / "services" / "nexus-api" / "web" / "public" / "opencode-workspace"
+    root = SERVICE_ROOT / "web" / "dist" / "opencode-workspace"
     return root / version / "index.html"
 
 
@@ -586,19 +586,13 @@ def bundle_installed(version: str) -> bool:
 
 
 def workspace_ui_for(snapshot: dict | None) -> tuple[str, str | None, str | None]:
-    """Select the UI for the version already stored on the session.
-
-    Missing or unreadable versions stay unknown. A recorded version is never
-    replaced with the current release; a retired bundle is reported as such.
-    """
+    """Select only the bundle matching the OpenCode version reported by the runtime."""
     raw = (snapshot or {}).get("opencode_version")
-    if raw is None or not str(raw).strip():
-        return "unknown", None, RETIRED_WORKSPACE_UI
-    version = str(raw).strip().removeprefix("v")
+    version = str(raw or "").strip().removeprefix("v")
     if not OPENCODE_VERSION.fullmatch(version):
-        return version or "unknown", None, RETIRED_WORKSPACE_UI
+        return "unknown", None, "OpenCode 未报告可识别的版本"
     if not bundle_installed(version):
-        return version, None, f"{RETIRED_WORKSPACE_UI}（{version}）"
+        return version, None, f"平台未安装 OpenCode {version} 的工作区界面"
     return version, f"/opencode-workspace/{version}/index.html", None
 
 
@@ -667,18 +661,12 @@ async def stop_task(task_id: str, session=Depends(get_session)):
         raise error_response(exc) from exc
 
 
-def execution_stop_actor(
-    user_id: Annotated[str, Header(alias="X-Astra-User-Id")] = "",
-) -> str:
-    return user_id
-
-
 @router.post("/confirm-execution-stop", response_model=TaskRead)
 async def confirm_execution_stop(
     task_id: str,
     body: ExecutionStopConfirm,
     session=Depends(get_session),
-    user_id: str = Depends(execution_stop_actor),
+    user_id: str = Depends(request_uid),
 ):
     await require_task(task_id, session)
     try:
@@ -708,17 +696,26 @@ async def reconnect_task(task_id: str, session=Depends(get_session)):
 async def task_workspace(task_id: str, session=Depends(get_session)):
     task = await require_task(task_id, session)
     worker = await resolve_environment(session, task) if task.agent_worker_id else None
-    version = "unknown"
-    if worker and task.current_session_id:
-        try:
-            async with connect(worker) as client:
-                version = str((await client.health()).get("version") or "unknown")
-        except Exception:
-            pass
-    version, ui, error = workspace_ui_for({"opencode_version": version})
+    worker_online = bool(worker and (worker.mode == ExecutionMode.LOCAL or worker.status != "OFFLINE"))
+    version, ui, error = "unknown", None, None
+    if task.current_session_id:
+        if not worker_online:
+            error = "Worker 不在线，连接恢复后可打开原生工作区"
+        else:
+            try:
+                async with connect(worker) as client:
+                    # Version discovery reports the actual server version even if it is
+                    # incompatible with the execution version gate.
+                    health = await client.request("GET", "/global/health")
+                version, ui, error = workspace_ui_for(
+                    {"opencode_version": health.get("version") if isinstance(health, dict) else None}
+                )
+            except (RuntimeError, ValueError, TimeoutError):
+                error = "无法读取 OpenCode 版本，请检查 Worker 和原生服务连接"
     return {
         "task_id": task.id,
         "task_status": task.status,
+        "sessions": [{"id": task.current_session_id}] if task.current_session_id else [],
         "runtime": {
             "runtime_engine": "opencode",
             "server": f"/api/tasks/{task.id}/opencode",
@@ -728,7 +725,7 @@ async def task_workspace(task_id: str, session=Depends(get_session)):
             "opencode_version": version,
             "workspace_ui": ui,
             "workspace_ui_error": error,
-            "worker_online": bool(worker and worker.status != "OFFLINE"),
+            "worker_online": worker_online,
         },
     }
 

@@ -18,7 +18,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.config.settings import get_settings
@@ -700,30 +700,24 @@ async def operation_detail(session, operation_id: str) -> dict[str, Any] | None:
 
 
 async def list_operations(
-    session, agent_worker_id: str, *, limit: int = 50, before_id: str | None = None
-) -> list[dict[str, Any]]:
+    session, agent_worker_id: str, *, limit: int, offset: int,
+    action: str | None = None, state: str | None = None,
+) -> dict[str, Any]:
     query = select(WorkerMaintenanceOperation).where(
         WorkerMaintenanceOperation.agent_worker_id == agent_worker_id
     )
-    if before_id:
-        cursor = await session.get(WorkerMaintenanceOperation, before_id)
-        if cursor is not None:
-            query = query.where(
-                or_(
-                    WorkerMaintenanceOperation.updated_at < cursor.updated_at,
-                    and_(
-                        WorkerMaintenanceOperation.updated_at == cursor.updated_at,
-                        WorkerMaintenanceOperation.id < cursor.id,
-                    ),
-                )
-            )
+    if action:
+        query = query.where(WorkerMaintenanceOperation.action == action)
+    if state:
+        query = query.where(WorkerMaintenanceOperation.state == state)
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
     rows = await session.scalars(
         query.order_by(
-            WorkerMaintenanceOperation.updated_at.desc(),
+            WorkerMaintenanceOperation.requested_at.desc(),
             WorkerMaintenanceOperation.id.desc(),
-        ).limit(limit)
+        ).offset(offset).limit(limit)
     )
-    return [operation_payload(item) for item in rows]
+    return {"items": [operation_payload(item) for item in rows], "total": total}
 
 
 async def cancel_operation(
@@ -1027,13 +1021,14 @@ class OperationLease:
 
 def _make_step_emitter(lease: OperationLease):
     async def emit(item: dict[str, Any]) -> None:
+        detail = item.get("detail")
         await lease.emit(
             event_type="step",
             stage="running",
             name=str(item.get("name") or "维护步骤"),
             state=str(item.get("state") or "running"),
-            message=str(item.get("message") or ""),
-            detail=item.get("detail") if isinstance(item.get("detail"), dict) else {},
+            message=str(item.get("message") or (detail if isinstance(detail, str) else "")),
+            detail=detail if isinstance(detail, dict) else {},
         )
 
     return emit

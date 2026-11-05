@@ -68,9 +68,11 @@ from .resources import (
     local_skill_rows,
     mcp_catalog,
     mcp_payload,
+    mcp_registry_status,
     mcp_row,
     mcp_sync_summary,
     normalize_uploads,
+    register_nexus_mcp,
     register_resource_removals,
     restore_skill_version,
     skill_catalog,
@@ -1044,6 +1046,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
+        expose_headers=["X-Total-Count"],
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -1962,7 +1965,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="技能不存在")
         return {"sync": await sync_bound(request, connection, "skills", skill_id)}
 
-    def local_mcp_detail(connection, row) -> dict[str, Any]:
+    def local_mcp_detail(connection, row, registry) -> dict[str, Any]:
         bound = bound_employees(connection, "mcps", row["id"])
         sync = mcp_sync_summary(
             connection,
@@ -1971,7 +1974,15 @@ def create_app() -> FastAPI:
             bool(row["enabled"]),
             bound,
         )
-        return mcp_payload(row, bound, sync)
+        return mcp_payload(row, bound, sync, registry)
+
+    async def sync_managed_mcp(request: Request, connection, row) -> tuple[dict[str, Any], dict[str, Any]]:
+        registry = await register_nexus_mcp(client_of(request), row, resource_store(request))
+        if registry["status"] == "error":
+            return registry, {**registry, "ok": False, "sessions": 0}
+        sessions = await sync_bound(request, connection, "mcps", row["id"])
+        detail = "；".join(filter(None, (registry["detail"], sessions["detail"])))
+        return registry, {**sessions, "detail": detail}
 
     @app.post("/api/v1/config/mcps", status_code=201)
     async def create_mcp_resource(
@@ -1996,8 +2007,9 @@ def create_app() -> FastAPI:
             )
         except ResourceError as exc:
             resource_error(exc)
-        detail = local_mcp_detail(connection, mcp_row(connection, mcp_id))
-        return {"mcp": detail, "sync": detail["sync"]}
+        row = mcp_row(connection, mcp_id)
+        registry, sync = await sync_managed_mcp(request, connection, row)
+        return {"mcp": local_mcp_detail(connection, row, registry), "sync": sync}
 
     @app.get("/api/v1/config/mcps/{mcp_id}")
     async def get_mcp_resource(
@@ -2007,7 +2019,11 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         row = mcp_row(connection, mcp_id)
         if row is not None:
-            return {"mcp": local_mcp_detail(connection, row)}
+            try:
+                records = {record["name"]: record for record in await client_of(request).list_mcp_records()}
+            except AgentScopeError:
+                records = None
+            return {"mcp": local_mcp_detail(connection, row, mcp_registry_status(row, records))}
         if is_nexus_mcp(mcp_id):
             raise HTTPException(status_code=404, detail="MCP 不存在")
         try:
@@ -2079,12 +2095,14 @@ def create_app() -> FastAPI:
             )
         except ResourceError as exc:
             resource_error(exc)
-        sync = await sync_bound(request, connection, "mcps", mcp_id)
-        detail = local_mcp_detail(connection, mcp_row(connection, mcp_id))
-        return {"mcp": detail, "sync": sync}
+        row = mcp_row(connection, mcp_id)
+        registry, sync = await sync_managed_mcp(request, connection, row)
+        return {"mcp": local_mcp_detail(connection, row, registry), "sync": sync}
 
     @app.delete("/api/v1/config/mcps/{mcp_id}")
-    def delete_mcp_resource(mcp_id: str, request: Request, connection=Depends(database)) -> dict[str, bool]:
+    async def delete_mcp_resource(
+        mcp_id: str, request: Request, connection=Depends(database)
+    ) -> dict[str, bool]:
         row = mcp_row(connection, mcp_id)
         if row is None:
             if is_nexus_mcp(mcp_id):
@@ -2094,6 +2112,10 @@ def create_app() -> FastAPI:
         if bound:
             names = "、".join(item["name"] for item in bound)
             raise HTTPException(status_code=409, detail=f"MCP 仍被员工引用：{names}，请先取消绑定")
+        try:
+            await client_of(request).unregister_mcp(str(row["runtime_name"]))
+        except AgentScopeError as exc:
+            raise HTTPException(502, "AgentScope 库删除失败，Nexus 配置已保留，请重试") from exc
         try:
             delete_mcp(connection, mcp_id)
         except ResourceError as exc:
@@ -2144,8 +2166,14 @@ def create_app() -> FastAPI:
         request: Request,
         connection=Depends(database),
     ) -> dict[str, Any]:
-        if mcp_row(connection, mcp_id) is None and is_nexus_mcp(mcp_id):
+        row = mcp_row(connection, mcp_id)
+        if row is not None:
+            registry, sync = await sync_managed_mcp(request, connection, row)
+            return {"registry": registry, "sync": sync}
+        if is_nexus_mcp(mcp_id):
             raise HTTPException(status_code=404, detail="MCP 不存在")
+        if not bound_employees(connection, "mcps", mcp_id):
+            raise HTTPException(409, "该 MCP 由 AgentScope 管理，暂无员工会话需要同步")
         return {"sync": await sync_bound(request, connection, "mcps", mcp_id)}
 
     @app.get("/api/v1/config/platform-prompt")

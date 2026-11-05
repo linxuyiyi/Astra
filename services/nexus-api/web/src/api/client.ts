@@ -29,10 +29,10 @@ export class ApiError extends Error {
   }
 }
 
-export async function request<T>(
+async function fetchResponse(
   path: string,
   options?: RequestInit,
-): Promise<T> {
+): Promise<Response> {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
@@ -50,7 +50,16 @@ export async function request<T>(
       response.status,
     )
   }
-  return response.json() as Promise<T>
+  return response
+}
+
+export async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  return (await fetchResponse(path, options)).json() as Promise<T>
+}
+
+async function listPage<T>(path: string, query: URLSearchParams, signal?: AbortSignal) {
+  const response = await fetchResponse(`${path}?${query}`, { signal })
+  return { items: await response.json() as T[], total: Number(response.headers.get('X-Total-Count')) }
 }
 
 export const api = {
@@ -70,6 +79,7 @@ export const api = {
       body: JSON.stringify(body),
     }),
   workers: () => request<Worker[]>('/api/workers'),
+  workerPage: (query: URLSearchParams, signal?: AbortSignal) => listPage<Worker>('/api/workers', query, signal),
   worker: (id: string) =>
     request<Worker>(`/api/workers/${encodeURIComponent(id)}`),
   saveWorker: (body: Record<string, unknown>, id?: string) => {
@@ -89,6 +99,7 @@ export const api = {
       method: 'POST',
     }),
   tasks: (query = '') => request<Task[]>(`/api/tasks${query}`),
+  taskPage: (query: URLSearchParams, signal?: AbortSignal) => listPage<Task>('/api/tasks', query, signal),
   task: (id: string) => request<Task>(`/api/tasks/${id}`),
   taskWorkspace: (id: string) =>
     request<TaskWorkspaceBinding>(`/api/tasks/${id}/workspace`),

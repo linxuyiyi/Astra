@@ -5,13 +5,15 @@ from __future__ import annotations
 import json
 from typing import Literal
 
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
-from app.identity import resolve_uid
+from app.domain import MaintenanceAction, MaintenanceState
+from app.identity import request_uid
+from app.models import WorkerMaintenanceOperation
 from app.runtime.maintenance import (
     cancel_operation,
     environment_health,
@@ -32,22 +34,12 @@ class MaintenanceSubmit(BaseModel):
     action: Literal["check", "deploy", "update", "restart"]
 
 
-def maintenance_actor(
-    x_verified_uid: str | None = Header(default=None, alias="X-Verified-UID"),
-    x_owner_id: str | None = Header(default=None, alias="X-Owner-Id"),
-    nexus_uid: str | None = Cookie(default=None, alias="nexus_uid"),
-) -> str:
-    """Resolve the acting UID; the request body never decides who acted."""
-
-    return resolve_uid(x_verified_uid, x_owner_id, nexus_uid)
-
-
 @router.post("/api/workers/{agent_worker_id}/maintenance", status_code=202)
 async def submit_maintenance(
     agent_worker_id: str,
     payload: MaintenanceSubmit,
     session: AsyncSession = Depends(get_session),
-    actor: str = Depends(maintenance_actor),
+    actor: str = Depends(request_uid),
 ):
     operation = await submit_operation(
         session,
@@ -62,10 +54,14 @@ async def submit_maintenance(
 async def maintenance_history(
     agent_worker_id: str,
     limit: int = Query(default=50, ge=1, le=200),
-    before_id: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    action: MaintenanceAction | None = None,
+    state: MaintenanceState | None = None,
     session: AsyncSession = Depends(get_session),
 ):
-    return {"items": await list_operations(session, agent_worker_id, limit=limit, before_id=before_id)}
+    return await list_operations(
+        session, agent_worker_id, limit=limit, offset=offset, action=action, state=state
+    )
 
 
 @router.get("/api/maintenance/{operation_id}")
@@ -83,8 +79,7 @@ async def maintenance_event_page(
     limit: int = Query(default=200, ge=1, le=500),
     session: AsyncSession = Depends(get_session),
 ):
-    detail = await operation_detail(session, operation_id)
-    if detail is None:
+    if await session.get(WorkerMaintenanceOperation, operation_id) is None:
         raise HTTPException(404, "维护操作不存在")
     events = await events_after(session, operation_id, after_id, limit=limit)
     items = [event_payload(item) for item in events]
@@ -101,9 +96,9 @@ async def maintenance_events(
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     session: AsyncSession = Depends(get_session),
 ):
-    detail = await operation_detail(session, operation_id)
-    if detail is None:
+    if await session.get(WorkerMaintenanceOperation, operation_id) is None:
         raise HTTPException(404, "维护操作不存在")
+    await session.commit()
     cursor = after_id
     if last_event_id:
         try:
@@ -113,7 +108,6 @@ async def maintenance_events(
 
     async def stream():
         from app.database import SessionLocal
-        from app.models import WorkerMaintenanceOperation
 
         async for item in event_stream(operation_id, cursor):
             if item.get("type") == "keepalive":
@@ -140,7 +134,7 @@ async def maintenance_events(
 async def cancel_maintenance(
     operation_id: str,
     session: AsyncSession = Depends(get_session),
-    actor: str = Depends(maintenance_actor),
+    actor: str = Depends(request_uid),
 ):
     operation = await cancel_operation(session, operation_id, actor=actor)
     return operation_payload(operation)
@@ -150,7 +144,7 @@ async def cancel_maintenance(
 async def retry_maintenance(
     operation_id: str,
     session: AsyncSession = Depends(get_session),
-    actor: str = Depends(maintenance_actor),
+    actor: str = Depends(request_uid),
 ):
     operation = await retry_operation(session, operation_id, actor=actor)
     return operation_payload(operation)
@@ -166,7 +160,7 @@ async def worker_health(agent_worker_id: str, session: AsyncSession = Depends(ge
 
 @router.post("/api/maintenance/{operation_id}/confirm-stopped")
 async def confirm_stopped(
-    operation_id: str, session=Depends(get_session), actor: str = Depends(maintenance_actor)
+    operation_id: str, session=Depends(get_session), actor: str = Depends(request_uid)
 ):
     from app.runtime.maintenance import confirm_maintenance_stopped
 

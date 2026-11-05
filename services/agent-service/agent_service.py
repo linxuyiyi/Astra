@@ -539,6 +539,9 @@ def main() -> None:
         mcp_hubs=[GitHubMCPHub(api_token=os.environ.get("AGENTSCOPE_GITHUB_TOKEN") or None)],
         skill_hubs=[ClawSkillHub(api_token=os.environ.get("AGENTSCOPE_CLAWHUB_TOKEN") or None)],
     )
+    from mcp_registry import register_mcp_registry
+
+    register_mcp_registry(app, os.environ.get("NEXUS_AGENTSCOPE_USER_ID", "nexus"))
     register_schedule_resources(app)
     app.add_middleware(AgentServiceKeyMiddleware)
     guard_lifespan(app)

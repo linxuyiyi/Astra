@@ -18,15 +18,14 @@ from app.api.gateway_routes import gateway_error_handler
 from app.api.gateway_routes import router as gateway_router
 from app.api.library_routes import library_error_handler, library_principal
 from app.api.library_routes import router as library_router
-from app.api.maintenance_routes import maintenance_actor
 from app.api.maintenance_routes import router as maintenance_router
 from app.api.routes import router as platform_router
 from app.api.speech_routes import router as speech_router
 from app.api.worker_routes import router as worker_router
-from app.api.workspace_routes import execution_stop_actor
 from app.api.workspace_routes import router as workspace_router
 from app.gateway.security import CredentialError
 from app.gateway.service import GatewayError
+from app.identity import request_uid
 from app.library_service import LibraryError, LibraryPrincipal
 from app.main import lifespan as platform_lifespan
 from app.worker_gateway.routes import router as worker_gateway_router
@@ -51,9 +50,8 @@ def session_library_principal(request: Request) -> LibraryPrincipal:
 
 
 def _include_platform(app: FastAPI) -> None:
-    app.dependency_overrides[maintenance_actor] = session_maintenance_actor
+    app.dependency_overrides[request_uid] = session_maintenance_actor
     app.dependency_overrides[library_principal] = session_library_principal
-    app.dependency_overrides[execution_stop_actor] = session_maintenance_actor
     app.include_router(platform_router)
     app.include_router(worker_router)
     app.include_router(worker_gateway_router)

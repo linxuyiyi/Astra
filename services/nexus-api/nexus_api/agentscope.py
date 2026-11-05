@@ -326,12 +326,6 @@ class AgentScopeClient:
             raise AgentScopeError("AgentScope MCP 返回的不是列表")
         return [item for item in payload if isinstance(item, dict)]
 
-    async def delete_mcp(self, mcp_id: str) -> None:
-        try:
-            await self.request("DELETE", f"/mcp/{mcp_id}")
-        except AgentScopeError as exc:
-            if exc.status_code != 404:
-                raise
 
     async def delete_session(self, agent_id: str, session_id: str) -> None:
         try:
@@ -532,46 +526,40 @@ class AgentScopeClient:
             files=parts,
         )
 
-    async def add_workspace_mcp(
-        self,
-        agent_id: str,
-        session_id: str,
-        *,
-        url: str,
-        headers: dict[str, str],
-        name: str,
-        timeout: float = 30.0,
-    ) -> None:
-        payload = {
+    @staticmethod
+    def _http_mcp(name: str, url: str, headers: dict[str, str], timeout: float) -> dict[str, Any]:
+        return {
             "name": name,
             "is_stateful": False,
             "mcp_config": {"type": "http_mcp", "url": url, "headers": headers, "timeout": timeout},
         }
-        try:
-            await self.request(
-                "POST",
-                "/workspace/mcp",
-                params={"agent_id": agent_id, "session_id": session_id},
-                json=payload,
-            )
-            return
-        except AgentScopeError as exc:
-            if exc.status_code != 409:
-                raise
-        if await self._workspace_mcp_matches(
-            agent_id,
-            session_id,
-            name=name,
-            url=url,
-            headers=headers,
-        ):
-            return
-        await self.remove_workspace_mcp(agent_id, session_id, name)
+
+    async def register_mcp(
+        self, name: str, url: str, headers: dict[str, str], timeout: float = 30,
+        *, display_name: str | None = None, description: str = "", enabled: bool = True,
+        revision: int | None = None,
+    ) -> str:
+        response = await self.request(
+            "PUT", f"/nexus/mcp-registry/{name}",
+            json={
+                "client": self._http_mcp(name, url, headers, timeout),
+                "display_name": display_name, "description": description,
+                "enabled": enabled, "revision": revision,
+            },
+        )
+        return str(response.json()["id"])
+
+    async def unregister_mcp(self, name: str) -> None:
+        await self.request("DELETE", f"/nexus/mcp-registry/{name}")
+
+    async def add_probe_mcp(
+        self, agent_id: str, session_id: str, *, name: str, url: str,
+        headers: dict[str, str], timeout: float,
+    ) -> None:
         await self.request(
-            "POST",
-            "/workspace/mcp",
+            "POST", "/nexus/mcp-probe",
             params={"agent_id": agent_id, "session_id": session_id},
-            json=payload,
+            json=self._http_mcp(name, url, headers, timeout),
         )
 
     async def add_workspace_mcps_from_library(
@@ -596,34 +584,6 @@ class AgentScopeClient:
         if not isinstance(failed, dict) or not failed:
             return ""
         return "；".join(f"{name}：{reason}" for name, reason in failed.items())
-
-    async def _workspace_mcp_matches(
-        self,
-        agent_id: str,
-        session_id: str,
-        *,
-        name: str,
-        url: str,
-        headers: dict[str, str],
-    ) -> bool:
-        try:
-            response = await self.request(
-                "GET",
-                "/workspace/mcp",
-                params={"agent_id": agent_id, "session_id": session_id},
-            )
-        except AgentScopeError:
-            return False
-        payload = response.json()
-        if not isinstance(payload, list):
-            return False
-        for item in payload:
-            if not isinstance(item, dict) or item.get("name") != name:
-                continue
-            config = item.get("mcp_config") if isinstance(item.get("mcp_config"), dict) else {}
-            current = config.get("headers") if isinstance(config.get("headers"), dict) else {}
-            return config.get("url") == url and dict(current) == dict(headers)
-        return False
 
     async def session_status(self, agent_id: str, session_id: str) -> str:
         response = await self.request(

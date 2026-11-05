@@ -150,6 +150,7 @@ class TaskRead(ORMModel):
     priority: str
     status: str
     agent_worker_id: str | None
+    worker_name: str | None = None
     current_session_id: str | None
     workspace: str | None
     last_message_id: str | None

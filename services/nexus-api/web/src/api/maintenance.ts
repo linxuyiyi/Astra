@@ -3,8 +3,6 @@ import { workerFacingMessage } from '@/utils/format'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
-export const MAINTENANCE_EVENT_PAGE_SIZE = 200
-
 export type MaintenanceAction = 'check' | 'deploy' | 'update' | 'restart'
 
 export type MaintenanceState =
@@ -111,11 +109,6 @@ export interface MaintenanceAfterSnapshot {
   changed: MaintenanceChanged
 }
 
-export interface MaintenanceEventPage {
-  items: MaintenanceEvent[]
-  next_cursor: number | null
-}
-
 export interface MaintenanceEvent {
   id: number
   operation_id: string
@@ -137,6 +130,7 @@ export interface MaintenanceOperation {
   stage: string
   attempt: number
   requested_by: string
+  execution_reason: string | null
   requested_at: string
   started_at: string | null
   finished_at: string | null
@@ -206,11 +200,11 @@ export function getWorkerHealth(agentWorkerId: string, signal?: AbortSignal): Pr
 
 export function listMaintenanceOperations(
   agentWorkerId: string,
-  limit = 20,
+  query: URLSearchParams,
   signal?: AbortSignal,
-): Promise<{ items: MaintenanceOperation[] }> {
-  return request<{ items: MaintenanceOperation[] }>(
-    `/api/workers/${agentWorkerId}/maintenance?limit=${limit}`,
+): Promise<{ items: MaintenanceOperation[]; total: number }> {
+  return request(
+    `/api/workers/${encodeURIComponent(agentWorkerId)}/maintenance?${query}`,
     { signal },
   )
 }
@@ -230,19 +224,6 @@ export function getMaintenanceOperation(
   signal?: AbortSignal,
 ): Promise<MaintenanceOperation> {
   return request<MaintenanceOperation>(`/api/maintenance/${encodeURIComponent(operationId)}`, { signal })
-}
-
-export function getMaintenanceEventsPage(
-  operationId: string,
-  afterId = 0,
-  limit = MAINTENANCE_EVENT_PAGE_SIZE,
-  signal?: AbortSignal,
-): Promise<MaintenanceEventPage> {
-  const query = new URLSearchParams({ after_id: String(Math.max(0, afterId)), limit: String(limit) })
-  return request<MaintenanceEventPage>(
-    `/api/maintenance/${encodeURIComponent(operationId)}/events/page?${query}`,
-    { signal },
-  )
 }
 
 export function cancelMaintenance(operationId: string): Promise<MaintenanceOperation> {

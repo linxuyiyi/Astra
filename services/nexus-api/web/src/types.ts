@@ -103,6 +103,7 @@ export interface McpResource {
   revision?: number;
   editable: boolean;
   employees: ResourceEmployee[];
+  registry?: { status: string; detail: string };
   sync: ResourceSync;
   created_at?: string;
   updated_at?: string;

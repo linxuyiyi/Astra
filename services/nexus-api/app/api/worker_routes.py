@@ -1,12 +1,13 @@
 """统一 Worker 配置接口；认证摘要、SSH 和 Git 密文均不返回。"""
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import delete, select, update
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.routes import validate_category_ids
 from app.config.settings import get_settings
 from app.database import get_session
+from app.domain import WorkerStatus
 from app.models import (
     AgentWorker,
     Event,
@@ -53,8 +54,27 @@ def config_values(payload):
 
 
 @router.get("", response_model=list[WorkerRead])
-async def list_workers(session=Depends(get_session)):
-    return (await session.scalars(select(AgentWorker).order_by(AgentWorker.created_at).limit(200))).all()
+async def list_workers(
+    response: Response,
+    status: WorkerStatus | None = None,
+    q: str = "",
+    limit: int = Query(200, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    session=Depends(get_session),
+):
+    query = select(AgentWorker)
+    if status:
+        query = query.where(AgentWorker.status == status)
+    if keyword := q.strip():
+        query = query.where(AgentWorker.name.ilike(f"%{keyword}%") | AgentWorker.host.ilike(f"%{keyword}%"))
+    response.headers["X-Total-Count"] = str(
+        await session.scalar(select(func.count()).select_from(query.subquery()))
+    )
+    return (
+        await session.scalars(
+            query.order_by(AgentWorker.created_at, AgentWorker.id).offset(offset).limit(limit)
+        )
+    ).all()
 
 
 @router.post("", response_model=WorkerRead, status_code=201)

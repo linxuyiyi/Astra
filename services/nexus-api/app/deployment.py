@@ -112,7 +112,9 @@ async def verify_mcp() -> None:
         if required not in tools:
             raise RuntimeError(f"{label} MCP 工具发现缺少 {required}")
 
-    client = AgentScopeClient(settings.agentscope_base_url, settings.agentscope_user_id)
+    client = AgentScopeClient(
+        settings.agentscope_base_url, os.environ.get("NEXUS_AGENTSCOPE_USER_ID", settings.agentscope_user_id)
+    )
     if not client.configured:
         raise RuntimeError("AgentScope 未连接，无法验证 MCP 注册")
     agent_id = ""
@@ -128,13 +130,10 @@ async def verify_mcp() -> None:
         )
         session_id = await client.create_probe_session(agent_id, "Nexus MCP 部署校验")
         for name, url in (("nexus-task", task_url), ("nexus-schedule", schedule_url)):
-            await client.add_workspace_mcp(
-                agent_id,
-                session_id,
-                url=url,
-                headers={},
-                name=name,
-            )
+            record_id = await client.register_mcp(name, url, {})
+            detail = await client.add_workspace_mcps_from_library(agent_id, session_id, [record_id])
+            if detail:
+                raise RuntimeError(f"AgentScope 工作区挂载 {name} 失败：{detail}")
             installed.append(name)
         items = await client.list_workspace_mcp(agent_id, session_id)
         for name in installed:

@@ -1,255 +1,203 @@
 <template>
-  <div class="task-page" v-loading="loading">
-    <el-alert v-if="error" :title="error" type="error" show-icon
-      ><el-button @click="load">重试</el-button></el-alert
-    >
+  <section class="astra-page" v-loading="loading" data-testid="task-detail">
+    <el-alert v-if="error" :title="error" type="error" show-icon :closable="false">
+      <el-button @click="reload">重试</el-button>
+    </el-alert>
     <template v-if="task">
-      <div class="toolbar">
-        <el-button @click="router.push('/tasks')">返回</el-button>
-        <h2>{{ task.title }}</h2>
-        <el-tag>{{ statusLabel(task.status) }}</el-tag>
-        <el-button v-if="task.status === 'PENDING'" @click="act('start')"
-          >开始</el-button
-        >
-        <el-button v-if="task.status === 'RUNNING'" @click="act('pause')"
-          >停止回复</el-button
-        >
-        <el-button v-if="task.status === 'WAITING'" @click="act('resume')"
-          >继续</el-button
-        >
-        <el-button
-          v-if="task.status === 'WAITING' && !task.pending_message_id"
-          type="success"
-          @click="act('confirm')"
-          >确认完成</el-button
-        >
-        <el-button
-          v-if="['RUNNING', 'WAITING', 'PENDING'].includes(task.status)"
-          @click="cancel"
-          >取消任务</el-button
-        >
-        <el-button
-          v-if="['SUCCEEDED', 'CANCELED', 'WAITING'].includes(task.status)"
-          @click="restart"
-          >重新开始</el-button
-        >
-        <el-button
-          v-if="['RUNNING', 'WAITING'].includes(task.status)"
-          type="danger"
-          plain
-          @click="forceStop"
-          >确认强制停止</el-button
-        >
-      </div>
-      <p>
-        {{ task.current_progress }} · Worker：{{
-          task.agent_worker_id || '未分配'
-        }}
-      </p>
-      <el-alert
-        v-if="task.pending_message_id"
-        title="提交尚未确认，连接恢复后自动重发；可能重复执行。"
-        type="warning"
-        :closable="false"
-      />
-      <el-tabs v-model="tab">
-        <el-tab-pane label="原生工作区" name="workspace">
-          <iframe
-            v-if="frameUrl"
-            :key="task.current_session_id || ''"
-            :src="frameUrl"
-            title="OpenCode Task Workspace"
-            allow="clipboard-read; clipboard-write"
-          />
-          <el-empty
-            v-else
-            :description="
-              binding?.runtime.workspace_ui_error || '任务尚未创建原生会话'
-            "
-          />
+      <AstraPageHeader :title="task.title" :description="task.current_progress">
+        <el-tag :type="statusTagType(task.status)">{{ statusLabel(task.status) }}</el-tag>
+        <span>Worker · {{ task.worker_name || (task.agent_worker_id ? '不可用' : '未分配') }}</span>
+        <template #actions>
+          <el-button @click="router.push({ name: 'tasks' })">返回任务大厅</el-button>
+          <el-button v-if="primaryAction" type="primary" :disabled="primaryAction.disabled" :loading="acting" @click="act(primaryAction.command)">
+            {{ primaryAction.label }}
+          </el-button>
+          <RowMenu :aria-label="task.title" :items="secondaryActions" :disabled="acting" @command="act" />
+        </template>
+      </AstraPageHeader>
+      <el-alert v-if="task.pending_message_id" title="提交尚未确认，连接恢复后自动重发，可能重复执行。" type="warning" :closable="false" />
+      <el-tabs v-model="tab" class="task-tabs">
+        <el-tab-pane label="原生工作区" name="workspace" class="task-pane">
+          <iframe v-if="frameUrl" :key="frameUrl" :src="frameUrl" title="OpenCode 任务工作区" allow="clipboard-read; clipboard-write" />
+          <el-empty v-else-if="!checkingWorkspace" :description="workspaceMessage">
+            <el-button v-if="task.current_session_id" @click="loadWorkspace">重试连接</el-button>
+          </el-empty>
+          <p v-else class="workspace-loading">正在读取原生工作区</p>
         </el-tab-pane>
-        <el-tab-pane label="任务详情" name="details"
-          ><p class="description">{{ task.description }}</p>
-          <p v-for="criterion in task.acceptance_criteria" :key="criterion.id">
-            {{ criterion.id }} · {{ criterion.content }}
-          </p>
-          <el-button
-            v-if="['PENDING', 'WAITING', 'RUNNING'].includes(task.status)"
-            @click="editing = true"
-            >编辑</el-button
-          ></el-tab-pane
-        >
-        <el-tab-pane label="事件" name="events"
-          ><el-table :data="events"
-            ><el-table-column label="时间" width="180"
-              ><template #default="{ row }">{{
-                formatTime(row.created_at)
-              }}</template></el-table-column
-            ><el-table-column prop="message" label="事件" /></el-table
-        ></el-tab-pane>
-        <el-tab-pane label="经验复盘" name="review"
-          ><el-empty
-            v-if="!reviews.length"
-            description="确认完成后按平台开关触发复盘"
-          /><el-card v-for="job in reviews" :key="job.id"
-            ><p>{{ job.status }} · {{ job.phase }}</p>
+        <el-tab-pane label="任务详情" name="details" class="task-pane task-pane--scroll">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="任务编号">{{ task.id }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{ formatTime(task.updated_at) }}</el-descriptions-item>
+          </el-descriptions>
+          <h3>任务描述</h3>
+          <p class="description">{{ task.description }}</p>
+          <template v-if="task.acceptance_criteria.length">
+            <h3>验收标准</h3>
+            <ul><li v-for="criterion in task.acceptance_criteria" :key="criterion.id">{{ criterion.content }}</li></ul>
+          </template>
+        </el-tab-pane>
+        <el-tab-pane label="事件" name="events" class="task-pane">
+          <el-table :data="events" height="100%" row-key="id">
+            <el-table-column label="时间" width="180">
+              <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+            </el-table-column>
+            <el-table-column prop="message" label="事件" />
+            <template #empty><el-empty :image-size="72" description="暂无任务事件" /></template>
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="经验复盘" name="review" class="task-pane task-pane--scroll">
+          <el-empty v-if="!reviews.length" description="确认完成后按平台开关触发复盘" />
+          <el-card v-for="job in reviews" :key="job.id" shadow="never">
+            <p>{{ job.status }} · {{ job.phase }}</p>
             <p>{{ job.error_message || job.zero_reason }}</p>
-            <router-link
-              v-for="id in job.candidate_ids"
-              :key="id"
-              :to="`/library?knowledge=${id}`"
-              >查看候选 {{ id }} </router-link
-            ><el-button
-              v-if="job.status === 'FAILED' || job.status === 'RETRY_WAIT'"
-              @click="retryReview(job.id)"
-              >重试</el-button
-            ></el-card
-          ></el-tab-pane
-        >
+            <router-link v-for="id in job.candidate_ids" :key="id" :to="`/library?knowledge=${id}`">查看候选 {{ id }} </router-link>
+            <el-button v-if="job.status === 'FAILED' || job.status === 'RETRY_WAIT'" @click="retryReview(job.id)">重试</el-button>
+          </el-card>
+        </el-tab-pane>
       </el-tabs>
-      <TaskCreateDrawer
-        :open="editing"
-        :task="task"
-        @close="editing = false"
-        @saved="configurationSaved"
-      />
+      <TaskCreateDrawer :open="editing" :task="task" @close="editing = false" @saved="saved" />
     </template>
-  </div>
+  </section>
 </template>
+
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
-import type {
-  Task,
-  TaskWorkspaceBinding,
-  AstraEvent,
-  ExperienceReviewJob,
-} from '@/api/types'
+import type { Task, TaskWorkspaceBinding, AstraEvent, ExperienceReviewJob } from '@/api/types'
+import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
+import RowMenu from '@/components/astra/RowMenu.vue'
 import TaskCreateDrawer from '@/components/task/TaskCreateDrawer.vue'
-import { statusLabel, formatTime } from '@/utils/format'
-const route = useRoute(),
-  router = useRouter(),
-  task = ref<Task>(),
-  binding = ref<TaskWorkspaceBinding>(),
-  events = ref<AstraEvent[]>([]),
-  reviews = ref<ExperienceReviewJob[]>([]),
-  loading = ref(false),
-  error = ref(''),
-  editing = ref(false),
-  tab = ref('workspace')
-const id = () => String(route.params.id)
-const frameUrl = computed(() =>
-  binding.value?.runtime.workspace_ui && task.value?.current_session_id
-    ? `${binding.value.runtime.workspace_ui}?task=${encodeURIComponent(id())}&session=${encodeURIComponent(task.value.current_session_id)}`
-    : '',
+import { runTaskAction, taskActions } from '@/features/tasks/actions'
+import { statusLabel, statusTagType, formatTime } from '@/utils/format'
+
+const route = useRoute()
+const router = useRouter()
+const id = computed(() => String(route.params.id))
+const task = ref<Task>()
+const binding = ref<TaskWorkspaceBinding>()
+const events = ref<AstraEvent[]>([])
+const reviews = ref<ExperienceReviewJob[]>([])
+const loading = ref(true)
+const checkingWorkspace = ref(false)
+const acting = ref(false)
+const error = ref('')
+const editing = ref(false)
+const tab = ref('workspace')
+const actions = computed(() => task.value ? taskActions(task.value) : [])
+const primaryAction = computed(() => actions.value.find(item => ['start', 'pause', 'resume'].includes(item.command)))
+const secondaryActions = computed(() => actions.value.filter(item => item !== primaryAction.value))
+const frameUrl = computed(() => {
+  const session = task.value?.current_session_id
+  const runtime = binding.value?.runtime
+  if (!session || runtime?.session_id !== session || !runtime.workspace_ui) return ''
+  return `${runtime.workspace_ui}?task=${encodeURIComponent(id.value)}&session=${encodeURIComponent(session)}`
+})
+const workspaceMessage = computed(() =>
+  task.value?.current_session_id
+    ? binding.value?.runtime.workspace_ui_error || '工作区暂不可用，请重试'
+    : '任务尚未创建原生会话',
 )
 let timer: ReturnType<typeof setInterval> | undefined
 let updating = false
-function configurationSaved() {
-  editing.value = false
-  void load()
+
+async function loadWorkspace() {
+  const taskId = id.value
+  if (!task.value?.current_session_id || checkingWorkspace.value) return
+  checkingWorkspace.value = true
+  try {
+    const result = await api.taskWorkspace(taskId)
+    if (id.value === taskId) binding.value = result
+  } catch (reason) {
+    if (id.value === taskId) ElMessage.error(String(reason))
+  } finally {
+    checkingWorkspace.value = false
+  }
 }
 async function load() {
   if (updating) return
   updating = true
+  const taskId = id.value
   try {
-    const data = await Promise.all([
-      api.task(id()),
-      api.taskWorkspace(id()),
-      api.taskEvents(id()),
-      api.experienceReviewJobs(id()),
+    const [next, history, jobs] = await Promise.all([
+      api.task(taskId), api.taskEvents(taskId), api.experienceReviewJobs(taskId),
     ])
-    ;[task.value, binding.value, events.value, reviews.value] = data
+    if (id.value !== taskId) return
+    const changed = next.current_session_id !== task.value?.current_session_id
+    task.value = next
+    events.value = history
+    reviews.value = jobs
     error.value = ''
-  } catch (e) {
-    error.value = String(e)
+    if (changed) void loadWorkspace()
+  } catch (reason) {
+    if (id.value === taskId) error.value = String(reason)
   } finally {
     updating = false
     loading.value = false
+    if (id.value !== taskId && route.name === 'task-detail') void load()
   }
 }
-async function act(action: string, body: Record<string, unknown> = {}) {
-  loading.value = true
+function reload() {
+  void load()
+  void loadWorkspace()
+}
+function saved() {
+  editing.value = false
+  void load()
+}
+async function act(command: string) {
+  if (!task.value || acting.value) return
+  if (command === 'edit') {
+    editing.value = true
+    return
+  }
+  acting.value = true
   try {
-    task.value = await api.taskAction(id(), action, body)
+    if (await runTaskAction(task.value, command)) {
+      if (command === 'delete') await router.push({ name: 'tasks' })
+      else if (command === 'reconnect') reload()
+      else await load()
+    }
+  } catch (reason) {
+    ElMessage.error(String(reason))
     await load()
-  } catch (e) {
-    error.value = String(e)
   } finally {
-    loading.value = false
+    acting.value = false
   }
-}
-async function cancel() {
-  try {
-    await ElMessageBox.confirm(
-      '确认停止原生执行并取消任务？连接失败时保留资源占用。',
-      '取消任务',
-    )
-    await act('stop')
-  } catch {}
-}
-async function restart() {
-  try {
-    await ElMessageBox.confirm(
-      '停止当前执行并创建新 Session？复盘仅使用之后可定位的当前 Session。',
-      '重新开始',
-    )
-    await act('restart')
-  } catch {}
-}
-async function forceStop() {
-  try {
-    const result = await ElMessageBox.prompt(
-      '仅在已确认执行停止，或明确接受原任务仍可能写入工作区的后果时使用。请输入原因。',
-      '强制释放',
-      { inputValidator: (v) => Boolean(v?.trim()) },
-    )
-    await act('confirm-execution-stop', { reason: result.value })
-  } catch {}
 }
 async function retryReview(jobId: string) {
   try {
     await api.retryExperienceReview(jobId)
     await load()
-  } catch (e) {
-    error.value = String(e)
+  } catch (reason) {
+    ElMessage.error(String(reason))
   }
 }
-onMounted(() => {
+watch(id, () => {
+  task.value = undefined
+  binding.value = undefined
   loading.value = true
+  void load()
+})
+onMounted(() => {
   void load()
   timer = setInterval(load, 4000)
 })
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
-})
+onUnmounted(() => clearInterval(timer))
 </script>
+
 <style scoped>
-.task-page {
-  padding: 20px;
-  height: 100%;
-  overflow: auto;
-}
-.toolbar {
+.astra-page > .task-tabs {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
 }
-.toolbar h2 {
-  flex: 1;
-  font-size: 20px;
-}
-iframe {
-  width: 100%;
-  height: calc(100vh - 240px);
-  border: 0;
-}
-.description {
-  white-space: pre-wrap;
-}
-.el-card {
-  margin: 12px 0;
-}
+.task-tabs :deep(.el-tabs__content) { flex: 1; min-height: 0; }
+.task-pane { height: 100%; min-height: 0; }
+.task-pane--scroll { overflow-y: auto; padding-right: 12px; scrollbar-gutter: stable; }
+iframe { display: block; width: 100%; height: 100%; border: 0; }
+.description { white-space: pre-wrap; overflow-wrap: anywhere; }
+.workspace-loading { color: var(--astra-text-muted); }
 </style>

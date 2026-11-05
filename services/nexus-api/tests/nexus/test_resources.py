@@ -65,6 +65,7 @@ class FakeAgentScope:
         self.library_skills: list[str] = []
         self.library_mcps: list[str] = []
         self.mcp_failure = ""
+        self.registry_failure = False
         self.sessions = 0
 
     def workspace(self, agent_id: str, session_id: str) -> tuple[list[dict], list[dict]]:
@@ -105,11 +106,26 @@ class FakeAgentScope:
                 return httpx.Response(404, json={"detail": "missing"})
             return httpx.Response(200, json={**record, "markdown": "# 外部技能\n\n正文"})
         if path == "/mcp" and method == "GET":
-            return httpx.Response(200, json=self.mcp_records)
-        if path.startswith("/mcp/") and method == "DELETE":
-            mcp_id = path.split("/")[-1]
-            self.mcp_records = [item for item in self.mcp_records if item["id"] != mcp_id]
-            return httpx.Response(204)
+            records = [{k: v for k, v in item.items() if k != "mcp_config"} for item in self.mcp_records]
+            return httpx.Response(200, json=records)
+        if path.startswith("/nexus/mcp-registry/"):
+            assert request.headers["X-User-ID"] == "nexus"
+            if self.registry_failure:
+                return httpx.Response(503)
+            name = path.rsplit("/", 1)[-1]
+            if method == "DELETE":
+                self.mcp_records = [item for item in self.mcp_records if item["name"] != name]
+                return httpx.Response(204)
+            body = json.loads(request.content)
+            record = next((item for item in self.mcp_records if item["name"] == name), None)
+            if record is None:
+                record = {"id": f"registry-{name}", "name": name}
+                self.mcp_records.append(record)
+            record.update(
+                enabled=body["enabled"], version=str(body["revision"]),
+                mcp_config=body["client"]["mcp_config"],
+            )
+            return httpx.Response(200, json={"id": record["id"]})
         if path == "/workspace/skill" and method == "GET":
             skills, _ = self.workspace(agent_id, session_id)
             return httpx.Response(200, json=skills)
@@ -168,7 +184,7 @@ class FakeAgentScope:
         if path == "/workspace/mcp" and method == "GET":
             _, mcps = self.workspace(agent_id, session_id)
             return httpx.Response(200, json=mcps)
-        if path == "/workspace/mcp" and method == "POST":
+        if path == "/nexus/mcp-probe" and method == "POST":
             body = json.loads(request.content.decode())
             _, mcps = self.workspace(agent_id, session_id)
             if any(item["name"] == body["name"] for item in mcps):
@@ -184,10 +200,6 @@ class FakeAgentScope:
                 }
             )
             self.added_mcps.append({"agent_id": agent_id, "session_id": session_id, "body": body})
-            if not any(item["name"] == body["name"] for item in self.mcp_records):
-                self.mcp_records.append(
-                    {"id": f"lib-{len(self.mcp_records) + 1}", "name": body["name"], "enabled": True}
-                )
             return httpx.Response(201, json={})
         if path == "/workspace/mcp/from-library" and method == "POST":
             body = json.loads(request.content.decode())
@@ -392,6 +404,7 @@ def test_mcp_secret_is_not_echoed_and_connection_test_returns_tools(tmp_path, mo
         assert saved_test.json()["ok"] is True
         # 探测用的临时 MCP 不应留在 AgentScope 库或工作区里。
         assert fake.added_mcps
+        assert not any(record["name"].startswith("nexus_probe_") for record in fake.mcp_records)
 
         updated = client.patch(
             f"/api/v1/config/mcps/{mcp['id']}",
@@ -908,3 +921,39 @@ def test_employee_save_persists_final_resource_sync_snapshot(
             item for item in client.get("/api/v1/employees").json()["items"] if item["id"] == employee["id"]
         )
         assert current["capability"] == saved
+
+
+def test_unbound_mcp_register_retry_update_and_delete(tmp_path, monkeypatch, fake):
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    base = "/api/v1/config/mcps"
+    with TestClient(create_app()) as client:
+        attach(client, fake)
+        fake.registry_failure = True
+        response = client.post(base, json={"name": "未绑定资源", "url": "http://mcp.test/mcp"})
+        assert response.status_code == 201
+        assert response.json()["sync"]["status"] == "error"
+        mcp = response.json()["mcp"]
+        path = f"{base}/{mcp['id']}"
+        name = mcp["runtime_name"]
+        assert mcp["employees"] == []
+        assert client.get(path).json()["mcp"]["registry"]["status"] == "pending"
+
+        fake.registry_failure = False
+        assert client.post(f"{path}/sync").json()["sync"]["ok"] is True
+        assert client.post(f"{path}/sync").json()["sync"]["ok"] is True
+        [record] = [row for row in fake.mcp_records if row["name"] == name]
+        before = record["id"]
+        assert not fake.workspace_mcps
+
+        updated = client.patch(path, json={"url": "http://new.test/mcp", "enabled": False}).json()
+        assert updated["sync"]["ok"] is True
+        assert record["id"] == before and not record["enabled"]
+        assert record["mcp_config"]["url"] == "http://new.test/mcp"
+        assert client.get(path).json()["mcp"]["registry"]["status"] == "applied"
+
+        fake.registry_failure = True
+        assert client.delete(path).status_code == 502
+        assert client.get(path).status_code == 200
+        fake.registry_failure = False
+        assert client.delete(path).status_code == 200
+        assert not any(row["name"] == name for row in fake.mcp_records)

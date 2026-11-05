@@ -59,7 +59,17 @@
           </div>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="同步状态" min-width="140">
+      <ElTableColumn label="平台库登记" min-width="128">
+        <template #default="{ row }">
+          <ElTooltip v-if="row.registry" :content="row.registry.detail" placement="top">
+            <ElTag size="small" :type="syncTagType(row.registry.status)">
+              {{ row.registry.status === 'applied' ? '已登记' : syncLabel(row.registry.status) }}
+            </ElTag>
+          </ElTooltip>
+          <span v-else>AgentScope 管理</span>
+        </template>
+      </ElTableColumn>
+      <ElTableColumn label="会话同步" min-width="140">
         <template #default="{ row }">
           <ElTooltip :content="row.sync.detail || syncLabel(row.sync.status)" placement="top">
             <ElTag size="small" :type="syncTagType(row.sync.status)">{{ syncLabel(row.sync.status) }}</ElTag>
@@ -82,12 +92,12 @@
             >{{ row.enabled ? '停用' : '启用' }}</ElButton>
             <ElButton v-if="row.editable" link type="danger" :disabled="busyId === row.id" @click="removeMcp(row as McpResource)">删除</ElButton>
             <ElButton
-              v-if="row.employees.length && row.sync.status !== 'applied'"
+              v-if="row.editable || (row.employees.length && row.sync.status !== 'applied')"
               link
               type="primary"
               :disabled="busyId === row.id"
               @click="retrySync(row as McpResource)"
-            >重试同步</ElButton>
+            >{{ row.editable ? '同步' : '重试同步' }}</ElButton>
           </div>
         </template>
       </ElTableColumn>
@@ -193,6 +203,12 @@
           <ElDescriptionsItem label="鉴权">{{ authLabel(viewing.auth_type) }}</ElDescriptionsItem>
           <ElDescriptionsItem label="凭据">{{ viewing.has_token ? "已保存（不回显）" : "未保存" }}</ElDescriptionsItem>
           <ElDescriptionsItem label="说明" :span="2"><span class="detail-desc">{{ viewing.description || "—" }}</span></ElDescriptionsItem>
+          <ElDescriptionsItem v-if="viewing.registry" label="平台库登记">
+            <ElTag size="small" :type="syncTagType(viewing.registry.status)">
+              {{ viewing.registry.status === 'applied' ? '已登记' : syncLabel(viewing.registry.status) }}
+            </ElTag>
+            <span class="detail-sync">{{ viewing.registry.detail }}</span>
+          </ElDescriptionsItem>
           <ElDescriptionsItem label="同步" :span="2">
             <ElTag size="small" :type="syncTagType(viewing.sync.status)">{{ syncLabel(viewing.sync.status) }}</ElTag>
             <span class="detail-sync">{{ viewing.sync.detail || "—" }}</span>
@@ -492,8 +508,8 @@ async function submitMcp() {
       : await createMcpResource(writeBody(true));
     editorOpen.value = false;
     await load();
-    if (result.sync.status === "applied") notify(editing.value ? "MCP 已保存并同步" : "MCP 已创建");
-    else notify(`MCP 已保存，${result.sync.detail || "等待同步"}`, "info", 4200);
+    if (result.sync.status === "applied") notify(editing.value ? "MCP 已保存并同步" : "MCP 已创建并登记到 AgentScope");
+    else notify(`MCP 已保存，${result.sync.detail || "等待同步"}`, result.sync.status === "error" ? "error" : "info", 4200);
   } catch (reason) {
     saveError.value = reason instanceof Error ? reason.message : "MCP 保存失败";
   } finally {
@@ -506,7 +522,7 @@ async function toggleEnabled(row: McpResource) {
   try {
     const result = await updateMcpResource(row.id, { enabled: !row.enabled });
     await load();
-    notify(result.sync.status === "applied" ? `MCP 已${row.enabled ? "停用" : "启用"}` : `配置已更新，${result.sync.detail || "待同步"}`, result.sync.status === "applied" ? "success" : "info");
+    notify(result.sync.status === "applied" ? `MCP 已${row.enabled ? "停用" : "启用"}` : `配置已更新，${result.sync.detail || "待同步"}`, result.sync.status === "applied" ? "success" : result.sync.status === "error" ? "error" : "info");
   } catch (reason) {
     notify(reason instanceof Error ? reason.message : "更新失败", "error");
   } finally {

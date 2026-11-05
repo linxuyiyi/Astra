@@ -841,3 +841,77 @@ async def test_confirmed_native_rejection_waits_without_retrying_or_releasing_wo
         await runtime.refresh(task.id)
         assert len(native.bodies) == 1
         assert task.waiting_reason == "input_rejected"
+
+
+async def test_admin_lists_and_native_workspace_binding(setup_runtime, monkeypatch, tmp_path):
+    import httpx
+
+    from app.api import workspace_routes
+    from app.main import app
+
+    worker_id, _, _ = setup_runtime
+    async with SessionLocal() as db:
+        worker = await db.get(AgentWorker, worker_id)
+        worker.name = f"研发 Worker {worker_id}"
+        name = worker.name
+        task = await create_task(db, setup_runtime)
+        task.current_session_id = "ses_admin_test"
+        task.workspace = str(tmp_path)
+        task_id = task.id
+        db.add_all(
+            [
+                WorkerMaintenanceOperation(
+                    id=f"{worker_id}-1", agent_worker_id=worker_id, action="deploy", state="SUCCEEDED"
+                ),
+                WorkerMaintenanceOperation(
+                    id=f"{worker_id}-2", agent_worker_id=worker_id, action="deploy", state="SUCCEEDED"
+                ),
+                WorkerMaintenanceOperation(
+                    id=f"{worker_id}-3", agent_worker_id=worker_id, action="check", state="FAILED"
+                ),
+            ]
+        )
+        await db.commit()
+
+    class RunningOpenCode:
+        async def request(self, method, path):
+            assert (method, path) == ("GET", "/global/health")
+            return {"healthy": True, "version": "1.18.35"}
+
+    @asynccontextmanager
+    async def connect(worker):
+        assert worker.id == worker_id
+        yield RunningOpenCode()
+
+    monkeypatch.setattr(workspace_routes, "connect", connect)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        tasks = await client.get("/api/tasks", params={"q": task_id, "limit": 1})
+        assert tasks.headers["X-Total-Count"] == "1"
+        assert tasks.json()[0]["worker_name"] == name
+        assert (await client.get(f"/api/tasks/{task_id}")).json()["worker_name"] == name
+        workers = await client.get("/api/workers", params={"q": name, "status": "IDLE", "limit": 1})
+        assert workers.headers["X-Total-Count"] == "1"
+        assert workers.json()[0]["id"] == worker_id
+        for offset in (0, 1):
+            history = await client.get(
+                f"/api/workers/{worker_id}/maintenance",
+                params={
+                    "action": "deploy",
+                    "state": "SUCCEEDED",
+                    "limit": 1,
+                    "offset": offset,
+                },
+            )
+            assert history.json()["total"] == 2
+            assert history.json()["items"][0]["id"] == f"{worker_id}-{2 - offset}"
+        binding = (await client.get(f"/api/tasks/{task_id}/workspace")).json()
+        assert binding["sessions"] == [{"id": "ses_admin_test"}]
+        assert binding["runtime"]["workspace_ui"] == "/opencode-workspace/1.18.35/index.html"
+
+        async with SessionLocal() as db:
+            worker = await db.get(AgentWorker, worker_id)
+            worker.status = "OFFLINE"
+            await db.commit()
+        binding = (await client.get(f"/api/tasks/{task_id}/workspace")).json()
+        assert binding["runtime"]["workspace_ui"] is None
+        assert "Worker 不在线" in binding["runtime"]["workspace_ui_error"]

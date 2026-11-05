@@ -562,7 +562,34 @@ def external_skill_payload(
     }
 
 
-def mcp_payload(row, bound: list[dict[str, Any]], sync: dict[str, Any]) -> dict[str, Any]:
+def mcp_registry_status(row, records: dict[str, Any] | None) -> dict[str, str]:
+    if records is None:
+        return {"status": "error", "detail": "AgentScope 库不可读"}
+    record = records.get(row["runtime_name"])
+    if (
+        record
+        and record.get("version") == str(row["revision"])
+        and record.get("enabled") == bool(row["enabled"])
+    ):
+        return {"status": "applied", "detail": "已登记到 AgentScope 平台库"}
+    return {"status": "pending", "detail": "AgentScope 库登记尚未同步到当前配置"}
+
+
+async def register_nexus_mcp(client: AgentScopeClient, row, store: ResourceStore) -> dict[str, Any]:
+    try:
+        await client.register_mcp(
+            str(row["runtime_name"]), str(row["url"]), _headers_for_row(row, store), float(row["timeout"]),
+            display_name=str(row["name"]), description=str(row["description"]),
+            enabled=bool(row["enabled"]), revision=int(row["revision"]),
+        )
+    except AgentScopeError as exc:
+        return {"status": "error", "detail": f"AgentScope 库登记失败（HTTP {exc.status_code}）"}
+    return {"status": "applied", "detail": "已登记到 AgentScope 平台库"}
+
+
+def mcp_payload(
+    row, bound: list[dict[str, Any]], sync: dict[str, Any], registry: dict[str, str]
+) -> dict[str, Any]:
     return {
         "id": row["id"],
         "name": row["name"],
@@ -576,6 +603,7 @@ def mcp_payload(row, bound: list[dict[str, Any]], sync: dict[str, Any]) -> dict[
         "has_token": bool(row["token_ciphertext"]),
         "timeout": float(row["timeout"]),
         "runtime_name": row["runtime_name"],
+        "registry": registry,
         "enabled": bool(row["enabled"]),
         "revision": int(row["revision"]),
         "editable": True,
@@ -919,7 +947,7 @@ async def sync_employee_resources(
     external_skills, external_mcps, catalog_error = await external_catalogs(
         client,
         need_skills=bool(external_skill_refs),
-        need_mcps=bool(external_mcp_refs),
+        need_mcps=bool(external_mcp_refs or set(desired_mcps) & local_mcps.keys()),
     )
     errors: list[str] = []
     pending: list[str] = []
@@ -1369,26 +1397,18 @@ async def _sync_one_session(
         except AgentScopeError as exc:
             failures.append(f"技能库技能未装入：{exc.detail}")
 
+    library_by_name = {record["name"]: record for record in external_mcps.values() if record.get("name")}
+    library_installs = list(external_mcp_installs)
     for _ref, row in local_mcp_installs:
-        try:
-            await client.add_workspace_mcp(
-                agent_id,
-                session_id,
-                name=str(row["runtime_name"]),
-                url=str(row["url"]),
-                headers=_headers_for_row(row, store),
-                timeout=float(row["timeout"] or 30),
-            )
-        except AgentScopeError as exc:
-            failures.append(f"{row['name']} 未连接：{exc.detail}")
+        registry = mcp_registry_status(row, library_by_name)
+        if registry["status"] != "applied":
+            failures.append(f"{row['name']}：{registry['detail']}")
+        else:
+            library_installs.append(str(library_by_name[row["runtime_name"]]["id"]))
 
-    if external_mcp_installs:
+    if library_installs:
         try:
-            detail = await client.add_workspace_mcps_from_library(
-                agent_id,
-                session_id,
-                external_mcp_installs,
-            )
+            detail = await client.add_workspace_mcps_from_library(agent_id, session_id, library_installs)
             if detail:
                 failures.append(f"MCP 库资源未装入：{detail}")
         except AgentScopeError as exc:
@@ -1970,26 +1990,24 @@ async def mcp_catalog(
     )
     local_runtime_names = {str(row["runtime_name"]) for row in local_rows}
     items: list[dict[str, Any]] = []
-    external_available = False
-    if source != SOURCE_NEXUS:
-        try:
-            records = await client.list_mcp_records()
-            external_available = True
-            for record in records:
-                if str(record.get("name") or "") in local_runtime_names:
-                    # 自建 MCP 装入 workspace 时 AgentScope 也会登记一条库记录，列表只保留 Nexus 资源。
-                    continue
-                mcp_id = str(record.get("id") or "")
-                bound = employees_for(employees, "mcps", mcp_id)
-                sync = _sync_summary(connection, "mcp", mcp_id, 0, bool(record.get("enabled", True)), bound)
-                items.append(external_mcp_payload(record, bound, sync))
-        except AgentScopeError:
-            external_available = False
+    records = None
+    try:
+        records = {str(record["name"]): record for record in await client.list_mcp_records()}
+    except AgentScopeError:
+        pass
+    if source != SOURCE_NEXUS and records is not None:
+        for name, record in records.items():
+            if name in local_runtime_names:
+                continue
+            mcp_id = str(record.get("id") or "")
+            bound = employees_for(employees, "mcps", mcp_id)
+            sync = _sync_summary(connection, "mcp", mcp_id, 0, bool(record.get("enabled", True)), bound)
+            items.append(external_mcp_payload(record, bound, sync))
     if source != SOURCE_AGENTSCOPE:
         for row in local_rows:
             bound = employees_for(employees, "mcps", row["id"])
             sync = mcp_sync_summary(connection, row["id"], int(row["revision"]), bool(row["enabled"]), bound)
-            items.append(mcp_payload(row, bound, sync))
+            items.append(mcp_payload(row, bound, sync, mcp_registry_status(row, records)))
     needle = q.strip().lower()
     if needle:
         items = [
@@ -2002,7 +2020,7 @@ async def mcp_catalog(
     items.sort(key=lambda item: (item["source"] != SOURCE_NEXUS, item["name"]))
     return {
         "available": True,
-        "agentscope_available": external_available,
+        "agentscope_available": records is not None,
         "items": items,
     }
 
@@ -2094,14 +2112,13 @@ async def test_mcp_connection(
     draft = draft or {}
     started = datetime.now(UTC)
     library_id = ""
-    name = ""
+    name = f"nexus_probe_{uuid4().hex[:8]}"
     url = ""
     headers: dict[str, str] = {}
     token = ""
     timeout = 30.0
     row = mcp_row(connection, mcp_id) if mcp_id and is_nexus_mcp(mcp_id) else None
     if row is not None:
-        name = str(row["runtime_name"])
         url = str(row["url"])
         timeout = float(row["timeout"] or 30)
         headers = {
@@ -2121,11 +2138,7 @@ async def test_mcp_connection(
         record = mcps.get(mcp_id, {})
         name = str(record.get("name") or mcp_id)
         timeout = 30.0
-    else:
-        name = f"nexus_probe_{uuid4().hex[:8]}"
     if draft:
-        if draft.get("name") and row is None and not library_id:
-            name = f"nexus_probe_{uuid4().hex[:8]}"
         if draft.get("url"):
             url = validate_mcp_url(str(draft["url"]))
         if draft.get("headers") is not None:
@@ -2153,7 +2166,7 @@ async def test_mcp_connection(
             if detail:
                 add_failure = detail
         else:
-            await client.add_workspace_mcp(
+            await client.add_probe_mcp(
                 agent_id,
                 session_id,
                 name=name,
@@ -2163,17 +2176,6 @@ async def test_mcp_connection(
             )
         items = await client.list_workspace_mcp(agent_id, session_id)
         target = next((item for item in items if str(item.get("name") or "") == installed_name), None)
-        if target is None and library_id:
-            target = next(
-                (
-                    item
-                    for item in items
-                    if str(item.get("name") or "")
-                    and str(item.get("name") or "") != "nexus-task"
-                    and str(item.get("mcp_config", {}).get("url") or "") == ""
-                ),
-                None,
-            )
         if target is None:
             error = _redact(
                 add_failure or "AgentScope 没有返回该 MCP 的连接状态",
@@ -2210,10 +2212,3 @@ async def test_mcp_connection(
             await client.remove_workspace_mcp(agent_id, session_id, installed_name)
         except AgentScopeError:
             pass
-        if not library_id and name.startswith("nexus_probe_"):
-            try:
-                for record in await client.list_mcp_records():
-                    if str(record.get("name") or "") == name and record.get("id"):
-                        await client.delete_mcp(str(record["id"]))
-            except AgentScopeError:
-                pass

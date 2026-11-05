@@ -5,6 +5,7 @@ import TaskListView from "./views/TaskListView.vue";
 import TaskDetailView from "./views/TaskDetailView.vue";
 import WorkerListView from "./views/WorkerListView.vue";
 import WorkerDetailView from "./views/WorkerDetailView.vue";
+import WorkerMaintenanceDetailView from "./views/WorkerMaintenanceDetailView.vue";
 import DigitalLibraryView from "./views/DigitalLibraryView.vue";
 import SchedulesView from "./views/SchedulesView.vue";
 import EmployeesView from "./views/EmployeesView.vue";
@@ -78,6 +79,7 @@ export const router = createRouter({
         { path: "employees", name: "settings-employees", component: EmployeesView },
         { path: "workers", name: "settings-workers", component: WorkerListView },
         { path: "workers/:id", name: "settings-worker-detail", component: WorkerDetailView },
+        { path: "workers/:id/maintenance/:operationId", name: "settings-worker-maintenance", component: WorkerMaintenanceDetailView },
         { path: "schedules", redirect: keepQuery("/schedules") },
         { path: "skills", name: "settings-skills", component: SkillResourcesView },
         { path: "mcps", name: "settings-mcps", component: McpResourcesView },
@@ -88,7 +90,7 @@ export const router = createRouter({
     },
     {
       path: "/interventions",
-      redirect: (to) => ({ path: "/tasks", query: { ...to.query, view: "interventions" }, hash: to.hash }),
+      redirect: (to) => ({ path: "/tasks", query: { ...to.query, status: "WAITING" }, hash: to.hash }),
     },
     {
       path: "/gateway",

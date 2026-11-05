@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 import os
+import posixpath
 from collections.abc import AsyncIterator
+from urllib.parse import unquote
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -60,6 +62,9 @@ def _user_id() -> str:
 
 @router.api_route(f"{PREFIX}/{{path:path}}", methods=METHODS, include_in_schema=False)
 async def proxy_agentscope(path: str, request: Request) -> StreamingResponse:
+    normalized = posixpath.normpath("/" + unquote(path)).strip("/")
+    if normalized.split("/", 2)[:2] in (["nexus", "mcp-registry"], ["nexus", "mcp-probe"]):
+        raise HTTPException(404, "Not Found")
     # 人类日程身份只能由 Nexus 的 require_owner 派生，控制台不能冒充。
     if request.headers.get("x-user-id", "").casefold().startswith("nexus-schedule-"):
         raise HTTPException(403, "日程身份请通过日程安排入口访问")

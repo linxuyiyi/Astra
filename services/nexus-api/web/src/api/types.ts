@@ -75,6 +75,7 @@ export interface Task {
   origin_employee_id: string | null
   external_reference_id: string | null
   agent_worker_id: string | null
+  worker_name?: string | null
   current_session_id: string | null
   workspace: string | null
   last_message_id: string | null

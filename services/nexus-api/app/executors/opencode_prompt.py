@@ -62,20 +62,8 @@ def build_task_prompt(
         f"{item.get('id', f'AC-{index + 1:02d}')}. {item.get('content', '')}"
         for index, item in enumerate(task.acceptance_criteria or [])
     )
-    human_input = (task.human_intervention or {}).get("response")
-    suspension = task.suspension or {}
-    retry_text = ""
-    if retry:
-        retry_text = "\n这是同一任务继续处理，请使用当前执行会话中的已有上下文。"
-        if human_input:
-            retry_text += f"\n人工补充信息：\n{human_input}"
-    context_text = ""
-    if task.current_progress:
-        context_text += f"\n已保留的当前进展：\n{task.current_progress}"
-    if suspension.get("scene_context"):
-        context_text += f"\n挂起时现场上下文：\n{suspension['scene_context']}"
-    if human_input and not retry:
-        context_text += f"\n人工补充信息：\n{human_input}"
+    retry_text = "\n这是同一任务继续处理，请使用当前执行会话中的已有上下文。" if retry else ""
+    context_text = f"\n当前进展：\n{task.current_progress}" if task.current_progress else ""
 
     prompt_context = get_task_prompt_context(task)
     task_type_label = {

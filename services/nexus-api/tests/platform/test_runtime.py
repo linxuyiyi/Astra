@@ -9,21 +9,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database import SessionLocal, init_database
-from app.domain import EmployeeStatus, EnvironmentStatus, Priority, TaskStatus, TaskType
+from app.domain import Priority, TaskStatus, TaskType
 from app.executors.base import ToolUsageResult
-from app.executors.opencode_cli import OpenCodeCLIExecutor
 from app.executors.process import windows_batch_command
 from app.executors.usage import parse_execution_seconds, parse_opencode_usage
-from app.models import (
-    AgentWorker,
-    Base,
-    Event,
-    OpenCodeExecutionEnvironment,
-    Task,
-    TaskCategory,
-)
-from app.runtime.dispatcher import Dispatcher
-from app.runtime.environment import ExecutionEnvironmentRuntime
+from app.models import Base, Event, Task, TaskCategory
 from app.runtime.scout import TaskScout
 from app.runtime.ssh_client import SSHSession
 from app.schemas import TaskCreate
@@ -50,8 +40,6 @@ def new_task(**overrides) -> TaskCreate:
         "description": "定位并解决接口异常",
         "acceptance_criteria": [{"content": "接口恢复正常"}],
         "priority": Priority.HIGH,
-        "completion_policy": "AUTO",
-
     }
     payload.update(overrides)
     return TaskCreate(**payload)
@@ -86,7 +74,7 @@ async def test_create_task_records_ready_event(session):
         .scalars()
         .all()
     )
-    assert [event.event_type for event in events] == ["TASK_CREATED", "TASK_PENDING"]
+    assert [event.event_type for event in events] == ["TASK_CREATED"]
 
 
 async def test_add_event_can_join_caller_transaction_without_implicit_commit(session):
@@ -107,172 +95,11 @@ async def test_add_event_can_join_caller_transaction_without_implicit_commit(ses
         .scalars()
         .all()
     )
-    assert [event.event_type for event in events] == ["TASK_CREATED", "TASK_PENDING"]
+    assert [event.event_type for event in events] == ["TASK_CREATED"]
 
 
-async def test_dispatcher_matches_type_and_category_and_limits_one_task(session, tmp_path):
-    workspace = tmp_path / "employee-workspace"
-    workspace.mkdir()
-    employee = AgentWorker(
-        id="astra-test",
-        name="Astra Test",
-        role="测试平台员工",
-        status=EmployeeStatus.IDLE,
-        task_types=["ISSUE"],
-        category_ids=["testing-platform"],
-        auto_execute=False,
-    )
-    session.add(employee)
-    session.add(
-        OpenCodeExecutionEnvironment(
-            employee_id=employee.id,
-            mode="LOCAL",
-            name="员工固定工作空间",
-            opencode_path="opencode",
-            model_name="deepseek/deepseek-v4-flash",
-            workspace_root=str(workspace),
-            repository_url='https://git.example/org/repo.git',
-            status=EnvironmentStatus.AVAILABLE,
-        )
-    )
-    await session.commit()
-    first = await TaskService(session).create(new_task(title="匹配任务"))
-    first_id = first.id
-    await TaskService(session).create(new_task(title="第二个任务"))
-
-    claimed = await Dispatcher(session).claim_once()
-    claimed_id = claimed.id if claimed else None
-    second_claim = await Dispatcher(session).claim_once()
-    if claimed:
-        await session.refresh(claimed)
-
-    assert claimed_id == first_id
-    assert claimed.status == TaskStatus.PENDING
-    assert claimed.employee_id == "astra-test"
-    assert claimed.claimed_at is not None
-    assert claimed.execution_environment_snapshot["workspace_root"] == str(workspace)
-    assert claimed.execution_environment_snapshot["model_name"] == "deepseek/deepseek-v4-flash"
-    assert second_claim is None
-    await session.refresh(employee)
-    assert employee.current_task_count == 1
-
-
-async def test_dispatcher_claims_task_assigned_to_employee_without_auto_claim(session, tmp_path):
-    """人工指定员工后必须自动分配并启动，不受 auto_claim 影响。"""
-
-    workspace = tmp_path / "employee-workspace"
-    workspace.mkdir()
-    employee = AgentWorker(
-        id="astra-assigned",
-        name="Astra Assigned",
-        role="指定员工",
-        status=EmployeeStatus.IDLE,
-        task_types=["ISSUE"],
-        category_ids=["testing-platform"],
-        auto_claim=False,
-        auto_execute=True,
-    )
-    session.add(employee)
-    session.add(
-        OpenCodeExecutionEnvironment(
-            employee_id=employee.id,
-            mode="LOCAL",
-            name="员工固定工作空间",
-            opencode_path="opencode",
-            model_name="opencode/space-bunny-free",
-            workspace_root=str(workspace),
-            repository_url='https://git.example/org/repo.git',
-            status=EnvironmentStatus.AVAILABLE,
-        )
-    )
-    await session.commit()
-    task = await TaskService(session).create(new_task(title="指定员工任务", employee_id="astra-assigned"))
-    task_id = task.id
-
-    claimed = await Dispatcher(session).claim_once()
-    assert claimed is not None
-    assert claimed.id == task_id
-    assert claimed.employee_id == "astra-assigned"
-    assert claimed.claimed_at is not None
-    assert claimed.execution_environment_snapshot["workspace_root"] == str(workspace)
-    assert claimed.execution_environment_snapshot["model_name"] == "opencode/space-bunny-free"
-    # 下一轮只把同一任务作为待启动的已分配任务交回，不会改派他人。
-    recovered = await Dispatcher(session).claim_once()
-    assert recovered is not None
-    assert recovered.id == task_id
-    assert recovered.employee_id == "astra-assigned"
-
-
-async def test_dispatcher_keeps_unclaimed_pool_on_auto_claim(session, tmp_path):
-    """未指定员工的任务仍只由开启自动认领的员工领取。"""
-
-    workspace = tmp_path / "employee-workspace"
-    workspace.mkdir()
-    session.add(
-        AgentWorker(
-            id="astra-manual",
-            name="Astra Manual",
-            role="手动员工",
-            status=EmployeeStatus.IDLE,
-            task_types=["ISSUE"],
-            category_ids=["testing-platform"],
-            auto_claim=False,
-            auto_execute=True,
-        )
-    )
-    session.add(
-        OpenCodeExecutionEnvironment(
-            employee_id="astra-manual",
-            mode="LOCAL",
-            name="员工固定工作空间",
-            opencode_path="opencode",
-            workspace_root=str(workspace),
-            status=EnvironmentStatus.AVAILABLE,
-        )
-    )
-    await session.commit()
-    await TaskService(session).create(new_task(title="无人指定任务"))
-
-    assert await Dispatcher(session).claim_once() is None
-
-
-async def _assigned_task(session, tmp_path, *, auto_execute: bool, employee_id: str):
-    workspace = tmp_path / "employee-workspace"
-    workspace.mkdir(exist_ok=True)
-    session.add(
-        AgentWorker(
-            id=employee_id,
-            name="Dispatch Employee",
-            role="调度员工",
-            status=EmployeeStatus.IDLE,
-            task_types=["ISSUE"],
-            category_ids=["testing-platform"],
-            auto_claim=False,
-            auto_execute=auto_execute,
-        )
-    )
-    session.add(
-        OpenCodeExecutionEnvironment(
-            employee_id=employee_id,
-            mode="LOCAL",
-            name="员工固定工作空间",
-            opencode_path="opencode",
-            workspace_root=str(workspace),
-            repository_url='https://git.example/org/repo.git',
-            status=EnvironmentStatus.AVAILABLE,
-        )
-    )
-    await session.commit()
-    return await TaskService(session).create(new_task(employee_id=employee_id))
-
-
-@pytest.mark.parametrize(
-    ("auto_execute", "expected_starts"),
-    [(False, []), (True, ["T-auto"])],
-)
-def test_dispatch_respects_employee_auto_execute(monkeypatch, auto_execute, expected_starts):
-    """人工指定员工即被领取；是否自动执行仍由员工的自动执行开关决定。"""
-
+def test_dispatch_starts_claimed_task(monkeypatch):
+    """已领取任务直接启动，不再有自动执行开关。"""
     from types import SimpleNamespace
 
     from app.runtime import celery_app
@@ -281,7 +108,7 @@ def test_dispatch_respects_employee_auto_execute(monkeypatch, auto_execute, expe
 
     class WorkerSession:
         async def get(self, model, key):
-            return SimpleNamespace(auto_execute=auto_execute)
+            return SimpleNamespace()
 
     @asynccontextmanager
     async def worker_scope():
@@ -302,26 +129,7 @@ def test_dispatch_respects_employee_auto_execute(monkeypatch, auto_execute, expe
     monkeypatch.setattr(celery_app.RuntimeService, "start", start)
 
     assert celery_app.dispatch() == "T-auto"
-    assert started == expected_starts
-
-
-async def test_claimed_task_without_session_is_offered_again_for_start_retry(session, tmp_path):
-    """启动失败后任务仍无 Session，下一轮必须原样交回同一任务重试启动。"""
-
-    task = await _assigned_task(session, tmp_path, auto_execute=True, employee_id="astra-retry")
-    task_id = task.id
-    claimed = await Dispatcher(session).claim_once()
-    assert claimed is not None and claimed.id == task_id
-    # 模拟 start() 失败：没有 Session、没有待确认输入、没有运行时错误。
-    assert claimed.current_session_id is None
-    assert claimed.pending_message_id is None
-    assert claimed.runtime_error is None
-
-    retried = await Dispatcher(session).claim_once()
-    assert retried is not None
-    assert retried.id == task_id
-    assert retried.employee_id == "astra-retry"
-    assert retried.execution_environment_snapshot["workspace_root"] == str(tmp_path / "employee-workspace")
+    assert started == ["T-auto"]
 
 
 class FakeSource(TaskSource):
@@ -452,31 +260,6 @@ def test_opencode_usage_parser_uses_actual_json_events():
     ]
 
 
-async def test_local_environment_check_reports_binary_and_workspace(tmp_path: Path):
-    binary_dir = tmp_path / "Agent Program Files"
-    binary_dir.mkdir()
-    binary = fake_agent_launcher(binary_dir, 'print("fake-opencode-1.0")\n', "fake-opencode")
-    environment = OpenCodeExecutionEnvironment(
-        employee_id="astra-check",
-        opencode_server_port=54198,
-        mode="LOCAL",
-        name="本地检查",
-        opencode_path=str(binary),
-        workspace_root=str(tmp_path / "workspaces"),
-    )
-
-    (tmp_path / "workspaces").mkdir()
-    checks = await ExecutionEnvironmentRuntime().test(environment)
-
-    assert [item.name for item in checks] == [
-        "Agent 命令存在",
-        "Agent 命令可启动",
-        "Workspace 可用",
-        "OpenCode Server",
-    ]
-    assert all(item.passed for item in checks)
-
-
 async def test_paramiko_exec_channel_closes_stdin_and_streams_output():
     class FakeChannel:
         closed = False
@@ -567,57 +350,6 @@ def test_windows_batch_command_does_not_prequote_multiline_arguments():
     )
 
     assert command[-1] == "第一行\n第二行 & 由 subprocess 负责转义"
-
-
-async def test_opencode_permission_rejection_is_blocked_even_with_zero_exit(tmp_path: Path):
-    binary = fake_agent_launcher(
-        tmp_path,
-        "import sys\n"
-        'print(\'{"type":"text","part":{"text":"无法写入目标文件"}}\')\n'
-        'print("permission requested: external_directory; auto-rejecting", file=sys.stderr)\n',
-        "permission-rejected-opencode",
-    )
-    task = Task(
-        id="T-PERMISSION-REJECTED",
-        source="manual",
-        task_type="ISSUE",
-        category_id="testing-platform",
-        title="验证权限拒绝识别",
-        description="创建文件",
-        acceptance_criteria=[{"id": "AC-01", "content": "文件已创建"}],
-        priority="LOW",
-        completion_policy="AUTO",
-        status=TaskStatus.RUNNING,
-    )
-
-    result = await OpenCodeCLIExecutor(opencode_binary=str(binary)).start(task, tmp_path)
-
-    assert result.exit_code == 0
-    assert result.status == "WAITING_INPUT"
-
-
-def test_employee_model_is_passed_to_agent_command(tmp_path: Path):
-    task = Task(
-        id="T-EMPLOYEE-MODEL",
-        source="manual",
-        task_type="REQUIREMENT",
-        category_id="testing-platform",
-        title="验证员工模型配置",
-        description="模型应作为 Agent 启动参数",
-        acceptance_criteria=[{"id": "AC-01", "content": "使用指定模型"}],
-        priority="LOW",
-        completion_policy="AUTO",
-        status=TaskStatus.RUNNING,
-    )
-    executor = OpenCodeCLIExecutor(
-        opencode_binary="opencode",
-        model_name="deepseek/deepseek-v4-flash",
-    )
-
-    command = executor._command(task, tmp_path)
-
-    model_index = command.index("--model")
-    assert command[model_index + 1] == "deepseek/deepseek-v4-flash"
 
 
 async def test_stream_poll_observes_external_commits_and_releases_connection():

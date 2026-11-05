@@ -26,7 +26,6 @@
         <span><b>{{ employee.counts.running }}</b>执行</span>
         <span><b>{{ employee.counts.queued }}</b>排队</span>
         <span><b>{{ employee.counts.waiting }}</b>待人工</span>
-        <span><b>{{ employee.counts.failed }}</b>异常</span>
         <span><b>{{ employee.counts.completedToday }}</b>今日完成</span>
       </div>
 
@@ -55,8 +54,8 @@
       <p v-if="kind === 'task' && task?.waitingReason" class="hint-reason wait">
         {{ task.waitingReason }}
       </p>
-      <p v-if="kind === 'task' && task?.failureReason" class="hint-reason fail">
-        {{ task.failureReason }}
+      <p v-if="kind === 'task' && task?.currentProgress" class="hint-reason fail">
+        {{ task.currentProgress }}
       </p>
       <p v-if="kind === 'task' && task?.conflict" class="hint-reason fail">
         责任员工与执行 Worker 归属冲突，画布不绘制执行光路。
@@ -92,9 +91,9 @@
             查看关联任务
           </RouterLink>
           <RouterLink
-            v-if="worker.digitalEmployeeId"
+            v-if="worker.originEmployeeId"
             class="hint-link"
-            :to="{ path: '/chat', query: { employee: worker.digitalEmployeeId } }"
+            :to="{ path: '/chat', query: { employee: worker.originEmployeeId } }"
           >员工对话</RouterLink>
         </template>
 
@@ -187,7 +186,7 @@ const title = computed(() => {
 const subtitle = computed(() => {
   if (props.kind === "employee") return props.employee?.domain || "数字员工";
   if (props.kind === "worker") {
-    return `${props.worker?.role || "执行节点"} · ${props.worker?.environmentMode || "环境未知"}`;
+    return `${props.worker?.name || "执行节点"} · ${props.worker?.environmentMode || "环境未知"}`;
   }
   if (props.kind === "execution") return "";
   if (props.kind === "task") return `${props.task?.id ?? ""} · ${props.task?.priority ?? ""}`;
@@ -213,7 +212,6 @@ const badge = computed(() => {
     if (!props.employee) return "";
     if (!props.employee.enabled) return "已停用";
     if (props.employee.counts.waiting) return "待人工";
-    if (props.employee.counts.failed) return "异常";
     if (props.employee.counts.running) return "运行中";
     return props.employee.interactionStatus === "available" ? "可交互" : "未绑定对话";
   }
@@ -227,7 +225,7 @@ const badge = computed(() => {
 const tone = computed(() => {
   if (props.kind === "employee") {
     if (!props.employee?.enabled) return "muted";
-    if (props.employee.counts.waiting || props.employee.counts.failed) return "warn";
+    if (props.employee.counts.waiting) return "warn";
     if (props.employee.counts.running) return "ok";
     return "ok";
   }
@@ -237,7 +235,7 @@ const tone = computed(() => {
     return "ok";
   }
   if (props.kind === "task") {
-    if (props.task?.status === "FAILED") return "warn";
+    if (false) return "warn";
     if (props.task?.status === "WAITING") return "wait";
     if (props.task?.status === "SUCCEEDED") return "muted";
     return "ok";

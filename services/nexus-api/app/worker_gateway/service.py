@@ -7,12 +7,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import timedelta
-from secrets import token_hex, token_urlsafe
+from secrets import token_urlsafe
 from typing import Any
 from uuid import uuid4
 
@@ -23,16 +24,13 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.config.settings import Settings, get_settings
 from app.database import SessionLocal
-from app.gateway.security import CredentialCipher, CredentialError, gateway_key_digest, verify_gateway_key
+from app.gateway.security import gateway_key_digest, verify_gateway_key
 from app.models import (
-    OpenCodeExecutionEnvironment,
+    AgentWorker,
     WorkerCommand,
-    WorkerConnection,
-    WorkerInstance,
     utcnow,
 )
 from app.runtime.redaction import redact_data
-from app.runtime.worker_readiness import compute_target_digest
 from app.worker_gateway.bus import ConnectionQueues, build_route_bus
 from app.worker_gateway.data_channel import DataChannel, http_frame_data, side_effect_http
 from app.worker_gateway.heartbeat import HeartbeatMonitor
@@ -47,13 +45,10 @@ from app.worker_gateway.protocol import (
     validate_command_name,
 )
 
-# 有副作用且结果未知时不能盲重发。阶段 1 没有 OpenCode 对账，投递成功后就停在原命令上。
-SIDE_EFFECT_COMMANDS = frozenset({"prompt", "upload_file"})
-
 logger = logging.getLogger(__name__)
 
 
-def held_slot_expire_statement(command_id: str, due: tuple, values: dict[str, Any]):
+def held_slot_expire_statement(command_id: int, due: tuple, values: dict[str, Any]):
     """Conditional expire of one held command. MySQL cannot run UPDATE … RETURNING."""
 
     return (
@@ -69,16 +64,14 @@ def expire_due_commands_statement(due: tuple, values: dict[str, Any]):
 
 @dataclass(slots=True)
 class AuthOk:
-    worker_instance_id: str
-    environment_id: int
+    agent_worker_id: str
     epoch: int
     ack: WorkerMessage
 
 
 @dataclass(slots=True)
 class EnrollResult:
-    worker_instance_id: str
-    environment_id: int
+    agent_worker_id: str
     token: str = field(repr=False)
     epoch: int
     rotated: bool
@@ -132,226 +125,110 @@ class WorkerGateway:
         # appending after the row moves.
         self._db_epochs: dict[str, int] = {}
 
-    async def enroll(
-        self,
-        session: AsyncSession,
-        environment_id: int,
-        *,
-        target_digest: str | None = None,
-        reuse_token: bool = False,
-    ) -> EnrollResult:
-        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        if environment is None:
-            raise WorkerGatewayError("unknown_environment", "执行环境不存在")
-        resolved_digest = (
-            target_digest if target_digest is not None else compute_target_digest(environment)
+    async def enroll(self, session, agent_worker_id: str) -> EnrollResult:
+        worker = await session.scalar(
+            select(AgentWorker).where(AgentWorker.id == agent_worker_id).with_for_update()
         )
-        existing = await session.scalar(
-            select(WorkerInstance).where(WorkerInstance.environment_id == environment_id)
-        )
+        if worker is None:
+            raise WorkerGatewayError("unknown_worker", "Worker 不存在")
+        from app.runtime.occupancy import occupying_exists
+
+        if await session.scalar(select(1).where(occupying_exists(worker.id))):
+            raise WorkerGatewayError("worker_busy", "Worker 有未释放任务，不能更换认证凭据")
+        previous = worker.epoch
+        token = "wtk_" + token_urlsafe(32)
+        worker.token_digest = gateway_key_digest(token)
+        worker.epoch += 1
+        worker.status = "OFFLINE" if worker.status != "PAUSED" else "PAUSED"
+        await session.commit()
+        await self.bus.clear_owner(worker.id, previous, None)
+        self._close_local_socket(worker.id, previous)
+        return EnrollResult(worker.id, token, worker.epoch, bool(previous))
+
+    async def authenticate(self, session, message, token):
+        if message.type != "command" or message.payload.get("name") != "authenticate":
+            raise WorkerGatewayError("unauthorized", "认证失败")
+        worker = await session.get(AgentWorker, message.agent_worker_id)
+        if worker is None or not worker.token_digest or not verify_gateway_key(token, worker.token_digest):
+            raise WorkerGatewayError("unauthorized", "认证失败")
+        from app.runtime.occupancy import occupying_exists
+
+        occupied = bool(await session.scalar(select(1).where(occupying_exists(worker.id))))
+        worker_id, expected = worker.id, worker.epoch
         now = utcnow()
-        if reuse_token and existing is not None and existing.target_digest == resolved_digest:
-            existing_token = self._decrypt_token(existing.token_ciphertext)
-            if existing_token and verify_gateway_key(existing_token, existing.token_digest):
-                return EnrollResult(existing.id, environment_id, existing_token, existing.epoch, False)
-
-        token = f"wtk_{token_urlsafe(32)}"
-        digest = gateway_key_digest(token)
-        token_ciphertext = self._token_ciphertext(token)
-        if existing is None:
-            instance = WorkerInstance(
-                id=f"wrk_{token_hex(16)}",
-                environment_id=environment_id,
-                token_digest=digest,
-                token_ciphertext=token_ciphertext,
-                status="offline",
-                epoch=0,
-                target_digest=resolved_digest,
-            )
-            session.add(instance)
-            await session.commit()
-            return EnrollResult(instance.id, environment_id, token, 0, False)
-
-        previous_epoch = existing.epoch
-        worker_id = existing.id
-        new_epoch = previous_epoch + 1
-        session.expire(existing)
         result = await session.execute(
-            update(WorkerInstance)
-            .where(WorkerInstance.id == worker_id, WorkerInstance.epoch == previous_epoch)
+            update(AgentWorker)
+            .where(AgentWorker.id == worker_id, AgentWorker.epoch == expected)
             .values(
-                token_digest=digest,
-                token_ciphertext=token_ciphertext,
-                epoch=new_epoch,
-                status="offline",
-                target_digest=resolved_digest,
-                observed_snapshot=None,
-                observed_at=None,
+                epoch=expected + 1,
+                status="PAUSED" if worker.status == "PAUSED" else ("WORKING" if occupied else "IDLE"),
+                last_heartbeat_at=now,
+                agent_version=str(message.payload.get("agent_version") or "")[:64],
                 updated_at=now,
             )
         )
         if result.rowcount != 1:
             await session.rollback()
             raise WorkerGatewayError("epoch_conflict", "连接注册冲突")
-        await self._supersede_connections(session, worker_id, now, "token_rotated")
         await session.commit()
-        await self.bus.clear_owner(worker_id, previous_epoch, None)
-        self._close_local_socket(worker_id, previous_epoch)
-        self._db_epochs[worker_id] = new_epoch
-        return EnrollResult(worker_id, environment_id, token, new_epoch, True)
-
-    def _token_ciphertext(self, token: str) -> str | None:
-        try:
-            cipher = CredentialCipher(self.settings.gateway_master_key)
-        except CredentialError:
-            return None
-        if not cipher.available:
-            return None
-        return cipher.encrypt(token)
-
-    def _decrypt_token(self, ciphertext: str | None) -> str | None:
-        if not ciphertext:
-            return None
-        try:
-            cipher = CredentialCipher(self.settings.gateway_master_key)
-            if not cipher.available:
-                return None
-            return cipher.decrypt(ciphertext)
-        except CredentialError:
-            return None
-
-    async def authenticate(self, session: AsyncSession, message: WorkerMessage, token: str) -> AuthOk:
-        if message.type != "command" or message.payload.get("name") != "authenticate":
-            raise WorkerGatewayError("unauthorized", "认证失败")
-        instance = await session.get(WorkerInstance, message.worker_instance_id)
-        if instance is None or instance.environment_id != message.environment_id:
-            raise WorkerGatewayError("unauthorized", "认证失败")
-        if not verify_gateway_key(token, instance.token_digest):
-            raise WorkerGatewayError("unauthorized", "认证失败")
-        expected = instance.epoch
-        new_epoch = expected + 1
-        now = utcnow()
-        version = message.payload.get("agent_version")
-        agent_version = version[:64] if isinstance(version, str) and version else instance.agent_version
-        raw_snapshot = message.payload.get("snapshot")
-        worker_id = instance.id
-        environment_id = instance.environment_id
-        values: dict[str, Any] = {
-            "epoch": new_epoch,
-            "status": "online",
-            "last_heartbeat_at": now,
-            "connected_at": now,
-            "agent_version": agent_version,
-            "updated_at": now,
-        }
-        values["observed_snapshot"] = redact_data(raw_snapshot) if isinstance(raw_snapshot, dict) else None
-        values["observed_at"] = now if isinstance(raw_snapshot, dict) else None
-        session.expire(instance)
-        result = await session.execute(
-            update(WorkerInstance)
-            .where(WorkerInstance.id == worker_id, WorkerInstance.epoch == expected)
-            .values(**values)
-        )
-        if result.rowcount != 1:
-            await session.rollback()
-            raise WorkerGatewayError("epoch_conflict", "连接注册冲突")
-        await self._supersede_connections(session, worker_id, now, "epoch_replaced")
-        session.add(
-            WorkerConnection(worker_instance_id=worker_id, epoch=new_epoch, state="active", opened_at=now)
-        )
-        await session.commit()
-        self._db_epochs[worker_id] = new_epoch
+        epoch = expected + 1
+        self._db_epochs[worker_id] = epoch
+        raw = message.payload.get("snapshot")
+        if isinstance(raw, dict):
+            await self.update_observed_snapshot(session, worker_id, epoch, raw)
         ack = envelope(
             request_id=message.request_id,
-            worker_instance_id=worker_id,
-            environment_id=environment_id,
+            agent_worker_id=worker_id,
             session_id=None,
             message_type="response",
             payload={
                 "ok": True,
-                "epoch": new_epoch,
+                "epoch": epoch,
                 "ping_seconds": self.settings.worker_gateway_ping_seconds,
                 "ping_timeout_seconds": self.settings.worker_gateway_ping_timeout_seconds,
             },
         )
-        return AuthOk(worker_id, environment_id, new_epoch, ack)
+        return AuthOk(worker_id, epoch, ack)
 
-    async def disconnect(self, session: AsyncSession, worker_instance_id: str, epoch: int) -> None:
-        now = utcnow()
+    async def disconnect(self, session, agent_worker_id, epoch):
         await session.execute(
-            update(WorkerConnection)
+            update(AgentWorker)
             .where(
-                WorkerConnection.worker_instance_id == worker_instance_id,
-                WorkerConnection.epoch == epoch,
-                WorkerConnection.state == "active",
+                AgentWorker.id == agent_worker_id, AgentWorker.epoch == epoch, AgentWorker.status != "PAUSED"
             )
-            .values(state="closed", close_reason="disconnected", closed_at=now)
-        )
-        await session.execute(
-            update(WorkerInstance)
-            .where(
-                WorkerInstance.id == worker_instance_id,
-                WorkerInstance.epoch == epoch,
-                WorkerInstance.status == "online",
-            )
-            .values(status="offline", updated_at=now)
+            .values(status="OFFLINE", updated_at=utcnow())
         )
         await session.commit()
 
-    async def note_heartbeat(
-        self,
-        session: AsyncSession,
-        worker_instance_id: str,
-        epoch: int,
-        *,
-        snapshot: dict[str, Any] | None = None,
-    ) -> bool:
-        now = utcnow()
-        values: dict[str, Any] = {"last_heartbeat_at": now, "updated_at": now}
-        if isinstance(snapshot, dict):
-            values["observed_snapshot"] = redact_data(snapshot)
-            values["observed_at"] = now
+    async def note_heartbeat(self, session, agent_worker_id, epoch, *, snapshot=None):
         result = await session.execute(
-            update(WorkerInstance)
-            .where(
-                WorkerInstance.id == worker_instance_id,
-                WorkerInstance.epoch == epoch,
-                WorkerInstance.status == "online",
-            )
-            .values(**values)
+            update(AgentWorker)
+            .where(AgentWorker.id == agent_worker_id, AgentWorker.epoch == epoch)
+            .values(last_heartbeat_at=utcnow(), updated_at=utcnow())
         )
         await session.commit()
+        if result.rowcount == 1 and isinstance(snapshot, dict):
+            await self.update_observed_snapshot(session, agent_worker_id, epoch, snapshot)
         return result.rowcount == 1
 
-    async def update_observed_snapshot(
-        self,
-        session: AsyncSession,
-        worker_instance_id: str,
-        epoch: int,
-        snapshot: dict[str, Any],
-    ) -> bool:
-        now = utcnow()
-        result = await session.execute(
-            update(WorkerInstance)
-            .where(
-                WorkerInstance.id == worker_instance_id,
-                WorkerInstance.epoch == epoch,
-                WorkerInstance.status == "online",
-            )
-            .values(
-                observed_snapshot=redact_data(snapshot),
-                observed_at=now,
-                updated_at=now,
-            )
-        )
+    async def update_observed_snapshot(self, session, agent_worker_id, epoch, snapshot):
+        if not await self.epoch_is_current(session, agent_worker_id, epoch):
+            return False
         await session.commit()
-        return result.rowcount == 1
+        await self.bus.put_text(
+            f"worker-observed:{agent_worker_id}:{epoch}", json.dumps(redact_data(snapshot)), 120
+        )
+        return True
+
+    async def observed_snapshot(self, worker):
+        raw = await self.bus.get_text(f"worker-observed:{worker.id}:{worker.epoch}")
+        return json.loads(raw) if raw else None
 
     async def dispatch(
         self,
         session: AsyncSession,
         *,
-        worker_instance_id: str,
+        agent_worker_id: str,
         request_id: str,
         name: str,
         payload: dict[str, Any],
@@ -367,17 +244,16 @@ class WorkerGateway:
             encoded_body(payload)
         existing = await session.scalar(select(WorkerCommand).where(WorkerCommand.request_id == request_id))
         if existing is not None:
-            self._require_same_command(existing, worker_instance_id, name, payload, session_id)
+            self._require_same_command(existing, agent_worker_id, name, payload, session_id)
             return DispatchResult(existing, False, True, None)
-        instance = await session.get(WorkerInstance, worker_instance_id)
+        instance = await session.get(AgentWorker, agent_worker_id)
         if instance is None:
             raise WorkerGatewayError("unknown_worker", "Worker 不存在")
         now = utcnow()
         timeout = timeout_seconds or self.settings.worker_gateway_command_timeout_seconds
         frame = envelope(
             request_id=request_id,
-            worker_instance_id=worker_instance_id,
-            environment_id=instance.environment_id,
+            agent_worker_id=agent_worker_id,
             session_id=session_id,
             message_type="command",
             payload={"name": name, "data": self._publish_data(name, payload)},
@@ -390,12 +266,15 @@ class WorkerGateway:
             raise WorkerGatewayError("invalid_message", "payload 不能序列化") from exc
         if len(encoded) > self.settings.worker_gateway_max_frame_bytes:
             raise WorkerGatewayError("frame_too_large", "单帧超过限制")
-        owner = await self.bus.get_owner(worker_instance_id)
-        online = instance.status == "online" and owner is not None and owner[1] == instance.epoch
+        owner = await self.bus.get_owner(agent_worker_id)
+        online = (
+            instance.status in {"IDLE", "WORKING", "PAUSED"}
+            and owner is not None
+            and owner[1] == instance.epoch
+        )
         command = WorkerCommand(
             request_id=request_id,
-            worker_instance_id=worker_instance_id,
-            environment_id=instance.environment_id,
+            agent_worker_id=agent_worker_id,
             session_id=session_id,
             name=name,
             payload=payload,
@@ -410,12 +289,10 @@ class WorkerGateway:
             await session.commit()
         except IntegrityError:
             await session.rollback()
-            stored = await session.scalar(
-                select(WorkerCommand).where(WorkerCommand.request_id == request_id)
-            )
+            stored = await session.scalar(select(WorkerCommand).where(WorkerCommand.request_id == request_id))
             if stored is None:
                 raise
-            self._require_same_command(stored, worker_instance_id, name, payload, session_id)
+            self._require_same_command(stored, agent_worker_id, name, payload, session_id)
             return DispatchResult(stored, False, True, None)
         if name == "http":
             await DataChannel(self).stage_request(command)
@@ -429,34 +306,34 @@ class WorkerGateway:
     def _require_same_command(
         self,
         existing: WorkerCommand,
-        worker_instance_id: str,
+        agent_worker_id: str,
         name: str,
         payload: dict[str, Any],
         session_id: str | None,
     ) -> None:
         if (
-            existing.worker_instance_id != worker_instance_id
+            existing.agent_worker_id != agent_worker_id
             or existing.name != name
             or existing.payload != payload
             or existing.session_id != session_id
         ):
             raise WorkerGatewayError("duplicate_request", "request_id 已用于其他指令")
 
-    async def dispatch_due(self, worker_instance_id: str, epoch: int) -> int:
-        """只补投当前 epoch 上仍未 ACK 的指令。prompt 离开 unpublished 后不再发布。"""
+    async def dispatch_due(self, agent_worker_id: str, epoch: int) -> int:
+        """只补投当前 epoch 的安全指令；未知副作用由 Task 串行重发并生成新 request_id。"""
 
-        owner = await self.bus.get_owner(worker_instance_id)
+        owner = await self.bus.get_owner(agent_worker_id)
         if owner is None or owner[0] != self.owner_id or owner[1] != epoch:
             return 0
         lease_before = utcnow() - timedelta(seconds=self.settings.worker_gateway_dispatch_lease_seconds)
         async with SessionLocal() as session:
-            instance = await session.get(WorkerInstance, worker_instance_id)
+            instance = await session.get(AgentWorker, agent_worker_id)
             if instance is None or instance.epoch != epoch:
                 return 0
             rows = (
                 await session.scalars(
                     select(WorkerCommand).where(
-                        WorkerCommand.worker_instance_id == worker_instance_id,
+                        WorkerCommand.agent_worker_id == agent_worker_id,
                         WorkerCommand.epoch == epoch,
                         WorkerCommand.status == "pending",
                         or_(
@@ -486,10 +363,10 @@ class WorkerGateway:
                 return False, "offline"
             if self._side_effect(command.name, command.payload) and command.delivery_state != "unpublished":
                 return False, "needs_reconcile"
-            instance = await session.get(WorkerInstance, command.worker_instance_id)
+            instance = await session.get(AgentWorker, command.agent_worker_id)
             if instance is None or instance.epoch != command.epoch:
                 return False, "offline"
-            owner = await self.bus.get_owner(command.worker_instance_id)
+            owner = await self.bus.get_owner(command.agent_worker_id)
             if owner is None or owner[1] != command.epoch:
                 return False, "offline"
             if owner_only and owner[0] != self.owner_id:
@@ -498,7 +375,7 @@ class WorkerGateway:
             lease_before = now - timedelta(seconds=self.settings.worker_gateway_dispatch_lease_seconds)
             previous_state = command.delivery_state
             attempts = command.delivery_attempts + 1
-            worker_id = command.worker_instance_id
+            worker_id = command.agent_worker_id
             epoch = command.epoch
             name = command.name
             reserved = False
@@ -508,8 +385,8 @@ class WorkerGateway:
                     await session.rollback()
                     return False, "http_busy"
             current_instance = (
-                select(WorkerInstance.id)
-                .where(WorkerInstance.id == worker_id, WorkerInstance.epoch == epoch)
+                select(AgentWorker.id)
+                .where(AgentWorker.id == worker_id, AgentWorker.epoch == epoch)
                 .scalar_subquery()
             )
             claim = await session.execute(
@@ -517,7 +394,7 @@ class WorkerGateway:
                 .where(
                     WorkerCommand.id == command.id,
                     WorkerCommand.epoch == epoch,
-                    WorkerCommand.worker_instance_id == current_instance,
+                    WorkerCommand.agent_worker_id == current_instance,
                     WorkerCommand.status == "pending",
                     WorkerCommand.delivery_state == previous_state,
                     or_(
@@ -610,7 +487,7 @@ class WorkerGateway:
 
     @staticmethod
     def _side_effect(name: str, payload: dict[str, Any] | None) -> bool:
-        return name in SIDE_EFFECT_COMMANDS or side_effect_http(name, payload)
+        return name == "upload_file" or side_effect_http(name, payload)
 
     def _command_frame(self, command: WorkerCommand) -> dict[str, Any]:
         deadline = command.deadline_at or (
@@ -618,8 +495,7 @@ class WorkerGateway:
         )
         message = envelope(
             request_id=command.request_id,
-            worker_instance_id=command.worker_instance_id,
-            environment_id=command.environment_id,
+            agent_worker_id=command.agent_worker_id,
             session_id=command.session_id,
             message_type="command",
             payload={"name": command.name, "data": self._publish_data(command.name, command.payload or {})},
@@ -632,22 +508,22 @@ class WorkerGateway:
         self,
         session: AsyncSession,
         *,
-        worker_instance_id: str,
+        agent_worker_id: str,
         epoch: int,
         message: WorkerMessage,
     ) -> bool:
         stage = message.payload.get("stage")
         now = utcnow()
         current_instance = (
-            select(WorkerInstance.id)
-            .where(WorkerInstance.id == worker_instance_id, WorkerInstance.epoch == epoch)
+            select(AgentWorker.id)
+            .where(AgentWorker.id == agent_worker_id, AgentWorker.epoch == epoch)
             .scalar_subquery()
         )
         where = (
             WorkerCommand.request_id == message.request_id,
-            WorkerCommand.worker_instance_id == worker_instance_id,
+            WorkerCommand.agent_worker_id == agent_worker_id,
             WorkerCommand.epoch == epoch,
-            WorkerCommand.worker_instance_id == current_instance,
+            WorkerCommand.agent_worker_id == current_instance,
         )
         if stage == "ack":
             result = await session.execute(
@@ -683,7 +559,7 @@ class WorkerGateway:
             .values(**values, slot_held=False)
         )
         if released.rowcount == 1:
-            await release_http_slot(session, worker_instance_id, epoch)
+            await release_http_slot(session, agent_worker_id, epoch)
             await session.commit()
             return True
         result = await session.execute(
@@ -694,21 +570,21 @@ class WorkerGateway:
         await session.commit()
         return result.rowcount == 1
 
-    async def epoch_is_current(self, session: AsyncSession, worker_instance_id: str, epoch: int) -> bool:
-        instance = await session.get(WorkerInstance, worker_instance_id)
+    async def epoch_is_current(self, session: AsyncSession, agent_worker_id: str, epoch: int) -> bool:
+        instance = await session.get(AgentWorker, agent_worker_id)
         return instance is not None and instance.epoch == epoch
 
-    async def database_epoch(self, worker_instance_id: str) -> int | None:
+    async def database_epoch(self, agent_worker_id: str) -> int | None:
         """Read the row epoch and drop a cached value that no longer matches."""
 
         async with SessionLocal() as session:
-            instance = await session.get(WorkerInstance, worker_instance_id)
+            instance = await session.get(AgentWorker, agent_worker_id)
         epoch = None if instance is None else instance.epoch
-        cached = self._db_epochs.get(worker_instance_id)
+        cached = self._db_epochs.get(agent_worker_id)
         if cached != epoch:
-            self._db_epochs.pop(worker_instance_id, None)
+            self._db_epochs.pop(agent_worker_id, None)
             if epoch is not None:
-                self._db_epochs[worker_instance_id] = epoch
+                self._db_epochs[agent_worker_id] = epoch
         return epoch
 
     async def record_worker_event(self, auth: AuthOk, message: WorkerMessage) -> bool:
@@ -716,12 +592,12 @@ class WorkerGateway:
         directory = str(payload.get("directory") or "")
         if not directory or message.epoch != auth.epoch:
             return False
-        if await self.database_epoch(auth.worker_instance_id) != message.epoch:
+        if await self.database_epoch(auth.agent_worker_id) != message.epoch:
             return False
         from app.worker_gateway.events import EventLog
 
         await EventLog(self.bus, limit=self.settings.worker_gateway_event_queue_size).append(
-            worker_id=auth.worker_instance_id,
+            worker_id=auth.agent_worker_id,
             epoch=message.epoch,
             directory=directory,
             payload=payload,
@@ -732,36 +608,35 @@ class WorkerGateway:
         current = now or utcnow()
         stale_after = timedelta(
             seconds=(
-                self.settings.worker_gateway_ping_seconds
-                + self.settings.worker_gateway_ping_timeout_seconds
+                self.settings.worker_gateway_ping_seconds + self.settings.worker_gateway_ping_timeout_seconds
             )
         )
         stale_before = current - stale_after
         stale_filter = (
-            WorkerInstance.status == "online",
+            AgentWorker.status.in_(("IDLE", "WORKING")),
             or_(
-                WorkerInstance.last_heartbeat_at.is_(None),
-                WorkerInstance.last_heartbeat_at <= stale_before,
+                AgentWorker.last_heartbeat_at.is_(None),
+                AgentWorker.last_heartbeat_at <= stale_before,
             ),
         )
         async with SessionLocal() as session:
             stale_rows = (
-                await session.execute(select(WorkerInstance.id, WorkerInstance.epoch).where(*stale_filter))
+                await session.execute(select(AgentWorker.id, AgentWorker.epoch).where(*stale_filter))
             ).all()
             # 只下线这次读到的 epoch。重连若已切到新 epoch，不能被这次清扫改成离线。
             if stale_rows:
                 pinned = or_(
                     *[
                         and_(
-                            WorkerInstance.id == worker_id,
-                            WorkerInstance.epoch == epoch,
+                            AgentWorker.id == worker_id,
+                            AgentWorker.epoch == epoch,
                             *stale_filter,
                         )
                         for worker_id, epoch in stale_rows
                     ]
                 )
                 offline = await session.execute(
-                    update(WorkerInstance).where(pinned).values(status="offline", updated_at=current)
+                    update(AgentWorker).where(pinned).values(status="OFFLINE", updated_at=current)
                 )
             else:
                 offline = None
@@ -779,16 +654,14 @@ class WorkerGateway:
             )
             held_rows = (
                 await session.execute(
-                    select(WorkerCommand.id, WorkerCommand.worker_instance_id, WorkerCommand.epoch).where(
+                    select(WorkerCommand.id, WorkerCommand.agent_worker_id, WorkerCommand.epoch).where(
                         *due, WorkerCommand.slot_held.is_(True)
                     )
                 )
             ).all()
             released_slots: list[tuple[str, int]] = []
             for command_id, worker_id, epoch in held_rows:
-                released = await session.execute(
-                    held_slot_expire_statement(command_id, due, expired_values)
-                )
+                released = await session.execute(held_slot_expire_statement(command_id, due, expired_values))
                 if released.rowcount != 1:
                     continue
                 released_slots.append((worker_id, epoch))
@@ -800,15 +673,15 @@ class WorkerGateway:
                 wanted = {(row[0], row[1]) for row in stale_rows}
                 current_rows = (
                     await session.execute(
-                        select(WorkerInstance.id, WorkerInstance.epoch, WorkerInstance.status).where(
-                            WorkerInstance.id.in_([row[0] for row in stale_rows])
+                        select(AgentWorker.id, AgentWorker.epoch, AgentWorker.status).where(
+                            AgentWorker.id.in_([row[0] for row in stale_rows])
                         )
                     )
                 ).all()
                 offlined = [
                     (worker_id, epoch)
                     for worker_id, epoch, status in current_rows
-                    if (worker_id, epoch) in wanted and status == "offline"
+                    if (worker_id, epoch) in wanted and status == "OFFLINE"
                 ]
         for worker_id, epoch in offlined:
             self._close_local_socket(worker_id, epoch)
@@ -824,17 +697,15 @@ class WorkerGateway:
         watched: list[asyncio.Task[None]] = []
         try:
             auth = await self._read_auth(websocket)
-            owned = await self.bus.set_owner(auth.worker_instance_id, self.owner_id, auth.epoch)
+            owned = await self.bus.set_owner(auth.agent_worker_id, self.owner_id, auth.epoch)
             if not owned:
                 raise ConnectionError("epoch_stale")
             async with SessionLocal() as session:
-                current = await self.epoch_is_current(session, auth.worker_instance_id, auth.epoch)
+                current = await self.epoch_is_current(session, auth.agent_worker_id, auth.epoch)
             if not current:
-                await self.bus.clear_owner(auth.worker_instance_id, auth.epoch, self.owner_id)
+                await self.bus.clear_owner(auth.agent_worker_id, auth.epoch, self.owner_id)
                 raise ConnectionError("epoch_stale")
-            queues = await self.bus.bind(
-                auth.worker_instance_id, epoch=auth.epoch, owner_id=self.owner_id
-            )
+            queues = await self.bus.bind(auth.agent_worker_id, epoch=auth.epoch, owner_id=self.owner_id)
             if queues is None:
                 raise ConnectionError("epoch_stale")
             lease = _SocketLease(
@@ -843,7 +714,7 @@ class WorkerGateway:
                 inbound_events=deque(),
                 event_limit=self.settings.worker_gateway_event_queue_size,
             )
-            if not self._remember_socket(auth.worker_instance_id, lease):
+            if not self._remember_socket(auth.agent_worker_id, lease):
                 raise ConnectionError("epoch_stale")
             await websocket.send_text(dump_message(auth.ack))
             monitor = HeartbeatMonitor(self.settings.worker_gateway_heartbeat_misses)
@@ -857,9 +728,7 @@ class WorkerGateway:
                 watched.append(queues.consumer)
             done, _pending = await asyncio.wait(set(watched), return_when=asyncio.FIRST_COMPLETED)
             errors = [
-                task.exception()
-                for task in done
-                if not task.cancelled() and task.exception() is not None
+                task.exception() for task in done if not task.cancelled() and task.exception() is not None
             ]
             if errors:
                 raise errors[0]
@@ -882,11 +751,11 @@ class WorkerGateway:
                 await asyncio.gather(*watched, return_exceptions=True)
             if auth is not None:
                 if queues is not None:
-                    await self.bus.unbind(auth.worker_instance_id, queues)
-                await self.bus.clear_owner(auth.worker_instance_id, auth.epoch, self.owner_id)
-                self._forget_socket(auth.worker_instance_id, auth.epoch)
+                    await self.bus.unbind(auth.agent_worker_id, queues)
+                await self.bus.clear_owner(auth.agent_worker_id, auth.epoch, self.owner_id)
+                self._forget_socket(auth.agent_worker_id, auth.epoch)
                 async with SessionLocal() as session:
-                    await self.disconnect(session, auth.worker_instance_id, auth.epoch)
+                    await self.disconnect(session, auth.agent_worker_id, auth.epoch)
 
     async def aclose(self) -> None:
         for lease in list(self.sockets.values()):
@@ -923,8 +792,8 @@ class WorkerGateway:
                 # One bad frame must not drop the Worker. The body can carry secrets.
                 logger.warning("worker frame rejected code=%s", exc.code)
                 continue
-            if message.worker_instance_id != auth.worker_instance_id:
-                raise WorkerGatewayError("invalid_message", "worker_instance_id 与连接不一致")
+            if message.agent_worker_id != auth.agent_worker_id:
+                raise WorkerGatewayError("invalid_message", "agent_worker_id 与连接不一致")
             if message.type == "heartbeat":
                 await self._on_heartbeat(auth, message, monitor)
                 if message.payload.get("kind") == "ping":
@@ -941,7 +810,7 @@ class WorkerGateway:
             async with SessionLocal() as session:
                 applied = await self.apply_response(
                     session,
-                    worker_instance_id=auth.worker_instance_id,
+                    agent_worker_id=auth.agent_worker_id,
                     epoch=auth.epoch,
                     message=message,
                 )
@@ -950,25 +819,24 @@ class WorkerGateway:
                     await self._route_response(message)
                 continue
             async with SessionLocal() as session:
-                current = await self.epoch_is_current(session, auth.worker_instance_id, auth.epoch)
+                current = await self.epoch_is_current(session, auth.agent_worker_id, auth.epoch)
             if not current:
                 raise ConnectionError("epoch_stale")
 
     async def publish_event_control(self, auth: AuthOk, directory: str) -> str | None:
         from app.worker_gateway.events import EventLog
 
-        action = await EventLog(
-            self.bus, limit=self.settings.worker_gateway_event_queue_size
-        ).control(worker_id=auth.worker_instance_id, epoch=auth.epoch, directory=directory)
+        action = await EventLog(self.bus, limit=self.settings.worker_gateway_event_queue_size).control(
+            worker_id=auth.agent_worker_id, epoch=auth.epoch, directory=directory
+        )
         if action is None:
             return None
-        queues = self.bus.bound.get(auth.worker_instance_id)
+        queues = self.bus.bound.get(auth.agent_worker_id)
         if queues is None:
             return action
         message = envelope(
             request_id=f"evt-{uuid4().hex}",
-            worker_instance_id=auth.worker_instance_id,
-            environment_id=auth.environment_id,
+            agent_worker_id=auth.agent_worker_id,
             session_id=None,
             message_type="command",
             payload={"name": action, "data": {"directory": directory}},
@@ -992,7 +860,7 @@ class WorkerGateway:
         async with SessionLocal() as session:
             current = await self.note_heartbeat(
                 session,
-                auth.worker_instance_id,
+                auth.agent_worker_id,
                 auth.epoch,
                 snapshot=snapshot,
             )
@@ -1000,7 +868,7 @@ class WorkerGateway:
             raise ConnectionError("epoch_stale")
 
     async def _queue_heartbeat(self, auth: AuthOk, request_id: str, kind: str) -> None:
-        queues = self.bus.bound.get(auth.worker_instance_id)
+        queues = self.bus.bound.get(auth.agent_worker_id)
         if queues is None:
             return
         frame = self._heartbeat_frame(auth, request_id, kind)
@@ -1021,9 +889,7 @@ class WorkerGateway:
             if stop.is_set():
                 return
             try:
-                refreshed = await self.bus.touch_owner(
-                    auth.worker_instance_id, self.owner_id, auth.epoch
-                )
+                refreshed = await self.bus.touch_owner(auth.agent_worker_id, self.owner_id, auth.epoch)
             except Exception:
                 logger.warning("worker owner lease refresh failed", exc_info=True)
                 refreshed = False
@@ -1050,16 +916,14 @@ class WorkerGateway:
     def _heartbeat_frame(self, auth: AuthOk, request_id: str, kind: str) -> dict[str, Any]:
         message = envelope(
             request_id=request_id,
-            worker_instance_id=auth.worker_instance_id,
-            environment_id=auth.environment_id,
+            agent_worker_id=auth.agent_worker_id,
             session_id=None,
             message_type="heartbeat",
             payload={"kind": kind},
         )
         message.epoch = auth.epoch
         horizon = (
-            self.settings.worker_gateway_ping_seconds
-            + self.settings.worker_gateway_ping_timeout_seconds
+            self.settings.worker_gateway_ping_seconds + self.settings.worker_gateway_ping_timeout_seconds
         )
         message.expires_at = int(time.time()) + horizon
         return message.to_dict()
@@ -1075,11 +939,11 @@ class WorkerGateway:
             if stop.is_set():
                 return
             try:
-                if not await self.bus.touch_owner(auth.worker_instance_id, self.owner_id, auth.epoch):
+                if not await self.bus.touch_owner(auth.agent_worker_id, self.owner_id, auth.epoch):
                     stop.set()
                     await self._try_close(websocket, 4000)
                     return
-                await self.dispatch_due(auth.worker_instance_id, auth.epoch)
+                await self.dispatch_due(auth.agent_worker_id, auth.epoch)
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -1092,9 +956,7 @@ class WorkerGateway:
             waiting = asyncio.create_task(queues.wait_frame())
             halted = asyncio.create_task(stop.wait())
             try:
-                done, pending = await asyncio.wait(
-                    {waiting, halted}, return_when=asyncio.FIRST_COMPLETED
-                )
+                done, pending = await asyncio.wait({waiting, halted}, return_when=asyncio.FIRST_COMPLETED)
             except asyncio.CancelledError:
                 waiting.cancel()
                 halted.cancel()
@@ -1113,37 +975,30 @@ class WorkerGateway:
             if not frame_acceptable(message, auth.epoch, time.time()):
                 await queues.release_delivered(frame)
                 continue
-            if not await self.bus.touch_owner(auth.worker_instance_id, self.owner_id, auth.epoch):
+            if not await self.bus.touch_owner(auth.agent_worker_id, self.owner_id, auth.epoch):
                 stop.set()
                 await self._try_close(websocket, 4000)
                 return
             await websocket.send_text(dump_message(message))
             await queues.release_delivered(frame)
 
-    async def _supersede_connections(self, session: AsyncSession, worker_id: str, now, reason: str) -> None:
-        await session.execute(
-            update(WorkerConnection)
-            .where(WorkerConnection.worker_instance_id == worker_id, WorkerConnection.state == "active")
-            .values(state="superseded", close_reason=reason, closed_at=now)
-        )
-
-    def _remember_socket(self, worker_instance_id: str, lease: _SocketLease) -> bool:
-        previous = self.sockets.get(worker_instance_id)
+    def _remember_socket(self, agent_worker_id: str, lease: _SocketLease) -> bool:
+        previous = self.sockets.get(agent_worker_id)
         if previous is not None and previous is not lease and previous.epoch >= lease.epoch:
             return False
-        self.sockets[worker_instance_id] = lease
+        self.sockets[agent_worker_id] = lease
         if previous is not None and previous is not lease:
             previous.superseded = True
             asyncio.create_task(self._try_close(previous.websocket, 4000))
         return True
 
-    def _forget_socket(self, worker_instance_id: str, epoch: int) -> None:
-        current = self.sockets.get(worker_instance_id)
+    def _forget_socket(self, agent_worker_id: str, epoch: int) -> None:
+        current = self.sockets.get(agent_worker_id)
         if current is not None and current.epoch == epoch:
-            del self.sockets[worker_instance_id]
+            del self.sockets[agent_worker_id]
 
-    def _close_local_socket(self, worker_instance_id: str, epoch: int) -> None:
-        lease = self.sockets.get(worker_instance_id)
+    def _close_local_socket(self, agent_worker_id: str, epoch: int) -> None:
+        lease = self.sockets.get(agent_worker_id)
         if lease is None or lease.epoch != epoch:
             return
         lease.superseded = True
@@ -1152,8 +1007,7 @@ class WorkerGateway:
     async def _send_failure(self, websocket: Any, exc: WorkerGatewayError) -> None:
         message = envelope(
             request_id="auth",
-            worker_instance_id="",
-            environment_id=0,
+            agent_worker_id="",
             session_id=None,
             message_type="response",
             payload={"ok": False, "error_code": exc.code},

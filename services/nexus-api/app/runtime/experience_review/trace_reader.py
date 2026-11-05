@@ -8,8 +8,8 @@ from typing import Any
 
 from app.config.settings import get_settings
 from app.database import SessionLocal
-from app.models import RuntimeSession
-from app.runtime.session_connection import connect, resolve_runtime_session_environment
+from app.models import AgentWorker
+from app.runtime.session_connection import connect, session_tree
 
 from .schemas import TraceResult
 from .trace_normalizer import normalize_messages
@@ -44,14 +44,11 @@ async def read_trace(snapshot: dict[str, Any]) -> TraceResult:
         raise TraceUnavailable("复盘来源没有 Session")
 
     async with SessionLocal() as db:
-        binding = await db.get(RuntimeSession, root)
-        if binding is None:
-            raise TraceUnavailable("根 RuntimeSession 不存在")
-        try:
-            environment = await resolve_runtime_session_environment(db, binding)
-        except Exception as exc:  # noqa: BLE001 - source resolution is an external boundary
-            raise TraceUnavailable(f"无法解析复盘执行环境: {exc}") from exc
-        workspace = str(snapshot.get("workspace") or binding.workspace or "")
+        environment = await db.get(AgentWorker, snapshot.get("agent_worker_id"))
+        if environment is None:
+            raise TraceUnavailable("复盘来源 Worker 不存在")
+        workspace = str(snapshot.get("workspace") or "")
+        db.expunge(environment)
 
     directory = Path(workspace)
     events = []
@@ -61,6 +58,9 @@ async def read_trace(snapshot: dict[str, Any]) -> TraceResult:
         async with connect(environment, start=False) as client:
             if not workspace:
                 raise TraceUnavailable("复盘来源没有 Workspace")
+            allowed = await session_tree(client, directory, root)
+            if not set(sessions).issubset(allowed):
+                raise TraceUnavailable("Session 不属于冻结的复盘来源")
             for session_id in sessions:
                 before: str | None = None
                 session_messages: list[dict[str, Any]] = []

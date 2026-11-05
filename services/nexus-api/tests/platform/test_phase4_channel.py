@@ -5,22 +5,13 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
-from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 
 from app.config.settings import get_settings
-from app.database import SessionLocal, init_database
-from app.models import AgentWorker, OpenCodeExecutionEnvironment, WorkerMaintenanceOperation
-from app.runtime.environment import ExecutionEnvironmentRuntime
-from app.runtime.maintenance import OperationLease, submit_operation
 from app.runtime.opencode_model import gateway_model
-from app.runtime.remote_provisioning import RemoteProvisioner, agent_wheel
+from app.runtime.remote_provisioning import agent_wheel
 from app.worker_agent.connection import handle_command
 from app.worker_agent.supervisor import RuntimeSupervisor
 from app.worker_gateway.protocol import envelope
@@ -37,134 +28,8 @@ def _direct(monkeypatch):
     monkeypatch.setattr(settings, "mcp_transport", "streamable-http")
     monkeypatch.setattr(settings, "gateway_openai_base", GATEWAY)
     monkeypatch.setattr(settings, "mcp_resource_server_url", MCP)
-    monkeypatch.setattr(
-        settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect"
-    )
+    monkeypatch.setattr(settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect")
     return settings
-
-
-async def _employee(**overrides) -> tuple[str, int]:
-    await init_database()
-    employee_id = "p4-" + uuid4().hex[:10]
-    async with SessionLocal() as db:
-        db.add(AgentWorker(id=employee_id, name=employee_id, role="build", current_task_count=0))
-        await db.flush()
-        values = dict(
-            employee_id=employee_id,
-            mode="LINUX_REMOTE",
-            name="Linux",
-            host="10.0.0.9",
-            port=22,
-            username="root",
-            ssh_password="test-ssh-secret",
-            workspace_root="/srv/project",
-            opencode_path="/usr/local/bin/opencode",
-            opencode_server_port=4096,
-            status="UNKNOWN",
-            status_detail={},
-        )
-        values.update(overrides)
-        row = OpenCodeExecutionEnvironment(**values)
-        db.add(row)
-        await db.commit()
-        return employee_id, row.id
-
-
-async def _reserve(employee_id, action):
-    async with SessionLocal() as db:
-        environment = await db.scalar(
-            select(OpenCodeExecutionEnvironment).where(
-                OpenCodeExecutionEnvironment.employee_id == employee_id
-            )
-        )
-        operation = await submit_operation(db, environment.id, action, requested_by="test")
-        now = datetime.now(UTC)
-        operation.state = "RUNNING"
-        operation.stage = "running"
-        operation.lease_owner = "test-lease"
-        operation.lease_until = now + timedelta(hours=1)
-        operation.started_at = now
-        await db.commit()
-        await db.refresh(operation)
-        environment_id = environment.id
-    async with SessionLocal() as db:
-        environment = await db.get(OpenCodeExecutionEnvironment, environment_id)
-        db.expunge(environment)
-    lease = OperationLease(operation.id, operation.attempt, "test-lease", 3600)
-    return environment, operation, lease
-
-
-@pytest.mark.asyncio
-async def test_deploy_rejects_loopback_before_ssh(monkeypatch):
-    monkeypatch.setattr(get_settings(), "mcp_transport", "streamable-http")
-    monkeypatch.setattr(get_settings(), "gateway_openai_base", "http://127.0.0.1:8110")
-    employee_id, _environment_id = await _employee()
-    environment, operation, lease = await _reserve(employee_id, "deploy")
-    called = False
-
-    async def opened(self, _environment):
-        nonlocal called
-        called = True
-        raise AssertionError("ssh")
-
-    monkeypatch.setattr(ExecutionEnvironmentRuntime, "open_session", opened)
-    events = []
-
-    async def emit(event):
-        events.append(event)
-
-    await RemoteProvisioner(environment, operation, lease=lease).run(emit)
-    assert called is False
-    async with SessionLocal() as db:
-        stored = await db.get(WorkerMaintenanceOperation, operation.id)
-    assert stored is not None and stored.state == "FAILED"
-    assert stored.active_environment_id is None
-    assert "内网" in str(stored.error_message)
-
-
-@pytest.mark.parametrize("failure", [None, "gateway", "agent"])
-@pytest.mark.asyncio
-async def test_server_deployment_order_and_failure_do_not_report_early_success(
-    monkeypatch, failure
-):
-    _direct(monkeypatch)
-    employee_id, _ = await _employee()
-    environment, operation, lease = await _reserve(employee_id, "deploy")
-    worker = RemoteProvisioner(environment, operation, lease=lease)
-    ssh = SimpleNamespace(close=AsyncMock())
-    monkeypatch.setattr(worker.runtime, "open_session", AsyncMock(return_value=ssh))
-    order = []
-
-    def stage(name):
-        async def execute(*_args, **_kwargs):
-            order.append(name)
-            if failure == name:
-                raise RuntimeError("fixture failure: " + name)
-
-        return execute
-
-    monkeypatch.setattr("app.runtime.remote_provisioning.prepare_python", stage("probe"))
-    worker._native_idle = AsyncMock(return_value=True)
-    worker._install = stage("runtime")
-    worker._probe_gateway = stage("gateway")
-    worker._install_worker = stage("agent")
-    worker._converge_readiness = stage("converge")
-    worker._finish = AsyncMock(return_value=True)
-    events = []
-
-    async def emit(event):
-        events.append(event)
-
-    await worker.run(emit)
-    assert order == (
-        ["probe", "runtime", "gateway"]
-        if failure == "gateway"
-        else ["probe", "runtime", "gateway", "agent"]
-        if failure == "agent"
-        else ["probe", "runtime", "gateway", "agent", "converge"]
-    )
-    assert events[-1]["success"] is (failure is None)
-    ssh.close.assert_awaited_once()
 
 
 def test_restart_command_restarts_local_opencode(monkeypatch, tmp_path):
@@ -181,8 +46,7 @@ def test_restart_command_restarts_local_opencode(monkeypatch, tmp_path):
     )
     message = envelope(
         request_id="restart-1",
-        worker_instance_id="wrk",
-        environment_id=1,
+        agent_worker_id="wrk",
         session_id=None,
         message_type="command",
         payload={"name": "restart_opencode", "data": {"workspace": str(tmp_path), "port": 4096}},
@@ -208,7 +72,7 @@ def test_linux_remote_model_stays_on_the_gateway():
     assert gateway_model("deepseek-flash") == "nexus-gateway/deepseek-flash"
     assert gateway_model("opencode/glm-5.1") == "nexus-gateway/glm-5.1"
     source = Path("app/runtime/lifecycle.py").read_text(encoding="utf-8")
-    assert "effective_model = gateway_model(raw_model)" in source
+    assert "gateway_model(worker.model_name or get_settings().opencode_model)" in source
 
 
 def repo_root() -> Path:

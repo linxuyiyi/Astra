@@ -12,8 +12,8 @@ function blank(): TaskDraftSnapshot {
     priority: 'MEDIUM',
     description: '',
     criteria: [''],
-    employee_id: '',
-    responsible_employee_id: '',
+    agent_worker_id: '',
+    origin_employee_id: '',
     files: 0,
   }
 }
@@ -36,8 +36,8 @@ test('an edit after the baseline stays dirty', () => {
 
 test('empty and null employee ids compare as the same untouched value', () => {
   const settled = applyDefaultCategory(blank(), ['testing-platform'], '')
-  const normalized = { ...settled.draft, employee_id: '' }
-  const cleared = { ...settled.draft, employee_id: undefined as unknown as string }
+  const normalized = { ...settled.draft, agent_worker_id: '' }
+  const cleared = { ...settled.draft, agent_worker_id: undefined as unknown as string }
   assert.equal(taskDraftSnapshot(normalized), taskDraftSnapshot(cleared))
   assert.equal(taskDraftSnapshot(cleared), settled.baseline)
 })

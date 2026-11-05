@@ -3,113 +3,73 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.domain import (
-    CompletionPolicy,
-    ExecutionMode,
-    Priority,
-    TaskType,
-)
+from app.domain import ExecutionMode, Priority, TaskType
 
 
 class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class RuntimeRead(ORMModel):
-    runtime_state: str
-    runtime_status_label: str
-    runtime_detail: str
-    failure: dict[str, Any] | None
+class WorkerWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-
-class ExecutionEnvironmentWrite(BaseModel):
-    runtime_engine: Literal["opencode"] = "opencode"
-    mode: ExecutionMode = ExecutionMode.LOCAL
-    name: str = "本地 Agent 工作环境"
+    name: str = Field(min_length=1, max_length=120)
     description: str = ""
+    enabled: bool = True
+    task_types: list[TaskType] = Field(default_factory=lambda: list(TaskType))
+    category_ids: list[str] = Field(default_factory=list)
+    runtime_engine: Literal["opencode"] = "opencode"
+    mode: ExecutionMode = ExecutionMode.LINUX_REMOTE
     host: str | None = None
     port: int = Field(default=22, ge=1, le=65535)
     username: str | None = None
     ssh_password: str | None = Field(default=None, max_length=1024)
-    opencode_server_port: int = Field(default=14096, ge=1, le=65535)
-    opencode_path: str = Field(default="opencode", min_length=1)
-    model_name: str | None = Field(default=None, max_length=255)
-    workspace_root: str = Field(default="./workspaces", min_length=1)
-    repository_url: str | None = Field(default=None, max_length=4096)
+    model_name: str | None = None
+    workspace_root: str = "/opt/nexus/workspace"
+    repository_url: str | None = None
     git_token: str | None = Field(default=None, max_length=4096)
-    branch: str | None = Field(default=None, max_length=255)
-    labels: list[str] = Field(default_factory=list)
-    skill_refs: list[str] | None = None
-    mcp_refs: list[dict[str, Any]] | None = None
+    branch: str | None = None
+    skill_refs: list[str] = Field(default_factory=list)
+    mcp_refs: list[dict[str, Any]] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_remote(self):
-        if self.mode is ExecutionMode.LINUX_REMOTE:
-            missing = [
-                label
-                for label, value in {
-                    "环境名称": self.name,
-                    "Host": self.host,
-                    "Username": self.username,
-                }.items()
-                if not value
-            ]
-            if missing:
-                raise ValueError(f"Linux 远程环境缺少：{', '.join(missing)}")
-            if not self.workspace_root.startswith("/"):
-                raise ValueError("Linux 远程 Workspace 根目录必须使用绝对路径")
+    def remote_target(self):
+        if self.mode == ExecutionMode.LINUX_REMOTE:
+            if not self.host or not self.username or not self.workspace_root.startswith("/"):
+                raise ValueError("远程 Worker 需要 Host、Username 和绝对 Workspace 路径")
         return self
 
 
-class ExecutionEnvironmentRead(ORMModel):
-    runtime_engine: str = "opencode"
-    id: int
-    employee_id: str
-    mode: str
+class WorkerCreate(WorkerWrite):
+    id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+
+
+class WorkerRead(ORMModel):
+    id: str
     name: str
     description: str
+    enabled: bool
+    status: str
+    task_types: list[str]
+    category_ids: list[str]
+    runtime_engine: str
+    mode: str
     host: str | None
     port: int
     username: str | None
     has_ssh_password: bool
-    opencode_server_port: int
-    opencode_path: str
     model_name: str | None
     workspace_root: str
-    repository_url: str | None = None
-    has_git_token: bool = False
-    branch: str | None = None
-    skill_refs: list[str] = Field(default_factory=list)
-    mcp_refs: list[dict[str, Any]] = Field(default_factory=list)
-    status: str
-    status_detail: dict[str, Any]
-    labels: list[str]
-    last_checked_at: datetime | None
+    repository_url: str | None
+    has_git_token: bool
+    branch: str | None
+    skill_refs: list[str]
+    mcp_refs: list[dict[str, Any]]
+    epoch: int
+    last_heartbeat_at: datetime | None
+    agent_version: str | None
     created_at: datetime
     updated_at: datetime
-
-
-class UsageSummary(BaseModel):
-    input_tokens: int | None = None
-    output_tokens: int | None = None
-    cache_read_tokens: int | None = None
-    cache_write_tokens: int | None = None
-    total_tokens: int | None = None
-    llm_call_count: int | None = None
-    tool_call_count: int | None = None
-    tool_success_count: int = 0
-    tool_failure_count: int = 0
-    duration_seconds: int = 0
-    execution_seconds: int | None = None
-    idle_seconds: int | None = None
-    waiting_seconds: int = 0
-    completed_tasks: int = 0
-    task_count: int = 0
-    session_count: int = 0
-    native_session_count: int = 0
-    completed_sessions: int = 0
-    failed_sessions: int = 0
-    interrupted_sessions: int = 0
 
 
 class TaskCategoryCreate(BaseModel):
@@ -142,147 +102,45 @@ class TaskCategoryRead(ORMModel):
     updated_at: datetime
 
 
-class EmployeeCreate(BaseModel):
-    id: str
-    digital_employee_id: str | None = Field(default=None, max_length=64)
-    name: str
-    role: str
-    description: str = ""
-    character_id: int = Field(default=0, ge=0, le=8, strict=True)
-    default_work_area: Literal[
-        "development", "collaboration", "pantry", "integration", "meeting", "special"
-    ] = "development"
-    task_types: list[TaskType] = Field(default_factory=lambda: list(TaskType))
-    category_ids: list[str] = Field(default_factory=list)
-    enabled: bool = True
-    auto_claim: bool = True
-    auto_execute: bool = True
-    execution_environment: ExecutionEnvironmentWrite = Field(default_factory=ExecutionEnvironmentWrite)
-
-
-class EmployeePatch(BaseModel):
-    digital_employee_id: str | None = Field(default=None, max_length=64)
-    name: str | None = None
-    role: str | None = None
-    description: str | None = None
-    character_id: int = Field(default=0, ge=0, le=8, strict=True)
-    default_work_area: (
-        Literal["development", "collaboration", "pantry", "integration", "meeting", "special"] | None
-    ) = None
-    task_types: list[TaskType] | None = None
-    category_ids: list[str] | None = None
-    enabled: bool | None = None
-    auto_claim: bool | None = None
-    auto_execute: bool | None = None
-
-
-class ChannelHealth(BaseModel):
-    runtime_engine: str = "opencode"
-    runtime_reachable: bool = False
-    worker_online: bool
-    opencode_reachable: bool
-    repository_configured: bool
-    executing: bool
-    waiting_human: bool
-    availability: str
-
-
-class EmployeeRead(RuntimeRead):
-    id: str
-    digital_employee_id: str | None = None
-    name: str
-    role: str
-    description: str
-    character_id: int
-    default_work_area: str
-    status: str
-    task_types: list[str]
-    category_ids: list[str]
-    enabled: bool
-    auto_claim: bool
-    auto_execute: bool
-    current_task_count: int
-    last_heartbeat: datetime | None
-    online_since: datetime | None
-    created_at: datetime
-    updated_at: datetime
-    execution_environment: ExecutionEnvironmentRead | None = None
-    worker_health: dict[str, Any] | None = None
-    channel_health: ChannelHealth = Field(
-        default_factory=lambda: ChannelHealth(
-            worker_online=True,
-            opencode_reachable=False,
-            repository_configured=False,
-            executing=False,
-            waiting_human=False,
-            availability="UNKNOWN",
-        )
-    )
-    today_usage: UsageSummary = Field(default_factory=UsageSummary)
-    today_completed: int = 0
-
-
 class AcceptanceCriterion(BaseModel):
     id: str | None = None
     content: str = Field(min_length=1, max_length=500)
 
 
-class RelatedTaskPart(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=240)
-    depends_on: int | None = Field(default=None, ge=0)
-
-
-class RelatedTaskCreate(BaseModel):
-    task_type: TaskType
-    category_id: str
-    title: str = Field(min_length=1, max_length=240)
-    description: str = Field(min_length=1)
-    acceptance_criteria: list[AcceptanceCriterion] = Field(default_factory=list)
-    parts: list[RelatedTaskPart] = Field(min_length=1)
-
-
 class TaskCreate(BaseModel):
-    source: str = "manual"
+    model_config = ConfigDict(extra="forbid")
+
+    source: Literal["manual", "opencode", "private_chat", "group_chat", "nr_test_system"] = "manual"
     external_task_id: str | None = None
+    origin_employee_id: str | None = None
+    external_reference_id: str | None = None
     task_type: TaskType
     category_id: str
     title: str = Field(min_length=1, max_length=240)
     description: str = Field(min_length=1)
     acceptance_criteria: list[AcceptanceCriterion] = Field(default_factory=list)
     attachments: list[dict[str, Any]] = Field(default_factory=list)
-    employee_id: str | None = None
-    responsible_employee_id: str | None = None
-    source_session_id: str | None = None
-    source_conversation_id: str | None = None
-    source_channel_id: str | None = None
-    idempotency_key: str | None = None
+    agent_worker_id: str | None = None
     priority: Priority = Priority.MEDIUM
-    # Kept in the API for stored tasks; all new tasks close explicitly.
-    completion_policy: CompletionPolicy = CompletionPolicy.MANUAL_CONFIRM
-
-
-class ExecutionStopConfirm(BaseModel):
-    reason: str = Field(min_length=1, max_length=500)
-
-
-class RetrySubmission(BaseModel):
-    confirm_unknown: bool = False
 
 
 class TaskUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: str | None = Field(default=None, min_length=1, max_length=240)
     description: str | None = Field(default=None, min_length=1)
     priority: Priority | None = None
     acceptance_criteria: list[AcceptanceCriterion] | None = None
-    employee_id: str | None = None
-    responsible_employee_id: str | None = None
+    agent_worker_id: str | None = None
+    origin_employee_id: str | None = None
 
 
-class TaskRead(RuntimeRead):
-    execution_released: bool
+class TaskRead(ORMModel):
     id: str
     source: str
     external_task_id: str | None
+    origin_employee_id: str | None
+    external_reference_id: str | None
     task_type: str
     category_id: str | None
     title: str
@@ -290,42 +148,25 @@ class TaskRead(RuntimeRead):
     acceptance_criteria: list[AcceptanceCriterion]
     attachments: list[dict[str, Any]]
     priority: str
-    completion_policy: str
     status: str
-    employee_id: str | None
-    worker_id: str | None = None
-    responsible_employee_id: str | None = None
-    source_session_id: str | None = None
-    source_conversation_id: str | None = None
-    source_channel_id: str | None = None
-    idempotency_key: str | None = None
-    related_task_id: str | None = None
-    base_commit: str | None = None
+    agent_worker_id: str | None
     current_session_id: str | None
-    session_status: str | None = None
-    session_terminal_reason: str | None = None
     workspace: str | None
-    runtime_connection: str
+    last_message_id: str | None
     pending_message_id: str | None
-    runtime_error: str | None
+    waiting_reason: str | None
     current_progress: str
-    suspension: dict[str, Any] | None
-    execution_error: dict[str, Any] | None
-    inactivity_alert: bool
-    inactivity_alert_since: datetime | None
+    execution_released: bool
     last_activity_at: datetime | None
-    submitted_at: datetime | None
-    confirmed_at: datetime | None
-    failure_reason: str | None
-    human_required_reason: str | None
-    waiting_reason: str | None = None
-    human_intervention: dict[str, Any] | None
-    execution_environment_snapshot: dict[str, Any] | None
     claimed_at: datetime | None
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class ExecutionStopConfirm(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
 
 
 class EventRead(ORMModel):

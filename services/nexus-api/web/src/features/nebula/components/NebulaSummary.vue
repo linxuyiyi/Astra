@@ -56,12 +56,6 @@ const tiles = computed(() => {
       note: "",
       tone: totals?.tasksWaiting ? "warn" : "",
     },
-    {
-      label: "执行异常",
-      value: totals?.tasksFailed ?? 0,
-      note: "FAILED",
-      tone: totals?.tasksFailed ? "danger" : "",
-    },
     { label: "今日完成", value: totals?.completedToday ?? 0, note: "", tone: "ok" },
   ];
 });

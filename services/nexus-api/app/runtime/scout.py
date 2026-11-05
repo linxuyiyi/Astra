@@ -25,7 +25,7 @@ class TaskScout:
                 exists = await self.session.scalar(
                     select(Task.id).where(
                         Task.source == source.id,
-                        Task.external_task_id == item.external_task_id,
+                        Task.external_reference_id == item.external_task_id,
                     )
                 )
                 if exists:
@@ -34,7 +34,7 @@ class TaskScout:
                     task = await TaskService(self.session).create(
                         TaskCreate(
                             source=source.id,
-                            external_task_id=item.external_task_id,
+                            external_reference_id=item.external_task_id,
                             task_type=item.task_type,
                             category_id=item.category_id,
                             title=item.title,

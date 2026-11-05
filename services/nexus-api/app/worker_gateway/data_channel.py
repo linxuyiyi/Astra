@@ -6,14 +6,12 @@ import base64
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Task, WorkerCommand, WorkerInstance, utcnow
-from app.runtime.submission import get_attempt, mark_body_fetched
+from app.models import AgentWorker, Task, WorkerCommand, utcnow
 from app.worker_gateway.http_limit import release_http_slot
 from app.worker_gateway.protocol import MAX_CHUNK_BYTES, WorkerGatewayError
 
@@ -64,10 +62,6 @@ def side_effect_http(name: str, payload: dict[str, Any] | None) -> bool:
     return method not in {"GET", "HEAD"}
 
 
-class UnfetchedSealError(RuntimeError):
-    """The original command was fetched while a human retry tried to seal it."""
-
-
 class DataChannel:
     def __init__(self, gateway) -> None:
         self.gateway = gateway
@@ -94,11 +88,11 @@ class DataChannel:
         session: AsyncSession,
         *,
         request_id: str,
-        worker_instance_id: str,
+        agent_worker_id: str,
         epoch: int,
     ) -> dict[str, Any] | RawBody:
         command, instance = await self._current_command(
-            session, request_id=request_id, worker_instance_id=worker_instance_id, epoch=epoch
+            session, request_id=request_id, agent_worker_id=agent_worker_id, epoch=epoch
         )
         if command.status not in {"pending", "accepted"}:
             raise WorkerGatewayError("epoch_conflict", "指令已结束")
@@ -107,7 +101,6 @@ class DataChannel:
         now = utcnow()
         if command.deadline_at is not None and command.deadline_at <= now:
             raise WorkerGatewayError("epoch_conflict", "指令已过期")
-        already_fetched = command.body_fetched_at is not None
         upload = command.name == "upload_file"
         stored = await self.gateway.bus.get_text(request_key(request_id))
         raw_upload: bytes | None = None
@@ -123,8 +116,8 @@ class DataChannel:
         now = utcnow()
         await self._require_current_attempt(session, command)
         current_instance = (
-            select(WorkerInstance.id)
-            .where(WorkerInstance.id == worker_instance_id, WorkerInstance.epoch == epoch)
+            select(AgentWorker.id)
+            .where(AgentWorker.id == agent_worker_id, AgentWorker.epoch == epoch)
             .scalar_subquery()
         )
         result = await session.execute(
@@ -133,7 +126,7 @@ class DataChannel:
                 WorkerCommand.id == command.id,
                 WorkerCommand.epoch == epoch,
                 WorkerCommand.status.in_(("pending", "accepted")),
-                WorkerCommand.worker_instance_id == current_instance,
+                WorkerCommand.agent_worker_id == current_instance,
                 or_(WorkerCommand.deadline_at.is_(None), WorkerCommand.deadline_at > now),
             )
             .values(body_fetched_at=func.coalesce(WorkerCommand.body_fetched_at, now), updated_at=now)
@@ -141,8 +134,6 @@ class DataChannel:
         if result.rowcount != 1:
             await session.rollback()
             raise WorkerGatewayError("epoch_conflict", "指令已结束")
-        if not already_fetched:
-            await self.note_task_fetch(session, command, now)
         await session.commit()
         await session.refresh(command)
         if upload:
@@ -164,7 +155,7 @@ class DataChannel:
         session: AsyncSession,
         *,
         request_id: str,
-        worker_instance_id: str,
+        agent_worker_id: str,
         epoch: int,
         upload_id: str,
         http_status: int,
@@ -178,7 +169,7 @@ class DataChannel:
             raise WorkerGatewayError("response_too_large", "分块超过 256 KiB")
         try:
             command, instance = await self._current_command(
-                session, request_id=request_id, worker_instance_id=worker_instance_id, epoch=epoch
+                session, request_id=request_id, agent_worker_id=agent_worker_id, epoch=epoch
             )
         except WorkerGatewayError:
             await self.gateway.bus.delete_text(response_key(request_id, upload_id))
@@ -201,9 +192,7 @@ class DataChannel:
         ttl = self.gateway.settings.worker_gateway_command_timeout_seconds + (
             self.gateway.settings.worker_gateway_dispatch_lease_seconds
         )
-        await self.gateway.bus.put_text(
-            response_key(request_id, upload_id), json.dumps(staged), ttl
-        )
+        await self.gateway.bus.put_text(response_key(request_id, upload_id), json.dumps(staged), ttl)
         if not complete:
             await session.rollback()
             return {"status": "partial", "upload_id": upload_id}
@@ -239,8 +228,8 @@ class DataChannel:
             await session.rollback()
             return {"status": "stored", "result": stored}
         current_instance = (
-            select(WorkerInstance.id)
-            .where(WorkerInstance.id == worker_instance_id, WorkerInstance.epoch == epoch)
+            select(AgentWorker.id)
+            .where(AgentWorker.id == agent_worker_id, AgentWorker.epoch == epoch)
             .scalar_subquery()
         )
         values = {
@@ -255,13 +244,13 @@ class DataChannel:
             WorkerCommand.id == command.id,
             WorkerCommand.epoch == epoch,
             WorkerCommand.status.in_(("pending", "accepted")),
-            WorkerCommand.worker_instance_id == current_instance,
+            WorkerCommand.agent_worker_id == current_instance,
         )
         released = await session.execute(
             update(WorkerCommand).where(*owned, WorkerCommand.slot_held.is_(True)).values(**values)
         )
         if released.rowcount == 1:
-            await release_http_slot(session, worker_instance_id, epoch)
+            await release_http_slot(session, agent_worker_id, epoch)
         else:
             result = await session.execute(update(WorkerCommand).where(*owned).values(**values))
             if result.rowcount != 1:
@@ -285,100 +274,56 @@ class DataChannel:
         session: AsyncSession,
         *,
         request_id: str,
-        worker_instance_id: str,
+        agent_worker_id: str,
         epoch: int,
-    ) -> tuple[WorkerCommand, WorkerInstance]:
-        instance = await session.get(WorkerInstance, worker_instance_id)
+    ) -> tuple[WorkerCommand, AgentWorker]:
+        instance = await session.get(AgentWorker, agent_worker_id)
         command = await session.scalar(select(WorkerCommand).where(WorkerCommand.request_id == request_id))
-        if instance is None or command is None or command.worker_instance_id != worker_instance_id:
+        if instance is None or command is None or command.agent_worker_id != agent_worker_id:
             raise WorkerGatewayError("unknown_command", "指令不存在")
         if instance.epoch != epoch or command.epoch != epoch:
             raise WorkerGatewayError("epoch_conflict", "epoch 已切换")
         return command, instance
 
-    async def _require_current_attempt(self, session: AsyncSession, command: WorkerCommand) -> None:
-        ref = (command.payload or {}).get("attempt_ref")
-        if not isinstance(ref, dict) or ref.get("message_id") is None or ref.get("attempt") is None:
+    async def _require_current_attempt(self, session, command):
+        body = (command.payload or {}).get("body") or {}
+        outbound = body.get("messageID") if isinstance(body, dict) else None
+        task_id = (command.payload or {}).get("task_id")
+        if not outbound or not task_id:
             return
-        try:
-            attempt = int(ref["attempt"])
-        except (TypeError, ValueError) as exc:
-            raise WorkerGatewayError("epoch_conflict", "指令已不是当前提交") from exc
-        task = await session.get(Task, ref.get("task_id"))
-        if task is not None:
-            await session.refresh(task)
-        message_id = str(ref["message_id"])
-        record = get_attempt(task, message_id, attempt) if task is not None else None
-        current = (
-            task is not None
-            and task.pending_message_id == message_id
-            and task.pending_attempt == attempt
-            and record is not None
-            and record.get("request_id") == command.request_id
-        )
-        if not current:
-            await session.rollback()
+        task = await session.get(Task, task_id)
+        if (
+            task is None
+            or task.pending_message_id != outbound
+            or task.current_session_id != command.session_id
+            or (task.pending_prompt or {}).get("request_id") != command.request_id
+        ):
             raise WorkerGatewayError("epoch_conflict", "指令已不是当前提交")
 
-    async def note_task_fetch(self, session: AsyncSession, command: WorkerCommand, when: datetime) -> None:
-        ref = (command.payload or {}).get("attempt_ref")
-        if not isinstance(ref, dict):
+
+async def retire_submission(request_id):
+    """退役旧命令并释放其 HTTP 槽；重发由 Task 重新提交，绝不跨 epoch 补投旧帧。"""
+    from app.database import SessionLocal
+
+    async with SessionLocal() as session:
+        command = await session.scalar(select(WorkerCommand).where(WorkerCommand.request_id == request_id))
+        if command is None or command.status not in {"pending", "accepted"}:
             return
-        task = await session.get(Task, ref.get("task_id"))
-        if task is None or ref.get("message_id") is None or ref.get("attempt") is None:
-            return
-        try:
-            mark_body_fetched(task, str(ref["message_id"]), int(ref["attempt"]), when)
-        except KeyError:
-            return
-
-
-async def seal_unfetched_request(session: AsyncSession, request_id: str) -> None:
-    """Fail the original command before a human retry, only while its body is unfetched.
-
-    A fetch that wins the race leaves the body fetched and this call raises.
-    A command that already finished without a fetch needs no seal: a late GET
-    is rejected because the status is no longer pending.
-    """
-
-    command = await session.scalar(select(WorkerCommand).where(WorkerCommand.request_id == request_id))
-    if command is None:
-        return
-    if command.body_fetched_at is not None:
-        raise UnfetchedSealError("请求体已拉取，结果未知，不能重发")
-    if command.status not in {"pending", "accepted"}:
-        return
-    now = utcnow()
-    values = {
-        "status": "failed",
-        "error_code": "superseded",
-        "finished_at": now,
-        "updated_at": now,
-        "slot_held": False,
-    }
-    held = await session.execute(
-        update(WorkerCommand)
-        .where(
-            WorkerCommand.id == command.id,
-            WorkerCommand.body_fetched_at.is_(None),
-            WorkerCommand.status.in_(("pending", "accepted")),
-            WorkerCommand.slot_held.is_(True),
+        released = await session.execute(
+            update(WorkerCommand)
+            .where(
+                WorkerCommand.id == command.id,
+                WorkerCommand.status.in_(("pending", "accepted")),
+                WorkerCommand.slot_held.is_(True),
+            )
+            .values(status="expired", error_code="superseded", finished_at=utcnow(), slot_held=False)
         )
-        .values(**values)
-    )
-    if held.rowcount == 1:
-        await release_http_slot(session, command.worker_instance_id, command.epoch)
-        session.expire(command)
-        return
-    sealed = await session.execute(
-        update(WorkerCommand)
-        .where(
-            WorkerCommand.id == command.id,
-            WorkerCommand.body_fetched_at.is_(None),
-            WorkerCommand.status.in_(("pending", "accepted")),
-        )
-        .values(**values)
-    )
-    if sealed.rowcount != 1:
-        raise UnfetchedSealError("原指令已被拉取或已结束，结果未知，不能重发")
-    session.expire(command)
+        if released.rowcount:
+            await release_http_slot(session, command.agent_worker_id, command.epoch)
+        else:
+            await session.execute(
+                update(WorkerCommand)
+                .where(WorkerCommand.id == command.id, WorkerCommand.status.in_(("pending", "accepted")))
+                .values(status="expired", error_code="superseded", finished_at=utcnow())
+            )
+        await session.commit()

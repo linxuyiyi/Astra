@@ -3,12 +3,10 @@
 from pathlib import Path
 from urllib.parse import quote
 
-from app.models import RuntimeSession
 from app.runtime.experience_review.trace_normalizer import normalize_messages
-from app.runtime.lifecycle import RuntimeStateError, _cancel_record
+from app.runtime.lifecycle import RuntimeStateError
 from app.runtime.redaction import redact_data
-from app.runtime.session_connection import connect, resolve_runtime_session_environment, session_tree
-from app.runtime.session_state import derive_session_state
+from app.runtime.session_connection import connect, resolve_environment, session_tree
 from app.services import TaskService
 
 
@@ -23,20 +21,18 @@ class WorkerAssistance:
             raise RuntimeStateError("当前任务不能处理任务执行端的求助")
         if expected_session_id and task.current_session_id != expected_session_id:
             raise RuntimeStateError("当前执行会话已切换，请重新查询求助")
-        if _cancel_record(task) or task.pending_message_id:
-            raise RuntimeStateError("任务正在停止或输入尚未确认，请稍后重新查询")
-        binding = await self.db.get(RuntimeSession, task.current_session_id, populate_existing=True)
-        if (
-            not binding or binding.task_id != task.id or binding.superseded_by
-            or binding.employee_id != task.employee_id
-        ):
-            raise RuntimeStateError("当前运行时绑定无效")
-        return task, binding
+        if task.pending_message_id:
+            raise RuntimeStateError("输入尚未确认，请稍后查询")
+        if not task.current_session_id:
+            raise RuntimeStateError("任务没有原生 Session")
+        from types import SimpleNamespace
+
+        return task, SimpleNamespace(id=task.current_session_id, workspace=task.workspace)
 
     async def read(self, task_id, *, cursor=0):
         task, binding = await self.context(task_id)
         session_id, anchor = binding.id, task.last_message_id
-        environment = await resolve_runtime_session_environment(self.db, binding)
+        environment = await resolve_environment(self.db, task)
         await self.db.commit()
         output, next_cursor = [], None
         async with connect(environment, start=True) as client:
@@ -48,7 +44,8 @@ class WorkerAssistance:
                     ("question", await client.questions(directory)),
                     ("permission", await client.permissions(directory)),
                 )
-                for item in items if item.get("sessionID") in allowed
+                for item in items
+                if item.get("sessionID") in allowed
             ]
             messages = await self.runtime._all_messages(client, directory, session_id)
             events = [
@@ -57,57 +54,67 @@ class WorkerAssistance:
                 if event.role == "assistant" or event.kind == "error"
             ]
             offset = max(0, cursor)
-            output = events[offset:offset + 40]
+            output = events[offset : offset + 40]
             next_cursor = offset + len(output) if offset + len(output) < len(events) else None
-            state = derive_session_state(
-                messages=messages, server_status=await client.status(directory, session_id),
-                has_pending_question=any(x["kind"] == "question" for x in requests),
-                has_pending_permission=any(x["kind"] == "permission" for x in requests),
-                pending_ack=False, turn_anchor_id=anchor,
-            )
-            can_input = bool(anchor) and state.status == "SUCCEEDED"
+            can_input = await client.status(directory, session_id) == "idle" and not requests
+
         # 查询期间切换、停止或进入新回合，不能返回可执行的旧请求。
         current, _ = await self.context(task_id, session_id)
         if current.last_message_id != anchor:
             raise RuntimeStateError("当前回合已变化，请重新查询求助")
         await self.db.commit()
-        return redact_data({
-            "ok": True, "task_id": task_id, "session_id": session_id,
-            "runtime_engine": "opencode", "submission_id": anchor, "requests": requests,
-            "output": output, "next_cursor": next_cursor, "can_input": can_input,
-        })
+        return redact_data(
+            {
+                "ok": True,
+                "task_id": task_id,
+                "session_id": session_id,
+                "runtime_engine": "opencode",
+                "submission_id": anchor,
+                "requests": requests,
+                "output": output,
+                "next_cursor": next_cursor,
+                "can_input": can_input,
+            }
+        )
 
     async def reply(
-        self, task_id, *, expected_session_id, request_id, kind,
-        answers=None, decision=None,
+        self,
+        task_id,
+        *,
+        expected_session_id,
+        request_id,
+        kind,
+        answers=None,
+        decision=None,
     ):
         task, binding = await self.context(task_id, expected_session_id)
-        session_id, fence, native_id = binding.id, binding.fencing_token, binding.native_session_id
+        session_id, anchor = binding.id, task.last_message_id
 
         async def revalidate():
             current, active = await self.context(task_id, session_id)
-            if active.fencing_token != fence or active.native_session_id != native_id:
+            if current.last_message_id != anchor:
                 raise RuntimeStateError("当前执行轮次已变化，请重新查询求助")
             return current, active
 
         # 慢查询不持有行锁；仅原生回复发送到受理期间串行化停止/切换。
         if kind not in {"question", "permission"}:
             raise RuntimeStateError("不支持的求助类型")
-        environment = await resolve_runtime_session_environment(self.db, binding)
+        environment = await resolve_environment(self.db, task)
         await self.db.commit()
         async with connect(environment, start=True) as client:
             directory = Path(binding.workspace)
             allowed = await session_tree(client, directory, binding.id)
             items = await client.request("GET", f"/{kind}", directory=directory)
-            pending = next((
-                x for x in items if x["id"] == request_id and x.get("sessionID") in allowed
-            ), None)
+            pending = next(
+                (x for x in items if x["id"] == request_id and x.get("sessionID") in allowed), None
+            )
             if not pending:
                 raise RuntimeStateError("请求已过期或不属于当前任务的执行会话")
             if kind == "question":
                 questions = pending.get("questions") or []
                 if (
-                    not answers or len(answers) != len(questions)
+                    not answers
+                    or len(answers) != len(questions)
                     or any(not row or any(not x.strip() for x in row) for row in answers)
                 ):
                     raise RuntimeStateError("必须按问题顺序提供每个问题的答案")
@@ -118,17 +125,28 @@ class WorkerAssistance:
                 body = {"reply": decision}
             task, binding = await revalidate()
             result = await client.request(
-                "POST", f"/{kind}/{quote(request_id, safe='')}/reply", directory=directory,
-                body=body, session_id=binding.id, task_id=task.id,
+                "POST",
+                f"/{kind}/{quote(request_id, safe='')}/reply",
+                directory=directory,
+                body=body,
+                session_id=binding.id,
+                task_id=task.id,
             )
             if result is False:
                 raise RuntimeStateError("任务执行端未受理回复，请重新查询")
         # 原生受理之后，审计或刷新失败都不能诱使模型重发已消费的回复。
         try:
             await TaskService(self.db).add_event(
-                task, "WORKER_ASSISTANCE_REPLIED", "work", "责任员工已回复任务执行端的求助",
-                {"session_id": binding.id, "request_id": request_id, "kind": kind,
-                 "responsible_employee_id": task.responsible_employee_id},
+                task,
+                "WORKER_ASSISTANCE_REPLIED",
+                "work",
+                "责任员工已回复任务执行端的求助",
+                {
+                    "session_id": binding.id,
+                    "request_id": request_id,
+                    "kind": kind,
+                    "origin_employee_id": task.origin_employee_id,
+                },
             )
             await self.runtime.refresh(task_id)
         except Exception:
@@ -145,6 +163,8 @@ class WorkerAssistance:
         if task.last_message_id != expected_submission_id:
             raise RuntimeStateError("当前回合已变化，请重新查询求助")
         return await self.runtime.send(
-            task_id, {"parts": [{"type": "text", "text": text}]},
-            expected_session_id=binding.id, expected_submission_id=expected_submission_id,
+            task_id,
+            {"parts": [{"type": "text", "text": text}]},
+            expected_session_id=binding.id,
+            expected_submission_id=expected_submission_id,
         )

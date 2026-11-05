@@ -2,7 +2,7 @@
 
 核心边界：
 1. 排他单实例由内核 ``fcntl.flock(LOCK_EX | LOCK_NB)`` + ``FD_CLOEXEC`` 保证，不依赖 PID 文件判活。
-2. 孤儿清理仅识别携带 ``NEXUS_WORKER_ENV_ID=<id>`` 的同 UID 残留进程，绝不误杀未知端口占用者。
+2. 孤儿清理仅识别携带 ``NEXUS_AGENT_WORKER_ID=<id>`` 的同 UID 残留进程，绝不误杀未知端口占用者。
 3. ``OpenCodeSupervisor`` 只负责本地 ``opencode serve`` 子进程生命周期、退避拉起与错误摘要上报；
    通信断连不重启子进程，子进程异常退出也绝不反推或猜测平台 Task/Run 终态。
 """
@@ -67,7 +67,7 @@ def acquire_daemon_lock(state_dir: Path) -> IO[bytes] | None:
 
 
 def cleanup_orphan_opencode(
-    environment_id: int,
+    agent_worker_id: str,
     *,
     proc_root: Path = Path("/proc"),
     uid: int | None = None,
@@ -78,7 +78,7 @@ def cleanup_orphan_opencode(
 
     if not proc_root.is_dir():
         return []
-    expected_env = str(int(environment_id))
+    expected_env = str(agent_worker_id)
     current_uid = os.getuid() if uid is None else uid
     self_pid = os.getpid()
     matched: list[int] = []
@@ -94,7 +94,7 @@ def cleanup_orphan_opencode(
             raw_env = (entry / "environ").read_bytes()
         except OSError:
             continue
-        if _extract_proc_env(raw_env, "NEXUS_WORKER_ENV_ID") != expected_env:
+        if _extract_proc_env(raw_env, "NEXUS_AGENT_WORKER_ID") != expected_env:
             continue
         matched.append(pid)
 
@@ -248,7 +248,7 @@ class OpenCodeSupervisor:
         opencode_bin: str = "opencode",
         port: int = 14096,
         workspace_root: str = "",
-        environment_id: int | None = None,
+        agent_worker_id: str | None = None,
         environ: Mapping[str, str] | None = None,
         on_state_change: Callable[[], None] | None = None,
         health_interval_seconds: float = 5.0,
@@ -263,7 +263,7 @@ class OpenCodeSupervisor:
         self.opencode_bin = opencode_bin
         self.port = int(port)
         self.workspace_root = workspace_root
-        self.environment_id = environment_id
+        self.agent_worker_id = agent_worker_id
         self._environ = dict(environ) if environ is not None else None
         self._on_state_change = on_state_change
         self.health_interval_seconds = health_interval_seconds
@@ -334,9 +334,7 @@ class OpenCodeSupervisor:
         if not self.enabled:
             raise RuntimeError("当前 Worker 未启用内置 OpenCode 监管器，无法重启")
         async with self._restart_lock:
-            await asyncio.to_thread(
-                assert_native_idle, self.workspace_root, self.port, gate=gate
-            )
+            await asyncio.to_thread(assert_native_idle, self.workspace_root, self.port, gate=gate)
             if gate is not None:
                 gate()
             self._restarting = True
@@ -390,7 +388,7 @@ class OpenCodeSupervisor:
             self.last_error = f"端口 {self.port} 已被未知进程占用，拒绝覆盖启动"
             return False
 
-        env = child_environ(self._environ, env_id=self.environment_id)
+        env = child_environ(self._environ, env_id=self.agent_worker_id)
         try:
             proc = await asyncio.create_subprocess_exec(
                 self.opencode_bin,
@@ -448,9 +446,7 @@ class OpenCodeSupervisor:
             if proc.returncode is not None:
                 if self._stdout_task is not None:
                     await asyncio.gather(self._stdout_task, return_exceptions=True)
-                self.last_error = self._format_failure(
-                    f"OpenCode 进程异常退出 (exit={proc.returncode})"
-                )
+                self.last_error = self._format_failure(f"OpenCode 进程异常退出 (exit={proc.returncode})")
                 return False
             healthy = await asyncio.to_thread(_check_local_health, self.port, timeout=0.8)
             if healthy:
@@ -503,9 +499,7 @@ class OpenCodeSupervisor:
                         self._stdout_task = None
                     self._proc = None
                     self.restart_count += 1
-                    self.last_error = self._format_failure(
-                        f"OpenCode 进程异常退出 (exit={proc.returncode})"
-                    )
+                    self.last_error = self._format_failure(f"OpenCode 进程异常退出 (exit={proc.returncode})")
                     healthy_since = None
                     self.notify_state_change()
 
@@ -523,9 +517,7 @@ class OpenCodeSupervisor:
                 if not spawned:
                     self.notify_state_change()
                     continue
-                healthy = await self._wait_until_healthy_or_exit(
-                    timeout=self.ready_timeout_seconds
-                )
+                healthy = await self._wait_until_healthy_or_exit(timeout=self.ready_timeout_seconds)
                 if healthy:
                     self.last_error = None
                     healthy_since = time.monotonic()
@@ -561,9 +553,7 @@ class OpenCodeSupervisor:
                 self.notify_state_change()
                 await self._terminate_child()
 
-    async def _wait_proc_or_interval(
-        self, proc: asyncio.subprocess.Process, interval: float
-    ) -> bool:
+    async def _wait_proc_or_interval(self, proc: asyncio.subprocess.Process, interval: float) -> bool:
         proc_task = asyncio.create_task(proc.wait())
         wake_task = asyncio.create_task(self._wake_monitor.wait())
         stop_task = asyncio.create_task(self._stopping.wait())

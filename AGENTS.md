@@ -1,14 +1,14 @@
-# Nexus v1.4.9 开发约定
+# Nexus v1.5.0 开发约定
 
 只放所有代码任务都要遵守的规则。OpenSpec 产物规则在 `openspec/config.yaml`，工具与集成细节见 `docs/architecture/OPENSPEC_SUPERPOWERS.md`；按需查阅，不要每轮加载整套教程。
 
-本分支的产品是 **Nexus v1.4.9**。`services/nexus-api` 是唯一的 Nexus 服务：同一进程提供 `/api/v1`（数字员工、私聊、团队、`contact_employee`）、`/api`（任务、Worker、网关控制面、图书馆）、Worker Gateway WebSocket 和前端静态资源。前端在 `services/nexus-api/web`，聊天岛在 `services/nexus-api/chat-island`；OpenCode 网关数据面、Task MCP、Library MCP 与 AgentScope 仍是独立基础设施进程。
+本分支的产品是 **Nexus v1.5.0**。`services/nexus-api` 是唯一的 Nexus 服务：同一进程提供 `/api/v1`（数字员工、私聊、团队、`contact_employee`）、`/api`（任务、Worker、网关控制面、图书馆）、Worker Gateway WebSocket 和前端静态资源。前端在 `services/nexus-api/web`，聊天岛在 `services/nexus-api/chat-island`；OpenCode 网关数据面、Task MCP、Library MCP 与 AgentScope 仍是独立基础设施进程。
 
 ## 项目范围
 
 Astra 负责长期任务的分配、执行、状态跟踪、人工介入和异常恢复。
 
-平台管理 Task、Run、Employee 和 Runtime 状态。
+平台只管理 Task 业务状态与 AgentWorker 资源状态。OpenCode 管理原生 Session 生命周期。
 任务具体怎么执行，由对应数字员工自己处理。
 
 不要在 Astra 中增加 Agent 内部步骤、Skill、Tool 或工作流编排能力。
@@ -22,20 +22,28 @@ Astra 负责长期任务的分配、执行、状态跟踪、人工介入和异�
 修改 Runtime 相关代码前，先理清：
 
 ```text
-Task → Run → Employee → Worker → OpenCode Session
+Task → AgentWorker → OpenCode Session
 ```
 
 注意：
 
-- Task、Run、Employee、Session 状态要保持一致。
+- Task 与 Worker 的独占占用必须一致；只读取 OpenCode 原生状态并转换为 Task 状态，不再保存 Session 状态机。
 - 不要根据时间戳、日志、事件数量或前端状态反推 Runtime 状态。
 - Runtime 展示以 `services/nexus-api/app/runtime/presentation.py` 为准。
 - 修改生命周期时，要同时考虑失败、取消、超时、重试、重启、心跳丢失和恢复。
 - 优先解决状态流转问题，不要靠 fallback 兜底。
 
+## 数据结构
+
+Task 为 27 字段，AgentWorker 为 26 字段；四张执行历史/环境表已移除。字段清单见 `docs/architecture/nexus-v1.5.0-schema.md`。
+
+Task 仅有 PENDING / RUNNING / WAITING / SUCCEEDED / CANCELED；Worker 仅有 OFFLINE / IDLE / WORKING / PAUSED。
+未知提交在原 Task、原 Session 上自动串行重发，接受重复执行；确认 Session 不存在后才新建。
+维护租约失效不等于远端进程停止，未确认停止的维护仍占用 Worker 维护锁。
+
 ## 数据兼容
 
-v1.4.9 公司从空 MySQL 8.0.36 部署，不保留早期迁移链或旧库导入。后续已发布 schema 的异常通过 **新 Alembic migration、backfill 或一次性修复脚本**处理，不修改已发布 init。
+v1.5.0 公司从空 MySQL 8.0.36 部署，不保留早期迁移链或旧库导入。后续已发布 schema 的异常通过 **新 Alembic migration、backfill 或一次性修复脚本**处理，不修改已发布 init。
 
 不要为了兼容旧数据长期保留：
 

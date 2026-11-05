@@ -63,8 +63,6 @@ def test_initial_schema_is_complete_and_repeatable(tmp_path):
         engine.dispose()
 
 
-
-
 @pytest.mark.parametrize("version", [None, "0058_drop_pool_route_weight"])
 def test_old_or_unversioned_database_is_untouched(tmp_path, version):
     database = tmp_path / "old.db"
@@ -107,12 +105,6 @@ def test_incomplete_current_schema_is_not_silently_accepted(tmp_path):
     assert "新的空数据库" in outcome.stderr
 
 
-
-
-
-
-
-
 def test_all_revision_identifiers_fit_published_version_column():
     from alembic.config import Config
     from alembic.script import ScriptDirectory
@@ -135,7 +127,7 @@ def test_fresh_schema_has_worker_git_fields_without_repository_registry(tmp_path
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert "t_nexus_code_repositories" not in tables
         assert "t_nexus_git_credentials" not in tables
-        fields = {row[1] for row in db.execute("PRAGMA table_info(t_nexus_opencode_execution_environments)")}
+        fields = {row[1] for row in db.execute("PRAGMA table_info(t_nexus_agent_workers)")}
         assert {"repository_url", "branch", "git_token_ciphertext"} <= fields
         assert "repository_id" not in fields
         task_fields = {row[1] for row in db.execute("PRAGMA table_info(t_nexus_tasks)")}

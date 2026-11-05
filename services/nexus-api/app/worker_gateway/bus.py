@@ -282,103 +282,97 @@ class MemoryRouteBus:
         self._texts: dict[str, tuple[float, str]] = {}
         self._text_waiters: dict[str, list[asyncio.Event]] = {}
 
-    def _remember_owner(self, worker_instance_id: str, owner_id: str, epoch: int) -> None:
-        self.owners[worker_instance_id] = (
+    def _remember_owner(self, agent_worker_id: str, owner_id: str, epoch: int) -> None:
+        self.owners[agent_worker_id] = (
             owner_id,
             epoch,
             time.monotonic() + self.owner_ttl_seconds,
         )
 
-    def _live_owner(self, worker_instance_id: str) -> tuple[str, int, float] | None:
-        current = self.owners.get(worker_instance_id)
+    def _live_owner(self, agent_worker_id: str) -> tuple[str, int, float] | None:
+        current = self.owners.get(agent_worker_id)
         if current is None:
             return None
         if current[2] <= time.monotonic():
-            self.epoch_floor[worker_instance_id] = max(
-                self.epoch_floor.get(worker_instance_id, 0), current[1]
-            )
-            del self.owners[worker_instance_id]
+            self.epoch_floor[agent_worker_id] = max(self.epoch_floor.get(agent_worker_id, 0), current[1])
+            del self.owners[agent_worker_id]
             return None
         return current
 
-    async def set_owner(self, worker_instance_id: str, owner_id: str, epoch: int) -> bool:
+    async def set_owner(self, agent_worker_id: str, owner_id: str, epoch: int) -> bool:
         if "|" in owner_id:
             raise ValueError("owner_id 不能包含 |")
-        current = self._live_owner(worker_instance_id)
+        current = self._live_owner(agent_worker_id)
         live = current[1] if current is not None else 0
-        floor = self.epoch_floor.get(worker_instance_id, 0)
+        floor = self.epoch_floor.get(agent_worker_id, 0)
         if epoch < max(floor, live):
             return False
         if current is not None and current[1] == epoch and current[0] != owner_id:
             return False
         if epoch > floor:
-            self.epoch_floor[worker_instance_id] = epoch
-        self._remember_owner(worker_instance_id, owner_id, epoch)
+            self.epoch_floor[agent_worker_id] = epoch
+        self._remember_owner(agent_worker_id, owner_id, epoch)
         return True
 
-    async def get_owner(self, worker_instance_id: str) -> tuple[str, int] | None:
-        current = self._live_owner(worker_instance_id)
+    async def get_owner(self, agent_worker_id: str) -> tuple[str, int] | None:
+        current = self._live_owner(agent_worker_id)
         if current is None:
             return None
         return current[0], current[1]
 
-    async def touch_owner(self, worker_instance_id: str, owner_id: str, epoch: int) -> bool:
-        current = self._live_owner(worker_instance_id)
+    async def touch_owner(self, agent_worker_id: str, owner_id: str, epoch: int) -> bool:
+        current = self._live_owner(agent_worker_id)
         if current is None or current[0] != owner_id or current[1] != epoch:
             return False
-        self._remember_owner(worker_instance_id, owner_id, epoch)
+        self._remember_owner(agent_worker_id, owner_id, epoch)
         return True
 
-    async def clear_owner(
-        self, worker_instance_id: str, epoch: int, owner_id: str | None
-    ) -> bool:
-        current = self._live_owner(worker_instance_id)
+    async def clear_owner(self, agent_worker_id: str, epoch: int, owner_id: str | None) -> bool:
+        current = self._live_owner(agent_worker_id)
         if current is None or current[1] != epoch:
             return False
         if owner_id is not None and current[0] != owner_id:
             return False
-        del self.owners[worker_instance_id]
+        del self.owners[agent_worker_id]
         return True
 
-    async def bind(
-        self, worker_instance_id: str, *, epoch: int, owner_id: str
-    ) -> ConnectionQueues | None:
-        current = self._live_owner(worker_instance_id)
+    async def bind(self, agent_worker_id: str, *, epoch: int, owner_id: str) -> ConnectionQueues | None:
+        current = self._live_owner(agent_worker_id)
         if current is None or current[0] != owner_id or current[1] != epoch:
             return None
-        previous = self.bound.get(worker_instance_id)
+        previous = self.bound.get(agent_worker_id)
         if previous is not None and previous.epoch is not None and previous.epoch > epoch:
             return None
         queues = ConnectionQueues(self.control_limit, self.event_limit)
         queues.epoch = epoch
         queues.owner_id = owner_id
-        self.bound[worker_instance_id] = queues
+        self.bound[agent_worker_id] = queues
         return queues
 
-    async def unbind(self, worker_instance_id: str, queues: ConnectionQueues) -> None:
-        if self.bound.get(worker_instance_id) is queues:
-            del self.bound[worker_instance_id]
+    async def unbind(self, agent_worker_id: str, queues: ConnectionQueues) -> None:
+        if self.bound.get(agent_worker_id) is queues:
+            del self.bound[agent_worker_id]
 
-    def _queues_for(self, worker_instance_id: str, frame: dict[str, Any]) -> ConnectionQueues | None:
+    def _queues_for(self, agent_worker_id: str, frame: dict[str, Any]) -> ConnectionQueues | None:
         epoch = frame_epoch(frame)
         if epoch is None or not frame_is_current(frame):
             return None
-        current = self._live_owner(worker_instance_id)
+        current = self._live_owner(agent_worker_id)
         if current is None or current[1] != epoch:
             return None
-        queues = self.bound.get(worker_instance_id)
+        queues = self.bound.get(agent_worker_id)
         if queues is None or queues.epoch != epoch:
             return None
         return queues
 
-    async def publish_command(self, worker_instance_id: str, frame: dict[str, Any]) -> bool:
-        queues = self._queues_for(worker_instance_id, frame)
+    async def publish_command(self, agent_worker_id: str, frame: dict[str, Any]) -> bool:
+        queues = self._queues_for(agent_worker_id, frame)
         if queues is None:
             return False
         return await queues.put_control(frame)
 
-    async def publish_event(self, worker_instance_id: str, frame: dict[str, Any]) -> bool:
-        queues = self._queues_for(worker_instance_id, frame)
+    async def publish_event(self, agent_worker_id: str, frame: dict[str, Any]) -> bool:
+        queues = self._queues_for(agent_worker_id, frame)
         if queues is None:
             return False
         return await queues.put_event(frame)
@@ -485,23 +479,23 @@ class RedisRouteBus:
             self._client = Redis.from_url(self.redis_url, decode_responses=True)
         return self._client
 
-    def _owner_key(self, worker_instance_id: str) -> str:
-        return f"{self.prefix}:owner:{worker_instance_id}"
+    def _owner_key(self, agent_worker_id: str) -> str:
+        return f"{self.prefix}:owner:{agent_worker_id}"
 
-    def _floor_key(self, worker_instance_id: str) -> str:
-        return f"{self.prefix}:epoch:{worker_instance_id}"
+    def _floor_key(self, agent_worker_id: str) -> str:
+        return f"{self.prefix}:epoch:{agent_worker_id}"
 
     def _queue_ttl(self) -> int:
         return max(60, _ttl_seconds(self.owner_ttl_seconds) * 2)
 
-    def _control_key(self, worker_instance_id: str, epoch: int) -> str:
-        return f"{self.prefix}:control:{worker_instance_id}:{epoch}"
+    def _control_key(self, agent_worker_id: str, epoch: int) -> str:
+        return f"{self.prefix}:control:{agent_worker_id}:{epoch}"
 
-    def _event_key(self, worker_instance_id: str, epoch: int) -> str:
-        return f"{self.prefix}:events:{worker_instance_id}:{epoch}"
+    def _event_key(self, agent_worker_id: str, epoch: int) -> str:
+        return f"{self.prefix}:events:{agent_worker_id}:{epoch}"
 
-    def _held_key(self, worker_instance_id: str, kind: str, epoch: int) -> str:
-        return f"{self.prefix}:{kind}-held:{worker_instance_id}:{epoch}"
+    def _held_key(self, agent_worker_id: str, kind: str, epoch: int) -> str:
+        return f"{self.prefix}:{kind}-held:{agent_worker_id}:{epoch}"
 
     def _result_key(self, request_id: str) -> str:
         return f"{self.prefix}:result:{request_id}"
@@ -544,86 +538,78 @@ class RedisRouteBus:
             found.append((logical, raw))
         return found
 
-    async def set_owner(self, worker_instance_id: str, owner_id: str, epoch: int) -> bool:
+    async def set_owner(self, agent_worker_id: str, owner_id: str, epoch: int) -> bool:
         if "|" in owner_id:
             raise ValueError("owner_id 不能包含 |")
         result = await self._connection().eval(
             _SET_OWNER_LUA,
             2,
-            self._owner_key(worker_instance_id),
-            self._floor_key(worker_instance_id),
+            self._owner_key(agent_worker_id),
+            self._floor_key(agent_worker_id),
             owner_id,
             str(epoch),
             str(_ttl_seconds(self.owner_ttl_seconds)),
         )
         return int(result) == 1
 
-    async def get_owner(self, worker_instance_id: str) -> tuple[str, int] | None:
-        raw = await self._connection().get(self._owner_key(worker_instance_id))
+    async def get_owner(self, agent_worker_id: str) -> tuple[str, int] | None:
+        raw = await self._connection().get(self._owner_key(agent_worker_id))
         if not raw:
             return None
         owner, _, epoch = raw.rpartition("|")
         return owner, int(epoch)
 
-    async def touch_owner(self, worker_instance_id: str, owner_id: str, epoch: int) -> bool:
+    async def touch_owner(self, agent_worker_id: str, owner_id: str, epoch: int) -> bool:
         result = await self._connection().eval(
             _TOUCH_LUA,
             1,
-            self._owner_key(worker_instance_id),
+            self._owner_key(agent_worker_id),
             owner_id,
             str(epoch),
             str(_ttl_seconds(self.owner_ttl_seconds)),
         )
         return int(result) == 1
 
-    async def clear_owner(
-        self, worker_instance_id: str, epoch: int, owner_id: str | None
-    ) -> bool:
+    async def clear_owner(self, agent_worker_id: str, epoch: int, owner_id: str | None) -> bool:
         result = await self._connection().eval(
             _CLEAR_LUA,
             1,
-            self._owner_key(worker_instance_id),
+            self._owner_key(agent_worker_id),
             str(epoch),
             owner_id or "",
         )
         return int(result) == 1
 
-    async def bind(
-        self, worker_instance_id: str, *, epoch: int, owner_id: str
-    ) -> ConnectionQueues | None:
+    async def bind(self, agent_worker_id: str, *, epoch: int, owner_id: str) -> ConnectionQueues | None:
         async with self._bind_lock:
-            current = await self.get_owner(worker_instance_id)
+            current = await self.get_owner(agent_worker_id)
             if current != (owner_id, epoch):
                 return None
-            previous = self.bound.get(worker_instance_id)
+            previous = self.bound.get(agent_worker_id)
             if previous is not None and previous.epoch is not None and previous.epoch > epoch:
                 return None
-            queues = self._start_pull(worker_instance_id, epoch, owner_id)
+            queues = self._start_pull(agent_worker_id, epoch, owner_id)
             return queues
 
-    def _start_pull(self, worker_instance_id: str, epoch: int, owner_id: str) -> ConnectionQueues:
+    def _start_pull(self, agent_worker_id: str, epoch: int, owner_id: str) -> ConnectionQueues:
         queues = ConnectionQueues(
             self.control_limit,
             self.event_limit,
-            on_delivered=lambda kind, frame: self._release_delivered(
-                worker_instance_id, kind, epoch, frame
-            ),
+            on_delivered=lambda kind, frame: self._release_delivered(agent_worker_id, kind, epoch, frame),
         )
         queues.epoch = epoch
         queues.owner_id = owner_id
-        self.bound[worker_instance_id] = queues
+        self.bound[agent_worker_id] = queues
         stop = asyncio.Event()
-        task = asyncio.create_task(
-            self._pull(worker_instance_id, queues, stop, epoch, owner_id)
-        )
+        task = asyncio.create_task(self._pull(agent_worker_id, queues, stop, epoch, owner_id))
         queues.consumer = task
         self._pulls[id(queues)] = (stop, task)
         return queues
 
-    async def unbind(self, worker_instance_id: str, queues: ConnectionQueues) -> None:
+    async def unbind(self, agent_worker_id: str, queues: ConnectionQueues) -> None:
         async with self._bind_lock:
-            if self.bound.get(worker_instance_id) is queues:
-                del self.bound[worker_instance_id]
+            if self.bound.get(agent_worker_id) is queues:
+                del self.bound[agent_worker_id]
         pull = self._pulls.pop(id(queues), None)
         if pull is not None:
             pull[0].set()
@@ -633,33 +619,33 @@ class RedisRouteBus:
         if epoch is None:
             return
         await self._connection().delete(
-            self._control_key(worker_instance_id, epoch),
-            self._event_key(worker_instance_id, epoch),
-            self._held_key(worker_instance_id, "control", epoch),
-            self._held_key(worker_instance_id, "event", epoch),
+            self._control_key(agent_worker_id, epoch),
+            self._event_key(agent_worker_id, epoch),
+            self._held_key(agent_worker_id, "control", epoch),
+            self._held_key(agent_worker_id, "event", epoch),
         )
 
-    async def publish_command(self, worker_instance_id: str, frame: dict[str, Any]) -> bool:
+    async def publish_command(self, agent_worker_id: str, frame: dict[str, Any]) -> bool:
         epoch = frame_epoch(frame)
         if epoch is None or not frame_is_current(frame):
             return False
         return await self._push(
-            self._control_key(worker_instance_id, epoch),
-            self._held_key(worker_instance_id, "control", epoch),
-            self._owner_key(worker_instance_id),
+            self._control_key(agent_worker_id, epoch),
+            self._held_key(agent_worker_id, "control", epoch),
+            self._owner_key(agent_worker_id),
             frame,
             self.control_limit,
             epoch,
         )
 
-    async def publish_event(self, worker_instance_id: str, frame: dict[str, Any]) -> bool:
+    async def publish_event(self, agent_worker_id: str, frame: dict[str, Any]) -> bool:
         epoch = frame_epoch(frame)
         if epoch is None or not frame_is_current(frame):
             return False
         return await self._push(
-            self._event_key(worker_instance_id, epoch),
-            self._held_key(worker_instance_id, "event", epoch),
-            self._owner_key(worker_instance_id),
+            self._event_key(agent_worker_id, epoch),
+            self._held_key(agent_worker_id, "event", epoch),
+            self._owner_key(agent_worker_id),
             frame,
             self.event_limit,
             epoch,
@@ -710,36 +696,36 @@ class RedisRouteBus:
         return int(result) == 1
 
     async def _release_delivered(
-        self, worker_instance_id: str, kind: str, epoch: int, frame: dict[str, Any]
+        self, agent_worker_id: str, kind: str, epoch: int, frame: dict[str, Any]
     ) -> None:
         if not frame.get("_bus"):
             return
-        await self._release(worker_instance_id, kind, epoch, 1)
+        await self._release(agent_worker_id, kind, epoch, 1)
 
-    async def _release(self, worker_instance_id: str, kind: str, epoch: int, count: int) -> None:
+    async def _release(self, agent_worker_id: str, kind: str, epoch: int, count: int) -> None:
         if count <= 0:
             return
         await self._connection().eval(
-            _RELEASE_LUA, 1, self._held_key(worker_instance_id, kind, epoch), str(count)
+            _RELEASE_LUA, 1, self._held_key(agent_worker_id, kind, epoch), str(count)
         )
 
     async def _pull(
         self,
-        worker_instance_id: str,
+        agent_worker_id: str,
         queues: ConnectionQueues,
         stop: asyncio.Event,
         epoch: int,
         owner_id: str,
     ) -> None:
         client = self._connection()
-        owner_key = self._owner_key(worker_instance_id)
-        control_key = self._control_key(worker_instance_id, epoch)
-        event_key = self._event_key(worker_instance_id, epoch)
-        control_held = self._held_key(worker_instance_id, "control", epoch)
-        event_held = self._held_key(worker_instance_id, "event", epoch)
+        owner_key = self._owner_key(agent_worker_id)
+        control_key = self._control_key(agent_worker_id, epoch)
+        event_key = self._event_key(agent_worker_id, epoch)
+        control_held = self._held_key(agent_worker_id, "control", epoch)
+        event_held = self._held_key(agent_worker_id, "event", epoch)
         ttl = str(_ttl_seconds(self.owner_ttl_seconds))
         while not stop.is_set():
-            if not await self.touch_owner(worker_instance_id, owner_id, epoch):
+            if not await self.touch_owner(agent_worker_id, owner_id, epoch):
                 return
             moved = await self._transfer(
                 client, queues, control_key, control_held, owner_key, ttl, epoch, owner_id, "control"
@@ -776,9 +762,7 @@ class RedisRouteBus:
             return False
         if kind == "event" and queues.events.full():
             return False
-        item = await client.eval(
-            _PULL_LUA, 3, list_key, held_key, owner_key, ttl, str(epoch), owner_id
-        )
+        item = await client.eval(_PULL_LUA, 3, list_key, held_key, owner_key, ttl, str(epoch), owner_id)
         if item == -1:
             return None
         if item == 0 or item is None:
@@ -786,9 +770,7 @@ class RedisRouteBus:
         payload = json.loads(item)
         payload["_bus"] = True
         payload["_bus_kind"] = kind
-        accepted = await (
-            queues.put_control(payload) if kind == "control" else queues.put_event(payload)
-        )
+        accepted = await (queues.put_control(payload) if kind == "control" else queues.put_event(payload))
         if accepted:
             return True
         if kind == "control":
@@ -828,7 +810,5 @@ def build_route_bus(
 ) -> tuple[MemoryRouteBus | RedisRouteBus, str, str | None]:
     mode, warning = resolve_worker_gateway_bus(requested, redis_url)
     if mode == "redis":
-        return RedisRouteBus(
-            redis_url, control_limit=control_limit, event_limit=event_limit
-        ), mode, warning
+        return RedisRouteBus(redis_url, control_limit=control_limit, event_limit=event_limit), mode, warning
     return MemoryRouteBus(control_limit=control_limit, event_limit=event_limit), mode, warning

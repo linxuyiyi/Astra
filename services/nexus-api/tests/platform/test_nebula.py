@@ -6,24 +6,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from sqlalchemy import text as sql_text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.database import get_session
-from app.models import (
-    AgentWorker,
-    Base,
-    OpenCodeExecutionEnvironment,
-    RuntimeSession,
-    Task,
-    WorkerInstance,
-)
+from app.models import Base
 from app.sql_storage import create_test_schema
 from nexus_api import nebula
 from nexus_api.db import connect
@@ -70,218 +60,6 @@ async def facts(tmp_path):
     finally:
         chat.close()
         await engine.dispose()
-
-
-async def _worker(session, worker_id, owner, *, mode="LOCAL", env_status="AVAILABLE", instance=None):
-    worker = AgentWorker(
-        id=worker_id,
-        digital_employee_id=owner,
-        name=f"Worker {worker_id}",
-        role="自动化执行",
-        status="IDLE",
-        enabled=True,
-        task_types=["ISSUE"],
-        category_ids=[],
-        last_heartbeat=datetime(2026, 1, 2, 0, 0, tzinfo=UTC),
-    )
-    session.add(worker)
-    await session.flush()
-    environment = OpenCodeExecutionEnvironment(
-        employee_id=worker_id,
-        mode=mode,
-        name=f"环境 {worker_id}",
-        status=env_status,
-        labels=["自动化"],
-    )
-    session.add(environment)
-    await session.flush()
-    if instance is not None:
-        status, heartbeat = instance
-        session.add(
-            WorkerInstance(
-                id=f"wi_{worker_id}",
-                environment_id=environment.id,
-                token_digest="x" * 64,
-                status=status,
-                last_heartbeat_at=heartbeat,
-            )
-        )
-    return worker
-
-
-def _task(
-    task_id,
-    *,
-    status,
-    owner=None,
-    worker=None,
-    title="任务",
-    completed_at=None,
-    runtime_connection="CONNECTED",
-    waiting_reason=None,
-    priority="MEDIUM",
-):
-    return Task(
-        id=task_id,
-        task_type="ISSUE",
-        title=title,
-        status=status,
-        responsible_employee_id=owner,
-        employee_id=worker,
-        priority=priority,
-        runtime_connection=runtime_connection,
-        waiting_reason=waiting_reason,
-        completed_at=completed_at,
-    )
-
-
-@pytest.mark.asyncio
-async def test_snapshot_builds_galaxies_edges_and_marks_conflicts(facts):
-    sessions, chat = facts
-    _insert_employee(chat, "e1", "星一", "agent-1")
-    _insert_employee(chat, "e2", "星二", "agent-2")
-    _insert_employee(chat, "e3", "星三", None)
-
-    now = datetime(2026, 1, 2, 0, 30, tzinfo=UTC)
-    async with sessions() as session:
-        await _worker(session, "w1", "e1")
-        await _worker(
-            session,
-            "w2",
-            "e2",
-            mode="LINUX_REMOTE",
-            instance=("online", now - timedelta(seconds=10)),
-        )
-        await _worker(session, "w3", None, env_status="UNKNOWN")
-        await _worker(session, "w4", "ghost", env_status="UNKNOWN")
-        session.add_all(
-            [
-                _task("t1", status="PENDING", owner="e1"),
-                _task(
-                    "t2",
-                    status="RUNNING",
-                    owner="e1",
-                    worker="w1",
-                    runtime_connection="UNAVAILABLE",
-                    waiting_reason="TRANSPORT_RECOVERY",
-                ),
-                _task("t3", status="WAITING", owner="e1", worker="w1"),
-                _task("t4", status="RUNNING", owner="e2", worker="w2"),
-                _task("t5", status="FAILED", owner="e3"),
-                _task("t6", status="RUNNING", owner="e1", worker="w2"),
-                _task("t7", status="FAILED", owner=None, worker="w3"),
-                _task(
-                    "t8",
-                    status="SUCCEEDED",
-                    owner="e1",
-                    completed_at=now - timedelta(minutes=5),
-                ),
-                _task("t9", status="RUNNING", owner=None, worker="w1"),
-                _task("t10", status="RUNNING", owner="e2"),
-            ]
-        )
-        session.add(
-            RuntimeSession(
-                id="ses-2",
-                task_id="t2",
-                employee_id="w1",
-                workspace="/tmp",
-                environment={},
-            )
-        )
-        await session.commit()
-
-        snapshot = await nebula.collect_snapshot(session, chat, now=now)
-
-    employees = {item["id"]: item for item in snapshot["employees"]}
-    assert employees["e1"]["counts"] == {
-        "running": 3,
-        "queued": 1,
-        "waiting": 1,
-        "failed": 0,
-        "completedToday": 1,
-    }
-    assert employees["e1"]["workerIds"] == ["w1"]
-    assert employees["e3"]["interactionStatus"] == "unknown"
-    assert employees["e2"]["interactionStatus"] == "available"
-
-    workers = {item["id"]: item for item in snapshot["workers"]}
-    assert workers["w1"]["name"] == "环境 w1"
-    assert workers["w1"]["name"] != employees["e1"]["name"]
-    assert workers["w1"]["health"] == "online"
-    assert workers["w1"]["occupancy"] == "waiting"
-    assert workers["w1"]["taskCount"] == 3
-    assert workers["w2"]["health"] == "online"
-    assert workers["w2"]["workerInstanceId"] == "wi_w2"
-    assert workers["w4"]["health"] == "unknown"
-
-    edges = {(item["digitalEmployeeId"], item["workerId"]): item for item in snapshot["taskEdges"]}
-    assert edges[("e1", "w1")]["running"] == 2
-    assert edges[("e1", "w1")]["waiting"] == 1
-    assert edges[("e1", "w1")]["unavailable"] == 1
-    assert edges[("e2", "w2")]["running"] == 1
-    assert ("e1", "w2") not in edges  # 责任员工与 Worker 归属冲突时不画线
-
-    conflict_codes = {item["code"] for item in snapshot["dataConflicts"]}
-    assert "TASK_OWNER_CONFLICT" in conflict_codes
-    assert "WORKER_EMPLOYEE_MISSING" in conflict_codes
-    assert snapshot["unassigned"]["workerCount"] == 2
-    assert snapshot["unassigned"]["taskCount"] == 1
-    assert snapshot["unassigned"]["counts"]["failed"] == 1
-    assert snapshot["totals"]["tasksQueued"] == 1
-    assert snapshot["totals"]["tasksWaiting"] == 1
-    assert snapshot["totals"]["tasksRunning"] == 5
-    assert snapshot["totals"]["tasksFailed"] == 2
-    assert snapshot["totals"]["completedToday"] == 1
-    assert snapshot["degradedSources"] == []
-    assert snapshot["snapshotVersion"]
-
-    detail = await nebula.collect_employee_detail(session, chat, "e1", now=now)
-    assert detail["employee"]["id"] == "e1"
-    assert {item["id"] for item in detail["activeTasks"]} == {"t2", "t3", "t6", "t9"}
-
-    single = await nebula.collect_task_detail(session, chat, "t2", now=now)
-    assert single["task"]["id"] == "t2"
-    assert single["task"]["ownerId"] == "e1"
-    assert single["task"]["waitingReason"] == "执行连接恢复中，等待系统重连"
-    with pytest.raises(ValueError):
-        await nebula.collect_task_detail(session, chat, "missing", now=now)
-
-
-@pytest.mark.asyncio
-async def test_completed_today_uses_configured_timezone(facts):
-    sessions, chat = facts
-    _insert_employee(chat, "e1", "星一", "agent-1")
-    now = datetime(2026, 1, 2, 0, 30, tzinfo=UTC)  # 上海时间 1 月 2 日 08:30
-    async with sessions() as session:
-        await _worker(session, "w1", "e1")
-        session.add_all(
-            [
-                _task(
-                    "today",
-                    status="SUCCEEDED",
-                    owner="e1",
-                    completed_at=datetime(2026, 1, 1, 16, 30, tzinfo=UTC),
-                ),
-                _task(
-                    "yesterday",
-                    status="SUCCEEDED",
-                    owner="e1",
-                    completed_at=datetime(2026, 1, 1, 15, 30, tzinfo=UTC),
-                ),
-                _task("no-timestamp", status="SUCCEEDED", owner="e1"),
-                _task(
-                    "unassigned-today",
-                    status="SUCCEEDED",
-                    completed_at=datetime(2026, 1, 1, 17, 0, tzinfo=UTC),
-                ),
-            ]
-        )
-        await session.commit()
-        snapshot = await nebula.collect_snapshot(session, chat, now=now)
-    assert snapshot["totals"]["completedToday"] == 2
-    assert snapshot["employees"][0]["counts"]["completedToday"] == 1
-    assert snapshot["unassigned"]["counts"]["completedToday"] == 1
 
 
 @pytest.mark.asyncio
@@ -342,50 +120,6 @@ async def test_collaboration_dedupes_directions_and_hides_unowned_conversations(
 
 
 @pytest.mark.asyncio
-async def test_employee_tasks_pagination_and_link_task_counts(facts):
-    sessions, chat = facts
-    _insert_employee(chat, "e1", "星一", "agent-1")
-    _insert_employee(chat, "e2", "星二", "agent-2")
-    now = datetime(2026, 1, 2, 0, 30, tzinfo=UTC)
-    async with sessions() as session:
-        await _worker(session, "w1", "e1")
-        await _worker(session, "w2", "e2")
-        session.add_all(
-            [
-                _task("a", status="RUNNING", owner="e1", worker="w1", title="A"),
-                _task("b", status="RUNNING", owner="e1", worker="w1", title="B"),
-                _task("c", status="WAITING", owner="e1", worker="w1", title="C"),
-                _task("d", status="FAILED", owner="e1", title="D"),
-                _task("e", status="RUNNING", owner="e2", worker="w2", title="E"),
-                _task("f", status="RUNNING", owner="e1", worker="w2", title="F"),
-                _task("g", status="RUNNING", owner="e1", worker="w1", title="G", priority="HIGH"),
-            ]
-        )
-        await session.commit()
-
-        page = await nebula.collect_employee_tasks(
-            session, chat, "e1", task_status="RUNNING", page=1, page_size=2, now=now
-        )
-        link = await nebula.collect_link_tasks(session, chat, "w1", now=now)
-        with pytest.raises(ValueError):
-            await nebula.collect_link_tasks(session, chat, "nope", now=now)
-
-    assert page["total"] == 4
-    assert len(page["items"]) == 2
-    conflict = next(item for item in page["items"] if item["id"] == "f")
-    assert conflict["conflict"] is True
-    assert "TASK_OWNER_CONFLICT" in conflict["conflictCodes"]
-    assert link["counts"] == {"RUNNING": 3, "WAITING": 1}
-    assert {item["id"] for item in link["items"]} == {"a", "b", "c", "g"}
-
-    high = await nebula.collect_employee_tasks(
-        session, chat, "e1", priority="HIGH", page=1, page_size=10, now=now
-    )
-    assert high["total"] == 1
-    assert high["items"][0]["id"] == "g"
-
-
-@pytest.mark.asyncio
 async def test_snapshot_stays_readable_when_platform_source_degrades(facts, monkeypatch):
     sessions, chat = facts
     _insert_employee(chat, "e1", "星一", "agent-1")
@@ -406,137 +140,19 @@ async def test_snapshot_stays_readable_when_platform_source_degrades(facts, monk
 
 
 @pytest.mark.asyncio
-async def test_http_contract_uses_camel_case_and_validates_status(facts):
-    sessions, chat = facts
-    _insert_employee(chat, "e1", "星一", "agent-1")
-    async with sessions() as session:
-        await _worker(session, "w1", "e1")
-        session.add(_task("a", status="RUNNING", owner="e1", worker="w1"))
-        await session.commit()
-
-    app = FastAPI()
-    app.include_router(nebula.router)
-
-    async def session_override():
-        async with sessions() as session:
-            yield session
-
-    def chat_override():
-        yield chat
-
-    app.dependency_overrides[get_session] = session_override
-    app.dependency_overrides[nebula.chat_database] = chat_override
-    app.dependency_overrides[nebula.require_owner] = lambda: "u1"
-
-    with TestClient(app) as client:
-        snapshot = client.get("/api/v1/nebula/snapshot")
-        assert snapshot.status_code == 200
-        assert snapshot.json()["employees"][0]["counts"]["running"] == 1
-        assert client.get("/api/v1/nebula/employees/e1/tasks").status_code == 200
-        office = client.get("/api/v1/nebula/employees/e1/office")
-        assert office.status_code == 200
-        assert office.json()["workers"][0]["tasks"][0]["id"] == "a"
-        assert office.json()["employee"]["id"] == "e1"
-        assert client.get("/api/v1/nebula/employees/e1/office?pageSize=21").status_code == 422
-        assert client.get("/api/v1/nebula/employees/e1/office?workerPage=0").status_code == 422
-        assert client.get("/api/v1/nebula/employees/missing/office").status_code == 404
-        assert (
-            client.get("/api/v1/nebula/employees/e1/tasks", params={"priority": "HIGH"}).json()["total"] == 0
-        )
-        bad = client.get("/api/v1/nebula/employees/e1/tasks", params={"status": "BROKEN"})
-        assert bad.status_code == 422
-        assert client.get("/api/v1/nebula/employees/missing").status_code == 404
-        assert client.get("/api/v1/nebula/links/w1/tasks").json()["counts"] == {"RUNNING": 1}
-        assert client.get("/api/v1/nebula/tasks/a").json()["task"]["id"] == "a"
-        collaborations = client.get("/api/v1/nebula/collaborations")
-        assert collaborations.status_code == 200
-        assert "items" in collaborations.json()
-
-
-@pytest.mark.asyncio
-async def test_office_shared_worker_is_related_by_current_task_and_private_refs_are_hidden(facts):
-    sessions, chat = facts
-    _insert_employee(chat, "e1", "自动化", "agent-1")
-    _insert_employee(chat, "e2", "系统", "agent-2")
-    async with sessions() as session:
-        await _worker(session, "shared", None)
-        await _worker(session, "idle", "e1")
-        await _worker(session, "busy-elsewhere", "e1")
-        t1 = _task("waiting", status="WAITING", owner="e1", worker="shared", waiting_reason="HITL_QUESTION")
-        t1.source_conversation_id = "private-of-another-owner"
-        session.add_all([
-            t1,
-            _task("running-e2", status="RUNNING", owner="e2", worker="shared"),
-            _task("elsewhere", status="RUNNING", owner="e2", worker="busy-elsewhere"),
-            _task("pending", status="PENDING", owner="e1"),
-        ])
-        await session.commit()
-        first = await nebula.collect_employee_office(session, chat, "e1")
-        assert [w["id"] for w in first["workers"]] == ["shared", "idle"]
-        assert first["workers"][0]["association"] == "task"
-        assert first["workers"][1]["association"] == "dispatch"
-        assert [t["id"] for t in first["workers"][0]["tasks"]] == ["waiting"]
-        assert first["workers"][0]["tasks"][0]["waitingReason"] == "等待人工回答"
-        assert first["workers"][0]["tasks"][0]["sourceConversationId"] is None
-        assert first["issueTotal"] == 2
-        assert [t["id"] for t in first["issues"]] == ["waiting", "pending"]
-        second = await nebula.collect_employee_office(session, chat, "e2")
-        assert {w["id"] for w in second["workers"]} == {"shared", "busy-elsewhere"}
-        assert second["workers"][0]["id"] == "shared"
-        shared = next(w for w in second["workers"] if w["id"] == "shared")
-        assert [t["id"] for t in shared["tasks"]] == ["running-e2"]
-        assert (await session.get(Task, "waiting")).status == "WAITING"
-        assert (await session.get(AgentWorker, "shared")).digital_employee_id is None
-
-
-@pytest.mark.asyncio
-async def test_office_pages_attention_before_active_before_idle_without_global_preview_limit(
-    facts, monkeypatch,
-):
-    sessions, chat = facts
-    _insert_employee(chat, "e1", "自动化", "agent-1")
-    monkeypatch.setattr(nebula, "ACTIVE_PREVIEW_LIMIT", 1)
-    monkeypatch.setattr(nebula, "ATTENTION_LIMIT", 1)
-    async with sessions() as session:
-        await _worker(session, "a-idle", "e1")
-        await _worker(session, "b-running", None)
-        await _worker(session, "c-offline", "e1", env_status="UNAVAILABLE")
-        await _worker(session, "d-waiting", None)
-        session.add_all([
-            _task("running", status="RUNNING", owner="e1", worker="b-running"),
-            _task("wait", status="WAITING", owner="e1", worker="d-waiting"),
-            *[_task(f"pending-{i}", status="PENDING", owner="e1") for i in range(24)],
-            _task("failed", status="FAILED", owner="e1"),
-        ])
-        await session.commit()
-        first = await nebula.collect_employee_office(session, chat, "e1", page_size=2)
-        assert first["workerTotal"] == 4
-        assert [w["id"] for w in first["workers"]] == ["c-offline", "d-waiting"]
-        assert [t["status"] for t in first["issues"]] == ["WAITING", "FAILED"]
-        assert first["issueTotal"] == 26
-        second = await nebula.collect_employee_office(
-            session, chat, "e1", page_size=2, worker_page=2, issue_page=2,
-        )
-        assert [w["id"] for w in second["workers"]] == ["b-running", "a-idle"]
-        assert all(t["status"] == "PENDING" for t in second["issues"])
-        last = await nebula.collect_employee_office(
-            session, chat, "e1", page_size=2, worker_page=99, issue_page=99,
-        )
-        assert last["workerPage"] == 2
-        assert last["issuePage"] == 13
-
-
-@pytest.mark.asyncio
 async def test_office_missing_employee_and_degraded_tasks_do_not_report_empty_success(facts, monkeypatch):
     sessions, chat = facts
     _insert_employee(chat, "e1", "自动化", "agent-1")
     async with sessions() as session:
         with pytest.raises(ValueError, match="员工不存在"):
             await nebula.collect_employee_office(session, chat, "missing")
+
         async def unavailable(*args, **kwargs):
             return {"employees": [{"id": "e1"}], "degradedSources": ["tasks"]}
+
         monkeypatch.setattr(nebula, "_collect_core", unavailable)
         from fastapi import HTTPException
+
         with pytest.raises(HTTPException) as exc:
             await nebula.collect_employee_office(session, chat, "e1")
         assert exc.value.status_code == 503

@@ -18,16 +18,6 @@ ROOT = Path(__file__).resolve().parents[4]
 INSTALLER = ROOT / "ops/deploy/install_nexus.sh"
 
 
-
-
-
-
-
-
-
-
-
-
 @pytest.mark.parametrize("url", ["http://gateway.test:18110", "http://gateway.test:18110/v1/"])
 def test_gateway_clients_share_canonical_v1(url):
     assert gateway_base(url) == "http://gateway.test:18110/v1"
@@ -110,12 +100,14 @@ def test_local_managed_runtime_cannot_use_vendor_provider_or_small_model():
     assert json.loads(original["OPENCODE_CONFIG_CONTENT"])["small_model"] == "vendor/direct"
 
 
-
-
-@pytest.mark.parametrize("field,value", [
-    ("small_model", "vendor/small"), ("model", "vendor/main"),
-    ("enabled_providers", ["nexus-gateway", "vendor"]),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("small_model", "vendor/small"),
+        ("model", "vendor/main"),
+        ("enabled_providers", ["nexus-gateway", "vendor"]),
+    ],
+)
 async def test_shared_serve_checks_actual_config_before_ready(monkeypatch, field, value):
     from app.config.settings import Settings
     from app.runtime.opencode_model import gateway_environment
@@ -133,8 +125,10 @@ async def test_shared_serve_checks_actual_config_before_ready(monkeypatch, field
         assert request.url.path == "/config"
         return httpx.Response(200, json=config)
 
-    monkeypatch.setattr("app.runtime.opencode_server.httpx.AsyncClient",
-                        lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
+    monkeypatch.setattr(
+        "app.runtime.opencode_server.httpx.AsyncClient",
+        lambda **kw: original(transport=httpx.MockTransport(handler), **kw),
+    )
     manager = OpenCodeServerManager(Settings(seed_demo=False, opencode_server_version="1.18.33"))
     with pytest.raises(RuntimeError, match="统一网关"):
         await manager.wait_until_ready()
@@ -162,13 +156,17 @@ async def test_platform_worker_and_review_share_generated_http_proxy(tmp_path, m
     configured = Settings(
         gateway_openai_base=base, mcp_resource_server_url=values["NEXUS_MCP_RESOURCE_SERVER_URL"]
     )
-    provisioner = RemoteProvisioner(
-        SimpleNamespace(id=7, model_name="model-a", opencode_path="opencode"), {"id": "proxy-test"}
-    )
+    provisioner = RemoteProvisioner(SimpleNamespace(id=7, model_name="model-a"), {"id": "proxy-test"})
     provisioner.settings = configured
     worker_base, mcp_url = provisioner._direct_endpoints()
-    worker = managed_config(config_path="/test/opencode.jsonc", model="model-a", models=["model-a"],
-                            gateway_url=worker_base, gateway_key="agw_test", mcp_url=mcp_url)
+    worker = managed_config(
+        config_path="/test/opencode.jsonc",
+        model="model-a",
+        models=["model-a"],
+        gateway_url=worker_base,
+        gateway_key="agw_test",
+        mcp_url=mcp_url,
+    )
     assert worker["provider"]["options"]["baseURL"] == base
     seen = []
 

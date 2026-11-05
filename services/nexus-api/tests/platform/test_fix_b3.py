@@ -6,24 +6,13 @@ import stat
 import subprocess
 import sys
 import textwrap
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
-from cryptography.fernet import Fernet
-from fastapi.testclient import TestClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.orm import selectinload
 
-from app.config.settings import get_settings
-from app.domain import EmployeeStatus, EnvironmentStatus, TaskStatus
-from app.main import app
-from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment, Task
-from app.runtime.dispatcher import Dispatcher
-from app.runtime.lifecycle import RuntimeService, RuntimeStateError
-from app.runtime.repository import copy_worker
-from app.runtime.worker_readiness import scheduling_block
+from app.domain import TaskStatus
+from app.models import Base, Task
 from app.worker_agent.jsonc import loads_jsonc as parse_jsonc
 
 PAT = "ghp_fixb3tokenvalue"
@@ -63,36 +52,6 @@ def test_shared_jsonc_accepts_inline_comments_and_trailing_commas(tmp_path):
     assert json.loads(completed.stdout) == {"skill": "review"}
 
 
-def _employee(employee_id="E1", **overrides):
-    values = dict(
-        id=employee_id,
-        name=employee_id,
-        role="build",
-        status=EmployeeStatus.IDLE,
-        enabled=True,
-        auto_claim=True,
-        auto_execute=False,
-        task_types=["ISSUE"],
-        category_ids=["testing"],
-    )
-    values.update(overrides)
-    return AgentWorker(**values)
-
-
-def _environment(employee_id="E1", **overrides):
-    values = dict(
-        employee_id=employee_id,
-        mode="LOCAL",
-        name="local",
-        workspace_root="/tmp/workspaces/" + employee_id,
-        repository_url='https://git.example/org/repo.git',
-        status=EnvironmentStatus.AVAILABLE,
-        status_detail={},
-    )
-    values.update(overrides)
-    return OpenCodeExecutionEnvironment(**values)
-
-
 def _task(task_id, **overrides):
     values = dict(
         id=task_id,
@@ -103,161 +62,6 @@ def _task(task_id, **overrides):
     )
     values.update(overrides)
     return Task(**values)
-
-
-@pytest.mark.asyncio
-async def test_child_waits_until_the_parent_succeeds(session):
-    session.add(_employee())
-    session.add(_environment())
-    session.add(_task("parent", status=TaskStatus.RUNNING))
-    session.add(_task("child", related_task_id="parent"))
-    await session.commit()
-    assert await Dispatcher(session).claim_once() is None
-    parent = await session.get(Task, "parent")
-    parent.status = TaskStatus.SUCCEEDED
-    await session.commit()
-    claimed = await Dispatcher(session).claim_once()
-    assert claimed is not None
-    assert claimed.id == "child"
-
-
-@pytest.mark.asyncio
-async def test_canceled_parent_skips_the_child_with_a_reason(session):
-    session.add(_employee())
-    session.add(_environment())
-    session.add(_task("parent", status=TaskStatus.CANCELED))
-    session.add(_task("child", related_task_id="parent"))
-    await session.commit()
-    assert await Dispatcher(session).claim_once() is None
-    child = await session.get(Task, "child")
-    assert child.status == TaskStatus.PENDING
-    assert child.current_progress == "父任务已取消，阻塞中"
-    assert child.runtime_error is None
-    assert await Dispatcher(session).claim_once() is None
-
-
-@pytest.mark.asyncio
-async def test_claim_defers_worker_head_read_until_workspace_preparation(session, monkeypatch):
-    async def head(_environment, _workspace):
-        raise AssertionError("assignment must not wait for remote workspace HEAD")
-
-    monkeypatch.setattr("app.runtime.workspace_changes.workspace_head_commit", head)
-    session.add(_employee())
-    session.add(_environment(workspace_root="/srv/missing"))
-    session.add(_task("T-worker"))
-    await session.commit()
-    claimed = await Dispatcher(session).claim_once()
-    assert claimed is not None
-    assert claimed.base_commit is None
-    assert "base_commit" not in claimed.execution_environment_snapshot
-    assert claimed.execution_environment_snapshot["repository_url"] == "https://git.example/org/repo.git"
-
-
-@pytest.mark.asyncio
-async def test_start_reuses_the_assignment_checks_and_merges_the_snapshot(session, monkeypatch):
-    session.add(_employee())
-    session.add(_environment(workspace_root="/tmp/does-not-matter"))
-    session.add(
-        _task(
-            "T-start",
-            status=TaskStatus.WAITING,
-            employee_id="E1",
-            execution_environment_snapshot={"kept_marker": "stay", "model_name": "old"},
-        )
-    )
-    await session.commit()
-    environment = await session.scalar(
-        select(OpenCodeExecutionEnvironment).where(OpenCodeExecutionEnvironment.employee_id == "E1")
-    )
-    environment.skill_refs = ["review"]
-    environment.status_detail = {
-        "local_observation": {
-            "opencode": {"status": "healthy", "version": "1.18.33"},
-            "skills": {"status": "healthy", "discovered": [], "missing": ["review"], "content_hashes": {}},
-        }
-    }
-    await session.commit()
-    with pytest.raises(RuntimeStateError, match="待同步"):
-        await RuntimeService(session).start("T-start")
-
-    environment.skill_refs = []
-    environment.status_detail = {}
-    await session.commit()
-
-    class Client:
-        async def health(self):
-            return {"version": "1.2.3"}
-
-        async def create_session(self, *_args, **_kwargs):
-            return {"id": "ses-new"}
-
-    @asynccontextmanager
-    async def fake_connect(*_args, **_kwargs):
-        yield Client()
-
-    async def fake_prepare(_task, _environment, *, reuse_existing=True):
-        return "/tmp/workspaces/E1/T-start"
-
-    async def fake_head(_environment, _workspace):
-        return "abc123"
-
-    async def fake_deliver(self, task_id):
-        return await self.session.get(Task, task_id)
-
-    monkeypatch.setattr("app.runtime.lifecycle.connect", fake_connect)
-    monkeypatch.setattr("app.runtime.lifecycle.prepare_workspace", fake_prepare)
-    monkeypatch.setattr("app.runtime.lifecycle.workspace_head_commit", fake_head)
-    monkeypatch.setattr(RuntimeService, "deliver_first_submission", fake_deliver)
-    started = await RuntimeService(session).start("T-start")
-    assert started.base_commit == "abc123"
-    snapshot = started.execution_environment_snapshot
-    assert snapshot["kept_marker"] == "stay"
-    assert snapshot["repository_url"] == "https://git.example/org/repo.git"
-    assert snapshot["base_commit"] == "abc123"
-    assert snapshot["opencode_version"] == "1.2.3"
-    assert started.current_session_id == "ses-new"
-
-
-@pytest.mark.asyncio
-async def test_copy_picks_a_free_port_or_the_requested_one(session):
-    source = _employee("src")
-    environment = _environment(
-        "src",
-        mode="LINUX_REMOTE",
-        host="10.9.9.9",
-        opencode_server_port=19991,
-        workspace_root="/tmp/workspaces/src",
-        skill_refs=["review"],
-        mcp_refs=[{"name": "library"}],
-    )
-    source.execution_environment = environment
-    other = _employee("other")
-    occupied = _environment("other", mode="LINUX_REMOTE", host="10.9.9.9", opencode_server_port=14096)
-    other.execution_environment = occupied
-    session.add_all([source, environment, other, occupied])
-    await session.commit()
-    loaded = await session.scalar(
-        select(AgentWorker)
-        .where(AgentWorker.id == "src")
-        .options(selectinload(AgentWorker.execution_environment))
-    )
-    await copy_worker(session, loaded, new_id="copy-a", name="副本")
-    copied = await session.scalar(
-        select(OpenCodeExecutionEnvironment).where(OpenCodeExecutionEnvironment.employee_id == "copy-a")
-    )
-    assert copied.opencode_server_port == 14097
-    assert copied.port == 22
-    assert await scheduling_block(session, copied) is not None
-    loaded = await session.scalar(
-        select(AgentWorker)
-        .where(AgentWorker.id == "src")
-        .options(selectinload(AgentWorker.execution_environment))
-    )
-    await copy_worker(session, loaded, new_id="copy-b", name="指定端口", port=15000)
-    chosen = await session.scalar(
-        select(OpenCodeExecutionEnvironment).where(OpenCodeExecutionEnvironment.employee_id == "copy-b")
-    )
-    assert chosen.opencode_server_port == 15000
 
 
 def _git_stub() -> str:
@@ -423,64 +227,3 @@ def test_remote_install_clones_with_askpass_and_checks_an_existing_workspace(tmp
     assert any(item["command"] == "init" for item in empty_calls)
     assert all(item["command"] != "clone" for item in empty_calls)
     assert not empty_token.exists()
-
-
-def test_related_tasks_stay_in_one_transaction(monkeypatch):
-    monkeypatch.setattr(get_settings(), "gateway_master_key", Fernet.generate_key().decode())
-    with TestClient(app) as client:
-        failed = client.post(
-            "/api/tasks/related",
-            json={
-                "task_type": "ISSUE",
-                "category_id": "testing-platform",
-                "title": "fix-b3-parent",
-                "description": "必须一起回滚",
-                "acceptance_criteria": [{"content": "没有残留"}],
-                "parts": [
-                    { "title": "fix-b3-parent"},
-                    {"title": "fix-b3-child", "depends_on": 99},
-                ],
-            },
-        )
-        assert failed.status_code == 422
-        listed = client.get("/api/tasks", params={"limit": 100})
-        assert listed.status_code == 200
-        assert "fix-b3-parent" not in [item["title"] for item in listed.json()]
-
-
-
-
-@pytest.mark.asyncio
-async def test_cancel_clears_waiting_reason_and_unknown_failure_does_too(session):
-    session.add(_employee())
-    task = _task(
-        "T-wait",
-        status=TaskStatus.WAITING,
-        employee_id="E1",
-        waiting_reason="TIMEOUT",
-        current_session_id="ses",
-    )
-    session.add(task)
-    await session.commit()
-    service = RuntimeService(session)
-    from app.runtime.session_state import SessionState
-
-    await service.apply_session_state(
-        task,
-        SessionState(status="FAILED", terminal_reason="session_missing"),
-    )
-    assert task.waiting_reason == "SESSION_MISSING"
-    assert task.status == TaskStatus.WAITING
-    task.waiting_reason = "TIMEOUT"
-    task.status = TaskStatus.WAITING
-    await session.commit()
-    canceled = await service._write_canceled_task(
-        task,
-        cancel_task=True,
-        usage_messages=None,
-        native_session_count=None,
-        forced_offline_cancel=False,
-        stop_error=None,
-    )
-    assert canceled.status == TaskStatus.CANCELED
-    assert canceled.waiting_reason is None

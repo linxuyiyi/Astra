@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 _PATTERNS = (
-    (re.compile(r"\bctx_[A-Za-z0-9_-]{20,}\b"), "[已隐藏]"),
+    (re.compile(r"\bctx_[A-Za-z0-9_-]{20,}(?:\.[0-9a-f]{64})?\b"), "[已隐藏]"),
     (re.compile(r"agw_[A-Za-z0-9_-]+"), "[已隐藏]"),
     (re.compile(r"wtk_[A-Za-z0-9_-]+"), "[已隐藏]"),
     (re.compile(r"Bearer\s+\S+", re.IGNORECASE), "Bearer [已隐藏]"),

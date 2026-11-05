@@ -6,7 +6,6 @@ from app.config.settings import get_settings
 from app.database import validate_database, worker_session
 from app.runtime.dispatcher import Dispatcher
 from app.runtime.experience_review.coordinator import process_job, scan_jobs
-from app.runtime.heartbeat import heartbeat_active_employees, mark_stale_employees_offline
 from app.runtime.lifecycle import RuntimeService
 from app.runtime.scout import TaskScout
 from app.runtime.task_wakeup import HttpWakeSender, deliver_pending
@@ -23,8 +22,6 @@ celery.conf.update(
     task_routes={
         "nexus.scout": {"queue": "nexus-control"},
         "nexus.dispatch": {"queue": "nexus-control"},
-        "nexus.heartbeat-check": {"queue": "nexus-control"},
-        "nexus.employee-heartbeat": {"queue": "nexus-control"},
         "nexus.task-wake": {"queue": "nexus-control"},
         "nexus.experience-review.scan": {"queue": "nexus-review"},
         "nexus.experience-review.process": {"queue": "nexus-review"},
@@ -47,14 +44,6 @@ celery.conf.update(
             else {}
         ),
         "nexus-dispatch": {"task": "nexus.dispatch", "schedule": settings.dispatcher_interval},
-        "nexus-heartbeat-check": {
-            "task": "nexus.heartbeat-check",
-            "schedule": settings.heartbeat_interval,
-        },
-        "nexus-employee-heartbeat": {
-            "task": "nexus.employee-heartbeat",
-            "schedule": settings.heartbeat_interval,
-        },
     },
 )
 
@@ -117,30 +106,7 @@ def dispatch() -> str | None:
             task = await Dispatcher(session).claim_once()
             if not task:
                 return None
-            if task.employee_id:
-                from app.models import AgentWorker
-
-                employee = await session.get(AgentWorker, task.employee_id)
-                if employee.auto_execute:
-                    await RuntimeService(session).start(task.id)
+            await RuntimeService(session).start(task.id)
             return task.id
-
-    return run_async(execute())
-
-
-@celery.task(name="nexus.heartbeat-check")
-def heartbeat_check() -> list[str]:
-    async def execute():
-        async with worker_session() as session:
-            return await mark_stale_employees_offline(session, settings)
-
-    return run_async(execute())
-
-
-@celery.task(name="nexus.employee-heartbeat")
-def employee_heartbeat() -> list[str]:
-    async def execute():
-        async with worker_session() as session:
-            return await heartbeat_active_employees(session)
 
     return run_async(execute())

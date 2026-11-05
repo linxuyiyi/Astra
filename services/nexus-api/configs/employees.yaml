@@ -1,3 +1,0 @@
-# Agent Worker 不再由平台预置。数字员工在 Nexus 目录中维护，
-# Worker 在配置中心按数字员工创建，避免启动时回填历史 Worker。
-employees: []

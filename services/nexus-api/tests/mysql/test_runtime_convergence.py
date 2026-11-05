@@ -1,45 +1,32 @@
-"""真实 MySQL 并发回归；ASTRA_TEST_MYSQL_URL 必须是隔离测试实例。
-
-测试用户需要在该实例创建/删除临时测试库的权限。每个用例独立迁移，
-只删除自己生成的 nexus_runtime_test_<uuid> 数据库。
-"""
+"""真实 MySQL 8.0 并发验收；仅创建并删除随机命名的隔离测试数据库。"""
 
 import asyncio
 import os
 import subprocess
 import sys
-from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select, text, update
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.sql.dml import Update
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.models import (
-    AgentWorker,
-    OpenCodeExecutionEnvironment,
-    Task,
-    TaskCategory,
-    WorkerInstance,
-    WorkerMaintenanceOperation,
-)
-from app.runtime import maintenance, remote_provisioning, worker_health
+from app.models import AgentWorker, Task, TaskCategory, WorkerMaintenanceOperation
 from app.runtime.dispatcher import Dispatcher
-from app.runtime.lifecycle import RuntimeService
+from app.runtime.maintenance import submit_operation
+from app.worker_gateway.bus import MemoryRouteBus
+from app.worker_gateway.protocol import envelope
+from app.worker_gateway.service import WorkerGateway
 
 pytestmark = pytest.mark.skipif(not os.environ.get("ASTRA_TEST_MYSQL_URL"), reason="需要独立 MySQL 测试实例")
 
 
 @pytest.fixture
-async def mysql_case(monkeypatch):
+async def mysql_case():
     url = make_url(os.environ["ASTRA_TEST_MYSQL_URL"])
     assert url.get_backend_name() == "mysql" and "test" in (url.database or "")
-    name = "nexus_runtime_test_" + uuid4().hex
+    name = "nexus_v150_test_" + uuid4().hex
     admin = create_async_engine(url.set(drivername="mysql+asyncmy", database=None))
     async with admin.begin() as connection:
         await connection.execute(text(f"CREATE DATABASE `{name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_bin"))
@@ -47,7 +34,7 @@ async def mysql_case(monkeypatch):
     engine = create_async_engine(scoped)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
-        migrated = await asyncio.to_thread(
+        result = await asyncio.to_thread(
             subprocess.run,
             [sys.executable, "-m", "alembic", "upgrade", "head"],
             cwd=Path(__file__).resolve().parents[2],
@@ -56,51 +43,25 @@ async def mysql_case(monkeypatch):
             text=True,
             timeout=30,
         )
-        assert migrated.returncode == 0, migrated.stderr
-        async with factory() as session:
-            session.add(TaskCategory(id="cat", name="cat"))
-            for index in (1, 2):
-                session.add(
-                    AgentWorker(
-                        id=f"E{index}",
-                        name=f"E{index}",
-                        role="build",
-                        status="IDLE",
-                        task_types=["ISSUE"],
-                        category_ids=["cat"],
-                    )
+        assert result.returncode == 0, result.stderr
+        async with factory() as db:
+            db.add(TaskCategory(id="cat", name="cat"))
+            db.add(
+                AgentWorker(
+                    id="worker",
+                    name="worker",
+                    status="IDLE",
+                    mode="LINUX_REMOTE",
+                    host="worker.invalid",
+                    username="root",
+                    ssh_password="encrypted",
+                    workspace_root="/workspace",
+                    task_types=["ISSUE"],
+                    category_ids=["cat"],
                 )
-            await session.flush()
-            for index in (1, 2):
-                session.add(
-                    OpenCodeExecutionEnvironment(
-                        id=index,
-                        employee_id=f"E{index}",
-                        repository_url='https://example.invalid/repo',
-                        mode="LOCAL",
-                        status="AVAILABLE",
-                        workspace_root="/tmp/unused-test-workspace",
-                        status_detail={"capability": {"runtime_status": "applied"}},
-                    )
-                )
-                session.add(
-                    Task(
-                        id=f"T{index}",
-                        title=f"T{index}",
-                        task_type="ISSUE",
-                        category_id="cat",
-
-                        status="PENDING",
-                    )
-                )
-            await session.commit()
-        monkeypatch.setattr(maintenance, "SessionLocal", factory)
-
-        async def probe(*args, **kwargs):
-            return {"error": "controlled probe"}
-
-        monkeypatch.setattr(worker_health, "probe_equipment", probe)
-        yield SimpleNamespace(engine=engine, factory=factory)
+            )
+            await db.commit()
+        yield factory
     finally:
         await engine.dispose()
         async with admin.begin() as connection:
@@ -108,344 +69,97 @@ async def mysql_case(monkeypatch):
         await admin.dispose()
 
 
-async def test_json_environment_lock_and_unchanged_observation(mysql_case):
-    async with mysql_case.factory() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, 1)
-        await remote_provisioning.guard_environment_write(session, environment)
-        await session.commit()
-    result = await maintenance.observe_environment(1, persist=True)
-    assert result["stale"] is False
-    async with mysql_case.factory() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, 1)
-        assert environment.status == "UNAVAILABLE"
-        assert environment.last_checked_at is not None
-        assert environment.status_detail["observed"]["error"] == "controlled probe"
-
-
-@pytest.mark.parametrize("task_status", ["RUNNING", "WAITING", "PENDING"])
-async def test_occupied_worker_skips_probe_and_keeps_health(mysql_case, monkeypatch, task_status):
-    async with mysql_case.factory() as session:
-        await session.execute(
-            update(Task).where(Task.id == "T1")
-            .values(employee_id="E1", status=task_status, claimed_at=datetime.now(UTC))
-        )
-        await session.commit()
-
-    async def unexpected_probe(*args, **kwargs):
-        raise AssertionError("occupied Worker must not be probed")
-
-    monkeypatch.setattr(worker_health, "probe_equipment", unexpected_probe)
-    result = await maintenance.observe_environment(1, persist=True)
-    assert result["skipped"] is True
-    assert result["reason"] == "occupied_task"
-    async with mysql_case.factory() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, 1)
-        assert environment.status == "AVAILABLE"
-        assert environment.last_checked_at is None
-
-
-async def test_idle_probe_cannot_downgrade_worker_that_started_work(mysql_case, monkeypatch):
-    async def start_work(*args, **kwargs):
-        async with mysql_case.factory() as session:
-            await session.execute(
-                update(Task).where(Task.id == "T1").values(status="RUNNING", employee_id="E1")
+async def test_concurrent_claims_keep_one_task_per_worker(mysql_case):
+    async with mysql_case() as db:
+        for index in range(8):
+            db.add(
+                Task(id=f"T{index}", title="task", task_type="ISSUE", category_id="cat", priority="MEDIUM")
             )
-            await session.commit()
-        return {"error": "late probe failure"}
-
-    monkeypatch.setattr(worker_health, "probe_equipment", start_work)
-    result = await maintenance.observe_environment(1, persist=True)
-    assert result["stale"] is True
-    assert result["skipped"] is True
-    async with mysql_case.factory() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, 1)
-        assert environment.status == "AVAILABLE"
-        assert environment.last_checked_at is None
-
-
-async def test_manual_check_records_skip_without_changing_busy_worker(mysql_case, monkeypatch):
-    async with mysql_case.factory() as session:
-        await session.execute(update(Task).where(Task.id == "T1").values(status="RUNNING", employee_id="E1"))
-        await session.commit()
-        operation = await maintenance.submit_operation(session, 1, "check")
-        operation_id = operation.id
-
-    async def unexpected_probe(*args, **kwargs):
-        raise AssertionError("occupied Worker must not be probed")
-
-    monkeypatch.setattr(worker_health, "probe_equipment", unexpected_probe)
-    assert await maintenance.run_maintenance_once("test-owner") is True
-    async with mysql_case.factory() as session:
-        operation = await session.get(WorkerMaintenanceOperation, operation_id)
-        assert operation.state == "SUCCEEDED"
-        assert operation.stage == "skipped"
-        assert operation.after_snapshot == {"skipped": True, "reason": "occupied_task"}
-        environment = await session.get(OpenCodeExecutionEnvironment, 1)
-        assert environment.status == "AVAILABLE"
-        assert environment.last_checked_at is None
-
-
-async def test_environment_guard_uses_current_read_after_an_older_snapshot(mysql_case):
-    async with mysql_case.factory() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, 1)
-        async with mysql_case.factory() as other:
-            await other.execute(
-                update(OpenCodeExecutionEnvironment)
-                .where(OpenCodeExecutionEnvironment.id == 1)
-                .values(status_detail={"new": "configuration"})
-            )
-            await other.commit()
-        await remote_provisioning.guard_environment_write(session, environment)
-        assert environment.status_detail == {"new": "configuration"}
-        await session.rollback()
-
-
-@pytest.mark.parametrize("change", ["configuration", "epoch"])
-async def test_late_observation_cannot_overwrite_new_facts(mysql_case, monkeypatch, change):
-    if change == "epoch":
-        async with mysql_case.factory() as session:
-            await session.execute(
-                update(OpenCodeExecutionEnvironment)
-                .where(OpenCodeExecutionEnvironment.id == 1)
-                .values(mode="LINUX_REMOTE")
-            )
-            session.add(
-                WorkerInstance(id="w1", environment_id=1, token_digest="test", status="online", epoch=1)
-            )
-            await session.commit()
-
-    async def changed_during_probe(*args, **kwargs):
-        async with mysql_case.factory() as session:
-            if change == "configuration":
-                await session.execute(
-                    update(OpenCodeExecutionEnvironment)
-                    .where(OpenCodeExecutionEnvironment.id == 1)
-                    .values(status_detail={"new": "configuration"})
-                )
-            else:
-                await session.execute(update(WorkerInstance).where(WorkerInstance.id == "w1").values(epoch=2))
-            await session.commit()
-        return {"error": "old observation"}
-
-    monkeypatch.setattr(worker_health, "probe_equipment", changed_during_probe)
-    result = await maintenance.observe_environment(1, persist=True)
-    assert result["stale"] is True
-    async with mysql_case.factory() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, 1)
-        assert environment.status == "AVAILABLE"
-        assert environment.last_checked_at is None
-
-
-async def test_assignment_does_not_lock_unrelated_task_or_worker(mysql_case, monkeypatch):
-    entered, release = asyncio.Event(), asyncio.Event()
-    original = remote_provisioning.guard_environment_write
-
-    async def hold_first(session, environment):
-        if environment.id == 1:
-            entered.set()
-            await release.wait()
-        return await original(session, environment)
-
-    monkeypatch.setattr(remote_provisioning, "guard_environment_write", hold_first)
+        await db.commit()
 
     async def claim():
-        async with mysql_case.factory() as session:
-            task = await Dispatcher(session).claim_once()
-            return (task.id, task.employee_id, task.base_commit) if task else None
+        async with mysql_case() as db:
+            result = await Dispatcher(db).claim_once()
+            return result.id if result else None
 
-    first = asyncio.create_task(claim())
-    try:
-        await asyncio.wait_for(entered.wait(), 5)
-        async with mysql_case.factory() as session:
-            await session.execute(text("SET SESSION innodb_lock_wait_timeout = 1"))
-            await session.execute(
-                update(AgentWorker).where(AgentWorker.id == "E2").values(last_heartbeat=datetime.now(UTC))
-            )
-            await session.commit()
-        assert await asyncio.wait_for(claim(), 3) == ("T2", "E2", None)
-    finally:
-        release.set()
-        outcome = await asyncio.wait_for(first, 5)
-    assert outcome == ("T1", "E1", None)
+    await asyncio.gather(*(claim() for _ in range(6)))
+    async with mysql_case() as db:
+        assert await db.scalar(select(func.count()).select_from(Task).where(Task.status == "RUNNING")) == 1
+        assert (await db.get(AgentWorker, "worker")).status == "WORKING"
 
 
-async def test_two_claimers_cannot_occupy_one_worker(mysql_case):
-    async with mysql_case.factory() as session:
-        await session.execute(update(AgentWorker).where(AgentWorker.id == "E2").values(enabled=False))
-        await session.commit()
+async def test_concurrent_maintenance_is_exclusive(mysql_case):
+    async def submit():
+        async with mysql_case() as db:
+            try:
+                return (await submit_operation(db, "worker", "check")).id
+            except Exception as exc:
+                assert getattr(exc, "status_code", None) == 409
+                return None
 
-    async def claim():
-        async with mysql_case.factory() as session:
-            task = await Dispatcher(session).claim_once()
-            return task.id if task else None
-
-    await asyncio.wait_for(asyncio.gather(claim(), claim()), 5)
-    async with mysql_case.factory() as session:
-        assigned = (await session.scalars(select(Task.id).where(Task.claimed_at.is_not(None)))).all()
-        assert len(assigned) == 1
+    results = await asyncio.gather(*(submit() for _ in range(4)))
+    assert sum(item is not None for item in results) == 1
+    async with mysql_case() as db:
+        assert await db.scalar(select(func.count()).select_from(WorkerMaintenanceOperation)) == 1
 
 
-async def test_maintained_worker_does_not_block_another_available_worker(mysql_case):
-    async with mysql_case.factory() as session:
-        session.add(
-            WorkerMaintenanceOperation(
-                id="op", environment_id=1, action="check", state="QUEUED", stage="queued",
-                attempt=1, active_environment_id=1,
+async def test_gateway_old_epoch_cannot_disconnect_or_reply(mysql_case):
+    gateway = WorkerGateway(bus=MemoryRouteBus())
+    async with mysql_case() as db:
+        enrolled = await gateway.enroll(db, "worker")
+        auth = envelope(
+            request_id="auth",
+            agent_worker_id="worker",
+            session_id=None,
+            message_type="command",
+            payload={"name": "authenticate"},
+        )
+        first = await gateway.authenticate(db, auth, enrolled.token)
+    async with mysql_case() as db:
+        second = await gateway.authenticate(db, auth, enrolled.token)
+        assert second.epoch > first.epoch
+    async with mysql_case() as db:
+        await gateway.disconnect(db, "worker", first.epoch)
+    async with mysql_case() as db:
+        assert (await db.get(AgentWorker, "worker")).status == "IDLE"
+        assert not await gateway.epoch_is_current(db, "worker", first.epoch)
+
+
+async def test_worker_deletion_respects_mysql_foreign_keys(mysql_case):
+    from app.api.worker_routes import delete_worker
+    from app.models import Event, WorkerCommand, WorkerHttpSlot
+
+    async with mysql_case() as db:
+        db.add(
+            Task(
+                id="finished",
+                title="已完成任务",
+                task_type="ISSUE",
+                category_id="cat",
+                status="SUCCEEDED",
+                agent_worker_id="worker",
             )
         )
-        await session.commit()
-    async with mysql_case.factory() as session:
-        task = await Dispatcher(session).claim_once()
-        assert task is not None
-        assert task.employee_id == "E2"
-
-
-@pytest.mark.parametrize("control_status", ["PAUSED", "ERROR"])
-async def test_heartbeat_preserves_concurrent_control_status(mysql_case, monkeypatch, control_status):
-    async with mysql_case.factory() as session:
-        await session.execute(update(AgentWorker).where(AgentWorker.id == "E1").values(status="OFFLINE"))
-        await session.execute(update(Task).where(Task.id == "T1").values(status="RUNNING", employee_id="E1"))
-        await session.commit()
-
-    async with mysql_case.factory() as session:
-        cached = await session.get(AgentWorker, "E1")
-        await session.commit()
-        async with mysql_case.factory() as other:
-            await other.execute(
-                update(AgentWorker).where(AgentWorker.id == "E1").values(status=control_status)
-            )
-            await other.commit()
-        assert cached.status == "OFFLINE"
-
-        @asynccontextmanager
-        async def connect(*args, **kwargs):
-            raise AssertionError("occupied Worker must not be probed")
-            yield
-
-        monkeypatch.setattr("app.runtime.lifecycle.connect", connect)
-        await RuntimeService(session).refresh_employee_heartbeats()
-    async with mysql_case.factory() as session:
-        employee = await session.get(AgentWorker, "E1")
-        assert employee.status == control_status
-        assert employee.current_task_count == 1
-        assert employee.last_heartbeat is None
-
-
-async def test_finish_and_observe_share_environment_first_order(mysql_case, monkeypatch):
-    async with mysql_case.factory() as session:
-        session.add(
-            WorkerMaintenanceOperation(
-                id="op",
-                environment_id=1,
-                action="check",
-                state="RUNNING",
-                stage="running",
-                attempt=1,
-                active_environment_id=1,
-                lease_owner="owner",
-                lease_until=datetime.now(UTC) + timedelta(minutes=1),
+        db.add(
+            WorkerCommand(
+                request_id="http_finished", agent_worker_id="worker", name="http", status="succeeded", epoch=2
             )
         )
-        await session.commit()
-    locked, release, observer_started = asyncio.Event(), asyncio.Event(), asyncio.Event()
-
-    class FinishingSession(AsyncSession):
-        async def execute(self, statement, *args, **kwargs):
-            result = await super().execute(statement, *args, **kwargs)
-            if (
-                isinstance(statement, Update)
-                and statement.table.name == "t_nexus_worker_maintenance_operations"
-            ):
-                locked.set()
-                await release.wait()
-            return result
-
-    async def finish():
-        async with FinishingSession(mysql_case.engine, expire_on_commit=False) as session:
-            done = await maintenance._finish_in_session(
-                session,
-                "op",
-                "owner",
-                1,
-                "SUCCEEDED",
-                stage="finished",
-                error_code=None,
-                error_message=None,
-                after_snapshot={},
-                release_active=True,
-                environment_id=1,
-                environment_values={"last_checked_at": datetime.now(UTC)},
-            )
-            await session.commit()
-            return done
-
-    class ObservingSession(AsyncSession):
-        async def scalar(self, statement, *args, **kwargs):
-            if statement.get_execution_options().get("populate_existing"):
-                observer_started.set()
-            return await super().scalar(statement, *args, **kwargs)
-
-    finishing = asyncio.create_task(finish())
-    await asyncio.wait_for(locked.wait(), 5)
-    monkeypatch.setattr(
-        maintenance, "SessionLocal",
-        async_sessionmaker(mysql_case.engine, class_=ObservingSession, expire_on_commit=False),
-    )
-    observing = asyncio.create_task(maintenance.observe_environment(1, persist=True))
-    try:
-        await asyncio.wait_for(observer_started.wait(), 5)
-    finally:
-        release.set()
-    result, observation = await asyncio.wait_for(asyncio.gather(finishing, observing), 5)
-    assert result is True
-    assert observation["stale"] is False
-
-
-async def test_finish_event_does_not_reverse_employee_environment_order(mysql_case):
-    async with mysql_case.factory() as session:
-        session.add(
-            WorkerMaintenanceOperation(
-                id="op", environment_id=1, action="check", state="RUNNING", stage="running",
-                attempt=1, active_environment_id=1, lease_owner="owner",
-                lease_until=datetime.now(UTC) + timedelta(minutes=1),
+        db.add(WorkerHttpSlot(agent_worker_id="worker", epoch=2, inflight=0))
+        await db.commit()
+        db.add(
+            Event(
+                task_id="finished",
+                employee_id="worker",
+                event_type="TASK_SUCCEEDED",
+                phase="work",
+                message="已确认",
             )
         )
-        await session.commit()
-    locked, release = asyncio.Event(), asyncio.Event()
-
-    class FinishingSession(AsyncSession):
-        async def execute(self, statement, *args, **kwargs):
-            result = await super().execute(statement, *args, **kwargs)
-            if (
-                isinstance(statement, Update)
-                and statement.table.name == "t_nexus_worker_maintenance_operations"
-            ):
-                locked.set()
-                await release.wait()
-            return result
-
-    async def finish():
-        async with FinishingSession(mysql_case.engine, expire_on_commit=False) as session:
-            done = await maintenance._finish_in_session(
-                session, "op", "owner", 1, "SUCCEEDED", stage="finished",
-                error_code=None, error_message=None, after_snapshot={}, release_active=True,
-                environment_id=1, environment_values={"last_checked_at": datetime.now(UTC)},
-                event_message="维护完成",
-            )
-            await session.commit()
-            return done
-
-    finishing = asyncio.create_task(finish())
-    try:
-        await asyncio.wait_for(locked.wait(), 5)
-        async with mysql_case.factory() as session:
-            # A task start must not take Employee while finish holds Environment:
-            # inserting its Event later also takes an Employee foreign-key lock.
-            available = await session.scalar(
-                select(AgentWorker.id).where(AgentWorker.id == "E1").with_for_update(skip_locked=True)
-            )
-            assert available is None
-    finally:
-        release.set()
-        done = await asyncio.wait_for(finishing, 5)
-    assert done is True
+        await db.commit()
+        await delete_worker("worker", db)
+        assert await db.get(AgentWorker, "worker") is None
+        assert (await db.get(Task, "finished")).agent_worker_id is None
+        assert (await db.scalar(select(Event).where(Event.task_id == "finished"))).employee_id is None
+        assert await db.scalar(select(WorkerCommand)) is None
+        assert await db.scalar(select(WorkerHttpSlot)) is None

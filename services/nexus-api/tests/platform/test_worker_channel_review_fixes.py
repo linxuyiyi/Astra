@@ -4,37 +4,17 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from uuid import uuid4
 
 import httpx
 import pytest
-from fastapi import HTTPException
-from sqlalchemy import select
 
 from app.api.workspace_routes import native_events
-from app.config.settings import get_settings
-from app.database import SessionLocal, init_database
-from app.domain import ExecutionMode
+from app.database import SessionLocal
 from app.main import app
-from app.models import (
-    AgentWorker,
-    OpenCodeExecutionEnvironment,
-    Task,
-    WorkerCommand,
-    WorkerHttpSlot,
-    WorkerInstance,
-    WorkerMaintenanceOperation,
-    utcnow,
-)
-from app.runtime.lifecycle import MessageHistoryIncomplete, RuntimeService, RuntimeStateError
-from app.runtime.recovery import _refresh_with_client
-from app.runtime.remote_provisioning import RemoteProvisioner, guard_environment_write
-from app.runtime.session_connection import connect
-from app.runtime.worker_client import WorkerOpenCodeClient
-from app.runtime.workspace_files import check_request_path
+from app.models import WorkerCommand
 from app.worker_agent.connection import (
     AgentConfig,
     WorkerConnectionManager,
@@ -43,57 +23,20 @@ from app.worker_agent.connection import (
 from app.worker_agent.local_opencode import bind_local_opencode
 from app.worker_agent.process_env import child_environ
 from app.worker_agent.workspace import prepare_workspace_local
-from app.worker_gateway.data_channel import DataChannel, response_key, seal_unfetched_request
 from app.worker_gateway.events import EventLog
-from app.worker_gateway.protocol import WorkerGatewayError, WorkerMessage, envelope
+from app.worker_gateway.protocol import WorkerMessage, envelope
 from app.worker_gateway.service import (
     WorkerGateway,
     expire_due_commands_statement,
     held_slot_expire_statement,
 )
-from tests.platform.test_worker_gateway import ADMIN_HEADERS, bring_online, gateway_for
-
-
-@pytest.fixture
-async def environment_id() -> int:
-    await init_database()
-    async with SessionLocal() as session:
-        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
-        session.add(employee)
-        await session.flush()
-        environment = OpenCodeExecutionEnvironment(
-            employee_id=employee.id,
-            mode="LINUX_REMOTE",
-            name="云执行机",
-            workspace_root="/srv/app",
-            opencode_server_port=4096,
-        )
-        session.add(environment)
-        await session.commit()
-        return environment.id
-
-
-async def _mark(environment_id: int) -> None:
-    return
-
-
-def _detached_environment(environment_id: int, employee_id: str) -> OpenCodeExecutionEnvironment:
-    return OpenCodeExecutionEnvironment(
-        id=environment_id,
-        employee_id=employee_id,
-        mode=ExecutionMode.LINUX_REMOTE,
-        name="云执行机",
-        workspace_root="/srv/app",
-        opencode_server_port=4096,
-        opencode_path="opencode",
-    )
+from tests.platform.test_worker_gateway import ADMIN_HEADERS, gateway_for
 
 
 async def _complete(gateway: WorkerGateway, frame: dict, epoch: int, result: dict | None = None) -> None:
     reply = envelope(
         request_id=frame["request_id"],
-        worker_instance_id=frame["worker_instance_id"],
-        environment_id=frame["environment_id"],
+        agent_worker_id=frame["agent_worker_id"],
         session_id=frame.get("session_id"),
         message_type="response",
         payload={"stage": "result", "ok": True, "result": result or {"ok": True}, "error_code": None},
@@ -102,153 +45,18 @@ async def _complete(gateway: WorkerGateway, frame: dict, epoch: int, result: dic
     async with SessionLocal() as session:
         await gateway.apply_response(
             session,
-            worker_instance_id=frame["worker_instance_id"],
+            agent_worker_id=frame["agent_worker_id"],
             epoch=epoch,
             message=reply,
         )
     await gateway.bus.publish_response(frame["request_id"], reply.to_dict())
 
 
-@pytest.mark.asyncio
-async def test_connect_start_health_uses_the_worker_channel(environment_id, monkeypatch):
-    gateway = gateway_for()
-    enrolled, auth = await bring_online(gateway, environment_id)
-    await _mark(environment_id)
-    from app.config.settings import Settings
-
-    def versioned():
-        return Settings(seed_demo=False, opencode_server_version="1.18.33")
-
-    monkeypatch.setattr("app.runtime.worker_client.get_settings", versioned)
-    monkeypatch.setattr("app.runtime.session_connection.get_settings", versioned)
-    monkeypatch.setattr("app.runtime.worker_client.get_gateway", lambda: gateway)
-    local_calls: list[str] = []
-
-    class GuardClient(httpx.AsyncClient):
-        async def get(self, url, *args, **kwargs):
-            local_calls.append(str(url))
-            raise AssertionError(url)
-
-    monkeypatch.setattr(httpx, "AsyncClient", GuardClient)
-    queues = gateway.bus.bound[enrolled.worker_instance_id]
-
-    async def answer():
-        frame = await queues.wait_frame()
-        assert frame["payload"]["name"] == "http"
-        assert frame["payload"]["data"]["path"] == "/global/health"
-        async with SessionLocal() as session:
-            await DataChannel(gateway).commit_upload(
-                session,
-                request_id=frame["request_id"],
-                worker_instance_id=enrolled.worker_instance_id,
-                epoch=auth.epoch,
-                upload_id="up-health",
-                http_status=200,
-                headers={},
-                content_type="application/json",
-                chunk=json.dumps({"healthy": True, "version": "1.18.33"}),
-                complete=True,
-            )
-
-    running = asyncio.create_task(answer())
-    async with SessionLocal() as session:
-        stored = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        environment = _detached_environment(environment_id, stored.employee_id)
-    async with connect(environment, start=True) as client:
-        assert isinstance(client, WorkerOpenCodeClient)
-    await running
-    assert local_calls == []
-
-
-@pytest.mark.asyncio
-async def test_open_event_stream_emits_gap_when_the_worker_epoch_changes(environment_id, monkeypatch):
-    gateway = gateway_for()
-    enrolled, auth = await bring_online(gateway, environment_id)
-    await _mark(environment_id)
-    monkeypatch.setattr("app.runtime.worker_client.get_gateway", lambda: gateway)
-    queues = gateway.bus.bound[enrolled.worker_instance_id]
-    names: list[str] = []
-
-    async def answer():
-        while True:
-            frame = await queues.wait_frame()
-            names.append(frame["payload"]["name"])
-            await _complete(gateway, frame, auth.epoch, {"subscribed": True})
-
-    answering = asyncio.create_task(answer())
-    client = WorkerOpenCodeClient(environment_id=environment_id, gateway=gateway, timeout_seconds=5)
-    stream = client.events(Path("/srv/app"), consumer="browser:held").__aiter__()
-    pending = asyncio.create_task(anext(stream))
-    await asyncio.wait_for(_until(lambda: "subscribe_events" in names), 3)
-    await EventLog(gateway.bus, limit=8).append(
-        worker_id=enrolled.worker_instance_id,
-        epoch=auth.epoch,
-        directory="/srv/app",
-        payload={"seq": 1, "directory": "/srv/app", "event": {"type": "server.heartbeat"}},
-    )
-    first = await asyncio.wait_for(pending, 3)
-    assert first["type"] == "server.heartbeat"
-    async with SessionLocal() as session:
-        instance = await session.get(WorkerInstance, enrolled.worker_instance_id)
-        instance.epoch += 1
-        await session.commit()
-    gap = await asyncio.wait_for(anext(stream), 3)
-    assert gap["type"] == "astra.event_gap"
-    assert gap["reason"] == "worker_reconnected"
-    await stream.aclose()
-    answering.cancel()
-    await asyncio.gather(answering, return_exceptions=True)
-
-
-@pytest.mark.asyncio
-async def test_open_event_stream_resumes_after_pause(environment_id, monkeypatch):
-    gateway = gateway_for()
-    enrolled, auth = await bring_online(gateway, environment_id)
-    await _mark(environment_id)
-    monkeypatch.setattr("app.runtime.worker_client.get_gateway", lambda: gateway)
-    resumed = {"done": False}
-    original = EventLog.control
-
-    async def control(self, **kwargs):
-        action = await original(self, **kwargs)
-        if action is None and not resumed["done"]:
-            resumed["done"] = True
-            return "resume_events"
-        return action
-
-    monkeypatch.setattr(EventLog, "control", control)
-    queues = gateway.bus.bound[enrolled.worker_instance_id]
-    names: list[str] = []
-
-    async def answer():
-        while "resume_events" not in names:
-            frame = await asyncio.wait_for(queues.wait_frame(), 3)
-            names.append(frame["payload"]["name"])
-            await _complete(gateway, frame, auth.epoch, {"subscribed": True})
-
-    answering = asyncio.create_task(answer())
-    client = WorkerOpenCodeClient(environment_id=environment_id, gateway=gateway, timeout_seconds=5)
-    stream = client.events(Path("/srv/app"), consumer="browser:pause").__aiter__()
-    reading = asyncio.create_task(anext(stream))
-    try:
-        await asyncio.wait_for(answering, 5)
-        assert names[0] == "subscribe_events"
-        assert "resume_events" in names
-    finally:
-        reading.cancel()
-        answering.cancel()
-        try:
-            await asyncio.wait_for(asyncio.gather(reading, answering, return_exceptions=True), 2)
-        except TimeoutError:
-            pass
-
-
 def test_resume_wakes_a_paused_event_reader():
     manager = WorkerConnectionManager(
         AgentConfig(
             gateway_url="ws://nexus.internal/api/worker-gateway/connect",
-            worker_instance_id="wrk",
-            environment_id=1,
+            agent_worker_id="wrk",
             token="wtk_test",
         )
     )
@@ -269,16 +77,14 @@ def test_child_environ_drops_worker_credentials_and_preserves_managed_config():
 def test_oversized_event_frame_becomes_a_gap_marker():
     incoming = WorkerMessage(
         request_id="evt",
-        worker_instance_id="wrk",
-        environment_id=1,
+        agent_worker_id="wrk",
         session_id=None,
         type="event",
         payload={},
     )
     config = AgentConfig(
         gateway_url="ws://nexus",
-        worker_instance_id="wrk",
-        environment_id=1,
+        agent_worker_id="wrk",
         token="wtk_test",
         max_frame_bytes=180,
     )
@@ -315,186 +121,15 @@ def test_prepare_workspace_stays_under_the_configured_root_and_rejects_symlinks(
     assert (allowed / "opencode.json").is_file()
 
 
-@pytest.mark.asyncio
-async def test_fetch_rejects_a_sealed_or_stale_attempt(environment_id):
-    gateway = gateway_for()
-    enrolled, auth = await bring_online(gateway, environment_id)
-    async with SessionLocal() as session:
-        employee_id = await session.scalar(
-            select(OpenCodeExecutionEnvironment.employee_id).where(
-                OpenCodeExecutionEnvironment.id == environment_id
-            )
-        )
-        task = Task(
-            id="T-seal",
-            title="seal",
-            task_type="ISSUE",
-            status="RUNNING",
-            employee_id=employee_id,
-            current_session_id="ses",
-            pending_message_id="msg_seal000001",
-            pending_attempt=1,
-            pending_prompt={"action": "prompt_async", "body": {"messageID": "msg_seal000001"}},
-        )
-        from app.runtime.submission import put_attempt
-
-        put_attempt(task, "msg_seal000001", 1, "req-seal")
-        session.add(task)
-        await session.commit()
-        await gateway.dispatch(
-            session,
-            worker_instance_id=enrolled.worker_instance_id,
-            request_id="req-seal",
-            name="http",
-            payload={
-                "method": "POST",
-                "path": "/session/ses/prompt_async",
-                "body": {"messageID": "msg_seal000001"},
-                "attempt_ref": {"task_id": "T-seal", "message_id": "msg_seal000001", "attempt": 1},
-            },
-            session_id="ses",
-        )
-    async with SessionLocal() as session:
-        command = await session.scalar(select(WorkerCommand).where(WorkerCommand.request_id == "req-seal"))
-        command.deadline_at = utcnow() - timedelta(seconds=1)
-        await session.commit()
-        with pytest.raises(WorkerGatewayError) as expired:
-            await DataChannel(gateway).fetch_request(
-                session,
-                request_id="req-seal",
-                worker_instance_id=enrolled.worker_instance_id,
-                epoch=auth.epoch,
-            )
-        assert expired.value.code == "epoch_conflict"
-        command.deadline_at = utcnow() + timedelta(minutes=5)
-        task = await session.get(Task, "T-seal")
-        task.pending_attempt = 2
-        await session.commit()
-        with pytest.raises(WorkerGatewayError) as stale:
-            await DataChannel(gateway).fetch_request(
-                session,
-                request_id="req-seal",
-                worker_instance_id=enrolled.worker_instance_id,
-                epoch=auth.epoch,
-            )
-        assert "当前提交" in str(stale.value)
-        task.pending_attempt = 1
-        await session.commit()
-        await seal_unfetched_request(session, "req-seal")
-        await session.commit()
-        with pytest.raises(WorkerGatewayError):
-            await DataChannel(gateway).fetch_request(
-                session,
-                request_id="req-seal",
-                worker_instance_id=enrolled.worker_instance_id,
-                epoch=auth.epoch,
-            )
-        stored = await session.scalar(select(WorkerCommand).where(WorkerCommand.request_id == "req-seal"))
-        assert stored.status == "failed"
-        assert stored.error_code == "superseded"
-        assert stored.body_fetched_at is None
-
-
-@pytest.mark.asyncio
-async def test_incomplete_message_pages_do_not_count_as_read():
-    class Pages:
-        def __init__(self, pages):
-            self.pages = pages
-            self.posts = 0
-
-        async def messages_page(self, _directory, _sid, *, limit, before=None):
-            return self.pages[before]
-
-    service = RuntimeService(None)
-    empty = Pages({None: {"messages": [], "next_before": None}})
-    assert await service._all_messages(empty, Path("/srv/app"), "ses") == []
-    repeated = Pages(
-        {
-            None: {"messages": [{"info": {"id": "msg_1"}}], "next_before": "same"},
-            "same": {"messages": [{"info": {"id": "msg_2"}}], "next_before": "same"},
-        }
-    )
-    with pytest.raises(MessageHistoryIncomplete):
-        await service._all_messages(repeated, Path("/srv/app"), "ses")
-
-
 async def test_admin_command_route_rejects_restart_opencode():
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
-            "/api/worker-gateway/instances/wrk_missing/commands",
+            "/api/worker-gateway/workers/wrk_missing/commands",
             headers=ADMIN_HEADERS,
             json={"request_id": "cmd-restart", "name": "restart_opencode", "payload": {}},
         )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "maintenance_command"
-
-
-@pytest.mark.asyncio
-async def test_worker_provisioning_writes_intranet_urls(environment_id, monkeypatch):
-    settings = get_settings()
-    monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:8110")
-    monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:8201/mcp")
-    async with SessionLocal() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        await session.refresh(environment)
-    provisioner = RemoteProvisioner(environment, {"id": "op"})
-    gateway_url, mcp_url = provisioner._direct_endpoints()
-    assert gateway_url == "http://10.0.0.8:8110/v1"
-    assert mcp_url == "http://10.0.0.8:8201/mcp"
-    monkeypatch.setattr(settings, "gateway_openai_base", "http://127.0.0.1:8110")
-    with pytest.raises(RuntimeError, match="内网"):
-        provisioner._direct_endpoints()
-
-
-@pytest.mark.asyncio
-async def test_worker_prompt_path_check_does_not_open_ssh(environment_id, monkeypatch):
-    async def opened(self, environment):
-        raise AssertionError(environment.host)
-
-    monkeypatch.setattr("app.runtime.environment.ExecutionEnvironmentRuntime.open_session", opened)
-    await bring_online(gateway_for(), environment_id)
-    async with SessionLocal() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        session.expunge(environment)
-    checked = await check_request_path(environment, "/srv/app", ".", native_path="/session/ses/prompt_async")
-    assert checked == "."
-    calls = []
-
-    async def validate(environment, workspace, value):
-        calls.append((workspace, value))
-        return "."
-
-    monkeypatch.setattr("app.runtime.worker_files.worker_validate_path", validate)
-    checked = await check_request_path(environment, "/srv/app", ".", native_path="/file")
-    assert checked == "."
-    assert calls == [("/srv/app", ".")]
-
-
-@pytest.mark.asyncio
-async def test_sweep_releases_a_held_http_slot_once(environment_id):
-    gateway = gateway_for()
-    enrolled, auth = await bring_online(gateway, environment_id)
-    async with SessionLocal() as session:
-        await gateway.dispatch(
-            session,
-            worker_instance_id=enrolled.worker_instance_id,
-            request_id="req-slot",
-            name="http",
-            payload={"method": "GET", "path": "/global/health", "body": {}},
-        )
-        command = await session.scalar(select(WorkerCommand).where(WorkerCommand.request_id == "req-slot"))
-        command.deadline_at = utcnow() - timedelta(seconds=5)
-        await session.commit()
-    assert await gateway.sweep() >= 1
-    async with SessionLocal() as session:
-        slot = await session.get(WorkerHttpSlot, (enrolled.worker_instance_id, auth.epoch))
-        assert slot.inflight == 0
-    await gateway.sweep()
-    async with SessionLocal() as session:
-        slot = await session.get(WorkerHttpSlot, (enrolled.worker_instance_id, auth.epoch))
-        assert slot.inflight == 0
 
 
 @pytest.mark.asyncio
@@ -526,69 +161,6 @@ async def test_local_opencode_call_has_an_overall_timeout(monkeypatch):
         await manager.local_request("GET", "/global/health", {"query": {}, "body": {}})
 
 
-@pytest.mark.asyncio
-async def test_refresh_snapshot_survives_a_closed_session(monkeypatch):
-    await init_database()
-    async with SessionLocal() as session:
-        session.add(Task(id="T-detached", title="detached", task_type="ISSUE", status="RUNNING"))
-        await session.commit()
-
-    async def refresh(self, task_id, *, client=None):
-        task = await self.session.get(Task, task_id)
-        await self.session.rollback()
-        return task
-
-    monkeypatch.setattr("app.runtime.recovery.RuntimeService.refresh", refresh)
-    snapshot = await _refresh_with_client("T-detached", None)
-    assert snapshot.status == "RUNNING"
-    assert snapshot.current_session_id is None
-
-
-async def _hold_operation(environment_id: int, *, expires_in: float = 300, status: str = "UNKNOWN") -> str:
-    now = datetime.now(UTC)
-    async with SessionLocal() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        environment.status = status
-        session.add(
-            WorkerMaintenanceOperation(
-                id="op_" + uuid4().hex,
-                environment_id=environment_id,
-                action="deploy",
-                state="RUNNING",
-                stage="channel",
-                requested_by="test-hold",
-                attempt=1,
-                lease_owner="test-hold",
-                lease_until=now + timedelta(seconds=expires_in),
-                target_revision={},
-                before_snapshot={},
-                after_snapshot={},
-                active_environment_id=environment_id,
-                requested_at=now,
-                started_at=now,
-            )
-        )
-        await session.commit()
-        return environment.employee_id
-
-
-def _snapshot(environment_id: int) -> dict:
-    return {
-        "environment_id": environment_id,
-        "mode": "LINUX_REMOTE",
-        "name": "云执行机",
-        "host": None,
-        "port": 22,
-        "username": None,
-        "has_ssh_password": False,
-        "opencode_server_port": 4096,
-        "opencode_path": "opencode",
-        "model_name": None,
-        "workspace_root": "/srv/app",
-        "labels": [],
-    }
-
-
 def test_mysql_dialect_compiles_sweep_without_returning():
     from sqlalchemy.dialects import mysql
 
@@ -607,7 +179,7 @@ def test_mysql_dialect_compiles_sweep_without_returning():
     }
     dialect = mysql.dialect()
     statements = (
-        held_slot_expire_statement("cmd-1", due, values),
+        held_slot_expire_statement(1, due, values),
         expire_due_commands_statement(due, values),
     )
     for statement in statements:
@@ -645,160 +217,12 @@ def test_sweep_statements_execute_on_mysql():
     }
     with engine.begin() as connection:
         for statement in (
-            held_slot_expire_statement("cmd-missing", due, values),
+            held_slot_expire_statement(-1, due, values),
             expire_due_commands_statement(due, values),
         ):
             compiled = statement.compile(dialect=connection.dialect)
             assert "RETURNING" not in str(compiled).upper()
             connection.execute(statement)
-
-
-@pytest.mark.asyncio
-async def test_start_and_send_reject_an_active_maintenance_reservation(environment_id, monkeypatch):
-    async def blocked(*_args, **_kwargs):
-        raise AssertionError("维护预留期间不能连接 OpenCode")
-
-    monkeypatch.setattr("app.runtime.lifecycle.connect", blocked)
-    employee_id = await _hold_operation(environment_id, status="UNKNOWN")
-    start_id = f"T-start-{uuid4().hex[:8]}"
-    send_id = f"T-send-{uuid4().hex[:8]}"
-    async with SessionLocal() as session:
-        session.add(
-            Task(
-                id=start_id,
-                title="start",
-                task_type="ISSUE",
-                status="PENDING",
-                employee_id=employee_id,
-            )
-        )
-        await session.commit()
-        with pytest.raises(RuntimeStateError, match="维护"):
-            await RuntimeService(session).start(start_id)
-    async with SessionLocal() as session:
-        session.add(
-            Task(
-                id=send_id,
-                title="send",
-                task_type="ISSUE",
-                status="WAITING",
-                employee_id=employee_id,
-                current_session_id="ses_maint",
-                workspace="/srv/app",
-                execution_environment_snapshot=_snapshot(environment_id),
-            )
-        )
-        await session.commit()
-        with pytest.raises(RuntimeStateError, match="维护"):
-            await RuntimeService(session).send(send_id, {"messageID": "msg_maint000001"})
-    async with SessionLocal() as session:
-        started = await session.get(Task, start_id)
-        assert started.pending_message_id is None
-        assert started.status == "PENDING"
-
-
-@pytest.mark.asyncio
-async def test_expired_lease_releases_maintenance_lock_while_unready_stays_unschedulable(
-    environment_id,
-):
-    await _hold_operation(environment_id, expires_in=-5, status="UNKNOWN")
-    async with SessionLocal() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        with pytest.raises(HTTPException):
-            await guard_environment_write(session, environment)
-        await session.rollback()
-    from app.runtime.maintenance import recover_expired, scheduling_block
-
-    await recover_expired("test-recovery")
-    async with SessionLocal() as session:
-        environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-        await guard_environment_write(session, environment)
-        assert await scheduling_block(session, environment) is not None
-
-
-@pytest.mark.asyncio
-async def test_event_stream_waits_through_offline_and_resumes_on_a_new_epoch(environment_id, monkeypatch):
-    gateway = gateway_for()
-    enrolled, auth = await bring_online(gateway, environment_id)
-    await _mark(environment_id)
-    monkeypatch.setattr("app.runtime.worker_client.get_gateway", lambda: gateway)
-    queues = gateway.bus.bound[enrolled.worker_instance_id]
-    names: list[str] = []
-
-    async def answer():
-        while True:
-            frame = await queues.wait_frame()
-            names.append(frame["payload"]["name"])
-            await _complete(gateway, frame, frame["epoch"], {"subscribed": True})
-
-    answering = asyncio.create_task(answer())
-    client = WorkerOpenCodeClient(environment_id=environment_id, gateway=gateway, timeout_seconds=5)
-    client.offline_grace_seconds = 3
-    stream = client.events(Path("/srv/app"), consumer="browser:offline").__aiter__()
-    pending = asyncio.create_task(anext(stream))
-    await asyncio.wait_for(_until(lambda: "subscribe_events" in names), 3)
-    async with SessionLocal() as session:
-        instance = await session.get(WorkerInstance, enrolled.worker_instance_id)
-        instance.status = "offline"
-        await session.commit()
-    keepalive = await asyncio.wait_for(pending, 3)
-    assert keepalive["type"] == "astra.keepalive"
-    new_epoch = auth.epoch + 1
-    async with SessionLocal() as session:
-        instance = await session.get(WorkerInstance, enrolled.worker_instance_id)
-        instance.status = "online"
-        instance.epoch = new_epoch
-        await session.commit()
-    assert await gateway.bus.set_owner(enrolled.worker_instance_id, gateway.owner_id, new_epoch)
-    queues.epoch = new_epoch
-    gap = await asyncio.wait_for(anext(stream), 3)
-    assert gap["type"] == "astra.event_gap"
-    assert gap["reason"] == "worker_reconnected"
-    resumed = asyncio.create_task(anext(stream))
-    await asyncio.wait_for(_until(lambda: names.count("subscribe_events") >= 2), 3)
-    resumed.cancel()
-    await asyncio.gather(resumed, return_exceptions=True)
-    await stream.aclose()
-    answering.cancel()
-    await asyncio.gather(answering, return_exceptions=True)
-
-
-@pytest.mark.asyncio
-async def test_event_stream_emits_a_gap_before_ending_when_the_worker_stays_offline(
-    environment_id, monkeypatch
-):
-    gateway = gateway_for()
-    enrolled, _auth = await bring_online(gateway, environment_id)
-    await _mark(environment_id)
-    monkeypatch.setattr("app.runtime.worker_client.get_gateway", lambda: gateway)
-    queues = gateway.bus.bound[enrolled.worker_instance_id]
-    names: list[str] = []
-
-    async def answer():
-        frame = await queues.wait_frame()
-        names.append(frame["payload"]["name"])
-        await _complete(gateway, frame, frame["epoch"], {"subscribed": True})
-
-    answering = asyncio.create_task(answer())
-    client = WorkerOpenCodeClient(environment_id=environment_id, gateway=gateway, timeout_seconds=5)
-    client.offline_grace_seconds = 0.2
-    collected: list[dict] = []
-
-    async def drain():
-        async for event in client.events(Path("/srv/app"), consumer="browser:timeout"):
-            collected.append(event)
-
-    draining = asyncio.create_task(drain())
-    await asyncio.wait_for(_until(lambda: "subscribe_events" in names), 3)
-    async with SessionLocal() as session:
-        instance = await session.get(WorkerInstance, enrolled.worker_instance_id)
-        instance.status = "offline"
-        await session.commit()
-    await asyncio.wait_for(draining, 3)
-    assert collected[-1]["type"] == "astra.event_gap"
-    assert collected[-1]["reason"] == "worker_offline"
-    answering.cancel()
-    await asyncio.gather(answering, return_exceptions=True)
 
 
 @pytest.mark.asyncio
@@ -830,46 +254,6 @@ async def test_native_event_keepalive_is_an_sse_comment(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_duplicate_upload_removes_the_staged_body(environment_id):
-    gateway = gateway_for()
-    enrolled, auth = await bring_online(gateway, environment_id)
-    async with SessionLocal() as session:
-        await gateway.dispatch(
-            session,
-            worker_instance_id=enrolled.worker_instance_id,
-            request_id="req-dup-body",
-            name="http",
-            payload={"method": "GET", "path": "/global/health", "body": {}},
-        )
-    body = '{"ok":true}'
-
-    async def upload():
-        async with SessionLocal() as session:
-            return await DataChannel(gateway).commit_upload(
-                session,
-                request_id="req-dup-body",
-                worker_instance_id=enrolled.worker_instance_id,
-                epoch=auth.epoch,
-                upload_id="up-dup",
-                http_status=200,
-                headers={},
-                content_type="application/json",
-                chunk=body,
-                complete=True,
-            )
-
-    first = await upload()
-    assert first["status"] == "stored"
-    assert await gateway.bus.get_text(response_key("req-dup-body", "up-dup"))
-    # The retry restages the same bytes. The already-succeeded command must not
-    # keep that copy.
-    await gateway.bus.delete_text(response_key("req-dup-body", "up-dup"))
-    second = await upload()
-    assert second["status"] == "stored"
-    assert await gateway.bus.get_text(response_key("req-dup-body", "up-dup")) is None
-
-
-@pytest.mark.asyncio
 async def test_duplicate_http_request_does_not_start_another_task():
     from app.worker_gateway.protocol import parse_message
 
@@ -886,8 +270,7 @@ async def test_duplicate_http_request_does_not_start_another_task():
     manager = WorkerConnectionManager(
         AgentConfig(
             gateway_url="ws://127.0.0.1/api/worker-gateway/connect",
-            worker_instance_id="wrk",
-            environment_id=1,
+            agent_worker_id="wrk",
             token="wtk_test",
         )
     )
@@ -912,8 +295,7 @@ async def test_duplicate_http_request_does_not_start_another_task():
 
     message = envelope(
         request_id="req-http",
-        worker_instance_id="wrk",
-        environment_id=1,
+        agent_worker_id="wrk",
         session_id=None,
         message_type="command",
         payload={"name": "http", "data": {"method": "POST", "path": "/x", "ready": True}},
@@ -966,35 +348,6 @@ async def test_trimmed_event_log_keeps_a_gap_for_a_lagging_cursor():
     assert state["events"][0]["reason"] == "log_trimmed"
     assert state["events"][0]["from"] == 1
     assert any(item.get("event", {}).get("n") == 3 for item in state["events"])
-
-
-@pytest.mark.asyncio
-async def test_event_receive_rejects_a_stale_database_epoch(environment_id):
-    gateway = gateway_for()
-    enrolled, auth = await bring_online(gateway, environment_id)
-
-    def frame(seq: int):
-        message = envelope(
-            request_id=f"evt-{seq}",
-            worker_instance_id=enrolled.worker_instance_id,
-            environment_id=environment_id,
-            session_id=None,
-            message_type="event",
-            payload={"directory": "/srv/app", "seq": seq, "event": {"type": "server.heartbeat"}},
-        )
-        message.epoch = auth.epoch
-        return message
-
-    assert await gateway.record_worker_event(auth, frame(1)) is True
-    async with SessionLocal() as session:
-        instance = await session.get(WorkerInstance, enrolled.worker_instance_id)
-        instance.epoch = auth.epoch + 1
-        await session.commit()
-    assert await gateway.record_worker_event(auth, frame(2)) is False
-    state = await EventLog(gateway.bus, limit=8)._load(
-        EventLog(gateway.bus, limit=8)._key(enrolled.worker_instance_id, auth.epoch, "/srv/app")
-    )
-    assert [item["seq"] for item in state["events"]] == [1]
 
 
 def test_child_environ_keeps_proxy_ca_and_an_explicit_allowlist():

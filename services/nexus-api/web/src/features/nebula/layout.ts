@@ -85,7 +85,6 @@ export const STATUS_COLOR = {
   queued: "#f5bd69",
   waiting: "#ff9470",
   completed: "#8fcab8",
-  failed: "#fb6484",
   collaboration: "#7caec1",
   collaborationActive: "#b9f5ff",
 } as const;
@@ -155,7 +154,6 @@ export function orbitPosition(center: Point3, radius: number, angle: number, til
 
 export function galaxyColor(employee: NebulaEmployee, paletteColor: string): string {
   const counts = employee.counts;
-  if (counts.failed > 0) return STATUS_COLOR.failed;
   if (counts.waiting > 0) return STATUS_COLOR.waiting;
   if (counts.running > 0) return STATUS_COLOR.running;
   return paletteColor;
@@ -171,7 +169,7 @@ export function buildScene(snapshot: NebulaSnapshot): NebulaScene {
   const workerById = new Map(snapshot.workers.map((item) => [item.id, item]));
   const workersByEmployee = new Map<string, NebulaWorker[]>();
   for (const worker of snapshot.workers) {
-    const owner = worker.digitalEmployeeId;
+    const owner = worker.originEmployeeId;
     if (!owner) continue;
     const list = workersByEmployee.get(owner) ?? [];
     list.push(worker);
@@ -242,7 +240,7 @@ export function buildScene(snapshot: NebulaSnapshot): NebulaScene {
 
   const executionEdges: ExecutionEdgeNode[] = [];
   for (const edge of snapshot.taskEdges) {
-    const from = galaxyById.get(edge.digitalEmployeeId)?.position;
+    const from = galaxyById.get(edge.originEmployeeId)?.position;
     const to = workerNodeById.get(edge.workerId)?.position;
     if (!from || !to) continue;
     executionEdges.push(executionEdgeNode(edge, from, to));
@@ -290,8 +288,8 @@ export function buildScene(snapshot: NebulaSnapshot): NebulaScene {
 
 function executionEdgeNode(edge: NebulaExecutionEdge, from: Point3, to: Point3): ExecutionEdgeNode {
   return {
-    key: `${edge.digitalEmployeeId}:${edge.workerId}`,
-    employeeId: edge.digitalEmployeeId,
+    key: `${edge.originEmployeeId}:${edge.workerId}`,
+    employeeId: edge.originEmployeeId,
     workerId: edge.workerId,
     running: edge.running,
     waiting: edge.waiting,

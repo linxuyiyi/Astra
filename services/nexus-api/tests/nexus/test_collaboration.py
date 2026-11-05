@@ -196,25 +196,43 @@ def assistance_event(cid, sid, initiator):
 
     with connect() as db:
         with Session(bind=db) as session:
-            session.add(Task(
-                id="T-ASSIST", title="协助任务", task_type="ISSUE", status="WAITING",
-                responsible_employee_id="dev", source_channel_id=cid, source_session_id=sid,
-                waiting_reason="HITL_QUESTION",
-            ))
+            session.add(
+                Task(
+                    id="T-ASSIST",
+                    title="协助任务",
+                    task_type="ISSUE",
+                    status="WAITING",
+                    origin_employee_id="dev",
+                    source="group_chat",
+                    external_task_id=cid,
+                    waiting_reason="question",
+                )
+            )
             session.flush()
-            session.add(Event(
-                task_id="T-ASSIST", event_type="group_task_requested", message="来源审计",
-                detail={"initiator_id": initiator},
-            ))
+            session.add(
+                Event(
+                    task_id="T-ASSIST",
+                    event_type="group_task_requested",
+                    message="来源审计",
+                    detail={"initiator_id": initiator},
+                )
+            )
             event = Event(task_id="T-ASSIST", event_type="TASK_WAITING", message="Worker 请求协助")
             session.add(event)
             session.flush()
             event_id = event.id
-            session.add(TaskWakeOutbox(
-                event_id=event_id, task_id="T-ASSIST", responsible_employee_id="dev",
-                source_session_id=sid, status="pending", next_retry_at=db_now(),
-                hint="请调用 nexus_task_get 和 nexus_task_assistance 先处理 T-ASSIST",
-            ))
+            session.add(
+                TaskWakeOutbox(
+                    event_id=event_id,
+                    task_id="T-ASSIST",
+                    origin_employee_id="dev",
+                    source="group_chat",
+                    external_task_id=cid,
+                    status="pending",
+                    next_retry_at=db_now(),
+                    hint="请调用 nexus_task_get 和 nexus_task_assistance 先处理 T-ASSIST",
+                )
+            )
             session.commit()
         db.commit()
     return event_id
@@ -228,11 +246,17 @@ def test_worker_assistance_starts_new_authorized_employee_discussion(setup, monk
     original_calls = len(fake.calls)
 
     with connect() as db:
-        sid = db.execute(text("""SELECT agentscope_session_id FROM t_nexus_channel_members
-            WHERE channel_id=:c AND employee_id='dev'"""), {"c": cid}).scalar()
+        sid = db.execute(
+            text("""SELECT agentscope_session_id FROM t_nexus_channel_members
+            WHERE channel_id=:c AND employee_id='dev'"""),
+            {"c": cid},
+        ).scalar()
         if revoked:
-            db.execute(text("""UPDATE t_nexus_channel_members SET membership_active=0
-                WHERE channel_id=:c AND member_type='human' AND member_id=:u"""), {"c": cid, "u": uid})
+            db.execute(
+                text("""UPDATE t_nexus_channel_members SET membership_active=0
+                WHERE channel_id=:c AND member_type='human' AND member_id=:u"""),
+                {"c": cid, "u": uid},
+            )
         db.commit()
     event_id = assistance_event(cid, sid, uid)
     headers = {"X-Nexus-Internal-Key": "test-internal-key"}
@@ -243,8 +267,9 @@ def test_worker_assistance_starts_new_authorized_employee_discussion(setup, monk
         if not duplicate:
             assert result.json()["assistance_scheduled"] is not revoked
     with connect() as db:
-        rows = list(db.execute(text("SELECT * FROM t_nexus_discussions WHERE channel_id=:c"),
-                               {"c": cid}).mappings())
+        rows = list(
+            db.execute(text("SELECT * FROM t_nexus_discussions WHERE channel_id=:c"), {"c": cid}).mappings()
+        )
     if revoked:
         assert len(rows) == 1 and len(fake.calls) == original_calls
     else:
@@ -264,8 +289,11 @@ def test_worker_assistance_starts_new_authorized_employee_discussion(setup, monk
         notice = next(x for x in page["items"] if x["id"] == f"task_event_{event_id}")
         assert "nexus_task_assistance" not in notice["text"]
         with connect() as db:
-            current = db.execute(text("SELECT * FROM t_nexus_discussions WHERE id=:i"),
-                                 {"i": discussion["id"]}).mappings().one()
+            current = (
+                db.execute(text("SELECT * FROM t_nexus_discussions WHERE id=:i"), {"i": discussion["id"]})
+                .mappings()
+                .one()
+            )
         assert current["initiator_id"] == uid
         assert json.loads(current["participants_json"]) == ["dev"]
 
@@ -311,8 +339,12 @@ def test_peer_delivery_wait_does_not_block_runtime_writer(setup, monkeypatch):
     app, owner, _, _, _ = setup
     loop = owner.portal.call(asyncio.get_running_loop)
     with connect() as db:
-        db.execute(text("UPDATE t_nexus_channel_members SET agentscope_session_id='group-session' "
-                        "WHERE employee_id='dev'"))
+        db.execute(
+            text(
+                "UPDATE t_nexus_channel_members SET agentscope_session_id='group-session' "
+                "WHERE employee_id='dev'"
+            )
+        )
         db.commit()
 
     def waiting_delivery(*args):
@@ -491,7 +523,8 @@ def test_tool_policy_checks_human_and_employee_and_retired_binding(setup):
     assert policy["allowed_tools"] == ["Bash", "contact_employee"]
     assert policy["mcp_refs"] == {}
     assert app.state.collaboration.policy(sid, "Bash", policy["discussion_id"])["allowed_tools"] == [
-        "Bash", "contact_employee"
+        "Bash",
+        "contact_employee",
     ]
     assert (
         owner.patch(f"/api/v1/channels/{cid}", json={"name": "群组", "member_ids": ["dev"]}).status_code
@@ -661,9 +694,16 @@ def test_expired_lease_interrupts_stale_run_then_processes_queue(setup):
         states = dict(
             db.execute(text("SELECT id,state FROM t_nexus_discussions WHERE channel_id=:c"), {"c": cid}).all()
         )
-        lease = db.execute(
-            text("SELECT lease_token,lease_until FROM t_nexus_channels WHERE id=:c"), {"c": cid}
-        ).one()
+    # completed 提交后，后台执行器才在 finally 释放租约；等待独立的清理动作。
+    deadline = time.monotonic() + 5
+    while True:
+        with connect() as db:
+            lease = db.execute(
+                text("SELECT lease_token,lease_until FROM t_nexus_channels WHERE id=:c"), {"c": cid}
+            ).one()
+        if tuple(lease) == ("", "") or time.monotonic() >= deadline:
+            break
+        time.sleep(0.01)
     assert states[stale] == "interrupted"
     assert fake.interrupts == [stale_session]
     assert [agent for agent, _ in fake.calls] == ["agent-qa"]
@@ -784,22 +824,15 @@ def test_task_notification_survives_closed_discussion_and_is_idempotent(setup):
     send(owner, cid, "@小牛码 你好")
     page = wait_done(owner, cid)
     with connect() as db:
-        sid = db.execute(
-            text(
-                "SELECT agentscope_session_id FROM t_nexus_channel_members "
-                "WHERE channel_id=:c AND employee_id='dev'"
-            ),
-            {"c": cid},
-        ).scalar()
         with Session(bind=db) as session:
             session.add(
                 Task(
                     id="T-NOTICE",
                     title="交付验收",
                     task_type="REQUIREMENT",
-                    responsible_employee_id="dev",
-                    source_channel_id=cid,
-                    source_session_id=sid,
+                    origin_employee_id="dev",
+                    source="group_chat",
+                    external_task_id=cid,
                     status="WAITING",
                 )
             )
@@ -812,8 +845,9 @@ def test_task_notification_survives_closed_discussion_and_is_idempotent(setup):
                 TaskWakeOutbox(
                     event_id=eid,
                     task_id="T-NOTICE",
-                    responsible_employee_id="dev",
-                    source_session_id=sid,
+                    origin_employee_id="dev",
+                    source="group_chat",
+                    external_task_id=cid,
                     status="pending",
                     hint="待确认",
                     next_retry_at=db_now(),
@@ -823,7 +857,9 @@ def test_task_notification_survives_closed_discussion_and_is_idempotent(setup):
         db.commit()
     headers = {"X-Nexus-Internal-Key": "test-internal-key"}
     target = owner.get(
-        "/api/v1/internal/wake-target", headers=headers, params={"employee_id": "dev", "session_id": sid}
+        "/api/v1/internal/wake-target",
+        headers=headers,
+        params={"employee_id": "dev", "source": "group_chat", "external_task_id": cid},
     )
     assert target.json() == {"channel_id": cid}
     assert owner.post("/api/v1/internal/group-task-event", json={"event_id": eid}).status_code == 401
@@ -837,7 +873,7 @@ def test_task_notification_survives_closed_discussion_and_is_idempotent(setup):
     assert notices[0]["message"]["metadata"]["task_id"] == "T-NOTICE"
     assert after["channel"]["discussion"] == page["channel"]["discussion"]
     with connect() as db:
-        db.execute(text("UPDATE t_nexus_tasks SET source_session_id='foreign' WHERE id='T-NOTICE'"))
+        db.execute(text("UPDATE t_nexus_tasks SET origin_employee_id='foreign' WHERE id='T-NOTICE'"))
         db.commit()
     assert (
         owner.post("/api/v1/internal/group-task-event", headers=headers, json={"event_id": eid}).status_code

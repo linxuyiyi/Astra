@@ -98,7 +98,7 @@
           >待关注
           <b>{{
             snapshot
-              ? snapshot.totals.tasksWaiting + snapshot.totals.tasksFailed
+              ? snapshot.totals.tasksWaiting
               : "—"
           }}</b></span
         ><small>{{

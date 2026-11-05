@@ -15,14 +15,12 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
 
 from app.api.routes import require_task
 from app.config.settings import REPO_ROOT
 from app.database import get_session
 from app.domain import ExecutionMode, TaskStatus
 from app.executors.errors import OpenCodeSessionNotFound
-from app.models import RuntimeSession
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
 from app.runtime.session_connection import connect, resolve_environment, session_tree
 from app.runtime.workspace_changes import collect_workspace_changes, workspace_diff
@@ -33,7 +31,7 @@ from app.runtime.workspace_files import (
     upload,
     validate_path,
 )
-from app.schemas import ExecutionStopConfirm, RetrySubmission, TaskRead
+from app.schemas import ExecutionStopConfirm, TaskRead
 
 router = APIRouter(prefix="/api/tasks/{task_id}")
 
@@ -50,6 +48,8 @@ class _Upstream:
 
     def json(self):
         return json.loads(self.content) if self.content else None
+
+
 # Task Workspace capability model: a task-bound, read-only window onto the
 # employee's OpenCode server plus the native conversation/reply writes below.
 # GET-only paths must be non-mutating and must not create PTYs, processes or
@@ -179,7 +179,7 @@ _CONCAT_SECRET_FIELDS = frozenset(
     }
 )
 # (environment id, worker epoch, workspace) -> (monotonic time, secret values). Not logged.
-_REMOTE_SECRET_CACHE: dict[tuple[int, int, str], tuple[float, frozenset[str]]] = {}
+_REMOTE_SECRET_CACHE: dict[tuple[str, int, str], tuple[float, frozenset[str]]] = {}
 _CONFIG_FILES = (
     Path("opencode.json"),
     Path("opencode.jsonc"),
@@ -348,19 +348,17 @@ async def _worker_epoch(environment) -> int:
     explicit = getattr(environment, "worker_epoch", None)
     if isinstance(explicit, int):
         return explicit
-    environment_id = getattr(environment, "id", None)
-    if not isinstance(environment_id, int):
+    agent_worker_id = getattr(environment, "id", None)
+    if not isinstance(agent_worker_id, str):
         return 0
     try:
         from sqlalchemy import select
 
         from app.database import SessionLocal
-        from app.models import WorkerInstance
+        from app.models import AgentWorker
 
         async with SessionLocal() as session:
-            epoch = await session.scalar(
-                select(WorkerInstance.epoch).where(WorkerInstance.environment_id == environment_id)
-            )
+            epoch = await session.scalar(select(AgentWorker.epoch).where(AgentWorker.id == agent_worker_id))
     except Exception:
         return 0
     return int(epoch or 0)
@@ -370,15 +368,15 @@ def clear_proxy_secret_cache() -> None:
     _REMOTE_SECRET_CACHE.clear()
 
 
-async def _remote_secret_cache_key(environment, workspace: str) -> tuple[int, int, str] | None:
-    environment_id = getattr(environment, "id", None)
-    if not isinstance(environment_id, int):
+async def _remote_secret_cache_key(environment, workspace: str) -> tuple[str, int, str] | None:
+    agent_worker_id = getattr(environment, "id", None)
+    if not isinstance(agent_worker_id, str):
         return None
     epoch = await _worker_epoch(environment)
-    return int(environment_id), epoch, _secret_cache_workspace(workspace)
+    return agent_worker_id, epoch, _secret_cache_workspace(workspace)
 
 
-def _cached_remote_secrets(key: tuple[int, int, str] | None) -> set[str]:
+def _cached_remote_secrets(key: tuple[str, int, str] | None) -> set[str]:
     if key is None:
         return set()
     cached = _REMOTE_SECRET_CACHE.get(key)
@@ -604,28 +602,6 @@ def workspace_ui_for(snapshot: dict | None) -> tuple[str, str | None, str | None
     return version, f"/opencode-workspace/{version}/index.html", None
 
 
-async def runtime_worker_online(session, snapshot: dict | None) -> bool | None:
-    """Worker 通道上的在线事实。非远程已登记节点不在这里判断。"""
-
-    if not isinstance(snapshot, dict):
-        return None
-    environment_id = snapshot.get("environment_id")
-    if environment_id is None:
-        return None
-    from app.domain import ExecutionMode
-    from app.models import OpenCodeExecutionEnvironment, WorkerInstance
-
-    stored = await session.get(OpenCodeExecutionEnvironment, environment_id)
-    if stored is None or stored.mode != ExecutionMode.LINUX_REMOTE:
-        return None
-    instance = await session.scalar(
-        select(WorkerInstance).where(WorkerInstance.environment_id == stored.id)
-    )
-    if instance is None:
-        return None
-    return bool(instance.status == "online")
-
-
 def error_response(exc):
     if isinstance(exc, HTTPException):
         return exc
@@ -729,62 +705,31 @@ async def reconnect_task(task_id: str, session=Depends(get_session)):
 
 
 @router.get("/workspace")
-async def task_workspace(task_id: str, session_id: str | None = None, session=Depends(get_session)):
+async def task_workspace(task_id: str, session=Depends(get_session)):
     task = await require_task(task_id, session)
-    bindings = (
-        await session.scalars(
-            select(RuntimeSession)
-            .where(
-                RuntimeSession.task_id == task.id,
-            )
-            .order_by(RuntimeSession.created_at.desc())
-        )
-    ).all()
-    selected = next((item for item in bindings if item.id == (session_id or task.current_session_id)), None)
-    if session_id and not selected:
-        raise HTTPException(404, "Session 不属于此任务")
-
-    selected_snapshot = selected.environment if selected else task.execution_environment_snapshot
-    selected_version, selected_ui, selected_ui_error = workspace_ui_for(selected_snapshot)
-    worker_online = await runtime_worker_online(session, selected_snapshot)
-
-    def session_item(item: RuntimeSession):
-        version, workspace_ui, workspace_ui_error = workspace_ui_for(item.environment)
-        return {
-            "id": item.id,
-            "runtime_engine": item.runtime_engine,
-            "native_session_id": item.native_session_id,
-            "engine_metadata": item.engine_metadata,
-            "workspace": item.workspace,
-            "created_at": item.created_at,
-            "status": item.status,
-            "superseded_by": item.superseded_by,
-            "finished_at": item.finished_at,
-            "current": item.id == task.current_session_id,
-            "opencode_version": version,
-            "workspace_ui": workspace_ui,
-            "workspace_ui_error": workspace_ui_error,
-        }
-
+    worker = await resolve_environment(session, task) if task.agent_worker_id else None
+    version = "unknown"
+    if worker and task.current_session_id:
+        try:
+            async with connect(worker) as client:
+                version = str((await client.health()).get("version") or "unknown")
+        except Exception:
+            pass
+    version, ui, error = workspace_ui_for({"opencode_version": version})
     return {
         "task_id": task.id,
         "task_status": task.status,
         "runtime": {
-            "runtime_engine": (selected.runtime_engine if selected
-                               else (selected_snapshot or {}).get("runtime_engine", "opencode")),
-            "native_session_id": selected.native_session_id if selected else None,
-            "engine_metadata": selected.engine_metadata if selected else None,
+            "runtime_engine": "opencode",
             "server": f"/api/tasks/{task.id}/opencode",
-            "session_id": selected.id if selected else None,
-            "workspace": selected.workspace if selected else task.workspace,
-            "connection": task.runtime_connection,
-            "error": task.runtime_error,
-            "opencode_version": selected_version,
-            "workspace_ui": selected_ui,
-            "workspace_ui_error": selected_ui_error,
-            "worker_online": worker_online,
+            "session_id": task.current_session_id,
+            "native_session_id": task.current_session_id,
+            "workspace": task.workspace,
+            "opencode_version": version,
+            "workspace_ui": ui,
+            "workspace_ui_error": error,
+            "worker_online": bool(worker and worker.status != "OFFLINE"),
         },
-        "sessions": [session_item(item) for item in bindings],
     }
 
 
@@ -893,23 +838,18 @@ async def persist_attachments(body, environment, workspace):
     return body
 
 
-@router.api_route("/opencode/{session_id}/{path:path}", methods=["GET", "POST", "PATCH", "DELETE"])
+@router.get("/opencode/{session_id}/{path:path}", operation_id="task_native_get")
+@router.post("/opencode/{session_id}/{path:path}", operation_id="task_native_post")
+@router.patch("/opencode/{session_id}/{path:path}", operation_id="task_native_patch")
+@router.delete("/opencode/{session_id}/{path:path}", operation_id="task_native_delete")
 async def native_proxy(
     task_id: str, session_id: str, path: str, request: Request, session=Depends(get_session)
 ):
     task = await require_task(task_id, session)
-    binding = await session.get(RuntimeSession, session_id)
-    if not binding or binding.task_id != task.id:
-        raise HTTPException(404, "Session 不属于此任务")
-    # Environment and directory are bound in the DB, never selected by browser-supplied paths.
-    from app.models import OpenCodeExecutionEnvironment
-    from app.runtime.environment import environment_from_snapshot
-
-    environment = environment_from_snapshot(binding.environment, binding.employee_id)
-    stored = await session.get(OpenCodeExecutionEnvironment, binding.environment["environment_id"])
-    if stored:
-        environment.ssh_password = stored.ssh_password
-    workspace = binding.workspace
+    if session_id != task.current_session_id or not task.workspace:
+        raise HTTPException(404, "Session 不属于当前任务")
+    environment = await resolve_environment(session, task)
+    workspace = task.workspace
     # Release the read transaction before path validation, SSH/OpenCode startup,
     # SSE or upstream HTTP. Native Workspace requests can be long-lived.
     await session.commit()
@@ -917,8 +857,7 @@ async def native_proxy(
         raise HTTPException(403, "不允许覆盖任务绑定")
     for key, value in request.query_params.multi_items():
         if key.startswith("location") and (
-            key != "location[directory]"
-            or not same_workspace_path(environment, workspace, unquote(value))
+            key != "location[directory]" or not same_workspace_path(environment, workspace, unquote(value))
         ):
             raise HTTPException(403, "不允许覆盖任务绑定")
     requested = request.query_params.get("directory") or request.headers.get("x-opencode-directory")
@@ -947,8 +886,12 @@ async def native_proxy(
             if not known:
                 raise HTTPException(503, _DIFF_UNAVAILABLE)
             diffs = await workspace_diff(
-                session, task, cumulative=mode == "task", directory=directory,
-                environment=environment, workspace=workspace,
+                session,
+                task,
+                cumulative=mode == "task",
+                directory=directory,
+                environment=environment,
+                workspace=workspace,
             )
             if native_path.endswith("/raw"):
                 raw = redact_configured_text("".join(item["patch"] for item in diffs), secrets)
@@ -961,8 +904,8 @@ async def native_proxy(
     permission_reply = PERMISSION_REPLY.fullmatch(native_path) if method == "POST" else None
     if permission_reply and permission_reply[1] != session_id:
         raise HTTPException(403, "历史 Session 只读")
-    pending = (reply[1], reply[2]) if reply else (
-        ("permission", permission_reply[2]) if permission_reply else None
+    pending = (
+        (reply[1], reply[2]) if reply else (("permission", permission_reply[2]) if permission_reply else None)
     )
     if method != "GET" and task.status in {"SUCCEEDED", "CANCELED"}:
         raise HTTPException(409, "任务已结束；请显式重新开始")
@@ -1141,21 +1084,6 @@ async def native_proxy(
         raise error_response(exc) from exc
 
 
-@router.post("/retry-submission", response_model=TaskRead)
-async def retry_submission(
-    task_id: str,
-    body: RetrySubmission | None = None,
-    session=Depends(get_session),
-):
-    await require_task(task_id, session)
-    try:
-        return await RuntimeService(session).retry_submission(
-            task_id, confirm_unknown=bool(body and body.confirm_unknown)
-        )
-    except Exception as exc:
-        raise error_response(exc) from exc
-
-
 @router.get("/repo")
 async def task_repo(task_id: str, session=Depends(get_session)):
     import asyncio
@@ -1208,7 +1136,9 @@ async def task_repo(task_id: str, session=Depends(get_session)):
         name = (
             origin.rstrip("/").split("/")[-1].removesuffix(".git")
             if origin
-            else Path(common_dir).parent.name if common_dir else Path(task.workspace).name
+            else Path(common_dir).parent.name
+            if common_dir
+            else Path(task.workspace).name
         )
         task_changes = await collect_workspace_changes(session, task)
         return {

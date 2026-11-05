@@ -928,25 +928,24 @@ class Collaboration:
         with connect() as db:
             source = one(
                 db,
-                """SELECT e.message,e.created_at,t.id,t.title,t.source_channel_id,
-                t.source_session_id,t.responsible_employee_id,t.status,t.waiting_reason
+                """SELECT e.message,e.created_at,t.id,t.title,t.source,t.external_task_id,
+                t.origin_employee_id,t.status,t.waiting_reason
                 FROM t_nexus_events e
                 JOIN t_nexus_tasks t ON t.id=e.task_id
                 JOIN t_nexus_task_wake_outbox o ON o.event_id=e.id AND o.task_id=t.id WHERE e.id=:i""",
                 i=event_id,
             )
-            if not source or not source["source_channel_id"]:
+            if not source or source["source"] != "group_chat":
                 raise HTTPException(404, "事件没有来源群")
-            cid = source["source_channel_id"]
+            cid = source["external_task_id"]
             lock_channel(db, cid)
             binding = one(
                 db,
                 """SELECT 1 FROM t_nexus_channel_members WHERE channel_id=:c
-                AND employee_id=:e AND agentscope_session_id=:s AND member_type='employee'
+                AND employee_id=:e AND member_type='employee'
                 AND membership_active=1""",
                 c=cid,
-                e=source["responsible_employee_id"],
-                s=source["source_session_id"],
+                e=source["origin_employee_id"],
             )
             if not binding:
                 raise HTTPException(403, "任务来源与员工群会话不一致")
@@ -955,24 +954,32 @@ class Collaboration:
                 return {"ok": True, "duplicate": True}
             body = f"任务《{source['title'] or source['id']}》：{source['message']}"
             needs_assistance = source["status"] == "WAITING" and source["waiting_reason"] in {
-                "HITL_QUESTION", "HITL_PERMISSION", "EXECUTION_RESULT_REVIEW",
+                "question",
+                "permission",
+                "confirmation",
             }
             did, initiator = "", ""
             if needs_assistance:
                 origin = one(
-                    db, """SELECT detail FROM t_nexus_events WHERE task_id=:t
-                    AND event_type='group_task_requested' ORDER BY id LIMIT 1""", t=source["id"],
+                    db,
+                    """SELECT detail FROM t_nexus_events WHERE task_id=:t
+                    AND event_type='group_task_requested' ORDER BY id LIMIT 1""",
+                    t=source["id"],
                 )
-                detail = json.loads(origin["detail"]) if origin and isinstance(origin["detail"], str) else (
-                    origin["detail"] if origin else {}
+                detail = (
+                    json.loads(origin["detail"])
+                    if origin and isinstance(origin["detail"], str)
+                    else (origin["detail"] if origin else {})
                 )
                 initiator = (detail or {}).get("initiator_id", "")
                 authorized = one(
-                    db, """SELECT 1 FROM t_nexus_channel_members WHERE channel_id=:c
+                    db,
+                    """SELECT 1 FROM t_nexus_channel_members WHERE channel_id=:c
                     AND member_type='human' AND membership_active=1 AND member_id=:u""",
-                    c=cid, u=initiator,
+                    c=cid,
+                    u=initiator,
                 )
-                employee = self.load_employee(db, source["responsible_employee_id"])
+                employee = self.load_employee(db, source["origin_employee_id"])
                 if authorized and employee["enabled"]:
                     did = new_id("dis")
                     body += "\n责任员工将先核实并处理，需要补充信息时会在群内提问。"
@@ -997,8 +1004,15 @@ class Collaboration:
                     text("""INSERT INTO t_nexus_discussions
                     (id,channel_id,message_id,initiator_id,generation,state,participants_json,created_at)
                     VALUES (:i,:c,:m,:u,:g,'queued',:p,:t)"""),
-                    {"i": did, "c": cid, "m": message["id"], "u": initiator, "g": generation,
-                     "p": dumps([source["responsible_employee_id"]]), "t": utcnow()},
+                    {
+                        "i": did,
+                        "c": cid,
+                        "m": message["id"],
+                        "u": initiator,
+                        "g": generation,
+                        "p": dumps([source["origin_employee_id"]]),
+                        "t": utcnow(),
+                    },
                 )
                 emit(db, cid, {"type": "discussion", "id": did, "state": "queued"})
             db.commit()
@@ -1431,23 +1445,32 @@ class Collaboration:
                 source = next((row for row in history if row["id"] == d["message_id"]), None)
                 task_event_id = (
                     json.loads(source["native_json"]).get("metadata", {}).get("task_event_id")
-                    if source and source["sender_type"] == "system" else None
+                    if source and source["sender_type"] == "system"
+                    else None
                 )
                 if task_event_id:
                     notice = one(
-                        db, """SELECT o.hint FROM t_nexus_task_wake_outbox o JOIN t_nexus_tasks t
-                        ON t.id=o.task_id WHERE o.event_id=:i AND t.source_channel_id=:c
-                        AND t.source_session_id=:s AND t.responsible_employee_id=:e""",
-                        i=task_event_id, c=d["channel_id"], s=session_id, e=eid,
+                        db,
+                        """SELECT o.hint FROM t_nexus_task_wake_outbox o JOIN t_nexus_tasks t
+                        ON t.id=o.task_id WHERE o.event_id=:i AND t.source='group_chat'
+                        AND t.external_task_id=:c
+                        AND t.origin_employee_id=:e""",
+                        i=task_event_id,
+                        c=d["channel_id"],
+                        e=eid,
                     )
                     if notice:
-                        inputs.append({
-                            "id": f"task_hint_{task_event_id}", "name": "任务协助提示", "role": "user",
-                            # AgentScope 2.0.10 的 user Msg 只接受 text/data；
-                            # inbox 可用的 HintBlock 不能直接放进 /chat/ 的 user 消息。
-                            "content": [{"type": "text", "text": notice["hint"]}],
-                            "metadata": {"source": "nexus-task"},
-                        })
+                        inputs.append(
+                            {
+                                "id": f"task_hint_{task_event_id}",
+                                "name": "任务协助提示",
+                                "role": "user",
+                                # AgentScope 2.0.10 的 user Msg 只接受 text/data；
+                                # inbox 可用的 HintBlock 不能直接放进 /chat/ 的 user 消息。
+                                "content": [{"type": "text", "text": notice["hint"]}],
+                                "metadata": {"source": "nexus-task"},
+                            }
+                        )
                 names = "、".join(x["name"] for x in staff)
                 inputs.append(
                     {
@@ -1459,6 +1482,8 @@ class Collaboration:
                                 "type": "text",
                                 "text": f"当前群成员：{names}。你是{e['name']}。"
                                 "请根据以上真实群发言回应当前讨论目标；前面同事已回答的部分不重复。"
+                                f"如需创建工程任务，来源为source=group_chat，external_task_id={d['channel_id']}，"
+                                f"employee_id={eid}。"
                                 f"这是第{turn + 1}/{MAX_TURNS}次发言。"
                                 "需要同事继续行动或把结果交还请求者时，使用contact_employee向该同事投递，"
                                 "并在原话中说清回传对象和下一步；仅公开陈述结果不会自动唤醒请求者。不要代写同事回答。"
@@ -1514,7 +1539,8 @@ class Collaboration:
                 other["name"] in routing_text(source["text"]) for other in staff if other["id"] != explicit[0]
             )
             task_notice = bool(
-                source and source["sender_type"] == "system"
+                source
+                and source["sender_type"] == "system"
                 and json.loads(source["native_json"]).get("metadata", {}).get("task_event_id")
             )
             targets = [] if greeting or strict_single or task_notice else followup(body, staff, eid, counts)

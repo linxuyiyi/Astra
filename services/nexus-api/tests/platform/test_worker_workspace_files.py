@@ -5,20 +5,16 @@ import hashlib
 import inspect
 import subprocess
 from types import SimpleNamespace
-from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
 
-from app.api.workspace_routes import persist_attachments, router, task_repo
+from app.api.workspace_routes import router, task_repo
 from app.config.settings import get_settings
-from app.database import SessionLocal, init_database
 from app.domain import ExecutionMode
-from app.models import AgentWorker, OpenCodeExecutionEnvironment, Task, WorkerInstance
-from app.runtime.environment import ExecutionEnvironmentRuntime, environment_from_snapshot
+from app.runtime.environment import ExecutionEnvironmentRuntime
 from app.runtime.worker_files import WorkerFileError, git_command_payload, worker_git, worker_upload
 from app.runtime.workspace_changes import workspace_diff
-from app.runtime.workspace_files import check_request_path, upload, validate_path
+from app.runtime.workspace_files import upload, validate_path
 from app.worker_gateway.bus import MemoryRouteBus
 from app.worker_gateway.data_channel import request_key
 
@@ -31,8 +27,21 @@ async def test_repo_metadata_with_git_218_commands_and_relative_common_dir(tmp_p
     subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
     subprocess.run(["git", "-C", str(repo), "symbolic-ref", "HEAD", "refs/heads/company"], check=True)
     subprocess.run(
-        ["git", "-C", str(repo), "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
-         "commit", "--allow-empty", "-m", "initial"], check=True, capture_output=True,
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "initial",
+        ],
+        check=True,
+        capture_output=True,
     )
     if detached:
         subprocess.run(["git", "-C", str(repo), "checkout", "--detach"], check=True, capture_output=True)
@@ -64,7 +73,7 @@ async def test_repo_metadata_with_git_218_commands_and_relative_common_dir(tmp_p
 
 
 class _SecretEnv:
-    id = 999991
+    id = "999991"
     mode = ExecutionMode.LINUX_REMOTE
 
     @property
@@ -75,9 +84,7 @@ class _SecretEnv:
 def test_git_operations_match_the_existing_invocations():
     assert git_command_payload(("rev-parse", "HEAD")) == {"operation": "head"}
     assert git_command_payload(("rev-parse", "--is-inside-work-tree")) == {"operation": "inside_work_tree"}
-    assert git_command_payload(("rev-parse", "--git-common-dir")) == {
-        "operation": "git_common_dir"
-    }
+    assert git_command_payload(("rev-parse", "--git-common-dir")) == {"operation": "git_common_dir"}
     assert git_command_payload(("symbolic-ref", "--quiet", "--short", "HEAD")) == {"operation": "branch"}
     assert git_command_payload(
         ("status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all")
@@ -180,64 +187,6 @@ async def test_worker_channel_does_not_open_ssh_or_read_the_password(monkeypatch
         await _git(unenrolled, "/ws", "rev-parse", "HEAD")
 
 
-async def test_snapshot_environment_follows_the_enrolled_worker(monkeypatch):
-    await init_database()
-    async with SessionLocal() as session:
-        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
-        session.add(employee)
-        await session.flush()
-        environment = OpenCodeExecutionEnvironment(
-            employee_id=employee.id,
-            mode="LINUX_REMOTE",
-            name="云执行机",
-            host="example.invalid",
-            username="dev",
-            ssh_password="secret",
-            opencode_path="opencode",
-            workspace_root="/work",
-        )
-        session.add(environment)
-        await session.flush()
-        session.add(
-            WorkerInstance(
-                id=f"wi-{uuid4().hex[:8]}",
-                environment_id=environment.id,
-                token_digest=uuid4().hex * 2,
-                status="online",
-            )
-        )
-        await session.commit()
-        await session.refresh(environment)
-        snapshot = environment_from_snapshot(
-            {
-                "environment_id": environment.id,
-                "mode": "LINUX_REMOTE",
-                "name": "云执行机",
-                "opencode_path": "opencode",
-                "workspace_root": "/work",
-            },
-            employee.id,
-        )
-
-    seen = []
-
-    class FakeClient:
-        def __init__(self, **_kwargs):
-            pass
-
-        async def run_command(self, name, data, session_id=None, request_id=None):
-            seen.append(name)
-            return {"relative": "."}
-
-    async def opened(self, environment):
-        raise AssertionError("ssh opened")
-
-    monkeypatch.setattr("app.runtime.worker_files.WorkerOpenCodeClient", FakeClient)
-    monkeypatch.setattr(ExecutionEnvironmentRuntime, "open_session", opened)
-    assert await validate_path(snapshot, "/work/task", ".") == "."
-    assert seen == ["validate_path"]
-
-
 async def test_upload_stages_bytes_and_deleted_diff_still_returns_the_file(monkeypatch):
     holder = {}
 
@@ -311,94 +260,6 @@ async def test_upload_stages_bytes_and_deleted_diff_still_returns_the_file(monke
     assert set(diffs[0]) == {"file", "patch", "before", "after", "additions", "deletions", "status"}
 
 
-async def test_file_api_still_validates_before_opencode_and_repo_overflow_is_dirty(monkeypatch):
-    seen = []
-
-    async def fake_validate(environment, workspace, value):
-        seen.append(value)
-        return "a.txt"
-
-    monkeypatch.setattr("app.runtime.workspace_files.validate_path", fake_validate)
-    env = _SecretEnv()
-    assert await check_request_path(env, "/ws", "a.txt", native_path="/file") == "a.txt"
-    assert await check_request_path(env, "/ws", "src/a.txt", native_path="/find") == "src/a.txt"
-    assert seen == ["a.txt"]
-
-    body = {"parts": [{"type": "file", "url": "file:///ws/a.txt"}]}
-    monkeypatch.setattr("app.api.workspace_routes.validate_path", fake_validate)
-    await persist_attachments(body, env, "/ws")
-    assert seen[-1] == "/ws/a.txt"
-
-    await init_database()
-    async with SessionLocal() as session:
-        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
-        session.add(employee)
-        await session.flush()
-        environment = OpenCodeExecutionEnvironment(
-            employee_id=employee.id,
-            mode="LINUX_REMOTE",
-            name="云执行机",
-            opencode_path="opencode",
-            workspace_root="/work",
-            ssh_password="secret",
-        )
-        session.add(environment)
-        await session.flush()
-        session.add(
-            WorkerInstance(
-                id=f"wi-{uuid4().hex[:8]}",
-                environment_id=environment.id,
-                token_digest=uuid4().hex * 2,
-                status="online",
-            )
-        )
-        task = Task(
-            id=f"T-{uuid4().hex[:8]}",
-            title="repo",
-            task_type="ISSUE",
-            status="RUNNING",
-            employee_id=employee.id,
-            workspace="/work/task",
-            execution_environment_snapshot={
-                "environment_id": environment.id,
-                "mode": "LINUX_REMOTE",
-                "name": "云执行机",
-                "opencode_path": "opencode",
-                "workspace_root": "/work",
-            },
-        )
-        session.add(task)
-        await session.commit()
-        task_id = task.id
-
-    async def fake_git(_environment, _workspace, args):
-        if args[0] == "status":
-            raise WorkerFileError("too_large", "文件不能超过 20 MB")
-        if args == ("rev-parse", "HEAD"):
-            return 0, "abc123\n"
-        if args[0] == "symbolic-ref":
-            return 0, "main\n"
-        if args[0] == "config":
-            return 1, ""
-        return 0, "/work/repo/.git\n"
-
-    async def allow(*_args, **_kwargs):
-        return "."
-
-    async def empty(*_args, **_kwargs):
-        return {}
-
-    monkeypatch.setattr("app.runtime.worker_files.worker_git", fake_git)
-    monkeypatch.setattr("app.api.workspace_routes.validate_path", allow)
-    monkeypatch.setattr("app.api.workspace_routes.collect_workspace_changes", empty)
-    async with SessionLocal() as session:
-        payload = await task_repo(task_id, session)
-    assert payload["dirty"] is True
-    assert payload["commit"] == "abc123"
-    assert payload["branch"] == "main"
-    assert set(payload) == {"name", "branch", "commit", "dirty", "changes", "task_changes"}
-
-
 async def test_worker_git_decodes_raw_bytes_with_replacement(monkeypatch):
     class FakeClient:
         def __init__(self, **_kwargs):
@@ -435,43 +296,3 @@ async def test_upload_helper_is_what_the_route_calls(monkeypatch):
     # upload() imports the helper inside the function.
     path = await upload(_SecretEnv(), "/ws", "a.txt", b"hi")
     assert path == "/ws/uploads/abc-a.txt"
-
-
-async def test_repo_route_turns_uninstalled_worker_into_503():
-    await init_database()
-    async with SessionLocal() as session:
-        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
-        session.add(employee)
-        await session.flush()
-        environment = OpenCodeExecutionEnvironment(
-            employee_id=employee.id,
-            mode="LINUX_REMOTE",
-            name="云执行机",
-            opencode_path="opencode",
-            workspace_root="/work",
-        )
-        session.add(environment)
-        await session.flush()
-        task = Task(
-            id=f"T-{uuid4().hex[:8]}",
-            title="repo",
-            task_type="ISSUE",
-            status="RUNNING",
-            employee_id=employee.id,
-            workspace="/work/task",
-            execution_environment_snapshot={
-                "environment_id": environment.id,
-                "mode": "LINUX_REMOTE",
-                "name": "云执行机",
-                "opencode_path": "opencode",
-                "workspace_root": "/work",
-            },
-        )
-        session.add(task)
-        await session.commit()
-        task_id = task.id
-    async with SessionLocal() as session:
-        with pytest.raises(HTTPException) as error:
-            await task_repo(task_id, session)
-    assert error.value.status_code == 503
-    assert "不可连接" in error.value.detail

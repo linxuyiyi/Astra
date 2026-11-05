@@ -27,22 +27,18 @@ from sqlalchemy.exc import OperationalError
 from app.config.settings import get_settings
 from app.config.worker_deployment import deployment_manifest, pip_install_options, pip_trusted_host
 from app.database import SessionLocal
-from app.domain import EnvironmentStatus, MaintenanceState
 from app.gateway.models import GatewayKey, GatewayRoute
 from app.gateway.probe import HttpGatewayProbeClient
-from app.gateway.runtime import RedisRuntimeStore
 from app.gateway.schemas import GatewayKeyCreate
 from app.gateway.security import CredentialCipher, gateway_key_digest
 from app.gateway.service import GatewayControlService
 from app.gateway.urls import client_gateway_base
 from app.models import (
-    OpenCodeExecutionEnvironment,
-    WorkerInstance,
+    AgentWorker,
 )
 from app.runtime.direct_urls import require_direct_url
 from app.runtime.environment import ExecutionEnvironmentRuntime
 from app.runtime.opencode_model import route_model_id
-from app.runtime.redaction import redact_data, redact_text
 from app.runtime.remote_artifacts import install_node, install_opencode
 from app.runtime.remote_bootstrap import managed_python, prepare_python
 from app.runtime.remote_package_config import configure_sources
@@ -50,58 +46,58 @@ from app.runtime.remote_workspace import configure_runtime, git_workspace
 from app.runtime.repository import cipher, collect_skill_files
 from app.runtime.worker_readiness import (
     build_desired_spec,
-    compute_target_digest,
     evaluate_worker_readiness,
 )
 from app.worker_agent import __version__ as WORKER_AGENT_VERSION
 from app.worker_agent.jsonc import loads_jsonc
+from app.worker_gateway.service import get_gateway
 
 PROVIDER_ID = "nexus-gateway"
 WORKER_SECRET_DIR = "/etc/nexus"
 START_ALL_PATH = "/opt/nexus/workers/start-all.sh"
 
 
-def worker_install_dir(environment_id: int) -> str:
-    return f"/opt/nexus/workers/{environment_id}"
+def worker_install_dir(agent_worker_id: int) -> str:
+    return f"/opt/nexus/workers/{agent_worker_id}"
 
 
-def worker_state_dir(environment_id: int) -> str:
-    return f"{worker_install_dir(environment_id)}/state"
+def worker_state_dir(agent_worker_id: int) -> str:
+    return f"{worker_install_dir(agent_worker_id)}/state"
 
 
-def worker_log_dir(environment_id: int) -> str:
-    return f"{worker_install_dir(environment_id)}/logs"
+def worker_log_dir(agent_worker_id: int) -> str:
+    return f"{worker_install_dir(agent_worker_id)}/logs"
 
 
-def worker_ctl_path(environment_id: int) -> str:
-    return f"{worker_install_dir(environment_id)}/ctl.sh"
+def worker_ctl_path(agent_worker_id: int) -> str:
+    return f"{worker_install_dir(agent_worker_id)}/ctl.sh"
 
 
-def agent_venv(environment_id: int) -> str:
-    return f"{worker_install_dir(environment_id)}/venv"
+def agent_venv(agent_worker_id: int) -> str:
+    return f"{worker_install_dir(agent_worker_id)}/venv"
 
 
-def agent_python(environment_id: int) -> str:
-    return f"{agent_venv(environment_id)}/bin/python"
+def agent_python(agent_worker_id: int) -> str:
+    return f"{agent_venv(agent_worker_id)}/bin/python"
 
 
-def git_token_path(environment_id: int) -> str:
-    return f"{WORKER_SECRET_DIR}/git-{environment_id}.token"
+def git_token_path(agent_worker_id: int) -> str:
+    return f"{WORKER_SECRET_DIR}/git-{agent_worker_id}.token"
 
 
-def git_askpass_path(environment_id: int) -> str:
-    return f"{WORKER_SECRET_DIR}/git-{environment_id}-askpass"
+def git_askpass_path(agent_worker_id: int) -> str:
+    return f"{WORKER_SECRET_DIR}/git-{agent_worker_id}-askpass"
 
 
 def credential_revision(ciphertext: str) -> str:
     return hashlib.sha256(ciphertext.encode("utf-8")).hexdigest()[:16]
 
 
-def safe_git_environment(environment_id: int) -> dict[str, str]:
+def safe_git_environment(agent_worker_id: int) -> dict[str, str]:
     """The only safe Git variables shared by OpenCode and Worker Agent."""
 
     return {
-        "GIT_ASKPASS": git_askpass_path(environment_id),
+        "GIT_ASKPASS": git_askpass_path(agent_worker_id),
         "GIT_TERMINAL_PROMPT": "0",
         "GIT_CONFIG_COUNT": "1",
         "GIT_CONFIG_KEY_0": "credential.helper",
@@ -109,24 +105,24 @@ def safe_git_environment(environment_id: int) -> dict[str, str]:
     }
 
 
-def git_askpass_script(environment_id: int) -> str:
+def git_askpass_script(agent_worker_id: int) -> str:
     return (
         "#!/bin/sh\n"
         'case "$1" in\n'
         "  *Username*) printf '%s\\n' git ;;\n"
-        f"  *) cat '{git_token_path(environment_id)}' ;;\n"
+        f"  *) cat '{git_token_path(agent_worker_id)}' ;;\n"
         "esac\n"
     )
 
 
-def render_worker_ctl_script(environment_id: int, *, port: int) -> str:
+def render_worker_ctl_script(agent_worker_id: int, *, port: int) -> str:
     """无 systemd 标准单入口脚本：通过 Python fcntl.flock 管理 worker.lock 生命周期。"""
 
-    install_dir = worker_install_dir(environment_id)
-    python_bin = agent_python(environment_id)
-    env_file = f"{WORKER_SECRET_DIR}/worker-{environment_id}.env"
-    state_dir = worker_state_dir(environment_id)
-    log_dir = worker_log_dir(environment_id)
+    install_dir = worker_install_dir(agent_worker_id)
+    python_bin = agent_python(agent_worker_id)
+    env_file = f"{WORKER_SECRET_DIR}/worker-{agent_worker_id}.env"
+    state_dir = worker_state_dir(agent_worker_id)
+    log_dir = worker_log_dir(agent_worker_id)
     lock_file = f"{state_dir}/worker.lock"
     return (
         "#!/bin/sh\n"
@@ -137,7 +133,7 @@ def render_worker_ctl_script(environment_id: int, *, port: int) -> str:
         f"STATE_DIR={shlex.quote(state_dir)}\n"
         f"LOG_DIR={shlex.quote(log_dir)}\n"
         f"LOCK_FILE={shlex.quote(lock_file)}\n"
-        f"ENV_ID={int(environment_id)}\n"
+        f"ENV_ID={shlex.quote(agent_worker_id)}\n"
         f"PORT={int(port)}\n"
         'ACTION="${1:-status}"\n'
         'mkdir -p -m 700 "$STATE_DIR" "$LOG_DIR"\n'
@@ -171,7 +167,7 @@ def render_worker_ctl_script(environment_id: int, *, port: int) -> str:
         '  "$PYTHON" -I - "$LOCK_FILE" "$ENV_ID" <<\'PY\'\n'
         "import errno, fcntl, os, pathlib, signal, sys, time\n"
         "from app.worker_agent.supervisor import cleanup_orphan_opencode\n"
-        "lock_path, env_id = pathlib.Path(sys.argv[1]), int(sys.argv[2])\n"
+        "lock_path, env_id = pathlib.Path(sys.argv[1]), sys.argv[2]\n"
         "\n"
         "def locked() -> bool:\n"
         "    if not lock_path.exists():\n"
@@ -350,7 +346,7 @@ async def guard_environment_write(session, environment):
     active = await session.scalar(
         select(WorkerMaintenanceOperation.id)
         .where(
-            WorkerMaintenanceOperation.environment_id == environment.id,
+            WorkerMaintenanceOperation.agent_worker_id == environment.id,
             WorkerMaintenanceOperation.state.in_(ACTIVE_STATES),
         )
         .with_for_update()
@@ -380,8 +376,7 @@ def agent_wheel() -> tuple[str, bytes]:
         "app/runtime/redaction.py",
     ]
     names.extend(
-        str(path.relative_to(app_root.parent))
-        for path in sorted((app_root / "worker_agent").rglob("*.py"))
+        str(path.relative_to(app_root.parent)) for path in sorted((app_root / "worker_agent").rglob("*.py"))
     )
     files = sorted((name, (app_root.parent / name).read_bytes()) for name in set(names))
     info = f"{dist}.dist-info"
@@ -445,11 +440,7 @@ class RemoteProvisioner:
         self.environment = environment
         self.operation = operation
         self.operation_id = operation["id"] if isinstance(operation, dict) else operation.id
-        self.action = (
-            operation.get("action", "deploy")
-            if isinstance(operation, dict)
-            else operation.action
-        )
+        self.action = operation.get("action", "deploy") if isinstance(operation, dict) else operation.action
         self.lease = lease
         self.settings = get_settings()
         self.runtime = runtime or ExecutionEnvironmentRuntime(self.settings)
@@ -460,7 +451,9 @@ class RemoteProvisioner:
         self.old_key_id = None
         self.key_applied = False
         self.target_model = environment.model_name
-        self.target_binary = environment.opencode_path
+        self.target_binary = f"/opt/nexus/workers/{environment.id}/bin/opencode"
+        self.opencode_port = None
+        self.stop_unconfirmed = False
         self.config_path = None
         self.home: str | None = None
         self.git_token: str | None = None
@@ -476,11 +469,7 @@ class RemoteProvisioner:
         return configured or managed_python(self.environment.id)
 
     def _probe_interpreter(self) -> str:
-        return (
-            agent_python(self.environment.id)
-            if self.action == "restart"
-            else self._agent_interpreter()
-        )
+        return agent_python(self.environment.id) if self.action == "restart" else self._agent_interpreter()
 
     def _gateway_service(self, db, runtime=None):
         return GatewayControlService(
@@ -514,9 +503,7 @@ class RemoteProvisioner:
             return
         root = "/opt/nexus/workers/.locks"
         await self._command(shlex.join(["install", "-d", "-m", "700", root]))
-        canonical = await self._command(
-            shlex.join(["realpath", "-m", self.environment.workspace_root])
-        )
+        canonical = await self._command(shlex.join(["realpath", "-m", self.environment.workspace_root]))
         digest = hashlib.sha256(canonical.encode()).hexdigest()[:24]
         self.install_lock = await self.ssh.hold_lock(
             [
@@ -525,7 +512,7 @@ class RemoteProvisioner:
             ]
         )
 
-    async def _ensure_safe(self, *, allow_occupied: bool = False):
+    async def _ensure_safe(self):
         if self.install_lock is not None and not self.install_lock.is_active():
             raise RuntimeError("远端部署锁已失效，停止修改")
         if self.lease is None:
@@ -533,11 +520,7 @@ class RemoteProvisioner:
         from app.runtime.maintenance import MaintenanceCanceled, MaintenanceLeaseLost
 
         await self.lease.check_canceled()
-        await self.lease.assert_safe_to_disrupt(
-            self.environment.id,
-            self.environment.employee_id,
-            allow_occupied=allow_occupied,
-        )
+        await self.lease.assert_safe_to_disrupt(self.environment.id)
         operation = await self.lease.snapshot()
         if operation is None or operation.attempt != self.lease.attempt:
             raise MaintenanceLeaseLost("维护租约已失效")
@@ -545,11 +528,13 @@ class RemoteProvisioner:
             raise MaintenanceCanceled("操作已请求取消")
 
     async def _command(self, command, timeout=30):
-        rc, out, err = await asyncio.wait_for(self.ssh.run_command(command), timeout)
+        try:
+            rc, out, err = await asyncio.wait_for(self.ssh.run_command(command), timeout)
+        except BaseException:
+            self.stop_unconfirmed = True
+            raise
         if rc:
-            raise RuntimeError(
-                self.redact(err.strip() or out.strip() or f"远程命令退出码 {rc}")
-            )
+            raise RuntimeError(self.redact(err.strip() or out.strip() or f"远程命令退出码 {rc}"))
         return out.strip()
 
     @staticmethod
@@ -567,7 +552,7 @@ class RemoteProvisioner:
                 raise RuntimeError("OpenCode 存在正在执行的 Session，请先停止执行再维护环境")
 
     async def _native_idle(self, *, strict: bool = False, interpreter: str | None = None):
-        port = int(self.environment.opencode_server_port)
+        port = int(self.opencode_port)
         query = urlencode({"directory": self.environment.workspace_root})
         url = f"http://127.0.0.1:{port}/session/status?{query}"
         script = (
@@ -612,6 +597,8 @@ class RemoteProvisioner:
         return True
 
     async def _bootstrap_idle(self, *, interpreter_ready: bool):
+        if self.opencode_port is None:
+            return
         if interpreter_ready:
             readable = await self._native_idle(strict=True)
             if readable:
@@ -674,14 +661,14 @@ for attempt in {1..50}; do
 done
 printf STILL_LISTENING
 """
-        port = f"{int(self.environment.opencode_server_port):04X}"
+        port = f"{int(self.opencode_port):04X}"
         state = await self._command("bash -c " + shlex.quote(probe) + " -- " + shlex.quote(port))
         if state not in {"CLEAR", "STOPPED"}:
-            raise RuntimeError("端口监听进程不是可停止的历史 OpenCode，或停止后端口仍被占用")
+            raise RuntimeError("端口监听进程不是可停止的受管 OpenCode，或停止后端口仍被占用")
 
     async def _require_owned_listener(self, *, interpreter: str):
         lock_file = f"{worker_state_dir(self.environment.id)}/worker.lock"
-        env_id = str(int(self.environment.id))
+        env_id = str(self.environment.id)
         script = (
             "import errno,fcntl,os,pathlib,sys\n"
             "lock_path,env_id=pathlib.Path(sys.argv[1]),sys.argv[2]\n"
@@ -703,14 +690,11 @@ printf STILL_LISTENING
             "        except OSError:\n"
             "            continue\n"
             "        items=set(raw.split(b'\\x00'))\n"
-            "        if (f'NEXUS_WORKER_ENV_ID={env_id}'.encode() in items\n"
-            "            or f'NEXUS_WORKER_ENVIRONMENT_ID={env_id}'.encode() in items):\n"
+            "        if f'NEXUS_AGENT_WORKER_ID={env_id}'.encode() in items:\n"
             "            print('OWNED');raise SystemExit(0)\n"
             "print('FOREIGN')\n"
         )
-        verdict = await self._command(
-            shlex.join([interpreter, "-I", "-c", script, lock_file, env_id])
-        )
+        verdict = await self._command(shlex.join([interpreter, "-I", "-c", script, lock_file, env_id]))
         if verdict.strip() != "OWNED":
             raise RuntimeError("OpenCode 端口已被非当前环境的未知进程占用，拒绝覆盖部署")
 
@@ -721,12 +705,7 @@ printf STILL_LISTENING
             text = content.decode() if isinstance(content, bytes) else content
             try:
                 config = loads_jsonc(text)
-                raw = (
-                    config.get("provider", {})
-                    .get(PROVIDER_ID, {})
-                    .get("options", {})
-                    .get("apiKey")
-                )
+                raw = config.get("provider", {}).get(PROVIDER_ID, {}).get("options", {}).get("apiKey")
             except (ValueError, AttributeError):
                 raise RuntimeError("已有全局配置不是有效 JSON，请人工合并后重试") from None
         async with SessionLocal() as db:
@@ -734,7 +713,7 @@ printf STILL_LISTENING
                 key = await db.scalar(
                     select(GatewayKey).where(
                         GatewayKey.key_digest == gateway_key_digest(raw),
-                        GatewayKey.owner_id == self.environment.employee_id,
+                        GatewayKey.owner_id == self.environment.id,
                         GatewayKey.deleted_at.is_(None),
                     )
                 )
@@ -750,8 +729,8 @@ printf STILL_LISTENING
                             return raw
             key, raw = await self._gateway_service(db).create_key(
                 GatewayKeyCreate(
-                    name=f"Agent Worker {self.environment.employee_id}",
-                    owner_id=self.environment.employee_id,
+                    name=f"Agent Worker {self.environment.id}",
+                    owner_id=self.environment.id,
                 ),
                 actor="employee-deployment",
                 actor_role="admin",
@@ -806,10 +785,10 @@ printf STILL_LISTENING
         payload.update(
             {
                 "action": "update" if self.action == "update" else "deploy",
-                "environment_id": self.environment.id,
+                "agent_worker_id": self.environment.id,
                 "workspace_root": self.environment.workspace_root,
                 "opencode_binary": self.target_binary,
-                "opencode_server_port": int(self.environment.opencode_server_port),
+                "opencode_server_port": int(self.opencode_port),
                 "repository": {"url": "", "branch": self.environment.branch or "main"},
             }
         )
@@ -831,9 +810,7 @@ printf STILL_LISTENING
         await self.step(emit, "Node.js 运行环境", "running")
         facts = self.remote_facts
         arch = "x64" if facts["arch"] == "x86_64" else "arm64"
-        node_root, node_changed = await install_node(
-            self, manifest, home, arch=arch, libc=facts["libc"]
-        )
+        node_root, node_changed = await install_node(self, manifest, home, arch=arch, libc=facts["libc"])
         self.node_binary = node_root + "/bin/node"
         await self.step(emit, "Node.js 运行环境", "passed", manifest["node_version"])
         await self.step(emit, "包管理器全局镜像", "running")
@@ -845,9 +822,7 @@ printf STILL_LISTENING
             self, manifest, prefix, arch=arch, musl=facts["libc"] == "musl"
         )
         await self._command(shlex.join(["mkdir", "-p", str(Path(self.target_binary).parent)]))
-        current_link = await self._command(
-            shlex.join(["readlink", self.target_binary]) + " || true"
-        )
+        current_link = await self._command(shlex.join(["readlink", self.target_binary]) + " || true")
         link_changed = current_link != prefix + "/bin/opencode"
         if link_changed:
             backup = self.target_binary + ".nexus-backup-" + self.operation_id
@@ -857,8 +832,7 @@ printf STILL_LISTENING
                 f"&& ! test -L {shlex.quote(self.target_binary)}; "
                 f"then test ! -e {shlex.quote(backup)} "
                 f"&& mv {shlex.quote(self.target_binary)} {shlex.quote(backup)} "
-                f"|| exit 1; fi; "
-                + shlex.join(["ln", "-sfn", prefix + "/bin/opencode", self.target_binary])
+                f"|| exit 1; fi; " + shlex.join(["ln", "-sfn", prefix + "/bin/opencode", self.target_binary])
             )
         await self.step(emit, "OpenCode 安装", "passed", manifest["opencode_version"])
         await self._native_idle(strict=True)
@@ -893,9 +867,7 @@ printf STILL_LISTENING
             }
         finally:
             if token_file:
-                await self._command(
-                    shlex.join(["rm", "-f", "--", token_file, token_file + ".askpass"])
-                )
+                await self._command(shlex.join(["rm", "-f", "--", token_file, token_file + ".askpass"]))
 
     def _direct_endpoints(self) -> tuple[str, str]:
         return (
@@ -971,51 +943,29 @@ printf STILL_LISTENING
                 pass
         return True
 
-    async def _existing_worker_credentials(
-        self, token_path: str, *, target_digest: str | None = None
-    ):
-        content = await self._read_optional(token_path)
-        remote_token = None
-        if content:
-            text = content.decode() if isinstance(content, bytes) else content
-            values: dict[str, str] = {}
-            for line in text.splitlines():
-                if "=" in line:
-                    key, value = line.split("=", 1)
-                    values[key.strip()] = value.strip()
-            remote_token = values.get("NEXUS_WORKER_TOKEN")
-        async with SessionLocal() as session:
-            instance = await session.scalar(
-                select(WorkerInstance).where(
-                    WorkerInstance.environment_id == self.environment.id
-                )
-            )
-            if instance is not None and target_digest != instance.target_digest:
-                return None
-        if remote_token and instance is not None:
-            if gateway_key_digest(remote_token) == instance.token_digest:
-                return remote_token, instance.id
-            raise RuntimeError("远端 Worker token 与数据库登记不一致，需人工核对后再部署，不会自动轮换")
-        if instance is None:
-            return None
-        if instance.token_ciphertext:
-            try:
-                token_cipher = CredentialCipher(self.settings.gateway_master_key)
-                recovered = token_cipher.decrypt(instance.token_ciphertext)
-            except Exception as exc:
-                raise RuntimeError(
-                    f"数据库中的 Worker token 无法恢复：{redact_text(exc)}；需人工修复"
-                ) from exc
-            if gateway_key_digest(recovered) == instance.token_digest:
-                return recovered, instance.id
-        raise RuntimeError("无法证明现有 Worker token 有效，需人工修复或在数据库中重新登记，不会盲目轮换")
-
-    async def _enroll_worker(self, target_digest: str):
+    async def _enroll_worker(self):
         from app.worker_gateway.service import get_gateway
 
-        gateway = get_gateway()
         async with SessionLocal() as session:
-            return await gateway.enroll(session, self.environment.id, target_digest=target_digest)
+            return await get_gateway().enroll(session, self.environment.id)
+
+    async def _load_local_runtime(self, *, allocate=True):
+        # The deployed worker.env is the only persisted source of the native port.
+        from urllib.parse import urlsplit
+
+        content = await self._read_optional(f"{WORKER_SECRET_DIR}/worker-{self.environment.id}.env")
+        if content:
+            text = content.decode() if isinstance(content, bytes) else content
+            values = dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
+            self.opencode_port = urlsplit(values.get("NEXUS_WORKER_OPENCODE_URL", "")).port
+        if self.opencode_port is None and allocate:
+            script = (
+                "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); "
+                "print(s.getsockname()[1]); s.close()"
+            )
+            self.opencode_port = int(
+                await self._command(shlex.join([self._agent_interpreter(), "-c", script]))
+            )
 
     async def _run_ctl(self, action: str) -> str:
         ctl_path = worker_ctl_path(self.environment.id)
@@ -1025,10 +975,8 @@ printf STILL_LISTENING
         await self.step(emit, "安装 Worker Agent", "running")
         await self._ensure_safe()
         gateway_url, mcp_url = self._direct_endpoints()
-        agent_gateway = require_direct_url(
-            self.settings.worker_agent_gateway_url, "Worker Gateway"
-        )
-        port = int(self.environment.opencode_server_port)
+        agent_gateway = require_direct_url(self.settings.worker_agent_gateway_url, "Worker Gateway")
+        port = int(self.opencode_port)
         home = self.home
         if not home:
             raise RuntimeError("部署尚未探测远端 HOME")
@@ -1039,9 +987,7 @@ printf STILL_LISTENING
             if node_binary
             else (f"{env_root}/node-v{self.settings.remote_node_version}/bin")
         )
-        path_value = ":".join(
-            [node_bin, f"{env_root}/opencode/bin", "/usr/local/bin", "/usr/bin", "/bin"]
-        )
+        path_value = ":".join([node_bin, f"{env_root}/opencode/bin", "/usr/local/bin", "/usr/bin", "/bin"])
         install_dir, python = (
             worker_install_dir(self.environment.id),
             agent_python(self.environment.id),
@@ -1059,9 +1005,7 @@ printf STILL_LISTENING
         )
         git_secret_changed = False
         if self.git_token:
-            tok_changed = await self._write_atomic_if_changed(
-                token_path_git, self.git_token.encode(), 0o600
-            )
+            tok_changed = await self._write_atomic_if_changed(token_path_git, self.git_token.encode(), 0o600)
             ask_changed = await self._write_atomic_if_changed(
                 askpass_git, git_askpass_script(self.environment.id).encode(), 0o700
             )
@@ -1072,13 +1016,10 @@ printf STILL_LISTENING
         wheel_name, wheel_bytes = agent_wheel()
         wheel_digest = hashlib.sha256(wheel_bytes).hexdigest()
         wheel_path, marker_path = f"{install_dir}/{wheel_name}", f"{install_dir}/wheel.sha256"
-        marker = (
-            await self._command(shlex.join(["cat", marker_path]) + " 2>/dev/null || true")
-        ).strip()
+        marker = (await self._command(shlex.join(["cat", marker_path]) + " 2>/dev/null || true")).strip()
         venv_ok = (
             marker == wheel_digest
-            and await self._command(f"test -x {shlex.quote(python)} && printf yes || true")
-            == "yes"
+            and await self._command(f"test -x {shlex.quote(python)} && printf yes || true") == "yes"
         )
         if not venv_ok:
             await self._ensure_safe()
@@ -1108,25 +1049,18 @@ printf STILL_LISTENING
                 )
             )
             await self._command(
-                shlex.join(
-                    [self._agent_interpreter(), "-m", "venv", agent_venv(self.environment.id)]
-                )
+                shlex.join([self._agent_interpreter(), "-m", "venv", agent_venv(self.environment.id)])
                 + " && "
                 + pip,
                 timeout=300,
             )
             await self._write_atomic_if_changed(marker_path, wheel_digest.encode(), 0o600)
 
-        target_digest = compute_target_digest(self.environment)
         token_path = f"{WORKER_SECRET_DIR}/worker-{self.environment.id}.env"
-        existing = await self._existing_worker_credentials(
-            token_path, target_digest=target_digest
-        )
-        if existing is not None:
-            token, worker_instance_id = existing
-        else:
-            enrolled = await self._enroll_worker(target_digest)
-            token, worker_instance_id = enrolled.token, enrolled.worker_instance_id
+        # No recoverable Token copy in Nexus. Every deployment distributes a fresh Token.
+        await self._native_idle(strict=True)
+        enrolled = await self._enroll_worker()
+        token, agent_worker_id = enrolled.token, enrolled.agent_worker_id
         self.secrets.append(token)
 
         async with SessionLocal() as session:
@@ -1141,17 +1075,14 @@ printf STILL_LISTENING
             "NEXUS_WORKER_STATE_DIR": state_dir,
             "NEXUS_WORKER_SPEC_REVISION": deployed_spec["revision"],
             "NEXUS_WORKER_TOKEN": token,
-            "NEXUS_WORKER_INSTANCE_ID": worker_instance_id,
-            "NEXUS_WORKER_ENVIRONMENT_ID": str(self.environment.id),
+            "NEXUS_AGENT_WORKER_ID": agent_worker_id,
             "NEXUS_WORKER_GATEWAY_URL": agent_gateway,
             "NEXUS_REMOTE_GATEWAY_URL": gateway_url,
             "NEXUS_MCP_RESOURCE_URL": mcp_url,
             "NEXUS_WORKER_OPENCODE_URL": f"http://127.0.0.1:{port}",
             "NEXUS_WORKER_OPENCODE_BIN": self.target_binary,
             "NEXUS_WORKER_WORKSPACE_ROOT": self.environment.workspace_root,
-            "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS": str(
-                self.settings.opencode_control_timeout_seconds
-            ),
+            "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS": str(self.settings.opencode_control_timeout_seconds),
         }
 
         def serialize(env):
@@ -1187,7 +1118,7 @@ printf STILL_LISTENING
             or changes.get("repository")
         )
         await self._run_ctl("restart" if should_restart else "start")
-        await self.step(emit, "安装 Worker Agent", "passed", worker_instance_id)
+        await self.step(emit, "安装 Worker Agent", "passed", agent_worker_id)
 
     async def _converge_readiness(self, emit) -> dict:
         await self.step(emit, "就绪验收", "running")
@@ -1198,21 +1129,16 @@ printf STILL_LISTENING
         while asyncio.get_running_loop().time() < deadline:
             await self._ensure_safe()
             async with SessionLocal() as session:
-                env_row = await session.get(
-                    OpenCodeExecutionEnvironment, self.environment.id
-                )
+                env_row = await session.get(AgentWorker, self.environment.id)
                 if env_row is None:
                     raise RuntimeError("执行环境已不存在")
-                instance = await session.scalar(
-                    select(WorkerInstance).where(
-                        WorkerInstance.environment_id == self.environment.id
-                    )
-                )
-                if instance is None or instance.status != "online":
+                if env_row.status not in {"IDLE", "WORKING", "PAUSED"}:
                     await asyncio.sleep(0.25)
                     continue
                 desired = await build_desired_spec(session, env_row, self.settings)
-                evaluated = evaluate_worker_readiness(desired, env_row, instance)
+                evaluated = evaluate_worker_readiness(
+                    desired, env_row, observation=await get_gateway().observed_snapshot(env_row)
+                )
             if evaluated["readiness"] == "READY":
                 self.verified_evaluation = evaluated
                 await self.step(emit, "就绪验收", "passed", "网关在线且装备快照已对齐")
@@ -1227,130 +1153,22 @@ printf STILL_LISTENING
         raise RuntimeError("就绪验收未通过：" + "；".join(last_blocking))
 
     async def _finish(self, success: bool, error: str = "") -> bool:
-        now = datetime.now(UTC)
         if self.lease is None:
-            if not success:
-                return False
-            async with SessionLocal() as db:
-                environment = await db.get(
-                    OpenCodeExecutionEnvironment, self.environment.id
-                )
-                if environment is None:
-                    return False
-                environment.status = EnvironmentStatus.AVAILABLE
-                environment.last_checked_at = now
-                if self.target_model:
-                    environment.model_name = self.target_model
-                if self.target_binary:
-                    environment.opencode_path = self.target_binary
-                await db.commit()
-            return True
-
-        evaluated = self.verified_evaluation
-        if evaluated is None:
-            try:
-                async with SessionLocal() as db:
-                    env_row = await db.get(
-                        OpenCodeExecutionEnvironment, self.environment.id
-                    )
-                    instance = await db.scalar(
-                        select(WorkerInstance).where(
-                            WorkerInstance.environment_id == self.environment.id
-                        )
-                    )
-                    if env_row is not None:
-                        desired = await build_desired_spec(db, env_row, self.settings)
-                        evaluated = evaluate_worker_readiness(desired, env_row, instance)
-            except Exception:
-                evaluated = None
-
-        if success:
-            state = MaintenanceState.SUCCEEDED.value
-            stage = "completed"
-            error_code = None
-            env_status = EnvironmentStatus.AVAILABLE
-        else:
-            state = MaintenanceState.FAILED.value
-            stage = "failed"
-            error_code = "maintenance_failed"
-            raw_status = (
-                ((evaluated or {}).get("runtime_health") or {}).get("status")
-                if isinstance(evaluated, dict)
-                else None
-            )
-            env_status = (
-                EnvironmentStatus(raw_status)
-                if raw_status in {item.value for item in EnvironmentStatus}
-                else EnvironmentStatus.UNAVAILABLE
-            )
-
-        installer_opencode = (
-            self.installer_meta.get("opencode")
-            if isinstance(self.installer_meta.get("opencode"), dict)
-            else {}
-        )
-        installer_worker = (
-            self.installer_meta.get("worker_agent")
-            if isinstance(self.installer_meta.get("worker_agent"), dict)
-            else {}
-        )
-        installer_repository = (
-            self.installer_meta.get("repository")
-            if isinstance(self.installer_meta.get("repository"), dict)
-            and self.installer_meta.get("repository")
-            else None
-        )
+            return success
         after = {
             "checks": self.steps,
-            "message": redact_text(error, self.secrets),
-            "probe_status": env_status.value,
-            "readiness": (evaluated or {}).get("readiness"),
-            "opencode_version": installer_opencode.get("version")
-            or ((evaluated or {}).get("opencode") or {}).get("version"),
-            "worker_agent_version": installer_worker.get("version") or WORKER_AGENT_VERSION,
-            "model_name": self.target_model,
-            "repository": installer_repository or (evaluated or {}).get("repository"),
+            "message": self.redact(error),
+            "readiness": (self.verified_evaluation or {}).get("readiness"),
             "changed": self.installer_meta.get("changed") or {},
-            "equipment": ((evaluated or {}).get("runtime_health") or {}).get("equipment") or [],
         }
-        values: dict = {
-            "status": env_status,
-            "last_checked_at": now,
-        }
-        if success:
-            if self.target_model:
-                values["model_name"] = self.target_model
-            if self.target_binary:
-                values["opencode_path"] = self.target_binary
-
-        applied = await self.lease.finish(
-            state,
-            stage=stage,
-            error_code=error_code,
-            error_message=redact_text(error, self.secrets) if error else None,
-            after_snapshot=redact_data(after, self.secrets),
-            environment_id=self.environment.id,
-            environment_values=values,
-            event_message="远程环境部署完成" if success else "远程环境部署失败",
+        return await self.lease.finish(
+            "SUCCEEDED" if success else "FAILED",
+            stage="completed" if success else ("stop_unconfirmed" if self.stop_unconfirmed else "failed"),
+            error_code=None if success else "maintenance_failed",
+            error_message=self.redact(error) if error else None,
+            after_snapshot=after,
+            event_message="部署完成" if success else "部署失败，请确认远端进程已停止后释放维护占用",
         )
-        if not applied:
-            return False
-
-        key_to_revoke = None
-        if success and self.new_key_id:
-            key_to_revoke = self.old_key_id
-        elif not success and self.new_key_id and not self.key_applied:
-            key_to_revoke = self.new_key_id
-        if key_to_revoke:
-            runtime = RedisRuntimeStore(self.settings.redis_url)
-            try:
-                async with SessionLocal() as db:
-                    await self._gateway_service(db, runtime).revoke_key(
-                        key_to_revoke, actor="employee-deployment", actor_role="admin"
-                    )
-            finally:
-                await runtime.close()
-        return True
 
     async def run(self, emit):
         from app.runtime.maintenance import (
@@ -1366,7 +1184,9 @@ printf STILL_LISTENING
                 self._direct_endpoints()
                 await self.step(emit, "SSH 连接与执行检查", "running")
                 self.ssh = await self.runtime.open_session(self.environment)
+                await self._load_local_runtime(allocate=False)
                 await prepare_python(self, emit)
+                await self._load_local_runtime()
                 await self._native_idle(strict=True)
                 await self.step(emit, "SSH 连接与执行检查", "passed")
                 if self.lease is not None:
@@ -1384,7 +1204,7 @@ printf STILL_LISTENING
             skip_finish = True
             raise
         except TimeoutError:
-            error = "部署超时；远端锁已释放，可直接重试一键部署"
+            error = "部署超时；请确认远端部署进程已停止后释放维护占用"
         except Exception as exc:
             error = self.redact(exc)
         finally:

@@ -10,7 +10,7 @@ from sqlalchemy import select
 from app.config.settings import get_settings
 from app.database import SessionLocal
 from app.executors.errors import OpenCodeServerUnavailable
-from app.models import WorkerInstance
+from app.models import AgentWorker
 from app.worker_gateway.protocol import WorkerGatewayError
 from app.worker_gateway.service import get_gateway
 
@@ -38,8 +38,8 @@ def command_result(frame: dict[str, Any]) -> dict[str, Any]:
 
 
 class WorkerCommandTransport:
-    def __init__(self, *, environment_id: int, gateway=None, timeout_seconds: float = 60):
-        self.environment_id = environment_id
+    def __init__(self, *, agent_worker_id: str, gateway=None, timeout_seconds: float = 60):
+        self.agent_worker_id = agent_worker_id
         self.gateway = gateway or get_gateway()
         self._timeout_seconds = timeout_seconds
         self.settings = get_settings()
@@ -56,11 +56,11 @@ class WorkerCommandTransport:
         try:
             _worker, _epoch, delivered, failed = await self._dispatch(request_id, name, data, session_id)
         except WorkerGatewayError as exc:
-            raise RuntimeError(str(exc)) from exc
+            raise WorkerCommandError(exc.code, str(exc)) from exc
         if failed:
-            raise RuntimeError(failed)
+            raise WorkerCommandError(failed)
         if not delivered:
-            raise RuntimeError("Worker 没有接收这条指令")
+            raise WorkerCommandError("not_delivered", "Worker 没有接收这条指令")
         frame = await self.gateway.bus.wait_response(request_id, self._timeout_seconds)
         if frame is None:
             raise TimeoutError("Worker 未在时限内返回指令结果")
@@ -73,7 +73,7 @@ class WorkerCommandTransport:
             instance = await self._instance(session)
             result = await self.gateway.dispatch(
                 session,
-                worker_instance_id=instance.id,
+                agent_worker_id=instance.id,
                 request_id=request_id,
                 name=name,
                 payload=payload,
@@ -90,10 +90,8 @@ class WorkerCommandTransport:
             instance = await self._instance(session)
             return instance.id, instance.epoch
 
-    async def _instance(self, session) -> WorkerInstance:
-        instance = await session.scalar(
-            select(WorkerInstance).where(WorkerInstance.environment_id == self.environment_id)
-        )
-        if instance is None or instance.status != "online":
+    async def _instance(self, session) -> AgentWorker:
+        instance = await session.scalar(select(AgentWorker).where(AgentWorker.id == self.agent_worker_id))
+        if instance is None or instance.status not in {"IDLE", "WORKING", "PAUSED"}:
             raise OpenCodeServerUnavailable("Worker 不在线")
         return instance

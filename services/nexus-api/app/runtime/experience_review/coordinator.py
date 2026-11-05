@@ -82,7 +82,7 @@ async def enqueue_in_transaction(
         task_id=task.id,
         task_id_snapshot=task.id,
         root_session_id=str(snapshot["root_session_id"]),
-        employee_id_snapshot=task.employee_id,
+        agent_worker_id_snapshot=task.agent_worker_id,
         turn_anchor_id=snapshot.get("turn_anchor_id"),
         confirmed_at=datetime.fromisoformat(str(snapshot["confirmed_at"])),
         source_snapshot=snapshot,
@@ -237,9 +237,7 @@ async def _next_segment(session: AsyncSession, job_id: str) -> ExperienceReviewS
     )
 
 
-async def _advance(
-    session: AsyncSession, job_id: str, token: str | None, **values: Any
-) -> bool:
+async def _advance(session: AsyncSession, job_id: str, token: str | None, **values: Any) -> bool:
     """按作业 ID + 本次 claim token + 活动状态做条件更新。
 
     起始阶段推进（COLLECTING/ANALYZING）和终态写入都必须先确认仍有权写：
@@ -269,8 +267,7 @@ async def _lease_holds(session: AsyncSession, job_id: str, token: str | None) ->
         session,
         job_id,
         token,
-        lease_until=_now()
-        + timedelta(seconds=get_settings().experience_review_lease_seconds),
+        lease_until=_now() + timedelta(seconds=get_settings().experience_review_lease_seconds),
     )
 
 
@@ -408,18 +405,14 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
             try:
                 if job.phase in {PENDING, COLLECTING}:
                     # claim 与这次推进之间可能已被新轮次作废：先 CAS 再提交。
-                    if not await _advance(
-                        session, job_id, token, status=COLLECTING, phase=COLLECTING
-                    ):
+                    if not await _advance(session, job_id, token, status=COLLECTING, phase=COLLECTING):
                         return await _abandoned(session, job)
                     await session.commit()
                     trace = await read_trace(job.source_snapshot)
                     if not await _lease_holds(session, job.id, token):
                         return await _abandoned(session, job)
                     if not trace.events:
-                        return await _finish(
-                            session, job.id, token, NO_FINDINGS, zero_reason="empty_trace"
-                        )
+                        return await _finish(session, job.id, token, NO_FINDINGS, zero_reason="empty_trace")
                     await _create_segments(session, job, trace)
                     job.phase = "MAP"
                     job.status = ANALYZING
@@ -441,9 +434,7 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
                         await session.commit()
                         return await _current_job(session, job_id)
                     segment.lease_token = uuid4().hex
-                    segment.lease_until = _now() + timedelta(
-                        seconds=settings.experience_review_lease_seconds
-                    )
+                    segment.lease_until = _now() + timedelta(seconds=settings.experience_review_lease_seconds)
                     await session.commit()
                     trace = await read_trace(job.source_snapshot)
                     mapped = await analyze_segment(
@@ -513,17 +504,13 @@ async def process_job(job_id: str, *, llm: ReviewLLMClient | None = None) -> Exp
                         return await _abandoned(session, job)
                     job.status = WRITING
                     job.phase = WRITING
-                    ids = await write_candidates(
-                        session, job=job, trace=trace, candidates=accepted
-                    )
+                    ids = await write_candidates(session, job=job, trace=trace, candidates=accepted)
                     return await _finish(session, job.id, token, SUCCEEDED, candidate_ids=ids)
 
                 return await _finish(session, job.id, token, FAILED, zero_reason="unknown_phase")
             except TraceTooLarge as exc:
                 await session.rollback()
-                return await _finish(
-                    session, job_id, token, SKIPPED_TOO_LARGE, zero_reason=str(exc)[:64]
-                )
+                return await _finish(session, job_id, token, SKIPPED_TOO_LARGE, zero_reason=str(exc)[:64])
             except TraceUnavailable as exc:
                 await session.rollback()
                 return await _fail_or_retry(session, job_id, token, "source_unavailable", str(exc))

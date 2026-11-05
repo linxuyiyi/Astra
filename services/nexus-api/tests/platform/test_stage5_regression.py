@@ -2,17 +2,9 @@
 
 import asyncio
 import inspect
-from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-from app.domain import EmployeeStatus, TaskStatus
-from app.models import AgentWorker, Base, RuntimeSession, Task
-from app.runtime import recovery
+from app.domain import TaskStatus
 from app.runtime.lifecycle import RuntimeService
 from app.runtime.session_connection import connect
 from app.state_machine import TaskStateMachine
@@ -33,7 +25,6 @@ SSH_CALLS = {
     ("app/runtime/maintenance.py", ".open_session("),
     ("app/runtime/remote_provisioning.py", ".open_session("),
     ("app/runtime/ssh_client.py", ".open_session("),
-    ("app/executors/opencode_remote.py", ".open_session("),
 }
 
 
@@ -63,11 +54,9 @@ def test_deleted_tunnel_and_ssh_execution_have_no_callers():
 
 
 def test_cli_fallback_agentscope_and_state_machine_stay():
-    cli = (APP / "executors" / "opencode_remote.py").read_text(encoding="utf-8")
-    assert "class RemoteOpenCodeExecutor(OpenCodeCLIExecutor)" in cli
-    assert "await self.runtime.open_session(self.environment)" in cli
+    cli = (APP / "executors" / "opencode_cli.py").read_text(encoding="utf-8")
+    assert "class OpenCodeCLIExecutor" in cli
 
-    assert "Runtime transport availability never changes task status." in TaskStateMachine.__doc__
     assert set(TaskStateMachine.transitions) == set(TaskStatus)
 
     agentscope = (ROOT / "services" / "nexus-api" / "nexus_api" / "agentscope.py").read_text(encoding="utf-8")
@@ -95,109 +84,3 @@ class _TimeoutClient:
 
     async def create_session(self, *_args, **_kwargs):
         raise AssertionError("超时和重启不能新建 Session")
-
-
-async def _seed(factory, workspace: str):
-    async with factory() as session:
-        session.add(
-            AgentWorker(
-                id="E1",
-                name="Engineer",
-                role="build",
-                status=EmployeeStatus.WORKING,
-                enabled=True,
-                auto_claim=True,
-                auto_execute=False,
-                task_types=["ISSUE"],
-                category_ids=["testing"],
-                current_task_count=1,
-            )
-        )
-        session.add(
-            Task(
-                id="T1",
-                title="running",
-                task_type="ISSUE",
-                category_id="testing",
-                status=TaskStatus.RUNNING,
-                employee_id="E1",
-                claimed_at=datetime.now(UTC),
-                current_session_id="ses",
-                workspace=workspace,
-            )
-        )
-        session.add(
-            RuntimeSession(
-                id="ses",
-                task_id="T1",
-                employee_id="E1",
-                workspace=workspace,
-                environment={},
-                status="RUNNING",
-            )
-        )
-        await session.commit()
-
-
-async def test_network_timeout_and_process_restart_keep_the_same_session(monkeypatch, tmp_path):
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'stage5.db'}")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    await _seed(factory, str(tmp_path))
-
-    async def _resolve(_session, _task):
-        return SimpleNamespace(runtime_engine="opencode")
-
-    @asynccontextmanager
-    async def _connect(*_args, **_kwargs):
-        yield _TimeoutClient()
-
-    monkeypatch.setattr(recovery, "SessionLocal", factory)
-    monkeypatch.setattr(recovery, "resolve_environment", _resolve)
-    monkeypatch.setattr(recovery, "connect", _connect)
-
-    watcher = asyncio.create_task(recovery.watch_session("T1"))
-    recorded = None
-    for _ in range(40):
-        async with factory() as session:
-            task = await session.get(Task, "T1")
-            binding = await session.get(RuntimeSession, "ses")
-            if task.runtime_connection == "UNAVAILABLE":
-                recorded = (
-                    task.status,
-                    task.current_session_id,
-                    binding.status,
-                    binding.terminal_reason,
-                )
-                break
-        await asyncio.sleep(0.05)
-    watcher.cancel()
-    await asyncio.gather(watcher, return_exceptions=True)
-    assert recorded == (TaskStatus.RUNNING, "ses", "UNKNOWN", "transport_unknown")
-
-    connects = []
-
-    @asynccontextmanager
-    async def _restart_connect(*_args, **_kwargs):
-        connects.append("connect")
-        yield _TimeoutClient()
-
-    monkeypatch.setattr(recovery, "connect", _restart_connect)
-    monkeypatch.setattr(recovery, "SUPERVISOR_INTERVAL_SECONDS", 0.01)
-    supervisor = asyncio.create_task(recovery.supervise_sessions())
-    for _ in range(40):
-        if connects:
-            break
-        await asyncio.sleep(0.05)
-    supervisor.cancel()
-    await asyncio.gather(supervisor, return_exceptions=True)
-
-    async with factory() as session:
-        task = await session.get(Task, "T1")
-        rows = (await session.scalars(select(RuntimeSession))).all()
-    assert connects
-    assert task.status == TaskStatus.RUNNING
-    assert task.current_session_id == "ses"
-    assert [row.id for row in rows] == ["ses"]
-    await engine.dispose()

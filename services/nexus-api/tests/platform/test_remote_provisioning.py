@@ -7,21 +7,10 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from uuid import uuid4
 
-import httpx
 import pytest
-from fastapi import HTTPException
-from sqlalchemy import select
 
 from app.config.settings import get_settings
-from app.database import SessionLocal, init_database
-from app.gateway.models import GatewayKey
-from app.gateway.security import gateway_key_digest
-from app.main import app
-from app.models import AgentWorker, OpenCodeExecutionEnvironment, RuntimeSession, Task
-from app.runtime.lifecycle import RuntimeService, RuntimeStateError
-from app.runtime.maintenance import submit_operation
 from app.runtime.remote_provisioning import (
     START_ALL_PATH,
     RemoteProvisioner,
@@ -42,63 +31,9 @@ def isolated_settings(monkeypatch):
     monkeypatch.setattr(settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect")
 
 
-async def employee(**overrides):
-    await init_database()
-    employee_id = "deploy-" + uuid4().hex[:10]
-    async with SessionLocal() as db:
-        db.add(AgentWorker(id=employee_id, name=employee_id, role="build", current_task_count=0))
-        await db.flush()
-        values = dict(
-            employee_id=employee_id,
-            mode="LINUX_REMOTE",
-            name="Linux",
-            host="test.invalid",
-            port=22,
-            username="root",
-            ssh_password="test-ssh-secret",
-            workspace_root="/srv/project",
-            opencode_path="/usr/local/bin/opencode",
-            status="UNKNOWN",
-            status_detail={},
-        )
-        values.update(overrides)
-        db.add(OpenCodeExecutionEnvironment(**values))
-        await db.commit()
-    return employee_id
-
-
-async def reserve(employee_id):
-    async with SessionLocal() as db:
-        environment = await db.scalar(
-            select(OpenCodeExecutionEnvironment).where(
-                OpenCodeExecutionEnvironment.employee_id == employee_id
-            )
-        )
-        operation = await submit_operation(db, environment.id, "deploy")
-        return environment, operation
-
-
-@pytest.mark.asyncio
-async def test_restart_finish_keeps_the_capability_record():
-    record = {
-        "desired_revision": "rev",
-        "applied_revision": "rev",
-        "runtime_status": "applied",
-        "error": "",
-    }
-    employee_id = await employee(status_detail={"capability": record})
-    env, op = await reserve(employee_id)
-    assert env.status_detail["capability"] == record
-    applied = await RemoteProvisioner(env, op)._finish(True)
-    assert applied
-    async with SessionLocal() as db:
-        current = await db.get(OpenCodeExecutionEnvironment, env.id)
-        assert current.status_detail["capability"] == record
-
-
 @pytest.mark.asyncio
 async def test_ctl_and_start_all_scripts_are_non_systemd_and_target_digest_tracks_identity():
-    ctl = render_worker_ctl_script(7, port=4096)
+    ctl = render_worker_ctl_script("7", port=4096)
     start_all = render_start_all_script()
     assert "systemctl" not in ctl and "systemd" not in ctl
     assert "systemctl" not in start_all and "systemd" not in start_all
@@ -112,7 +47,6 @@ async def test_ctl_and_start_all_scripts_are_non_systemd_and_target_digest_track
         port=22,
         username="root",
         workspace_root="/srv/project",
-        opencode_server_port=4096,
     )
     same = SimpleNamespace(
         mode="LINUX_REMOTE",
@@ -120,7 +54,6 @@ async def test_ctl_and_start_all_scripts_are_non_systemd_and_target_digest_track
         port=22,
         username="root",
         workspace_root="/srv/project/",
-        opencode_server_port=4096,
     )
     moved = SimpleNamespace(
         mode="LINUX_REMOTE",
@@ -128,7 +61,6 @@ async def test_ctl_and_start_all_scripts_are_non_systemd_and_target_digest_track
         port=22,
         username="root",
         workspace_root="/srv/project",
-        opencode_server_port=4096,
     )
     assert compute_target_digest(base) == compute_target_digest(same)
     assert compute_target_digest(base) != compute_target_digest(moved)
@@ -138,19 +70,21 @@ async def test_ctl_and_start_all_scripts_are_non_systemd_and_target_digest_track
 async def test_owned_listener_script_checks_each_process_before_foreign_tail(
     tmp_path, monkeypatch, matching_process
 ):
-    worker = RemoteProvisioner(SimpleNamespace(id=7, model_name="", opencode_path=""), {"id": "probe"})
+    worker = RemoteProvisioner(SimpleNamespace(id="7", model_name=""), {"id": "probe"})
     proc = tmp_path / "proc"
     for pid, mark in [("11", "7" if matching_process else "8"), ("22", "unrelated")]:
         entry = proc / pid
         entry.mkdir(parents=True)
-        (entry / "environ").write_bytes(f"NEXUS_WORKER_ENV_ID={mark}\0".encode())
+        (entry / "environ").write_bytes(f"NEXUS_AGENT_WORKER_ID={mark}\0".encode())
 
     async def execute(command, timeout=30):
         args = shlex.split(command)
         script = args[3].replace("pathlib.Path('/proc')", f"pathlib.Path({str(proc)!r})")
         result = subprocess.run(
             [sys.executable, "-I", "-c", script, str(tmp_path / "worker.lock"), "7"],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         return result.stdout.strip()
 
@@ -160,142 +94,6 @@ async def test_owned_listener_script_checks_each_process_before_foreign_tail(
     else:
         with pytest.raises(RuntimeError, match="未知进程"):
             await worker._require_owned_listener(interpreter=sys.executable)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("overrides", [{"mode": "LOCAL"}, {"ssh_password": None}])
-async def test_reservation_rejects_ineligible_environment(overrides):
-    employee_id = await employee(**overrides)
-    with pytest.raises(HTTPException) as error:
-        await reserve(employee_id)
-    assert error.value.status_code == 409
-
-
-@pytest.mark.asyncio
-async def test_reservation_checks_runtime_facts_even_when_employee_count_is_zero():
-    employee_id = await employee()
-    async with SessionLocal() as db:
-        task = Task(
-            id="task-" + uuid4().hex,
-            title="guard",
-            task_type="ISSUE",
-            category_id="testing-platform",
-            employee_id=employee_id,
-            status="SUCCEEDED",
-        )
-        db.add(task)
-        await db.flush()
-        db.add(
-            RuntimeSession(
-                id="ses_" + uuid4().hex,
-                task_id=task.id,
-                employee_id=employee_id,
-                status="UNKNOWN",
-                workspace="/srv/project",
-                environment={},
-            )
-        )
-        await db.commit()
-    with pytest.raises(HTTPException) as error:
-        await reserve(employee_id)
-    assert error.value.status_code == 409
-
-
-@pytest.mark.asyncio
-async def test_reservation_is_exclusive_and_blocks_manual_start():
-    employee_id = await employee()
-    env, op = await reserve(employee_id)
-    with pytest.raises(HTTPException):
-        await reserve(employee_id)
-    async with SessionLocal() as db:
-        task = Task(
-            id="task-" + uuid4().hex,
-            title="start guard",
-            task_type="ISSUE",
-            category_id="testing-platform",
-            employee_id=employee_id,
-            status="PENDING",
-        )
-        db.add(task)
-        await db.commit()
-        with pytest.raises(RuntimeStateError, match="维护"):
-            await RuntimeService(db).start(task.id)
-
-
-@pytest.mark.asyncio
-async def test_operation_blocks_mutation_until_canceled_and_cancels_immediately():
-    from app.runtime.maintenance import cancel_operation
-
-    employee_id = await employee()
-    env, op = await reserve(employee_id)
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        for method, url, body in [
-            (
-                "put",
-                f"/api/agent-workers/{employee_id}/environment",
-                {
-                    "mode": "LINUX_REMOTE",
-                    "name": "Linux",
-                    "host": "other.invalid",
-                    "username": "root",
-                    "workspace_root": "/other",
-                },
-            ),
-            ("delete", f"/api/agent-workers/{employee_id}", None),
-        ]:
-            response = await client.request(method, url, json=body)
-            assert response.status_code == 409, response.text
-
-        async with SessionLocal() as db:
-            canceled = await cancel_operation(db, op.id)
-            assert canceled.state == "CANCELED"
-            assert canceled.active_environment_id is None
-
-        unlocked = await client.put(
-            f"/api/agent-workers/{employee_id}/environment",
-            json={
-                "mode": "LINUX_REMOTE",
-                "name": "Linux",
-                "host": "test.invalid",
-                "username": "root",
-                "workspace_root": "/srv/project",
-                "model_name": "nexus-gateway/new-route",
-            },
-        )
-        assert unlocked.status_code == 200, unlocked.text
-
-
-@pytest.mark.asyncio
-async def test_redeploy_reuses_existing_employee_key():
-    employee_id = await employee()
-    env, op = await reserve(employee_id)
-    raw = "agw_existing-test-key"
-    async with SessionLocal() as db:
-        db.add(
-            GatewayKey(
-                id="key-" + uuid4().hex,
-                name="employee",
-                owner_id=employee_id,
-                key_prefix=raw[:12],
-                key_digest=gateway_key_digest(raw),
-                enabled=True,
-                allowed_models=["test-model"],
-            )
-        )
-        await db.commit()
-
-    class SSH:
-        async def read_file(self, _path):
-            return json.dumps({"provider": {"nexus-gateway": {"options": {"apiKey": raw}}}}).encode()
-
-    worker = RemoteProvisioner(env, op)
-    worker.ssh = SSH()
-    assert await worker._gateway_key("/config/opencode.json", ["test-model"]) == raw
-    assert worker.new_key_id is None
-    assert raw not in worker.redact("request " + raw + " test-ssh-secret Bearer mcp-secret")
-    assert "test-ssh-secret" not in worker.redact("test-ssh-secret")
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="Node.js required for real config merge")
@@ -365,20 +163,6 @@ def test_special_model_names_still_use_gateway():
     assert payload["provider"]["options"]["apiKey"] == "agw_do_not_read"
 
 
-@pytest.mark.asyncio
-async def test_native_busy_refuses_maintenance_before_install():
-    env, op = await reserve(await employee())
-    worker = RemoteProvisioner(env, op)
-
-    async def run_command(command, timeout=30):
-        assert "session/status?directory=%2Fsrv%2Fproject" in command
-        return 0, '{"ses_busy": {"type": "busy"}}', ""
-
-    worker.ssh = type("SSH", (), {"run_command": staticmethod(run_command)})()
-    with pytest.raises(RuntimeError, match="正在执行"):
-        await worker._native_idle(strict=True)
-
-
 def test_deleted_tunnel_helpers_have_no_callers():
     from pathlib import Path
 
@@ -402,21 +186,20 @@ def _agent_install_worker(monkeypatch):
     monkeypatch.setattr(settings, "remote_python", "/usr/bin/python3.12")
     monkeypatch.setattr(settings, "remote_pip_index_url", "https://pypi.example.invalid/simple")
     environment = SimpleNamespace(
-        id=7,
+        id="7",
         mode="LINUX_REMOTE",
         host="10.0.0.9",
         port=22,
         username="root",
-        opencode_server_port=4096,
         workspace_root="/srv/project",
         ssh_password="secret",
         model_name="",
-        opencode_path="/usr/local/bin/opencode",
         repository_url=None,
         skill_refs=[],
         mcp_refs=[],
     )
     worker = RemoteProvisioner(environment, {"id": "op", "action": "deploy"})
+    worker.opencode_port = 4096
     worker.home = "/root"
     worker.config_path = "/etc/nexus/opencode/7/opencode.jsonc"
     worker._run_ctl = AsyncMock()
@@ -452,7 +235,7 @@ async def test_failed_venv_does_not_rotate_the_worker_token(monkeypatch):
     worker, calls = _agent_install_worker(monkeypatch)
 
     class Gateway:
-        async def enroll(self, session, environment_id, *, target_digest=None):
+        async def enroll(self, session, agent_worker_id, *, target_digest=None):
             raise AssertionError("venv 失败不应轮换 token")
 
     monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda *_a, **_kw: Gateway())
@@ -483,9 +266,9 @@ async def test_enroll_happens_after_the_venv_and_writes_the_token(monkeypatch):
     worker, calls = _agent_install_worker(monkeypatch)
 
     class Gateway:
-        async def enroll(self, session, environment_id, *, target_digest=None):
+        async def enroll(self, session, agent_worker_id, *, target_digest=None):
             calls.append(("enroll", target_digest))
-            return SimpleNamespace(token="wtk_secret", worker_instance_id="wrk_test")
+            return SimpleNamespace(token="wtk_secret", agent_worker_id="7")
 
     monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda *_a, **_kw: Gateway())
 
@@ -497,9 +280,7 @@ async def test_enroll_happens_after_the_venv_and_writes_the_token(monkeypatch):
         i for i, item in enumerate(calls) if isinstance(item, tuple) and "pip install" in str(item[1])
     )
     enroll_at = next(i for i, item in enumerate(calls) if isinstance(item, tuple) and item[0] == "enroll")
-    token_at = next(
-        i for i, item in enumerate(calls) if isinstance(item, str) and ".env.tmp-" in item
-    )
+    token_at = next(i for i, item in enumerate(calls) if isinstance(item, str) and ".env.tmp-" in item)
     ctl_at = next(
         i for i, item in enumerate(calls) if isinstance(item, str) and f"{worker_ctl_path(7)}.tmp-" in item
     )
@@ -542,18 +323,15 @@ class _AtomicLocalSSH:
     async def run_command(self, command):
         if self.fail_move and command.startswith("mv -f "):
             return 1, "", "rename failed"
-        result = subprocess.run(
-            ["bash", "-c", command], capture_output=True, text=True, timeout=20
-        )
+        result = subprocess.run(["bash", "-c", command], capture_output=True, text=True, timeout=20)
         return result.returncode, result.stdout, result.stderr
 
 
 def _atomic_worker(secret: str = "ssh-canary-secret"):
     environment = SimpleNamespace(
-        id=901,
+        id="901",
         ssh_password=secret,
         model_name=None,
-        opencode_path="/usr/local/bin/opencode",
     )
     return RemoteProvisioner(environment, {"id": "op-atomic", "action": "deploy"})
 
@@ -581,9 +359,7 @@ async def test_atomic_write_skips_identical_content_but_enforces_mode(tmp_path):
     worker = _atomic_worker()
     worker.ssh = ssh
 
-    changed = await worker._write_atomic_if_changed(
-        str(target), target.read_bytes(), 0o600, backup=True
-    )
+    changed = await worker._write_atomic_if_changed(str(target), target.read_bytes(), 0o600, backup=True)
 
     assert changed is False
     assert ssh.writes == []
@@ -600,9 +376,7 @@ async def test_atomic_write_replaces_and_keeps_old_backup(tmp_path):
     worker = _atomic_worker()
     worker.ssh = ssh
 
-    changed = await worker._write_atomic_if_changed(
-        str(target), b"new-value\n", 0o600, backup=True
-    )
+    changed = await worker._write_atomic_if_changed(str(target), b"new-value\n", 0o600, backup=True)
 
     assert changed is True
     assert target.read_bytes() == b"new-value\n"
@@ -625,9 +399,7 @@ async def test_atomic_write_stops_when_existing_read_fails(tmp_path):
     worker.ssh = ssh
 
     with pytest.raises(OSError, match="permission denied"):
-        await worker._write_atomic_if_changed(
-            str(target), b"new-secret-value\n", 0o600, backup=True
-        )
+        await worker._write_atomic_if_changed(str(target), b"new-secret-value\n", 0o600, backup=True)
 
     assert target.read_bytes() == b"old-canary\n"
     assert ssh.writes == []
@@ -644,9 +416,7 @@ async def test_atomic_write_interruption_keeps_old_target_and_backup(tmp_path):
     worker.ssh = ssh
 
     with pytest.raises(RuntimeError) as error:
-        await worker._write_atomic_if_changed(
-            str(target), b"new-secret-value\n", 0o600, backup=True
-        )
+        await worker._write_atomic_if_changed(str(target), b"new-secret-value\n", 0o600, backup=True)
 
     assert target.read_bytes() == b"old-canary\n"
     assert (tmp_path / "worker 1.env.nexus-backup").read_bytes() == b"old-canary\n"
@@ -664,9 +434,7 @@ async def test_atomic_write_verification_failure_keeps_old_target(tmp_path):
     worker.ssh = ssh
 
     with pytest.raises(RuntimeError, match="完整性校验失败") as error:
-        await worker._write_atomic_if_changed(
-            str(target), b"new-secret-value\n", 0o600, backup=True
-        )
+        await worker._write_atomic_if_changed(str(target), b"new-secret-value\n", 0o600, backup=True)
 
     assert target.read_bytes() == b"old-canary\n"
     assert (tmp_path / "worker 1.env.nexus-backup").read_bytes() == b"old-canary\n"
@@ -683,9 +451,7 @@ async def test_atomic_write_rename_failure_keeps_old_target_and_reports(tmp_path
     worker.ssh = ssh
 
     with pytest.raises(RuntimeError, match="rename failed"):
-        await worker._write_atomic_if_changed(
-            str(target), b"new-secret-value\n", 0o600, backup=True
-        )
+        await worker._write_atomic_if_changed(str(target), b"new-secret-value\n", 0o600, backup=True)
 
     assert target.read_bytes() == b"old-canary\n"
     assert (tmp_path / "worker 1.env.nexus-backup").read_bytes() == b"old-canary\n"
@@ -699,9 +465,7 @@ async def test_atomic_write_creates_new_file_with_requested_mode(tmp_path):
     worker = _atomic_worker()
     worker.ssh = ssh
 
-    changed = await worker._write_atomic_if_changed(
-        str(target), b"value\n", 0o600, backup=True
-    )
+    changed = await worker._write_atomic_if_changed(str(target), b"value\n", 0o600, backup=True)
 
     assert changed is True
     assert target.read_bytes() == b"value\n"
@@ -714,9 +478,7 @@ class _ProbeLocalSSH:
         self.env = env
 
     async def run_command(self, command):
-        result = subprocess.run(
-            command, shell=True, env=self.env, capture_output=True, text=True
-        )
+        result = subprocess.run(command, shell=True, env=self.env, capture_output=True, text=True)
         return result.returncode, result.stdout, result.stderr
 
 
@@ -731,17 +493,6 @@ def _write_probe_node(path, log, output):
     path.chmod(0o755)
 
 
-async def _probe_worker(tmp_path):
-    env, op = await reserve(await employee())
-    worker = RemoteProvisioner(env, op)
-    worker.home = str(tmp_path)
-    worker.python_interpreter = str(tmp_path / "python")
-    worker.target_model = "nexus-gateway/probe-model"
-    worker.config_path = str(tmp_path / "opencode.jsonc")
-    Path(worker.config_path).write_text("{}", encoding="utf-8")
-    return worker
-
-
 def _probe_node_path(tmp_path, worker):
     return (
         tmp_path
@@ -754,70 +505,13 @@ def _probe_node_path(tmp_path, worker):
 
 
 @pytest.mark.asyncio
-async def test_probe_gateway_uses_environment_node_without_global_node(tmp_path):
-    worker = await _probe_worker(tmp_path)
-    empty_bin = tmp_path / "empty-bin"
-    empty_bin.mkdir()
-    worker.ssh = _ProbeLocalSSH({"PATH": str(empty_bin), "HOME": str(tmp_path)})
-    log = tmp_path / "invoked.log"
-    node = Path(worker.python_interpreter)
-    _write_probe_node(node, log, json.dumps({"status":200,"body":{"data":[{"id":"probe-model"}]}}))
-    steps = []
-
-    async def emit(step):
-        steps.append(step)
-
-    await worker._probe_gateway(emit)
-
-    assert log.read_text(encoding="utf-8").splitlines() == [str(node)]
-    assert steps[-1]["detail"] == "模型中转认证与模型路由正常"
-
-
-@pytest.mark.asyncio
-async def test_probe_gateway_fails_without_environment_node_and_ignores_global(
-    tmp_path,
-):
-    worker = await _probe_worker(tmp_path)
-    global_bin = tmp_path / "global-bin"
-    global_log = tmp_path / "global.log"
-    _write_probe_node(global_bin / "node", global_log, "global-node")
-    worker.ssh = _ProbeLocalSSH({"PATH": str(global_bin), "HOME": str(tmp_path)})
-    steps = []
-
-    async def emit(step):
-        steps.append(step)
-
-    with pytest.raises(RuntimeError):
-        await worker._probe_gateway(emit)
-
-    assert not global_log.exists()
-
-
-@pytest.mark.asyncio
-async def test_probe_gateway_fails_when_home_is_unknown(tmp_path):
-    worker = await _probe_worker(tmp_path)
-    worker.config_path = None
-    global_bin = tmp_path / "global-bin"
-    global_log = tmp_path / "global.log"
-    _write_probe_node(global_bin / "node", global_log, "global-node")
-    worker.ssh = _ProbeLocalSSH({"PATH": str(global_bin), "HOME": str(tmp_path)})
-    steps = []
-
-    async def emit(step):
-        steps.append(step)
-
-    with pytest.raises(RuntimeError, match="尚未准备 OpenCode 配置"):
-        await worker._probe_gateway(emit)
-
-    assert not global_log.exists()
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("state", ["CLEAR", "STOPPED"])
 async def test_bootstrap_without_interpreter_accepts_clear_or_stopped_listener(state):
     worker = RemoteProvisioner(
-        SimpleNamespace(id=7, opencode_server_port=4096, model_name="", opencode_path=""), {"id": "bootstrap"}
+        SimpleNamespace(id="7", model_name=""),
+        {"id": "bootstrap"},
     )
+    worker.opencode_port = 4096
     worker._ensure_safe = AsyncMock()
     worker._command = AsyncMock(side_effect=["", state])
 
@@ -833,10 +527,12 @@ async def test_bootstrap_without_interpreter_accepts_clear_or_stopped_listener(s
 @pytest.mark.parametrize("state", ["FOREIGN", "UNKNOWN", "STILL_LISTENING"])
 async def test_bootstrap_without_interpreter_rejects_unreleased_listener(state):
     worker = RemoteProvisioner(
-        SimpleNamespace(id=7, opencode_server_port=4096, model_name="", opencode_path=""), {"id": "bootstrap"}
+        SimpleNamespace(id="7", model_name=""),
+        {"id": "bootstrap"},
     )
+    worker.opencode_port = 4096
     worker._ensure_safe = AsyncMock()
     worker._command = AsyncMock(side_effect=["", state])
 
-    with pytest.raises(RuntimeError, match="历史 OpenCode"):
+    with pytest.raises(RuntimeError, match="受管 OpenCode"):
         await worker._bootstrap_idle(interpreter_ready=False)

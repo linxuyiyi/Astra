@@ -1,34 +1,6 @@
-export interface PlatformTask {
-  id: string;
-  title: string;
-  status: string;
-  task_type: string;
-  category_id: string | null;
-  employee_id: string | null;
-  worker_id: string | null;
-  responsible_employee_id: string | null;
-  source_session_id: string | null;
-  source_channel_id: string | null;
-  current_progress: string;
-  runtime_status_label?: string;
-  human_intervention: { reason?: string } | null;
-}
-
-export interface PlatformWorker {
-  id: string;
-  name: string;
-  role: string;
-  status: string;
-  enabled: boolean;
-  current_task_count: number;
-  execution_environment: {
-    name: string;
-    mode: string;
-    status: string;
-    model_name: string | null;
-    host: string | null;
-  } | null;
-}
+import type { Task,Worker } from './api/types'
+export type PlatformTask = Task
+export type PlatformWorker = Worker
 
 async function read<T>(response: Response): Promise<T> {
   if (!response.ok) {

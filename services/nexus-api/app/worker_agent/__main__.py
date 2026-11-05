@@ -83,7 +83,7 @@ async def _main(argv: list[str] | None = None) -> int:
             return 0
 
     try:
-        cleanup_orphan_opencode(config.environment_id)
+        cleanup_orphan_opencode(config.agent_worker_id)
         if config.workspace_root:
             sweep_partials(config.workspace_root)
 
@@ -94,7 +94,7 @@ async def _main(argv: list[str] | None = None) -> int:
             opencode_bin=opencode_bin or "opencode",
             port=_opencode_port(config.opencode_url),
             workspace_root=config.workspace_root,
-            environment_id=config.environment_id,
+            agent_worker_id=config.agent_worker_id,
             environ=dict(os.environ),
         )
         manager = WorkerConnectionManager(config, supervisor=supervisor)

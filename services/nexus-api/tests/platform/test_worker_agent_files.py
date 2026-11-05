@@ -303,8 +303,7 @@ class _Hold(ScriptedTransport):
 def _file_command(name: str, request_id: str, workspace: str) -> dict:
     message = envelope(
         request_id=request_id,
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         session_id=None,
         message_type="command",
         payload={"name": name, "data": {"workspace": workspace, "path": "."}},

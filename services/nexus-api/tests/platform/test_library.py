@@ -2,16 +2,11 @@ import asyncio
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
 
 from app.database import SessionLocal
-from app.library_schemas import (
-    LibrarySubmitExperienceInput,
-)
-from app.library_service import KnowledgeService
 from app.main import app
 from app.mcp_server import mcp
-from app.models import KnowledgeAudit, KnowledgeItem
+from app.models import KnowledgeItem
 
 
 def unique(prefix: str) -> str:
@@ -194,108 +189,6 @@ def test_library_stats_visible_total_tracks_scope_statuses_and_unassigned_candid
             headers=viewer_headers,
         ).json()
         assert viewer_list["total"] == 0
-
-
-def test_candidate_experience_mcp_flow_preserves_provenance_and_review_audit():
-    employee_id = unique("employee-library")
-    with TestClient(app) as client:
-        employee = client.post(
-            "/api/agent-workers",
-            json={
-                "id": employee_id,
-                "name": "测试知识员工",
-                "execution_environment": {"name": "知识验证 Worker 01"},
-                "role": "知识验证员工",
-                "category_ids": ["testing-platform"],
-                "auto_claim": False,
-                "auto_execute": False,
-            },
-        )
-        assert employee.status_code == 201
-        task = client.post(
-            "/api/tasks",
-            json={
-                "task_type": "ISSUE",
-                "category_id": "testing-platform",
-                "title": unique("候选经验来源任务"),
-                "description": "验证数字员工提交候选经验",
-                "acceptance_criteria": [{"content": "候选经验可审核发布"}],
-                "priority": "MEDIUM",
-                "completion_policy": "AUTO",
-                "employee_id": employee_id,
-            },
-        )
-        assert task.status_code == 201
-        task_id = task.json()["id"]
-
-        async def run_flow():
-            async with SessionLocal() as session:
-                candidate = await KnowledgeService(session).mcp_submit_experience(
-                    LibrarySubmitExperienceInput(
-                        title=unique("并发任务调度超时处理经验"),
-                        summary="并发调度超时后降低批量并验证重试",
-                        content_md=(
-                            "## 问题现象\n\n调度返回 `SCHED_TIMEOUT`。\n\n## 处理步骤\n\n降低并发后重试。"
-                        ),
-                        source_employee_id=employee_id,
-                        source_task_id=task_id,
-                        evidence=[
-                            {
-                                "evidence_type": "observation",
-                                "content": "处理后 PASS",
-                                "result": "PASS",
-                            }
-                        ],
-                        tags=["SCHED_TIMEOUT", "并发调度"],
-                        experience_data={
-                            "before_status": "FAILED",
-                            "after_status": "PASS",
-                            "verification_count": 2,
-                            "verification_passed": True,
-                            "original_error": "scheduler timeout",
-                            "handling": "降低并发批量并重试",
-                        },
-                    )
-                )
-                return candidate
-
-        candidate = asyncio.run(run_flow())
-        assert candidate.status == "candidate"
-        assert candidate.type == "experience"
-        assert candidate.source_employee_id == employee_id
-        assert candidate.source_employee_name == "知识验证 Worker 01"
-        assert candidate.evidence[0].result == "PASS"
-
-        candidate_stats = client.get(
-            "/api/library/stats",
-            headers={"X-Astra-User-Id": "reviewer-2", "X-Astra-Role": "reviewer"},
-        ).json()
-        assert candidate_stats["candidate_experiences"] >= 1
-        candidate_rows = client.get(
-            "/api/library/knowledge",
-            params={"type": "experience", "status": "candidate"},
-            headers={"X-Astra-User-Id": "reviewer-2", "X-Astra-Role": "reviewer"},
-        ).json()
-        assert any(item["id"] == candidate.id for item in candidate_rows["items"])
-
-        space_id = client.get("/api/library/spaces").json()[1]["id"]
-        published = client.post(
-            f"/api/library/knowledge/{candidate.id}/publish",
-            json={"space_id": space_id, "verification_status": "verified"},
-            headers={"X-Astra-User-Id": "reviewer-2", "X-Astra-Role": "reviewer"},
-        )
-        assert published.status_code == 200
-
-        async def audit_state():
-            async with SessionLocal() as session:
-                audits = await session.scalar(select(func.count(KnowledgeAudit.id)).where(
-                    KnowledgeAudit.knowledge_id == candidate.id))
-                item = await session.get(KnowledgeItem, candidate.id)
-                return audits, item
-
-        audit_count, stored = asyncio.run(audit_state())
-        assert audit_count >= 2
-        assert stored.status == "published"
 
 
 def test_employee_mcp_exposes_read_and_feedback_without_experience_submission():

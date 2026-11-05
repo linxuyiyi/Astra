@@ -583,7 +583,7 @@ export class NebulaRenderer {
     const counts = galaxy.employee.counts;
     const summary = `${galaxy.workerIds.length} Worker · ${counts.running} 执行 · ${counts.queued} 排队${
       counts.waiting ? ` · ${counts.waiting} 待人工` : ""
-    }${counts.failed ? ` · ${counts.failed} 异常` : ""}`;
+    }`;
     this.drawLabel(
       context,
       galaxy.employee.name,
@@ -599,7 +599,7 @@ export class NebulaRenderer {
         summary,
         point.x,
         point.y + radius + 39,
-        counts.waiting || counts.failed ? "#ffcfac" : "#8ed4b7",
+        counts.waiting ? "#ffcfac" : "#8ed4b7",
         10,
         selected,
       );
@@ -617,15 +617,6 @@ export class NebulaRenderer {
         10,
         true,
       );
-    }
-    if (counts.failed > 0) {
-      context.fillStyle = STATUS_COLOR.failed;
-      context.shadowColor = STATUS_COLOR.failed;
-      context.shadowBlur = 8;
-      context.beginPath();
-      context.arc(point.x + radius + 8, point.y - radius - 4, 3.2, 0, Math.PI * 2);
-      context.fill();
-      context.shadowBlur = 0;
     }
     context.restore();
     this.hits.push({

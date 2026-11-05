@@ -101,8 +101,8 @@ export const useNebulaStore = defineStore("nebula", () => {
   function flashCompleted(workerId: string | null | undefined): void {
     if (!workerId) return;
     const worker = snapshot.value?.workers.find((item) => item.id === workerId);
-    if (!worker?.digitalEmployeeId) return;
-    flashes[worker.digitalEmployeeId] = Date.now() + FLASH_MS;
+    if (!worker?.originEmployeeId) return;
+    flashes[worker.originEmployeeId] = Date.now() + FLASH_MS;
   }
 
   function handleEvent(payload: { type?: string; employee_id?: string | null }): void {

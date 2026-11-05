@@ -3,13 +3,12 @@
 export type InteractionStatus = "available" | "unavailable" | "unknown";
 export type WorkerHealth = "online" | "offline" | "error" | "unknown";
 export type WorkerOccupancy = "idle" | "running" | "waiting" | "unknown";
-export type NebulaTaskStatus = "PENDING" | "RUNNING" | "WAITING" | "SUCCEEDED" | "FAILED" | "CANCELED";
+export type NebulaTaskStatus = "PENDING" | "RUNNING" | "WAITING" | "SUCCEEDED" | "CANCELED";
 
 export interface NebulaCounts {
   running: number;
   queued: number;
   waiting: number;
-  failed: number;
   completedToday: number;
 }
 
@@ -28,10 +27,8 @@ export interface NebulaEmployee {
 
 export interface NebulaWorker {
   id: string;
-  digitalEmployeeId: string | null;
-  workerInstanceId: string | null;
+  originEmployeeId: string | null;
   name: string;
-  role: string;
   capabilityLabels: string[];
   environmentMode: string | null;
   environmentName: string | null;
@@ -50,21 +47,17 @@ export interface NebulaTask {
   status: NebulaTaskStatus;
   priority: string;
   taskType: string;
-  responsibleEmployeeId: string | null;
+  originEmployeeId: string | null;
   workerId: string | null;
   workerName: string | null;
   ownerId: string | null;
   ownerName: string | null;
   currentProgress: string;
   waitingReason: string;
-  failureReason: string;
-  runtimeConnection: string;
   currentSessionId: string | null;
-  sessionStatus: string | null;
+  source: string;
+  externalTaskId: string | null;
   pendingMessageId: string | null;
-  sourceConversationId: string | null;
-  sourceChannelId: string | null;
-  inactivityAlert: boolean;
   conflict: boolean;
   conflictCodes: string[];
   createdAt: string;
@@ -73,7 +66,7 @@ export interface NebulaTask {
 }
 
 export interface NebulaExecutionEdge {
-  digitalEmployeeId: string;
+  originEmployeeId: string;
   workerId: string;
   running: number;
   waiting: number;
@@ -108,7 +101,6 @@ export interface NebulaTotals {
   tasksRunning: number;
   tasksQueued: number;
   tasksWaiting: number;
-  tasksFailed: number;
   completedToday: number;
 }
 

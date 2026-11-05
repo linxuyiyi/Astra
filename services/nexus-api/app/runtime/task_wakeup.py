@@ -33,8 +33,9 @@ class HttpWakeSender:
                     f"{settings.nexus_api_base.rstrip('/')}/api/v1/internal/wake-target",
                     headers=internal_headers(),
                     params={
-                        "employee_id": row.responsible_employee_id,
-                        "session_id": row.source_session_id or "",
+                        "employee_id": row.origin_employee_id,
+                        "source": row.source,
+                        "external_task_id": row.external_task_id or "",
                     },
                 )
             except httpx.HTTPError as exc:

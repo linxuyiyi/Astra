@@ -216,7 +216,6 @@ class KnowledgeDetail(KnowledgeListItem):
     source_session_id: str | None = None
     experience_type: str | None = None
     verified_at: datetime | None = None
-    verification_session_status: str | None = None
     experience_data: dict[str, Any]
     review_note: str | None
     created_by: str

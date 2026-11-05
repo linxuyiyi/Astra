@@ -29,34 +29,32 @@ def test_config_environment_is_preserved_without_worker_credentials():
             "NEXUS_WORKER_GATEWAY_URL": "https://worker.test",
             "SSL_CERT_FILE": "/etc/ca.pem",
         },
-        env_id=71,
+        env_id="71",
     )
     assert result["OPENCODE_CONFIG"] == "/etc/nexus/opencode.jsonc"
     assert result["OPENCODE_CONFIG_DIR"] == "/etc/nexus"
     assert result["SSL_CERT_FILE"] == "/etc/ca.pem"
-    assert result["NEXUS_WORKER_ENV_ID"] == "71"
+    assert result["NEXUS_AGENT_WORKER_ID"] == "71"
     assert "NEXUS_WORKER_TOKEN" not in result
     assert "NEXUS_WORKER_GATEWAY_URL" not in result
 
 
 def _provisioner(monkeypatch):
     environment = SimpleNamespace(
-        id=71,
-        employee_id="worker-container",
+        id="71",
         mode="LINUX_REMOTE",
         host="10.0.0.8",
         port=22,
         username="root",
         ssh_password="ssh-canary",
-        opencode_server_port=14096,
         workspace_root="/srv/container workspace",
         model_name="nexus-gateway/test",
-        opencode_path="/managed/bin/opencode",
         repository_url=None,
         skill_refs=[],
         mcp_refs=[],
     )
     worker = RemoteProvisioner(environment, {"id": "maintenance", "action": "deploy"})
+    worker.opencode_port = 14096
     worker.home = "/root"
     worker.config_path = "/etc/nexus/opencode/71/opencode.jsonc"
     worker.target_binary = "/managed/bin/opencode"
@@ -88,14 +86,19 @@ def _provisioner(monkeypatch):
     monkeypatch.setattr(worker, "_native_idle", AsyncMock(return_value=True))
     monkeypatch.setattr(
         worker,
-        "_existing_worker_credentials",
-        AsyncMock(return_value=("worker-token-canary", "worker-instance")),
+        "_enroll_worker",
+        AsyncMock(
+            side_effect=[
+                SimpleNamespace(token="worker-token-canary", agent_worker_id="71"),
+                SimpleNamespace(token="worker-token-next", agent_worker_id="71"),
+            ]
+        ),
     )
     return worker, commands, files
 
 
 @pytest.mark.asyncio
-async def test_install_writes_ctl_and_start_all_without_systemd_and_reuses_token(monkeypatch):
+async def test_install_writes_ctl_and_start_all_without_systemd_and_rotates_token(monkeypatch):
     worker, commands, files = _provisioner(monkeypatch)
     await worker._install_worker(AsyncMock())
 
@@ -119,9 +122,8 @@ async def test_install_writes_ctl_and_start_all_without_systemd_and_reuses_token
 
     commands.clear()
     await worker._install_worker(AsyncMock())
-    assert any(f"{ctl_file}" in cmd and "start" in cmd for cmd in commands)
-    assert not any("restart" in cmd for cmd in commands)
-    assert worker._existing_worker_credentials.await_count == 2
+    assert any(f"{ctl_file}" in cmd and "restart" in cmd for cmd in commands)
+    assert worker._enroll_worker.await_count == 2
 
 
 def test_health_reports_supervisor_managed_by(monkeypatch):

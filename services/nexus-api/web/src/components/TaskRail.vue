@@ -39,7 +39,7 @@ const active = computed(() => props.tasks.filter((task) => !isHistory(task)).sli
 const history = computed(() => props.tasks.filter((task) => isHistory(task)).slice().sort((a, b) => a.title.localeCompare(b.title, 'zh')))
 
 function isHistory(task: PlatformTask) {
-  return task.status === 'SUCCEEDED' || task.status === 'CANCELED' || (task.status === 'FAILED' && !task.human_intervention)
+  return task.status === 'SUCCEEDED' || task.status === 'CANCELED'
 }
 
 function byRank(a: PlatformTask, b: PlatformTask) {
@@ -48,26 +48,22 @@ function byRank(a: PlatformTask, b: PlatformTask) {
 
 function rank(task: PlatformTask) {
   if (task.status === 'RUNNING') return 0
-  if (task.human_intervention || task.status === 'WAITING') return 1
+  if (task.status === 'WAITING') return 1
   if (task.status === 'PENDING') return 2
-  if (task.status === 'FAILED') return 3
   return 4
 }
 
 function statusText(task: PlatformTask) {
-  return runtimeStatusLabel(task.status, task.runtime_status_label)
+  return runtimeStatusLabel(task.status)
 }
 
 function tone(task: PlatformTask) {
   if (task.status === 'RUNNING') return 'go'
-  if (task.status === 'FAILED' || task.human_intervention) return 'stop'
   if (task.status === 'PENDING' || task.status === 'WAITING') return 'wait'
   return 'done'
 }
 
 function line(task: PlatformTask) {
-  const pending = task.human_intervention?.reason?.trim()
-  if (pending) return pending
   const progress = task.current_progress?.trim()
   if (!progress || progress === statusText(task)) return ''
   return progress
@@ -79,8 +75,8 @@ function lookup(id: string | null) {
 }
 
 function who(task: PlatformTask) {
-  const worker = lookup(task.worker_id || task.employee_id)
-  const owner = props.hideResponsible ? '' : lookup(task.responsible_employee_id)
+  const worker = lookup(task.agent_worker_id)
+  const owner = props.hideResponsible ? '' : lookup(task.origin_employee_id)
   if (owner && worker && owner !== worker) return `${worker} 执行 · 问 ${owner}`
   if (worker) return `${worker} 执行`
   if (owner) return `问 ${owner}`

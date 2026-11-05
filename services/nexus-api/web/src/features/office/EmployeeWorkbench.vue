@@ -62,12 +62,12 @@
             type="button"
             :class="{
               warning:
-                data.employee.counts.waiting + data.employee.counts.failed > 0,
+                data.employee.counts.waiting > 0,
             }"
             @click="jumpInbox"
           >
             <strong>{{
-              data.employee.counts.waiting + data.employee.counts.failed
+              data.employee.counts.waiting
             }}</strong
             ><span>待关注 <ArrowUpRight :size="10" /></span>
           </button>

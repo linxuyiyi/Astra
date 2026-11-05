@@ -48,32 +48,28 @@ def build_mcp_server() -> MCPServer:
         description: str,
         acceptance_criteria: list[str] | None = None,
         priority: str = "MEDIUM",
-        worker_id: str | None = None,
-        idempotency_key: str | None = None,
-        source_session_id: str | None = None,
-        source_conversation_id: str | None = None,
-        source_channel_id: str | None = None,
+        agent_worker_id: str | None = None,
+        source: Literal["opencode", "private_chat", "group_chat"] = "opencode",
+        external_task_id: str | None = None,
     ) -> dict[str, Any]:
         """为 employee_id 指定的数字员工创建工程任务，只检查员工是否存在。
 
-        source_* 为可选的通知回传信息，不用于权限判断。提供来源会话时，相同内容不会重复创建。
+        source 和 external_task_id 指向来源会话或群聊；同一来源允许创建多个任务。
 
         同一工作的补充指令应查询原任务并使用 nexus_task_input，不要重新创建。
         """
         return await _call(
             "create",
-            responsible_employee_id=employee_id,
+            origin_employee_id=employee_id,
             task_type=task_type,
             category_id=category_id,
             title=title,
             description=description,
             acceptance_criteria=acceptance_criteria,
             priority=priority,
-            worker_id=worker_id,
-            idempotency_key=idempotency_key,
-            source_session_id=source_session_id,
-            source_conversation_id=source_conversation_id,
-            source_channel_id=source_channel_id,
+            agent_worker_id=agent_worker_id,
+            source=source,
+            external_task_id=external_task_id,
         )
 
     @server.tool(name="nexus_task_categories", structured_output=True)
@@ -91,7 +87,7 @@ def build_mcp_server() -> MCPServer:
         employee_id: str | None = None, status: str | None = None, limit: int = 20
     ) -> dict[str, Any]:
         """列出任务，可按责任员工 ID 和状态筛选。"""
-        return await _call("list", responsible_employee_id=employee_id, status=status, limit=limit)
+        return await _call("list", origin_employee_id=employee_id, status=status, limit=limit)
 
     @server.tool(name="nexus_task_update", structured_output=True)
     async def nexus_task_update(
@@ -110,9 +106,9 @@ def build_mcp_server() -> MCPServer:
         )
 
     @server.tool(name="nexus_task_assign", structured_output=True)
-    async def nexus_task_assign(task_id: str, worker_id: str) -> dict[str, Any]:
+    async def nexus_task_assign(task_id: str, agent_worker_id: str) -> dict[str, Any]:
         """把待领取任务指定给一个 Agent Worker。"""
-        return await _call("assign", task_id=task_id, worker_id=worker_id)
+        return await _call("assign", task_id=task_id, agent_worker_id=agent_worker_id)
 
     @server.tool(name="nexus_task_start", structured_output=True)
     async def nexus_task_start(task_id: str) -> dict[str, Any]:

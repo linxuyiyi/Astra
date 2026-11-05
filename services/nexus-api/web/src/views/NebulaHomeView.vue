@@ -220,7 +220,7 @@ function selectWorker(id: string): void {
   const worker = store.workerById.get(id);
   if (!worker) return;
   selectedWorkerId.value = id;
-  if (worker.digitalEmployeeId) selectedEmployeeId.value = worker.digitalEmployeeId;
+  if (worker.originEmployeeId) selectedEmployeeId.value = worker.originEmployeeId;
   selectedTaskId.value = null;
   selectedCollaborationKey.value = null;
   selectedExecutionKey.value = null;

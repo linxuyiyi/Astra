@@ -1,9 +1,7 @@
-"""Worker 期望配置与实时运行观测的单一就绪判定事实源。
+"""Worker 配置与当前 epoch 观测的就绪展示和部署检查。
 
-设计边界：
-1. ``OpenCodeExecutionEnvironment`` 只存管理员维护的期望配置（Desired）。
-2. ``WorkerInstance`` 只存网关心跳与当前连接代数（epoch）下的实时观测（Observed）。
-3. ``evaluate_worker_readiness`` 是无副作用纯函数，统一驱动列表展示、详情健康度与任务调度门禁。
+期望配置来自 AgentWorker，观测仅缓存于 Gateway 总线，均不保存独立环境状态。
+任务调度只取 Worker 状态、enabled 和 Task/维护占用。
 """
 
 from __future__ import annotations
@@ -11,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,8 +23,7 @@ from app.config.settings import Settings, get_settings
 from app.domain import EnvironmentStatus, ExecutionMode, MaintenanceState, WorkerReadiness
 from app.gateway.models import GatewayRoute
 from app.models import (
-    OpenCodeExecutionEnvironment,
-    WorkerInstance,
+    AgentWorker,
     WorkerMaintenanceOperation,
 )
 from app.runtime.opencode_model import route_model_id
@@ -52,20 +49,19 @@ class ReadinessLookupContext:
     skill_bodies: dict[str, str] = field(default_factory=dict)
 
 
-def compute_target_digest(environment: OpenCodeExecutionEnvironment) -> str:
+def compute_target_digest(environment: AgentWorker) -> str:
     """计算目标主机与服务绑定指纹。展示字段与模型/Skill/MCP 变更不影响该指纹。"""
 
     mode = str(environment.mode or ExecutionMode.LOCAL.value).strip().upper()
     workspace = str(environment.workspace_root or "").strip().rstrip("/")
-    port = int(environment.opencode_server_port or 0)
     if mode == ExecutionMode.LOCAL.value:
         normalized = Path(workspace or ".").as_posix().rstrip("/")
-        raw = f"LOCAL|{normalized}|{port}"
+        raw = f"LOCAL|{normalized}"
     else:
         host = str(environment.host or "").strip().lower()
         ssh_port = int(environment.port or 22)
         username = str(environment.username or "").strip()
-        raw = f"LINUX_REMOTE|{host}|{ssh_port}|{username}|{workspace}|{port}"
+        raw = f"LINUX_REMOTE|{host}|{ssh_port}|{username}|{workspace}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -112,7 +108,7 @@ def mcp_endpoints_revision(items: Iterable[dict[str, Any]]) -> str:
 
 async def load_readiness_context(
     session: AsyncSession,
-    environments: Iterable[OpenCodeExecutionEnvironment],
+    environments: Iterable[AgentWorker],
     settings: Settings | None = None,
 ) -> ReadinessLookupContext:
     resolved = settings or get_settings()
@@ -128,19 +124,12 @@ async def load_readiness_context(
         ).all()
     ]
     skill_names = sorted(
-        {
-            str(name).strip()
-            for env in env_list
-            for name in (env.skill_refs or [])
-            if str(name).strip()
-        }
+        {str(name).strip() for env in env_list for name in (env.skill_refs or []) if str(name).strip()}
     )
     skill_bodies: dict[str, str] = {}
     if skill_names:
         source_dir = Path(resolved.workspace_root) / "worker-skills"
-        skill_bodies = {
-            item["name"]: item["body"] for item in collect_skill_files(skill_names, source_dir)
-        }
+        skill_bodies = {item["name"]: item["body"] for item in collect_skill_files(skill_names, source_dir)}
 
     return ReadinessLookupContext(
         ordered_chat_routes=ordered_routes,
@@ -150,7 +139,7 @@ async def load_readiness_context(
 
 
 def build_desired_spec_from_context(
-    environment: OpenCodeExecutionEnvironment,
+    environment: AgentWorker,
     context: ReadinessLookupContext,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
@@ -164,15 +153,13 @@ def build_desired_spec_from_context(
         "skills": _desired_skills(environment, context),
         "mcp": _desired_mcp(environment, resolved),
     }
-    payload["revision"] = _revision(
-        {key: value for key, value in payload.items() if key != "target_digest"}
-    )
+    payload["revision"] = _revision(payload)
     return payload
 
 
 async def build_desired_spec(
     session: AsyncSession,
-    environment: OpenCodeExecutionEnvironment,
+    environment: AgentWorker,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
     resolved = settings or get_settings()
@@ -180,278 +167,57 @@ async def build_desired_spec(
     return build_desired_spec_from_context(environment, context, resolved)
 
 
-async def scheduling_block(
-    session: AsyncSession,
-    environment: OpenCodeExecutionEnvironment | None,
-    settings: Settings | None = None,
-) -> str | None:
-    """返回首个不可调度阻断原因；可调度时返回 None。与列表/详情共享同一判定函数。"""
-
-    if environment is None:
-        return "员工尚未配置运行环境"
-    from app.models import AgentWorker
-
-    employee = (
-        await session.get(AgentWorker, environment.employee_id)
-        if environment.employee_id
-        else None
-    )
-    if employee is None or not employee.enabled:
-        return "员工已停用调度"
-    active_op = None
-    instance = None
-    if environment.id is not None:
-        active_op = await session.scalar(
-            select(WorkerMaintenanceOperation).where(
-                WorkerMaintenanceOperation.environment_id == environment.id,
-                WorkerMaintenanceOperation.state.in_(tuple(ACTIVE_MAINTENANCE_STATES)),
-            )
-        )
-        instance = await session.scalar(
-            select(WorkerInstance).where(WorkerInstance.environment_id == environment.id)
-        )
-    desired = await build_desired_spec(session, environment, settings)
-    evaluated = evaluate_worker_readiness(
-        desired,
-        environment,
-        instance,
-        employee_enabled=bool(employee.enabled),
-        latest_operation=active_op,
-    )
-    blockers = evaluated.get("blocking") or []
-    return str(blockers[0]["message"]) if blockers else None
-
-
 def evaluate_worker_readiness(
-    desired: dict[str, Any],
-    environment: OpenCodeExecutionEnvironment,
-    worker_instance: WorkerInstance | None = None,
+    desired,
+    worker,
     *,
-    employee_enabled: bool = True,
-    occupying_task_ids: Sequence[str] = (),
-    active_session_ids: Sequence[str] = (),
-    latest_operation: WorkerMaintenanceOperation | None = None,
-) -> dict[str, Any]:
-    """纯函数：根据期望配置与当前连接/观测快照计算唯一就绪状态与阻断原因。"""
-
-    is_local = str(environment.mode) == ExecutionMode.LOCAL.value
-    want_digest = _text(desired.get("target_digest")) or compute_target_digest(environment)
-    blockers: list[dict[str, Any]] = []
-
-    if not employee_enabled:
-        blockers.append({"code": "disabled", "message": "员工已停用调度"})
-
-    if latest_operation is not None and latest_operation.state in ACTIVE_MAINTENANCE_STATES:
-        blockers.append({"code": "maintenance_active", "message": "环境正在执行维护操作"})
-
-    if is_local:
-        return _evaluate_local_readiness(
-            desired=desired,
-            environment=environment,
-            want_digest=want_digest,
-            employee_enabled=employee_enabled,
-            occupying_task_ids=occupying_task_ids,
-            active_session_ids=active_session_ids,
-            latest_operation=latest_operation,
-            base_blockers=blockers,
-        )
-
-    online = worker_instance is not None and worker_instance.status == "online"
-    target_matched = bool(
-        worker_instance is not None
-        and _text(worker_instance.target_digest)
-        and _text(worker_instance.target_digest) == want_digest
-    )
-    snapshot = (
-        worker_instance.observed_snapshot
-        if (
-            worker_instance is not None
-            and target_matched
-            and isinstance(worker_instance.observed_snapshot, dict)
-        )
-        else None
-    )
-    observation = _normalize_snapshot(snapshot, worker_instance) if snapshot is not None else None
-    rows = build_equipment_rows(desired, observation)
-    repo_summary = build_repository_summary(desired, observation)
-    opencode_last_error = _extract_opencode_last_error(observation)
-
-    if worker_instance is None:
-        readiness = WorkerReadiness.UNKNOWN.value
-        blockers.append({"code": "worker_not_enrolled", "message": "远程环境尚未完成一键部署"})
-    elif not target_matched:
-        readiness = WorkerReadiness.DRIFTED.value
-        blockers.append(
-            {
-                "code": "target_changed",
-                "message": "目标服务器或路径已变更，请重新执行一键部署",
-            }
-        )
-    elif not online:
-        readiness = (
-            WorkerReadiness.DEGRADED.value
-            if observation is not None
-            else WorkerReadiness.UNKNOWN.value
-        )
-        blockers.append({"code": "worker_offline", "message": "Worker 通道离线"})
-    elif observation is None:
-        readiness = WorkerReadiness.UNKNOWN.value
-        blockers.append({"code": "snapshot_missing", "message": "等待节点上报运行快照"})
+    observation=None,
+    occupying_task_ids=(),
+    latest_operation=None,
+):
+    online = worker.status in {"IDLE", "WORKING", "PAUSED"}
+    normalized = _normalize_snapshot(observation, worker) if observation else None
+    rows = build_equipment_rows(desired, normalized)
+    states = [row["state"] for row in rows if row.get("configured")]
+    blockers = []
+    if not online:
+        blockers.append({"code": "offline", "message": "Worker 通道离线"})
+    if not worker.enabled or worker.status == "PAUSED":
+        blockers.append({"code": "disabled", "message": "Worker 已暂停调度"})
+    if latest_operation and latest_operation.active_worker_id:
+        blockers.append({"code": "maintenance_active", "message": "Worker 正在维护"})
+    if occupying_task_ids:
+        blockers.append({"code": "occupied_task", "message": "Worker 有未释放任务"})
+    if not observation:
+        readiness = "UNKNOWN"
+    elif any(state == "degraded" for state in states):
+        readiness = "DEGRADED"
+    elif observation.get("spec_revision") != desired["revision"] or "drifted" in states:
+        readiness = "DRIFTED"
+    elif "unknown" in states:
+        readiness = "UNKNOWN"
     else:
-        row_states = [str(row.get("state") or "unknown") for row in rows if row.get("configured")]
-        if observation.get("error") or any(state == "degraded" for state in row_states):
-            readiness = WorkerReadiness.DEGRADED.value
-            degraded_labels = [
-                str(row.get("label") or row.get("key"))
-                for row in rows
-                if row.get("configured") and row.get("state") == "degraded"
-            ]
-            detail = f"运行异常：{'、'.join(degraded_labels)}" if degraded_labels else str(
-                observation.get("error") or "节点运行自检异常"
-            )
-            if opencode_last_error and "OpenCode" in degraded_labels:
-                first_line = opencode_last_error.splitlines()[-1][:160]
-                detail = f"{detail}（{first_line}）"
-            blockers.append({"code": "runtime_degraded", "message": redact_text(detail)})
-        elif (
-            any(state == "drifted" for state in row_states)
-            or not desired.get("repository")
-            or observation.get("spec_revision") != desired.get("revision")
-        ):
-            readiness = WorkerReadiness.DRIFTED.value
-            if not desired.get("repository"):
-                blockers.append({"code": "repository_missing", "message": "尚未绑定 Git 仓库"})
-            else:
-                drifted_labels = [
-                    str(row.get("label") or row.get("key"))
-                    for row in rows
-                    if row.get("configured") and row.get("state") == "drifted"
-                ]
-                if not drifted_labels:
-                    drifted_labels = ["运行配置绑定"]
-                blockers.append(
-                    {
-                        "code": "config_drifted",
-                        "message": f"配置已变更（{'、'.join(drifted_labels)}），待执行一键部署同步",
-                    }
-                )
-        elif any(state == "unknown" for state in row_states):
-            readiness = WorkerReadiness.UNKNOWN.value
-            blockers.append({"code": "observation_incomplete", "message": "节点运行快照尚未完整核验"})
-        else:
-            readiness = WorkerReadiness.READY.value
-
-    _append_occupancy_blockers(blockers, occupying_task_ids, active_session_ids)
-    runtime_status = _runtime_status_for_readiness(readiness)
-    last_checked_at = (
-        _iso(worker_instance.observed_at)
-        if (worker_instance is not None and worker_instance.observed_at is not None)
-        else (_text(observation.get("checked_at")) if observation is not None else None)
-    )
+        readiness = "READY"
+    if readiness != "READY":
+        blockers.append({"code": "runtime_unready", "message": "运行环境尚未就绪，请检查或部署"})
     return {
-        "environment_id": environment.id,
-        "employee_id": environment.employee_id,
-        "enabled": bool(employee_enabled),
+        "agent_worker_id": worker.id,
+        "enabled": worker.enabled,
         "readiness": readiness,
-        "target_digest": want_digest,
-        "target_matched": target_matched,
         "connection": {
             "channel": "worker",
             "state": "online" if online else "offline",
-            "last_heartbeat_at": _iso(worker_instance.last_heartbeat_at)
-            if worker_instance is not None
-            else None,
-            "observed_at": _iso(worker_instance.observed_at)
-            if worker_instance is not None
-            else None,
-            "epoch": worker_instance.epoch if worker_instance is not None else None,
+            "epoch": worker.epoch,
+            "last_heartbeat_at": _iso(worker.last_heartbeat_at),
         },
         "maintenance": _maintenance_summary(latest_operation),
         "runtime_health": {
-            "status": runtime_status,
+            "status": _runtime_status_for_readiness(readiness),
             "readiness": readiness,
-            "last_checked_at": last_checked_at,
-            "last_error": opencode_last_error,
+            "last_error": _extract_opencode_last_error(normalized),
             "equipment": rows,
         },
-        "repository": repo_summary,
-        "schedulable": len(blockers) == 0,
-        "blocking": blockers,
-    }
-
-
-def _evaluate_local_readiness(
-    *,
-    desired: dict[str, Any],
-    environment: OpenCodeExecutionEnvironment,
-    want_digest: str,
-    employee_enabled: bool,
-    occupying_task_ids: Sequence[str],
-    active_session_ids: Sequence[str],
-    latest_operation: WorkerMaintenanceOperation | None,
-    base_blockers: list[dict[str, Any]],
-) -> dict[str, Any]:
-    blockers = list(base_blockers)
-    detail = environment.status_detail if isinstance(environment.status_detail, dict) else {}
-    local_obs = detail.get("local_observation") if isinstance(detail.get("local_observation"), dict) else None
-    observation = _normalize_snapshot(local_obs, None, default_source="local") if local_obs else None
-    rows = build_equipment_rows(desired, observation)
-    repo_summary = build_repository_summary(desired, observation)
-
-    if not _text(environment.repository_url):
-        readiness = WorkerReadiness.DRIFTED.value
-        blockers.append({"code": "repository_missing", "message": "尚未绑定 Git 仓库"})
-    elif environment.status == EnvironmentStatus.UNAVAILABLE:
-        readiness = WorkerReadiness.DEGRADED.value
-        message = _text(detail.get("message")) or "本地运行环境不可用"
-        blockers.append({"code": "runtime_degraded", "message": redact_text(message)})
-    elif environment.status != EnvironmentStatus.AVAILABLE:
-        readiness = WorkerReadiness.UNKNOWN.value
-        blockers.append(
-            {
-                "code": f"runtime_{str(environment.status).lower()}",
-                "message": "本地运行环境尚未通过检查",
-            }
-        )
-    elif observation is not None:
-        row_states = [str(row.get("state") or "unknown") for row in rows if row.get("configured")]
-        if any(state == "degraded" for state in row_states):
-            readiness = WorkerReadiness.DEGRADED.value
-            blockers.append({"code": "runtime_degraded", "message": "本地运行自检异常"})
-        elif any(state == "drifted" for state in row_states):
-            readiness = WorkerReadiness.DRIFTED.value
-            blockers.append({"code": "config_drifted", "message": "本地配置已变更，待同步"})
-        else:
-            readiness = WorkerReadiness.READY.value
-    else:
-        readiness = WorkerReadiness.READY.value
-
-    _append_occupancy_blockers(blockers, occupying_task_ids, active_session_ids)
-    runtime_status = _runtime_status_for_readiness(readiness)
-    return {
-        "environment_id": environment.id,
-        "employee_id": environment.employee_id,
-        "enabled": bool(employee_enabled),
-        "readiness": readiness,
-        "target_digest": want_digest,
-        "target_matched": True,
-        "connection": {
-            "channel": "local",
-            "state": "local",
-            "last_heartbeat_at": None,
-            "observed_at": _iso(environment.last_checked_at),
-            "epoch": None,
-        },
-        "maintenance": _maintenance_summary(latest_operation),
-        "runtime_health": {
-            "status": runtime_status,
-            "readiness": readiness,
-            "last_checked_at": _iso(environment.last_checked_at),
-            "last_error": _extract_opencode_last_error(observation),
-            "equipment": rows,
-        },
-        "repository": repo_summary,
-        "schedulable": len(blockers) == 0,
+        "repository": build_repository_summary(desired, normalized),
         "blocking": blockers,
     }
 
@@ -724,11 +490,7 @@ def _mcp_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[str, 
         actual_revision=actual_rev or None,
         diff=diff,
         error=_text(section.get("error")) or None,
-        detail=(
-            "已连接：" + "、".join(required)
-            if state == "ready" and required
-            else None
-        ),
+        detail=("已连接：" + "、".join(required) if state == "ready" and required else None),
     )
 
     row["warnings"] = warnings
@@ -833,11 +595,7 @@ def _skills_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[st
         actual_revision=actual_content_revision or None,
         diff=diff,
         error=_text(section.get("error")) or None,
-        detail=(
-            "已生效：" + "、".join(managed_names)
-            if state == "ready" and managed_names
-            else None
-        ),
+        detail=("已生效：" + "、".join(managed_names) if state == "ready" and managed_names else None),
     )
 
 
@@ -890,12 +648,7 @@ def _git_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[str, 
         drift_reasons.append("仓库地址已变更，待重新部署")
     if status == HEALTHY and expected_branch and actual_branch and actual_branch != expected_branch:
         drift_reasons.append(f"分支待同步：期望 {expected_branch}，当前 {actual_branch}")
-    if (
-        status == HEALTHY
-        and want_cred_rev
-        and actual_cred_rev
-        and actual_cred_rev != want_cred_rev
-    ):
+    if status == HEALTHY and want_cred_rev and actual_cred_rev and actual_cred_rev != want_cred_rev:
         drift_reasons.append("仓库访问凭据已更新，待重新部署同步")
 
     if drift_reasons:
@@ -909,8 +662,10 @@ def _git_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[str, 
         deployed = False
         diff = [_text(section.get("error")) or "Git 工作区异常"]
     elif status == HEALTHY:
-        if not commit or (expected_url and actual_url != expected_url) or (
-            expected_branch and actual_branch != expected_branch
+        if (
+            not commit
+            or (expected_url and actual_url != expected_url)
+            or (expected_branch and actual_branch != expected_branch)
         ):
             state = "drifted"
             verified = False
@@ -949,9 +704,7 @@ def _git_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[str, 
     )
 
 
-def _desired_model(
-    environment: OpenCodeExecutionEnvironment, context: ReadinessLookupContext
-) -> dict[str, Any]:
+def _desired_model(environment: AgentWorker, context: ReadinessLookupContext) -> dict[str, Any]:
     configured = _text(environment.model_name)
     route = (
         route_model_id(configured)
@@ -974,9 +727,7 @@ def _desired_model(
     }
 
 
-def _desired_repository(
-    environment: OpenCodeExecutionEnvironment, context: ReadinessLookupContext
-) -> dict[str, Any] | None:
+def _desired_repository(environment: AgentWorker, context: ReadinessLookupContext) -> dict[str, Any] | None:
     if not _text(environment.repository_url):
         return None
     ciphertext = _text(environment.git_token_ciphertext)
@@ -989,12 +740,8 @@ def _desired_repository(
     }
 
 
-def _desired_skills(
-    environment: OpenCodeExecutionEnvironment, context: ReadinessLookupContext
-) -> dict[str, Any]:
-    names = sorted(
-        {str(name).strip() for name in (environment.skill_refs or []) if str(name).strip()}
-    )
+def _desired_skills(environment: AgentWorker, context: ReadinessLookupContext) -> dict[str, Any]:
+    names = sorted({str(name).strip() for name in (environment.skill_refs or []) if str(name).strip()})
     items = []
     for name in names:
         body = context.skill_bodies.get(name)
@@ -1020,9 +767,7 @@ def _desired_skills(
     }
 
 
-def _desired_mcp(
-    environment: OpenCodeExecutionEnvironment, settings: Settings
-) -> dict[str, Any]:
+def _desired_mcp(environment: AgentWorker, settings: Settings) -> dict[str, Any]:
     default_url = sanitize_url(getattr(settings, "mcp_resource_server_url", ""))
     urls: dict[str, str] = {DEFAULT_MCP: default_url}
     for item in environment.mcp_refs or []:
@@ -1032,10 +777,7 @@ def _desired_mcp(
         url = sanitize_url(item.get("url"))
         if name and url:
             urls[name] = url
-    items = [
-        {"name": name, "url": urls.get(name) or "", "required": True}
-        for name in sorted(urls)
-    ]
+    items = [{"name": name, "url": urls.get(name) or "", "required": True} for name in sorted(urls)]
     return {
         "items": items,
         "required": [item["name"] for item in items],
@@ -1045,14 +787,14 @@ def _desired_mcp(
 
 def _normalize_snapshot(
     snapshot: dict[str, Any] | None,
-    worker_instance: WorkerInstance | None,
+    worker: AgentWorker,
     *,
     default_source: str = "worker",
 ) -> dict[str, Any]:
     raw = snapshot if isinstance(snapshot, dict) else {}
     agent_ver = (
-        _text(worker_instance.agent_version)
-        if (worker_instance is not None and _text(worker_instance.agent_version))
+        _text(worker.agent_version)
+        if (worker is not None and _text(worker.agent_version))
         else _text(raw.get("worker_agent_version"))
     )
     normalized: dict[str, Any] = {
@@ -1078,29 +820,6 @@ def _extract_opencode_last_error(observation: dict[str, Any] | None) -> str | No
         return None
     tail = _text(opencode.get("last_error"))
     return redact_text(tail) if tail else None
-
-
-def _append_occupancy_blockers(
-    blockers: list[dict[str, Any]],
-    occupying_task_ids: Sequence[str],
-    active_session_ids: Sequence[str],
-) -> None:
-    for task_id in occupying_task_ids:
-        blockers.append(
-            {
-                "code": "occupied_task",
-                "message": "员工存在运行中或等待介入的任务",
-                "task_id": str(task_id),
-            }
-        )
-    for session_id in active_session_ids:
-        blockers.append(
-            {
-                "code": "active_session",
-                "message": "员工存在未结束的运行会话",
-                "session_id": str(session_id),
-            }
-        )
 
 
 def _maintenance_summary(operation: WorkerMaintenanceOperation | None) -> dict[str, Any] | None:

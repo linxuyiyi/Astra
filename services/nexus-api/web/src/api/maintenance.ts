@@ -50,24 +50,19 @@ export interface WorkerRepositoryHealth {
 }
 
 export interface WorkerHealth {
-  environment_id: number
-  employee_id: string
+  agent_worker_id: string
   enabled: boolean
   readiness: WorkerReadiness
-  target_digest: string
-  target_matched: boolean
   connection: {
     channel: string
     state: string
     last_heartbeat_at: string | null
-    observed_at: string | null
     epoch: number | null
   }
   runtime_health: {
     status: string
     readiness: WorkerReadiness
     last_error: string | null
-    last_checked_at: string | null
     equipment: WorkerEquipmentItem[]
   }
   maintenance: {
@@ -77,7 +72,6 @@ export interface WorkerHealth {
     attempt?: number
   } | null
   repository: WorkerRepositoryHealth | null
-  schedulable: boolean
   blocking: WorkerBlocking[]
 }
 
@@ -137,7 +131,7 @@ export interface MaintenanceEvent {
 
 export interface MaintenanceOperation {
   id: string
-  environment_id: number
+  agent_worker_id: string
   action: MaintenanceAction
   state: MaintenanceState
   stage: string
@@ -206,26 +200,26 @@ function maintenanceText(value: string): string {
   return workerFacingMessage(redactMaintenanceText(value))
 }
 
-export function getWorkerHealth(environmentId: number, signal?: AbortSignal): Promise<WorkerHealth> {
-  return request<WorkerHealth>(`/api/agent-workers/${environmentId}/health`, { signal })
+export function getWorkerHealth(agentWorkerId: string, signal?: AbortSignal): Promise<WorkerHealth> {
+  return request<WorkerHealth>(`/api/workers/${agentWorkerId}/health`, { signal })
 }
 
 export function listMaintenanceOperations(
-  environmentId: number,
+  agentWorkerId: string,
   limit = 20,
   signal?: AbortSignal,
 ): Promise<{ items: MaintenanceOperation[] }> {
   return request<{ items: MaintenanceOperation[] }>(
-    `/api/agent-workers/${environmentId}/maintenance?limit=${limit}`,
+    `/api/workers/${agentWorkerId}/maintenance?limit=${limit}`,
     { signal },
   )
 }
 
 export function submitMaintenance(
-  environmentId: number,
+  agentWorkerId: string,
   action: MaintenanceAction,
 ): Promise<MaintenanceSubmitResult> {
-  return request<MaintenanceSubmitResult>(`/api/agent-workers/${environmentId}/maintenance`, {
+  return request<MaintenanceSubmitResult>(`/api/workers/${agentWorkerId}/maintenance`, {
     method: 'POST',
     body: JSON.stringify({ action }),
   })
@@ -263,6 +257,10 @@ export function retryMaintenance(operationId: string): Promise<MaintenanceOperat
     `/api/maintenance/${encodeURIComponent(operationId)}/retry`,
     { method: 'POST' },
   )
+}
+
+export function confirmMaintenanceStopped(operationId: string): Promise<MaintenanceOperation> {
+  return request<MaintenanceOperation>(`/api/maintenance/${encodeURIComponent(operationId)}/confirm-stopped`, { method: 'POST' })
 }
 
 export interface MaintenanceEventSubscription {

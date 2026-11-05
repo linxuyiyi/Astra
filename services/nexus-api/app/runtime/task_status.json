@@ -1,8 +1,37 @@
 {
-  "PENDING": {"label": "待执行", "tone": "neutral", "group": "pending", "rank": 0, "pulse": false},
-  "RUNNING": {"label": "执行中", "tone": "info", "group": "active", "rank": 1, "pulse": true},
-  "WAITING": {"label": "等待人工或外部条件", "tone": "warning", "group": "attention", "rank": 2, "pulse": false},
-  "SUCCEEDED": {"label": "已完成", "tone": "success", "group": "finished", "rank": 3, "pulse": false},
-  "FAILED": {"label": "执行失败", "tone": "danger", "group": "attention", "rank": 4, "pulse": false},
-  "CANCELED": {"label": "已取消", "tone": "neutral", "group": "finished", "rank": 5, "pulse": false}
+  "PENDING": {
+    "label": "待执行",
+    "tone": "neutral",
+    "group": "pending",
+    "rank": 0,
+    "pulse": false
+  },
+  "RUNNING": {
+    "label": "执行中",
+    "tone": "info",
+    "group": "active",
+    "rank": 1,
+    "pulse": true
+  },
+  "WAITING": {
+    "label": "等待人工或外部条件",
+    "tone": "warning",
+    "group": "attention",
+    "rank": 2,
+    "pulse": false
+  },
+  "SUCCEEDED": {
+    "label": "已完成",
+    "tone": "success",
+    "group": "finished",
+    "rank": 3,
+    "pulse": false
+  },
+  "CANCELED": {
+    "label": "已取消",
+    "tone": "neutral",
+    "group": "finished",
+    "rank": 5,
+    "pulse": false
+  }
 }

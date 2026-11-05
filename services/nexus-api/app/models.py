@@ -11,7 +11,6 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    text,
 )
 from sqlalchemy.dialects.mysql import DATETIME, LONGTEXT
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -66,73 +65,40 @@ class TaskCategory(Base):
 
 
 class AgentWorker(RuntimeProjection, Base):
-    """Agent Worker 的执行身份；一个 Nexus 数字员工可拥有多个 Worker。
-
-    `digital_employee_id` 指向 Nexus 数字员工目录，不建外键：目录与任务库分属
-    两个服务。Worker 自己的显示名称保存在执行环境的 `name` 上。
-    """
+    """一个 Worker 对应一份环境配置及一个当前连接身份。"""
 
     __tablename__ = "t_nexus_agent_workers"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    digital_employee_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
-    role: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text, default="")
-    character_id: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    default_work_area: Mapped[str] = mapped_column(
-        String(32), default="development", server_default="development"
-    )
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
     status: Mapped[str] = mapped_column(String(32), default="OFFLINE", index=True)
     task_types: Mapped[list[str]] = mapped_column(JSON, default=lambda: ["ISSUE", "REQUIREMENT"])
     category_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    auto_claim: Mapped[bool] = mapped_column(Boolean, default=True)
-    auto_execute: Mapped[bool] = mapped_column(Boolean, default=True)
-    current_task_count: Mapped[int] = mapped_column(Integer, default=0)
-    last_heartbeat: Mapped[datetime | None] = mapped_column(UTCDateTime())
-    online_since: Mapped[datetime | None] = mapped_column(UTCDateTime())
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
-
-    tasks: Mapped[list["Task"]] = relationship(back_populates="employee")
-    execution_environment: Mapped["OpenCodeExecutionEnvironment | None"] = relationship(
-        back_populates="employee", uselist=False, cascade="all, delete-orphan"
-    )
-
-
-class OpenCodeExecutionEnvironment(Base):
-    __tablename__ = "t_nexus_opencode_execution_environments"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    employee_id: Mapped[str] = mapped_column(ForeignKey("t_nexus_agent_workers.id"), unique=True, index=True)
-    repository_url: Mapped[str | None] = mapped_column(Text, nullable=True)
-    git_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
-    runtime_engine: Mapped[str] = mapped_column(String(16), default="opencode", server_default="opencode")
-    mode: Mapped[str] = mapped_column(String(32), default="LOCAL", index=True)
-    name: Mapped[str] = mapped_column(String(120), default="本地 Agent 工作环境")
-    description: Mapped[str] = mapped_column(Text, default="")
+    runtime_engine: Mapped[str] = mapped_column(String(16), default="opencode")
+    mode: Mapped[str] = mapped_column(String(32), default="LINUX_REMOTE")
     host: Mapped[str | None] = mapped_column(String(255), nullable=True)
     port: Mapped[int] = mapped_column(Integer, default=22)
     username: Mapped[str | None] = mapped_column(String(120), nullable=True)
     ssh_password: Mapped[str | None] = mapped_column(Text, nullable=True)
-    opencode_server_port: Mapped[int] = mapped_column(Integer, default=14096)
-    opencode_path: Mapped[str] = mapped_column(Text, default="opencode")
     model_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    workspace_root: Mapped[str] = mapped_column(Text, default="./workspaces")
+    workspace_root: Mapped[str] = mapped_column(Text, default="/opt/nexus/workspace")
+    repository_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    git_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    skill_refs: Mapped[list[str]] = mapped_column(JSON, default=list, server_default=text("('[]')"))
-    mcp_refs: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, server_default=text("('[]')"))
-    status: Mapped[str] = mapped_column(String(32), default="UNKNOWN", index=True)
-    status_detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    labels: Mapped[list[str]] = mapped_column(JSON, default=list)
-    last_checked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+    skill_refs: Mapped[list[str]] = mapped_column(JSON, default=list)
+    mcp_refs: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    token_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    epoch: Mapped[int] = mapped_column(Integer, default=0)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    agent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
-    employee: Mapped[AgentWorker] = relationship(back_populates="execution_environment")
-    worker_instance: Mapped["WorkerInstance | None"] = relationship(
-        back_populates="environment", uselist=False, cascade="all, delete-orphan"
+    tasks: Mapped[list["Task"]] = relationship(back_populates="agent_worker")
+    commands: Mapped[list["WorkerCommand"]] = relationship(
+        back_populates="worker", cascade="all, delete-orphan"
     )
 
     @property
@@ -146,128 +112,46 @@ class OpenCodeExecutionEnvironment(Base):
 
 class Task(RuntimeProjection, Base):
     __tablename__ = "t_nexus_tasks"
-    __table_args__ = (
-        UniqueConstraint("source", "external_task_id", name="uq_task_source_external"),
-        Index("ix_tasks_dispatch", "status", "priority_weight", "created_at"),
-    )
+    __table_args__ = (Index("ix_tasks_dispatch", "status", "priority", "created_at"),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    source: Mapped[str] = mapped_column(String(64), default="manual")
-    external_task_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    task_type: Mapped[str] = mapped_column(String(80), index=True)
     title: Mapped[str] = mapped_column(String(240))
     description: Mapped[str] = mapped_column(Text, default="")
+    task_type: Mapped[str] = mapped_column(String(80), index=True)
     category_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    priority: Mapped[str] = mapped_column(String(16), default="MEDIUM")
     acceptance_criteria: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     attachments: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
-    priority: Mapped[str] = mapped_column(String(16), default="MEDIUM")
-    priority_weight: Mapped[int] = mapped_column(Integer, default=2)
-    completion_policy: Mapped[str] = mapped_column(String(32), default="MANUAL_CONFIRM")
-    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
-    employee_id: Mapped[str | None] = mapped_column(ForeignKey("t_nexus_agent_workers.id"), nullable=True)
-    responsible_employee_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    source_session_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    source_conversation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    source_channel_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    idempotency_key: Mapped[str | None] = mapped_column(String(160), nullable=True, unique=True)
-    workspace: Mapped[str | None] = mapped_column(Text, nullable=True)
-    related_task_id: Mapped[str | None] = mapped_column(
-        ForeignKey("t_nexus_tasks.id"), nullable=True, index=True
+    source: Mapped[str] = mapped_column(String(64), default="manual")
+    external_task_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    origin_employee_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    external_reference_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    agent_worker_id: Mapped[str | None] = mapped_column(
+        ForeignKey("t_nexus_agent_workers.id"), nullable=True, index=True
     )
-    base_commit: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    last_message_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    turn_started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    pending_message_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    pending_attempt: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    pending_prompt: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    submission_attempts: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    execution_stop_confirmed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    execution_stop_session_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    execution_stop_attempt: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    execution_stop_operator: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    execution_stop_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    runtime_connection: Mapped[str] = mapped_column(String(32), default="UNKNOWN")
-    runtime_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    current_progress: Mapped[str] = mapped_column(Text, default="等待领取")
-    human_intervention: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    suspension: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    execution_error: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    inactivity_alert: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    inactivity_alert_since: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    last_activity_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True, index=True)
-    submitted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    confirmed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    # Immutable business completion fact: set once when the Task first reaches
-    # SUCCEEDED and never cleared by a later restart.
-    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True, index=True)
     current_session_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    human_required_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    workspace: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_message_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    pending_message_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    pending_prompt: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
     waiting_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    execution_environment_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    current_progress: Mapped[str] = mapped_column(Text, default="等待领取")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
     claimed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+    last_activity_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
-    employee: Mapped[AgentWorker | None] = relationship(back_populates="tasks")
+    agent_worker: Mapped[AgentWorker | None] = relationship(back_populates="tasks")
     events: Mapped[list["Event"]] = relationship(back_populates="task", cascade="all, delete-orphan")
-
-    @property
-    def worker_id(self) -> str | None:
-        return self.employee_id
 
     @property
     def execution_released(self) -> bool:
         from app.runtime.occupancy import task_occupies
 
         return not task_occupies(self)
-
-
-class RuntimeSession(Base):
-    """Binding and result index; the selected engine owns execution details."""
-
-    __tablename__ = "t_nexus_runtime_sessions"
-    id: Mapped[str] = mapped_column(String(160), primary_key=True)
-    runtime_engine: Mapped[str] = mapped_column(String(16), default="opencode", server_default="opencode")
-    native_session_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    engine_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    fencing_token: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    task_id: Mapped[str] = mapped_column(ForeignKey("t_nexus_tasks.id"), index=True)
-    employee_id: Mapped[str] = mapped_column(ForeignKey("t_nexus_agent_workers.id"))
-    workspace: Mapped[str] = mapped_column(Text)
-    workspace_base_commit: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    environment: Mapped[dict[str, Any]] = mapped_column(JSON)
-    status: Mapped[str] = mapped_column(String(32), default="UNKNOWN", server_default="UNKNOWN", index=True)
-    terminal_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    finish_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    last_message_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    last_activity_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    model_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    cache_read_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    cache_write_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    llm_call_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    tool_call_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    native_session_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
-    execution_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    tool_usage: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
-    # Token/model consumption bucketed by the real message day and the real
-    # message model, computed when native messages are read.
-    usage_by_day: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
-    model_usage: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
-    superseded_by: Mapped[str | None] = mapped_column(
-        ForeignKey("t_nexus_runtime_sessions.id"), nullable=True, index=True
-    )
-    superseded_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    runtime_context_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
-    runtime_context_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
 class Event(Base):
@@ -293,8 +177,9 @@ class TaskWakeOutbox(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     event_id: Mapped[int] = mapped_column(ForeignKey("t_nexus_events.id", ondelete="CASCADE"), unique=True)
     task_id: Mapped[str] = mapped_column(String(64), index=True)
-    responsible_employee_id: Mapped[str] = mapped_column(String(64))
-    source_session_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    origin_employee_id: Mapped[str] = mapped_column(String(64))
+    source: Mapped[str] = mapped_column(String(64))
+    external_task_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     status: Mapped[str] = mapped_column(String(32), index=True)
     hint: Mapped[str] = mapped_column(Text)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
@@ -322,7 +207,7 @@ class ExperienceReviewJob(Base):
     )
     task_id_snapshot: Mapped[str] = mapped_column(String(64), index=True)
     root_session_id: Mapped[str] = mapped_column(String(160))
-    employee_id_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    agent_worker_id_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
     turn_anchor_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     confirmed_at: Mapped[datetime] = mapped_column(UTCDateTime())
     source_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -427,18 +312,13 @@ class KnowledgeItem(Base):
     source_task_id: Mapped[str | None] = mapped_column(
         ForeignKey("t_nexus_tasks.id"), nullable=True, index=True
     )
-    source_session_id: Mapped[str | None] = mapped_column(
-        ForeignKey("t_nexus_runtime_sessions.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    source_session_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
     origin: Mapped[str] = mapped_column(String(32), default="manual", server_default="manual")
     dedupe_key: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
     fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     experience_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     scope: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    session_status_at_submission: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    verification_session_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     verification_message_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    session_last_message_id_at_verification: Mapped[str | None] = mapped_column(String(160), nullable=True)
     verified_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     source_ref_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     experience_data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -519,9 +399,7 @@ class KnowledgeUsage(Base):
         ForeignKey("t_nexus_agent_workers.id"), nullable=True, index=True
     )
     task_id: Mapped[str | None] = mapped_column(ForeignKey("t_nexus_tasks.id"), nullable=True, index=True)
-    session_id: Mapped[str | None] = mapped_column(
-        ForeignKey("t_nexus_runtime_sessions.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    session_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
     tool_name: Mapped[str] = mapped_column(String(80), index=True)
     action: Mapped[str] = mapped_column(String(32), index=True)
     query: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -574,9 +452,7 @@ class ExperienceEvidence(Base):
         ForeignKey("t_nexus_knowledge_items.id", ondelete="CASCADE"), index=True
     )
     task_id: Mapped[str | None] = mapped_column(ForeignKey("t_nexus_tasks.id"), nullable=True, index=True)
-    source_session_id: Mapped[str | None] = mapped_column(
-        ForeignKey("t_nexus_runtime_sessions.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    source_session_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
     message_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     part_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -612,56 +488,6 @@ class KnowledgeAudit(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)
 
 
-class WorkerInstance(Base):
-    """云端 Worker Agent 的实例身份。绑定执行环境，不使用数字员工 ID。"""
-
-    __tablename__ = "t_nexus_worker_instances"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    environment_id: Mapped[int] = mapped_column(
-        ForeignKey("t_nexus_opencode_execution_environments.id", ondelete="CASCADE"), unique=True, index=True
-    )
-    token_digest: Mapped[str] = mapped_column(String(64))
-    token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(32), default="offline", index=True)
-    epoch: Mapped[int] = mapped_column(Integer, default=0)
-    agent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    target_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    observed_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    observed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    last_heartbeat_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    connected_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
-
-    environment: Mapped[OpenCodeExecutionEnvironment] = relationship(back_populates="worker_instance")
-    connections: Mapped[list["WorkerConnection"]] = relationship(
-        back_populates="worker", cascade="all, delete-orphan"
-    )
-    commands: Mapped[list["WorkerCommand"]] = relationship(
-        back_populates="worker", cascade="all, delete-orphan"
-    )
-
-
-class WorkerConnection(Base):
-    """一次 WebSocket 注册。新 epoch 使旧连接失效。"""
-
-    __tablename__ = "t_nexus_worker_connections"
-    __table_args__ = (Index("ix_worker_connections_worker_state", "worker_instance_id", "state"),)
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    worker_instance_id: Mapped[str] = mapped_column(
-        ForeignKey("t_nexus_worker_instances.id", ondelete="CASCADE"), index=True
-    )
-    epoch: Mapped[int] = mapped_column(Integer)
-    state: Mapped[str] = mapped_column(String(32), default="active", index=True)
-    close_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    opened_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
-    closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-
-    worker: Mapped[WorkerInstance] = relationship(back_populates="connections")
-
-
 class WorkerCommand(Base):
     """已持久化的控制指令。投递前先落库，旧 epoch 的结果不能覆盖新状态。"""
 
@@ -670,10 +496,9 @@ class WorkerCommand(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     request_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
-    worker_instance_id: Mapped[str] = mapped_column(
-        ForeignKey("t_nexus_worker_instances.id", ondelete="CASCADE"), index=True
+    agent_worker_id: Mapped[str] = mapped_column(
+        ForeignKey("t_nexus_agent_workers.id", ondelete="CASCADE"), index=True
     )
-    environment_id: Mapped[int] = mapped_column(Integer, index=True)
     session_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     name: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -694,7 +519,7 @@ class WorkerCommand(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
-    worker: Mapped[WorkerInstance] = relationship(back_populates="commands")
+    worker: Mapped[AgentWorker] = relationship(back_populates="commands")
 
 
 class WorkerHttpSlot(Base):
@@ -702,7 +527,7 @@ class WorkerHttpSlot(Base):
 
     __tablename__ = "t_nexus_worker_http_slots"
 
-    worker_instance_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    agent_worker_id: Mapped[str] = mapped_column(String(80), primary_key=True)
     epoch: Mapped[int] = mapped_column(Integer, primary_key=True)
     inflight: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
@@ -712,13 +537,13 @@ class WorkerMaintenanceOperation(Base):
 
     __tablename__ = "t_nexus_worker_maintenance_operations"
     __table_args__ = (
-        UniqueConstraint("active_environment_id", name="uq_worker_maintenance_active_environment"),
+        UniqueConstraint("active_worker_id", name="uq_worker_maintenance_active_worker"),
         Index("ix_worker_maintenance_state_lease", "state", "lease_until"),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    environment_id: Mapped[int] = mapped_column(
-        ForeignKey("t_nexus_opencode_execution_environments.id", ondelete="CASCADE"), index=True
+    agent_worker_id: Mapped[str] = mapped_column(
+        ForeignKey("t_nexus_agent_workers.id", ondelete="CASCADE"), index=True
     )
     action: Mapped[str] = mapped_column(String(32))
     state: Mapped[str] = mapped_column(String(32), default="QUEUED", index=True)
@@ -736,7 +561,7 @@ class WorkerMaintenanceOperation(Base):
     execution_channel: Mapped[str | None] = mapped_column(String(16), nullable=True)
     execution_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     retry_of_attempt: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    active_environment_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    active_worker_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     requested_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import SessionLocal
 from app.domain import ExecutionMode
-from app.models import WorkerInstance
+from app.models import AgentWorker
 from app.runtime.worker_client import WorkerCommandError, WorkerOpenCodeClient
 from app.worker_gateway.data_channel import DataChannel, request_key
 
@@ -38,14 +38,10 @@ class WorkerFileError(ValueError):
         super().__init__(message)
 
 
-async def environment_enrolled_in_gateway(
-    session: AsyncSession, environment_id: int | None
-) -> bool:
-    if not isinstance(environment_id, int):
+async def environment_enrolled_in_gateway(session: AsyncSession, agent_worker_id: str | None) -> bool:
+    if not isinstance(agent_worker_id, str):
         return False
-    worker_id = await session.scalar(
-        select(WorkerInstance.id).where(WorkerInstance.environment_id == environment_id)
-    )
+    worker_id = await session.scalar(select(AgentWorker.id).where(AgentWorker.id == agent_worker_id))
     return worker_id is not None
 
 
@@ -54,11 +50,11 @@ async def environment_uses_worker(environment) -> bool:
 
     if str(getattr(environment, "mode", "")) != ExecutionMode.LINUX_REMOTE.value:
         return False
-    environment_id = getattr(environment, "id", None)
-    if not isinstance(environment_id, int):
+    agent_worker_id = getattr(environment, "id", None)
+    if not isinstance(agent_worker_id, str):
         return False
     async with SessionLocal() as session:
-        return await environment_enrolled_in_gateway(session, environment_id)
+        return await environment_enrolled_in_gateway(session, agent_worker_id)
 
 
 def git_command_payload(args: tuple[str, ...]) -> dict[str, Any]:
@@ -109,11 +105,7 @@ def git_command_payload(args: tuple[str, ...]) -> dict[str, Any]:
         and args[6] == "--"
     ):
         return {"operation": "diff_patch", "revision": args[5], "file": args[7]}
-    if (
-        len(args) == 7
-        and args[:4] == ("diff", "--no-renames", "--name-status", "-z")
-        and args[5] == "--"
-    ):
+    if len(args) == 7 and args[:4] == ("diff", "--no-renames", "--name-status", "-z") and args[5] == "--":
         return {"operation": "diff_name_status_file", "revision": args[4], "file": args[6]}
     raise WorkerFileError("unsupported_operation", "不支持的 Git 操作")
 
@@ -166,7 +158,7 @@ async def worker_upload(environment, workspace: str, filename: str, content: byt
 
 
 def _client(environment):
-    return WorkerOpenCodeClient(environment_id=environment.id)
+    return WorkerOpenCodeClient(agent_worker_id=environment.id)
 
 
 async def _run(environment, name: str, payload: dict[str, Any]) -> dict[str, Any]:

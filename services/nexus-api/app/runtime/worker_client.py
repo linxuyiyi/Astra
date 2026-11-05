@@ -42,16 +42,17 @@ class WorkerOpenCodeClient(WorkerCommandTransport, OpenCodeServerClient):
         self,
         settings: Settings | None = None,
         *,
-        environment_id: int,
+        agent_worker_id: str,
         gateway=None,
         timeout_seconds: int | None = None,
     ):
-        OpenCodeServerClient.__init__(self,
+        OpenCodeServerClient.__init__(
+            self,
             settings or get_settings(),
             base_url="http://127.0.0.1",
             timeout_seconds=timeout_seconds,
         )
-        self.environment_id = environment_id
+        self.agent_worker_id = agent_worker_id
         self.gateway = gateway or get_gateway()
         self.offline_grace_seconds = float(self.settings.worker_event_offline_grace_seconds)
 
@@ -63,7 +64,6 @@ class WorkerOpenCodeClient(WorkerCommandTransport, OpenCodeServerClient):
         params: dict[str, Any] | None = None,
         body: Any = None,
         command_request_id: str | None = None,
-        attempt_ref: dict[str, Any] | None = None,
         session_id: str | None = None,
         task_id: str | None = None,
     ) -> tuple[int, bytes, dict[str, str]]:
@@ -75,8 +75,6 @@ class WorkerOpenCodeClient(WorkerCommandTransport, OpenCodeServerClient):
         }
         if task_id:
             payload["task_id"] = task_id
-        if attempt_ref:
-            payload["attempt_ref"] = attempt_ref
         request_id = command_request_id or f"http_{uuid4().hex}"
         try:
             worker_id, epoch, delivered, failed = await self._dispatch(
@@ -113,7 +111,6 @@ class WorkerOpenCodeClient(WorkerCommandTransport, OpenCodeServerClient):
         query: dict[str, Any] | None = None,
         include_headers: bool = False,
         command_request_id: str | None = None,
-        attempt_ref: dict[str, Any] | None = None,
         session_id: str | None = None,
         task_id: str | None = None,
     ) -> Any:
@@ -126,7 +123,6 @@ class WorkerOpenCodeClient(WorkerCommandTransport, OpenCodeServerClient):
             params=params,
             body=body,
             command_request_id=command_request_id,
-            attempt_ref=attempt_ref,
             session_id=session_id,
             task_id=task_id,
         )
@@ -184,9 +180,7 @@ class WorkerOpenCodeClient(WorkerCommandTransport, OpenCodeServerClient):
         holder = consumer or f"browser:{uuid4().hex}"
         # A live cursor must exist before the first frame, or control() treats
         # the directory as unused and deletes the log.
-        await log.touch_cursor(
-            worker_id=worker_id, epoch=epoch, directory=folder, consumer=holder, seq=0
-        )
+        await log.touch_cursor(worker_id=worker_id, epoch=epoch, directory=folder, consumer=holder, seq=0)
         await self.run_command("subscribe_events", {"directory": folder})
         seen = 0
         offline_deadline: float | None = None

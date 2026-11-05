@@ -9,7 +9,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.domain import ExecutionMode
-from app.models import RuntimeSession
+from app.models import Event
 from app.runtime.session_connection import resolve_environment
 from app.runtime.workspace_files import MAX_UPLOAD, validate_path
 
@@ -43,22 +43,23 @@ async def workspace_head_commit(environment, workspace: str) -> str | None:
 
 
 async def _task_baseline(session, task_id: str, workspace: str | None = None) -> str | None:
-    return await session.scalar(
-        select(RuntimeSession.workspace_base_commit)
+    event = await session.scalar(
+        select(Event)
         .where(
-            RuntimeSession.task_id == task_id,
-            RuntimeSession.workspace_base_commit.is_not(None),
-            *([RuntimeSession.workspace == workspace] if workspace else []),
+            Event.task_id == task_id,
+            Event.event_type == "WORKSPACE_PREPARED",
+            *([Event.detail["workspace"].as_string() == workspace] if workspace else []),
         )
-        .order_by(RuntimeSession.created_at, RuntimeSession.id)
+        .order_by(Event.id)
         .limit(1)
     )
+    return (event.detail or {}).get("base_commit") if event else None
 
 
 async def collect_workspace_changes(session, task) -> dict:
     """Return task-wide Git facts relative to the first Session baseline."""
 
-    if not task.workspace or not task.execution_environment_snapshot:
+    if not task.workspace or not task.agent_worker_id:
         return {}
     try:
         environment = await resolve_environment(session, task)
@@ -71,8 +72,13 @@ async def collect_workspace_changes(session, task) -> dict:
         deleted: set[str] = set()
 
         code, porcelain = await _git(
-            environment, task.workspace, "status", "--porcelain=v1", "-z",
-            "--no-renames", "--untracked-files=all",
+            environment,
+            task.workspace,
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--no-renames",
+            "--untracked-files=all",
         )
         if code == 0:
             for entry in porcelain.split("\0"):
@@ -156,8 +162,13 @@ async def _working_text(environment, workspace: str, file: str) -> str:
 
 
 async def workspace_diff(
-    session, task, *, cumulative: bool = True, directory: str | None = None,
-    environment=None, workspace: str | None = None,
+    session,
+    task,
+    *,
+    cumulative: bool = True,
+    directory: str | None = None,
+    environment=None,
+    workspace: str | None = None,
 ) -> list[dict]:
     """Native diff shape, read directly from the bound Git worktree on either host."""
     environment = environment or await resolve_environment(session, task)
@@ -170,8 +181,17 @@ async def workspace_diff(
     revision = baseline or "HEAD"
     path = await validate_path(environment, workspace, directory or ".")
     code, stats = await _git(
-        environment, workspace, "diff", "--no-ext-diff", "--no-textconv", "--no-renames",
-        "--numstat", "-z", revision, "--", path,
+        environment,
+        workspace,
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-renames",
+        "--numstat",
+        "-z",
+        revision,
+        "--",
+        path,
     )
     if code:
         raise ValueError("任务 Git 基线不可读取，无法展示累计变更")
@@ -180,10 +200,13 @@ async def workspace_diff(
         fields = entry.split("\t", 2)
         if len(fields) == 3:
             additions, deletions, file = fields
-            files[file] = (int(additions) if additions.isdigit() else 0,
-                           int(deletions) if deletions.isdigit() else 0)
-    code, untracked = await _git(environment, workspace, "ls-files", "--others", "--exclude-standard", "-z",
-                                 "--", path)
+            files[file] = (
+                int(additions) if additions.isdigit() else 0,
+                int(deletions) if deletions.isdigit() else 0,
+            )
+    code, untracked = await _git(
+        environment, workspace, "ls-files", "--others", "--exclude-standard", "-z", "--", path
+    )
     if code == 0:
         for file in untracked.split("\0"):
             if file:
@@ -195,19 +218,40 @@ async def workspace_diff(
         before_code, before = await _git(environment, workspace, "show", f"{revision}:{file}")
         after = await _working_text(environment, workspace, file)
         patch_code, patch = await _git(
-            environment, workspace, "diff", "--no-ext-diff", "--no-textconv", "--no-color",
-            "--no-renames", revision, "--", file,
+            environment,
+            workspace,
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-color",
+            "--no-renames",
+            revision,
+            "--",
+            file,
         )
         if patch_code:
             raise ValueError("Git Diff 读取失败")
         if before_code and after:
             before = ""
             additions = len(after.splitlines())
-            patch = "".join(difflib.unified_diff([], after.splitlines(keepends=True),
-                                               fromfile="/dev/null", tofile=f"b/{file}"))
-        _, name_status = await _git(environment, workspace, "diff", "--no-renames", "--name-status",
-                                    "-z", revision, "--", file)
+            patch = "".join(
+                difflib.unified_diff(
+                    [], after.splitlines(keepends=True), fromfile="/dev/null", tofile=f"b/{file}"
+                )
+            )
+        _, name_status = await _git(
+            environment, workspace, "diff", "--no-renames", "--name-status", "-z", revision, "--", file
+        )
         status = "added" if before_code else "deleted" if name_status.startswith("D\0") else "modified"
-        result.append({"file": file, "patch": patch, "before": before, "after": after,
-                       "additions": additions, "deletions": deletions, "status": status})
+        result.append(
+            {
+                "file": file,
+                "patch": patch,
+                "before": before,
+                "after": after,
+                "additions": additions,
+                "deletions": deletions,
+                "status": status,
+            }
+        )
     return result

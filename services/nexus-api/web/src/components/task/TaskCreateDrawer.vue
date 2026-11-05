@@ -77,16 +77,16 @@
 
       <ElDivider content-position="left">谁来执行，问谁</ElDivider>
 
-      <ElFormItem prop="employee_id">
+      <ElFormItem prop="agent_worker_id">
         <template #label>执行 Worker</template>
-        <ElSelect v-model="form.employee_id" :disabled="Boolean(task && task.status !== 'PENDING')">
+        <ElSelect v-model="form.agent_worker_id" :disabled="Boolean(task && task.status !== 'PENDING')">
           <ElOption value="" label="自动分配" />
-          <ElOption v-for="item in compatibleEmployees" :key="item.id" :value="item.id" :label="`${workerDisplayName(item)} · ${item.role}`" />
+          <ElOption v-for="item in compatibleEmployees" :key="item.id" :value="item.id" :label="`${workerDisplayName(item)}`" />
         </ElSelect>
       </ElFormItem>
       <ElFormItem>
         <template #label>责任数字员工</template>
-        <ElSelect v-model="form.responsible_employee_id" clearable placeholder="可选，选择要询问进度的数字员工">
+        <ElSelect v-model="form.origin_employee_id" clearable placeholder="可选，选择要询问进度的数字员工">
           <ElOption v-for="item in owners" :key="item.id" :value="item.id" :label="item.name" />
         </ElSelect>
       </ElFormItem>
@@ -151,8 +151,8 @@ const form = reactive({
   priority: (props.task?.priority ?? 'MEDIUM') as TaskPriority,
   description: props.task?.description ?? '',
   criteria: criteriaFrom(props.task),
-  employee_id: props.task?.worker_id || props.task?.employee_id || '',
-  responsible_employee_id: props.task?.responsible_employee_id || '',
+  agent_worker_id: props.task?.agent_worker_id || '',
+  origin_employee_id: props.task?.origin_employee_id || '',
 })
 const openedSnapshot = ref('')
 
@@ -164,8 +164,8 @@ function currentDraft(): TaskDraftSnapshot {
     priority: form.priority,
     description: form.description,
     criteria: form.criteria.map((item) => item.content),
-    employee_id: form.employee_id || '',
-    responsible_employee_id: form.responsible_employee_id || '',
+    agent_worker_id: form.agent_worker_id || '',
+    origin_employee_id: form.origin_employee_id || '',
     files: fileList.value.length,
   }
 }
@@ -196,7 +196,7 @@ onMounted(async () => {
 
 const compatibleEmployees = computed(() => store.employees.filter((item) => item.enabled && item.task_types.includes(form.task_type) && item.category_ids.includes(form.category_id)))
 watch(() => [form.task_type, form.category_id], () => {
-  if (form.employee_id && !compatibleEmployees.value.some((item) => item.id === form.employee_id)) form.employee_id = ''
+  if (form.agent_worker_id && !compatibleEmployees.value.some((item) => item.id === form.agent_worker_id)) form.agent_worker_id = ''
 })
 
 const createDirty = computed(() => openedSnapshot.value !== '' && taskDraftSnapshot(currentDraft()) !== openedSnapshot.value)
@@ -259,9 +259,9 @@ async function submit() {
         description: form.description,
         priority: form.priority,
         acceptance_criteria,
-        responsible_employee_id: form.responsible_employee_id || null,
+        origin_employee_id: form.origin_employee_id || null,
       }
-      if (props.task.status === 'PENDING') body.employee_id = form.employee_id || null
+      if (props.task.status === 'PENDING') body.agent_worker_id = form.agent_worker_id || null
       const task = await api.updateTask(props.task.id, body)
       emit('saved', task.id)
       return
@@ -275,8 +275,8 @@ async function submit() {
       description: form.description,
       acceptance_criteria,
       attachments: await attachmentPayload(),
-      employee_id: form.employee_id || null,
-      responsible_employee_id: form.responsible_employee_id || null,
+      agent_worker_id: form.agent_worker_id || null,
+      origin_employee_id: form.origin_employee_id || null,
     })
     emit('created', task.id)
   } catch (error) {

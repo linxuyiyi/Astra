@@ -22,7 +22,7 @@
           <span class="status-pill" :class="pillClass(item.status)">{{ statusText(item.status) }}</span>
           <button type="button" @click="selectTask(item)">
             <b>{{ item.title }}</b>
-            <small>{{ item.ownerName || "未关联员工" }} · {{ item.waitingReason || item.failureReason || formatTime(item.updatedAt) }}</small>
+            <small>{{ item.ownerName || "未关联员工" }} · {{ item.waitingReason || formatTime(item.updatedAt) }}</small>
           </button>
         </div>
       </div>
@@ -32,7 +32,7 @@
           <span class="status-pill" :class="item.health === 'error' ? 'fail' : 'muted'">{{ healthText(item.health) }}</span>
           <button type="button" @click="selectWorker(item.id)">
             <b>{{ item.name }}</b>
-            <small>{{ employeeName(item.digitalEmployeeId) }} · {{ item.taskCount }} 项关联任务</small>
+            <small>{{ employeeName(item.originEmployeeId) }} · {{ item.taskCount }} 项关联任务</small>
           </button>
         </div>
       </div>

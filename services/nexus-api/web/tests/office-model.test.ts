@@ -97,8 +97,8 @@ test("human issues retain actual reason and unavailable connection is visible", 
   assert.match(
     taskReason({
       status: "RUNNING",
-      runtimeConnection: "UNAVAILABLE",
+      currentProgress: "连接异常，保留原 Worker 占用",
     } as NebulaTask),
-    /执行连接不可用/,
+    /连接异常/,
   );
 });

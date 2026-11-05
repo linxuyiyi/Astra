@@ -242,18 +242,6 @@ def test_batch_archive_delete_and_publish():
         assert deleted.json()["deleted"] == todo["id"]
 
 
-def test_knowledge_usages_endpoint():
-    with TestClient(app) as client:
-        root = _root_space(client)
-        created = client.post(
-            "/api/library/knowledge",
-            json={"space_id": root["id"], "title": unique("引用来源知识"), "content_md": "## 引用"},
-        ).json()
-        usages = client.get(f"/api/library/knowledge/{created['id']}/usages")
-        assert usages.status_code == 200
-        assert isinstance(usages.json(), list)
-
-
 def test_private_space_scope_is_inherited_by_public_child_directory():
     with TestClient(app) as client:
         private_root = client.post(

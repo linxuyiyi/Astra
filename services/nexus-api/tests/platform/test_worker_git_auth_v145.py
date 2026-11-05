@@ -14,12 +14,8 @@ from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 import pytest
-from sqlalchemy import select
 
 from app.config.settings import get_settings
-from app.database import SessionLocal
-from app.models import AgentWorker, OpenCodeExecutionEnvironment, WorkerMaintenanceOperation
-from app.runtime.maintenance import OperationLease, claim_next, submit_operation
 from app.runtime.remote_provisioning import RemoteProvisioner
 from app.worker_agent import inspection
 from app.worker_agent.process_env import child_environ
@@ -304,55 +300,6 @@ def test_file_url_sanitizers_preserve_absolute_path():
 
 
 @pytest.mark.asyncio
-async def test_deploy_uses_written_credential_revision(monkeypatch):
-    monkeypatch.setattr(get_settings(), "mcp_transport", "streamable-http")
-    async with SessionLocal() as db:
-        db.add(AgentWorker(id="gitrev", name="gitrev", role="build"))
-        await db.flush()
-        db.add(
-            OpenCodeExecutionEnvironment(
-                employee_id="gitrev",
-                mode="LINUX_REMOTE",
-                name="linux",
-                host="test.invalid",
-                username="root",
-                ssh_password="secret",
-                workspace_root="/srv/project",
-                status="AVAILABLE",
-                status_detail={},
-            )
-        )
-        await db.commit()
-    async with SessionLocal() as db:
-        environment = await db.scalar(
-            select(OpenCodeExecutionEnvironment).where(OpenCodeExecutionEnvironment.employee_id == "gitrev")
-        )
-        operation = await submit_operation(db, environment.id, "deploy", requested_by="test")
-        operation_id = operation.id
-        db.expunge(environment)
-    assert await claim_next("owner-gitrev") == operation_id
-    lease = OperationLease(operation_id, 1, "owner-gitrev", 60)
-    provisioner = RemoteProvisioner(
-        environment,
-        SimpleNamespace(id=operation_id, action="deploy"),
-        lease=lease,
-    )
-    # 已写入凭据版本只由 Worker 快照上报，部署完成不伪造环境表观测态。
-    provisioner.git_credential_revision = "written-actual"
-    provisioner.verified_evaluation = {
-        "readiness": "READY",
-        "runtime_health": {"status": "AVAILABLE", "equipment": []},
-        "repository": {"credential_revision": "observed-actual"},
-    }
-    assert await provisioner._finish(True) is True
-    async with SessionLocal() as db:
-        stored = await db.get(OpenCodeExecutionEnvironment, environment.id)
-        assert stored.status_detail == {}
-        operation = await db.get(WorkerMaintenanceOperation, operation_id)
-        assert operation.after_snapshot["repository"]["credential_revision"] == "observed-actual"
-
-
-@pytest.mark.asyncio
 async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkeypatch):
     import hashlib
 
@@ -370,16 +317,21 @@ async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkey
     monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:18110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
-        id=77, mode="LINUX_REMOTE", host="node.invalid", port=22, username="nexus",
-        repository_url=None, skill_refs=[], mcp_refs=[],
+        id="77",
+        mode="LINUX_REMOTE",
+        host="node.invalid",
+        port=22,
+        username="nexus",
+        repository_url=None,
+        skill_refs=[],
+        mcp_refs=[],
         employee_id="gitrot",
         workspace_root="/srv/project",
-        opencode_server_port=14096,
         ssh_password="secret",
         model_name="",
-        opencode_path="/usr/local/bin/opencode",
     )
     provisioner = RemoteProvisioner(environment, {"id": "op-gitrot", "action": "deploy"})
+    provisioner.opencode_port = 14096
     provisioner.home = "/root"
     provisioner.config_path = "/etc/nexus/opencode/77/opencode.jsonc"
     provisioner.target_binary = "/root/.local/share/nexus/workers/77/bin/opencode"
@@ -417,8 +369,8 @@ async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkey
     async def idle(*_args, **_kwargs):
         return True
 
-    async def credentials(_path, **_kwargs):
-        return "wtk", "wrk"
+    async def credentials():
+        return SimpleNamespace(token="wtk", agent_worker_id=str(provisioner.environment.id))
 
     async def emit(_event):
         return None
@@ -427,7 +379,7 @@ async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkey
     monkeypatch.setattr(provisioner, "_write_atomic_if_changed", atomic_write)
     monkeypatch.setattr(provisioner, "_ensure_safe", safe)
     monkeypatch.setattr(provisioner, "_native_idle", idle)
-    monkeypatch.setattr(provisioner, "_existing_worker_credentials", credentials)
+    monkeypatch.setattr(provisioner, "_enroll_worker", credentials)
     await provisioner._install_worker(emit)
 
     assert (git_token_path(77), 0o600) in atomic
@@ -457,16 +409,21 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
     monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:18110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
-        id=88, mode="LINUX_REMOTE", host="node.invalid", port=22, username="nexus",
-        repository_url=None, skill_refs=[], mcp_refs=[],
+        id="88",
+        mode="LINUX_REMOTE",
+        host="node.invalid",
+        port=22,
+        username="nexus",
+        repository_url=None,
+        skill_refs=[],
+        mcp_refs=[],
         employee_id="gitwire",
         workspace_root=str(workspace),
-        opencode_server_port=14096,
         ssh_password="secret",
         model_name="",
-        opencode_path="/usr/local/bin/opencode",
     )
     provisioner = RemoteProvisioner(environment, {"id": "op-gitwire", "action": "deploy"})
+    provisioner.opencode_port = 14096
     provisioner.home = "/root"
     provisioner.config_path = "/etc/nexus/opencode/88/opencode.jsonc"
     provisioner.target_binary = "/root/.local/share/nexus/workers/88/bin/opencode"
@@ -512,8 +469,8 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
     async def idle(*_args, **_kwargs):
         return True
 
-    async def credentials(_path, **_kwargs):
-        return "wtk", "wrk"
+    async def credentials():
+        return SimpleNamespace(token="wtk", agent_worker_id=str(provisioner.environment.id))
 
     async def emit(_event):
         return None
@@ -522,7 +479,7 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
     monkeypatch.setattr(provisioner, "_write_atomic_if_changed", atomic)
     monkeypatch.setattr(provisioner, "_ensure_safe", safe)
     monkeypatch.setattr(provisioner, "_native_idle", idle)
-    monkeypatch.setattr(provisioner, "_existing_worker_credentials", credentials)
+    monkeypatch.setattr(provisioner, "_enroll_worker", credentials)
 
     await provisioner._install_worker(emit)
     env_path = f"{remote_provisioning.WORKER_SECRET_DIR}/worker-88.env"

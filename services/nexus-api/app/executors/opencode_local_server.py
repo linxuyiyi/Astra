@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from app.executors.errors import OpenCodeServerUnavailable
-from app.executors.opencode_server import OpenCodeServerClient, OpenCodeServerExecutor
+from app.executors.opencode_server import OpenCodeServerClient
 from app.executors.process import local_command, process_group_options
 
 # Only terminate processes started by this worker, never an unknown port owner.
@@ -61,19 +61,12 @@ async def port_lock(port: int, timeout: float):
         handle.close()
 
 
-class LocalOpenCodeServerExecutor(OpenCodeServerExecutor):
+class LocalOpenCodeServerExecutor:
     def __init__(self, environment, settings, **kwargs):
         self.environment = environment
         self.workspace = settings.employee_workspace_path(environment.workspace_root).resolve()
-        super().__init__(
-            settings,
-            model_name=environment.model_name,
-            client=OpenCodeServerClient(
-                settings,
-                base_url=f"http://127.0.0.1:{environment.opencode_server_port}",
-            ),
-            **kwargs,
-        )
+        self.settings = settings
+        self.client = OpenCodeServerClient(settings)
 
     async def _verify_gateway(self):
         from app.runtime.opencode_model import validate_gateway_config
@@ -82,13 +75,11 @@ class LocalOpenCodeServerExecutor(OpenCodeServerExecutor):
         validate_gateway_config(config, dict(os.environ))
 
     async def ensure_ready(self):
-        port = self.environment.opencode_server_port
+        port = self.settings.opencode_server_port
         try:
-            if port == self.settings.opencode_server_port:
-                raise RuntimeError("端口与平台公共 Serve 冲突，请人工配置员工独立端口")
             lock_timeout = self.settings.opencode_server_start_timeout_seconds + 10
             async with port_lock(port, lock_timeout) as owner_path:
-                owner = {"employee_id": self.environment.employee_id, "workspace": str(self.workspace)}
+                owner = {"employee_id": self.environment.id, "workspace": str(self.workspace)}
                 healthy = False
                 try:
                     await self.client.health()
@@ -123,7 +114,7 @@ class LocalOpenCodeServerExecutor(OpenCodeServerExecutor):
                 if not self.workspace.is_dir():
                     raise RuntimeError("Workspace 不存在")
                 command = local_command(
-                    self.environment.opencode_path,
+                    self.settings.opencode_binary,
                     [
                         "serve",
                         "--hostname",
@@ -174,11 +165,7 @@ class LocalOpenCodeServerExecutor(OpenCodeServerExecutor):
                 raise TimeoutError(f"Serve 启动超时：{last_error}；日志：{log_path}")
         except Exception as exc:
             raise OpenCodeServerUnavailable(
-                f"员工 {self.environment.employee_id}；环境 {self.environment.name} (LOCAL)；"
+                f"员工 {self.environment.id}；环境 {self.environment.name} (LOCAL)；"
                 f"Workspace={self.workspace}；Server Port={port}；"
                 f"启动方式=本机后台进程；{exc}"
             ) from exc
-
-    async def _execute(self, task, workspace: Path, *, session_id=None):
-        await self.ensure_ready()
-        return await super()._execute(task, self.workspace, session_id=session_id)

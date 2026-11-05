@@ -9,8 +9,8 @@ from app.config.worker_deployment import PYTHON_SHA256, PYTHON_VERSION, deployme
 from app.runtime.remote_artifacts import download
 
 
-def managed_python(environment_id: int) -> str:
-    return f"/opt/nexus/workers/{environment_id}/python-{PYTHON_VERSION}/bin/python3.11"
+def managed_python(agent_worker_id: int) -> str:
+    return f"/opt/nexus/workers/{agent_worker_id}/python-{PYTHON_VERSION}/bin/python3.11"
 
 
 def python_probe(interpreter: str) -> str:

@@ -3,8 +3,8 @@ import DigitalEmployeeChatView from "./views/DigitalEmployeeChatView.vue";
 import PixelOfficeHomeView from "./views/PixelOfficeHomeView.vue";
 import TaskListView from "./views/TaskListView.vue";
 import TaskDetailView from "./views/TaskDetailView.vue";
-import EmployeeListView from "./views/EmployeeListView.vue";
-import EmployeeDetailView from "./views/EmployeeDetailView.vue";
+import WorkerListView from "./views/WorkerListView.vue";
+import WorkerDetailView from "./views/WorkerDetailView.vue";
 import DigitalLibraryView from "./views/DigitalLibraryView.vue";
 import SchedulesView from "./views/SchedulesView.vue";
 import EmployeesView from "./views/EmployeesView.vue";
@@ -76,8 +76,8 @@ export const router = createRouter({
       children: [
         { path: "", redirect: "/settings/employees" },
         { path: "employees", name: "settings-employees", component: EmployeesView },
-        { path: "workers", name: "settings-workers", component: EmployeeListView },
-        { path: "workers/:id", name: "settings-worker-detail", component: EmployeeDetailView },
+        { path: "workers", name: "settings-workers", component: WorkerListView },
+        { path: "workers/:id", name: "settings-worker-detail", component: WorkerDetailView },
         { path: "schedules", redirect: keepQuery("/schedules") },
         { path: "skills", name: "settings-skills", component: SkillResourcesView },
         { path: "mcps", name: "settings-mcps", component: McpResourcesView },

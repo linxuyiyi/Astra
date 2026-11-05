@@ -11,8 +11,7 @@ from app.config.settings import get_settings
 from app.domain import ExecutionMode
 from app.executors.opencode_local_server import LocalOpenCodeServerExecutor
 from app.executors.opencode_server import OpenCodeServerClient
-from app.models import OpenCodeExecutionEnvironment, Task
-from app.runtime.environment import environment_from_snapshot
+from app.models import AgentWorker, Task
 from app.runtime.worker_client import WorkerOpenCodeClient
 from app.runtime.worker_files import environment_uses_worker
 
@@ -32,25 +31,10 @@ async def session_tree(client, directory: Path, root: str) -> set[str]:
 
 
 async def resolve_environment(session, task: Task):
-    snapshot = task.execution_environment_snapshot
-    if not snapshot:
-        raise ValueError("任务尚未绑定执行环境")
-    environment = environment_from_snapshot(snapshot, task.employee_id)
-    stored = await session.get(OpenCodeExecutionEnvironment, snapshot["environment_id"])
-    if stored:
-        environment.ssh_password = stored.ssh_password
-    return environment
-
-
-async def resolve_runtime_session_environment(session, binding):
-    """Resolve credentials from a RuntimeSession's immutable environment binding."""
-
-    snapshot = binding.environment
-    environment = environment_from_snapshot(snapshot, binding.employee_id)
-    stored = await session.get(OpenCodeExecutionEnvironment, snapshot.get("environment_id"))
-    if stored:
-        environment.ssh_password = stored.ssh_password
-    return environment
+    worker = await session.get(AgentWorker, task.agent_worker_id)
+    if worker is None:
+        raise ValueError("任务尚未绑定 Worker")
+    return worker
 
 
 @asynccontextmanager
@@ -61,10 +45,10 @@ async def connect(environment, *, start: bool = False):
             raise RuntimeError("当前部署只支持远程 Worker，不能使用 LOCAL 执行环境")
         if start:
             await LocalOpenCodeServerExecutor(environment, settings).ensure_ready()
-        yield OpenCodeServerClient(settings, base_url=f"http://127.0.0.1:{environment.opencode_server_port}")
+        yield OpenCodeServerClient(settings)
         return
     if await environment_uses_worker(environment):
-        client = WorkerOpenCodeClient(settings, environment_id=environment.id)
+        client = WorkerOpenCodeClient(settings, agent_worker_id=environment.id)
         if start:
             await client.health()
         yield client
@@ -107,9 +91,7 @@ async def _assert_valid_task_worktree(main_repo: Path, target: Path) -> None:
         raise RuntimeError(f"任务工作区不是合法的 Git worktree：{target}")
     if await _git_common_dir(main_repo) != await _git_common_dir(target):
         raise RuntimeError(f"任务工作区不属于当前仓库：{target}")
-    code, listing, _ = await _local_git(
-        ["-C", str(main_repo), "worktree", "list", "--porcelain"]
-    )
+    code, listing, _ = await _local_git(["-C", str(main_repo), "worktree", "list", "--porcelain"])
     registered = {
         Path(line[len("worktree ") :]).resolve()
         for line in listing.splitlines()
@@ -162,8 +144,12 @@ async def _ensure_local_task_worktree(root: Path, target: Path) -> None:
 
 def _inherit_local_config(root: Path, target: Path, *, created: bool = False) -> None:
     """Copy project-owned config for a fresh worktree; preserve existing task config."""
-    names = (Path("opencode.json"), Path("opencode.jsonc"),
-             Path(".opencode/opencode.json"), Path(".opencode/opencode.jsonc"))
+    names = (
+        Path("opencode.json"),
+        Path("opencode.jsonc"),
+        Path(".opencode/opencode.json"),
+        Path(".opencode/opencode.jsonc"),
+    )
     if not created and any((target / name).exists() for name in names):
         return
     for name in names:
@@ -183,7 +169,8 @@ async def prepare_workspace(task: Task, environment, *, reuse_existing: bool = T
         if local
         else environment.workspace_root
     )
-    if reuse_existing and task.workspace:
+    target = str(Path(root).parent / ".astra-tasks" / environment.id / task.id)
+    if reuse_existing and task.workspace == target:
         if local:
             await _assert_reusable_local_workspace(Path(root), task.workspace)
             _inherit_local_config(Path(root), Path(task.workspace))
@@ -194,8 +181,6 @@ async def prepare_workspace(task: Task, environment, *, reuse_existing: bool = T
         else:
             raise RuntimeError("远程环境尚未安装 Worker")
         return task.workspace
-    target_name = task.id if reuse_existing else f"{task.id}-env-{environment.id}"
-    target = str(Path(root).parent / ".astra-tasks" / environment.employee_id / target_name)
     if local:
         if not Path(root).is_dir():
             raise FileNotFoundError(f"Workspace 不存在：{root}")
@@ -218,7 +203,7 @@ async def prepare_workspace(task: Task, environment, *, reuse_existing: bool = T
 
 
 async def _prepare_worker_workspace(environment, *, root: str, target: str, reuse_existing: bool) -> None:
-    client = WorkerOpenCodeClient(get_settings(), environment_id=environment.id)
+    client = WorkerOpenCodeClient(get_settings(), agent_worker_id=environment.id)
     await client.run_command(
         "prepare_workspace",
         {"root": root, "target": target, "reuse_existing": reuse_existing},

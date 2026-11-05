@@ -3,7 +3,7 @@
 事实源分工：
 
 * 数字员工目录、私聊会话、员工间职责请求由 ``nexus_api`` 查询共享 SQL 数据库；
-* Agent Worker、任务、执行环境、WorkerInstance 在 ``app`` 的 SQLAlchemy 数据层。
+* Agent Worker、任务、执行环境、AgentWorker 在 ``app`` 的 SQLAlchemy 数据层。
 
 这里不复制任何业务状态，也不写业务表。两套访问层按 ID 批量读取后在本模块组装，
 保持模块查询边界，也不把两次独立连接读取包装成一个一致快照事务。
@@ -25,16 +25,12 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.config.settings import get_settings
 from app.database import get_session
 from app.models import (
     AgentWorker,
-    OpenCodeExecutionEnvironment,
-    RuntimeSession,
     Task,
-    WorkerInstance,
 )
 from app.worker_presentation import worker_display_name
 
@@ -49,12 +45,11 @@ PENDING = "PENDING"
 RUNNING = "RUNNING"
 WAITING = "WAITING"
 SUCCEEDED = "SUCCEEDED"
-FAILED = "FAILED"
 CANCELED = "CANCELED"
 
-COUNTED_STATUSES = (PENDING, RUNNING, WAITING, FAILED)
+COUNTED_STATUSES = (PENDING, RUNNING, WAITING)
 PREVIEW_STATUSES = (PENDING, RUNNING, WAITING)
-COUNT_FIELD = {RUNNING: "running", PENDING: "queued", WAITING: "waiting", FAILED: "failed"}
+COUNT_FIELD = {RUNNING: "running", PENDING: "queued", WAITING: "waiting"}
 
 QUEUED_PREVIEW_LIMIT = 400
 ACTIVE_PREVIEW_LIMIT = 400
@@ -63,16 +58,6 @@ ATTENTION_LIMIT = 30
 UNASSIGNED_TASK_LIMIT = 20
 CONFLICT_LIMIT = 50
 COLLABORATION_RECENT = timedelta(hours=24)
-WAITING_REASON_TEXT = {
-    "SESSION_MISSING": "执行会话不存在，需要恢复",
-    "TRANSPORT_RECOVERY": "执行连接恢复中，等待系统重连",
-    "EXECUTION_RESULT_REVIEW": "本轮执行结束，等待人工确认结果",
-    "HITL_PERMISSION": "等待人工授权",
-    "HITL_QUESTION": "等待人工回答",
-    "TIMEOUT": "执行超时",
-    "MANUAL_INTERVENTION": "等待人工介入",
-    "RETRY_EXHAUSTED": "重试次数已用尽",
-}
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +101,7 @@ def _day_window(now: datetime) -> tuple[datetime, datetime, str]:
 
 
 def _empty_counts() -> dict[str, int]:
-    return {"running": 0, "queued": 0, "waiting": 0, "failed": 0, "completedToday": 0}
+    return {"running": 0, "queued": 0, "waiting": 0, "completedToday": 0}
 
 
 def _unique(values: list[str]) -> list[str]:
@@ -187,31 +172,20 @@ def _employee_base(row: dict[str, Any], counts: dict[str, int]) -> dict[str, Any
 
 async def _load_workers(
     session: AsyncSession,
-) -> tuple[list[AgentWorker], dict[str, WorkerInstance]]:
-    workers = (
-        (
-            await session.execute(
-                select(AgentWorker)
-                .options(selectinload(AgentWorker.execution_environment))
-                .order_by(AgentWorker.id)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    instances = (await session.scalars(select(WorkerInstance))).all()
-    return list(workers), {item.environment_id: item for item in instances}
+) -> tuple[list[AgentWorker], dict[str, AgentWorker]]:
+    workers = (await session.execute(select(AgentWorker).order_by(AgentWorker.id))).scalars().all()
+    return list(workers), {item.id: item for item in workers}
 
 
 async def _worker_task_counts(session: AsyncSession) -> dict[str, dict[str, int]]:
     rows = (
         await session.execute(
-            select(Task.employee_id, Task.status, func.count(Task.id))
+            select(Task.agent_worker_id, Task.status, func.count(Task.id))
             .where(
-                Task.employee_id.is_not(None),
+                Task.agent_worker_id.is_not(None),
                 Task.status.in_((RUNNING, WAITING)),
             )
-            .group_by(Task.employee_id, Task.status)
+            .group_by(Task.agent_worker_id, Task.status)
         )
     ).all()
     result: dict[str, dict[str, int]] = defaultdict(lambda: {"running": 0, "waiting": 0})
@@ -225,39 +199,13 @@ async def _worker_task_counts(session: AsyncSession) -> dict[str, dict[str, int]
 
 def _worker_health(
     worker: AgentWorker,
-    environment: OpenCodeExecutionEnvironment | None,
-    instance: WorkerInstance | None,
+    environment: AgentWorker | None,
+    instance: AgentWorker | None,
     *,
     now: datetime,
     stale_after: timedelta,
 ) -> str:
-    if not worker.enabled:
-        return "offline"
-    if worker.status == "ERROR":
-        return "error"
-    if worker.status == "OFFLINE":
-        return "offline"
-    if environment is None:
-        return "unknown"
-    remote = environment.mode == "LINUX_REMOTE"
-    if remote:
-        if instance is None:
-            return "unknown"
-        if instance.status != "online":
-            return "offline"
-        heartbeat = instance.last_heartbeat_at or worker.last_heartbeat
-        if heartbeat is None:
-            return "offline"
-        if heartbeat.tzinfo is None:
-            heartbeat = heartbeat.replace(tzinfo=UTC)
-        if heartbeat.astimezone(UTC) <= now - stale_after:
-            return "offline"
-        return "online"
-    if environment.status == "AVAILABLE":
-        return "online"
-    if environment.status == "UNAVAILABLE":
-        return "error"
-    return "unknown"
+    return "offline" if worker.status in {"OFFLINE", "PAUSED"} else "online"
 
 
 def _worker_occupancy(counts: dict[str, int]) -> str:
@@ -270,26 +218,18 @@ def _worker_occupancy(counts: dict[str, int]) -> str:
 
 def _worker_dto(
     worker: AgentWorker,
-    environment: OpenCodeExecutionEnvironment | None,
-    instance: WorkerInstance | None,
+    environment: AgentWorker | None,
+    instance: AgentWorker | None,
     counts: dict[str, int],
     *,
     now: datetime,
     stale_after: timedelta,
 ) -> dict[str, Any]:
     health = _worker_health(worker, environment, instance, now=now, stale_after=stale_after)
-    labels = _unique(
-        [
-            worker.role,
-            *[str(item) for item in ((environment.labels or []) if environment else [])],
-        ]
-    )
+    labels = list(worker.task_types or [])
     return {
         "id": worker.id,
-        "digitalEmployeeId": worker.digital_employee_id,
-        "workerInstanceId": instance.id if instance else None,
         "name": worker_display_name(worker),
-        "role": worker.role,
         "capabilityLabels": labels,
         "environmentMode": environment.mode if environment else None,
         "environmentName": environment.name if environment else None,
@@ -299,7 +239,7 @@ def _worker_dto(
         "taskCount": int(counts.get("running", 0)) + int(counts.get("waiting", 0)),
         "runningTaskCount": int(counts.get("running", 0)),
         "waitingTaskCount": int(counts.get("waiting", 0)),
-        "lastHeartbeatAt": _iso((instance.last_heartbeat_at if instance else None) or worker.last_heartbeat),
+        "lastHeartbeatAt": _iso(instance.last_heartbeat_at if instance else None),
     }
 
 
@@ -314,11 +254,11 @@ def _resolve_task_owner(
     worker_known: set[str],
 ) -> tuple[str | None, list[str]]:
     conflicts: list[str] = []
-    worker_id = task.employee_id
+    worker_id = task.agent_worker_id
     if worker_id and worker_id not in worker_known:
         conflicts.append("TASK_WORKER_MISSING")
     worker_owner_id = worker_owner.get(worker_id) if worker_id else None
-    responsible = task.responsible_employee_id
+    responsible = task.origin_employee_id
     if responsible and responsible not in employee_ids:
         conflicts.append("TASK_RESPONSIBLE_MISSING")
     if responsible and worker_owner_id and responsible != worker_owner_id:
@@ -332,18 +272,6 @@ def _resolve_task_owner(
     return owner, conflicts
 
 
-async def _load_session_statuses(session: AsyncSession, tasks: list[Task]) -> dict[str, str]:
-    ids = [task.current_session_id for task in tasks if task.current_session_id]
-    if not ids:
-        return {}
-    rows = (
-        await session.execute(
-            select(RuntimeSession.id, RuntimeSession.status).where(RuntimeSession.id.in_(ids))
-        )
-    ).all()
-    return {str(row[0]): row[1] for row in rows}
-
-
 def _task_dto(
     task: Task,
     *,
@@ -351,7 +279,6 @@ def _task_dto(
     conflicts: list[str],
     worker_names: dict[str, str],
     employee_names: dict[str, str],
-    session_statuses: dict[str, str],
 ) -> dict[str, Any]:
     return {
         "id": task.id,
@@ -359,28 +286,23 @@ def _task_dto(
         "status": task.status,
         "priority": task.priority,
         "taskType": task.task_type,
-        "responsibleEmployeeId": task.responsible_employee_id,
-        "workerId": task.employee_id,
-        "workerName": worker_names.get(task.employee_id or ""),
+        "originEmployeeId": task.origin_employee_id,
+        "workerId": task.agent_worker_id,
+        "workerName": worker_names.get(task.agent_worker_id or ""),
         "ownerId": owner,
         "ownerName": employee_names.get(owner or ""),
         "currentProgress": task.current_progress or "",
-        "waitingReason": task.human_required_reason
-        or WAITING_REASON_TEXT.get(task.waiting_reason or "", task.waiting_reason or ""),
+        "waitingReason": task.current_progress,
         "waitingReasonCode": task.waiting_reason,
-        "failureReason": task.failure_reason or "",
-        "runtimeConnection": task.runtime_connection,
         "currentSessionId": task.current_session_id,
-        "sessionStatus": session_statuses.get(task.current_session_id or ""),
         "pendingMessageId": task.pending_message_id,
-        "sourceConversationId": task.source_conversation_id,
-        "sourceChannelId": task.source_channel_id,
-        "inactivityAlert": bool(task.inactivity_alert),
+        "source": task.source,
+        "externalTaskId": task.external_task_id,
         "conflict": bool(conflicts),
         "conflictCodes": conflicts,
         "createdAt": _iso(task.created_at),
         "updatedAt": _iso(task.updated_at),
-        "completedAt": _iso(task.completed_at),
+        "completedAt": _iso(task.finished_at),
     }
 
 
@@ -586,10 +508,9 @@ async def _collect_core(
     counts = {row["id"]: _empty_counts() for row in employee_rows}
     unassigned_counts = _empty_counts()
     unassigned_tasks = 0
-    unassigned_workers = 0
 
     workers: list[AgentWorker] = []
-    instances: dict[str, WorkerInstance] = {}
+    instances: dict[str, AgentWorker] = {}
     worker_task_counts: dict[str, dict[str, int]] = {}
     worker_owner: dict[str, str] = {}
     worker_known: set[str] = set()
@@ -605,28 +526,11 @@ async def _collect_core(
 
     for worker in workers:
         worker_known.add(worker.id)
-        owner = worker.digital_employee_id
-        if owner and owner in employee_ids:
-            worker_owner[worker.id] = owner
-        elif owner:
-            unassigned_workers += 1
-            _add_conflict(
-                conflicts,
-                conflict_seen,
-                _conflict(
-                    "WORKER_EMPLOYEE_MISSING",
-                    "worker",
-                    worker.id,
-                    "Worker 关联的数字员工不存在，已放入待绑定列表",
-                ),
-            )
-        else:
-            unassigned_workers += 1
 
     worker_names = {worker.id: worker_display_name(worker) for worker in workers}
     worker_dtos: list[dict[str, Any]] = []
     for worker in workers:
-        environment = worker.execution_environment
+        environment = worker
         instance = instances.get(environment.id) if environment is not None else None
         worker_dtos.append(
             _worker_dto(
@@ -650,9 +554,9 @@ async def _collect_core(
             # 计数以 SQL 聚合为准；预览按更新时间截断，避免首页被历史任务拖慢。
             owner_status_rows = (
                 await session.execute(
-                    select(Task.responsible_employee_id, Task.status, func.count(Task.id))
-                    .where(Task.responsible_employee_id.is_not(None))
-                    .group_by(Task.responsible_employee_id, Task.status)
+                    select(Task.origin_employee_id, Task.status, func.count(Task.id))
+                    .where(Task.origin_employee_id.is_not(None))
+                    .group_by(Task.origin_employee_id, Task.status)
                 )
             ).all()
             for employee_id, task_status, count in owner_status_rows:
@@ -664,12 +568,12 @@ async def _collect_core(
 
             unresolved_status_rows = (
                 await session.execute(
-                    select(Task.employee_id, Task.status, func.count(Task.id))
+                    select(Task.agent_worker_id, Task.status, func.count(Task.id))
                     .where(
-                        Task.responsible_employee_id.is_(None),
-                        Task.employee_id.is_not(None),
+                        Task.origin_employee_id.is_(None),
+                        Task.agent_worker_id.is_not(None),
                     )
-                    .group_by(Task.employee_id, Task.status)
+                    .group_by(Task.agent_worker_id, Task.status)
                 )
             ).all()
             for worker_id, task_status, count in unresolved_status_rows:
@@ -686,8 +590,8 @@ async def _collect_core(
                 await session.execute(
                     select(Task.status, func.count(Task.id))
                     .where(
-                        Task.responsible_employee_id.is_(None),
-                        Task.employee_id.is_(None),
+                        Task.origin_employee_id.is_(None),
+                        Task.agent_worker_id.is_(None),
                         Task.status.in_(COUNTED_STATUSES),
                     )
                     .group_by(Task.status)
@@ -700,15 +604,15 @@ async def _collect_core(
 
             completed_rows = (
                 await session.execute(
-                    select(Task.responsible_employee_id, func.count(Task.id))
+                    select(Task.origin_employee_id, func.count(Task.id))
                     .where(
                         Task.status == SUCCEEDED,
-                        Task.completed_at.is_not(None),
-                        Task.completed_at >= start,
-                        Task.completed_at < end,
-                        Task.responsible_employee_id.is_not(None),
+                        Task.finished_at.is_not(None),
+                        Task.finished_at >= start,
+                        Task.finished_at < end,
+                        Task.origin_employee_id.is_not(None),
                     )
-                    .group_by(Task.responsible_employee_id)
+                    .group_by(Task.origin_employee_id)
                 )
             ).all()
             for employee_id, count in completed_rows:
@@ -719,15 +623,15 @@ async def _collect_core(
 
             unresolved_completed = (
                 await session.execute(
-                    select(Task.employee_id, func.count(Task.id))
+                    select(Task.agent_worker_id, func.count(Task.id))
                     .where(
                         Task.status == SUCCEEDED,
-                        Task.completed_at.is_not(None),
-                        Task.completed_at >= start,
-                        Task.completed_at < end,
-                        Task.responsible_employee_id.is_(None),
+                        Task.finished_at.is_not(None),
+                        Task.finished_at >= start,
+                        Task.finished_at < end,
+                        Task.origin_employee_id.is_(None),
                     )
-                    .group_by(Task.employee_id)
+                    .group_by(Task.agent_worker_id)
                 )
             ).all()
             for worker_id, count in unresolved_completed:
@@ -765,11 +669,11 @@ async def _collect_core(
                 .scalars()
                 .all()
             )
-            failed_rows = (
+            waiting_rows = (
                 (
                     await session.execute(
                         select(Task)
-                        .where(Task.status == FAILED)
+                        .where(Task.status == WAITING)
                         .order_by(Task.updated_at.desc(), Task.id)
                         .limit(AWAITING_PREVIEW_LIMIT)
                     )
@@ -779,7 +683,7 @@ async def _collect_core(
             )
             queued_tasks = list(queued_rows)
             active_tasks = list(active_rows)
-            attention_tasks = list(failed_rows)
+            attention_tasks = list(waiting_rows)
             preview_truncated = bool(
                 (queued_total or 0) > len(queued_rows) or (active_total or 0) > len(active_rows)
             )
@@ -802,14 +706,6 @@ async def _collect_core(
             attention_tasks = []
             tasks_by_id = {}
 
-    try:
-        session_statuses = await _load_session_statuses(session, list(tasks_by_id.values()))
-    except SQLAlchemyError:
-        logger.exception("Nebula 无法读取 RuntimeSession 状态")
-        if "tasks" not in degraded:
-            degraded.append("tasks")
-        session_statuses = {}
-
     def owner_and_conflicts(task: Task) -> tuple[str | None, list[str]]:
         return _resolve_task_owner(task, employee_ids, worker_owner, worker_known)
 
@@ -826,7 +722,6 @@ async def _collect_core(
                         conflicts=codes,
                         worker_names=worker_names,
                         employee_names=employee_names,
-                        session_statuses=session_statuses,
                     )
                 )
             continue
@@ -851,7 +746,6 @@ async def _collect_core(
                 conflicts=codes,
                 worker_names=worker_names,
                 employee_names=employee_names,
-                session_statuses=session_statuses,
             )
         )
 
@@ -865,14 +759,13 @@ async def _collect_core(
             conflicts=codes,
             worker_names=worker_names,
             employee_names=employee_names,
-            session_statuses=session_statuses,
         )
         if not owner:
             if len(unassigned_preview) < UNASSIGNED_TASK_LIMIT:
                 unassigned_preview.append(dto)
             continue
         active_by_owner[owner].append(dto)
-        if task.status == WAITING or task.runtime_connection == "UNAVAILABLE" or task.inactivity_alert:
+        if task.status == WAITING:
             attention_by_id[task.id] = dto
         for code in codes:
             if code == "TASK_OWNER_CONFLICT":
@@ -900,7 +793,6 @@ async def _collect_core(
             conflicts=codes,
             worker_names=worker_names,
             employee_names=employee_names,
-            session_statuses=session_statuses,
         )
         if not owner:
             if len(unassigned_preview) < UNASSIGNED_TASK_LIMIT:
@@ -908,7 +800,7 @@ async def _collect_core(
             continue
         attention_by_id[task.id] = dto
 
-    unassigned_tasks = sum(unassigned_counts[field] for field in ("running", "queued", "waiting", "failed"))
+    unassigned_tasks = sum(unassigned_counts[field] for field in ("running", "queued", "waiting"))
 
     # 同一员工—Worker 的多个任务聚合成一条执行光路；冲突任务不画线。
     edges: dict[tuple[str, str], dict[str, Any]] = {}
@@ -923,7 +815,7 @@ async def _collect_core(
         edge = edges.setdefault(
             key,
             {
-                "digitalEmployeeId": owner,
+                "originEmployeeId": owner,
                 "workerId": worker_id,
                 "running": 0,
                 "waiting": 0,
@@ -935,8 +827,6 @@ async def _collect_core(
             edge["running"] += 1
         else:
             edge["waiting"] += 1
-        if dto["runtimeConnection"] == "UNAVAILABLE":
-            edge["unavailable"] += 1
         if len(edge["taskIdsPreview"]) < 5:
             edge["taskIdsPreview"].append(dto["id"])
 
@@ -947,10 +837,15 @@ async def _collect_core(
 
     employee_dtos: list[dict[str, Any]] = []
     worker_ids_by_employee: dict[str, list[str]] = defaultdict(list)
-    for worker in workers:
-        owner = worker_owner.get(worker.id)
-        if owner:
-            worker_ids_by_employee[owner].append(worker.id)
+    active_origins = {
+        task.agent_worker_id: task.origin_employee_id
+        for task in active_tasks
+        if task.agent_worker_id and task.origin_employee_id in employee_ids
+    }
+    for worker in worker_dtos:
+        worker["originEmployeeId"] = active_origins.get(worker["id"])
+        if worker["originEmployeeId"]:
+            worker_ids_by_employee[worker["originEmployeeId"]].append(worker["id"])
     for row in employee_rows:
         dto = _employee_base(row, counts[row["id"]])
         dto["workerIds"] = sorted(worker_ids_by_employee.get(row["id"], []))
@@ -985,7 +880,6 @@ async def _collect_core(
         "tasksQueued": sum(item["counts"]["queued"] for item in employee_dtos) + unassigned_counts["queued"],
         "tasksWaiting": sum(item["counts"]["waiting"] for item in employee_dtos)
         + unassigned_counts["waiting"],
-        "tasksFailed": sum(item["counts"]["failed"] for item in employee_dtos) + unassigned_counts["failed"],
         "completedToday": sum(item["counts"]["completedToday"] for item in employee_dtos)
         + unassigned_counts["completedToday"],
     }
@@ -1009,7 +903,7 @@ async def _collect_core(
         "collaborations": collaborations,
         "totals": totals,
         "unassigned": {
-            "workerCount": unassigned_workers,
+            "workerCount": sum(not item["originEmployeeId"] for item in worker_dtos),
             "taskCount": unassigned_tasks,
             "counts": unassigned_counts,
         },
@@ -1025,13 +919,10 @@ def _snapshot_version(core: dict[str, Any], watermarks: list[datetime], now: dat
         "employees": [
             (item["id"], item["enabled"], item["counts"], item["workerIds"]) for item in core["employees"]
         ],
-        "workers": [
-            (item["id"], item["digitalEmployeeId"], item["health"], item["occupancy"])
-            for item in core["workers"]
-        ],
+        "workers": [(item["id"], item["health"], item["occupancy"]) for item in core["workers"]],
         "edges": [
             (
-                item["digitalEmployeeId"],
+                item["originEmployeeId"],
                 item["workerId"],
                 item["running"],
                 item["waiting"],
@@ -1060,7 +951,7 @@ async def _task_watermarks(session: AsyncSession) -> list[datetime]:
             select(
                 select(func.max(Task.updated_at)).scalar_subquery(),
                 select(func.max(AgentWorker.updated_at)).scalar_subquery(),
-                select(func.max(WorkerInstance.updated_at)).scalar_subquery(),
+                select(func.max(AgentWorker.updated_at)).scalar_subquery(),
             )
         )
     ).one()
@@ -1146,7 +1037,7 @@ async def collect_employee_detail(
         "timezone": core["timezone"],
         "degradedSources": core["degradedSources"],
         "employee": employee,
-        "workers": [item for item in core["workers"] if item["digitalEmployeeId"] == employee_id],
+        "workers": [item for item in core["workers"] if item["id"] in employee["workerIds"]],
         "activeTasks": [item for item in core["activeTasks"] if belongs(item)],
         "queuedTasks": [item for item in core["queuedTasks"] if belongs(item)],
         "attentionTasks": [item for item in core["attentionTasks"] if belongs(item)],
@@ -1174,9 +1065,8 @@ async def collect_task_detail(
     employee_names = {row["id"]: row["name"] for row in employee_rows}
     workers, _instances = await _load_workers(session)
     worker_names = {worker.id: worker_display_name(worker) for worker in workers}
-    worker_owner = {worker.id: worker.digital_employee_id for worker in workers if worker.digital_employee_id}
+    worker_owner = {}
     owner, codes = _resolve_task_owner(task, employee_ids, worker_owner, set(worker_names))
-    session_statuses = await _load_session_statuses(session, [task])
     return {
         "generatedAt": current.astimezone(UTC).isoformat(),
         "task": _task_dto(
@@ -1185,7 +1075,6 @@ async def collect_task_detail(
             conflicts=codes,
             worker_names=worker_names,
             employee_names=employee_names,
-            session_statuses=session_statuses,
         ),
     }
 
@@ -1208,7 +1097,7 @@ async def collect_employee_tasks(
         raise ValueError("员工不存在")
     workers, _instances = await _load_workers(session)
     worker_names = {worker.id: worker_display_name(worker) for worker in workers}
-    worker_owner = {worker.id: worker.digital_employee_id for worker in workers if worker.digital_employee_id}
+    worker_owner = {}
     employee_names = {row["id"]: row["name"] for row in employee_rows}
     owned_ids = sorted(worker_id for worker_id, owner in worker_owner.items() if owner == employee_id)
 
@@ -1232,7 +1121,6 @@ async def collect_employee_tasks(
         .scalars()
         .all()
     )
-    session_statuses = await _load_session_statuses(session, list(rows))
     items = []
     for task in rows:
         owner, codes = _resolve_task_owner(
@@ -1241,7 +1129,7 @@ async def collect_employee_tasks(
             worker_owner,
             set(worker_names),
         )
-        if task.employee_id and task.employee_id not in worker_names:
+        if task.agent_worker_id and task.agent_worker_id not in worker_names:
             codes = [*codes, "TASK_WORKER_MISSING"]
         items.append(
             _task_dto(
@@ -1250,7 +1138,6 @@ async def collect_employee_tasks(
                 conflicts=codes,
                 worker_names=worker_names,
                 employee_names=employee_names,
-                session_statuses=session_statuses,
             )
         )
     return {
@@ -1263,15 +1150,9 @@ async def collect_employee_tasks(
     }
 
 
-def _employee_task_condition(employee_id: str, configured_worker_ids: list[str]):
-    """与现有任务归属投影一致：显式责任员工优先。"""
-    return or_(
-        Task.responsible_employee_id == employee_id,
-        and_(
-            Task.responsible_employee_id.is_(None),
-            Task.employee_id.in_(configured_worker_ids),
-        ),
-    )
+def _employee_task_condition(employee_id: str):
+    """员工归属只取 Task 的来源员工。"""
+    return Task.origin_employee_id == employee_id
 
 
 async def collect_employee_office(
@@ -1296,35 +1177,35 @@ async def collect_employee_office(
         raise ValueError("员工不存在")
     if "tasks" in core["degradedSources"] or "workers" in core["degradedSources"]:
         raise HTTPException(status_code=503, detail="任务或 Worker 数据暂不可用，请重试")
-    condition = _employee_task_condition(employee_id, employee["workerIds"])
+    condition = _employee_task_condition(employee_id)
     active_condition = and_(condition, Task.status.in_((RUNNING, WAITING)))
     grouped = (
         await session.execute(
-            select(Task.employee_id, Task.status, func.count(Task.id))
-            .where(active_condition, Task.employee_id.is_not(None))
-            .group_by(Task.employee_id, Task.status)
+            select(Task.agent_worker_id, Task.status, func.count(Task.id))
+            .where(active_condition, Task.agent_worker_id.is_not(None))
+            .group_by(Task.agent_worker_id, Task.status)
         )
     ).all()
     active_counts: dict[str, dict[str, int]] = defaultdict(lambda: {RUNNING: 0, WAITING: 0})
     for worker_id, status, count in grouped:
         active_counts[str(worker_id)][str(status)] = int(count)
-    attention_worker_ids = set(await session.scalars(
-        select(Task.employee_id).where(
-            active_condition,
-            or_(
-                Task.status == WAITING,
-                Task.runtime_connection == "UNAVAILABLE",
-                Task.inactivity_alert.is_(True),
-            ),
-        ).distinct()
-    ))
-    # 有实际执行关系的共享 Worker 均可见。配置关联但正执行其他员工工作的
-    # 资源不冒充当前员工执行资源；空闲及不可用配置资源供查看调度环境。
+    attention_worker_ids = set(
+        await session.scalars(
+            select(Task.agent_worker_id)
+            .where(
+                active_condition,
+                or_(
+                    Task.status == WAITING,
+                ),
+            )
+            .distinct()
+        )
+    )
+    # 办公室仅展示当前执行该员工任务的 Worker。
     related = [
         {**worker, "association": "task" if worker["id"] in active_counts else "dispatch"}
         for worker in core["workers"]
         if worker["id"] in active_counts
-        or (worker["digitalEmployeeId"] == employee_id and worker["occupancy"] == "idle")
     ]
 
     def worker_rank(worker: dict[str, Any]) -> tuple[int, str, str]:
@@ -1343,24 +1224,26 @@ async def collect_employee_office(
     worker_ids = [worker["id"] for worker in worker_items]
     task_rank = case(
         (Task.status == WAITING, 0),
-        (or_(Task.runtime_connection == "UNAVAILABLE", Task.inactivity_alert.is_(True)), 1),
         else_=2,
     )
     # 每个 Worker 至多三个任务摘要，SQL 窗口避免某个繁忙 Worker 占满预览。
     preview = (
         select(
             Task.id,
-            func.row_number().over(
-                partition_by=Task.employee_id,
+            func.row_number()
+            .over(
+                partition_by=Task.agent_worker_id,
                 order_by=(task_rank, Task.updated_at.desc(), Task.id),
-            ).label("position"),
+            )
+            .label("position"),
         )
-        .where(active_condition, Task.employee_id.in_(worker_ids))
+        .where(active_condition, Task.agent_worker_id.in_(worker_ids))
         .subquery()
     )
     worker_tasks = list(
         await session.scalars(
-            select(Task).join(preview, Task.id == preview.c.id)
+            select(Task)
+            .join(preview, Task.id == preview.c.id)
             .where(preview.c.position <= 3)
             .order_by(task_rank, Task.updated_at.desc(), Task.id)
         )
@@ -1368,10 +1251,10 @@ async def collect_employee_office(
     issue_condition = and_(
         condition,
         or_(
-            Task.status.in_((WAITING, FAILED, PENDING)),
+            Task.status.in_((WAITING, PENDING)),
             and_(
                 Task.status == RUNNING,
-                or_(Task.runtime_connection == "UNAVAILABLE", Task.inactivity_alert.is_(True)),
+                Task.status == WAITING,
             ),
         ),
     )
@@ -1380,12 +1263,13 @@ async def collect_employee_office(
     issue_rank = case((Task.status == WAITING, 0), (Task.status == PENDING, 2), else_=1)
     issues = list(
         await session.scalars(
-            select(Task).where(issue_condition)
+            select(Task)
+            .where(issue_condition)
             .order_by(issue_rank, Task.updated_at.desc(), Task.id)
-            .offset((issue_page - 1) * page_size).limit(page_size)
+            .offset((issue_page - 1) * page_size)
+            .limit(page_size)
         )
     )
-    session_statuses = await _load_session_statuses(session, [*worker_tasks, *issues])
     employee_names = {item["id"]: item["name"] for item in core["employees"]}
 
     def dto(task: Task) -> dict[str, Any]:
@@ -1393,8 +1277,11 @@ async def collect_employee_office(
             task, set(employee_names), core["workerOwner"], core["workerKnown"]
         )
         result = _task_dto(
-            task, owner=owner, conflicts=conflicts, worker_names=core["workerNames"],
-            employee_names=employee_names, session_statuses=session_statuses,
+            task,
+            owner=owner,
+            conflicts=conflicts,
+            worker_names=core["workerNames"],
+            employee_names=employee_names,
         )
         # 工作台通过现有 Task 入口处理，不公开其他用户的会话引用。
         result["sourceConversationId"] = None
@@ -1402,7 +1289,7 @@ async def collect_employee_office(
         return result
 
     for worker in worker_items:
-        worker["tasks"] = [dto(task) for task in worker_tasks if task.employee_id == worker["id"]]
+        worker["tasks"] = [dto(task) for task in worker_tasks if task.agent_worker_id == worker["id"]]
         worker["employeeTaskCounts"] = active_counts.get(worker["id"], {RUNNING: 0, WAITING: 0})
     return {
         "employee": employee,
@@ -1436,22 +1323,21 @@ async def collect_link_tasks(
     employee_names = {row["id"]: row["name"] for row in employee_rows}
     workers, _instances = await _load_workers(session)
     worker_names = {item.id: worker_display_name(item) for item in workers}
-    worker_owner = {item.id: item.digital_employee_id for item in workers if item.digital_employee_id}
+    worker_owner = {}
     status_rows = (
         await session.execute(
             select(Task.status, func.count(Task.id))
-            .where(Task.employee_id == worker_id)
+            .where(Task.agent_worker_id == worker_id)
             .group_by(Task.status)
         )
     ).all()
     counts = {str(key): int(value) for key, value in status_rows}
-    query = select(Task).where(Task.employee_id == worker_id)
+    query = select(Task).where(Task.agent_worker_id == worker_id)
     if task_status:
         query = query.where(Task.status == task_status)
     rows = (
         (await session.execute(query.order_by(Task.updated_at.desc(), Task.id).limit(limit))).scalars().all()
     )
-    session_statuses = await _load_session_statuses(session, list(rows))
     items = []
     for task in rows:
         owner, codes = _resolve_task_owner(task, employee_ids, worker_owner, set(worker_names))
@@ -1462,13 +1348,11 @@ async def collect_link_tasks(
                 conflicts=codes,
                 worker_names=worker_names,
                 employee_names=employee_names,
-                session_statuses=session_statuses,
             )
         )
     return {
         "workerId": worker_id,
         "workerName": worker_display_name(worker),
-        "digitalEmployeeId": worker.digital_employee_id,
         "generatedAt": current.astimezone(UTC).isoformat(),
         "counts": counts,
         "items": items,
@@ -1574,8 +1458,12 @@ async def nebula_employee_office(
 ) -> dict[str, Any]:
     try:
         return await collect_employee_office(
-            session, connection, employee_id, worker_page=worker_page,
-            issue_page=issue_page, page_size=page_size,
+            session,
+            connection,
+            employee_id,
+            worker_page=worker_page,
+            issue_page=issue_page,
+            page_size=page_size,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1597,7 +1485,6 @@ async def nebula_employee_tasks(
         RUNNING,
         WAITING,
         SUCCEEDED,
-        FAILED,
         CANCELED,
     }:
         raise HTTPException(status_code=422, detail="未知任务状态")
@@ -1629,7 +1516,6 @@ async def nebula_link_tasks(
         RUNNING,
         WAITING,
         SUCCEEDED,
-        FAILED,
         CANCELED,
     }:
         raise HTTPException(status_code=422, detail="未知任务状态")

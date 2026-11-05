@@ -58,8 +58,8 @@ def employee_body(**overrides):
 
 def test_health_and_runtime_report_pinned_version(client):
     assert client.get("/api/health").json()["product"] == "nexus"
-    assert client.get("/api/health").json()["version"] == "1.4.9"
-    assert client.get("/openapi.json").json()["info"]["version"] == "1.4.9"
+    assert client.get("/api/health").json()["version"] == "1.5.0"
+    assert client.get("/openapi.json").json()["info"]["version"] == "1.5.0"
     runtime = client.get("/api/v1/runtime").json()
     assert runtime["agentscope_version"] == "2.0.10"
     assert runtime["configured"] is False
@@ -381,11 +381,9 @@ def test_wake_target_uses_mailbox_and_rejects_foreign_session(client):
     assert mailbox.json() == {"agent_id": "agt_1", "session_id": "ses_mail"}
     foreign = client.get(
         "/api/v1/internal/wake-target",
-        params={"employee_id": employee["id"], "session_id": "ses_other"},
+        params={"employee_id": employee["id"], "source": "opencode", "external_task_id": "ses_other"},
     )
     assert foreign.status_code == 404
-
-
 
 
 def test_new_knowledge_and_tools_are_rejected_when_catalog_is_unavailable(client):
@@ -580,7 +578,8 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
         assert payload["input"]["role"] == "user"
         assert payload["input"]["name"] == "browser-a"
         assert payload["input"]["metadata"]["verified_uid"] == "browser-a"
-        assert payload["input"]["content"] == [{"type": "text", "text": "看一下失败日志"}]
+        assert payload["input"]["content"][0] == {"type": "text", "text": "看一下失败日志"}
+        assert conversation["id"] in payload["input"]["content"][-1]["text"]
         assert chat_calls[0].headers["x-user-id"] == "nexus"
         session_calls = [request for request in seen if request.url.path == "/sessions/"]
         # 邮箱一次，私聊一次。第二条消息复用私聊 Session。
@@ -1360,8 +1359,6 @@ def test_private_chat_uses_dont_ask(tmp_path, monkeypatch):
     assert private[0][1]["permission_mode"] == "dont_ask"
 
 
-
-
 def test_task_hint_body_accepts_json_at_module_level():
     import __future__
 
@@ -1397,8 +1394,6 @@ def test_task_hint_body_accepts_json_at_module_level():
     assert any(item[0] == "body" for item in locations)
 
 
-
-
 def test_disabled_employee_defers_wake(client):
     from nexus_api.db import connect
     from nexus_api.main import db_path
@@ -1420,10 +1415,6 @@ def test_disabled_employee_defers_wake(client):
     deferred = client.get("/api/v1/internal/wake-target", params={"employee_id": employee["id"]})
     assert deferred.status_code == 409
     assert "禁用" in deferred.json()["detail"]
-
-
-
-
 
 
 def test_employee_avatar_persists_and_metadata_edits_do_not_change_it(client):

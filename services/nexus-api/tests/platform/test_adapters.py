@@ -2,12 +2,11 @@ import json
 
 import httpx
 import pytest
-from sqlalchemy import make_url, select
+from sqlalchemy import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.bootstrap import bootstrap_employees
 from app.config.settings import BACKEND_ROOT, Settings
-from app.models import AgentWorker, Base, OpenCodeExecutionEnvironment
+from app.models import Base
 from app.sources.nr_test_system import NrTestSystemSource
 
 
@@ -20,39 +19,6 @@ async def session():
     async with factory() as value:
         yield value
     await engine.dispose()
-
-
-async def test_bootstrap_employee_from_v03_yaml(tmp_path, session):
-    (tmp_path / "employees.yaml").write_text(
-        """employees:
-  - id: astra-config
-    name: Astra Config
-    role: 测试平台员工
-    task_types: [ISSUE, REQUIREMENT]
-    category_ids: [testing-platform]
-    policy:
-      auto_claim: true
-      auto_execute: false
-      max_auto_retries: 2
-    execution_environment:
-      mode: LOCAL
-      workspace_root: ./workspaces/astra-config
-""",
-        encoding="utf-8",
-    )
-
-    await bootstrap_employees(session, tmp_path)
-    employee = await session.get(AgentWorker, "astra-config")
-
-    assert employee is not None
-    assert employee.status == "IDLE"
-    assert employee.task_types == ["ISSUE", "REQUIREMENT"]
-    assert employee.category_ids == ["testing-platform"]
-    assert employee.auto_execute is False
-    environment = await session.scalar(
-        select(OpenCodeExecutionEnvironment).where(OpenCodeExecutionEnvironment.employee_id == employee.id)
-    )
-    assert environment.workspace_root == "./workspaces/astra-config"
 
 
 async def test_nr_test_system_adapter_maps_v03_task_and_backfills():

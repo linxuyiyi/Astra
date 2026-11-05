@@ -1,12 +1,18 @@
-# Nexus v1.4.9
+# Nexus v1.5.0
 
 Nexus 是数字员工的目录和交流产品。推理、会话、技能、知识和记忆由 **AgentScope 2.0.10 Agent Service** 承担。Nexus 只通过 HTTP 调用它。
 
 `services/nexus-api` 是唯一的 Nexus 服务：同一进程提供员工对话与目录、任务、Agent Worker、API 网关控制面、数字图书馆、Worker Gateway WebSocket 和前端静态资源。OpenCode 网关数据面、Task MCP、Library MCP 与 AgentScope 仍是独立基础设施进程。
 
-公司正式部署使用 **MySQL 8.0.36 空库**。Nexus 的 53 张自有业务表以 `t_nexus_` 开头，由一个 Alembic `0001_init` 初始化。AgentScope 官方 SQL 存储使用独立数据库。SQLite 仅用于显式配置的开发/测试环境；不支持历史库升级或导入。Redis 继续承担消息总线、Celery 和网关运行态。
+公司正式部署使用 **MySQL 8.0.36 空库**。Nexus 的 52 张自有业务表以 `t_nexus_` 开头，由一个 Alembic `0001_init` 初始化。AgentScope 官方 SQL 存储使用独立数据库。SQLite 仅用于显式配置的开发/测试环境；不支持历史库升级或导入。Redis 继续承担消息总线、Celery 和网关运行态。
 
 ## 当前版本
+
+v1.5.0 将执行链路收敛为 **Task → AgentWorker → OpenCode 原生 Session**。平台只保存 Task 五态与 Worker 四态；同一 Worker 独占一项未释放任务，未知提交在原 Task 上串行自动重发，接受重复执行。删除 Session / 实例 / 环境 / 连接历史四张表，保留认证、epoch、部署维护和经验复盘闭环。Worker 按当前任务关联原数字员工，不再静态绑定员工。
+
+[架构落地与验证边界](docs/architecture/nexus-v1.5.0-task-worker.md) · [全部数据库表与字段](docs/architecture/nexus-v1.5.0-schema.md)
+
+以下为此前版本的功能背景：
 
 v1.4.9 在 v1.4.8 基础上完善了标准 HTTP MCP 注册与部署验收、群聊 @ 数字员工、平台提示词配置，把日程安排提升为主菜单，并将 `/chat` 切换为同文档原生 Vue 聊天窗口。
 

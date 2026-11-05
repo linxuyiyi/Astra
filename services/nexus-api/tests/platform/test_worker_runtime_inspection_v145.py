@@ -43,11 +43,7 @@ def opencode_server():
             200,
             {
                 "model": "custom-relay/route-1",
-                "provider": {
-                    "custom-relay": {
-                        "options": {"baseURL": "{base}/gateway", "apiKey": CANARY}
-                    }
-                },
+                "provider": {"custom-relay": {"options": {"baseURL": "{base}/gateway", "apiKey": CANARY}}},
             },
         ),
         "models": (200, {"data": [{"id": "route-1"}]}),
@@ -186,11 +182,7 @@ def test_actual_model_differs_from_desired_is_rejected(tmp_path: Path, opencode_
         200,
         {
             "model": "custom-relay/route-2",
-            "provider": {
-                "custom-relay": {
-                    "options": {"baseURL": "{base}/gateway", "apiKey": CANARY}
-                }
-            },
+            "provider": {"custom-relay": {"options": {"baseURL": "{base}/gateway", "apiKey": CANARY}}},
         },
     )
     state["models"] = (
@@ -223,9 +215,7 @@ def test_unicode_expected_names_are_not_silently_dropped(tmp_path: Path, opencod
     assert missing["skills"]["status"] == "unhealthy"
     assert missing["skills"]["missing"] == ["缺失技能"]
     with pytest.raises(ValueError):
-        inspect_runtime_from_payload(
-            base, str(workspace), {"expected_skills": ["ok", 3]}
-        )
+        inspect_runtime_from_payload(base, str(workspace), {"expected_skills": ["ok", 3]})
 
 
 def test_subdirectory_is_not_reported_as_repository_root(tmp_path: Path, opencode_server):
@@ -333,8 +323,7 @@ def test_payload_cannot_supply_paths_urls_or_shell(tmp_path: Path, opencode_serv
     workspace = _repo(tmp_path / "ws", remote="https://example.test/org/repo.git")
     message = envelope(
         request_id="req-inspect",
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         session_id=None,
         message_type="command",
         payload={
@@ -387,8 +376,7 @@ class _Hold:
 def _inspect_command(request_id: str, epoch: int = 3) -> dict:
     message = envelope(
         request_id=request_id,
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         session_id=None,
         message_type="command",
         payload={
@@ -409,8 +397,7 @@ def _inspect_command(request_id: str, epoch: int = 3) -> dict:
 def _heartbeat_ping(epoch: int = 3) -> dict:
     message = envelope(
         request_id="hb-1",
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         session_id=None,
         message_type="heartbeat",
         payload={"kind": "ping"},
@@ -473,17 +460,14 @@ def _slow_inspection(monkeypatch, *, release: threading.Event) -> dict:
             "checked_at": "2026-10-19T00:00:00+00:00",
         }
 
-    monkeypatch.setattr(
-        "app.worker_agent.inspection.inspect_runtime_from_payload", slow
-    )
+    monkeypatch.setattr("app.worker_agent.inspection.inspect_runtime_from_payload", slow)
     return state
 
 
 def _manager(base: str, workspace: Path) -> WorkerConnectionManager:
     config = AgentConfig(
         gateway_url="ws://nexus.internal/api/worker-gateway/connect",
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         token="wtk_test",
         ping_seconds=3600,
         opencode_url=base,
@@ -513,24 +497,20 @@ async def test_slow_inspection_does_not_block_heartbeat_and_dedups(
 
     for _ in range(100):
         if any(
-            item["type"] == "heartbeat" and item["payload"].get("kind") == "pong"
-            for item in transport.sent
+            item["type"] == "heartbeat" and item["payload"].get("kind") == "pong" for item in transport.sent
         ):
             break
         await asyncio.sleep(0.02)
 
     assert any(
-        item["type"] == "heartbeat" and item["payload"].get("kind") == "pong"
-        for item in transport.sent
+        item["type"] == "heartbeat" and item["payload"].get("kind") == "pong" for item in transport.sent
     )
     assert any(item["payload"].get("stage") == "duplicate" for item in transport.sent)
     assert counters["calls"] == 1
 
     release.set()
     for _ in range(100):
-        if len(
-            [item for item in transport.sent if item["payload"].get("stage") == "result"]
-        ) >= 2:
+        if len([item for item in transport.sent if item["payload"].get("stage") == "result"]) >= 2:
             break
         await asyncio.sleep(0.02)
 
@@ -541,9 +521,7 @@ async def test_slow_inspection_does_not_block_heartbeat_and_dedups(
         await asyncio.wait_for(task, 5)
 
 
-async def test_epoch_switch_discards_old_inspection_result(
-    monkeypatch, tmp_path: Path, opencode_server
-):
+async def test_epoch_switch_discards_old_inspection_result(monkeypatch, tmp_path: Path, opencode_server):
     _state, base = opencode_server
     workspace = _repo(tmp_path / "ws", remote="https://example.test/org/repo.git")
     release = threading.Event()
@@ -564,9 +542,7 @@ async def test_epoch_switch_discards_old_inspection_result(
             break
         await asyncio.sleep(0.02)
 
-    assert not [
-        item for item in transport.sent if item["payload"].get("stage") == "result"
-    ]
+    assert not [item for item in transport.sent if item["payload"].get("stage") == "result"]
     transport.socket_release.set()
     with pytest.raises(ConnectionError):
         await asyncio.wait_for(task, 5)
@@ -576,8 +552,7 @@ async def test_epoch_switch_discards_old_inspection_result(
 def _restart_command(workspace: Path, port: int, request_id: str = "req-restart") -> dict:
     message = envelope(
         request_id=request_id,
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         session_id=None,
         message_type="command",
         payload={
@@ -595,8 +570,9 @@ async def test_disconnect_gate_stops_queued_restart_before_side_effect(monkeypat
     workspace.mkdir()
     manager = _manager("http://127.0.0.1:14096", workspace)
     manager.supervisor = RuntimeSupervisor(
-        environment_id=7, workspace_root=str(workspace),
-        port=14096, opencode_bin="opencode", enabled=True,
+        port=14096,
+        opencode_bin="opencode",
+        enabled=True,
     )
     manager.supervisor._loop = asyncio.get_running_loop()
     entered = threading.Event()
@@ -614,11 +590,10 @@ async def test_disconnect_gate_stops_queued_restart_before_side_effect(monkeypat
     async def _unexpected_stop():
         calls.append("stop")
 
+    monkeypatch.setattr("app.worker_agent.supervisor.assert_native_idle", slow_native_idle)
     monkeypatch.setattr(
-        "app.worker_agent.supervisor.assert_native_idle", slow_native_idle
-    )
-    monkeypatch.setattr(
-        manager.supervisor, "_terminate_child",
+        manager.supervisor,
+        "_terminate_child",
         _unexpected_stop,
     )
     transport = _ControlTransport([_auth_reply(), _restart_command(workspace, 14096)])
@@ -637,9 +612,7 @@ async def test_disconnect_gate_stops_queued_restart_before_side_effect(monkeypat
         await asyncio.sleep(0.02)
 
     assert calls == []
-    assert not [
-        item for item in transport.sent if item["payload"].get("stage") == "result"
-    ]
+    assert not [item for item in transport.sent if item["payload"].get("stage") == "result"]
     transport.socket_release.set()
     with pytest.raises(ConnectionError):
         await asyncio.wait_for(task, 5)
@@ -659,8 +632,7 @@ async def test_socket_disconnect_does_not_restart_and_result_has_no_canary(
     workspace = _repo(tmp_path / "ws", remote="https://example.test/org/repo.git")
     config = AgentConfig(
         gateway_url="ws://nexus.internal/api/worker-gateway/connect",
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         token="wtk_test",
         ping_seconds=3600,
         opencode_url=base,
@@ -698,19 +670,13 @@ def test_skill_body_hash_strips_frontmatter_and_ignores_empty_content():
     assert skill_content_hash(None) is None
 
 
-def test_effective_config_mcp_endpoints_and_skill_content_hashes(
-    tmp_path: Path, opencode_server
-):
+def test_effective_config_mcp_endpoints_and_skill_content_hashes(tmp_path: Path, opencode_server):
     state, base = opencode_server
     state["config"] = (
         200,
         {
             "model": "custom-relay/route-1",
-            "provider": {
-                "custom-relay": {
-                    "options": {"baseURL": "{base}/gateway", "apiKey": CANARY}
-                }
-            },
+            "provider": {"custom-relay": {"options": {"baseURL": "{base}/gateway", "apiKey": CANARY}}},
             "mcp": {
                 "nexus-library": {
                     "type": "remote",

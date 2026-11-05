@@ -155,7 +155,7 @@ def fetch(url, target=None, *, digest=None):
     label = f"{parsed.hostname}{parsed.path}"
     try:
         with opener.open(
-            urllib.request.Request(url, headers={"User-Agent": "Nexus-Deploy/1.4.9"}),
+            urllib.request.Request(url, headers={"User-Agent": "Nexus-Deploy/1.5.0"}),
             timeout=30,
         ) as response:
             if response.status != 200:
@@ -775,8 +775,8 @@ class Deployer:
         branch = self.run(
             ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], capture=True
         )
-        if branch != "v1.4.9":
-            raise DeploymentError("标准部署需要 v1.4.9 分支，请先选择正确的发布分支")
+        if branch != "v1.5.0":
+            raise DeploymentError("标准部署需要 v1.5.0 分支，请先选择正确的发布分支")
         previous = self.run(["git", "rev-parse", "HEAD"], capture=True)
         self.run(["git", "fetch", "origin", branch], timeout=180)
         self.run(["git", "merge", "--ff-only", "origin/" + branch])
@@ -1302,7 +1302,7 @@ Settings()
             json.dumps(
                 {
                     "release": self.values["NEXUS_DEPLOY_RELEASE"],
-                    "version": "1.4.9",
+                    "version": "1.5.0",
                     "verified_at": time.time(),
                 }
             )
@@ -1330,7 +1330,7 @@ Settings()
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Nexus·数字空间 V1.4.9 首次安装/升级统一入口"
+        description="Nexus·数字空间 V1.5.0 首次安装/升级统一入口"
     )
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument(

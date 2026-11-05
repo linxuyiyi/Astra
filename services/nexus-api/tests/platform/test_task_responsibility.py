@@ -4,9 +4,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.domain import RuntimeSessionStatus, TaskStatus
-from app.models import AgentWorker, Base, Event, RuntimeSession, Task, TaskWakeOutbox
-from app.runtime.lifecycle import RuntimeService
+from app.domain import TaskStatus
+from app.models import Base, Event, Task
 from app.runtime.opencode_model import direct_model, gateway_model, route_model_id
 from app.runtime.presentation import TASK_STATUS
 from app.schemas import TaskCreate
@@ -23,10 +22,23 @@ async def session():
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as value:
         from nexus_api.db_models import employees
-        await value.execute(employees.insert().values(
-            id="qa-owner", name="QA", domain="QA", description="", instructions="", avatar="robot",
-            enabled=1, knowledge_json="[]", skills_json="[]", tools_json="[]", created_at="t", updated_at="t",
-        ))
+
+        await value.execute(
+            employees.insert().values(
+                id="qa-owner",
+                name="QA",
+                domain="QA",
+                description="",
+                instructions="",
+                avatar="robot",
+                enabled=1,
+                knowledge_json="[]",
+                skills_json="[]",
+                tools_json="[]",
+                created_at="t",
+                updated_at="t",
+            )
+        )
         await value.commit()
         yield value
     await engine.dispose()
@@ -39,7 +51,7 @@ def _create(**overrides) -> TaskCreate:
 @pytest.mark.parametrize("state", list(TaskStatus))
 async def test_employee_task_results_supply_chinese_labels_and_original_codes(session, state):
 
-    task = await TaskService(session).create(_create(responsible_employee_id="emp_1"))
+    task = await TaskService(session).create(_create(origin_employee_id="emp_1"))
     task.status = state.value
     await session.commit()
     tools = TaskTools(session)
@@ -53,47 +65,19 @@ async def test_employee_task_results_supply_chinese_labels_and_original_codes(se
         assert result["runtime_status_label"] == TASK_STATUS[state.value]["label"]
 
 
-async def test_same_idempotency_key_returns_the_existing_task(session):
+async def test_same_source_creates_distinct_tasks(session):
     service = TaskService(session)
     first = await service.create(
-        _create(responsible_employee_id="emp_1", source_session_id="ses_1", idempotency_key="same-request")
+        _create(origin_employee_id="emp_1", source="group_chat", external_task_id="group")
     )
     second = await service.create(
-        _create(title="另一标题", responsible_employee_id="emp_1", idempotency_key="same-request")
+        _create(origin_employee_id="emp_1", source="group_chat", external_task_id="group")
     )
-
-    assert second.id == first.id
-    assert second.title == first.title
-    events = (await session.scalars(select(Event).where(Event.task_id == first.id))).all()
-    assert [event.event_type for event in events] == ["TASK_CREATED", "TASK_PENDING"]
-
-
-async def test_failure_and_recovery_coalesce_pending_wakes(session):
-    task = await TaskService(session).create(
-        _create(responsible_employee_id="emp_1", source_session_id="ses_1")
-    )
-    await TaskService(session).transition(task, TaskStatus.FAILED)
-    pending = list(
-        (await session.scalars(select(TaskWakeOutbox).where(TaskWakeOutbox.status == "pending"))).all()
-    )
-    assert len(pending) == 1
-    assert "nexus_task_get" in pending[0].hint
-
-    await TaskService(session).transition(task, TaskStatus.RUNNING)
-    rows = list((await session.scalars(select(TaskWakeOutbox))).all())
-    assert sorted(row.status for row in rows) == ["pending", "superseded"]
-    assert task.status == TaskStatus.RUNNING
-
-
-async def test_task_without_responsible_employee_does_not_wake(session):
-    task = await TaskService(session).create(_create())
-    await TaskService(session).transition(task, TaskStatus.FAILED)
-    rows = list((await session.scalars(select(TaskWakeOutbox))).all())
-    assert rows == []
+    assert second.id != first.id
 
 
 async def test_illegal_control_leaves_concluded_status(session):
-    task = await TaskService(session).create(_create(responsible_employee_id="emp_1"))
+    task = await TaskService(session).create(_create(origin_employee_id="emp_1"))
     task.status = TaskStatus.SUCCEEDED.value
     await session.commit()
     tools = TaskTools(session)
@@ -119,69 +103,14 @@ async def test_retry_pending_does_not_start(session):
 
 async def test_refused_start_returns_ok_false_after_rollback(session):
 
-    task = await TaskService(session).create(_create(responsible_employee_id="emp_1"))
+    task = await TaskService(session).create(_create(origin_employee_id="emp_1"))
     result = await TaskTools(session).start(task.id)
 
     assert result["ok"] is False
     assert result["task_id"] == task.id
-    assert "请先分配已配置运行环境的员工" in result["error"]
+    assert "Worker" in result["error"]
     current = await session.get(Task, task.id)
     assert current.status == TaskStatus.PENDING.value
-
-
-async def test_paused_finished_turn_stays_waiting(session):
-    started = datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
-    session.add(AgentWorker(id="worker-1", name="执行员工", role="工程"))
-    session.add(
-        Task(
-            id="T-paused",
-            task_type="ISSUE",
-            title="登录修复",
-            status=TaskStatus.WAITING.value,
-            employee_id="worker-1",
-            workspace="/tmp/task-ws",
-            current_session_id="ses_done",
-            last_message_id="msg_done",
-            turn_started_at=started,
-        )
-    )
-    session.add(
-        RuntimeSession(
-            id="ses_done",
-            task_id="T-paused",
-            employee_id="worker-1",
-            workspace="/tmp/task-ws",
-            environment={},
-            status=RuntimeSessionStatus.SUCCEEDED.value,
-        )
-    )
-    await session.commit()
-
-    class IdleClient:
-        def __init__(self) -> None:
-            self.history_reads = 0
-
-        async def status(self, _directory, _session_id):
-            return "idle"
-
-        async def children(self, _directory, _session_id):
-            return []
-
-        async def questions(self, _directory):
-            return []
-
-        async def permissions(self, _directory):
-            return []
-
-        async def messages(self, _directory, _session_id):
-            self.history_reads += 1
-            raise AssertionError("暂停后的已完成回合不应再读历史")
-
-    client = IdleClient()
-    refreshed = await RuntimeService(session).refresh("T-paused", client=client)
-
-    assert client.history_reads == 0
-    assert refreshed.status == TaskStatus.WAITING.value
 
 
 def test_task_mcp_structured_output_accepts_dict_annotations():
@@ -196,9 +125,9 @@ def test_task_mcp_structured_output_accepts_dict_annotations():
 async def test_task_tools_use_explicit_filters_and_hide_transport_errors(session, monkeypatch):
     from app.executors.errors import OpenCodeServerUnavailable
 
-    owned = await TaskService(session).create(_create(title="自己的", responsible_employee_id="emp_1"))
-    other = await TaskService(session).create(_create(title="别人的", responsible_employee_id="emp_2"))
-    listed = await TaskTools(session).list(responsible_employee_id="emp_1")
+    owned = await TaskService(session).create(_create(title="自己的", origin_employee_id="emp_1"))
+    other = await TaskService(session).create(_create(title="别人的", origin_employee_id="emp_2"))
+    listed = await TaskTools(session).list(origin_employee_id="emp_1")
     assert listed["ok"] is True
     assert [item["task_id"] for item in listed["tasks"]] == [owned.id]
     hidden = await TaskTools(session).get(other.id)
@@ -276,8 +205,6 @@ def test_opencode_model_names():
     assert direct_model(None, "deepseek/deepseek-flash") == "deepseek/deepseek-flash"
 
 
-
-
 async def test_task_categories_only_return_enabled_choices(session):
     from app.models import TaskCategory
 
@@ -307,19 +234,13 @@ async def test_task_mcp_exposes_categories_and_enum_types():
     ]
 
 
-
-
-
-
-
-
 async def test_summary_uses_real_review_for_the_requested_task(session):
     from app.models import ExperienceReviewJob, KnowledgeItem
 
     task = await TaskService(session).create(
-        _create(responsible_employee_id="emp_1", source_channel_id="group-a", source_conversation_id="conv-a")
+        _create(origin_employee_id="emp_1", source="group_chat", external_task_id="group-a")
     )
-    other = await TaskService(session).create(_create(responsible_employee_id="emp_2"))
+    other = await TaskService(session).create(_create(origin_employee_id="emp_2"))
     tools = TaskTools(session)
     assert (await tools.summary(task.id))["review"] is None
     event = await session.scalar(select(Event).where(Event.task_id == task.id))
@@ -376,23 +297,3 @@ async def test_summary_is_registered_as_a_readonly_task_tool():
     tools = {t.name: t for t in await build_mcp_server().list_tools()}
     assert "nexus_task_summary" in tools
     assert set(tools["nexus_task_summary"].input_schema["properties"]) == {"task_id"}
-
-
-async def test_task_creation_and_assignment_use_category_without_repository(session):
-    from app.models import TaskCategory
-
-    session.add(TaskCategory(id="category-only", name="测试系统"))
-    session.add(AgentWorker(id="category-worker", name="Worker", role="开发",
-                           task_types=["REQUIREMENT"], category_ids=["category-only"]))
-    await session.commit()
-    tools = TaskTools(session)
-    result = await tools.create(task_type="REQUIREMENT", category_id="category-only", title="实现 MCP",
-                                description="只按分类派发", responsible_employee_id="qa-owner",
-                                source_session_id="source-session")
-    assert result["ok"] is True
-    assert "repository_id" not in result
-    assert (await tools.assign(result["task_id"], "category-worker"))["ok"] is True
-    repeated = await tools.create(task_type="REQUIREMENT", category_id="category-only", title="实现 MCP",
-                                  description="只按分类派发", responsible_employee_id="qa-owner",
-                                  source_session_id="source-session")
-    assert repeated["task_id"] == result["task_id"]

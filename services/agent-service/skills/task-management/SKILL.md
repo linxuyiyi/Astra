@@ -15,14 +15,15 @@ description: 仅在明确查询或操作 Nexus 任务、需要 Worker 工程执�
 ## 创建时要写清
 
 - `employee_id`：任务责任员工的编号；系统只检查该员工是否存在
-- `source_session_id`、`source_conversation_id`、`source_channel_id`：可选的通知来源信息，有对应信息时传入，不用于权限判断
+- `source`、`external_task_id`：采用当前内部任务来源上下文。私聊使用 `private_chat` 和会话编号，群聊使用 `group_chat` 和群编号；通知始终回到 `employee_id` 指定员工对应的会话，不用于权限判断。
+- `agent_worker_id`：可选的指定执行 Worker；不填时由分类调度。
 - `task_type`：缺陷用 `ISSUE`，需求用 `REQUIREMENT`
 - `category_id`：先调用 `nexus_task_categories`，使用返回的已启用分类 ID
 - 任务仅选择分类；平台按分类派给 Worker，Git 地址和分支由 Worker 自身配置管理。
 - `title`、`description`
 - `acceptance_criteria`：可以验收的结果
 
-同一会话里相同内容再次创建会返回已有任务，不要再造一条。
+同一会话允许多个任务；同一工作的补充不要再创建，先查询已有任务。未知提交由平台在同一 Task 和原生 Session 自动重发，接受重复执行风险。
 收到同一工作的补充指令时，先查询原任务（编号未知时用 `nexus_task_list`），继续原 Task 和原执行会话。
 不要把“检视通过，继续 Commit”等后续工作改写成新任务；`nexus_task_update` 只改说明，不发送执行指令。
 

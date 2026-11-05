@@ -1,6 +1,6 @@
-# Nexus·数字空间 V1.4.9 统一部署
+# Nexus·数字空间 V1.5.0 统一部署
 
-首次安装、代码升级和容器重启后的恢复使用同一入口。在目标 Linux 的 `v1.4.9` Git checkout 中执行：
+首次安装、代码升级和容器重启后的恢复使用同一入口。在目标 Linux 的 `v1.5.0` Git checkout 中执行：
 
 ```bash
 sudo bash ops/deploy/install_nexus.sh
@@ -77,7 +77,7 @@ Nginx 使用部署器生成的完整配置，前台受管运行，不覆盖系�
 
 ## Worker 一键部署与升级
 
-保存 Worker 配置只更新期望值；出现「待同步」后，由管理员手动点击「一键部署」。平台自动下发上述同一 HTTP 网关、`http://<控制机内网IP>:<NEXUS_DEPLOY_WORKER_PORT>/mcp` 的 `nexus-library` 地址及 Worker 连接地址，生成配置与 Nginx 规则，不要求手填另一套 URL。
+名称、描述、调度开关和任务分类即时生效。执行配置变更后使旧连接失效，由管理员重新点击「一键部署」签发连接凭据并应用配置。平台自动下发上述同一 HTTP 网关、`http://<控制机内网IP>:<NEXUS_DEPLOY_WORKER_PORT>/mcp` 的 `nexus-library` 地址及 Worker 连接地址，生成配置与 Nginx 规则，不要求手填另一套 URL。
 
 全新部署使用单守护管理 Worker 和 OpenCode；重复部署继续使用现有受管启停流程。不增加旧版进程识别、旧配置迁移或独立交接模块，不使用 systemd。
 
@@ -85,4 +85,6 @@ MCP 就绪只依赖 `nexus-library` 和管理员显式绑定的服务。OpenCode
 
 ## 验证边界
 
-公司提供的镜像、数据库和代理兼容结论为已验证输入。本次实现的数据库、Nginx、镜像冻结安装与真实 Linux Worker 结果见 `openspec/changes/nexus-intranet-deployment-corrections/verification.md`。隔离验收不等于公司现场整套平台重新部署或宿主机重启验收。开发辅助启动脚本和官方 UI 构建工具保留用于开发/制品维护，不是平台部署入口。
+v1.5.0 仅面向新的空库；Task 27 列、AgentWorker 26 列和全部表字段见 `docs/architecture/nexus-v1.5.0-schema.md`。Worker 的 OpenCode 路径及端口只由其本地运行配置管理，数据库不再保存。
+
+以下是 v1.4.9 的历史部署验证边界，不代表本次 v1.5.0 已在公司目标机重新验收：公司提供的镜像、数据库和代理兼容结论为当时的已验证输入。本次实现的数据库、Nginx、镜像冻结安装与真实 Linux Worker 结果见 `openspec/changes/nexus-intranet-deployment-corrections/verification.md`。隔离验收不等于公司现场整套平台重新部署或宿主机重启验收。开发辅助启动脚本和官方 UI 构建工具保留用于开发/制品维护，不是平台部署入口。

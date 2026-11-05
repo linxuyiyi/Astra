@@ -21,8 +21,7 @@ class WorkerGatewayError(Exception):
 @dataclass(slots=True)
 class WorkerMessage:
     request_id: str
-    worker_instance_id: str
-    environment_id: int
+    agent_worker_id: str
     session_id: str | None
     type: str
     payload: dict[str, Any]
@@ -32,8 +31,7 @@ class WorkerMessage:
     def to_dict(self) -> dict[str, Any]:
         data = {
             "request_id": self.request_id,
-            "worker_instance_id": self.worker_instance_id,
-            "environment_id": self.environment_id,
+            "agent_worker_id": self.agent_worker_id,
             "session_id": self.session_id,
             "type": self.type,
             "payload": self.payload,
@@ -59,7 +57,7 @@ def parse_message(raw: str, *, max_bytes: int) -> WorkerMessage:
         raise WorkerGatewayError("invalid_message", "消息不是 JSON") from exc
     if not isinstance(data, dict):
         raise WorkerGatewayError("invalid_message", "消息必须是对象")
-    for key in ("request_id", "worker_instance_id", "environment_id", "session_id", "type", "payload"):
+    for key in ("request_id", "agent_worker_id", "session_id", "type", "payload"):
         if key not in data:
             raise WorkerGatewayError("invalid_message", "消息缺少字段")
     if data["type"] not in MESSAGE_TYPES:
@@ -68,11 +66,8 @@ def parse_message(raw: str, *, max_bytes: int) -> WorkerMessage:
         raise WorkerGatewayError("invalid_message", "request_id 无效")
     if len(data["request_id"]) > 80:
         raise WorkerGatewayError("invalid_message", "request_id 过长")
-    if not isinstance(data["worker_instance_id"], str) or not data["worker_instance_id"].strip():
-        raise WorkerGatewayError("invalid_message", "worker_instance_id 无效")
-    environment_id = data["environment_id"]
-    if isinstance(environment_id, bool) or not isinstance(environment_id, int):
-        raise WorkerGatewayError("invalid_message", "environment_id 无效")
+    if not isinstance(data["agent_worker_id"], str) or not data["agent_worker_id"].strip():
+        raise WorkerGatewayError("invalid_message", "agent_worker_id 无效")
     session_id = data["session_id"]
     if session_id is not None and not isinstance(session_id, str):
         raise WorkerGatewayError("invalid_message", "session_id 无效")
@@ -86,8 +81,7 @@ def parse_message(raw: str, *, max_bytes: int) -> WorkerMessage:
         raise WorkerGatewayError("invalid_message", "expires_at 无效")
     return WorkerMessage(
         request_id=data["request_id"],
-        worker_instance_id=data["worker_instance_id"],
-        environment_id=environment_id,
+        agent_worker_id=data["agent_worker_id"],
         session_id=session_id,
         type=data["type"],
         payload=data["payload"],
@@ -99,16 +93,14 @@ def parse_message(raw: str, *, max_bytes: int) -> WorkerMessage:
 def envelope(
     *,
     request_id: str,
-    worker_instance_id: str,
-    environment_id: int,
+    agent_worker_id: str,
     session_id: str | None,
     message_type: str,
     payload: dict[str, Any],
 ) -> WorkerMessage:
     return WorkerMessage(
         request_id=request_id,
-        worker_instance_id=worker_instance_id,
-        environment_id=environment_id,
+        agent_worker_id=agent_worker_id,
         session_id=session_id,
         type=message_type,
         payload=payload,

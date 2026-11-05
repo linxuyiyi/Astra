@@ -76,7 +76,7 @@ export class PrivateChatAdapter implements ChatAdapter {
     return { messages, activity: this.running ? "streaming" as const : "idle" as const };
   }
   taskQuery(): Record<string, string> {
-    return this.sessionId ? { source_session_id: this.sessionId } : { source_conversation_id: this.conversation.id };
+    return { source: "private_chat", external_task_id: this.conversation.id, origin_employee_id: this.conversation.employee_id };
   }
   async follow(signal: AbortSignal, emit: (event: ChatAdapterEvent) => void): Promise<void> {
     const messages = await this.load();
@@ -175,7 +175,7 @@ export class GroupChatAdapter implements ChatAdapter {
     const messages = await this.load();
     return { messages, activity: discussionPhase(this.channel) };
   }
-  taskQuery() { return { source_channel_id: this.channel.id }; }
+  taskQuery() { return { source: "group_chat", external_task_id: this.channel.id }; }
   async follow(signal: AbortSignal, emit: (event: ChatAdapterEvent) => void): Promise<void> {
     const messages = await this.load();
     if (signal.aborted) return;

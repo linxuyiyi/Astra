@@ -20,7 +20,6 @@ from app.api.library_routes import library_error_handler, library_principal
 from app.api.library_routes import router as library_router
 from app.api.maintenance_routes import maintenance_actor
 from app.api.maintenance_routes import router as maintenance_router
-from app.api.repository_routes import router as repository_router
 from app.api.routes import router as platform_router
 from app.api.speech_routes import router as speech_router
 from app.api.worker_routes import router as worker_router
@@ -56,7 +55,6 @@ def _include_platform(app: FastAPI) -> None:
     app.dependency_overrides[library_principal] = session_library_principal
     app.dependency_overrides[execution_stop_actor] = session_maintenance_actor
     app.include_router(platform_router)
-    app.include_router(repository_router)
     app.include_router(worker_router)
     app.include_router(worker_gateway_router)
     app.include_router(maintenance_router)

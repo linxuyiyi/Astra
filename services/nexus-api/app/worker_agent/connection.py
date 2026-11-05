@@ -61,8 +61,7 @@ class FrameTransport(Protocol):
 @dataclass(slots=True)
 class AgentConfig:
     gateway_url: str
-    worker_instance_id: str
-    environment_id: int
+    agent_worker_id: str
     token: str
     agent_version: str = __version__
     ping_seconds: float = 20
@@ -161,15 +160,8 @@ def _same_workspace(requested: str, configured: str) -> bool:
 def _binding_error(data: dict[str, Any], workspace_root: str, opencode_url: str) -> str | None:
     """危险动作只能操作本 Worker 自己绑定的工作区和端口。"""
 
-    try:
-        port = int(data.get("port"))
-    except (TypeError, ValueError):
-        return "OpenCode 端口无效"
-    bound = _bound_opencode_port(opencode_url)
-    if bound is None:
+    if _bound_opencode_port(opencode_url) is None:
         return "未绑定本机 OpenCode 端口"
-    if port != bound:
-        return "OpenCode 端口与 Worker 绑定不一致"
     if not _same_workspace(str(data.get("workspace") or ""), workspace_root):
         return "工作区与 Worker 绑定不一致"
     return None
@@ -211,9 +203,7 @@ def handle_command(
             return None, error
         try:
             supervisor.restart_from_thread(gate=gate)
-            snapshot = inspect_runtime(
-                opencode_url, workspace_root, last_error=supervisor.last_error
-            )
+            snapshot = inspect_runtime(opencode_url, workspace_root, last_error=supervisor.last_error)
         except (RuntimeError, OSError, ValueError, TimeoutError) as exc:
             return None, str(exc)
         return {"restarted": True, "snapshot": snapshot}, None
@@ -233,9 +223,7 @@ def handle_command(
                 branch=str(data.get("branch") or ""),
                 gate=gate,
             )
-            snapshot = inspect_runtime(
-                opencode_url, workspace_root, last_error=supervisor.last_error
-            )
+            snapshot = inspect_runtime(opencode_url, workspace_root, last_error=supervisor.last_error)
         except (RuntimeError, OSError, ValueError) as exc:
             return None, str(exc)
         supervisor.notify_state_change()
@@ -298,6 +286,7 @@ class WorkerConnectionManager:
         self.delays: list[float] = []
         self.ledger = CommandLedger(config.command_dedupe_limit, config.command_dedupe_ttl_seconds)
         self.http_tasks: dict[str, asyncio.Task[None]] = {}
+        self.native_write_lock = asyncio.Lock()
         self.file_tasks: dict[str, asyncio.Task[None]] = {}
         self.control_tasks: dict[str, asyncio.Task[None]] = {}
         self.file_slots = asyncio.Semaphore(FILE_COMMAND_LIMIT)
@@ -396,9 +385,8 @@ class WorkerConnectionManager:
             if initial_snapshot is not None:
                 auth_payload["snapshot"] = initial_snapshot
             auth = envelope(
-                request_id=f"auth-{config.worker_instance_id}",
-                worker_instance_id=config.worker_instance_id,
-                environment_id=config.environment_id,
+                request_id=f"auth-{config.agent_worker_id}",
+                agent_worker_id=config.agent_worker_id,
                 session_id=None,
                 message_type="command",
                 payload=auth_payload,
@@ -495,9 +483,7 @@ class WorkerConnectionManager:
     async def _next_message(self, transport: FrameTransport, heartbeat: asyncio.Task[None]) -> WorkerMessage:
         recv_task = asyncio.create_task(self._recv(transport))
         try:
-            done, _pending = await asyncio.wait(
-                {recv_task, heartbeat}, return_when=asyncio.FIRST_COMPLETED
-            )
+            done, _pending = await asyncio.wait({recv_task, heartbeat}, return_when=asyncio.FIRST_COMPLETED)
         except asyncio.CancelledError:
             recv_task.cancel()
             await asyncio.gather(recv_task, return_exceptions=True)
@@ -532,14 +518,32 @@ class WorkerConnectionManager:
             data = incoming.payload.get("data") if isinstance(incoming.payload.get("data"), dict) else {}
             if self.fetch_body is None or self.local_request is None or self.upload_body is None:
                 return
-            body = await self.fetch_body(incoming.request_id, epoch)
-            if self.epoch != epoch:
+
+            async def execute():
+                if self.epoch != epoch or not frame_acceptable(incoming, epoch, self.clock()):
+                    return None
+                body = await self.fetch_body(incoming.request_id, epoch)
+                if self.epoch != epoch:
+                    return None
+                return await self.local_request(
+                    str(data.get("method") or "GET"), str(data.get("path") or "/"), body
+                )
+
+            async def serialized():
+                if str(data.get("method") or "GET").upper() == "GET":
+                    return await execute()
+                async with self.native_write_lock:
+                    return await execute()
+
+            # Do not reconnect/release the mutation lock while a local request is still alive.
+            running = asyncio.create_task(serialized())
+            try:
+                result = await asyncio.shield(running)
+            except asyncio.CancelledError:
+                await running
                 return
-            result = await self.local_request(
-                str(data.get("method") or "GET"),
-                str(data.get("path") or "/"),
-                body,
-            )
+            if result is None:
+                return
             if self.epoch != epoch:
                 return
             await self.upload_body(incoming.request_id, epoch, result)
@@ -550,9 +554,7 @@ class WorkerConnectionManager:
             if self.http_tasks.get(incoming.request_id) is task:
                 self.http_tasks.pop(incoming.request_id, None)
 
-    def _start_control(
-        self, transport: FrameTransport, incoming: WorkerMessage, epoch: int
-    ) -> None:
+    def _start_control(self, transport: FrameTransport, incoming: WorkerMessage, epoch: int) -> None:
         """Dedup before queueing; control probes never block the receive loop."""
 
         if not frame_acceptable(incoming, epoch, self.clock()):
@@ -579,14 +581,10 @@ class WorkerConnectionManager:
         if current is not None and not current.done():
             return
         self.ledger.begin(incoming.request_id, now)
-        task = asyncio.create_task(
-            self._execute_control(transport, incoming, epoch, closed=self.closed)
-        )
+        task = asyncio.create_task(self._execute_control(transport, incoming, epoch, closed=self.closed))
         self.control_tasks[incoming.request_id] = task
 
-    def _control_gate(
-        self, epoch: int, deadline: int | None, closed: threading.Event
-    ) -> Callable[[], None]:
+    def _control_gate(self, epoch: int, deadline: int | None, closed: threading.Event) -> Callable[[], None]:
         """危险动作每次副作用前检查当前 epoch、连接状态和命令有效期。"""
 
         def gate() -> None:
@@ -639,9 +637,7 @@ class WorkerConnectionManager:
                 return
             self._note_event_control(name, result)
             self.ledger.finish(incoming.request_id, result, error_code, self.clock())
-            await transport.send(
-                self._response(incoming, "result", result, error_code).to_dict()
-            )
+            await transport.send(self._response(incoming, "result", result, error_code).to_dict())
         except asyncio.CancelledError:
             return
         except (ConnectionError, OSError):
@@ -653,9 +649,7 @@ class WorkerConnectionManager:
             self.ledger.finish(incoming.request_id, None, "io", self.clock(), error=str(exc))
             try:
                 await transport.send(
-                    self._response(
-                        incoming, "result", None, "io", error="控制命令执行失败"
-                    ).to_dict()
+                    self._response(incoming, "result", None, "io", error="控制命令执行失败").to_dict()
                 )
             except (ConnectionError, OSError):
                 return
@@ -913,8 +907,7 @@ class WorkerConnectionManager:
     def _agent_ping(self, request_id: str) -> WorkerMessage:
         message = envelope(
             request_id=request_id,
-            worker_instance_id=self.config.worker_instance_id,
-            environment_id=self.config.environment_id,
+            agent_worker_id=self.config.agent_worker_id,
             session_id=None,
             message_type="heartbeat",
             payload={"kind": "ping"},
@@ -926,8 +919,7 @@ class WorkerConnectionManager:
     def _agent_report(self, request_id: str, epoch: int, snapshot: dict[str, Any]) -> WorkerMessage:
         message = envelope(
             request_id=request_id,
-            worker_instance_id=self.config.worker_instance_id,
-            environment_id=self.config.environment_id,
+            agent_worker_id=self.config.agent_worker_id,
             session_id=None,
             message_type="heartbeat",
             payload={"kind": "report", "snapshot": snapshot},
@@ -944,11 +936,7 @@ class WorkerConnectionManager:
         *,
         initial_snapshot: dict[str, Any] | None = None,
     ) -> None:
-        interval = (
-            self.config.report_interval_seconds
-            if self.config.report_interval_seconds > 0
-            else 15.0
-        )
+        interval = self.config.report_interval_seconds if self.config.report_interval_seconds > 0 else 15.0
         force_refresh = max(60.0, interval * 4.0)
         last_digest = _snapshot_digest(initial_snapshot) if initial_snapshot else ""
         last_sent_at = self.clock() if initial_snapshot else 0.0
@@ -983,9 +971,7 @@ class WorkerConnectionManager:
                 continue
             count += 1
             try:
-                await transport.send(
-                    self._agent_report(f"rpt-{epoch}-{count}", epoch, snapshot).to_dict()
-                )
+                await transport.send(self._agent_report(f"rpt-{epoch}-{count}", epoch, snapshot).to_dict())
                 last_digest = digest
                 last_sent_at = now
             except (ConnectionError, OSError):
@@ -994,8 +980,7 @@ class WorkerConnectionManager:
     def _heartbeat_reply(self, incoming: WorkerMessage, kind: str) -> WorkerMessage:
         message = envelope(
             request_id=incoming.request_id,
-            worker_instance_id=self.config.worker_instance_id,
-            environment_id=self.config.environment_id,
+            agent_worker_id=self.config.agent_worker_id,
             session_id=incoming.session_id,
             message_type="heartbeat",
             payload={"kind": kind},
@@ -1007,8 +992,7 @@ class WorkerConnectionManager:
     def _duplicate(self, command: WorkerMessage) -> WorkerMessage:
         return envelope(
             request_id=command.request_id,
-            worker_instance_id=self.config.worker_instance_id,
-            environment_id=self.config.environment_id,
+            agent_worker_id=self.config.agent_worker_id,
             session_id=command.session_id,
             message_type="response",
             payload={
@@ -1035,8 +1019,7 @@ class WorkerConnectionManager:
                 payload["error"] = error
         return envelope(
             request_id=command.request_id,
-            worker_instance_id=self.config.worker_instance_id,
-            environment_id=self.config.environment_id,
+            agent_worker_id=self.config.agent_worker_id,
             session_id=command.session_id,
             message_type="response",
             payload=payload,
@@ -1047,8 +1030,7 @@ def _message_fields(data: dict[str, Any]) -> dict[str, Any]:
     message = parse_message(dump_message(data), max_bytes=1024 * 1024)
     return {
         "request_id": message.request_id,
-        "worker_instance_id": message.worker_instance_id,
-        "environment_id": message.environment_id,
+        "agent_worker_id": message.agent_worker_id,
         "session_id": message.session_id,
         "type": message.type,
         "payload": message.payload,
@@ -1079,21 +1061,17 @@ def load_agent_config(environ: dict[str, str]) -> AgentConfig:
     if not token:
         raise SystemExit("缺少 NEXUS_WORKER_TOKEN")
     url = environ.get("NEXUS_WORKER_GATEWAY_URL", "").strip()
-    worker_id = environ.get("NEXUS_WORKER_INSTANCE_ID", "").strip()
-    environment = environ.get("NEXUS_WORKER_ENVIRONMENT_ID", "").strip()
-    if not url or not worker_id or not environment:
-        raise SystemExit("缺少 Worker Gateway 地址、实例 ID 或环境 ID")
+    worker_id = environ.get("NEXUS_AGENT_WORKER_ID", "").strip()
+    if not url or not worker_id:
+        raise SystemExit("缺少 Worker Gateway 地址或 Worker ID")
     return AgentConfig(
         gateway_url=url,
-        worker_instance_id=worker_id,
-        environment_id=int(environment),
+        agent_worker_id=worker_id,
         token=token,
         agent_version=__version__,
         opencode_url=environ.get("NEXUS_WORKER_OPENCODE_URL", "http://127.0.0.1:14096"),
         workspace_root=environ.get("NEXUS_WORKER_WORKSPACE_ROOT", "").strip(),
-        report_interval_seconds=_positive_float(
-            environ.get("NEXUS_WORKER_REPORT_SECONDS"), 15.0
-        ),
+        report_interval_seconds=_positive_float(environ.get("NEXUS_WORKER_REPORT_SECONDS"), 15.0),
     )
 
 
@@ -1141,8 +1119,7 @@ def _event_envelope(
 ) -> dict[str, Any]:
     message = envelope(
         request_id=event_request_id(directory, seq),
-        worker_instance_id=config.worker_instance_id,
-        environment_id=config.environment_id,
+        agent_worker_id=config.agent_worker_id,
         session_id=incoming.session_id,
         message_type="event",
         payload=payload,

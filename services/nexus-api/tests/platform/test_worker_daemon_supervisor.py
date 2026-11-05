@@ -77,8 +77,8 @@ def test_flock_single_instance_is_idempotent_and_fd_cloexec_survives_orphan(tmp_
                 [
                     "NEXUS_WORKER_TOKEN=wtk_secret",
                     "NEXUS_WORKER_GATEWAY_URL=ws://127.0.0.1:9/connect",
-                    "NEXUS_WORKER_INSTANCE_ID=wrk_test",
-                    "NEXUS_WORKER_ENVIRONMENT_ID=42",
+                    "NEXUS_AGENT_WORKER_ID=wrk_test",
+                    "NEXUS_AGENT_WORKER_ID=42",
                     f"NEXUS_WORKER_STATE_DIR={state_dir}",
                 ]
             )
@@ -136,7 +136,7 @@ def test_flock_single_instance_is_idempotent_and_fd_cloexec_survives_orphan(tmp_
 
 
 def test_cleanup_orphan_opencode_only_kills_matching_env_id(tmp_path: Path):
-    """孤儿清理只清理携带匹配 NEXUS_WORKER_ENV_ID 的同 UID 进程，绝不误杀其他进程。"""
+    """孤儿清理只清理携带匹配 NEXUS_AGENT_WORKER_ID 的同 UID 进程，绝不误杀其他进程。"""
 
     proc_root = tmp_path / "proc"
     proc_root.mkdir()
@@ -149,9 +149,9 @@ def test_cleanup_orphan_opencode_only_kills_matching_env_id(tmp_path: Path):
         (entry / "environ").write_bytes(payload)
         return entry
 
-    target_entry = write_proc(91001, {"PATH": "/usr/bin", "NEXUS_WORKER_ENV_ID": "7"})
-    stubborn_entry = write_proc(91002, {"PATH": "/usr/bin", "NEXUS_WORKER_ENV_ID": "7"})
-    other_env = write_proc(91003, {"PATH": "/usr/bin", "NEXUS_WORKER_ENV_ID": "8"})
+    target_entry = write_proc(91001, {"PATH": "/usr/bin", "NEXUS_AGENT_WORKER_ID": "7"})
+    stubborn_entry = write_proc(91002, {"PATH": "/usr/bin", "NEXUS_AGENT_WORKER_ID": "7"})
+    other_env = write_proc(91003, {"PATH": "/usr/bin", "NEXUS_AGENT_WORKER_ID": "8"})
     unrelated = write_proc(91004, {"PATH": "/usr/bin"})
 
     signals_sent: list[tuple[int, int]] = []
@@ -193,7 +193,7 @@ def test_child_environ_injects_env_id_without_leaking_worker_secrets():
         },
         env_id=19,
     )
-    assert env["NEXUS_WORKER_ENV_ID"] == "19"
+    assert env["NEXUS_AGENT_WORKER_ID"] == "19"
     assert "NEXUS_WORKER_TOKEN" not in env
     assert "NEXUS_WORKER_GATEWAY_URL" not in env
 
@@ -214,8 +214,7 @@ class _CaptureTransport:
             self.push(
                 {
                     "request_id": message["request_id"],
-                    "worker_instance_id": message["worker_instance_id"],
-                    "environment_id": message["environment_id"],
+                    "agent_worker_id": message["agent_worker_id"],
                     "session_id": None,
                     "type": "response",
                     "payload": {
@@ -323,9 +322,9 @@ async def test_supervisor_crash_recovery_reports_last_error_and_recovers_cleanly
     supervisor = OpenCodeSupervisor(
         enabled=True,
         opencode_bin=str(fake_opencode),
+        agent_worker_id="12",
         port=port,
         workspace_root=str(workspace),
-        environment_id=12,
         environ={
             **os.environ,
             "NEXUS_WORKER_TOKEN": "wtk_never_leak",
@@ -338,8 +337,7 @@ async def test_supervisor_crash_recovery_reports_last_error_and_recovers_cleanly
     )
     config = AgentConfig(
         gateway_url="ws://nexus.internal/api/worker-gateway/connect",
-        worker_instance_id="wrk_sup",
-        environment_id=12,
+        agent_worker_id="wrk_sup",
         token="wtk_never_leak",
         ping_seconds=3600,
         opencode_url=f"http://127.0.0.1:{port}",
@@ -361,9 +359,9 @@ async def test_supervisor_crash_recovery_reports_last_error_and_recovers_cleanly
         assert auth_frame["payload"]["snapshot"]["opencode"]["status"] == "healthy"
         assert auth_frame["payload"]["snapshot"]["opencode"]["last_error"] is None
 
-        # 验证子进程拿到了 NEXUS_WORKER_ENV_ID 但未泄露 Worker Token
+        # 验证子进程拿到了 NEXUS_AGENT_WORKER_ID 但未泄露 Worker Token
         child_env = json.loads(env_dump.read_text(encoding="utf-8"))
-        assert child_env["NEXUS_WORKER_ENV_ID"] == "12"
+        assert child_env["NEXUS_AGENT_WORKER_ID"] == "12"
         assert "NEXUS_WORKER_TOKEN" not in child_env
 
         # 触发子进程崩溃：应先上报带 last_error 的降级 report，随后退避重启成功并上报恢复健康 report
@@ -392,8 +390,7 @@ async def test_supervisor_crash_recovery_reports_last_error_and_recovers_cleanly
 
         assert supervisor.restart_count >= 1
         assert any(
-            snap["opencode"]["last_error"]
-            and "simulated opencode panic" in snap["opencode"]["last_error"]
+            snap["opencode"]["last_error"] and "simulated opencode panic" in snap["opencode"]["last_error"]
             for snap in reports
         )
         assert reports[-1]["opencode"]["status"] == "healthy"
@@ -526,8 +523,7 @@ def test_update_workspace_command_fast_forwards_clean_repo_and_rejects_dirty(tmp
     supervisor = OpenCodeSupervisor()
     msg = envelope(
         request_id="cmd-update-1",
-        worker_instance_id="wrk_1",
-        environment_id=1,
+        agent_worker_id="wrk_1",
         session_id=None,
         message_type="command",
         payload={

@@ -19,7 +19,6 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "services/nexus-api"))
 
 
-
 def create_directory_database(directory: Path, count: int) -> Path:
     from app.sql_storage import connect, create_test_schema
     from nexus_api.avatars import CATALOG
@@ -64,7 +63,7 @@ def create_directory_database(directory: Path, count: int) -> Path:
 
 
 async def seed_work(database: Path) -> None:
-    from app.models import AgentWorker, OpenCodeExecutionEnvironment, Task
+    from app.models import AgentWorker, Task
 
     engine = create_async_engine(f"sqlite+aiosqlite:///{database}")
     sessions = async_sessionmaker(engine, expire_on_commit=False)
@@ -75,31 +74,19 @@ async def seed_work(database: Path) -> None:
             worker = AgentWorker(
                 id=f"office-w{index:02}",
                 name=f"Worker-{index + 1:02}",
-                role="测试执行",
                 enabled=True,
-                status="IDLE",
+                status="OFFLINE" if index == 2 else ("WORKING" if index in (0, 1, 3, 4, 5) else "IDLE"),
                 task_types=["ISSUE"],
                 category_ids=[],
-                digital_employee_id=None if index in (0, 1) else "office-e0",
             )
             session.add(worker)
             await session.flush()
-            session.add(
-                OpenCodeExecutionEnvironment(
-                    employee_id=worker.id,
-                    mode="LOCAL",
-                    name=f"测试环境 {index + 1}",
-                    worker_channel="ssh",
-                    status="UNAVAILABLE" if index == 2 else "AVAILABLE",
-                    labels=[],
-                )
-            )
         for index, (status, title, worker, reason) in enumerate(
             [
-                ("WAITING", "测试环境访问权限确认", "office-w00", "HITL_PERMISSION"),
+                ("WAITING", "测试环境访问权限确认", "office-w00", "permission"),
                 ("RUNNING", "登录接口自动化回归", "office-w01", None),
                 ("RUNNING", "测试平台服务健康检查", "office-w03", None),
-                ("FAILED", "接口兼容性验证", None, None),
+                ("WAITING", "接口验证需人工处理", "office-w05", "confirmation"),
                 ("PENDING", "新增规格用例补充", None, None),
             ]
         ):
@@ -109,17 +96,10 @@ async def seed_work(database: Path) -> None:
                     task_type="ISSUE",
                     title=title,
                     status=status,
-                    responsible_employee_id="office-e0",
-                    employee_id=worker,
+                    origin_employee_id="office-e0",
+                    agent_worker_id=worker,
                     priority="MEDIUM",
-                    runtime_connection="UNAVAILABLE" if index == 2 else "CONNECTED",
                     waiting_reason=reason,
-                    human_required_reason="请确认是否授权访问预发布测试环境"
-                    if index == 0
-                    else None,
-                    failure_reason="测试数据连接被拒绝，请检查环境配置"
-                    if status == "FAILED"
-                    else None,
                     current_progress="验证核心业务接口" if status == "RUNNING" else "",
                 )
             )
@@ -130,7 +110,7 @@ async def seed_work(database: Path) -> None:
                     task_type="ISSUE",
                     title=f"回归用例补充 {index + 1}",
                     status="PENDING",
-                    responsible_employee_id="office-e0",
+                    origin_employee_id="office-e0",
                     priority="MEDIUM",
                 )
             )
@@ -140,8 +120,8 @@ async def seed_work(database: Path) -> None:
                 task_type="ISSUE",
                 title="测试系统构建验证",
                 status="RUNNING",
-                responsible_employee_id="office-e1",
-                employee_id="office-w01",
+                origin_employee_id="office-e1",
+                agent_worker_id="office-w04",
                 priority="MEDIUM",
             )
         )
@@ -151,9 +131,9 @@ async def seed_work(database: Path) -> None:
                 task_type="ISSUE",
                 title="防线巡检已完成",
                 status="SUCCEEDED",
-                responsible_employee_id="office-e2",
+                origin_employee_id="office-e2",
                 priority="MEDIUM",
-                completed_at=now,
+                finished_at=now,
             )
         )
         await session.commit()

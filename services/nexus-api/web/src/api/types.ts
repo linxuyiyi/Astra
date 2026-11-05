@@ -1,15 +1,6 @@
-export interface RuntimeProjection {
-  runtime_state: string
-  runtime_status_label: string
-  runtime_detail: string
-  failure: { failure_code: string; failure_scope: string; retryable: boolean; recovery_action: string; raw_error: string } | null
-}
-
 export type TaskType = 'ISSUE' | 'REQUIREMENT'
 export type TaskPriority = 'VERY_HIGH' | 'HIGH' | 'MEDIUM' | 'LOW'
 export type TaskStatus = import('@/features/runtime/status').TaskState
-export type CompletionPolicy = 'AUTO' | 'MANUAL_CONFIRM'
-export type AcceptanceStatus = 'SATISFIED' | 'UNSATISFIED' | 'UNCONFIRMED'
 
 export interface TaskCategory {
   id: string
@@ -23,172 +14,81 @@ export interface TaskCategory {
   updated_at: string
 }
 
-export type TaskCategoryWrite = Pick<TaskCategory, 'name' | 'description' | 'enabled' | 'sort_order' | 'task_prompt' | 'question_prompt'>
+export type TaskCategoryWrite = Pick<
+  TaskCategory,
+  | 'name'
+  | 'description'
+  | 'enabled'
+  | 'sort_order'
+  | 'task_prompt'
+  | 'question_prompt'
+>
 
-export interface ExecutionEnvironment {
-  runtime_engine?: 'opencode'
-  id: number
-  employee_id: string
-  mode: 'LOCAL' | 'LINUX_REMOTE'
+export interface Worker {
+  id: string
   name: string
   description: string
+  enabled: boolean
+  status: 'OFFLINE' | 'IDLE' | 'WORKING' | 'PAUSED'
+  task_types: TaskType[]
+  category_ids: string[]
+  runtime_engine: 'opencode'
+  mode: 'LOCAL' | 'LINUX_REMOTE'
   host: string | null
   port: number
   username: string | null
   has_ssh_password: boolean
-  opencode_server_port: number
-  opencode_path: string
   model_name: string | null
   workspace_root: string
-  repository_url?: string | null
+  repository_url: string | null
   has_git_token: boolean
-  branch?: string | null
-  status: 'UNKNOWN' | 'CHECKING' | 'AVAILABLE' | 'UNAVAILABLE' | 'DRIFTED'
-  status_detail: Record<string, unknown>
-  labels: string[]
-  last_checked_at: string | null
+  branch: string | null
+  skill_refs: string[]
+  mcp_refs: Array<{
+    name: string
+    url: string
+    config?: Record<string, unknown>
+  }>
+  epoch: number
+  last_heartbeat_at: string | null
+  agent_version: string | null
   created_at: string
   updated_at: string
 }
 
-export interface UsageSummary {
-  input_tokens: number | null
-  output_tokens: number | null
-  cache_read_tokens: number | null
-  cache_write_tokens: number | null
-  total_tokens: number | null
-  llm_call_count: number | null
-  tool_call_count: number | null
-  tool_success_count: number
-  tool_failure_count: number
-  duration_seconds: number
-  execution_seconds: number | null
-  idle_seconds: number | null
-  waiting_seconds: number
-  completed_tasks: number
-  task_count: number
-  session_count: number
-  native_session_count: number
-  completed_sessions: number
-  failed_sessions: number
-  interrupted_sessions: number
-}
-
-export interface ToolUsage {
-  tool_name: string
-  call_count: number
-  success_count: number
-  failure_count: number
-  duration_ms: number
-}
-
-export interface ModelUsage {
-  model_name: string
-  session_count: number
-  total_tokens: number
-  llm_call_count: number
-  tool_call_count: number
-}
-
-export interface EmployeeUsage {
-  period_days: number
-  summary: UsageSummary
-  trend: Array<{ date: string } & UsageSummary>
-  tools: ToolUsage[]
-  models?: ModelUsage[]
-  token_by_day?: Array<{ date: string } & UsageSummary>
-}
-
-export interface TaskUsage { summary: UsageSummary; tools: ToolUsage[]; sessions: number }
-
-export interface Employee extends RuntimeProjection {
+export interface AcceptanceCriterion {
   id: string
-  digital_employee_id: string | null
-  name: string
-  role: string
-  description: string
-  character_id: number
-  default_work_area: 'development' | 'collaboration' | 'pantry' | 'integration' | 'meeting' | 'special'
-  status: string
-  task_types: TaskType[]
-  category_ids: string[]
-  enabled: boolean
-  auto_claim: boolean
-  auto_execute: boolean
-  current_task_count: number
-  last_heartbeat: string | null
-  online_since: string | null
-  created_at: string
-  updated_at: string
-  execution_environment: ExecutionEnvironment | null
-  worker_health: import('./maintenance').WorkerHealth | null
-  channel_health: {
-    worker_online: boolean
-    opencode_reachable: boolean
-    repository_configured: boolean
-    executing: boolean
-    waiting_human: boolean
-    availability: string
-  }
-  today_usage: UsageSummary
-  today_completed: number
+  content: string
 }
 
-export interface AcceptanceCriterion { id: string; content: string }
-
-export interface HumanIntervention {
-  blocking_reason: string
-  completed_work: string
-  current_state: string
-  requested_input: string
-  can_suspend?: boolean
-  scene_context?: string
-}
-
-export interface Task extends RuntimeProjection {
-  execution_released: boolean
+export interface Task {
   id: string
-  source: string
-  external_task_id: string | null
-  task_type: TaskType
-  category_id: string | null
   title: string
   description: string
+  task_type: TaskType
+  category_id: string | null
+  priority: TaskPriority
   acceptance_criteria: AcceptanceCriterion[]
   attachments: Array<Record<string, unknown>>
-  priority: TaskPriority
-  completion_policy: CompletionPolicy
-  status: TaskStatus
-  employee_id: string | null
-  worker_id: string | null
-  responsible_employee_id: string | null
-  source_session_id: string | null
-  source_conversation_id: string | null
-  source_channel_id: string | null
+  source: string
+  external_task_id: string | null
+  origin_employee_id: string | null
+  external_reference_id: string | null
+  agent_worker_id: string | null
   current_session_id: string | null
-  session_status?: string | null
-  session_terminal_reason?: string | null
   workspace: string | null
-  runtime_connection: string
+  last_message_id: string | null
   pending_message_id: string | null
-  runtime_error: string | null
+  status: TaskStatus
+  waiting_reason: string | null
   current_progress: string
-  failure_reason: string | null
-  human_required_reason: string | null
-  human_intervention: HumanIntervention | null
-  suspension: Record<string, unknown> | null
-  execution_error: Record<string, unknown> | null
-  inactivity_alert: boolean
-  inactivity_alert_since: string | null
-  last_activity_at: string | null
-  submitted_at: string | null
-  confirmed_at: string | null
-  execution_environment_snapshot: Record<string, unknown> | null
+  execution_released: boolean
+  created_at: string
+  updated_at: string
   claimed_at: string | null
   started_at: string | null
   finished_at: string | null
-  created_at: string
-  updated_at: string
+  last_activity_at: string | null
 }
 
 export interface AstraEvent {
@@ -201,7 +101,6 @@ export interface AstraEvent {
   detail: Record<string, unknown>
   created_at: string
 }
-
 
 export interface ExperienceReviewJob {
   id: string
@@ -223,8 +122,20 @@ export interface ExperienceReviewJob {
   finished_at: string | null
 }
 
-export type KnowledgeType = 'document' | 'rule' | 'guide' | 'experience' | 'faq' | 'tool' | 'example'
-export type KnowledgeStatus = 'draft' | 'candidate' | 'published' | 'archived' | 'rejected'
+export type KnowledgeType =
+  | 'document'
+  | 'rule'
+  | 'guide'
+  | 'experience'
+  | 'faq'
+  | 'tool'
+  | 'example'
+export type KnowledgeStatus =
+  | 'draft'
+  | 'candidate'
+  | 'published'
+  | 'archived'
+  | 'rejected'
 export type VerificationStatus = 'unverified' | 'verified' | 'failed'
 
 export interface LibraryPermissions {
@@ -321,7 +232,6 @@ export interface KnowledgeDetail extends KnowledgeListItem {
   source_session_id: string | null
   experience_type: string | null
   verified_at: string | null
-  verification_session_status: string | null
   experience_data: Record<string, unknown>
   review_note: string | null
   created_by: string
@@ -342,142 +252,12 @@ export interface KnowledgePage {
   pages: number
 }
 
-export interface RelatedTask {
-  id: string
-  title: string
-  status: string
-  relation: string
-  last_used_at: string | null
-}
-
 export interface Metrics {
-  online_employees: number
   running_tasks: number
-  idle_employees: number
-  error_employees: number
   pending_tasks: number
   waiting_tasks: number
-  failed_tasks: number
-  completed_today: number
-  completed_sessions_today?: number
-  failed_today: number
-  failed_sessions_today?: number
-  interrupted_sessions_today?: number
-  today_tokens: number | null
-  today_tool_calls: number | null
-  task_status_distribution: Record<string, number>
-  employee_status_distribution: Record<string, number>
-}
-
-export interface DashboardOverview {
-  employee_total: number
-  team_count: number
-  working_employees: number
-  running_tasks: number
-  completed_today: number
-  attention_total: number
-  waiting_tasks: number
-  failed_tasks: number
+  idle_employees: number
   online_employees: number
-}
-
-export interface DashboardEmployee extends RuntimeProjection {
-  id: string
-  name: string
-  role: string
-  character_id: number
-  status: string
-  enabled: boolean
-  state: 'working' | 'idle' | 'waiting' | 'error'
-  state_label: string
-  current_task: {
-    id: string
-    title: string
-    status: string
-    current_session_id: string | null
-    session_status: string | null
-    runtime_status_label: string
-    runtime_detail: string
-    human_required_reason: string | null
-    runtime_connection: string
-  } | null
-}
-
-export interface DashboardTeam {
-  id: string
-  name: string
-  order: number
-  employee_count: number
-  employees: DashboardEmployee[]
-}
-
-export interface DashboardEmployees {
-  teams: DashboardTeam[]
-}
-
-export interface DashboardAttentionItem {
-  task_id: string
-  task_title: string
-  employee_id: string | null
-  employee_name: string
-  status: string
-  status_label: string
-  current_session_id: string | null
-  session_status: string | null
-  runtime_detail: string
-  human_required_reason: string | null
-  runtime_connection: string
-  occurred_at: string
-}
-
-export interface DashboardAttention {
-  items: DashboardAttentionItem[]
-}
-
-export interface DashboardTaskTrendPoint {
-  date: string
-  total: number
-  completed: number
-}
-
-export interface DashboardTasks {
-  running: number
-  waiting: number
-  completed_today: number
-  failed_today: number
-  trend: DashboardTaskTrendPoint[]
-  recent: Array<{
-    id: string
-    title: string
-    status: string
-    employee_id: string | null
-    employee_name: string
-    runtime_state: string
-    runtime_status_label: string
-    updated_at: string
-  }>
-}
-
-export interface DashboardActivityItem {
-  id: number
-  employee_id: string | null
-  employee_name: string
-  kind: 'task_created' | 'task_started' | 'task_completed' | 'task_failed' | 'waiting_human' | 'schedule_triggered' | 'employee_created'
-  description: string
-  created_at: string
-  target_type: 'task' | 'employee' | null
-  target_id: string | null
-}
-
-export interface DashboardActivity {
-  items: DashboardActivityItem[]
-}
-
-export interface DashboardKnowledge {
-  today_added: number
-  candidate_experiences: number
-  total: number
-  recent: Array<{ id: string; title: string }>
 }
 
 export interface LibraryServiceStatus {
@@ -493,31 +273,21 @@ export interface TaskWorkspaceBinding {
   task_id: string
   task_status: TaskStatus
   runtime: {
-    runtime_engine?: 'opencode'
-    native_session_id?: string | null
-    engine_metadata?: Record<string, string> | null
+    runtime_engine: 'opencode'
     server: string
     session_id: string | null
     workspace: string | null
-    connection: string
-    error: string | null
     opencode_version: string
     workspace_ui: string | null
     workspace_ui_error: string | null
+    worker_online: boolean
   }
-  sessions: Array<{
-    runtime_engine?: 'opencode'
-    native_session_id?: string | null
-    engine_metadata?: Record<string, string> | null
-    id: string
-    workspace: string
-    created_at: string
-    status: string
-    superseded_by: string | null
-    finished_at: string | null
-    current: boolean
-    opencode_version: string
-    workspace_ui: string | null
-    workspace_ui_error: string | null
-  }>
+}
+
+export interface RelatedTask {
+  id: string
+  title: string
+  status: string
+  relation: string
+  last_used_at: string | null
 }

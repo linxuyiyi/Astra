@@ -3,7 +3,7 @@
     <header v-if="route.path !== '/'" class="top">
       <router-link to="/" class="brand" title="数字办公室">
         <div class="mark">✦</div>
-        <div class="brandname">NEXUS <span class="version">v1.4.9</span></div>
+        <div class="brandname">NEXUS <span class="version">v1.5.0</span></div>
       </router-link>
       <nav class="top-nav" aria-label="页面导航">
         <router-link

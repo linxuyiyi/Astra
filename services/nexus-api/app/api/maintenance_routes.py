@@ -42,40 +42,34 @@ def maintenance_actor(
     return resolve_uid(x_verified_uid, x_owner_id, nexus_uid)
 
 
-@router.post("/api/agent-workers/{environment_id}/maintenance", status_code=202)
+@router.post("/api/workers/{agent_worker_id}/maintenance", status_code=202)
 async def submit_maintenance(
-    environment_id: int,
+    agent_worker_id: str,
     payload: MaintenanceSubmit,
     session: AsyncSession = Depends(get_session),
     actor: str = Depends(maintenance_actor),
 ):
     operation = await submit_operation(
         session,
-        environment_id,
+        agent_worker_id,
         payload.action,
         requested_by=actor,
     )
     return operation_payload(operation)
 
 
-@router.get("/api/agent-workers/{environment_id}/maintenance")
+@router.get("/api/workers/{agent_worker_id}/maintenance")
 async def maintenance_history(
-    environment_id: int,
+    agent_worker_id: str,
     limit: int = Query(default=50, ge=1, le=200),
     before_id: str | None = None,
     session: AsyncSession = Depends(get_session),
 ):
-    return {
-        "items": await list_operations(
-            session, environment_id, limit=limit, before_id=before_id
-        )
-    }
+    return {"items": await list_operations(session, agent_worker_id, limit=limit, before_id=before_id)}
 
 
 @router.get("/api/maintenance/{operation_id}")
-async def maintenance_detail(
-    operation_id: str, session: AsyncSession = Depends(get_session)
-):
+async def maintenance_detail(operation_id: str, session: AsyncSession = Depends(get_session)):
     detail = await operation_detail(session, operation_id)
     if detail is None:
         raise HTTPException(404, "维护操作不存在")
@@ -162,9 +156,18 @@ async def retry_maintenance(
     return operation_payload(operation)
 
 
-@router.get("/api/agent-workers/{environment_id}/health")
-async def worker_health(environment_id: int, session: AsyncSession = Depends(get_session)):
-    health = await environment_health(session, environment_id)
+@router.get("/api/workers/{agent_worker_id}/health")
+async def worker_health(agent_worker_id: str, session: AsyncSession = Depends(get_session)):
+    health = await environment_health(session, agent_worker_id)
     if health is None:
         raise HTTPException(404, "Worker 环境不存在")
     return health
+
+
+@router.post("/api/maintenance/{operation_id}/confirm-stopped")
+async def confirm_stopped(
+    operation_id: str, session=Depends(get_session), actor: str = Depends(maintenance_actor)
+):
+    from app.runtime.maintenance import confirm_maintenance_stopped
+
+    return operation_payload(await confirm_maintenance_stopped(session, operation_id, actor))

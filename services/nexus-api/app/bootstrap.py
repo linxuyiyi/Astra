@@ -1,10 +1,7 @@
-from datetime import UTC, datetime
-
 import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import EmployeeStatus, EnvironmentStatus
-from app.models import AgentWorker, KnowledgeSpace, OpenCodeExecutionEnvironment, TaskCategory
+from app.models import AgentWorker, KnowledgeSpace, TaskCategory
 
 DEFAULT_CATEGORIES = (
     ("testing-platform", "测试平台", "测试平台相关问题与需求", 10),
@@ -70,57 +67,17 @@ async def bootstrap_knowledge_spaces(session: AsyncSession) -> None:
         await session.commit()
 
 
-async def bootstrap_employees(session: AsyncSession, config_path) -> None:
-    path = config_path / "employees.yaml"
+async def bootstrap_workers(session: AsyncSession, config_path) -> None:
+    from app.api.worker_routes import config_values
+    from app.schemas import WorkerCreate
+
+    path = config_path / "workers.yaml"
     if not path.is_file():
         return
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    changed = False
-    for item in payload.get("employees", []):
-        if not item.get("enabled", True):
+    for item in payload.get("workers", []):
+        data = WorkerCreate.model_validate(item)
+        if await session.get(AgentWorker, data.id):
             continue
-        employee = await session.get(AgentWorker, item["id"])
-        if employee:
-            continue
-        now = datetime.now(UTC)
-        employee = AgentWorker(
-            id=item["id"],
-            name=item.get("name", item["id"]),
-            role=item.get("role", "Agent Worker"),
-            description=item.get("description", ""),
-            default_work_area=item.get("default_work_area", "development"),
-            status=EmployeeStatus.IDLE,
-            task_types=item.get("task_types", ["ISSUE", "REQUIREMENT"]),
-            category_ids=item.get(
-                "category_ids",
-                ["testing-platform", "automation-engineering", "quality-defense"],
-            ),
-            enabled=item.get("enabled", True),
-            auto_claim=item.get("policy", {}).get("auto_claim", True),
-            auto_execute=item.get("policy", {}).get("auto_execute", True),
-            online_since=now,
-            last_heartbeat=now,
-        )
-        session.add(employee)
-        await session.flush()
-        environment = item.get("execution_environment", {})
-        session.add(
-            OpenCodeExecutionEnvironment(
-                employee_id=employee.id,
-                mode=environment.get("mode", "LOCAL"),
-                name=environment.get("name", "本地 Agent 工作环境"),
-                description=environment.get("description", ""),
-                host=environment.get("host"),
-                port=environment.get("port", 22),
-                username=environment.get("username"),
-                ssh_password=environment.get("ssh_password"),
-                opencode_path=environment.get("opencode_path", "opencode"),
-                model_name=environment.get("model_name"),
-                workspace_root=environment.get("workspace_root", "./workspaces"),
-                labels=environment.get("labels", []),
-                status=EnvironmentStatus.UNKNOWN,
-            )
-        )
-        changed = True
-    if changed:
-        await session.commit()
+        session.add(AgentWorker(**config_values(data)))
+    await session.commit()

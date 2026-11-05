@@ -13,7 +13,7 @@ function employee(id: string, overrides: Partial<NebulaEmployee> = {}): NebulaEm
     avatar: '✦',
     enabled: true,
     interactionStatus: 'available',
-    counts: { running: 1, queued: 1, waiting: 0, failed: 0, completedToday: 0 },
+    counts: { running: 1, queued: 1, waiting: 0, completedToday: 0 },
     workerIds: [`w-${id}`],
     createdAt: '2026-01-01T00:00:00+00:00',
     ...overrides,
@@ -23,10 +23,8 @@ function employee(id: string, overrides: Partial<NebulaEmployee> = {}): NebulaEm
 function worker(id: string, owner: string, overrides: Partial<NebulaWorker> = {}): NebulaWorker {
   return {
     id,
-    digitalEmployeeId: owner,
-    workerInstanceId: null,
+    originEmployeeId: owner,
     name: `Worker ${id}`,
-    role: '执行',
     capabilityLabels: ['执行'],
     environmentMode: 'LOCAL',
     environmentName: '本地',
@@ -48,7 +46,7 @@ function task(id: string, owner: string, workerId: string | null, status: Nebula
     status,
     priority: 'MEDIUM',
     taskType: 'ISSUE',
-    responsibleEmployeeId: owner,
+    originEmployeeId: owner,
     workerId,
     workerName: workerId ? `Worker ${workerId}` : null,
     ownerId: owner,
@@ -92,7 +90,7 @@ function snapshot(employees: NebulaEmployee[], workers: NebulaWorker[], tasks: N
     workers,
     taskEdges: [
       {
-        digitalEmployeeId: 'a',
+        originEmployeeId: 'a',
         workerId: 'w-a',
         running: 1,
         waiting: 0,
@@ -104,7 +102,7 @@ function snapshot(employees: NebulaEmployee[], workers: NebulaWorker[], tasks: N
     queuedTasks: tasks.filter((item) => item.status === 'PENDING'),
     attentionTasks: [],
     unassignedTasks: [],
-    unassigned: { workerCount: 0, taskCount: 0, counts: { running: 0, queued: 0, waiting: 0, failed: 0, completedToday: 0 } },
+    unassigned: { workerCount: 0, taskCount: 0, counts: { running: 0, queued: 0, waiting: 0, completedToday: 0 } },
     dataConflicts: [],
     dataWarnings: [],
   }
@@ -129,7 +127,7 @@ test('task status changes do not move galaxies, workers or satellites', () => {
     snapshot(
       employees.map((item) => ({
         ...item,
-        counts: { ...item.counts, running: 2, waiting: 1, failed: 1 },
+        counts: { ...item.counts, running: 2, waiting: 1, waiting: 1 },
       })),
       workers,
       [
@@ -154,15 +152,11 @@ test('galaxy color follows business state instead of decorative palette', () => 
   const palette = '#21d5ab'
   assert.equal(galaxyColor(employee('a'), palette), '#5df1b8')
   assert.equal(
-    galaxyColor(employee('a', { counts: { running: 0, queued: 0, waiting: 1, failed: 0, completedToday: 0 } }), palette),
+    galaxyColor(employee('a', { counts: { running: 0, queued: 0, waiting: 1, completedToday: 0 } }), palette),
     '#ff9470',
   )
   assert.equal(
-    galaxyColor(employee('a', { counts: { running: 0, queued: 0, waiting: 0, failed: 1, completedToday: 0 } }), palette),
-    '#fb6484',
-  )
-  assert.equal(
-    galaxyColor(employee('a', { counts: { running: 0, queued: 0, waiting: 0, failed: 0, completedToday: 0 } }), palette),
+    galaxyColor(employee('a', { counts: { running: 0, queued: 0, waiting: 0, completedToday: 0 } }), palette),
     palette,
   )
 })
@@ -170,7 +164,7 @@ test('galaxy color follows business state instead of decorative palette', () => 
 test('only owned workers orbit a galaxy and queued satellites cap at five', () => {
   const employees = [
     employee('a', {
-      counts: { running: 0, queued: 7, waiting: 0, failed: 0, completedToday: 0 },
+      counts: { running: 0, queued: 7, waiting: 0, completedToday: 0 },
     }),
   ]
   const workers = [worker('w-a', 'a'), worker('w-x', null)]

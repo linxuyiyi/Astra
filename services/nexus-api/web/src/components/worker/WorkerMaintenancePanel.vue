@@ -1,418 +1,258 @@
 <template>
-  <section class="worker-maintenance" data-testid="worker-maintenance-panel">
-    <div class="worker-maintenance__toolbar">
-      <ElSpace wrap :size="8">
-        <ElButton
-          data-testid="check-environment"
-          :icon="Stethoscope"
-          :loading="busyAction === 'check'"
-          :disabled="actionDisabled('check')"
-          @click="runAction('check')"
-        >检查</ElButton>
-        <ElButton v-if="mode === 'LINUX_REMOTE'"
-          data-testid="deploy-environment"
-          type="primary"
-          :loading="busyAction === 'deploy'"
-          :disabled="actionDisabled('deploy')"
-          @click="runAction('deploy')"
-        >一键部署</ElButton>
-        <ElButton v-if="mode === 'LINUX_REMOTE'"
-          data-testid="update-environment"
-          :loading="busyAction === 'update'"
-          :disabled="actionDisabled('update')"
-          @click="runAction('update')"
-        >更新</ElButton>
-        <ElButton v-if="mode === 'LINUX_REMOTE'"
-          data-testid="restart-environment"
-          :loading="busyAction === 'restart'"
-          :disabled="actionDisabled('restart')"
-          @click="runAction('restart')"
-        >重启</ElButton>
-        <ElSwitch
-          data-testid="worker-enabled"
-          :model-value="health?.enabled ?? false"
-          :loading="enabledSaving"
-          :disabled="!health || enabledSaving"
-          active-text="允许调度"
-          inactive-text="停止派单"
-          aria-label="允许 Worker 接收新任务"
-          @change="(value) => controller.setEnabled(Boolean(value))"
-        />
-      </ElSpace>
-      <ElButton data-testid="refresh-worker-maintenance" :icon="RefreshCw" :loading="loading" @click="controller.load">刷新</ElButton>
+  <section>
+    <h3>运行维护</h3>
+    <div class="toolbar">
+      <el-button
+        v-for="action in actions"
+        :key="action.key"
+        :disabled="busy"
+        @click="submit(action.key)"
+        >{{ action.label }}</el-button
+      >
+      <el-button @click="load">刷新</el-button>
     </div>
-
-    <ElAlert
-      v-if="actionError"
-      class="worker-maintenance__alert"
-      data-testid="worker-maintenance-error"
-      type="error"
-      show-icon
-      @close="controller.clearActionError"
-      :title="actionError"
-    />
-
-    <ElAlert
-      v-if="blockedNote"
-      class="worker-maintenance__alert"
-      type="warning"
-      show-icon
-      :closable="false"
-      :title="blockedNote"
-    />
-
-    <ElAlert
-      v-for="warning in health?.runtime_health.equipment.flatMap(item => item.warnings ?? []) ?? []"
-      :key="warning"
-      type="warning"
-      show-icon
-      :closable="false"
-      :title="warning"
-    />
-
-    <ElAlert v-if="health?.readiness === 'DRIFTED'" type="warning" show-icon :closable="false" title="待同步，请点一键部署应用已保存的配置。" />
-    <ElAlert v-if="health?.runtime_health.last_error" type="error" show-icon :closable="false" :title="maintenanceCopy(health.runtime_health.last_error)" />
-
-    <ElAlert
-      v-if="healthError"
-      class="worker-maintenance__alert"
-      type="error"
-      show-icon
-      :closable="false"
-      title="无法读取 Worker 维护状态"
+    <el-alert v-if="error" :title="error" type="error" />
+    <p v-if="health">
+      运行就绪：{{ readinessLabels[health.readiness] }} ·
+      {{ health.blocking.map((x) => x.message).join('；') }}
+    </p>
+    <el-table :data="operations" @row-click="select">
+      <el-table-column label="操作" width="140">
+        <template #default="{ row }">{{
+          actions.find((action) => action.key === row.action)?.label
+        }}</template>
+      </el-table-column>
+      <el-table-column label="结果" width="160">
+        <template #default="{ row }">
+          <el-tag
+            :type="semanticTag(maintenanceSemanticTone(row.state)).type"
+            :class="semanticTag(maintenanceSemanticTone(row.state)).className"
+            >{{ operationLabels[row.state] }}</el-tag
+          >
+        </template>
+      </el-table-column>
+      <el-table-column prop="error_message" label="说明" min-width="280" />
+      <el-table-column label="操作" width="220">
+        <template #default="{ row }">
+          <el-button
+            v-if="['QUEUED', 'RUNNING'].includes(row.state)"
+            @click.stop="cancel(row.id)"
+            >取消</el-button
+          >
+          <el-button
+            v-if="row.stage === 'stop_unconfirmed'"
+            type="danger"
+            @click.stop="confirmStopped(row.id)"
+            >确认远端已停止</el-button
+          >
+          <el-button
+            v-else-if="['FAILED', 'CANCELED'].includes(row.state)"
+            @click.stop="retry(row.id)"
+            >重试</el-button
+          >
+        </template>
+      </el-table-column>
+      <template #empty><el-empty description="暂无维护操作" /></template>
+    </el-table>
+    <el-table v-if="events.length" :data="events">
+      <el-table-column prop="name" label="步骤" width="220" />
+      <el-table-column prop="message" label="详情" />
+    </el-table>
+    <el-button v-if="nextCursor !== null" @click="nextLogPage"
+      >下一页日志</el-button
     >
-      <p>{{ healthError }}</p>
-      <ElButton size="small" @click="controller.load">重新加载</ElButton>
-    </ElAlert>
-
-    <div v-if="summaryOperation" class="worker-maintenance__summary">
-      <SemanticTag :tone="maintenanceStateTone(summaryOperation.state)" :label="maintenanceStateLabel(summaryOperation.state)" />
-      <strong>{{ maintenanceActionLabel(summaryOperation.action) }}</strong>
-      <ElText>{{ maintenanceStageLabel(summaryOperation.stage) }}</ElText>
-      <ElButton link type="primary" @click="viewOperation(summaryOperation.id)">查看详情</ElButton>
-    </div>
-
-    <ElEmpty v-if="!loading && !operations.length && !healthError" :image-size="48" description="暂无维护记录" />
-
-
-    <div v-if="showHistory && historyOperations.length" class="worker-maintenance__history">
-      <div class="worker-maintenance__history-head"><h4>维护记录</h4></div>
-      <ElTable v-loading="loading || detailLoading" :data="historyOperations" size="small" @row-click="onSelectOperation">
-        <ElTableColumn label="操作" min-width="110"><template #default="{ row }">{{ maintenanceActionLabel(row.action) }}</template></ElTableColumn>
-        <ElTableColumn label="结果" width="110"><template #default="{ row }"><SemanticTag :tone="maintenanceStateTone(row.state)" :label="maintenanceStateLabel(row.state)" /></template></ElTableColumn>
-        <ElTableColumn label="发起人" min-width="150" show-overflow-tooltip><template #default="{ row }">{{ requesterLabel(row.requested_by) }}</template></ElTableColumn>
-        <ElTableColumn label="申请时间" width="130"><template #default="{ row }">{{ formatTime(row.requested_at) }}</template></ElTableColumn>
-        <ElTableColumn label="结果说明" min-width="170" show-overflow-tooltip><template #default="{ row }">{{ operationReason(row as MaintenanceOperation) || maintenanceStageLabel(row.stage) }}</template></ElTableColumn>
-        <ElTableColumn label="操作" width="80" align="right"><template #default="{ row }"><ElButton link type="primary" @click.stop="viewOperation(row.id)">详情</ElButton></template></ElTableColumn>
-      </ElTable>
-    </div>
-
-    <ElDrawer v-model="detailsOpen" title="维护记录详情" size="min(760px, 96vw)" append-to-body destroy-on-close>
-    <div v-if="operation" class="worker-maintenance__operation">
-      <div class="worker-maintenance__operation-head">
-        <div class="worker-maintenance__operation-title">
-          <SemanticTag :tone="maintenanceStateTone(operation.state)" :label="maintenanceStateLabel(operation.state)" />
-          <strong>{{ maintenanceActionLabel(operation.action) }}</strong>
-          <ElText size="small">第 {{ operation.attempt }} 次尝试</ElText>
-          <IdDisplay :value="operation.id" :max-width="220" />
-        </div>
-        <ElSpace :size="8">
-          <ElButton
-            v-if="canCancel"
-            data-testid="cancel-maintenance-operation"
-            size="small"
-            :loading="busyAction === 'cancel'"
-            :disabled="busyAction !== null"
-            @click="cancelOperation"
-          >取消操作</ElButton>
-          <ElButton
-            v-if="canRetry"
-            data-testid="retry-maintenance-operation"
-            size="small"
-            type="primary"
-            :loading="busyAction === 'retry'"
-            :disabled="busyAction !== null"
-            @click="retryOperation"
-          >重试</ElButton>
-        </ElSpace>
-      </div>
-
-      <p v-if="operationReason(operation)" class="worker-maintenance__reason" :data-state="operation.state">{{ operationReason(operation) }}</p>
-
-      <ElDescriptions :column="3" border size="small">
-        <ElDescriptionsItem label="请求人">{{ requesterLabel(operation.requested_by) }}</ElDescriptionsItem>
-        <ElDescriptionsItem label="当前阶段">{{ maintenanceStageLabel(operation.stage) }}</ElDescriptionsItem>
-        <ElDescriptionsItem label="申请时间">{{ formatTime(operation.requested_at) }}</ElDescriptionsItem>
-        <ElDescriptionsItem label="开始时间">{{ formatTime(operation.started_at) }}</ElDescriptionsItem>
-        <ElDescriptionsItem label="结束时间">{{ formatTime(operation.finished_at) }}</ElDescriptionsItem>
-        <ElDescriptionsItem label="取消请求">{{ operation.cancel_requested ? '已请求，等待安全检查点' : '无' }}</ElDescriptionsItem>
-        <ElDescriptionsItem v-if="changed.length" label="本次变更" :span="3">
-          <ElSpace wrap :size="6">
-            <SemanticTag v-for="item in changed" :key="item" tone="neutral" :label="item" />
-          </ElSpace>
-        </ElDescriptionsItem>
-      </ElDescriptions>
-
-      <ElCollapse v-model="expandedDetails" class="worker-maintenance__detail">
-        <ElCollapseItem v-if="revisions.length" title="版本差异" name="revisions">
-          <ElTable :data="revisions" size="small">
-            <ElTableColumn label="项目" prop="label" min-width="130" />
-            <ElTableColumn label="目标版本" min-width="170"><template #default="{ row }">{{ row.target || '未核验' }}</template></ElTableColumn>
-            <ElTableColumn label="实际版本" min-width="170"><template #default="{ row }">{{ row.actual || '未核验' }}</template></ElTableColumn>
-          </ElTable>
-        </ElCollapseItem>
-        <ElCollapseItem title="维护日志" name="logs">
-          <div class="worker-maintenance__logs">
-            <div class="worker-maintenance__log-head">
-              <div class="worker-maintenance__log-title">
-                <SemanticTag :tone="streamTone" :label="streamLabel" />
-                <ElText size="small">{{ streamNote }}</ElText>
-              </div>
-              <ElSpace :size="8">
-                <ElButton size="small" :loading="historyLoading" :disabled="!operation || busyAction !== null" @click="controller.loadHistoryPage(true)">刷新日志</ElButton>
-                <ElButton v-if="historyHasMore" size="small" :loading="historyLoading" :disabled="busyAction !== null" @click="controller.loadHistoryPage(false)">加载更多</ElButton>
-              </ElSpace>
-            </div>
-
-            <ElAlert v-if="historyError" type="error" show-icon :closable="false" :title="historyError" />
-            <div v-if="events.length" class="worker-maintenance__log-list">
-              <article v-for="event in events" :key="event.id" class="worker-maintenance__log-item">
-                <time>{{ formatTime(event.created_at) }}</time>
-                <SemanticTag :tone="eventTone(event)" :label="eventStateLabel(event)" />
-                <div class="worker-maintenance__log-copy">
-                  <strong v-if="event.name">{{ maintenanceCopy(event.name) }}</strong>
-                  <span>{{ eventText(event) }}</span>
-                  <small>
-                    #{{ event.id }} · 第 {{ event.attempt }} 次 · {{ event.type }}<template v-if="event.stage"> · {{ maintenanceStageLabel(event.stage) }}</template>
-                    <template v-if="eventActor(event)"> · 操作者 {{ eventActor(event) }}</template>
-                  </small>
-                  <details v-if="eventDetailText(event)">
-                    <summary>事件详情</summary>
-                    <pre>{{ eventDetailText(event) }}</pre>
-                  </details>
-                </div>
-              </article>
-            </div>
-            <ElText v-else size="small">暂无日志。</ElText>
-          </div>
-        </ElCollapseItem>
-      </ElCollapse>
-    </div>
-
-    </ElDrawer>
   </section>
 </template>
-
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElDescriptions, ElDescriptionsItem, ElDrawer, ElEmpty, ElSpace, ElSwitch, ElTable, ElTableColumn, ElText, vLoading } from 'element-plus'
-import { RefreshCw, Stethoscope } from 'lucide-vue-next'
-import type { MaintenanceAction, MaintenanceEvent, MaintenanceOperation } from '@/api/maintenance'
-import { actionBlockedByPolicy, hasOccupancy, isActiveMaintenanceState } from '@/features/workers/actionPolicy'
-import type { WorkerMaintenanceController } from '@/composables/useWorkerMaintenance'
-import IdDisplay from '@/components/astra/IdDisplay.vue'
-import SemanticTag from '@/components/astra/SemanticTag.vue'
-import { confirmDialog } from '@/composables/useConfirm'
-import { notify } from '@/composables/useToast'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { ElMessageBox } from 'element-plus'
+import type { Worker } from '@/api/types'
 import {
-  canCancelMaintenance,
-  changedLabels,
-  canRetryMaintenance,
-  eventDetailText,
-  eventStateLabel,
-  eventText,
-  eventTone,
-  maintenanceActionLabel,
-  maintenanceCopy,
-  maintenanceStageLabel,
-  maintenanceStateLabel,
-  maintenanceStateTone,
-  operationReason,
-  requesterLabel,
-  revisionRows,
-} from '@/features/workers/presentation'
-import type { SemanticTone } from '@/features/workers/semantic'
-import { formatTime } from '@/utils/format'
+  getWorkerHealth,
+  listMaintenanceOperations,
+  submitMaintenance,
+  getMaintenanceEventsPage,
+  cancelMaintenance,
+  retryMaintenance,
+  confirmMaintenanceStopped,
+  subscribeMaintenanceEvents,
+  type MaintenanceOperation,
+  type MaintenanceEvent,
+  type MaintenanceAction,
+  type WorkerHealth,
+} from '@/api/maintenance'
+import {
+  semanticTag,
+  maintenanceSemanticTone,
+} from '@/features/workers/semantic'
 
-const props = withDefaults(defineProps<{
-  controller: WorkerMaintenanceController
-  mode: 'LOCAL' | 'LINUX_REMOTE' | null
-  runtimeEngine?: 'opencode'
-  disabledReason?: string
-  showHistory?: boolean
-}>(), {
-  disabledReason: '',
-  runtimeEngine: 'opencode',
-  showHistory: true,
-})
-
+const props = defineProps<{ worker: Worker }>()
 const emit = defineEmits<{ changed: [] }>()
-const {
-  health,
-  operations,
-  operation,
-  events,
-  loading,
-  healthError,
-  actionError,
-  busyAction,
-  enabledSaving,
-  streamState,
-  streamNote,
-  historyHasMore,
-  historyLoading,
-  historyError,
-} = props.controller
-
-const detailsOpen = ref(false)
-const detailLoading = ref(false)
-const expandedDetails = ref<string[]>([])
-watch(() => operation.value?.id, () => { expandedDetails.value = [] })
-watch(() => health.value?.environment_id, () => { detailsOpen.value = false })
-const activeOperation = computed(() => operations.value.find((item) => isActiveMaintenanceState(item.state)) ?? null)
-const activeMaintenance = computed(() =>
-  isActiveMaintenanceState(health.value?.maintenance?.state)
-  || isActiveMaintenanceState(operation.value?.state)
-  || Boolean(activeOperation.value),
+const operationLabels: Record<string, string> = {
+  QUEUED: '排队中',
+  RUNNING: '执行中',
+  SUCCEEDED: '成功',
+  FAILED: '失败',
+  CANCELED: '已取消',
+}
+const readinessLabels: Record<string, string> = {
+  READY: '就绪',
+  DRIFTED: '待同步',
+  DEGRADED: '不可用',
+  UNKNOWN: '未检查',
+}
+const operations = ref<MaintenanceOperation[]>([])
+const events = ref<MaintenanceEvent[]>([])
+const health = ref<WorkerHealth>()
+const error = ref('')
+const selected = ref('')
+const nextCursor = ref<number | null>(null)
+const actions: Array<{ key: MaintenanceAction; label: string }> = [
+  { key: 'check', label: '检查' },
+  { key: 'deploy', label: '一键部署' },
+  { key: 'restart', label: '重启' },
+  { key: 'update', label: '更新仓库' },
+]
+const busy = computed(() =>
+  operations.value.some(
+    (x) =>
+      ['RUNNING', 'QUEUED'].includes(x.state) || x.stage === 'stop_unconfirmed',
+  ),
 )
-const summaryOperation = computed(() => activeOperation.value ?? (!props.showHistory ? operation.value : null))
-const historyOperations = computed(() => operations.value.filter(item => item.id !== activeOperation.value?.id))
-const occupancy = computed(() => hasOccupancy(health.value))
-const revisions = computed(() => revisionRows(operation.value))
-const changed = computed(() => changedLabels(operation.value))
-const canCancel = computed(() => canCancelMaintenance(operation.value) && !operation.value?.cancel_requested && busyAction.value !== 'cancel')
-const canRetry = computed(() => canRetryMaintenance(operation.value) && !activeMaintenance.value && busyAction.value === null)
-const blockedNote = computed(() => {
-  if (props.disabledReason) return props.disabledReason
-  if (activeMaintenance.value) return '维护操作进行中，部署、更新和重启暂不可用。'
-  if (occupancy.value) return '存在正在执行或等待确认的任务/会话，部署、更新和重启已暂停；停止派单仍允许当前任务完成。'
-  if (!health.value) return '尚未获取健康状态；部署、更新和重启仍可提交，是否安全由后端最终检查。'
-  return ''
-})
-const streamLabel = computed(() => ({
-  idle: '未订阅',
-  live: '同步正常',
-  reconnecting: '重连中',
-  polling: '正在同步',
-  ended: '已结束',
-}[streamState.value]))
-const streamTone = computed<SemanticTone>(() => {
-  if (streamState.value === 'live') return 'success'
-  if (streamState.value === 'polling' || streamState.value === 'reconnecting') return 'attention'
-  return 'neutral'
-})
+let timer: ReturnType<typeof setInterval> | undefined
+let stream: AbortController | undefined
+let updating = false
+let cursor = 0
 
-let unsubscribe: (() => void) | null = null
-onMounted(() => {
-  unsubscribe = props.controller.onChange(() => emit('changed'))
-})
-onBeforeUnmount(() => { unsubscribe?.() })
-
-function eventActor(event: MaintenanceEvent): string {
-  const value = event.detail?.requested_by
-  return typeof value === 'string' ? value : ''
+function appendEvent(event: MaintenanceEvent) {
+  if (event.id <= cursor) return
+  cursor = event.id
+  events.value = [...events.value.slice(-199), event]
 }
-
-function actionDisabled(action: MaintenanceAction): boolean {
-  if (busyAction.value !== null) return true
-  if (props.disabledReason) return action !== 'check'
-  return actionBlockedByPolicy(action, health.value, {
-    activeMaintenance: activeMaintenance.value,
+async function observeLogs(operation: MaintenanceOperation) {
+  const id = operation.id
+  const page = await getMaintenanceEventsPage(id, cursor)
+  if (selected.value !== id) return
+  page.items.forEach(appendEvent)
+  nextCursor.value = page.next_cursor
+  if (!['QUEUED', 'RUNNING'].includes(operation.state) || stream) return
+  const controller = new AbortController()
+  stream = controller
+  void subscribeMaintenanceEvents(id, {
+    signal: controller.signal,
+    afterId: cursor,
+    onEvent: appendEvent,
+    onEnd: () => {
+      void load()
+    },
   })
-}
-
-async function runAction(action: MaintenanceAction) {
-  if (actionDisabled(action)) return
-  if (action !== 'check') {
-    const confirmed = await confirmDialog({
-      title: `${maintenanceActionLabel(action)} Agent Worker`,
-      message: confirmMessage(action),
-      confirmLabel: maintenanceActionLabel(action),
+    .catch((e) => {
+      if (!controller.signal.aborted) error.value = String(e)
     })
-    if (!confirmed) return
+    .finally(() => {
+      if (stream === controller) stream = undefined
+    })
+}
+async function nextLogPage() {
+  const operation = operations.value.find((x) => x.id === selected.value)
+  if (operation) {
+    try {
+      events.value = []
+      await observeLogs(operation)
+    } catch (e) {
+      error.value = String(e)
+    }
   }
-  const created = await props.controller.submit(action)
-  if (created) notify(`${maintenanceActionLabel(action)}已提交：${created.id}`)
-  else if (actionError.value) notify(actionError.value, 'error')
 }
-
-async function cancelOperation() {
-  const confirmed = await confirmDialog({
-    title: '取消维护操作',
-    message: '取消只停止服务端维护任务，不会回滚已经写入远端的配置或代码。操作取消后可重新检查或一键部署。',
-    confirmLabel: '请求取消',
-    danger: true,
-  })
-  if (!confirmed) return
-  const done = await props.controller.cancel()
-  if (done) notify('已请求取消维护操作')
-  else if (actionError.value) notify(actionError.value, 'error')
-}
-
-async function retryOperation() {
-  if (!canRetry.value) return
-  const action = operation.value?.action as MaintenanceAction | undefined
-  if (action && action !== 'check') {
-    const confirmed = await confirmDialog({ title: `重试${maintenanceActionLabel(action)}？`, message: confirmMessage(action), confirmLabel: '重试', danger: action === 'restart' })
-    if (!confirmed) return
-  }
-  const updated = await props.controller.retry()
-  if (updated) notify(`已开始第 ${updated.attempt} 次尝试`)
-  else if (actionError.value) notify(actionError.value, 'error')
-}
-
-function onSelectOperation(row: { id: string }) { void viewOperation(row.id) }
-
-async function viewOperation(id: string) {
-  detailLoading.value = true
+async function load() {
+  if (updating) return
+  updating = true
   try {
-    await props.controller.selectOperation(id, { force: true })
-    if (operation.value?.id === id && !actionError.value) detailsOpen.value = true
-  } finally { detailLoading.value = false }
-}
-
-function confirmMessage(action: MaintenanceAction): string {
-  const messages: Record<MaintenanceAction, string> = {
-    check: '',
-    deploy: '将安装或校验运行依赖并写入配置，不会主动更新已有仓库代码；维护失败不会把真实健康的 Worker 标成不可用。',
-    update: '将获取目标分支并更新仓库代码；工作区存在未提交修改或冲突时会停止并保留现场。',
-    restart: '将重启 OpenCode Serve；需要任务、等待确认和未结束会话均已清空。',
+    const [list, status] = await Promise.all([
+      listMaintenanceOperations(props.worker.id),
+      getWorkerHealth(props.worker.id),
+    ])
+    operations.value = list.items
+    health.value = status
+    error.value = ''
+    const operation = list.items.find((x) => x.id === selected.value)
+    if (operation && !stream) await observeLogs(operation)
+  } catch (e) {
+    error.value = String(e)
+  } finally {
+    updating = false
   }
-  return messages[action]
 }
+async function select(operation: MaintenanceOperation) {
+  stream?.abort()
+  stream = undefined
+  selected.value = operation.id
+  cursor = 0
+  events.value = []
+  nextCursor.value = null
+  try {
+    await observeLogs(operation)
+  } catch (e) {
+    error.value = String(e)
+  }
+}
+async function command(action: () => Promise<MaintenanceOperation>) {
+  try {
+    const operation = await action()
+    await load()
+    await select(operation)
+    emit('changed')
+  } catch (e) {
+    error.value = String(e)
+  }
+}
+async function submit(action: MaintenanceAction) {
+  if (action !== 'check') {
+    try {
+      await ElMessageBox.confirm(
+        '维护将操作 Worker 的原生运行环境；有未释放任务时禁止执行。',
+        'Worker 维护',
+      )
+    } catch {
+      return
+    }
+  }
+  await command(() => submitMaintenance(props.worker.id, action))
+}
+async function cancel(id: string) {
+  await command(() => cancelMaintenance(id))
+}
+async function retry(id: string) {
+  await command(() => retryMaintenance(id))
+}
+async function confirmStopped(id: string) {
+  try {
+    await ElMessageBox.confirm(
+      '请先在目标机器确认部署和更新进程均已停止。确认后才释放维护互斥占用。',
+      '确认远端进程停止',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  await command(() => confirmMaintenanceStopped(id))
+}
+onMounted(() => {
+  void load()
+  timer = setInterval(load, 3000)
+})
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+  stream?.abort()
+})
 </script>
-
 <style scoped>
-.worker-maintenance { display: grid; gap: 12px; min-width: 0; }
-.worker-maintenance__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.worker-maintenance__alert { margin: 0; }
-.worker-maintenance__summary { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px; border: 1px solid var(--astra-border); border-radius: 8px; }
-.worker-maintenance__reason { margin: 0; color: var(--astra-text-secondary); overflow-wrap: anywhere; line-height: 1.6; }
-.worker-maintenance__reason[data-state='FAILED'] { color: var(--astra-danger); }
-.worker-maintenance__operation { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--astra-border); border-radius: 10px; background: var(--astra-bg-subtle, transparent); }
-.worker-maintenance__operation-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.worker-maintenance__operation-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-.worker-maintenance__operation-title strong { font-size: var(--astra-font-label); }
-.worker-maintenance__detail { --el-collapse-header-height: 36px; }
-.worker-maintenance__logs { display: grid; gap: 8px; }
-.worker-maintenance__log-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.worker-maintenance__log-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.worker-maintenance__log-title h4, .worker-maintenance__history-head h4 { margin: 0; font-size: var(--astra-font-label); }
-.worker-maintenance__log-list { display: grid; gap: 6px; max-height: 320px; overflow: auto; padding-right: 4px; }
-.worker-maintenance__log-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 7px; background: var(--astra-bg-muted, rgba(127, 127, 127, .06)); }
-.worker-maintenance__log-item time { flex: none; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
-.worker-maintenance__log-copy { display: grid; gap: 2px; min-width: 0; }
-.worker-maintenance__log-copy strong { font-size: var(--astra-font-body); }
-.worker-maintenance__log-copy span { overflow-wrap: anywhere; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); }
-.worker-maintenance__log-copy small { color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
-.worker-maintenance__log-copy details { margin-top: 2px; }
-.worker-maintenance__log-copy summary { cursor: pointer; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
-.worker-maintenance__log-copy pre { margin: 4px 0 0; max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); }
-.worker-maintenance__history { display: grid; gap: 8px; }
-.worker-maintenance__history-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.worker-maintenance__history :deep(.el-table__row) { cursor: pointer; }
-.worker-maintenance__history-id { display: flex; align-items: center; gap: 6px; min-width: 0; }
-@media (max-width: 720px) {
-  .worker-maintenance__operation-head, .worker-maintenance__log-head { align-items: flex-start; flex-direction: column; }
+section {
+  margin-top: 28px;
+}
+.toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 </style>

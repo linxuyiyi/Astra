@@ -1,11 +1,8 @@
-"""Agent Worker 五状态无死锁维护操作、租约续期与动作执行。
+"""Worker 维护队列、租约、互斥占用与操作事件。
 
-设计边界：
-1. 维护操作仅保留活跃态 ``QUEUED | RUNNING`` 与终态 ``SUCCEEDED | FAILED | CANCELED``，
-   彻底移除 ``INTERRUPTED / PREFLIGHT / VERIFYING`` 中间阻塞态与 ``reconcile`` 死锁路径。
-2. 任何进入终态（成功、失败、取消、租约过期、控制面停机）的操作均立即释放 ``active_environment_id`` 互斥锁；
-   任务能否调度完全由 ``evaluate_worker_readiness`` 基于实时观测快照判定，绝不靠锁住维护表阻断恢复。
-3. 员工调度开关（``enabled``）通过员工同步接口即时生效，不再走异步维护队列。
+确认执行已停止后才释放 active_worker_id。租约过期或控制面停机时，
+远端进程可能仍在运行，保留占用并等待人工确认停止。
+Worker enabled 仅控制任务调度，不进入维护队列。
 """
 
 from __future__ import annotations
@@ -20,35 +17,28 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from anyio import CancelScope
 from fastapi import HTTPException
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.config.settings import get_settings
 from app.database import SessionLocal
-from app.domain import EnvironmentStatus, ExecutionMode, MaintenanceAction, MaintenanceState
+from app.domain import ExecutionMode, MaintenanceAction, MaintenanceState
+from app.executors.errors import OpenCodeServerUnavailable
 from app.models import (
     AgentWorker,
-    OpenCodeExecutionEnvironment,
-    RuntimeSession,
     Task,
-    WorkerInstance,
     WorkerMaintenanceEvent,
     WorkerMaintenanceOperation,
 )
 from app.runtime.environment import ExecutionEnvironmentRuntime, environment_snapshot
 from app.runtime.occupancy import (
-    blocking_session_exists,
     occupying_clause,
     occupying_exists,
-    release_match_clause,
 )
 from app.runtime.redaction import redact_data, redact_text
 from app.runtime.worker_client import WorkerOpenCodeClient
 from app.runtime.worker_health import (
-    expected_inspection_payload,
-    normalize_probe_result,
     probe_online_worker,
 )
 from app.runtime.worker_readiness import (
@@ -57,11 +47,8 @@ from app.runtime.worker_readiness import (
     compute_target_digest,
     evaluate_worker_readiness,
 )
-from app.runtime.worker_readiness import (
-    scheduling_block as readiness_scheduling_block,
-)
+from app.runtime.worker_transport import WorkerCommandError
 from app.worker_agent import __version__ as WORKER_AGENT_VERSION
-from app.worker_agent.inspection import inspect_runtime
 from app.worker_gateway.service import get_gateway
 
 logger = logging.getLogger(__name__)
@@ -128,7 +115,7 @@ def _utc(value: datetime | None) -> datetime | None:
 def operation_payload(operation: WorkerMaintenanceOperation) -> dict[str, Any]:
     return {
         "id": operation.id,
-        "environment_id": operation.environment_id,
+        "agent_worker_id": operation.agent_worker_id,
         "action": operation.action,
         "state": operation.state,
         "stage": operation.stage,
@@ -166,23 +153,23 @@ def event_payload(event: WorkerMaintenanceEvent) -> dict[str, Any]:
     }
 
 
-def active_maintenance_exists(environment_id: int):
+def active_maintenance_exists(agent_worker_id: str):
     return (
         select(WorkerMaintenanceOperation.id)
         .where(
-            WorkerMaintenanceOperation.environment_id == environment_id,
-            WorkerMaintenanceOperation.state.in_(ACTIVE_STATES),
+            WorkerMaintenanceOperation.agent_worker_id == agent_worker_id,
+            WorkerMaintenanceOperation.active_worker_id.is_not(None),
         )
         .exists()
     )
 
 
-async def active_operation(session, environment_id: int) -> WorkerMaintenanceOperation | None:
+async def active_operation(session, agent_worker_id: str) -> WorkerMaintenanceOperation | None:
     return await session.scalar(
         select(WorkerMaintenanceOperation)
         .where(
-            WorkerMaintenanceOperation.environment_id == environment_id,
-            WorkerMaintenanceOperation.state.in_(ACTIVE_STATES),
+            WorkerMaintenanceOperation.agent_worker_id == agent_worker_id,
+            WorkerMaintenanceOperation.active_worker_id.is_not(None),
         )
         .order_by(
             WorkerMaintenanceOperation.updated_at.desc(),
@@ -192,10 +179,10 @@ async def active_operation(session, environment_id: int) -> WorkerMaintenanceOpe
     )
 
 
-async def latest_operation(session, environment_id: int) -> WorkerMaintenanceOperation | None:
+async def latest_operation(session, agent_worker_id: str) -> WorkerMaintenanceOperation | None:
     return await session.scalar(
         select(WorkerMaintenanceOperation)
-        .where(WorkerMaintenanceOperation.environment_id == environment_id)
+        .where(WorkerMaintenanceOperation.agent_worker_id == agent_worker_id)
         .order_by(
             WorkerMaintenanceOperation.updated_at.desc(),
             WorkerMaintenanceOperation.id.desc(),
@@ -204,14 +191,14 @@ async def latest_operation(session, environment_id: int) -> WorkerMaintenanceOpe
     )
 
 
-async def require_no_active_maintenance(session, environment_id: int | None) -> None:
-    if environment_id is None:
+async def require_no_active_maintenance(session, agent_worker_id: str | None) -> None:
+    if agent_worker_id is None:
         return
     active = await session.scalar(
         select(WorkerMaintenanceOperation.id)
         .where(
-            WorkerMaintenanceOperation.environment_id == environment_id,
-            WorkerMaintenanceOperation.state.in_(ACTIVE_STATES),
+            WorkerMaintenanceOperation.agent_worker_id == agent_worker_id,
+            WorkerMaintenanceOperation.active_worker_id.is_not(None),
         )
         .with_for_update()
         .limit(1)
@@ -220,13 +207,13 @@ async def require_no_active_maintenance(session, environment_id: int | None) -> 
         raise HTTPException(409, "远程环境正在维护，请等待完成或先取消当前操作")
 
 
-async def lock_environment_row(session, environment: OpenCodeExecutionEnvironment) -> None:
+async def lock_environment_row(session, environment: AgentWorker) -> None:
     """获取环境行写锁，防止维护入队与任务认领/环境写入并发竞态。"""
 
     result = await session.execute(
-        update(OpenCodeExecutionEnvironment)
-        .where(OpenCodeExecutionEnvironment.id == environment.id)
-        .values(updated_at=OpenCodeExecutionEnvironment.updated_at)
+        update(AgentWorker)
+        .where(AgentWorker.id == environment.id)
+        .values(updated_at=AgentWorker.updated_at)
         .execution_options(synchronize_session=False)
     )
     if result.rowcount != 1:
@@ -234,7 +221,7 @@ async def lock_environment_row(session, environment: OpenCodeExecutionEnvironmen
     await session.refresh(environment, with_for_update=True)
 
 
-def _validate_action(environment: OpenCodeExecutionEnvironment, action: str) -> None:
+def _validate_action(environment: AgentWorker, action: str) -> None:
     settings = get_settings()
     if action not in PUBLIC_ACTIONS:
         raise HTTPException(422, "不支持的维护动作")
@@ -254,23 +241,18 @@ def _validate_action(environment: OpenCodeExecutionEnvironment, action: str) -> 
         raise HTTPException(409, "更新需要先绑定工程仓库")
 
 
-def _target_revision(environment: OpenCodeExecutionEnvironment) -> dict[str, Any]:
+def _target_revision(environment: AgentWorker) -> dict[str, Any]:
     settings = get_settings()
     return {
         "target_digest": compute_target_digest(environment),
         "opencode_version": settings.remote_opencode_version,
         "worker_agent_version": WORKER_AGENT_VERSION,
         "model_name": environment.model_name,
-        "opencode_path": environment.opencode_path,
         "repository_url": environment.repository_url,
         "branch": environment.branch,
         "skills": list(environment.skill_refs or []),
-        "mcp": [
-            item.get("name") for item in (environment.mcp_refs or []) if isinstance(item, dict)
-        ],
-        "capability_revision": capability_spec_revision(
-            environment.skill_refs, environment.mcp_refs
-        ),
+        "mcp": [item.get("name") for item in (environment.mcp_refs or []) if isinstance(item, dict)],
+        "capability_revision": capability_spec_revision(environment.skill_refs, environment.mcp_refs),
     }
 
 
@@ -280,14 +262,10 @@ async def _occupancy_blockers(session, employee_id: str | None) -> list[str]:
     blockers: list[str] = []
     if await session.scalar(select(1).where(occupying_exists(employee_id))):
         blockers.append("occupied_task")
-    if await session.scalar(select(1).where(blocking_session_exists(employee_id))):
-        blockers.append("active_session")
     return blockers
 
 
-def _initial_execution_route(
-    environment: OpenCodeExecutionEnvironment, action: str
-) -> tuple[str | None, str | None]:
+def _initial_execution_route(environment: AgentWorker, action: str) -> tuple[str | None, str | None]:
     if action == MaintenanceAction.DEPLOY.value:
         return "ssh", "通过 SSH 执行一键部署与守护拉起"
     if action == MaintenanceAction.UPDATE.value:
@@ -301,25 +279,21 @@ def _initial_execution_route(
 
 async def submit_operation(
     session,
-    environment_id: int,
+    agent_worker_id: str,
     action: str,
     *,
     requested_by: str = DEFAULT_REQUESTED_BY,
 ) -> WorkerMaintenanceOperation:
     """原子校验并写入排队维护操作。"""
 
-    environment = await session.scalar(
-        select(OpenCodeExecutionEnvironment).where(
-            OpenCodeExecutionEnvironment.id == environment_id
-        )
-    )
+    environment = await session.scalar(select(AgentWorker).where(AgentWorker.id == agent_worker_id))
     if environment is None:
         raise HTTPException(404, "Worker 环境不存在")
     _validate_action(environment, action)
     await lock_environment_row(session, environment)
     await require_no_active_maintenance(session, environment.id)
     if action in DISRUPTIVE_ACTIONS:
-        blockers = await _occupancy_blockers(session, environment.employee_id)
+        blockers = await _occupancy_blockers(session, environment.id)
         if blockers:
             await session.rollback()
             raise HTTPException(
@@ -333,7 +307,7 @@ async def submit_operation(
     channel, reason = _initial_execution_route(environment, action)
     operation = WorkerMaintenanceOperation(
         id="op_" + uuid4().hex,
-        environment_id=environment.id,
+        agent_worker_id=environment.id,
         action=action,
         state=MaintenanceState.QUEUED.value,
         stage="queued",
@@ -344,7 +318,7 @@ async def submit_operation(
         target_revision=_target_revision(environment),
         before_snapshot=snapshot,
         after_snapshot={},
-        active_environment_id=environment.id,
+        active_worker_id=environment.id,
         requested_at=now,
     )
     session.add(operation)
@@ -401,7 +375,7 @@ async def claim_next(owner: str) -> str | None:
                 .values(
                     state=MaintenanceState.CANCELED.value,
                     stage="canceled",
-                    active_environment_id=None,
+                    active_worker_id=None,
                     lease_owner=None,
                     lease_until=None,
                     finished_at=now,
@@ -484,73 +458,58 @@ async def claim_next(owner: str) -> str | None:
         return candidate.id
 
 
-async def recover_expired(owner: str | None = None) -> int:
-    """将租约过期的 RUNNING 操作立即收敛为终态并释放环境锁（无 INTERRUPTED 死锁）。"""
-
+async def recover_expired(owner=None):
     now = datetime.now(UTC)
-    recovered = 0
     async with SessionLocal() as session:
-        expired = (
+        operations = (
             await session.scalars(
-                select(WorkerMaintenanceOperation).where(
-                    WorkerMaintenanceOperation.state.in_(EXECUTING_STATES),
-                    WorkerMaintenanceOperation.lease_until.is_not(None),
+                select(WorkerMaintenanceOperation)
+                .where(
+                    WorkerMaintenanceOperation.state == "RUNNING",
                     WorkerMaintenanceOperation.lease_until <= now,
-                    or_(owner is None, WorkerMaintenanceOperation.lease_owner != owner),
+                    *([WorkerMaintenanceOperation.lease_owner != owner] if owner else []),
                 )
+                .with_for_update()
             )
         ).all()
-        for operation in expired:
-            target_state = (
-                MaintenanceState.CANCELED.value
-                if operation.cancel_requested
-                else MaintenanceState.FAILED.value
-            )
-            target_stage = "canceled" if operation.cancel_requested else "failed"
-            error_code = "canceled" if operation.cancel_requested else "lease_expired"
-            error_message = (
-                "维护操作已取消，环境锁已释放"
-                if operation.cancel_requested
-                else "执行进程失联或租约过期，环境锁已自动释放，可直接重新执行"
-            )
-            result = await session.execute(
-                update(WorkerMaintenanceOperation)
-                .where(
-                    WorkerMaintenanceOperation.id == operation.id,
-                    WorkerMaintenanceOperation.attempt == operation.attempt,
-                    WorkerMaintenanceOperation.state.in_(EXECUTING_STATES),
-                    WorkerMaintenanceOperation.lease_until.is_not(None),
-                    WorkerMaintenanceOperation.lease_until <= now,
+        for operation in operations:
+            operation.state = "FAILED"
+            operation.stage = "stop_unconfirmed"
+            operation.error_code = "lease_expired"
+            operation.error_message = "控制进程失联；请确认远端维护进程已停止后释放维护占用"
+            operation.lease_owner = None
+            operation.lease_until = None
+            operation.finished_at = now
+            session.add(
+                WorkerMaintenanceEvent(
+                    operation_id=operation.id,
+                    stage="stop_unconfirmed",
+                    name="维护租约过期",
+                    state="FAILED",
+                    message=operation.error_message,
                 )
-                .values(
-                    state=target_state,
-                    stage=target_stage,
-                    active_environment_id=None,
-                    lease_owner=None,
-                    lease_until=None,
-                    finished_at=now,
-                    error_code=error_code,
-                    error_message=error_message,
-                    updated_at=now,
-                )
-                .execution_options(synchronize_session=False)
             )
-            if result.rowcount:
-                recovered += 1
-                session.add(
-                    WorkerMaintenanceEvent(
-                        operation_id=operation.id,
-                        attempt=operation.attempt,
-                        type="canceled" if operation.cancel_requested else "failed",
-                        stage=target_stage,
-                        name="已取消" if operation.cancel_requested else "租约过期失败",
-                        state=target_state,
-                        message=error_message,
-                        detail={"reason": error_code, "previous_stage": operation.stage},
-                    )
-                )
         await session.commit()
-    return recovered
+        return len(operations)
+
+
+async def confirm_maintenance_stopped(session, operation_id, actor):
+    operation = await session.get(WorkerMaintenanceOperation, operation_id)
+    if not operation or operation.stage != "stop_unconfirmed":
+        raise HTTPException(409, "操作无需人工释放")
+    operation.active_worker_id = None
+    operation.stage = "stopped_confirmed"
+    session.add(
+        WorkerMaintenanceEvent(
+            operation_id=operation.id,
+            attempt=operation.attempt,
+            type="stop_confirmed",
+            message="操作者已确认远端维护进程停止",
+            detail={"actor": actor},
+        )
+    )
+    await session.commit()
+    return operation
 
 
 async def _finish_in_session(
@@ -564,10 +523,6 @@ async def _finish_in_session(
     error_code: str | None = None,
     error_message: str | None = None,
     after_snapshot: dict[str, Any] | None = None,
-    environment_id: int | None = None,
-    environment_values: dict[str, Any] | None = None,
-    employee_id: str | None = None,
-    employee_values: dict[str, Any] | None = None,
     event_message: str | None = None,
     secrets: tuple[str, ...] | list[str] = (),
 ) -> bool:
@@ -589,7 +544,9 @@ async def _finish_in_session(
         .values(
             state=state,
             stage=resolved_stage,
-            active_environment_id=None,
+            active_worker_id=WorkerMaintenanceOperation.active_worker_id
+            if resolved_stage == "stop_unconfirmed"
+            else None,
             lease_owner=None,
             lease_until=None,
             finished_at=now,
@@ -602,26 +559,6 @@ async def _finish_in_session(
     )
     if result.rowcount != 1:
         return False
-
-    if environment_id is not None and environment_values:
-        env_patch = dict(environment_values)
-        env_patch.setdefault("updated_at", now)
-        await session.execute(
-            update(OpenCodeExecutionEnvironment)
-            .where(OpenCodeExecutionEnvironment.id == environment_id)
-            .values(**env_patch)
-            .execution_options(synchronize_session=False)
-        )
-
-    if employee_id is not None and employee_values:
-        emp_patch = dict(employee_values)
-        emp_patch.setdefault("updated_at", now)
-        await session.execute(
-            update(AgentWorker)
-            .where(AgentWorker.id == employee_id)
-            .values(**emp_patch)
-            .execution_options(synchronize_session=False)
-        )
 
     event_type = (
         "completed"
@@ -653,10 +590,6 @@ async def finish_operation(
     error_code: str | None = None,
     error_message: str | None = None,
     after_snapshot: dict[str, Any] | None = None,
-    environment_id: int | None = None,
-    environment_values: dict[str, Any] | None = None,
-    employee_id: str | None = None,
-    employee_values: dict[str, Any] | None = None,
     event_message: str | None = None,
     secrets: tuple[str, ...] | list[str] = (),
 ) -> bool:
@@ -671,10 +604,6 @@ async def finish_operation(
             error_code=error_code,
             error_message=error_message,
             after_snapshot=after_snapshot,
-            environment_id=environment_id,
-            environment_values=environment_values,
-            employee_id=employee_id,
-            employee_values=employee_values,
             event_message=event_message,
             secrets=secrets,
         )
@@ -682,59 +611,26 @@ async def finish_operation(
         return applied
 
 
-async def interrupt_owned(owner: str, reason: str) -> int:
-    """控制面进程停机时将本进程持有的 RUNNING 操作直接置为 FAILED 并释放锁。"""
-
-    now = datetime.now(UTC)
-    with CancelScope(shield=True):
-        async with SessionLocal() as session:
-            owned = (
-                await session.scalars(
-                    select(WorkerMaintenanceOperation).where(
-                        WorkerMaintenanceOperation.lease_owner == owner,
-                        WorkerMaintenanceOperation.state.in_(EXECUTING_STATES),
-                    )
-                )
-            ).all()
-            count = 0
-            for operation in owned:
-                result = await session.execute(
-                    update(WorkerMaintenanceOperation)
-                    .where(
-                        WorkerMaintenanceOperation.id == operation.id,
-                        WorkerMaintenanceOperation.attempt == operation.attempt,
-                        WorkerMaintenanceOperation.lease_owner == owner,
-                        WorkerMaintenanceOperation.state.in_(EXECUTING_STATES),
-                    )
-                    .values(
-                        state=MaintenanceState.FAILED.value,
-                        stage="failed",
-                        active_environment_id=None,
-                        lease_owner=None,
-                        lease_until=None,
-                        finished_at=now,
-                        error_code="controller_stopped",
-                        error_message=reason,
-                        updated_at=now,
-                    )
-                    .execution_options(synchronize_session=False)
-                )
-                if result.rowcount:
-                    count += 1
-                    session.add(
-                        WorkerMaintenanceEvent(
-                            operation_id=operation.id,
-                            attempt=operation.attempt,
-                            type="failed",
-                            stage="failed",
-                            name="控制面重启中断",
-                            state=MaintenanceState.FAILED.value,
-                            message=reason,
-                            detail={"reason": "controller_stopped"},
-                        )
-                    )
-            await session.commit()
-            return count
+async def interrupt_owned(owner, reason):
+    async with SessionLocal() as session:
+        result = await session.execute(
+            update(WorkerMaintenanceOperation)
+            .where(
+                WorkerMaintenanceOperation.lease_owner == owner,
+                WorkerMaintenanceOperation.state == "RUNNING",
+            )
+            .values(
+                state="FAILED",
+                stage="stop_unconfirmed",
+                error_code="controller_stopped",
+                error_message=reason,
+                lease_owner=None,
+                lease_until=None,
+                finished_at=datetime.now(UTC),
+            )
+        )
+        await session.commit()
+        return result.rowcount
 
 
 async def append_event(
@@ -804,10 +700,10 @@ async def operation_detail(session, operation_id: str) -> dict[str, Any] | None:
 
 
 async def list_operations(
-    session, environment_id: int, *, limit: int = 50, before_id: str | None = None
+    session, agent_worker_id: str, *, limit: int = 50, before_id: str | None = None
 ) -> list[dict[str, Any]]:
     query = select(WorkerMaintenanceOperation).where(
-        WorkerMaintenanceOperation.environment_id == environment_id
+        WorkerMaintenanceOperation.agent_worker_id == agent_worker_id
     )
     if before_id:
         cursor = await session.get(WorkerMaintenanceOperation, before_id)
@@ -840,10 +736,8 @@ async def cancel_operation(
         return operation
 
     now = datetime.now(UTC)
-    lease_until = _utc(operation.lease_until)
-    lease_dead = lease_until is not None and lease_until <= now
 
-    if operation.state == MaintenanceState.QUEUED.value or lease_dead:
+    if operation.state == MaintenanceState.QUEUED.value:
         result = await session.execute(
             update(WorkerMaintenanceOperation)
             .where(
@@ -855,7 +749,7 @@ async def cancel_operation(
                 state=MaintenanceState.CANCELED.value,
                 stage="canceled",
                 cancel_requested=True,
-                active_environment_id=None,
+                active_worker_id=None,
                 lease_owner=None,
                 lease_until=None,
                 finished_at=now,
@@ -925,14 +819,14 @@ async def retry_operation(
     if operation.state not in {MaintenanceState.FAILED.value, MaintenanceState.CANCELED.value}:
         raise HTTPException(409, "仅失败或已取消的维护操作支持重试")
 
-    environment = await session.get(OpenCodeExecutionEnvironment, operation.environment_id)
+    environment = await session.get(AgentWorker, operation.agent_worker_id)
     if environment is None:
         raise HTTPException(404, "Worker 环境不存在")
     _validate_action(environment, operation.action)
     await lock_environment_row(session, environment)
     await require_no_active_maintenance(session, environment.id)
     if operation.action in DISRUPTIVE_ACTIONS:
-        blockers = await _occupancy_blockers(session, environment.employee_id)
+        blockers = await _occupancy_blockers(session, environment.id)
         if blockers:
             await session.rollback()
             raise HTTPException(
@@ -960,7 +854,7 @@ async def retry_operation(
             stage="queued",
             attempt=next_attempt,
             retry_of_attempt=previous_attempt,
-            active_environment_id=environment.id,
+            active_worker_id=environment.id,
             lease_owner=None,
             lease_until=None,
             cancel_requested=False,
@@ -1060,20 +954,12 @@ class OperationLease:
         if current.cancel_requested:
             raise MaintenanceCanceled("维护操作已取消")
 
-    async def assert_safe_to_disrupt(
-        self,
-        environment_id: int | None,
-        employee_id: str | None,
-        *,
-        allow_occupied: bool = False,
-    ) -> None:
+    async def assert_safe_to_disrupt(self, agent_worker_id: str) -> None:
         await self.check_canceled()
-        if allow_occupied or not employee_id:
-            return
         async with SessionLocal() as session:
-            blockers = await _occupancy_blockers(session, employee_id)
+            blockers = await _occupancy_blockers(session, agent_worker_id)
         if blockers:
-            raise MaintenanceBlocked("员工存在在途任务或活跃会话，已中止破坏性维护动作")
+            raise MaintenanceBlocked("Worker 有未释放任务，已中止破坏性维护动作")
 
     async def set_execution_route(self, channel: str, reason: str) -> None:
         now = datetime.now(UTC)
@@ -1123,10 +1009,6 @@ class OperationLease:
         error_code: str | None = None,
         error_message: str | None = None,
         after_snapshot: dict[str, Any] | None = None,
-        environment_id: int | None = None,
-        environment_values: dict[str, Any] | None = None,
-        employee_id: str | None = None,
-        employee_values: dict[str, Any] | None = None,
         event_message: str | None = None,
     ) -> bool:
         return await finish_operation(
@@ -1138,10 +1020,6 @@ class OperationLease:
             error_code=error_code,
             error_message=error_message,
             after_snapshot=after_snapshot,
-            environment_id=environment_id,
-            environment_values=environment_values,
-            employee_id=employee_id,
-            employee_values=employee_values,
             event_message=event_message,
             secrets=self.secrets,
         )
@@ -1176,438 +1054,72 @@ async def _emit_equipment_steps(emit, rows: list[dict[str, Any]]) -> None:
         await emit({"name": f"核验 {label}", "state": step_state, "message": msg})
 
 
-async def _execute_check(
-    environment: OpenCodeExecutionEnvironment,
-    lease: OperationLease,
-    emit,
-) -> None:
-    settings = get_settings()
+async def _execute_check(environment, lease, emit):
     await lease.check_canceled()
-    now = datetime.now(UTC)
+    if environment.mode == ExecutionMode.LOCAL and get_settings().executor_type == "opencode_server":
+        from app.runtime.session_connection import connect
 
-    if environment.mode == ExecutionMode.LOCAL:
-        await lease.set_execution_route("local", "本机开发运行环境深度检查")
-        await emit({"name": "探测本机运行环境", "state": "running", "message": ""})
-        async with SessionLocal() as db:
-            desired = await build_desired_spec(db, environment, settings)
-        raw = await asyncio.to_thread(
-            inspect_runtime,
-            f"http://127.0.0.1:{environment.opencode_server_port}",
-            environment.workspace_root,
-            **expected_inspection_payload(desired, deep=True),
-        )
-        observation = normalize_probe_result(raw, None, source="local")
-        detail = (
-            dict(environment.status_detail)
-            if isinstance(environment.status_detail, dict)
-            else {}
-        )
-        detail["local_observation"] = observation
-        environment.status_detail = detail
-        environment.status = (
-            EnvironmentStatus.AVAILABLE
-            if (observation.get("opencode") or {}).get("status") == "healthy"
-            else EnvironmentStatus.UNAVAILABLE
-        )
-        environment.last_checked_at = now
-        evaluated = evaluate_worker_readiness(desired, environment, None)
-        rows = evaluated["runtime_health"]["equipment"]
-        await _emit_equipment_steps(emit, rows)
-        readiness = str(evaluated["readiness"])
-        env_status = EnvironmentStatus(evaluated["runtime_health"]["status"])
-        blockers = evaluated.get("blocking") or []
-        message = str(blockers[0]["message"]) if blockers else ""
-        success = readiness == "READY"
-        await lease.finish(
-            MaintenanceState.SUCCEEDED.value if success else MaintenanceState.FAILED.value,
-            stage="completed" if success else "failed",
-            error_code=None if success else (blockers[0]["code"] if blockers else "check_failed"),
-            error_message=None if success else (message or "本机环境检查未通过"),
-            after_snapshot={
-                "readiness": readiness,
-                "probe_status": env_status.value,
-                "equipment": rows,
-                "repository": evaluated.get("repository"),
-            },
-            environment_id=environment.id,
-            environment_values={
-                "status": env_status,
-                "status_detail": detail,
-                "last_checked_at": now,
-            },
-            event_message="本机环境检查通过" if success else (message or "本机环境检查未通过"),
-        )
+        async with connect(environment) as client:
+            health = await client.health()
+        if health.get("healthy") is not True:
+            raise _ActionError("native_unhealthy", "本机 OpenCode 原生服务未通过健康检查")
+        await emit({"name": "本机原生服务", "state": "passed", "message": "原生服务健康及版本检查通过"})
+        await lease.finish("SUCCEEDED", after_snapshot={"scope": "local_opencode_health", "opencode": health})
         return
-
     async with SessionLocal() as db:
-        desired = await build_desired_spec(db, environment, settings)
-        instance = await db.scalar(
-            select(WorkerInstance).where(WorkerInstance.environment_id == environment.id)
-        )
-
-    if instance is None:
-        raise _ActionError("not_deployed", "远程环境尚未完成一键部署")
-    if compute_target_digest(environment) != str(instance.target_digest or ""):
-        await lease.finish(
-            MaintenanceState.FAILED.value,
-            stage="failed",
-            error_code="target_changed",
-            error_message="目标服务器或路径已变更，请重新执行一键部署",
-            after_snapshot={"readiness": "DRIFTED", "probe_status": EnvironmentStatus.DRIFTED.value},
-            environment_id=environment.id,
-            environment_values={
-                "status": EnvironmentStatus.DRIFTED,
-                "last_checked_at": now,
-            },
-            event_message="目标服务器或路径已变更，请重新执行一键部署",
-        )
-        return
-    if instance.status != "online":
-        await lease.finish(
-            MaintenanceState.FAILED.value,
-            stage="failed",
-            error_code="worker_offline",
-            error_message="Worker 通道离线，请先执行重启唤醒或一键部署",
-            after_snapshot={
-                "readiness": "DEGRADED",
-                "probe_status": EnvironmentStatus.UNAVAILABLE.value,
-            },
-            environment_id=environment.id,
-            environment_values={
-                "status": EnvironmentStatus.UNAVAILABLE,
-                "last_checked_at": now,
-            },
-            event_message="Worker 通道离线，请先执行重启唤醒或一键部署",
-        )
-        return
-
-    await lease.set_execution_route(
-        "worker", "通过在线 Worker Gateway 执行深度诊断（含远端仓库与网关连通性）"
-    )
-    await emit({"name": "执行节点深度诊断", "state": "running", "message": ""})
-    observation = await probe_online_worker(
-        environment,
-        desired,
-        settings,
-        worker_instance=instance,
-        deep=True,
-    )
-    gateway = get_gateway()
+        desired = await build_desired_spec(db, environment)
+    observation = await probe_online_worker(environment, desired, deep=True)
+    evaluated = evaluate_worker_readiness(desired, environment, observation=observation)
+    await _emit_equipment_steps(emit, evaluated["runtime_health"]["equipment"])
+    ok = evaluated["readiness"] == "READY"
     async with SessionLocal() as db:
-        await gateway.update_observed_snapshot(
-            db,
-            worker_instance_id=instance.id,
-            epoch=instance.epoch,
-            snapshot=observation,
-        )
-        refreshed = await db.get(WorkerInstance, instance.id)
-        if refreshed is not None:
-            db.expunge(refreshed)
-
-    evaluated = evaluate_worker_readiness(desired, environment, refreshed or instance)
-    rows = evaluated["runtime_health"]["equipment"]
-    await _emit_equipment_steps(emit, rows)
-    readiness = str(evaluated["readiness"])
-    env_status = EnvironmentStatus(evaluated["runtime_health"]["status"])
-    blockers = evaluated.get("blocking") or []
-    message = str(blockers[0]["message"]) if blockers else ""
-    success = readiness == "READY"
+        await get_gateway().update_observed_snapshot(db, environment.id, environment.epoch, observation)
     await lease.finish(
-        MaintenanceState.SUCCEEDED.value if success else MaintenanceState.FAILED.value,
-        stage="completed" if success else "failed",
-        error_code=None if success else (blockers[0]["code"] if blockers else "check_failed"),
-        error_message=None if success else (message or "健康检查未通过"),
-        after_snapshot={
-            "readiness": readiness,
-            "probe_status": env_status.value,
-            "equipment": rows,
-            "repository": evaluated.get("repository"),
-        },
-        environment_id=environment.id,
-        environment_values={
-            "status": env_status,
-            "last_checked_at": now,
-        },
-        event_message="深度健康检查通过" if success else (message or "深度健康检查未通过"),
+        "SUCCEEDED" if ok else "FAILED",
+        after_snapshot=evaluated,
+        error_message=None if ok else "运行环境检查未通过",
     )
 
 
-async def _execute_restart(
-    environment: OpenCodeExecutionEnvironment,
-    lease: OperationLease,
-    emit,
-) -> None:
-    from app.runtime.remote_provisioning import worker_ctl_path
-
-    settings = get_settings()
-    await lease.assert_safe_to_disrupt(environment.id, environment.employee_id)
-    async with SessionLocal() as db:
-        desired = await build_desired_spec(db, environment, settings)
-        instance = await db.scalar(
-            select(WorkerInstance).where(WorkerInstance.environment_id == environment.id)
+async def _execute_restart(environment, lease, emit):
+    await lease.assert_safe_to_disrupt(environment.id)
+    if environment.status in {"IDLE", "WORKING", "PAUSED"}:
+        await lease.set_execution_route("worker", "通过 Worker 重启原生 OpenCode")
+        result = await WorkerOpenCodeClient(agent_worker_id=environment.id).run_command(
+            "restart_opencode", {"workspace": environment.workspace_root}
         )
+        if not result.get("restarted"):
+            raise _ActionError("restart_failed", "Worker 未确认重启")
+    else:
+        from app.runtime.remote_provisioning import worker_ctl_path
 
-    if instance is None:
-        raise _ActionError("not_deployed", "远端环境尚未完成首次部署，请先执行一键部署")
-    if compute_target_digest(environment) != str(instance.target_digest or ""):
-        raise _ActionError("target_changed", "目标服务器或路径已变更，请重新执行一键部署")
-
-    now = datetime.now(UTC)
-    if instance.status == "online":
-        await lease.set_execution_route("worker", "通过在线 Worker Gateway 重启受管 OpenCode")
-        await emit({"name": "重启受管 OpenCode", "state": "running", "message": ""})
-        client = WorkerOpenCodeClient(settings, environment_id=environment.id)
-        result = await client.run_command(
-            "restart_opencode",
-            {
-                "workspace": environment.workspace_root,
-                "port": int(environment.opencode_server_port),
-            },
-        )
-        raw_snapshot = result.get("snapshot") if isinstance(result, dict) else None
-        refreshed = instance
-        if isinstance(raw_snapshot, dict):
-            normalized = normalize_probe_result(raw_snapshot, instance)
-            gateway = get_gateway()
+        await lease.set_execution_route("ssh", "通过受管启动入口唤醒 Worker")
+        ssh = await ExecutionEnvironmentRuntime().open_session(environment)
+        try:
+            code, _, error = await ssh.run_command(shlex.join([worker_ctl_path(environment.id), "start"]))
+            if code:
+                raise _ActionError("restart_failed", redact_text(error))
+        finally:
+            await ssh.close()
+        for _ in range(60):
+            await lease.check_canceled()
             async with SessionLocal() as db:
-                await gateway.update_observed_snapshot(
-                    db,
-                    worker_instance_id=instance.id,
-                    epoch=instance.epoch,
-                    snapshot=normalized,
-                )
-                refreshed = await db.get(WorkerInstance, instance.id) or instance
-                if refreshed in db:
-                    db.expunge(refreshed)
-        opencode_ok = bool(
-            isinstance(result, dict)
-            and result.get("restarted")
-            and ((raw_snapshot or {}).get("opencode") or {}).get("status") == "healthy"
-        )
-        if not opencode_ok:
-            err = (
-                str(((raw_snapshot or {}).get("opencode") or {}).get("last_error") or "")
-                or str(((raw_snapshot or {}).get("opencode") or {}).get("error") or "")
-                or "受管 OpenCode 重启后健康探活未通过"
-            )
-            await emit({"name": "重启受管 OpenCode", "state": "failed", "message": err})
-            raise _ActionError("restart_failed", err)
-        await emit(
-            {"name": "重启受管 OpenCode", "state": "passed", "message": "本地健康探活已恢复"}
-        )
-        evaluated = evaluate_worker_readiness(desired, environment, refreshed)
-        env_status = EnvironmentStatus(evaluated["runtime_health"]["status"])
-        await lease.finish(
-            MaintenanceState.SUCCEEDED.value,
-            stage="completed",
-            after_snapshot={
-                "readiness": evaluated["readiness"],
-                "probe_status": env_status.value,
-                "equipment": evaluated["runtime_health"]["equipment"],
-            },
-            environment_id=environment.id,
-            environment_values={
-                "status": env_status,
-                "last_checked_at": now,
-            },
-            event_message="受管 OpenCode 重启完成",
-        )
-        return
-
-    if not environment.host or not environment.username or not environment.ssh_password:
-        raise _ActionError(
-            "ssh_credentials_missing",
-            "节点当前离线且缺少远程 SSH 凭据，请补充凭据后重试或执行一键部署",
-        )
-
-    await lease.set_execution_route("ssh", "节点离线，通过轻量 SSH 调用标准启动入口快速唤醒")
-    await emit({"name": "SSH 快速唤醒守护进程", "state": "running", "message": ""})
-    ctl = worker_ctl_path(environment.id)
-    wake_started_at = datetime.now(UTC)
-    ssh = await ExecutionEnvironmentRuntime(settings).open_session(environment)
-    try:
-        rc, _, _ = await asyncio.wait_for(ssh.run_command(f"test -x {shlex.quote(ctl)}"), 15)
-        if rc != 0:
-            await emit(
-                {
-                    "name": "SSH 快速唤醒守护进程",
-                    "state": "failed",
-                    "message": "远端标准启动入口缺失",
-                }
-            )
-            raise _ActionError("ctl_missing", "远端尚未安装标准启动入口，请先执行一键部署")
-        rc, out, err = await asyncio.wait_for(ssh.run_command(f"{shlex.quote(ctl)} start"), 30)
-        if rc != 0:
-            detail = (err or out or "").strip() or f"exit {rc}"
-            await emit({"name": "SSH 快速唤醒守护进程", "state": "failed", "message": detail})
-            raise _ActionError("wake_failed", f"远端守护唤醒失败：{detail}")
-    finally:
-        await ssh.close()
-
-    await emit({"name": "SSH 快速唤醒守护进程", "state": "passed", "message": ctl})
-    await emit({"name": "等待网关重连与就绪快照", "state": "running", "message": ""})
-
-    wake_timeout = min(20.0, max(5.0, float(settings.remote_deploy_timeout_seconds)))
-    deadline = asyncio.get_running_loop().time() + wake_timeout
-    woken_instance: WorkerInstance | None = None
-    while asyncio.get_running_loop().time() < deadline:
-        await lease.check_canceled()
-        async with SessionLocal() as db:
-            candidate = await db.scalar(
-                select(WorkerInstance).where(WorkerInstance.environment_id == environment.id)
-            )
-            if candidate is not None:
-                db.expunge(candidate)
-        if candidate is not None and candidate.status == "online":
-            obs_at = _utc(candidate.observed_at)
-            snap = candidate.observed_snapshot if isinstance(candidate.observed_snapshot, dict) else None
-            if (
-                snap is not None
-                and (obs_at is None or obs_at >= wake_started_at - timedelta(seconds=1))
-                and (snap.get("opencode") or {}).get("status") == "healthy"
-            ):
-                woken_instance = candidate
+                fresh = await db.get(AgentWorker, environment.id)
+            if fresh.status in {"IDLE", "WORKING", "PAUSED"} and fresh.epoch > environment.epoch:
                 break
-        await asyncio.sleep(0.3)
+            await asyncio.sleep(0.5)
+        else:
+            raise _ActionError("worker_offline", "启动后 Worker 未连接网关")
+        result = {"connected": True}
+    await lease.finish("SUCCEEDED", after_snapshot=redact_data(result))
 
-    if woken_instance is None:
-        async with SessionLocal() as db:
-            woken_instance = await db.scalar(
-                select(WorkerInstance).where(WorkerInstance.environment_id == environment.id)
-            )
-            if woken_instance is not None:
-                db.expunge(woken_instance)
-        if woken_instance is None or woken_instance.status != "online":
-            await emit(
-                {
-                    "name": "等待网关重连与就绪快照",
-                    "state": "failed",
-                    "message": "守护未在超时时间内连入网关",
-                }
-            )
-            raise _ActionError(
-                "wake_timeout", "守护已触发唤醒，但未在超时时间内重新连入网关，请执行一键部署排查"
-            )
-        snap = (
-            woken_instance.observed_snapshot
-            if isinstance(woken_instance.observed_snapshot, dict)
-            else {}
-        )
-        if (snap.get("opencode") or {}).get("status") != "healthy":
-            err = (
-                str((snap.get("opencode") or {}).get("last_error") or "")
-                or "守护已重连，但受管 OpenCode 未通过健康探活"
-            )
-            await emit({"name": "等待网关重连与就绪快照", "state": "failed", "message": err})
-            raise _ActionError("opencode_unhealthy", err)
 
-    await emit({"name": "等待网关重连与就绪快照", "state": "passed", "message": "节点已恢复在线"})
-    evaluated = evaluate_worker_readiness(desired, environment, woken_instance)
-    env_status = EnvironmentStatus(evaluated["runtime_health"]["status"])
-    await lease.finish(
-        MaintenanceState.SUCCEEDED.value,
-        stage="completed",
-        after_snapshot={
-            "readiness": evaluated["readiness"],
-            "probe_status": env_status.value,
-            "equipment": evaluated["runtime_health"]["equipment"],
-        },
-        environment_id=environment.id,
-        environment_values={
-            "status": env_status,
-            "last_checked_at": datetime.now(UTC),
-        },
-        event_message="离线节点已快速唤醒并恢复连接",
+async def _execute_update(environment, lease, emit):
+    await lease.assert_safe_to_disrupt(environment.id)
+    result = await WorkerOpenCodeClient(agent_worker_id=environment.id).run_command(
+        "update_workspace", {"workspace": environment.workspace_root, "branch": environment.branch or "main"}
     )
-
-
-async def _execute_update(
-    environment: OpenCodeExecutionEnvironment,
-    lease: OperationLease,
-    emit,
-) -> None:
-    settings = get_settings()
-    await lease.assert_safe_to_disrupt(environment.id, environment.employee_id)
-    async with SessionLocal() as db:
-        desired = await build_desired_spec(db, environment, settings)
-        instance = await db.scalar(
-            select(WorkerInstance).where(WorkerInstance.environment_id == environment.id)
-        )
-
-    if instance is None:
-        raise _ActionError("not_deployed", "远端环境尚未完成首次部署，请先执行一键部署")
-    if compute_target_digest(environment) != str(instance.target_digest or ""):
-        raise _ActionError("target_changed", "目标服务器或路径已变更，请重新执行一键部署")
-    if instance.status != "online":
-        raise _ActionError(
-            "worker_offline", "Worker 当前离线，请先执行重启唤醒或一键部署后再更新代码"
-        )
-
-    repo_spec = desired.get("repository") if isinstance(desired.get("repository"), dict) else None
-    if not repo_spec:
-        raise _ActionError("repository_missing", "更新需要先绑定工程仓库")
-    target_branch = str(repo_spec.get("target_branch") or "").strip()
-
-    await lease.set_execution_route("worker", "通过在线 Worker Gateway 更新工作区代码")
-    await emit(
-        {
-            "name": "更新远端工作区代码",
-            "state": "running",
-            "message": f"目标分支 {target_branch}",
-        }
-    )
-    client = WorkerOpenCodeClient(settings, environment_id=environment.id)
-    result = await client.run_command(
-        "update_workspace",
-        {
-            "workspace": environment.workspace_root,
-            "port": int(environment.opencode_server_port),
-            "branch": target_branch,
-        },
-    )
-    raw_snapshot = result.get("snapshot") if isinstance(result, dict) else None
-    refreshed = instance
-    if isinstance(raw_snapshot, dict):
-        normalized = normalize_probe_result(raw_snapshot, instance)
-        gateway = get_gateway()
-        async with SessionLocal() as db:
-            await gateway.update_observed_snapshot(
-                db,
-                worker_instance_id=instance.id,
-                epoch=instance.epoch,
-                snapshot=normalized,
-            )
-            refreshed = await db.get(WorkerInstance, instance.id) or instance
-            if refreshed in db:
-                db.expunge(refreshed)
-
-    commit = str((result or {}).get("commit") or "")[:12] if isinstance(result, dict) else ""
-    await emit(
-        {
-            "name": "更新远端工作区代码",
-            "state": "passed",
-            "message": f"{target_branch} @ {commit}" if commit else target_branch,
-        }
-    )
-    evaluated = evaluate_worker_readiness(desired, environment, refreshed)
-    env_status = EnvironmentStatus(evaluated["runtime_health"]["status"])
-    await lease.finish(
-        MaintenanceState.SUCCEEDED.value,
-        stage="completed",
-        after_snapshot={
-            "readiness": evaluated["readiness"],
-            "probe_status": env_status.value,
-            "commit": (result or {}).get("commit") if isinstance(result, dict) else None,
-            "branch": target_branch,
-            "equipment": evaluated["runtime_health"]["equipment"],
-        },
-        environment_id=environment.id,
-        environment_values={
-            "status": env_status,
-            "last_checked_at": datetime.now(UTC),
-        },
-        event_message="工作区代码已更新",
-    )
+    await lease.finish("SUCCEEDED", after_snapshot=redact_data(result))
 
 
 async def _execute_operation(operation_id: str, owner: str) -> None:
@@ -1616,13 +1128,9 @@ async def _execute_operation(operation_id: str, owner: str) -> None:
     settings = get_settings()
     async with SessionLocal() as session:
         operation = await session.get(WorkerMaintenanceOperation, operation_id)
-        if (
-            operation is None
-            or operation.lease_owner != owner
-            or operation.state not in EXECUTING_STATES
-        ):
+        if operation is None or operation.lease_owner != owner or operation.state not in EXECUTING_STATES:
             return
-        environment = await session.get(OpenCodeExecutionEnvironment, operation.environment_id)
+        environment = await session.get(AgentWorker, operation.agent_worker_id)
         attempt = operation.attempt
         action = operation.action
         if operation is not None:
@@ -1631,9 +1139,7 @@ async def _execute_operation(operation_id: str, owner: str) -> None:
             session.expunge(environment)
 
     secrets = tuple(
-        secret
-        for secret in (environment.ssh_password if environment is not None else None,)
-        if secret
+        secret for secret in (environment.ssh_password if environment is not None else None,) if secret
     )
     lease = OperationLease(
         operation_id,
@@ -1688,11 +1194,14 @@ async def _execute_operation(operation_id: str, owner: str) -> None:
             stage="failed",
             error_code=exc.code,
             error_message=exc.message,
-            environment_id=environment.id,
-            environment_values={
-                "last_checked_at": datetime.now(UTC),
-            },
             event_message=exc.message,
+        )
+    except (WorkerCommandError, OpenCodeServerUnavailable) as exc:
+        await lease.finish(
+            "FAILED",
+            stage="failed",
+            error_code=getattr(exc, "code", "worker_offline"),
+            error_message=redact_text(str(exc), secrets),
         )
     except asyncio.CancelledError:
         raise
@@ -1701,13 +1210,9 @@ async def _execute_operation(operation_id: str, owner: str) -> None:
         message = redact_text(str(exc) or exc.__class__.__name__, secrets)
         await lease.finish(
             MaintenanceState.FAILED.value,
-            stage="failed",
-            error_code="execution_error",
+            stage="stop_unconfirmed" if action in DISRUPTIVE_ACTIONS else "failed",
+            error_code="execution_unknown" if action in DISRUPTIVE_ACTIONS else "execution_error",
             error_message=message,
-            environment_id=environment.id,
-            environment_values={
-                "last_checked_at": datetime.now(UTC),
-            },
             event_message=message,
         )
 
@@ -1817,64 +1322,18 @@ async def event_stream(operation_id: str, after_id: int) -> AsyncIterator[dict[s
         await asyncio.sleep(0.5)
 
 
-async def scheduling_block(session, environment: OpenCodeExecutionEnvironment | None) -> str | None:
-    """与列表和详情共享同一就绪判定的任务调度门禁。"""
-
-    return await readiness_scheduling_block(session, environment)
-
-
-async def environment_health(session, environment_id: int) -> dict[str, Any] | None:
-    """返回单个 Worker 环境的就绪健康快照（与列表内嵌 worker_health 同源同构）。"""
-
-    environment = await session.get(OpenCodeExecutionEnvironment, environment_id)
-    if environment is None:
+async def environment_health(session, agent_worker_id):
+    worker = await session.get(AgentWorker, agent_worker_id)
+    if worker is None:
         return None
-    employee = (
-        await session.get(AgentWorker, environment.employee_id)
-        if environment.employee_id
-        else None
-    )
-    instance = await session.scalar(
-        select(WorkerInstance).where(WorkerInstance.environment_id == environment.id)
-    )
-    active_or_latest = await active_operation(session, environment.id) or await latest_operation(
-        session, environment.id
-    )
-    occupying_task_ids: list[str] = []
-    active_session_ids: list[str] = []
-    if environment.employee_id:
-        occupying_task_ids = list(
-            (
-                await session.scalars(
-                    select(Task.id).where(occupying_clause(environment.employee_id)).limit(5)
-                )
-            ).all()
-        )
-        released_task = (
-            select(Task.id)
-            .where(Task.id == RuntimeSession.task_id, release_match_clause())
-            .exists()
-        )
-        active_session_ids = list(
-            (
-                await session.scalars(
-                    select(RuntimeSession.id)
-                    .where(
-                        RuntimeSession.employee_id == environment.employee_id,
-                        RuntimeSession.status.in_(("RUNNING", "WAITING", "UNKNOWN")),
-                        ~released_task,
-                    )
-                    .limit(5)
-                )
-            ).all()
-        )
-    desired = await build_desired_spec(session, environment)
+    operation = await active_operation(session, worker.id) or await latest_operation(session, worker.id)
+    tasks = (await session.scalars(select(Task.id).where(occupying_clause(worker.id)))).all()
+    desired = await build_desired_spec(session, worker)
+    observation = await get_gateway().observed_snapshot(worker)
     return evaluate_worker_readiness(
         desired,
-        environment,
-        instance,
-        employee_enabled=bool(employee.enabled) if employee is not None else False,
-        occupying_task_ids=occupying_task_ids,
-        active_session_ids=active_session_ids,
-        latest_operation=active_or_latest,
+        worker,
+        observation=observation,
+        occupying_task_ids=tasks,
+        latest_operation=operation,
     )

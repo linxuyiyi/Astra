@@ -35,9 +35,7 @@ from tests.platform.test_worker_gateway_faults import _auth_reply
 def _server(routes: dict[str, tuple[int, object]]):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
-            status, body = routes.get(
-                urlsplit(self.path).path, (404, {"error": "not found"})
-            )
+            status, body = routes.get(urlsplit(self.path).path, (404, {"error": "not found"}))
             data = json.dumps(body).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
@@ -62,13 +60,12 @@ def _server(routes: dict[str, tuple[int, object]]):
 def _restart_message(workspace: Path, port: int, request_id: str = "req-restart"):
     message = envelope(
         request_id=request_id,
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         session_id=None,
         message_type="command",
         payload={
             "name": "restart_opencode",
-            "data": {"workspace": str(workspace), "port": port},
+            "data": {"workspace": str(workspace)},
         },
     )
     message.epoch = 3
@@ -79,13 +76,12 @@ def _restart_message(workspace: Path, port: int, request_id: str = "req-restart"
 def _update_message(workspace: Path, port: int, request_id: str = "req-update"):
     message = envelope(
         request_id=request_id,
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         session_id=None,
         message_type="command",
         payload={
             "name": "update_workspace",
-            "data": {"workspace": str(workspace), "port": port, "branch": "main"},
+            "data": {"workspace": str(workspace), "branch": "main"},
         },
     )
     message.epoch = 3
@@ -115,9 +111,7 @@ def test_native_busy_or_retry_blocks_restart(tmp_path: Path, kind: str):
         [],
     ],
 )
-def test_unknown_or_malformed_native_state_is_conservatively_rejected(
-    tmp_path: Path, body
-):
+def test_unknown_or_malformed_native_state_is_conservatively_rejected(tmp_path: Path, body):
     workspace = _workspace(tmp_path)
     with _server({"/session/status": (200, body)}) as port:
         with pytest.raises(RuntimeError, match="无法确认"):
@@ -189,7 +183,7 @@ def test_command_data_must_match_worker_binding(tmp_path: Path, name: str):
         build(workspace, 14097),
         RuntimeSupervisor(),
         workspace_root=str(workspace),
-        opencode_url="http://127.0.0.1:14096",
+        opencode_url="http://127.0.0.1",
     )
     assert result is None
     assert "端口" in str(error)
@@ -208,8 +202,7 @@ def test_switch_channel_command_is_retired(tmp_path: Path):
     workspace = _workspace(tmp_path)
     message = envelope(
         request_id="req-switch",
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         session_id=None,
         message_type="command",
         payload={"name": "switch_channel", "data": {"workspace": str(workspace), "port": 14096}},
@@ -225,13 +218,12 @@ def test_switch_channel_command_is_retired(tmp_path: Path):
 
 
 def test_version_contract_comes_from_the_module_not_env():
-    assert worker_agent.__version__ == "1.4.5"
+    assert worker_agent.__version__ == "1.5.0"
     config = load_agent_config(
         {
             "NEXUS_WORKER_TOKEN": "wtk_test",
             "NEXUS_WORKER_GATEWAY_URL": "ws://nexus/api/worker-gateway/connect",
-            "NEXUS_WORKER_INSTANCE_ID": "wrk_test",
-            "NEXUS_WORKER_ENVIRONMENT_ID": "7",
+            "NEXUS_AGENT_WORKER_ID": "wrk_test",
             "NEXUS_WORKER_AGENT_VERSION": "0.1.0",
             "NEXUS_WORKER_OPENCODE_URL": "http://127.0.0.1:14096",
             "NEXUS_WORKER_WORKSPACE_ROOT": "/srv/project",
@@ -240,12 +232,14 @@ def test_version_contract_comes_from_the_module_not_env():
     assert config.agent_version == worker_agent.__version__
     assert config.opencode_url == "http://127.0.0.1:14096"
     assert config.workspace_root == "/srv/project"
-    assert AgentConfig(
-        gateway_url="ws://nexus",
-        worker_instance_id="wrk",
-        environment_id=1,
-        token="wtk_test",
-    ).agent_version == worker_agent.__version__
+    assert (
+        AgentConfig(
+            gateway_url="ws://nexus",
+            agent_worker_id="wrk",
+            token="wtk_test",
+        ).agent_version
+        == worker_agent.__version__
+    )
 
 
 def test_load_agent_config_does_not_read_old_astra_keys():
@@ -302,17 +296,14 @@ class _Transport:
 
 
 @pytest.mark.asyncio
-async def test_thread_gate_stops_restart_before_the_real_side_effect(
-    tmp_path: Path, monkeypatch
-):
+async def test_thread_gate_stops_restart_before_the_real_side_effect(tmp_path: Path, monkeypatch):
     workspace = _workspace(tmp_path)
     sup = RuntimeSupervisor(enabled=True, workspace_root=str(workspace), port=14096)
     sup._loop = asyncio.get_running_loop()
     manager = WorkerConnectionManager(
         AgentConfig(
             gateway_url="ws://nexus.internal/api/worker-gateway/connect",
-            worker_instance_id="wrk_agent",
-            environment_id=7,
+            agent_worker_id="wrk_agent",
             token="wtk_test",
             ping_seconds=3600,
             report_interval_seconds=0.0,
@@ -354,9 +345,7 @@ async def test_thread_gate_stops_restart_before_the_real_side_effect(
         await asyncio.sleep(0.02)
 
     assert restarted == []
-    assert not [
-        item for item in transport.sent if item["payload"].get("stage") == "result"
-    ]
+    assert not [item for item in transport.sent if item["payload"].get("stage") == "result"]
     transport.socket_release.set()
     with pytest.raises(ConnectionError):
         await asyncio.wait_for(task, 5)

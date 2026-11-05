@@ -1,10 +1,10 @@
-"""Nexus 全新空库初始化；不提供旧版本兼容或数据迁移。"""
-
 from datetime import UTC, datetime
 
-import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
+"""Nexus v1.5.0 全新空库初始化。"""
 
+import sqlalchemy as sa
+import app.models
+from sqlalchemy.dialects import mysql
 from alembic import op
 
 revision = "0001_init"
@@ -18,32 +18,32 @@ def upgrade():
     op.create_table(
         "t_nexus_agent_workers",
         sa.Column("id", sa.String(length=64), nullable=False),
-        sa.Column("digital_employee_id", sa.String(length=64), nullable=True),
         sa.Column("name", sa.String(length=120), nullable=False),
-        sa.Column("role", sa.String(length=120), nullable=False),
         sa.Column("description", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
-        sa.Column("character_id", sa.Integer(), server_default="0", nullable=False),
-        sa.Column("default_work_area", sa.String(length=32), server_default="development", nullable=False),
+        sa.Column("enabled", sa.Boolean(), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("task_types", sa.JSON(), nullable=False),
         sa.Column("category_ids", sa.JSON(), nullable=False),
-        sa.Column("enabled", sa.Boolean(), nullable=False),
-        sa.Column("auto_claim", sa.Boolean(), nullable=False),
-        sa.Column("auto_execute", sa.Boolean(), nullable=False),
-        sa.Column("current_task_count", sa.Integer(), nullable=False),
-        sa.Column(
-            "last_heartbeat", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True
-        ),
-        sa.Column("online_since", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("runtime_engine", sa.String(length=16), nullable=False),
+        sa.Column("mode", sa.String(length=32), nullable=False),
+        sa.Column("host", sa.String(length=255), nullable=True),
+        sa.Column("port", sa.Integer(), nullable=False),
+        sa.Column("username", sa.String(length=120), nullable=True),
+        sa.Column("ssh_password", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
+        sa.Column("model_name", sa.String(length=255), nullable=True),
+        sa.Column("workspace_root", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
+        sa.Column("repository_url", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
+        sa.Column("git_token_ciphertext", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
+        sa.Column("branch", sa.String(length=255), nullable=True),
+        sa.Column("skill_refs", sa.JSON(), nullable=False),
+        sa.Column("mcp_refs", sa.JSON(), nullable=False),
+        sa.Column("token_digest", sa.String(length=64), nullable=True),
+        sa.Column("epoch", sa.Integer(), nullable=False),
+        sa.Column("last_heartbeat_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("agent_version", sa.String(length=64), nullable=True),
         sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_t_nexus_agent_workers_digital_employee_id"),
-        "t_nexus_agent_workers",
-        ["digital_employee_id"],
-        unique=False,
     )
     op.create_index(
         op.f("ix_t_nexus_agent_workers_status"), "t_nexus_agent_workers", ["status"], unique=False
@@ -58,7 +58,7 @@ def upgrade():
         sa.Column(
             "owner_uid",
             sa.String(length=160).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=160), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -90,7 +90,7 @@ def upgrade():
         sa.Column(
             "employee_id",
             sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -114,7 +114,7 @@ def upgrade():
         sa.Column(
             "last_seen",
             sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -125,7 +125,7 @@ def upgrade():
         sa.Column(
             "last_delivered_message_id",
             sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("channel_id", "member_type", "member_id"),
@@ -148,25 +148,25 @@ def upgrade():
         sa.Column(
             "lease_token",
             sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
             "lease_until",
             sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
             "record_agent_id",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
             "record_session_id",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -217,7 +217,7 @@ def upgrade():
         sa.Column(
             "workspace_id",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -269,7 +269,7 @@ def upgrade():
         sa.Column(
             "active_employee_id",
             sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -342,7 +342,7 @@ def upgrade():
         sa.Column(
             "model_route_id",
             sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -368,7 +368,7 @@ def upgrade():
         sa.Column("result", sa.String(length=16), nullable=False),
         sa.Column("before", sa.JSON(), nullable=False),
         sa.Column("after", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -422,12 +422,12 @@ def upgrade():
         sa.Column("hourly_token_limit", sa.Integer(), nullable=True),
         sa.Column("daily_token_limit", sa.Integer(), nullable=True),
         sa.Column("enabled", sa.Boolean(), nullable=False),
-        sa.Column("expires_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("last_used_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("revoked_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("deleted_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("expires_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("last_used_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("revoked_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("deleted_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -449,8 +449,8 @@ def upgrade():
         sa.Column("description", sa.Text(), nullable=False),
         sa.Column("enabled", sa.Boolean(), nullable=False),
         sa.Column("sort_order", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("name"),
     )
@@ -482,16 +482,12 @@ def upgrade():
         sa.Column("output_tokens", sa.Integer(), nullable=True),
         sa.Column("total_tokens", sa.Integer(), nullable=True),
         sa.Column("output_tps", sa.Float(), nullable=True),
-        sa.Column("started_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("finished_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
+        sa.Column("started_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("finished_at", app.models.UTCDateTime(), nullable=True),
         sa.Column("gateway_instance_id", sa.String(length=200), nullable=True),
-        sa.Column(
-            "gateway_instance_started_at",
-            sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"),
-            nullable=True,
-        ),
+        sa.Column("gateway_instance_started_at", app.models.UTCDateTime(), nullable=True),
         sa.Column("outcome", sa.String(length=16), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -534,7 +530,7 @@ def upgrade():
         sa.Column("previous", sa.String(length=32), nullable=True),
         sa.Column("current", sa.String(length=32), nullable=True),
         sa.Column("detail", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -645,7 +641,7 @@ def upgrade():
         sa.Column(
             "used_by",
             sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("token_hash"),
@@ -679,13 +675,13 @@ def upgrade():
         sa.Column(
             "external_key",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
             "owner_uid",
             sa.String(length=160).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=160), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -735,20 +731,20 @@ def upgrade():
         sa.Column(
             "session_id",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column("accepted", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column(
             "claim_token",
             sa.String(length=160).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=160), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
             "claim_until",
             sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("provider", "event_id"),
@@ -784,7 +780,7 @@ def upgrade():
         sa.Column(
             "lease_until",
             sa.String(length=40).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=40), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -823,8 +819,8 @@ def upgrade():
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("access_scope", sa.String(length=160), nullable=False),
         sa.Column("created_by", sa.String(length=120), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(
             ["parent_id"],
             ["t_nexus_knowledge_spaces.id"],
@@ -899,7 +895,7 @@ def upgrade():
             server_default=sa.text("('')"),
             nullable=False,
         ),
-        sa.Column("timeout", sa.Float(), server_default=sa.text("(30)"), nullable=False),
+        sa.Column("timeout", sa.Float(), server_default=sa.text("30"), nullable=False),
         sa.Column(
             "runtime_name",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
@@ -956,7 +952,7 @@ def upgrade():
         sa.Column(
             "sender_name",
             sa.String(length=255).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=255), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -968,7 +964,7 @@ def upgrade():
         sa.Column(
             "discussion_id",
             sa.String(length=64).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=64), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -979,7 +975,7 @@ def upgrade():
         sa.Column(
             "speaker_uid",
             sa.String(length=160).with_variant(mysql.VARCHAR(collation="utf8mb4_bin", length=160), "mysql"),
-            server_default=sa.text("('')"),
+            server_default=sa.text("''"),
             nullable=False,
         ),
         sa.Column(
@@ -1159,8 +1155,8 @@ def upgrade():
         sa.Column("question_prompt", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
         sa.Column("enabled", sa.Boolean(), nullable=False),
         sa.Column("sort_order", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("name"),
     )
@@ -1172,10 +1168,10 @@ def upgrade():
     )
     op.create_table(
         "t_nexus_worker_http_slots",
-        sa.Column("worker_instance_id", sa.String(length=80), nullable=False),
+        sa.Column("agent_worker_id", sa.String(length=80), nullable=False),
         sa.Column("epoch", sa.Integer(), nullable=False),
         sa.Column("inflight", sa.Integer(), server_default="0", nullable=False),
-        sa.PrimaryKeyConstraint("worker_instance_id", "epoch"),
+        sa.PrimaryKeyConstraint("agent_worker_id", "epoch"),
     )
     op.create_table(
         "t_nexus_gateway_nodes",
@@ -1204,11 +1200,9 @@ def upgrade():
         sa.Column("failure_streak", sa.Integer(), nullable=False),
         sa.Column("health_detail", sa.JSON(), nullable=False),
         sa.Column("sort_order", sa.Integer(), nullable=False),
-        sa.Column(
-            "last_checked_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True
-        ),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("last_checked_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(["pool_id"], ["t_nexus_gateway_pools.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -1239,8 +1233,8 @@ def upgrade():
         sa.Column("target_model", sa.String(length=200), nullable=True),
         sa.Column("description", sa.Text(), nullable=False),
         sa.Column("enabled", sa.Boolean(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(["pool_id"], ["t_nexus_gateway_pools.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -1252,163 +1246,146 @@ def upgrade():
         op.f("ix_t_nexus_gateway_routes_pool_id"), "t_nexus_gateway_routes", ["pool_id"], unique=False
     )
     op.create_table(
-        "t_nexus_opencode_execution_environments",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("employee_id", sa.String(length=64), nullable=False),
-        sa.Column("repository_url", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("git_token_ciphertext", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("runtime_engine", sa.String(length=16), server_default="opencode", nullable=False),
-        sa.Column("mode", sa.String(length=32), nullable=False),
-        sa.Column("name", sa.String(length=120), nullable=False),
-        sa.Column("description", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
-        sa.Column("host", sa.String(length=255), nullable=True),
-        sa.Column("port", sa.Integer(), nullable=False),
-        sa.Column("username", sa.String(length=120), nullable=True),
-        sa.Column("ssh_password", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("opencode_server_port", sa.Integer(), nullable=False),
-        sa.Column("opencode_path", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
-        sa.Column("model_name", sa.String(length=255), nullable=True),
-        sa.Column("workspace_root", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
-        sa.Column("branch", sa.String(length=255), nullable=True),
-        sa.Column("skill_refs", sa.JSON(), server_default=sa.text("('[]')"), nullable=False),
-        sa.Column("mcp_refs", sa.JSON(), server_default=sa.text("('[]')"), nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("status_detail", sa.JSON(), nullable=False),
-        sa.Column("labels", sa.JSON(), nullable=False),
-        sa.Column(
-            "last_checked_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True
-        ),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["employee_id"],
-            ["t_nexus_agent_workers.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_t_nexus_opencode_execution_environments_employee_id"),
-        "t_nexus_opencode_execution_environments",
-        ["employee_id"],
-        unique=True,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_opencode_execution_environments_mode"),
-        "t_nexus_opencode_execution_environments",
-        ["mode"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_opencode_execution_environments_status"),
-        "t_nexus_opencode_execution_environments",
-        ["status"],
-        unique=False,
-    )
-    op.create_table(
         "t_nexus_tasks",
         sa.Column("id", sa.String(length=64), nullable=False),
-        sa.Column("source", sa.String(length=64), nullable=False),
-        sa.Column("external_task_id", sa.String(length=160), nullable=True),
-        sa.Column("task_type", sa.String(length=80), nullable=False),
         sa.Column("title", sa.String(length=240), nullable=False),
         sa.Column("description", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
+        sa.Column("task_type", sa.String(length=80), nullable=False),
         sa.Column("category_id", sa.String(length=64), nullable=True),
+        sa.Column("priority", sa.String(length=16), nullable=False),
         sa.Column("acceptance_criteria", sa.JSON(), nullable=False),
         sa.Column("attachments", sa.JSON(), nullable=False),
-        sa.Column("priority", sa.String(length=16), nullable=False),
-        sa.Column("priority_weight", sa.Integer(), nullable=False),
-        sa.Column("completion_policy", sa.String(length=32), nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("employee_id", sa.String(length=64), nullable=True),
-        sa.Column("responsible_employee_id", sa.String(length=64), nullable=True),
-        sa.Column("source_session_id", sa.String(length=160), nullable=True),
-        sa.Column("source_conversation_id", sa.String(length=64), nullable=True),
-        sa.Column("source_channel_id", sa.String(length=64), nullable=True),
-        sa.Column("idempotency_key", sa.String(length=160), nullable=True),
-        sa.Column("workspace", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("related_task_id", sa.String(length=64), nullable=True),
-        sa.Column("base_commit", sa.String(length=64), nullable=True),
-        sa.Column("last_message_id", sa.String(length=160), nullable=True),
-        sa.Column(
-            "turn_started_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True
-        ),
-        sa.Column("pending_message_id", sa.String(length=160), nullable=True),
-        sa.Column("pending_attempt", sa.Integer(), server_default="0", nullable=False),
-        sa.Column("pending_prompt", sa.JSON(), nullable=True),
-        sa.Column("submission_attempts", sa.JSON(), nullable=True),
-        sa.Column(
-            "execution_stop_confirmed_at",
-            sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"),
-            nullable=True,
-        ),
-        sa.Column("execution_stop_session_id", sa.String(length=160), nullable=True),
-        sa.Column("execution_stop_attempt", sa.Integer(), nullable=True),
-        sa.Column("execution_stop_operator", sa.String(length=120), nullable=True),
-        sa.Column("execution_stop_reason", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("runtime_connection", sa.String(length=32), nullable=False),
-        sa.Column("runtime_error", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("current_progress", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
-        sa.Column("human_intervention", sa.JSON(), nullable=True),
-        sa.Column("suspension", sa.JSON(), nullable=True),
-        sa.Column("execution_error", sa.JSON(), nullable=True),
-        sa.Column("inactivity_alert", sa.Boolean(), nullable=False),
-        sa.Column(
-            "inactivity_alert_since",
-            sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"),
-            nullable=True,
-        ),
-        sa.Column(
-            "last_activity_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True
-        ),
-        sa.Column("submitted_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("confirmed_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("completed_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
+        sa.Column("source", sa.String(length=64), nullable=False),
+        sa.Column("external_task_id", sa.String(length=160), nullable=True),
+        sa.Column("origin_employee_id", sa.String(length=64), nullable=True),
+        sa.Column("external_reference_id", sa.String(length=160), nullable=True),
+        sa.Column("agent_worker_id", sa.String(length=64), nullable=True),
         sa.Column("current_session_id", sa.String(length=160), nullable=True),
-        sa.Column("failure_reason", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("human_required_reason", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
+        sa.Column("workspace", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
+        sa.Column("last_message_id", sa.String(length=160), nullable=True),
+        sa.Column("pending_message_id", sa.String(length=160), nullable=True),
+        sa.Column("pending_prompt", sa.JSON(), nullable=True),
+        sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("waiting_reason", sa.String(length=64), nullable=True),
-        sa.Column("execution_environment_snapshot", sa.JSON(), nullable=True),
-        sa.Column("claimed_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("started_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("finished_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("current_progress", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("claimed_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("started_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("finished_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("last_activity_at", app.models.UTCDateTime(), nullable=True),
         sa.ForeignKeyConstraint(
-            ["employee_id"],
+            ["agent_worker_id"],
             ["t_nexus_agent_workers.id"],
         ),
-        sa.ForeignKeyConstraint(
-            ["related_task_id"],
-            ["t_nexus_tasks.id"],
-        ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("idempotency_key"),
-        sa.UniqueConstraint("source", "external_task_id", name="uq_task_source_external"),
+    )
+    op.create_index(
+        op.f("ix_t_nexus_tasks_agent_worker_id"), "t_nexus_tasks", ["agent_worker_id"], unique=False
     )
     op.create_index(op.f("ix_t_nexus_tasks_category_id"), "t_nexus_tasks", ["category_id"], unique=False)
-    op.create_index(op.f("ix_t_nexus_tasks_completed_at"), "t_nexus_tasks", ["completed_at"], unique=False)
     op.create_index(
-        op.f("ix_t_nexus_tasks_inactivity_alert"), "t_nexus_tasks", ["inactivity_alert"], unique=False
-    )
-    op.create_index(
-        op.f("ix_t_nexus_tasks_last_activity_at"), "t_nexus_tasks", ["last_activity_at"], unique=False
-    )
-    op.create_index(
-        op.f("ix_t_nexus_tasks_related_task_id"), "t_nexus_tasks", ["related_task_id"], unique=False
-    )
-    op.create_index(
-        op.f("ix_t_nexus_tasks_responsible_employee_id"),
-        "t_nexus_tasks",
-        ["responsible_employee_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_tasks_source_channel_id"), "t_nexus_tasks", ["source_channel_id"], unique=False
+        op.f("ix_t_nexus_tasks_origin_employee_id"), "t_nexus_tasks", ["origin_employee_id"], unique=False
     )
     op.create_index(op.f("ix_t_nexus_tasks_status"), "t_nexus_tasks", ["status"], unique=False)
     op.create_index(op.f("ix_t_nexus_tasks_task_type"), "t_nexus_tasks", ["task_type"], unique=False)
+    op.create_index("ix_tasks_dispatch", "t_nexus_tasks", ["status", "priority", "created_at"], unique=False)
+    op.create_table(
+        "t_nexus_worker_commands",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("request_id", sa.String(length=80), nullable=False),
+        sa.Column("agent_worker_id", sa.String(length=64), nullable=False),
+        sa.Column("session_id", sa.String(length=160), nullable=True),
+        sa.Column("name", sa.String(length=64), nullable=False),
+        sa.Column("payload", sa.JSON(), nullable=False),
+        sa.Column("status", sa.String(length=32), nullable=False),
+        sa.Column("epoch", sa.Integer(), nullable=False),
+        sa.Column("result", sa.JSON(), nullable=True),
+        sa.Column("error_code", sa.String(length=64), nullable=True),
+        sa.Column("deadline_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("body_fetched_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("delivery_attempts", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("delivery_state", sa.String(length=16), server_default="unpublished", nullable=False),
+        sa.Column("slot_held", sa.Boolean(), server_default="0", nullable=False),
+        sa.Column("last_dispatched_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("dispatched_epoch", sa.Integer(), nullable=True),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("finished_at", app.models.UTCDateTime(), nullable=True),
+        sa.ForeignKeyConstraint(["agent_worker_id"], ["t_nexus_agent_workers.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+    )
     op.create_index(
-        "ix_tasks_dispatch", "t_nexus_tasks", ["status", "priority_weight", "created_at"], unique=False
+        op.f("ix_t_nexus_worker_commands_agent_worker_id"),
+        "t_nexus_worker_commands",
+        ["agent_worker_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_t_nexus_worker_commands_request_id"), "t_nexus_worker_commands", ["request_id"], unique=True
+    )
+    op.create_index(
+        op.f("ix_t_nexus_worker_commands_status"), "t_nexus_worker_commands", ["status"], unique=False
+    )
+    op.create_index(
+        "ix_worker_commands_status_deadline",
+        "t_nexus_worker_commands",
+        ["status", "deadline_at"],
+        unique=False,
+    )
+    op.create_table(
+        "t_nexus_worker_maintenance_operations",
+        sa.Column("id", sa.String(length=64), nullable=False),
+        sa.Column("agent_worker_id", sa.String(length=64), nullable=False),
+        sa.Column("action", sa.String(length=32), nullable=False),
+        sa.Column("state", sa.String(length=32), nullable=False),
+        sa.Column("stage", sa.String(length=64), server_default="queued", nullable=False),
+        sa.Column("requested_by", sa.String(length=120), nullable=False),
+        sa.Column("attempt", sa.Integer(), server_default="1", nullable=False),
+        sa.Column("lease_owner", sa.String(length=120), nullable=True),
+        sa.Column("lease_until", app.models.UTCDateTime(), nullable=True),
+        sa.Column("cancel_requested", sa.Boolean(), server_default="0", nullable=False),
+        sa.Column("target_revision", sa.JSON(), nullable=False),
+        sa.Column("before_snapshot", sa.JSON(), nullable=False),
+        sa.Column("after_snapshot", sa.JSON(), nullable=False),
+        sa.Column("error_code", sa.String(length=80), nullable=True),
+        sa.Column("error_message", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
+        sa.Column("execution_channel", sa.String(length=16), nullable=True),
+        sa.Column("execution_reason", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
+        sa.Column("retry_of_attempt", sa.Integer(), nullable=True),
+        sa.Column("active_worker_id", sa.String(length=64), nullable=True),
+        sa.Column("requested_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("started_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("finished_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
+        sa.ForeignKeyConstraint(["agent_worker_id"], ["t_nexus_agent_workers.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("active_worker_id", name="uq_worker_maintenance_active_worker"),
+    )
+    op.create_index(
+        op.f("ix_t_nexus_worker_maintenance_operations_agent_worker_id"),
+        "t_nexus_worker_maintenance_operations",
+        ["agent_worker_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_t_nexus_worker_maintenance_operations_lease_owner"),
+        "t_nexus_worker_maintenance_operations",
+        ["lease_owner"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_t_nexus_worker_maintenance_operations_state"),
+        "t_nexus_worker_maintenance_operations",
+        ["state"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_worker_maintenance_state_lease",
+        "t_nexus_worker_maintenance_operations",
+        ["state", "lease_until"],
+        unique=False,
     )
     op.create_table(
         "t_nexus_events",
@@ -1419,7 +1396,7 @@ def upgrade():
         sa.Column("phase", sa.String(length=80), nullable=False),
         sa.Column("message", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
         sa.Column("detail", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(
             ["employee_id"],
             ["t_nexus_agent_workers.id"],
@@ -1441,20 +1418,18 @@ def upgrade():
         sa.Column("task_id", sa.String(length=64), nullable=True),
         sa.Column("task_id_snapshot", sa.String(length=64), nullable=False),
         sa.Column("root_session_id", sa.String(length=160), nullable=False),
-        sa.Column("employee_id_snapshot", sa.String(length=64), nullable=True),
+        sa.Column("agent_worker_id_snapshot", sa.String(length=64), nullable=True),
         sa.Column("turn_anchor_id", sa.String(length=160), nullable=True),
-        sa.Column("confirmed_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("confirmed_at", app.models.UTCDateTime(), nullable=False),
         sa.Column("source_snapshot", sa.JSON(), nullable=False),
         sa.Column("source_digest", sa.String(length=64), nullable=True),
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("phase", sa.String(length=32), nullable=False),
         sa.Column("attempts", sa.Integer(), nullable=False),
-        sa.Column(
-            "next_retry_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False
-        ),
+        sa.Column("next_retry_at", app.models.UTCDateTime(), nullable=False),
         sa.Column("lease_owner", sa.String(length=128), nullable=True),
         sa.Column("lease_token", sa.String(length=64), nullable=True),
-        sa.Column("lease_until", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
+        sa.Column("lease_until", app.models.UTCDateTime(), nullable=True),
         sa.Column("source_message_count", sa.Integer(), nullable=False),
         sa.Column("segment_count", sa.Integer(), nullable=False),
         sa.Column("completed_segment_count", sa.Integer(), nullable=False),
@@ -1464,9 +1439,9 @@ def upgrade():
         sa.Column("error_message", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
         sa.Column("model_id", sa.String(length=160), nullable=True),
         sa.Column("prompt_version", sa.String(length=32), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("finished_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("finished_at", app.models.UTCDateTime(), nullable=True),
         sa.ForeignKeyConstraint(["task_id"], ["t_nexus_tasks.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -1528,7 +1503,7 @@ def upgrade():
         sa.Column("status_code", sa.Integer(), nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column("detail", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(["node_id"], ["t_nexus_gateway_nodes.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -1564,10 +1539,10 @@ def upgrade():
         sa.Column("steps", sa.JSON(), nullable=False),
         sa.Column("usage", sa.JSON(), nullable=False),
         sa.Column("error", sa.Text(), nullable=True),
-        sa.Column("started_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("finished_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
+        sa.Column("started_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("finished_at", app.models.UTCDateTime(), nullable=True),
         sa.Column("duration_ms", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(["node_id"], ["t_nexus_gateway_nodes.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -1588,195 +1563,6 @@ def upgrade():
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
-        "t_nexus_runtime_sessions",
-        sa.Column("id", sa.String(length=160), nullable=False),
-        sa.Column("runtime_engine", sa.String(length=16), server_default="opencode", nullable=False),
-        sa.Column("native_session_id", sa.String(length=160), nullable=True),
-        sa.Column("engine_metadata", sa.JSON(), nullable=True),
-        sa.Column("fencing_token", sa.Integer(), server_default="0", nullable=False),
-        sa.Column("task_id", sa.String(length=64), nullable=False),
-        sa.Column("employee_id", sa.String(length=64), nullable=False),
-        sa.Column("workspace", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
-        sa.Column("workspace_base_commit", sa.String(length=64), nullable=True),
-        sa.Column("environment", sa.JSON(), nullable=False),
-        sa.Column("status", sa.String(length=32), server_default="UNKNOWN", nullable=False),
-        sa.Column("terminal_reason", sa.String(length=64), nullable=True),
-        sa.Column("finish_reason", sa.String(length=32), nullable=True),
-        sa.Column("started_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("finished_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("last_message_id", sa.String(length=160), nullable=True),
-        sa.Column(
-            "last_activity_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True
-        ),
-        sa.Column("model_name", sa.String(length=160), nullable=True),
-        sa.Column("input_tokens", sa.Integer(), nullable=True),
-        sa.Column("output_tokens", sa.Integer(), nullable=True),
-        sa.Column("cache_read_tokens", sa.Integer(), nullable=True),
-        sa.Column("cache_write_tokens", sa.Integer(), nullable=True),
-        sa.Column("total_tokens", sa.Integer(), nullable=True),
-        sa.Column("llm_call_count", sa.Integer(), nullable=True),
-        sa.Column("tool_call_count", sa.Integer(), nullable=True),
-        sa.Column("native_session_count", sa.Integer(), server_default="1", nullable=False),
-        sa.Column("execution_seconds", sa.Integer(), nullable=True),
-        sa.Column("tool_usage", sa.JSON(), nullable=False),
-        sa.Column("usage_by_day", sa.JSON(), nullable=False),
-        sa.Column("model_usage", sa.JSON(), nullable=False),
-        sa.Column("superseded_by", sa.String(length=160), nullable=True),
-        sa.Column("superseded_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("runtime_context_hash", sa.String(length=64), nullable=True),
-        sa.Column("runtime_context_id", sa.String(length=64), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["employee_id"],
-            ["t_nexus_agent_workers.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["superseded_by"],
-            ["t_nexus_runtime_sessions.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["task_id"],
-            ["t_nexus_tasks.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("runtime_context_hash"),
-    )
-    op.create_index(
-        op.f("ix_t_nexus_runtime_sessions_status"), "t_nexus_runtime_sessions", ["status"], unique=False
-    )
-    op.create_index(
-        op.f("ix_t_nexus_runtime_sessions_superseded_by"),
-        "t_nexus_runtime_sessions",
-        ["superseded_by"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_runtime_sessions_task_id"), "t_nexus_runtime_sessions", ["task_id"], unique=False
-    )
-    op.create_table(
-        "t_nexus_worker_instances",
-        sa.Column("id", sa.String(length=64), nullable=False),
-        sa.Column("environment_id", sa.Integer(), nullable=False),
-        sa.Column("token_digest", sa.String(length=64), nullable=False),
-        sa.Column("token_ciphertext", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("epoch", sa.Integer(), nullable=False),
-        sa.Column("agent_version", sa.String(length=64), nullable=True),
-        sa.Column("target_digest", sa.String(length=64), nullable=True),
-        sa.Column("observed_snapshot", sa.JSON(), nullable=True),
-        sa.Column("observed_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column(
-            "last_heartbeat_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True
-        ),
-        sa.Column("connected_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["environment_id"], ["t_nexus_opencode_execution_environments.id"], ondelete="CASCADE"
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_instances_environment_id"),
-        "t_nexus_worker_instances",
-        ["environment_id"],
-        unique=True,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_instances_status"), "t_nexus_worker_instances", ["status"], unique=False
-    )
-    op.create_table(
-        "t_nexus_worker_maintenance_operations",
-        sa.Column("id", sa.String(length=64), nullable=False),
-        sa.Column("environment_id", sa.Integer(), nullable=False),
-        sa.Column("action", sa.String(length=32), nullable=False),
-        sa.Column("state", sa.String(length=32), nullable=False),
-        sa.Column("stage", sa.String(length=64), server_default="queued", nullable=False),
-        sa.Column("requested_by", sa.String(length=120), nullable=False),
-        sa.Column("attempt", sa.Integer(), server_default="1", nullable=False),
-        sa.Column("lease_owner", sa.String(length=120), nullable=True),
-        sa.Column("lease_until", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("cancel_requested", sa.Boolean(), server_default="0", nullable=False),
-        sa.Column("target_revision", sa.JSON(), nullable=False),
-        sa.Column("before_snapshot", sa.JSON(), nullable=False),
-        sa.Column("after_snapshot", sa.JSON(), nullable=False),
-        sa.Column("error_code", sa.String(length=80), nullable=True),
-        sa.Column("error_message", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("execution_channel", sa.String(length=16), nullable=True),
-        sa.Column("execution_reason", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("retry_of_attempt", sa.Integer(), nullable=True),
-        sa.Column("active_environment_id", sa.Integer(), nullable=True),
-        sa.Column("requested_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("started_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("finished_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["environment_id"], ["t_nexus_opencode_execution_environments.id"], ondelete="CASCADE"
-        ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("active_environment_id", name="uq_worker_maintenance_active_environment"),
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_maintenance_operations_environment_id"),
-        "t_nexus_worker_maintenance_operations",
-        ["environment_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_maintenance_operations_lease_owner"),
-        "t_nexus_worker_maintenance_operations",
-        ["lease_owner"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_maintenance_operations_state"),
-        "t_nexus_worker_maintenance_operations",
-        ["state"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_worker_maintenance_state_lease",
-        "t_nexus_worker_maintenance_operations",
-        ["state", "lease_until"],
-        unique=False,
-    )
-    op.create_table(
-        "t_nexus_experience_review_segments",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("job_id", sa.String(length=64), nullable=False),
-        sa.Column("segment_index", sa.Integer(), nullable=False),
-        sa.Column("source_refs", sa.JSON(), nullable=False),
-        sa.Column("input_digest", sa.String(length=64), nullable=False),
-        sa.Column("token_estimate", sa.Integer(), nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("attempts", sa.Integer(), nullable=False),
-        sa.Column("lease_token", sa.String(length=64), nullable=True),
-        sa.Column("lease_until", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column(
-            "next_retry_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False
-        ),
-        sa.Column("analysis_json", sa.JSON(), nullable=True),
-        sa.Column("error_code", sa.String(length=64), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.ForeignKeyConstraint(["job_id"], ["t_nexus_experience_review_jobs.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("job_id", "segment_index", name="uq_experience_review_segment"),
-    )
-    op.create_index(
-        op.f("ix_t_nexus_experience_review_segments_job_id"),
-        "t_nexus_experience_review_segments",
-        ["job_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_experience_review_segments_status"),
-        "t_nexus_experience_review_segments",
-        ["status"],
-        unique=False,
-    )
-    op.create_table(
         "t_nexus_knowledge_items",
         sa.Column("id", sa.String(length=64), nullable=False),
         sa.Column("space_id", sa.String(length=64), nullable=True),
@@ -1787,7 +1573,7 @@ def upgrade():
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("sync_status", sa.String(length=16), server_default="not_synced", nullable=False),
         sa.Column("sync_error", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("synced_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
+        sa.Column("synced_at", app.models.UTCDateTime(), nullable=True),
         sa.Column("source_path", sa.String(length=512), nullable=True),
         sa.Column("verification_status", sa.String(length=32), nullable=False),
         sa.Column("tags", sa.JSON(), nullable=False),
@@ -1801,18 +1587,15 @@ def upgrade():
         sa.Column("fingerprint", sa.String(length=64), nullable=True),
         sa.Column("experience_type", sa.String(length=64), nullable=True),
         sa.Column("scope", sa.JSON(), nullable=False),
-        sa.Column("session_status_at_submission", sa.String(length=32), nullable=True),
-        sa.Column("verification_session_status", sa.String(length=32), nullable=True),
         sa.Column("verification_message_id", sa.String(length=160), nullable=True),
-        sa.Column("session_last_message_id_at_verification", sa.String(length=160), nullable=True),
-        sa.Column("verified_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
+        sa.Column("verified_at", app.models.UTCDateTime(), nullable=True),
         sa.Column("source_ref_snapshot", sa.JSON(), nullable=False),
         sa.Column("experience_data", sa.JSON(), nullable=False),
         sa.Column("review_note", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
         sa.Column("created_by", sa.String(length=120), nullable=False),
         sa.Column("updated_by", sa.String(length=120), nullable=False),
         sa.Column("published_by", sa.String(length=120), nullable=True),
-        sa.Column("published_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
+        sa.Column("published_at", app.models.UTCDateTime(), nullable=True),
         sa.Column("agentscope_kb_id", sa.String(length=64), server_default="", nullable=False),
         sa.Column("agentscope_document_id", sa.String(length=64), server_default="", nullable=False),
         sa.Column(
@@ -1821,13 +1604,12 @@ def upgrade():
         sa.Column("agentscope_sync_error", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
         sa.Column("reference_count", sa.Integer(), nullable=False),
         sa.Column("helpful_count", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(
             ["source_employee_id"],
             ["t_nexus_agent_workers.id"],
         ),
-        sa.ForeignKeyConstraint(["source_session_id"], ["t_nexus_runtime_sessions.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
             ["source_task_id"],
             ["t_nexus_tasks.id"],
@@ -1903,119 +1685,6 @@ def upgrade():
         unique=False,
     )
     op.create_table(
-        "t_nexus_task_wake_outbox",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("event_id", sa.Integer(), nullable=False),
-        sa.Column("task_id", sa.String(length=64), nullable=False),
-        sa.Column("responsible_employee_id", sa.String(length=64), nullable=False),
-        sa.Column("source_session_id", sa.String(length=160), nullable=True),
-        sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("hint", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
-        sa.Column("attempts", sa.Integer(), nullable=False),
-        sa.Column(
-            "next_retry_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False
-        ),
-        sa.Column("last_error", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.ForeignKeyConstraint(["event_id"], ["t_nexus_events.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("event_id"),
-    )
-    op.create_index(
-        op.f("ix_t_nexus_task_wake_outbox_next_retry_at"),
-        "t_nexus_task_wake_outbox",
-        ["next_retry_at"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_task_wake_outbox_status"), "t_nexus_task_wake_outbox", ["status"], unique=False
-    )
-    op.create_index(
-        op.f("ix_t_nexus_task_wake_outbox_task_id"), "t_nexus_task_wake_outbox", ["task_id"], unique=False
-    )
-    op.create_table(
-        "t_nexus_worker_commands",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("request_id", sa.String(length=80), nullable=False),
-        sa.Column("worker_instance_id", sa.String(length=64), nullable=False),
-        sa.Column("environment_id", sa.Integer(), nullable=False),
-        sa.Column("session_id", sa.String(length=160), nullable=True),
-        sa.Column("name", sa.String(length=64), nullable=False),
-        sa.Column("payload", sa.JSON(), nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("epoch", sa.Integer(), nullable=False),
-        sa.Column("result", sa.JSON(), nullable=True),
-        sa.Column("error_code", sa.String(length=64), nullable=True),
-        sa.Column("deadline_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column(
-            "body_fetched_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True
-        ),
-        sa.Column("delivery_attempts", sa.Integer(), server_default="0", nullable=False),
-        sa.Column("delivery_state", sa.String(length=16), server_default="unpublished", nullable=False),
-        sa.Column("slot_held", sa.Boolean(), server_default="0", nullable=False),
-        sa.Column(
-            "last_dispatched_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True
-        ),
-        sa.Column("dispatched_epoch", sa.Integer(), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("updated_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("finished_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.ForeignKeyConstraint(["worker_instance_id"], ["t_nexus_worker_instances.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_commands_environment_id"),
-        "t_nexus_worker_commands",
-        ["environment_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_commands_request_id"), "t_nexus_worker_commands", ["request_id"], unique=True
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_commands_status"), "t_nexus_worker_commands", ["status"], unique=False
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_commands_worker_instance_id"),
-        "t_nexus_worker_commands",
-        ["worker_instance_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_worker_commands_status_deadline",
-        "t_nexus_worker_commands",
-        ["status", "deadline_at"],
-        unique=False,
-    )
-    op.create_table(
-        "t_nexus_worker_connections",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("worker_instance_id", sa.String(length=64), nullable=False),
-        sa.Column("epoch", sa.Integer(), nullable=False),
-        sa.Column("state", sa.String(length=32), nullable=False),
-        sa.Column("close_reason", sa.String(length=64), nullable=True),
-        sa.Column("opened_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("closed_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.ForeignKeyConstraint(["worker_instance_id"], ["t_nexus_worker_instances.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_connections_state"), "t_nexus_worker_connections", ["state"], unique=False
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_connections_worker_instance_id"),
-        "t_nexus_worker_connections",
-        ["worker_instance_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_worker_connections_worker_state",
-        "t_nexus_worker_connections",
-        ["worker_instance_id", "state"],
-        unique=False,
-    )
-    op.create_table(
         "t_nexus_worker_maintenance_events",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("operation_id", sa.String(length=64), nullable=False),
@@ -2026,7 +1695,7 @@ def upgrade():
         sa.Column("state", sa.String(length=32), nullable=True),
         sa.Column("message", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
         sa.Column("detail", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(
             ["operation_id"], ["t_nexus_worker_maintenance_operations.id"], ondelete="CASCADE"
         ),
@@ -2063,10 +1732,9 @@ def upgrade():
         sa.Column("source_digest", sa.String(length=64), nullable=True),
         sa.Column("review_job_id", sa.String(length=64), nullable=True),
         sa.Column("validation_status", sa.String(length=16), server_default="unverified", nullable=False),
-        sa.Column("captured_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("captured_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(["knowledge_id"], ["t_nexus_knowledge_items.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["source_session_id"], ["t_nexus_runtime_sessions.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
             ["task_id"],
             ["t_nexus_tasks.id"],
@@ -2110,6 +1778,39 @@ def upgrade():
         unique=False,
     )
     op.create_table(
+        "t_nexus_experience_review_segments",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("job_id", sa.String(length=64), nullable=False),
+        sa.Column("segment_index", sa.Integer(), nullable=False),
+        sa.Column("source_refs", sa.JSON(), nullable=False),
+        sa.Column("input_digest", sa.String(length=64), nullable=False),
+        sa.Column("token_estimate", sa.Integer(), nullable=False),
+        sa.Column("status", sa.String(length=32), nullable=False),
+        sa.Column("attempts", sa.Integer(), nullable=False),
+        sa.Column("lease_token", sa.String(length=64), nullable=True),
+        sa.Column("lease_until", app.models.UTCDateTime(), nullable=True),
+        sa.Column("next_retry_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("analysis_json", sa.JSON(), nullable=True),
+        sa.Column("error_code", sa.String(length=64), nullable=True),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
+        sa.ForeignKeyConstraint(["job_id"], ["t_nexus_experience_review_jobs.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("job_id", "segment_index", name="uq_experience_review_segment"),
+    )
+    op.create_index(
+        op.f("ix_t_nexus_experience_review_segments_job_id"),
+        "t_nexus_experience_review_segments",
+        ["job_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_t_nexus_experience_review_segments_status"),
+        "t_nexus_experience_review_segments",
+        ["status"],
+        unique=False,
+    )
+    op.create_table(
         "t_nexus_knowledge_audit",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("knowledge_id", sa.String(length=64), nullable=False),
@@ -2117,7 +1818,7 @@ def upgrade():
         sa.Column("actor_id", sa.String(length=120), nullable=False),
         sa.Column("actor_role", sa.String(length=32), nullable=False),
         sa.Column("detail", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(["knowledge_id"], ["t_nexus_knowledge_items.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -2141,7 +1842,7 @@ def upgrade():
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("knowledge_id", sa.String(length=64), nullable=False),
         sa.Column("user_id", sa.String(length=120), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(["knowledge_id"], ["t_nexus_knowledge_items.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("knowledge_id", "user_id", name="uq_knowledge_favorite_user"),
@@ -2170,8 +1871,8 @@ def upgrade():
         sa.Column("comment", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
         sa.Column("task_id", sa.String(length=64), nullable=True),
         sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
-        sa.Column("resolved_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=True),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("resolved_at", app.models.UTCDateTime(), nullable=True),
         sa.ForeignKeyConstraint(
             ["employee_id"],
             ["t_nexus_agent_workers.id"],
@@ -2223,7 +1924,7 @@ def upgrade():
         sa.Column("source_knowledge_id", sa.String(length=64), nullable=False),
         sa.Column("target_knowledge_id", sa.String(length=64), nullable=False),
         sa.Column("relation_type", sa.String(length=32), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(["source_knowledge_id"], ["t_nexus_knowledge_items.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["target_knowledge_id"], ["t_nexus_knowledge_items.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -2252,7 +1953,7 @@ def upgrade():
         sa.Column("source_name", sa.String(length=240), nullable=True),
         sa.Column("source_uri", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
         sa.Column("version", sa.String(length=80), nullable=True),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(["knowledge_id"], ["t_nexus_knowledge_items.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -2275,13 +1976,12 @@ def upgrade():
         sa.Column("query", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
         sa.Column("result", sa.JSON(), nullable=False),
         sa.Column("latency_ms", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql"), nullable=False),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
         sa.ForeignKeyConstraint(
             ["employee_id"],
             ["t_nexus_agent_workers.id"],
         ),
         sa.ForeignKeyConstraint(["knowledge_id"], ["t_nexus_knowledge_items.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["session_id"], ["t_nexus_runtime_sessions.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
             ["task_id"],
             ["t_nexus_tasks.id"],
@@ -2323,6 +2023,37 @@ def upgrade():
     )
     op.create_index(
         op.f("ix_t_nexus_knowledge_usage_tool_name"), "t_nexus_knowledge_usage", ["tool_name"], unique=False
+    )
+    op.create_table(
+        "t_nexus_task_wake_outbox",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("event_id", sa.Integer(), nullable=False),
+        sa.Column("task_id", sa.String(length=64), nullable=False),
+        sa.Column("origin_employee_id", sa.String(length=64), nullable=False),
+        sa.Column("source", sa.String(length=64), nullable=False),
+        sa.Column("external_task_id", sa.String(length=160), nullable=True),
+        sa.Column("status", sa.String(length=32), nullable=False),
+        sa.Column("hint", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=False),
+        sa.Column("attempts", sa.Integer(), nullable=False),
+        sa.Column("next_retry_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("last_error", sa.Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True),
+        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
+        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
+        sa.ForeignKeyConstraint(["event_id"], ["t_nexus_events.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("event_id"),
+    )
+    op.create_index(
+        op.f("ix_t_nexus_task_wake_outbox_next_retry_at"),
+        "t_nexus_task_wake_outbox",
+        ["next_retry_at"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_t_nexus_task_wake_outbox_status"), "t_nexus_task_wake_outbox", ["status"], unique=False
+    )
+    op.create_index(
+        op.f("ix_t_nexus_task_wake_outbox_task_id"), "t_nexus_task_wake_outbox", ["task_id"], unique=False
     )
     # ### end Alembic commands ###
 

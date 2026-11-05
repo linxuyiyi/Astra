@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.library_schemas import ExperienceEvidenceWrite, LibrarySubmitExperienceInput
 from app.library_service import KnowledgeService, LibraryConflict, experience_fingerprint
-from app.models import ExperienceReviewJob, KnowledgeItem, RuntimeSession
+from app.models import ExperienceReviewJob, KnowledgeItem
 
 from .schemas import Candidate, TraceResult
 
@@ -41,9 +41,6 @@ async def write_candidates(
     trace: TraceResult,
     candidates: list[Candidate],
 ) -> list[str]:
-    binding = await session.get(RuntimeSession, job.root_session_id)
-    if binding is None:
-        raise LibraryConflict("复盘来源 RuntimeSession 已不存在")
     service = KnowledgeService(session)
     ids: list[str] = []
     for candidate in candidates:
@@ -64,9 +61,9 @@ async def write_candidates(
             },
         )
         try:
-            detail = await service.mcp_submit_experience(
+            detail = await service.write_experience_candidate(
                 payload,
-                review_session=binding,
+                review_job=job,
                 review_key=job.review_key,
                 commit=False,
             )

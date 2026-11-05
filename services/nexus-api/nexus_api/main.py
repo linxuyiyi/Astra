@@ -2208,28 +2208,43 @@ def create_app() -> FastAPI:
     async def wake_target(
         request: Request,
         employee_id: str,
-        session_id: str = "",
+        source: str = "opencode",
+        external_task_id: str = "",
         connection=Depends(database),
     ) -> dict[str, str]:
         employee = load_employee(connection, employee_id)
-        if session_id.strip():
+        if source == "group_chat":
             group = (
                 connection.execute(
-                    sql_text("""SELECT channel_id FROM t_nexus_channel_members WHERE employee_id=:e
-                    AND agentscope_session_id=:s AND member_type='employee'"""),
-                    {"e": employee_id, "s": session_id.strip()},
+                    sql_text("""SELECT channel_id FROM t_nexus_channel_members
+                WHERE channel_id=:c AND employee_id=:e AND member_type='employee' AND membership_active=1"""),
+                    {"c": external_task_id, "e": employee_id},
                 )
                 .mappings()
                 .first()
             )
-            if group:
-                return {"channel_id": group["channel_id"]}
+            if not group:
+                raise HTTPException(404, "群聊与来源员工不匹配")
+            return {"channel_id": group["channel_id"]}
         if not employee["enabled"]:
             raise HTTPException(status_code=409, detail="员工已禁用，稍后再投递")
         agent_id = employee["agentscope_agent_id"]
         if not agent_id:
             raise HTTPException(status_code=404, detail="员工还没有 Agent")
-        requested = session_id.strip()
+        requested = external_task_id.strip()
+        if source == "private_chat" and requested:
+            conversation = (
+                connection.execute(
+                    sql_text("""SELECT agentscope_session_id FROM t_nexus_conversations
+                WHERE id=:c AND employee_id=:e"""),
+                    {"c": requested, "e": employee_id},
+                )
+                .mappings()
+                .first()
+            )
+            if not conversation or not conversation["agentscope_session_id"]:
+                raise HTTPException(404, "来源私聊不存在")
+            requested = conversation["agentscope_session_id"]
         if requested:
             if not session_owned_by(connection, employee_id, requested, employee["mailbox_session_id"]):
                 raise HTTPException(status_code=404, detail="会话不属于该员工")
@@ -2834,7 +2849,14 @@ def create_app() -> FastAPI:
                 await client.trigger_chat(
                     employee["agentscope_agent_id"],
                     session_id,
-                    model_input_blocks(body.text, files),
+                    [
+                        *model_input_blocks(body.text, files),
+                        {
+                            "type": "text",
+                            "text": f"内部任务来源：source=private_chat，external_task_id={conversation_id}，"
+                            f"employee_id={employee['id']}。仅在需要创建工程任务时使用此来源。",
+                        },
+                    ],
                     owner_id,
                     verified_uid=owner_id,
                     attachments=visible,

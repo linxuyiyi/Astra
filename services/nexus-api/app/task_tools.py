@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
 from pydantic import ValidationError
@@ -16,7 +15,6 @@ from app.models import (
     Event,
     ExperienceReviewJob,
     KnowledgeItem,
-    RuntimeSession,
     Task,
     TaskCategory,
 )
@@ -26,7 +24,7 @@ from app.services import TaskService
 from app.state_machine import InvalidTransition
 from nexus_api.db_models import employees
 
-_CONCLUDED = {TaskStatus.SUCCEEDED.value, TaskStatus.FAILED.value, TaskStatus.CANCELED.value}
+_CONCLUDED = {TaskStatus.SUCCEEDED.value, TaskStatus.CANCELED.value}
 
 
 def _text(value: str | None) -> str:
@@ -97,12 +95,10 @@ class TaskTools:
         description: str,
         acceptance_criteria: list[str] | None = None,
         priority: str = "MEDIUM",
-        worker_id: str | None = None,
-        responsible_employee_id: str | None = None,
-        source_session_id: str | None = None,
-        source_conversation_id: str | None = None,
-        source_channel_id: str | None = None,
-        idempotency_key: str | None = None,
+        agent_worker_id: str | None = None,
+        origin_employee_id: str | None = None,
+        source: str = "opencode",
+        external_task_id: str | None = None,
     ) -> dict[str, Any]:
         category = await self.session.get(TaskCategory, category_id)
         if not category or not category.enabled:
@@ -112,42 +108,32 @@ class TaskTools:
             level = Priority(priority)
         except ValueError as exc:
             return {"ok": False, "error": str(exc)}
-        employee = _text(responsible_employee_id)
+        employee = _text(origin_employee_id)
         exists = await self.session.scalar(select(employees.c.id).where(employees.c.id == employee))
         if not exists:
             return {"ok": False, "error": "员工不存在"}
-        session_id = _text(source_session_id)
-        conversation_id = _text(source_conversation_id)
-        channel_id = _text(source_channel_id)
-        assignee = _text(worker_id) or None
+        assignee = _text(agent_worker_id) or None
         if assignee:
             refusal = await self._worker_refusal(assignee, kind.value, category_id)
             if refusal:
                 return {"ok": False, "error": refusal}
-        key = _text(idempotency_key) or _derived_key(
-            session_id, kind.value, category_id, title, description
-        )
         try:
             payload = TaskCreate(
-                source="nexus-employee" if employee else "manual",
+                source=source,
+                external_task_id=external_task_id,
                 task_type=kind,
                 category_id=category_id,
                 title=title.strip(),
                 description=description.strip(),
                 acceptance_criteria=[AcceptanceCriterion(content=item) for item in acceptance_criteria or []],
-                employee_id=assignee,
-                responsible_employee_id=employee or None,
-                source_session_id=session_id or None,
-                source_conversation_id=conversation_id or None,
-                source_channel_id=channel_id or None,
-                idempotency_key=key,
+                agent_worker_id=assignee,
+                origin_employee_id=employee or None,
                 priority=level,
             )
         except ValidationError as exc:
             return {"ok": False, "error": str(exc)}
         task = await TaskService(self.session).create(payload)
         return self._ok(task)
-
 
     async def categories(self) -> dict[str, Any]:
         rows = (
@@ -170,31 +156,29 @@ class TaskTools:
         task = await self._task(task_id)
         if isinstance(task, dict):
             return task
-        await self._attach_session_facts([task])
         return self._ok(task)
 
     async def list(
         self,
         *,
-        responsible_employee_id: str | None = None,
-        worker_id: str | None = None,
-        source_channel_id: str | None = None,
+        origin_employee_id: str | None = None,
+        agent_worker_id: str | None = None,
+        external_task_id: str | None = None,
         status: str | None = None,
         limit: int = 20,
     ) -> dict[str, Any]:
         query = select(Task)
-        if _text(responsible_employee_id):
-            query = query.where(Task.responsible_employee_id == _text(responsible_employee_id))
-        if _text(worker_id):
-            query = query.where(Task.employee_id == _text(worker_id))
-        if _text(source_channel_id):
-            query = query.where(Task.source_channel_id == _text(source_channel_id))
+        if _text(origin_employee_id):
+            query = query.where(Task.origin_employee_id == _text(origin_employee_id))
+        if _text(agent_worker_id):
+            query = query.where(Task.agent_worker_id == _text(agent_worker_id))
+        if _text(external_task_id):
+            query = query.where(Task.external_task_id == _text(external_task_id))
         if status:
             query = query.where(Task.status == status)
         rows = (
             await self.session.scalars(query.order_by(Task.created_at.desc()).limit(max(1, min(limit, 50))))
         ).all()
-        await self._attach_session_facts(rows)
         return {"ok": True, "tasks": [self._brief(item) for item in rows]}
 
     async def update(
@@ -223,18 +207,18 @@ class TaskTools:
         await self.session.refresh(task)
         return self._ok(task)
 
-    async def assign(self, task_id: str, worker_id: str) -> dict[str, Any]:
+    async def assign(self, task_id: str, agent_worker_id: str) -> dict[str, Any]:
         task = await self._task(task_id)
         if isinstance(task, dict):
             return task
         if task.status != TaskStatus.PENDING.value:
             return self._refuse(task, "只有待领取任务可以指定 Worker")
-        refusal = await self._worker_refusal(worker_id, task.task_type, task.category_id or "")
+        refusal = await self._worker_refusal(agent_worker_id, task.task_type, task.category_id or "")
         if refusal:
             return self._refuse(task, refusal)
-        task.employee_id = worker_id
+        task.agent_worker_id = agent_worker_id
         await TaskService(self.session).add_event(
-            task, "TASK_ASSIGNED", "work", "已指定 Worker", {"worker_id": worker_id}
+            task, "TASK_ASSIGNED", "work", "已指定 Worker", {"agent_worker_id": agent_worker_id}
         )
         await self.session.refresh(task)
         return self._ok(task)
@@ -281,7 +265,7 @@ class TaskTools:
         task = await self._task(task_id)
         if isinstance(task, dict):
             return task
-        if task.status not in {TaskStatus.FAILED.value, TaskStatus.CANCELED.value}:
+        if task.status not in {TaskStatus.CANCELED.value}:
             return self._refuse(task, "只有失败或已终止的任务可以重试")
         return await self._runtime(task, lambda: RuntimeService(self.session).start(task.id, restart=True))
 
@@ -315,7 +299,6 @@ class TaskTools:
             "status": task.status,
             "runtime_status_label": task.runtime_status_label,
             "current_progress": task.current_progress,
-            "failure_reason": task.failure_reason,
             "workspace": task.workspace,
             "current_session_id": task.current_session_id,
             "finished_at": task.finished_at.isoformat() if task.finished_at else None,
@@ -379,7 +362,6 @@ class TaskTools:
             return task
         if task.status in _CONCLUDED:
             return self._refuse(task, "已结束的任务不能请求人工处理")
-        note = {"reason": reason.strip(), "source": "nexus-task"}
         if task.status == TaskStatus.RUNNING.value:
             outcome = await self._runtime(
                 task, lambda: RuntimeService(self.session).stop(task.id, cancel_task=False)
@@ -388,9 +370,10 @@ class TaskTools:
                 return outcome
             task = await self.session.get(Task, task_id)
         elif task.status == TaskStatus.PENDING.value:
-            await TaskService(self.session).transition(task, TaskStatus.WAITING, message="等待人工处理")
+            return self._refuse(task, "任务尚未开始")
             task = await self.session.get(Task, task_id)
-        task.human_intervention = note
+        task.current_progress = reason.strip()
+        task.waiting_reason = "intervention"
         await self.session.commit()
         await self.session.refresh(task)
         return self._ok(task)
@@ -412,8 +395,13 @@ class TaskTools:
             return await self._runtime_failure(task_id, **self._assistance_error(exc))
 
     async def reply(
-        self, task_id: str, expected_session_id: str, request_id: str, kind: str,
-        answers: list[list[str]] | None = None, decision: str | None = None,
+        self,
+        task_id: str,
+        expected_session_id: str,
+        request_id: str,
+        kind: str,
+        answers: list[list[str]] | None = None,
+        decision: str | None = None,
     ) -> dict[str, Any]:
         task = await self._task(task_id)
         if isinstance(task, dict):
@@ -422,8 +410,12 @@ class TaskTools:
             return self._refuse(task, "必须提供查询得到的执行会话和请求标识")
         try:
             return await self._assistance().reply(
-                task_id, expected_session_id=expected_session_id, request_id=request_id,
-                kind=kind, answers=answers, decision=decision,
+                task_id,
+                expected_session_id=expected_session_id,
+                request_id=request_id,
+                kind=kind,
+                answers=answers,
+                decision=decision,
             )
         except (RuntimeStateError, ValueError) as exc:
             return await self._runtime_failure(task_id, str(exc))
@@ -431,17 +423,26 @@ class TaskTools:
             return await self._runtime_failure(task_id, **self._assistance_error(exc))
 
     async def input(
-        self, task_id: str, expected_session_id: str, expected_submission_id: str, text: str,
+        self,
+        task_id: str,
+        expected_session_id: str,
+        expected_submission_id: str,
+        text: str,
     ) -> dict[str, Any]:
         task = await self._task(task_id)
         if isinstance(task, dict):
             return task
         if not expected_session_id or not expected_submission_id:
             return self._refuse(task, "必须提供查询得到的执行会话和回合标识")
-        return await self._runtime(task, lambda: self._assistance().input(
-            task_id, expected_session_id=expected_session_id,
-            expected_submission_id=expected_submission_id, text=text,
-        ))
+        return await self._runtime(
+            task,
+            lambda: self._assistance().input(
+                task_id,
+                expected_session_id=expected_session_id,
+                expected_submission_id=expected_submission_id,
+                text=text,
+            ),
+        )
 
     @staticmethod
     def _assistance_error(exc):
@@ -454,7 +455,7 @@ class TaskTools:
             return task
         if task.status == TaskStatus.SUCCEEDED.value:
             return self._ok(task)
-        if task.status in {TaskStatus.CANCELED.value, TaskStatus.FAILED.value, TaskStatus.PENDING.value}:
+        if task.status in {TaskStatus.CANCELED.value, TaskStatus.PENDING.value}:
             return self._refuse(task, "当前状态不能确认完成")
         return await self._runtime(task, lambda: RuntimeService(self.session).confirm_completion(task.id))
 
@@ -473,7 +474,6 @@ class TaskTools:
                 hint=failure["hint"],
             )
         # Mutations return the Task outcome; query get/assistance for Session facts.
-        updated.session_status = None
         return self._ok(updated)
 
     async def _runtime_failure(
@@ -501,8 +501,8 @@ class TaskTools:
             return {"ok": False, "error": "任务不存在"}
         return task
 
-    async def _worker_refusal(self, worker_id: str, task_type: str, category_id: str) -> str | None:
-        worker = await self.session.get(AgentWorker, worker_id)
+    async def _worker_refusal(self, agent_worker_id: str, task_type: str, category_id: str) -> str | None:
+        worker = await self.session.get(AgentWorker, agent_worker_id)
         if not worker or not worker.enabled:
             return "指定 Worker 不存在或未启用"
         if task_type not in (worker.task_types or []):
@@ -527,25 +527,17 @@ class TaskTools:
         hint: str | None = None,
     ) -> dict[str, Any]:
         body = {
-            "ok": False, "error": error, "task_id": task.id,
-            "status": task.status, "runtime_status_label": task.runtime_status_label,
+            "ok": False,
+            "error": error,
+            "task_id": task.id,
+            "status": task.status,
+            "runtime_status_label": task.runtime_status_label,
         }
         if failure_code:
             body["failure_code"] = failure_code
         if hint:
             body["hint"] = hint
         return body
-
-    async def _attach_session_facts(self, tasks):
-        ids = [task.current_session_id for task in tasks if task.current_session_id]
-        bindings = {
-            item.id: item for item in (await self.session.scalars(
-                select(RuntimeSession).where(RuntimeSession.id.in_(ids))
-            )).all()
-        } if ids else {}
-        for task in tasks:
-            binding = bindings.get(task.current_session_id)
-            task.session_status = binding.status if binding else None
 
     def _brief(self, task: Task) -> dict[str, Any]:
         return {
@@ -555,26 +547,11 @@ class TaskTools:
             "runtime_status_label": task.runtime_status_label,
             "task_type": task.task_type,
             "category_id": task.category_id,
-            "worker_id": task.employee_id,
-            "responsible_employee_id": task.responsible_employee_id,
-            "source_session_id": task.source_session_id,
-            "source_channel_id": task.source_channel_id,
+            "agent_worker_id": task.agent_worker_id,
+            "origin_employee_id": task.origin_employee_id,
+            "source": task.source,
+            "external_task_id": task.external_task_id,
             "current_progress": task.current_progress,
             "current_session_id": task.current_session_id,
-            "session_status": getattr(task, "session_status", None),
             "waiting_reason": task.waiting_reason,
-            "human_required_reason": task.human_required_reason,
         }
-
-
-def _derived_key(
-    session_id: str,
-    task_type: str,
-    category_id: str,
-    title: str,
-    description: str,
-) -> str | None:
-    if not session_id:
-        return None
-    raw = f"{session_id}\n{task_type}\n{category_id}\n{title.strip()}\n{description.strip()}"
-    return f"{session_id}:{hashlib.sha256(raw.encode()).hexdigest()[:32]}"

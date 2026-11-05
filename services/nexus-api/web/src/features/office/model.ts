@@ -36,7 +36,7 @@ export function employeeState(
 ): OfficeState {
   if (!employee.enabled) return "offline";
   if (degraded) return "unknown";
-  if (employee.counts.waiting || employee.counts.failed) return "attention";
+  if (employee.counts.waiting) return "attention";
   if (employee.counts.running) return "working";
   return "idle";
 }
@@ -51,27 +51,12 @@ export function workerState(worker: OfficeWorker): OfficeState {
   return worker.occupancy === "idle" ? "idle" : "unknown";
 }
 export function needsAttention(task: NebulaTask): boolean {
-  return (
-    task.status === "WAITING" ||
-    task.status === "FAILED" ||
-    task.runtimeConnection === "UNAVAILABLE" ||
-    task.inactivityAlert ||
-    task.conflict
-  );
+  return task.status === "WAITING" || task.conflict;
 }
 export function taskReason(task: NebulaTask): string {
-  if (task.status === "WAITING")
-    return task.waitingReason || "等待人工确认，请进入任务查看";
-  if (task.status === "FAILED")
-    return task.failureReason || "任务执行失败，请查看失败详情";
-  if (task.runtimeConnection === "UNAVAILABLE")
-    return "执行连接不可用，请检查运行环境";
-  if (task.inactivityAlert) return "任务长时间无活动，需要检查";
-  if (task.conflict) return "任务关联存在冲突，请检查责任员工与执行资源";
-  return (
-    task.currentProgress ||
-    (task.status === "PENDING" ? "等待 Worker 调度" : "正在执行")
-  );
+  if (task.status === "WAITING") return task.waitingReason || "等待人工处理";
+  if (task.conflict) return "任务关联需要检查";
+  return task.currentProgress || (task.status === "PENDING" ? "等待 Worker 调度" : "正在执行");
 }
 export const OFFICE_ROOM_SIZE = 12;
 const NAMEPLATE_HEIGHT = 44;

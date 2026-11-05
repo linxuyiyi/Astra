@@ -50,19 +50,19 @@ from app.llm_wiki import LlmWikiClient, LlmWikiError, knowledge_source_path, wik
 from app.models import (
     AgentWorker,
     ExperienceEvidence,
+    ExperienceReviewJob,
     KnowledgeAudit,
     KnowledgeFavorite,
     KnowledgeFeedback,
     KnowledgeItem,
     KnowledgeSpace,
     KnowledgeUsage,
-    RuntimeSession,
     Task,
     utcnow,
 )
 from app.runtime.runtime_context import RuntimeContext
 from app.runtime.runtime_context import resolve_runtime_context as _resolve_runtime_context
-from app.usage import day_bounds
+from app.time_ranges import day_bounds
 from app.worker_presentation import worker_display_name
 
 KNOWLEDGE_TYPES = {"document", "rule", "guide", "experience", "faq", "tool", "example"}
@@ -96,8 +96,7 @@ def experience_fingerprint(content_md: str) -> str:
 
 def invalidate_experience_verification(item: KnowledgeItem) -> None:
     item.verification_status = "unverified"
-    item.verified_at = item.verification_message_id = item.verification_session_status = None
-    item.session_last_message_id_at_verification = None
+    item.verified_at = item.verification_message_id = None
 
 
 KNOWLEDGE_STATUSES = {"draft", "candidate", "published", "archived", "rejected"}
@@ -356,9 +355,7 @@ class KnowledgeService:
         await self._prepare_sync(item)
         return item
 
-    async def resync_knowledge(
-        self, knowledge_id: str, principal: LibraryPrincipal
-    ) -> KnowledgeDetail:
+    async def resync_knowledge(self, knowledge_id: str, principal: LibraryPrincipal) -> KnowledgeDetail:
         _require_manage(principal)
         await self.sync_knowledge(knowledge_id)
         return await self.get_detail(knowledge_id, principal)
@@ -721,9 +718,7 @@ class KnowledgeService:
         task_title = None
         if item.source_employee_id:
             worker = await self.session.scalar(
-                select(AgentWorker)
-                .options(selectinload(AgentWorker.execution_environment))
-                .where(AgentWorker.id == item.source_employee_id)
+                select(AgentWorker).where(AgentWorker.id == item.source_employee_id)
             )
             employee_name = worker_display_name(worker) if worker else None
         if item.source_task_id:
@@ -755,7 +750,6 @@ class KnowledgeService:
             source_session_id=item.source_session_id,
             experience_type=item.experience_type,
             verified_at=item.verified_at,
-            verification_session_status=item.verification_session_status,
             experience_data=item.experience_data or {},
             review_note=item.review_note,
             created_by=item.created_by,
@@ -800,8 +794,7 @@ class KnowledgeService:
         values = payload.model_dump(exclude_unset=True)
         if "space_id" in values:
             await self._space(values["space_id"], principal)
-        if (item.type == "experience" and "content_md" in values
-                and values["content_md"] != item.content_md):
+        if item.type == "experience" and "content_md" in values and values["content_md"] != item.content_md:
             invalidate_experience_verification(item)
         for key, value in values.items():
             setattr(item, key, value)
@@ -924,10 +917,16 @@ class KnowledgeService:
                 await LlmWikiClient().delete_source(item.source_path)
             except LlmWikiError as exc:
                 logger.warning("删除知识 %s 的 llm_wiki 源文件失败：%s", knowledge_id, exc)
-        await self.session.execute(update(KnowledgeUsage).where(
-            KnowledgeUsage.knowledge_id == knowledge_id).values(knowledge_id=None))
-        await self.session.execute(update(KnowledgeFeedback).where(
-            KnowledgeFeedback.knowledge_id == knowledge_id).values(knowledge_id=None))
+        await self.session.execute(
+            update(KnowledgeUsage)
+            .where(KnowledgeUsage.knowledge_id == knowledge_id)
+            .values(knowledge_id=None)
+        )
+        await self.session.execute(
+            update(KnowledgeFeedback)
+            .where(KnowledgeFeedback.knowledge_id == knowledge_id)
+            .values(knowledge_id=None)
+        )
         for model in (KnowledgeFavorite, KnowledgeAudit):
             rows = await self.session.scalars(select(model).where(model.knowledge_id == knowledge_id))
             for row in rows.all():
@@ -943,7 +942,6 @@ class KnowledgeService:
         rows = (
             await self.session.execute(
                 select(KnowledgeUsage, AgentWorker, Task.title)
-                .options(selectinload(AgentWorker.execution_environment))
                 .outerjoin(AgentWorker, KnowledgeUsage.employee_id == AgentWorker.id)
                 .outerjoin(Task, KnowledgeUsage.task_id == Task.id)
                 .where(
@@ -980,8 +978,7 @@ class KnowledgeService:
         await self._space(payload.space_id, principal)
         previous_status = item.status
         values = payload.model_dump(exclude_unset=True)
-        if (item.type == "experience" and "content_md" in values
-                and values["content_md"] != item.content_md):
+        if item.type == "experience" and "content_md" in values and values["content_md"] != item.content_md:
             invalidate_experience_verification(item)
         for key, value in values.items():
             setattr(item, key, value)
@@ -1264,7 +1261,7 @@ class KnowledgeService:
             raise LibraryValidationError("Agent Worker 不存在")
         if task_id and not task:
             raise LibraryValidationError("来源任务不存在")
-        if task and employee and task.employee_id != employee.id:
+        if task and employee and task.agent_worker_id != employee.id:
             raise LibraryValidationError("Task 与 Employee 不匹配")
         return employee, task
 
@@ -1316,9 +1313,7 @@ class KnowledgeService:
         # llm_wiki 的编译来源页通过 YAML sources 保留源文件路径；正文里的
         # ID 可能只是示例，不能据此归因。多来源不猜选其中一条。
         knowledge_id = None
-        frontmatter = re.match(
-            r"\A---[ \t]*\r?\n(.*?)\r?\n---(?:\r?\n|$)", resource.content_md, re.DOTALL
-        )
+        frontmatter = re.match(r"\A---[ \t]*\r?\n(.*?)\r?\n---(?:\r?\n|$)", resource.content_md, re.DOTALL)
         if frontmatter:
             try:
                 metadata = yaml.safe_load(frontmatter[1])
@@ -1380,50 +1375,60 @@ class KnowledgeService:
         """Shared runtime MCP capability used by every runtime tool."""
         return await _resolve_runtime_context(self.session, token)
 
-    async def mcp_submit_experience(
+    async def write_experience_candidate(
         self,
         payload: LibrarySubmitExperienceInput,
         *,
-        review_session: RuntimeSession | None = None,
+        review_job: ExperienceReviewJob | None = None,
         review_key: str | None = None,
         merge_into_id: str | None = None,
         merge_reason: str = "",
-        verified_message_id: str | None = None,
         commit: bool = True,
     ) -> KnowledgeDetail:
         """Internal candidate writer. Employee MCP deliberately has no submission tool.
 
-        Native citations are checked by submit_review before entering this short
+        Native citations are checked by the review coordinator before entering this short
         transaction. Exact identity is global; semantic identity is selected by
         the review model after reading similar candidates and published items.
         """
-        source_session_id = review_session.id if review_session else None
-        if review_session:
-            payload = payload.model_copy(update={
-                "source_employee_id": review_session.employee_id,
-                "source_task_id": review_session.task_id,
-            })
+        source_session_id = review_job.root_session_id if review_job else None
+        if review_job:
+            payload = payload.model_copy(
+                update={
+                    "source_employee_id": review_job.agent_worker_id_snapshot,
+                    "source_task_id": review_job.task_id,
+                }
+            )
         employee, task = await self._validate_source_context(
-            payload.source_employee_id, payload.source_task_id,
+            payload.source_employee_id,
+            payload.source_task_id,
         )
         fingerprint = experience_fingerprint(payload.content_md)
-        actor = "system:nexus-experience-review" if review_session else "manual"
+        actor = "system:nexus-experience-review" if review_job else "manual"
         exact = await self.session.scalar(
-            select(KnowledgeItem).where(
+            select(KnowledgeItem)
+            .where(
                 KnowledgeItem.type == "experience",
                 KnowledgeItem.status.in_(("candidate", "published")),
-                or_(KnowledgeItem.fingerprint == fingerprint,
-                    KnowledgeItem.content_md == payload.content_md),
-            ).order_by(KnowledgeItem.status.desc(), KnowledgeItem.created_at).limit(1)
-            .with_for_update().execution_options(populate_existing=True)
+                or_(KnowledgeItem.fingerprint == fingerprint, KnowledgeItem.content_md == payload.content_md),
+            )
+            .order_by(KnowledgeItem.status.desc(), KnowledgeItem.created_at)
+            .limit(1)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         item = exact
         if merge_into_id and item is None:
-            if not review_session or not merge_reason.strip():
+            if not review_job or not merge_reason.strip():
                 raise LibraryConflict("语义合并必须说明适用条件与方法一致的依据")
-            item = await self.session.scalar(select(KnowledgeItem).where(
-                KnowledgeItem.id == merge_into_id,
-            ).with_for_update().execution_options(populate_existing=True))
+            item = await self.session.scalar(
+                select(KnowledgeItem)
+                .where(
+                    KnowledgeItem.id == merge_into_id,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
             if not item or item.type != "experience" or item.status not in {"candidate", "published"}:
                 raise LibraryConflict("合并目标必须是候选或已发布经验")
         created = item is None
@@ -1431,22 +1436,36 @@ class KnowledgeService:
             # 界面只认识 task / manual / import / system。复盘产物用 task，
             # 这样列表来源是「任务沉淀」并带上来源任务编号。
             item = KnowledgeItem(
-                id=_new_id("KNOW"), title=payload.title, type="experience",
-                summary=payload.summary, content_md=payload.content_md,
-                status="candidate", verification_status="unverified", tags=payload.tags,
-                space_id=await self._experience_space_id(task) if review_session else None,
-                source_type="task" if review_session else "manual",
-                source_ref=payload.source_task_id, source_employee_id=payload.source_employee_id,
-                source_task_id=payload.source_task_id, source_session_id=source_session_id,
-                origin="system_review" if review_session else "manual",
-                dedupe_key="global-experience", fingerprint=fingerprint,
-                experience_type=payload.experience_type or "other", scope=payload.scope,
+                id=_new_id("KNOW"),
+                title=payload.title,
+                type="experience",
+                summary=payload.summary,
+                content_md=payload.content_md,
+                status="candidate",
+                verification_status="unverified",
+                tags=payload.tags,
+                space_id=await self._experience_space_id(task) if review_job else None,
+                source_type="task" if review_job else "manual",
+                source_ref=payload.source_task_id,
+                source_employee_id=payload.source_employee_id,
+                source_task_id=payload.source_task_id,
+                source_session_id=source_session_id,
+                origin="system_review" if review_job else "manual",
+                dedupe_key="global-experience",
+                fingerprint=fingerprint,
+                experience_type=payload.experience_type or "other",
+                scope=payload.scope,
                 source_ref_snapshot={
-                    "task_id": task.id if task else None, "task_title": task.title if task else None,
-                    "employee_id": payload.source_employee_id, "session_id": source_session_id,
-                    "turn_anchor_id": task.last_message_id if task else None, "review_id": review_key,
+                    "task_id": task.id if task else None,
+                    "task_title": task.title if task else None,
+                    "employee_id": payload.source_employee_id,
+                    "session_id": source_session_id,
+                    "turn_anchor_id": review_job.turn_anchor_id if review_job else None,
+                    "review_id": review_key,
                 },
-                experience_data=payload.experience_data, created_by=actor, updated_by=actor,
+                experience_data=payload.experience_data,
+                created_by=actor,
+                updated_by=actor,
             )
             try:
                 # A unique global fingerprint closes concurrent exact inserts.
@@ -1454,10 +1473,14 @@ class KnowledgeService:
                     self.session.add(item)
                     await self.session.flush()
             except IntegrityError:
-                item = await self.session.scalar(select(KnowledgeItem).where(
-                    KnowledgeItem.dedupe_key == "global-experience",
-                    KnowledgeItem.fingerprint == fingerprint,
-                ).with_for_update())
+                item = await self.session.scalar(
+                    select(KnowledgeItem)
+                    .where(
+                        KnowledgeItem.dedupe_key == "global-experience",
+                        KnowledgeItem.fingerprint == fingerprint,
+                    )
+                    .with_for_update()
+                )
                 if item is None or item.status not in {"candidate", "published"}:
                     raise LibraryConflict("重复经验已被归档或拒绝，请人工审核") from None
                 created = False
@@ -1469,50 +1492,68 @@ class KnowledgeService:
             invalidate_experience_verification(item)
             item.updated_by = actor
         # Published content and its approval are immutable to automatic reviews.
-        existing_refs = set((await self.session.execute(select(
-            ExperienceEvidence.source_session_id, ExperienceEvidence.message_id,
-            ExperienceEvidence.part_id, ExperienceEvidence.evidence_type,
-        ).where(ExperienceEvidence.knowledge_id == item.id))).all())
+        existing_refs = set(
+            (
+                await self.session.execute(
+                    select(
+                        ExperienceEvidence.source_session_id,
+                        ExperienceEvidence.message_id,
+                        ExperienceEvidence.part_id,
+                        ExperienceEvidence.evidence_type,
+                    ).where(ExperienceEvidence.knowledge_id == item.id)
+                )
+            ).all()
+        )
         for evidence in payload.evidence:
             ref = (source_session_id, evidence.message_id, evidence.part_id, evidence.evidence_type)
             if ref in existing_refs:
                 continue
             existing_refs.add(ref)
-            self.session.add(ExperienceEvidence(
-                knowledge_id=item.id, task_id=payload.source_task_id,
-                source_session_id=source_session_id, message_id=evidence.message_id,
-                part_id=evidence.part_id, file_path=evidence.file_path, diff_hash=evidence.diff_hash,
-                evidence_type=evidence.evidence_type, content=evidence.content,
-                uri=evidence.uri, result=evidence.result,
-                source_system=evidence.source_system,
-                native_session_id=evidence.native_session_id,
-                source_digest=evidence.source_digest,
-                review_job_id=evidence.review_job_id,
-                validation_status=evidence.validation_status,
-                captured_at=utcnow(),
-            ))
-        if verified_message_id and item.status == "candidate":
-            item.verification_status = "verified"
-            item.verification_message_id = verified_message_id
-            item.verification_session_status = review_session.status
-            item.session_last_message_id_at_verification = review_session.last_message_id
-            item.verified_at = utcnow()
-        if created and review_session:
-            item.session_status_at_submission = review_session.status
+            self.session.add(
+                ExperienceEvidence(
+                    knowledge_id=item.id,
+                    task_id=payload.source_task_id,
+                    source_session_id=source_session_id,
+                    message_id=evidence.message_id,
+                    part_id=evidence.part_id,
+                    file_path=evidence.file_path,
+                    diff_hash=evidence.diff_hash,
+                    evidence_type=evidence.evidence_type,
+                    content=evidence.content,
+                    uri=evidence.uri,
+                    result=evidence.result,
+                    source_system=evidence.source_system,
+                    native_session_id=evidence.native_session_id,
+                    source_digest=evidence.source_digest,
+                    review_job_id=evidence.review_job_id,
+                    validation_status=evidence.validation_status,
+                    captured_at=utcnow(),
+                )
+            )
         await self._audit(
-            item, "candidate_submitted" if created else "experience_reused",
+            item,
+            "candidate_submitted" if created else "experience_reused",
             LibraryPrincipal(user_id=actor, role="viewer"),
-            {"task_id": task.id if task else None, "session_id": source_session_id,
-             "review_id": review_key, "merge_reason": merge_reason,
-             "evidence_count": len(payload.evidence)},
+            {
+                "task_id": task.id if task else None,
+                "session_id": source_session_id,
+                "review_id": review_key,
+                "merge_reason": merge_reason,
+                "evidence_count": len(payload.evidence),
+            },
         )
-        self.session.add(KnowledgeUsage(
-            resource_id=f"astra:{item.id}", knowledge_id=item.id,
-            employee_id=employee.id if employee else None, task_id=task.id if task else None,
-            session_id=source_session_id, tool_name="nexus_experience_review",
-            action="experience_submitted" if created else "experience_reused",
-            result={"status": item.status},
-        ))
+        self.session.add(
+            KnowledgeUsage(
+                resource_id=f"astra:{item.id}",
+                knowledge_id=item.id,
+                employee_id=employee.id if employee else None,
+                task_id=task.id if task else None,
+                session_id=source_session_id,
+                tool_name="nexus_experience_review",
+                action="experience_submitted" if created else "experience_reused",
+                result={"status": item.status},
+            )
+        )
         if commit:
             await self.session.commit()
         else:
@@ -1548,9 +1589,7 @@ class KnowledgeService:
         counts = dict(
             (
                 await self.session.execute(
-                    select(KnowledgeItem.sync_status, func.count()).group_by(
-                        KnowledgeItem.sync_status
-                    )
+                    select(KnowledgeItem.sync_status, func.count()).group_by(KnowledgeItem.sync_status)
                 )
             ).all()
         )

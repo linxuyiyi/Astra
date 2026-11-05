@@ -19,11 +19,11 @@ def test_product_entry_is_nexus_and_astra_env_names_stay():
     with TestClient(app) as client:
         assert client.get("/openapi.json").json()["info"]["title"] == "Nexus API"
         assert client.get("/api/assistant/health").status_code == 404
-        assert client.get("/api/health").status_code == 200
+        assert client.get("/api/system/health").status_code == 200
 
     router = (REPO / "services/nexus-api/web/src/router.ts").read_text()
     assert "/assistant" not in router
-    help_text = (REPO / "services/nexus-api/web/src/views/settings/EmployeeConfig.vue").read_text()
+    help_text = (REPO / "services/nexus-api/web/src/views/settings/WorkerConfig.vue").read_text()
     assert "助手端口" not in help_text
     gateway = (REPO / "services/nexus-api/app/gateway/server.py").read_text()
     assert 'title="Nexus API Gateway"' in gateway

@@ -19,7 +19,7 @@ async def reserve_http_slot(session: AsyncSession, worker_id: str, epoch: int) -
     claimed = await session.execute(
         update(WorkerHttpSlot)
         .where(
-            WorkerHttpSlot.worker_instance_id == worker_id,
+            WorkerHttpSlot.agent_worker_id == worker_id,
             WorkerHttpSlot.epoch == epoch,
             WorkerHttpSlot.inflight < MAX_HTTP_IN_FLIGHT,
         )
@@ -28,8 +28,8 @@ async def reserve_http_slot(session: AsyncSession, worker_id: str, epoch: int) -
     if claimed.rowcount == 1:
         return True
     existing = await session.scalar(
-        select(WorkerHttpSlot.worker_instance_id).where(
-            WorkerHttpSlot.worker_instance_id == worker_id,
+        select(WorkerHttpSlot.agent_worker_id).where(
+            WorkerHttpSlot.agent_worker_id == worker_id,
             WorkerHttpSlot.epoch == epoch,
         )
     )
@@ -37,13 +37,13 @@ async def reserve_http_slot(session: AsyncSession, worker_id: str, epoch: int) -
         return False
     try:
         async with session.begin_nested():
-            session.add(WorkerHttpSlot(worker_instance_id=worker_id, epoch=epoch, inflight=1))
+            session.add(WorkerHttpSlot(agent_worker_id=worker_id, epoch=epoch, inflight=1))
             await session.flush()
     except IntegrityError:
         claimed = await session.execute(
             update(WorkerHttpSlot)
             .where(
-                WorkerHttpSlot.worker_instance_id == worker_id,
+                WorkerHttpSlot.agent_worker_id == worker_id,
                 WorkerHttpSlot.epoch == epoch,
                 WorkerHttpSlot.inflight < MAX_HTTP_IN_FLIGHT,
             )
@@ -57,7 +57,7 @@ async def release_http_slot(session: AsyncSession, worker_id: str, epoch: int) -
     await session.execute(
         update(WorkerHttpSlot)
         .where(
-            WorkerHttpSlot.worker_instance_id == worker_id,
+            WorkerHttpSlot.agent_worker_id == worker_id,
             WorkerHttpSlot.epoch == epoch,
             WorkerHttpSlot.inflight > 0,
         )

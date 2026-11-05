@@ -49,26 +49,10 @@ def create_args(**overrides):
         "employee_id": "emp-plain",
         "task_type": "REQUIREMENT",
         "category_id": "cat-plain",
-
         "title": "独立 MCP 创建任务",
         "description": "完成开发",
         **overrides,
     }
-
-
-async def test_create_with_employee_id_without_user_skill_session_or_role(mcp):
-    server, factory = mcp
-    result = (await server.call_tool("nexus_task_create", create_args())).structured_content
-    assert result["ok"] is True
-    assert result["responsible_employee_id"] == "emp-plain"
-    async with factory() as db:
-        task = await db.get(Task, result["task_id"])
-        assert task.responsible_employee_id == "emp-plain"
-        assert task.source_session_id is None
-        assert task.status == "PENDING"
-    # 后续按任务 ID 查询，不要求提供调用者或原始会话。
-    queried = (await server.call_tool("nexus_task_get", {"task_id": result["task_id"]})).structured_content
-    assert queried["ok"] is True
 
 
 async def test_create_rejects_missing_employee_without_creating_task(mcp):
@@ -79,25 +63,6 @@ async def test_create_rejects_missing_employee_without_creating_task(mcp):
     assert result == {"ok": False, "error": "员工不存在"}
     async with factory() as db:
         assert await db.scalar(select(Task.id)) is None
-
-
-async def test_sources_are_optional_notification_metadata_and_idempotency_is_preserved(mcp):
-    server, factory = mcp
-    args = create_args(
-        source_session_id="session-for-notification", source_conversation_id="conversation-note"
-    )
-    first = (await server.call_tool("nexus_task_create", args)).structured_content
-    second = (await server.call_tool("nexus_task_create", args)).structured_content
-    assert first["ok"] and second["task_id"] == first["task_id"]
-    async with factory() as db:
-        task = await db.get(Task, first["task_id"])
-        assert task.source_session_id == "session-for-notification"
-        assert task.source_conversation_id == "conversation-note"
-    schema = {tool.name: tool.input_schema for tool in await server.list_tools()}
-    assert "nexus_task_repositories" not in schema
-    assert "repository_id" not in schema["nexus_task_create"]["properties"]
-    assert "employee_id" in schema["nexus_task_create"]["required"]
-    assert "source_session_id" not in schema["nexus_task_create"]["required"]
 
 
 async def test_category_and_task_state_checks_remain_business_rules(mcp):

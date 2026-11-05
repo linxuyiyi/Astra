@@ -125,6 +125,7 @@ _STRIPPED_RESPONSE_HEADERS = {
     "content-encoding",
 }
 
+
 @dataclass
 class RequestRecord:
     """调用日志：只保留元数据与测量值，绝不包含 Prompt / Authorization / 响应体。"""
@@ -249,7 +250,7 @@ def elapsed_ms(started: datetime) -> int:
 
 def _frame_has_content(body: Mapping[str, Any]) -> bool:
     """首个非空有效内容 token。
-    
+
     扣除 SSE 注释/控制消息（由上层过滤）后，识别首个具有实际生成的帧：
     1. content: str (标准输出正文)
     2. reasoning_content / reasoning: str (深度思考/推理模型 token，如 DeepSeek R1)
@@ -685,9 +686,7 @@ class GatewayDataPlane:
 
     async def heartbeat_now(self) -> None:
         try:
-            await self.runtime.heartbeat(
-                self.instance_id, self.heartbeat_payload(), self._heartbeat_ttl
-            )
+            await self.runtime.heartbeat(self.instance_id, self.heartbeat_payload(), self._heartbeat_ttl)
         except Exception:  # noqa: BLE001
             pass
 
@@ -859,12 +858,10 @@ class GatewayDataPlane:
                             raise upstream_protocol_error()
                     # 语音转写的 4xx 是客户端音频问题，不应让上游节点降级或开熔断；
                     # 鉴权、限流和 5xx 仍然计入节点失败。
-                    node_failure = not audio or upstream.status_code >= 500 or (
-                        upstream.status_code in {401, 403, 429}
+                    node_failure = (
+                        not audio or upstream.status_code >= 500 or (upstream.status_code in {401, 403, 429})
                     )
-                    await self._complete_non_stream(
-                        record, upstream, node_scope, node_failure=node_failure
-                    )
+                    await self._complete_non_stream(record, upstream, node_scope, node_failure=node_failure)
                     await self._safe_release(SCOPE_NODE, node.id, node_lease)
                     response_content = upstream.content
                     if actual_model != model and 200 <= upstream.status_code < 300:
@@ -949,9 +946,7 @@ class GatewayDataPlane:
             raise key_expired()
         return key
 
-    async def _read_bounded_body(
-        self, request: Request, *, limit: int = MAX_REQUEST_BODY_BYTES
-    ) -> bytes:
+    async def _read_bounded_body(self, request: Request, *, limit: int = MAX_REQUEST_BODY_BYTES) -> bytes:
         """有界读取请求体：先按 Content-Length 拒绝，再按实际流字节强制上限。
 
         不缓存到 ``request._body``，也不回显请求体；超限时抛结构化 413，交由统一
@@ -1001,9 +996,7 @@ class GatewayDataPlane:
         self, *, config: GatewayConfig, model: str, pool: PoolConfig, exclude: set[str]
     ) -> tuple[NodeConfig | None, str | None, dict[str, int]]:
         try:
-            return await self._pick_node_from_runtime(
-                config=config, model=model, pool=pool, exclude=exclude
-            )
+            return await self._pick_node_from_runtime(config=config, model=model, pool=pool, exclude=exclude)
         except GatewayDataPlaneError:
             raise
         except Exception as exc:  # noqa: BLE001 - Redis 失败统一结构化 503
@@ -1043,9 +1036,7 @@ class GatewayDataPlane:
                 Candidate(
                     node,
                     schedule.active,
-                    effective_weight(
-                        node, schedule.hourly, schedule.daily, health_state=schedule.health
-                    ),
+                    effective_weight(node, schedule.hourly, schedule.daily, health_state=schedule.health),
                 )
             )
         for candidate in order_candidates(candidates):
@@ -1190,9 +1181,7 @@ class GatewayDataPlane:
         if not node_scope:
             return
         try:
-            transition = await self.runtime.transition_circuit_open(
-                node_scope, self._circuit_open_seconds
-            )
+            transition = await self.runtime.transition_circuit_open(node_scope, self._circuit_open_seconds)
             await self.runtime.mark_degraded(node_scope)
         except Exception:  # noqa: BLE001
             return
@@ -1201,9 +1190,7 @@ class GatewayDataPlane:
                 node_scope, transition.previous, transition.current, "circuit_open"
             )
 
-    async def _write_circuit_event(
-        self, node_scope: str, previous: str, current: str, kind: str
-    ) -> None:
+    async def _write_circuit_event(self, node_scope: str, previous: str, current: str, kind: str) -> None:
         """只在熔断状态变化时记一条。已经打开或已经关闭时不再为每次失败重复写。"""
 
         node_id = node_scope.split("#", 1)[0]
@@ -1269,9 +1256,7 @@ class GatewayDataPlane:
             (SCOPE_KEY, key.id, key_lease),
         )
         return StreamingResponse(
-            self._stream_body(
-                upstream, record, key, node_id, node_scope, node_lease, key_lease, renewals
-            ),
+            self._stream_body(upstream, record, key, node_id, node_scope, node_lease, key_lease, renewals),
             status_code=upstream.status_code,
             headers=self._forward_response_headers(upstream),
         )
@@ -1401,8 +1386,10 @@ class GatewayDataPlane:
                 if finished and record.key_id:
                     key = await session.get(GatewayKey, record.key_id)
                     used_at = stored.finished_at
-                    if key is not None and used_at is not None and (
-                        key.last_used_at is None or key.last_used_at < used_at
+                    if (
+                        key is not None
+                        and used_at is not None
+                        and (key.last_used_at is None or key.last_used_at < used_at)
                     ):
                         key.last_used_at = used_at
                 await session.commit()

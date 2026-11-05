@@ -69,7 +69,7 @@ def _configured_allow(source: Mapping[str, str]) -> list[str]:
 def child_environ(
     source: Mapping[str, str] | None = None,
     *,
-    env_id: int | None = None,
+    env_id: str | None = None,
 ) -> dict[str, str]:
     env = os.environ if source is None else source
     allowed = set(_EXACT)
@@ -82,5 +82,5 @@ def child_environ(
         if not _blocked(key) and (key in allowed or key.startswith(_PREFIXES))
     }
     if env_id is not None:
-        cleaned["NEXUS_WORKER_ENV_ID"] = str(int(env_id))
+        cleaned["NEXUS_AGENT_WORKER_ID"] = str(env_id)
     return cleaned

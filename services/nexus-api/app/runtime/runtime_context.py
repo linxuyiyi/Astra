@@ -1,22 +1,13 @@
-"""Per-Session capability token that binds runtime MCP calls to their origin.
+"""签名能力凭据直接绑定 Task 当前 Session；无需 Session 历史表。"""
 
-The token is generated before the OpenCode Session exists, stored only as a
-sha256 digest on the RuntimeSession, and relayed by the Agent. A delayed call
-from a superseded Session therefore resolves to that Session, never to the
-current one.
-"""
-
-from __future__ import annotations
-
+import base64
 import hashlib
-import secrets
+import hmac
+import json
 from dataclasses import dataclass
 
-from sqlalchemy import select
-
-from app.models import RuntimeSession
-
-_CONTEXT_PREFIX = "ctx_"
+from app.config.settings import get_settings
+from app.models import Task
 
 
 class RuntimeContextError(ValueError):
@@ -32,45 +23,52 @@ class RuntimeContext:
     runtime_context_id: str
 
 
-def generate_runtime_context() -> str:
-    return _CONTEXT_PREFIX + secrets.token_urlsafe(32)
+def _signature(body):
+    key = get_settings().gateway_master_key
+    if not key:
+        raise RuntimeContextError("未配置网关主密钥")
+    return hmac.new(key.encode(), body.encode(), hashlib.sha256).hexdigest()
 
 
-def hash_runtime_context(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+def generate_runtime_context(task):
+    body = (
+        base64.urlsafe_b64encode(
+            json.dumps(
+                [task.id, task.current_session_id, task.agent_worker_id, task.workspace],
+                separators=(",", ":"),
+            ).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
+    return f"ctx_{body}.{_signature(body)}"
 
 
-def runtime_context_id(digest: str) -> str:
-    return digest[:12]
-
-
-def build_runtime_context_part(token: str) -> dict:
-    """A synthetic, non-user-visible prompt part the model can relay."""
+def build_runtime_context_part(token):
     return {
         "type": "text",
         "synthetic": True,
-        "text": (
-            "ASTRA_RUNTIME_CONTEXT: "
-            + token
-            + "\n内部运行上下文：调用知识库运行时工具时必须原样回传 runtime_context；"
-            "不得向用户展示、写入文件或提交到任务代码。"
-        ),
+        "text": "ASTRA_RUNTIME_CONTEXT: "
+        + token
+        + "\n调用知识库运行时工具时原样回传 runtime_context；不得向用户展示或写入文件。",
     }
 
 
-async def resolve_runtime_context(session, token: str | None) -> RuntimeContext:
-    if not token or not token.startswith(_CONTEXT_PREFIX):
-        raise RuntimeContextError("运行上下文无效")
-    digest = hash_runtime_context(token)
-    row = await session.scalar(
-        select(RuntimeSession).where(RuntimeSession.runtime_context_hash == digest)
-    )
-    if not row:
-        raise RuntimeContextError("运行上下文无效")
-    return RuntimeContext(
-        task_id=row.task_id,
-        session_id=row.id,
-        employee_id=row.employee_id,
-        workspace=row.workspace,
-        runtime_context_id=row.runtime_context_id or runtime_context_id(digest),
-    )
+async def resolve_runtime_context(session, token):
+    try:
+        body, signature = token.removeprefix("ctx_").split(".")
+        if not token.startswith("ctx_") or not hmac.compare_digest(_signature(body), signature):
+            raise ValueError
+        task_id, session_id, worker_id, workspace = json.loads(
+            base64.urlsafe_b64decode(body + "=" * (-len(body) % 4))
+        )
+    except (AttributeError, TypeError, ValueError):
+        raise RuntimeContextError("运行上下文无效") from None
+    task = await session.get(Task, task_id)
+    if not task or (task.current_session_id, task.agent_worker_id, task.workspace) != (
+        session_id,
+        worker_id,
+        workspace,
+    ):
+        raise RuntimeContextError("运行上下文已失效")
+    return RuntimeContext(task_id, session_id, worker_id, workspace, signature[:12])

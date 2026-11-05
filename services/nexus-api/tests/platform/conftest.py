@@ -31,11 +31,7 @@ def isolate_proxy_secret_cache():
 
 @pytest.fixture(autouse=True)
 async def prepare_process_schema():
-    """The process database URL is a fresh file. Create its schema before any lookup.
-
-    Standalone modules such as ``test_waiting_reason`` use their own engine, while
-    ``environment_uses_worker`` queries ``WorkerInstance`` through SessionLocal.
-    """
+    """Create the isolated process schema before any lookup."""
 
     import app.gateway.models  # noqa: F401 - register gateway tables
     from app.database import engine, init_database
@@ -46,9 +42,7 @@ async def prepare_process_schema():
     from app.gateway.models import GatewayProbeRun
 
     async with engine.begin() as connection:
-        await connection.run_sync(
-            lambda sync: GatewayProbeRun.__table__.create(sync, checkfirst=True)
-        )
+        await connection.run_sync(lambda sync: GatewayProbeRun.__table__.create(sync, checkfirst=True))
 
 
 @pytest.fixture(autouse=True)

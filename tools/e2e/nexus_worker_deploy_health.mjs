@@ -1,112 +1,106 @@
-// 隔离 UI 回归：API 全部使用夹具，不连接或修改真实 Worker。
-import { createRequire } from 'node:module';
-import assert from 'node:assert/strict';
-import path from 'node:path';
-import fs from 'node:fs/promises';
-const require = createRequire(import.meta.url);
-const { chromium } = require(process.env.PLAYWRIGHT_PATH || path.resolve('frontend/node_modules/playwright'));
-const baseUrl = process.env.UI_BASE_URL || 'http://127.0.0.1:15189';
-const outputDir = process.env.UI_EVIDENCE_DIR || '/tmp/nexus-worker-deploy-health-ui';
-await fs.mkdir(outputDir, { recursive: true });
-const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
-const errors = [];
-const requests = [];
-page.on('pageerror', error => errors.push(error.message));
-await page.addInitScript(() => localStorage.setItem('nexus_owner_id', 'worker-regression'));
-const timestamp = '2026-11-02T00:00:00Z';
-const health = {
-  environment_id: 1, employee_id: 'w1', enabled: true, readiness: 'DRIFTED',
-  target_digest: 'fixture', target_matched: true, schedulable: false,
-  connection: { state: 'online', channel: 'worker', epoch: 3, last_heartbeat_at: timestamp, observed_at: timestamp },
-  runtime_health: { status: 'DRIFTED', readiness: 'DRIFTED', last_checked_at: timestamp,
-    last_error: 'OpenCode 启动失败：fixture bind failed', equipment: [] },
-  repository: null,
-  maintenance: { state: 'FAILED', operation_id: 'op-old', stage: 'failed' },
-  blocking: [{ code: 'config_drifted', message: '配置待同步，请执行一键部署' }],
-};
+// 桌面维护 UI 回归：API 夹具隔离真实 Worker；验证当前 v1.5.0 扁平结构。
+import { createRequire } from 'node:module'
+import assert from 'node:assert/strict'
+import path from 'node:path'
+import fs from 'node:fs/promises'
+const require = createRequire(import.meta.url)
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || path.resolve('frontend/node_modules/playwright'))
+const baseUrl = process.env.UI_BASE_URL || 'http://127.0.0.1:15189'
+const outputDir = process.env.UI_EVIDENCE_DIR || '/tmp/nexus-v150-worker-ui'
+await fs.mkdir(outputDir, { recursive: true })
+const browser = await chromium.launch({ headless: true })
+const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } })
+const errors = [], requests = []
+page.on('pageerror', error => errors.push(error.message))
+await page.addInitScript(() => {
+  localStorage.setItem('nexus_owner_id', 'isolated-ui-test')
+  document.cookie = 'nexus_uid=isolated-ui-test; Path=/; SameSite=Lax'
+})
+const timestamp = '2026-11-05T00:00:00Z'
 const worker = {
-  id: 'w1', name: '测试 Worker', role: '开发', description: '', enabled: true,
-  auto_claim: true, auto_execute: false, task_types: ['ISSUE'], category_ids: [],
-  digital_employee_id: null, status: 'IDLE', current_task_count: 0, worker_health: health,
-  execution_environment: { id: 1, employee_id: 'w1', mode: 'LINUX_REMOTE', runtime_engine: 'opencode',
-    name: '构建 Worker 01', host: 'fixture.invalid', port: 22, username: 'nexus',
-    workspace_root: '/srv/project', opencode_server_port: 14096, status: 'DRIFTED',
-    labels: [], status_detail: {}, opencode_path: 'opencode', has_ssh_password: true },
-};
-const oldOperation = {
-  id: 'op-old', environment_id: 1, action: 'check', state: 'FAILED', stage: 'failed',
-  attempt: 1, requested_by: 'regression', requested_at: timestamp, cancel_requested: false,
-  error_code: 'health_check_failed', error_message: '健康检查未通过',
-  target_revision: {}, after_snapshot: {}, events: [],
-};
-let activeOperation = null;
-let streamCount = 0;
+  id: 'w1', name: '构建 Worker 01', description: '', enabled: true,
+  task_types: ['ISSUE'], category_ids: [], status: 'OFFLINE',
+  runtime_engine: 'opencode', mode: 'LINUX_REMOTE', host: 'fixture.invalid', port: 22,
+  username: 'nexus', workspace_root: '/srv/project', model_name: 'route-test',
+  repository_url: null, branch: null, skill_refs: [], mcp_refs: [],
+  has_ssh_password: true, has_git_token: false, epoch: 3,
+  last_heartbeat_at: timestamp, agent_version: '1.5.0', created_at: timestamp, updated_at: timestamp,
+}
+const health = { readiness: 'UNKNOWN', blocking: [{ message: 'Worker 尚未连接' }] }
+let operation = {
+  id: 'op-expired', agent_worker_id: 'w1', action: 'deploy', state: 'FAILED',
+  stage: 'stop_unconfirmed', error_message: '控制进程失联，等待确认远端已停止',
+}
+let deployed = false
+let streams = 0
 await page.route('**/api/**', async route => {
-  const req = route.request();
-  const pathname = new URL(req.url()).pathname;
-  if (!pathname.startsWith('/api/')) return route.continue();
-  requests.push({ pathname, method: req.method(), body: req.postDataJSON() });
-  let data = [];
-  if (pathname === '/api/agent-workers') data = [worker];
-  else if (pathname === '/api/agent-workers/w1' && req.method() === 'PATCH') {
-    worker.enabled = req.postDataJSON().enabled;
-    health.enabled = worker.enabled;
-    data = worker;
-  } else if (pathname === '/api/agent-workers/1/health') data = health;
-  else if (pathname === '/api/agent-workers/1/maintenance' && req.method() === 'POST') {
-    assert.deepEqual(req.postDataJSON(), { action: 'deploy' });
-    activeOperation = { ...oldOperation, id: 'op-deploy', action: 'deploy', state: 'QUEUED', stage: 'queued' };
-    data = activeOperation;
-  } else if (pathname === '/api/agent-workers/1/maintenance') {
-    data = { items: activeOperation ? [activeOperation, oldOperation] : [oldOperation] };
-  } else if (pathname.endsWith('/events') && pathname.startsWith('/api/maintenance/')) {
-    streamCount += 1;
-    activeOperation = { ...activeOperation, state: 'SUCCEEDED', stage: 'completed' };
-    return route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'event: end\ndata: {}\n\n' });
-  } else if (pathname === '/api/maintenance/op-old') data = oldOperation;
-  else if (pathname === '/api/maintenance/op-deploy') data = activeOperation;
-  else if (pathname === '/api/v1/employees') data = { items: [] };
-  else if (pathname.includes('metrics')) data = {};
-  else if (pathname.includes('stream')) return route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' });
-  return route.fulfill({ json: data });
-});
+  const req = route.request(), url = new URL(req.url()), pathname = url.pathname
+  requests.push({ pathname, method: req.method() })
+  let data = []
+  if (pathname === '/api/workers') data = [worker]
+  else if (pathname === '/api/workers/w1') {
+    if (req.method() === 'PUT') {
+      assert.equal('id' in req.postDataJSON(), false)
+      Object.assign(worker, req.postDataJSON())
+    }
+    data = worker
+  } else if (pathname === '/api/workers/w1/health') data = health
+  else if (pathname === '/api/maintenance/op-expired/confirm-stopped') {
+    operation = { ...operation, stage: 'stopped_confirmed' }
+    data = operation
+  } else if (pathname === '/api/workers/w1/maintenance') {
+    if (req.method() === 'POST') {
+      assert.equal(req.postDataJSON().action, 'deploy')
+      operation = { ...operation, id: 'op-deploy', state: 'QUEUED', stage: 'queued', error_message: null }
+      deployed = true
+    }
+    data = req.method() === 'POST' ? operation : { items: [operation] }
+  } else if (pathname === '/api/maintenance/op-deploy/events') {
+    streams += 1
+    operation = { ...operation, state: 'SUCCEEDED', stage: 'completed' }
+    const event = { id: 2, name: '就绪验收', message: '部署完成：当前连接代次验证通过' }
+    return route.fulfill({ contentType: 'text/event-stream', body: `id: 2\nevent: message\ndata: ${JSON.stringify(event)}\n\nevent: end\ndata: {}\n\n` })
+  } else if (pathname.endsWith('/events/page')) data = { items: [{ id: 1, name: '部署配置', message: '凭据已重新签发并启动 Worker' }], next_cursor: null }
+  else if (pathname === '/api/v1/employees') data = { items: [] }
+  else if (pathname === '/api/v1/runtime') data = { agentscope_version: '2.0.10', configured: false, reachable: false }
+  else if (pathname.includes('metrics')) data = {}
+  else if (pathname.includes('stream')) return route.fulfill({ contentType: 'text/event-stream', body: '' })
+  return route.fulfill({ json: data })
+})
 try {
-  await page.goto(`${baseUrl}/settings/workers`);
-  await page.getByText('构建 Worker 01', { exact: true }).waitFor();
-  assert.equal(await page.getByText('待同步', { exact: true }).count(), 1);
-  assert.equal(requests.filter(req => req.pathname.endsWith('/health')).length, 0);
-  await page.screenshot({ path: path.join(outputDir, 'worker-list.png'), fullPage: true });
-  await page.getByRole('button', { name: '查看', exact: true }).click();
-  await page.getByRole('tab', { name: '维护', exact: true }).click();
-  await page.getByText('待同步，请点一键部署应用已保存的配置。', { exact: true }).waitFor();
-  await page.getByText('OpenCode 启动失败：fixture bind failed', { exact: true }).waitFor();
-  assert.equal(streamCount, 0, '终态记录不订阅 SSE');
-  const enabledSwitch = page.getByTestId('worker-enabled').locator('.el-switch__core');
-  await enabledSwitch.click();
-  await page.waitForFunction(() => document.querySelector('[data-testid="worker-enabled"] input')?.getAttribute('aria-checked') === 'false');
-  assert.equal(worker.enabled, false);
-  assert.equal(requests.filter(req => req.method === 'POST' && req.pathname.endsWith('/maintenance')).length, 0);
-  await enabledSwitch.click();
-  await page.waitForFunction(() => document.querySelector('[data-testid="worker-enabled"] input')?.getAttribute('aria-checked') === 'true');
-  assert.equal(worker.enabled, true);
-  await page.screenshot({ path: path.join(outputDir, 'worker-maintenance.png'), fullPage: true });
-  await page.getByTestId('deploy-environment').click();
-  await page.getByRole('dialog').getByRole('button', { name: '一键部署', exact: true }).click();
-  await page.waitForResponse(response => response.url().includes('/api/maintenance/op-deploy/events'));
-  await page.getByText('成功', { exact: true }).first().waitFor();
-  assert.ok(streamCount >= 1, '活跃操作订阅 SSE');
-  assert.equal(requests.some(req => /reconcile|\/disable|\/restore/.test(req.pathname)), false);
-  assert.deepEqual(errors, []);
-  await fs.writeFile(path.join(outputDir, 'result.json'), JSON.stringify({
-    result: 'passed', listHealthRequests: 0, enabledPatches: requests.filter(req => req.method === 'PATCH').length,
-    streamCount, errors,
-  }, null, 2));
-  console.log(JSON.stringify({ result: 'passed', outputDir, streamCount }));
+  await page.goto(`${baseUrl}/settings/workers`)
+  await page.getByText(worker.name, { exact: true }).waitFor()
+  await page.screenshot({ path: path.join(outputDir, 'worker-list.png'), fullPage: true })
+  await page.getByText(worker.name, { exact: true }).click()
+  await page.getByRole('heading', { name: worker.name }).waitFor()
+  await page.getByRole('button', { name: '确认远端已停止', exact: true }).waitFor()
+  assert.equal(await page.getByRole('button', { name: '一键部署', exact: true }).isDisabled(), true)
+  await page.getByRole('button', { name: '确认远端已停止', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '确定', exact: true }).click()
+  await page.getByRole('button', { name: '一键部署', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '确定', exact: true }).click()
+  await page.getByText('成功', { exact: true }).waitFor()
+  assert.equal(deployed, true)
+  assert.equal(streams, 1)
+  await page.getByText('成功', { exact: true }).click()
+  await page.getByText('凭据已重新签发并启动 Worker', { exact: true }).waitFor()
+  await page.screenshot({ path: path.join(outputDir, 'worker-maintenance.png'), fullPage: true })
+  await page.getByRole('button', { name: '编辑配置', exact: true }).click()
+  await page.getByRole('dialog').getByText('SSH 密码', { exact: true }).waitFor()
+  const password = page.getByRole('dialog').locator('input[type="password"]').first()
+  assert.equal(await password.inputValue(), '')
+  await page.getByRole('dialog').locator('.el-switch__core').click()
+  await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click()
+  await page.getByRole('dialog').waitFor({ state: 'hidden' })
+  assert.equal(worker.enabled, false)
+  assert.deepEqual(errors, [])
+  assert.equal(requests.some(req => req.pathname.includes('agent-workers')), false)
+  await fs.writeFile(path.join(outputDir, 'result.json'), JSON.stringify({ result: 'passed', streams, requests, errors }, null, 2))
+  console.log(JSON.stringify({ result: 'passed', outputDir }))
 } catch (error) {
-  console.error(JSON.stringify({ errors, requests, body: await page.locator('body').innerText() }));
-  await page.screenshot({ path: path.join(outputDir, 'failure.png'), fullPage: true });
-  throw error;
+  await page.screenshot({ path: path.join(outputDir, 'failure.png'), fullPage: true })
+  console.error(JSON.stringify({ errors, body: await page.locator('body').innerText() }))
+  throw error
 } finally {
-  await browser.close();
+  await browser.close()
 }

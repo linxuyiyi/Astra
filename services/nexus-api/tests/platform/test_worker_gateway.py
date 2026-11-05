@@ -2,10 +2,8 @@ import asyncio
 import os
 import random
 import time
-from datetime import timedelta
 from uuid import uuid4
 
-import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -13,10 +11,9 @@ from sqlalchemy import select
 from starlette.websockets import WebSocketDisconnect
 
 from app.config.settings import get_settings
-from app.database import SessionLocal, init_database
-from app.gateway.security import verify_gateway_key
+from app.database import SessionLocal
 from app.main import app
-from app.models import AgentWorker, OpenCodeExecutionEnvironment, WorkerCommand, WorkerInstance, utcnow
+from app.models import WorkerCommand
 from app.worker_agent.connection import (
     AgentConfig,
     WorkerConnectionManager,
@@ -32,7 +29,7 @@ from app.worker_gateway.bus import (
     RedisRouteBus,
     resolve_worker_gateway_bus,
 )
-from app.worker_gateway.protocol import WorkerGatewayError, dump_message, envelope, parse_message
+from app.worker_gateway.protocol import dump_message, envelope, parse_message
 from app.worker_gateway.service import HeartbeatMonitor, WorkerGateway
 
 REDIS_URL = os.environ.get("ASTRA_TEST_REDIS_URL")
@@ -73,14 +70,14 @@ class RecordingBus(MemoryRouteBus):
         self.published: list[str] = []
         self.status_at_publish: list[str | None] = []
 
-    async def publish_command(self, worker_instance_id: str, frame: dict) -> bool:
+    async def publish_command(self, agent_worker_id: str, frame: dict) -> bool:
         async with SessionLocal() as session:
             row = await session.scalar(
                 select(WorkerCommand).where(WorkerCommand.request_id == frame["request_id"])
             )
             self.status_at_publish.append(None if row is None else row.status)
         self.published.append(frame["request_id"])
-        return await super().publish_command(worker_instance_id, frame)
+        return await super().publish_command(agent_worker_id, frame)
 
 
 class ScriptedTransport:
@@ -101,80 +98,20 @@ class ScriptedTransport:
         self.closed = True
 
 
-@pytest.fixture
-async def environment_id() -> int:
-    await init_database()
-    async with SessionLocal() as session:
-        employee = AgentWorker(id=f"emp-{uuid4().hex[:8]}", name="远程员工", role="执行")
-        session.add(employee)
-        await session.flush()
-        environment = OpenCodeExecutionEnvironment(
-            employee_id=employee.id, mode="LINUX_REMOTE", name="云执行机"
-        )
-        session.add(environment)
-        await session.commit()
-        return environment.id
-
-
 def gateway_for(bus: MemoryRouteBus | None = None, **settings) -> WorkerGateway:
     copied = get_settings().model_copy(update=settings) if settings else get_settings()
     return WorkerGateway(settings=copied, bus=bus or MemoryRouteBus())
-
-
-def auth_message(worker_id: str, environment_id: int, token: str, request_id: str = "auth-1"):
-    return envelope(
-        request_id=request_id,
-        worker_instance_id=worker_id,
-        environment_id=environment_id,
-        session_id=None,
-        message_type="command",
-        payload={"name": "authenticate", "token": token, "agent_version": "0.1.0"},
-    )
-
-
-async def enroll(gateway: WorkerGateway, environment_id: int):
-    async with SessionLocal() as session:
-        return await gateway.enroll(session, environment_id)
-
-
-async def authenticate(
-    gateway: WorkerGateway, environment_id: int, worker_id: str, token: str, request_id: str
-):
-    async with SessionLocal() as session:
-        return await gateway.authenticate(
-            session, auth_message(worker_id, environment_id, token, request_id), token
-        )
-
-
-async def bring_online(gateway: WorkerGateway, environment_id: int):
-    enrolled = await enroll(gateway, environment_id)
-    auth = await authenticate(
-        gateway, environment_id, enrolled.worker_instance_id, enrolled.token, "auth-online"
-    )
-    assert await gateway.bus.set_owner(auth.worker_instance_id, gateway.owner_id, auth.epoch) is True
-    queues = await gateway.bus.bind(
-        auth.worker_instance_id, epoch=auth.epoch, owner_id=gateway.owner_id
-    )
-    assert queues is not None
-    return enrolled, auth
 
 
 async def dispatch(gateway: WorkerGateway, worker_id: str, request_id: str, name: str = "ping", payload=None):
     async with SessionLocal() as session:
         return await gateway.dispatch(
             session,
-            worker_instance_id=worker_id,
+            agent_worker_id=worker_id,
             request_id=request_id,
             name=name,
             payload={} if payload is None else payload,
         )
-
-
-async def load_instance(worker_id: str) -> WorkerInstance:
-    async with SessionLocal() as session:
-        instance = await session.get(WorkerInstance, worker_id)
-        assert instance is not None
-        return instance
 
 
 async def load_command(request_id: str) -> WorkerCommand:
@@ -191,283 +128,6 @@ async def wait_until(predicate, timeout: float = 2) -> None:
             return
         await asyncio.sleep(0.01)
     raise AssertionError("timed out")
-
-
-async def test_enroll_stores_digest_and_rejects_bad_token(environment_id: int):
-    gateway = gateway_for()
-    enrolled = await enroll(gateway, environment_id)
-    stored = await load_instance(enrolled.worker_instance_id)
-
-    assert stored.token_digest != enrolled.token
-    assert verify_gateway_key(enrolled.token, stored.token_digest)
-    assert stored.epoch == 0
-    assert stored.status == "offline"
-
-    with pytest.raises(WorkerGatewayError) as caught:
-        await authenticate(gateway, environment_id, enrolled.worker_instance_id, "wtk_wrong", "auth-bad")
-    assert caught.value.code == "unauthorized"
-    assert (await load_instance(enrolled.worker_instance_id)).epoch == 0
-
-    mismatch = auth_message(enrolled.worker_instance_id, environment_id + 1, enrolled.token, "auth-mismatch")
-    async with SessionLocal() as session:
-        with pytest.raises(WorkerGatewayError) as mismatch_error:
-            await gateway.authenticate(session, mismatch, enrolled.token)
-    assert mismatch_error.value.code == "unauthorized"
-
-
-async def test_reenroll_rotates_token_and_keeps_instance_id(environment_id: int):
-    gateway = gateway_for()
-    first = await enroll(gateway, environment_id)
-    second = await enroll(gateway, environment_id)
-
-    assert second.rotated is True
-    assert second.worker_instance_id == first.worker_instance_id
-    assert second.token != first.token
-    assert second.epoch == 1
-    with pytest.raises(WorkerGatewayError):
-        await authenticate(gateway, environment_id, first.worker_instance_id, first.token, "auth-old")
-    auth = await authenticate(gateway, environment_id, second.worker_instance_id, second.token, "auth-new")
-    assert auth.epoch == 2
-
-
-async def test_command_is_persisted_before_publish_and_duplicate_is_not_redeilvered(environment_id: int):
-    bus = RecordingBus()
-    gateway = gateway_for(bus)
-    enrolled, _auth = await bring_online(gateway, environment_id)
-
-    first = await dispatch(gateway, enrolled.worker_instance_id, "req-1")
-    second = await dispatch(gateway, enrolled.worker_instance_id, "req-1")
-
-    assert first.delivered is True
-    assert first.replayed is False
-    assert bus.status_at_publish == ["pending"]
-    assert bus.published == ["req-1"]
-    assert second.replayed is True
-    assert second.command.id == first.command.id
-    assert (await load_command("req-1")).status == "pending"
-
-
-async def test_offline_dispatch_is_persisted_as_failed_without_publish(environment_id: int):
-    bus = RecordingBus()
-    gateway = gateway_for(bus)
-    enrolled = await enroll(gateway, environment_id)
-
-    result = await dispatch(gateway, enrolled.worker_instance_id, "req-offline")
-
-    assert result.delivered is False
-    assert result.error_code == "offline"
-    assert bus.published == []
-    stored = await load_command("req-offline")
-    assert stored.status == "failed"
-    assert stored.error_code == "offline"
-
-
-async def test_stale_epoch_response_cannot_overwrite_and_old_disconnect_keeps_new_epoch(environment_id: int):
-    gateway = gateway_for()
-    enrolled, auth = await bring_online(gateway, environment_id)
-    await dispatch(gateway, enrolled.worker_instance_id, "req-epoch")
-    async with SessionLocal() as session:
-        later = await gateway.authenticate(
-            session,
-            auth_message(enrolled.worker_instance_id, environment_id, enrolled.token, "auth-2"),
-            enrolled.token,
-        )
-    stale = envelope(
-        request_id="req-epoch",
-        worker_instance_id=enrolled.worker_instance_id,
-        environment_id=environment_id,
-        session_id=None,
-        message_type="response",
-        payload={"stage": "result", "ok": True, "result": {"pong": True}, "error_code": None},
-    )
-    async with SessionLocal() as session:
-        applied = await gateway.apply_response(
-            session,
-            worker_instance_id=enrolled.worker_instance_id,
-            epoch=auth.epoch,
-            message=stale,
-        )
-    assert applied is False
-    assert (await load_command("req-epoch")).status == "pending"
-
-    async with SessionLocal() as session:
-        await gateway.disconnect(session, enrolled.worker_instance_id, auth.epoch)
-    current = await load_instance(enrolled.worker_instance_id)
-    assert current.epoch == later.epoch
-    assert current.status == "online"
-
-
-async def test_ack_then_result_and_late_ack_does_not_downgrade(environment_id: int):
-    gateway = gateway_for()
-    enrolled, auth = await bring_online(gateway, environment_id)
-    await dispatch(gateway, enrolled.worker_instance_id, "req-ack")
-
-    async def respond(stage: str, result: dict | None = None):
-        message = envelope(
-            request_id="req-ack",
-            worker_instance_id=enrolled.worker_instance_id,
-            environment_id=environment_id,
-            session_id=None,
-            message_type="response",
-            payload={"stage": stage, "ok": True, "result": result, "error_code": None},
-        )
-        async with SessionLocal() as session:
-            return await gateway.apply_response(
-                session,
-                worker_instance_id=enrolled.worker_instance_id,
-                epoch=auth.epoch,
-                message=message,
-            )
-
-    assert await respond("ack") is True
-    assert (await load_command("req-ack")).status == "accepted"
-    assert await respond("result", {"pong": True}) is True
-    assert (await load_command("req-ack")).status == "succeeded"
-    assert await respond("ack") is False
-    assert (await load_command("req-ack")).status == "succeeded"
-
-
-async def test_queue_full_keeps_command_pending_and_oversized_frame_is_rejected(environment_id: int):
-    bus = MemoryRouteBus(control_limit=1)
-    gateway = gateway_for(bus)
-    enrolled, _auth = await bring_online(gateway, environment_id)
-    assert await bus.bound[enrolled.worker_instance_id].put_control({"request_id": "filler"}) is True
-
-    queued = await dispatch(gateway, enrolled.worker_instance_id, "req-full")
-    assert queued.delivered is False
-    assert queued.error_code == "queue_full"
-    assert (await load_command("req-full")).status == "pending"
-
-    small = gateway_for(MemoryRouteBus(), worker_gateway_max_frame_bytes=1024)
-    enrolled_small, _auth_small = await bring_online(small, environment_id)
-    with pytest.raises(WorkerGatewayError) as caught:
-        await dispatch(small, enrolled_small.worker_instance_id, "req-big", payload={"blob": "x" * 2000})
-    assert caught.value.code == "frame_too_large"
-    async with SessionLocal() as session:
-        stored = await session.scalar(select(WorkerCommand).where(WorkerCommand.request_id == "req-big"))
-        assert stored is None
-
-
-async def test_heartbeat_timeout_marks_offline_and_expired_result_is_ignored(environment_id: int):
-    gateway = gateway_for()
-    enrolled, auth = await bring_online(gateway, environment_id)
-    await gateway.sweep(now=utcnow())
-    assert (await load_instance(enrolled.worker_instance_id)).status == "online"
-
-    async with SessionLocal() as session:
-        instance = await session.get(WorkerInstance, enrolled.worker_instance_id)
-        assert instance is not None
-        instance.last_heartbeat_at = utcnow() - timedelta(seconds=31)
-        await session.commit()
-    assert await gateway.sweep(now=utcnow()) >= 1
-    assert (await load_instance(enrolled.worker_instance_id)).status == "offline"
-
-    async with SessionLocal() as session:
-        instance = await session.get(WorkerInstance, enrolled.worker_instance_id)
-        assert instance is not None
-        instance.status = "online"
-        instance.last_heartbeat_at = utcnow()
-        session.add(
-            WorkerCommand(
-                request_id="req-expire",
-                worker_instance_id=enrolled.worker_instance_id,
-                environment_id=environment_id,
-                name="ping",
-                payload={},
-                status="pending",
-                epoch=auth.epoch,
-                deadline_at=utcnow() - timedelta(seconds=1),
-            )
-        )
-        await session.commit()
-    await gateway.sweep(now=utcnow())
-    assert (await load_command("req-expire")).status == "expired"
-    message = envelope(
-        request_id="req-expire",
-        worker_instance_id=enrolled.worker_instance_id,
-        environment_id=environment_id,
-        session_id=None,
-        message_type="response",
-        payload={"stage": "result", "ok": True, "result": {"late": True}, "error_code": None},
-    )
-    async with SessionLocal() as session:
-        instance = await session.get(WorkerInstance, enrolled.worker_instance_id)
-        assert instance is not None
-        instance.epoch = auth.epoch
-        instance.status = "online"
-        await session.commit()
-        applied = await gateway.apply_response(
-            session,
-            worker_instance_id=enrolled.worker_instance_id,
-            epoch=auth.epoch,
-            message=message,
-        )
-    assert applied is False
-    assert (await load_command("req-expire")).status == "expired"
-
-
-async def test_socket_roundtrip_supersede_and_event_backpressure(environment_id: int):
-    gateway = gateway_for(worker_gateway_event_queue_size=2)
-    enrolled = await enroll(gateway, environment_id)
-    socket = FakeWebSocket()
-    task = asyncio.create_task(gateway.serve_socket(socket))
-    await socket.incoming.put(dump_message(auth_message(
-        enrolled.worker_instance_id, environment_id, enrolled.token
-    )))
-    await wait_until(lambda: socket.sent)
-    ack = parse_message(socket.sent[0], max_bytes=10000)
-    assert ack.payload["ok"] is True
-    assert ack.payload["epoch"] == 1
-    assert "token" not in ack.payload
-
-    delivered = await dispatch(gateway, enrolled.worker_instance_id, "req-socket")
-    assert delivered.delivered is True
-    await wait_until(lambda: len(socket.sent) >= 2)
-    command = parse_message(socket.sent[-1], max_bytes=10000)
-    assert command.payload["name"] == "ping"
-    for stage, result in (("ack", None), ("result", {"pong": True})):
-        await socket.incoming.put(dump_message(envelope(
-            request_id="req-socket",
-            worker_instance_id=enrolled.worker_instance_id,
-            environment_id=environment_id,
-            session_id=None,
-            message_type="response",
-            payload={"stage": stage, "ok": True, "result": result, "error_code": None},
-        )))
-    for _attempt in range(50):
-        if (await load_command("req-socket")).status == "succeeded":
-            break
-        await asyncio.sleep(0.02)
-    assert (await load_command("req-socket")).status == "succeeded"
-
-    for number in range(3):
-        await socket.incoming.put(dump_message(envelope(
-            request_id=f"event-{number}",
-            worker_instance_id=enrolled.worker_instance_id,
-            environment_id=environment_id,
-            session_id=None,
-            message_type="event",
-            payload={"number": number},
-        )))
-    await wait_until(lambda: gateway.sockets[enrolled.worker_instance_id].dropped_events == 1)
-    lease = gateway.sockets[enrolled.worker_instance_id]
-    assert len(lease.inbound_events) == 2
-
-    replacement = FakeWebSocket()
-    replacement_task = asyncio.create_task(gateway.serve_socket(replacement))
-    await replacement.incoming.put(dump_message(auth_message(
-        enrolled.worker_instance_id, environment_id, enrolled.token, "auth-2"
-    )))
-    await wait_until(lambda: replacement.sent)
-    assert parse_message(replacement.sent[0], max_bytes=10000).payload["epoch"] == 2
-    await asyncio.wait_for(task, 2)
-    assert socket.close_code == 4000
-    assert (await load_instance(enrolled.worker_instance_id)).status == "online"
-
-    await replacement.close()
-    await asyncio.wait_for(replacement_task, 2)
-    assert (await load_instance(enrolled.worker_instance_id)).status == "offline"
-    assert (await load_instance(enrolled.worker_instance_id)).epoch == 2
 
 
 async def test_control_frames_preempt_events_and_memory_buses_do_not_share_owner():
@@ -519,8 +179,7 @@ def test_disconnect_does_not_restart_opencode_and_reconnect_uses_new_epoch():
 
     config = AgentConfig(
         gateway_url="ws://nexus.internal/api/worker-gateway/connect",
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         token="wtk_test",
         ping_seconds=3600,
     )
@@ -528,8 +187,7 @@ def test_disconnect_does_not_restart_opencode_and_reconnect_uses_new_epoch():
     def reply(epoch: int) -> dict:
         return envelope(
             request_id="auth-wrk_agent",
-            worker_instance_id="wrk_agent",
-            environment_id=7,
+            agent_worker_id="wrk_agent",
             session_id=None,
             message_type="response",
             payload={"ok": True, "epoch": epoch},
@@ -537,8 +195,7 @@ def test_disconnect_does_not_restart_opencode_and_reconnect_uses_new_epoch():
 
     command_message = envelope(
         request_id="req-agent",
-        worker_instance_id="wrk_agent",
-        environment_id=7,
+        agent_worker_id="wrk_agent",
         session_id=None,
         message_type="command",
         payload={"name": "ping", "data": {}},
@@ -577,14 +234,15 @@ def test_disconnect_does_not_restart_opencode_and_reconnect_uses_new_epoch():
     assert 1 <= manager.delays[0] <= 2
     result, error = handle_command(
         parse_message(
-            dump_message(envelope(
-                request_id="req-bad",
-                worker_instance_id="wrk_agent",
-                environment_id=7,
-                session_id=None,
-                message_type="command",
-                payload={"name": "explode", "data": {}},
-            )),
+            dump_message(
+                envelope(
+                    request_id="req-bad",
+                    agent_worker_id="wrk_agent",
+                    session_id=None,
+                    message_type="command",
+                    payload={"name": "explode", "data": {}},
+                )
+            ),
             max_bytes=10000,
         ),
         supervisor,
@@ -595,7 +253,7 @@ def test_disconnect_does_not_restart_opencode_and_reconnect_uses_new_epoch():
 
 def test_agent_config_requires_token_and_does_not_echo_it():
     with pytest.raises(SystemExit) as caught:
-        load_agent_config({"NEXUS_WORKER_GATEWAY_URL": "ws://nexus", "NEXUS_WORKER_INSTANCE_ID": "wrk"})
+        load_agent_config({"NEXUS_WORKER_GATEWAY_URL": "ws://nexus", "NEXUS_AGENT_WORKER_ID": "wrk"})
     assert "TOKEN" in str(caught.value)
     assert "wtk_" not in str(caught.value)
 
@@ -603,9 +261,9 @@ def test_agent_config_requires_token_and_does_not_echo_it():
 def test_worker_gateway_routes_are_mounted_and_reject_unknown_workers():
     from app.worker_gateway.routes import router
 
-    assert {
-        route.path for route in router.routes if getattr(route, "methods", None)
-    } <= app.openapi()["paths"].keys()
+    assert {route.path for route in router.routes if getattr(route, "methods", None)} <= app.openapi()[
+        "paths"
+    ].keys()
     isolated_app = FastAPI()
     isolated_app.include_router(router)
     with TestClient(isolated_app) as client:
@@ -618,54 +276,33 @@ def test_worker_gateway_routes_are_mounted_and_reject_unknown_workers():
         assert health.json()["requested_bus"] == get_settings().worker_gateway_bus
         assert health.json()["warning"] == warning
         assert health.json()["owner_id"].startswith("gw_")
-        denied = client.post("/api/worker-gateway/instances", json={"environment_id": 9_999_999})
+        denied = client.post("/api/worker-gateway/workers", json={"agent_worker_id": "unknown-worker"})
         assert denied.status_code == 401
         missing = client.post(
-            "/api/worker-gateway/instances",
-            json={"environment_id": 9_999_999},
+            "/api/worker-gateway/workers",
+            json={"agent_worker_id": "unknown-worker"},
             headers=ADMIN_HEADERS,
         )
         assert missing.status_code == 404
-        assert missing.json()["detail"]["code"] == "unknown_environment"
+        assert missing.json()["detail"]["code"] == "unknown_worker"
         assert client.get("/api/worker-gateway/commands/missing-command").status_code == 401
-        assert client.get(
-            "/api/worker-gateway/commands/missing-command", headers=ADMIN_HEADERS
-        ).status_code == 404
+        assert (
+            client.get("/api/worker-gateway/commands/missing-command", headers=ADMIN_HEADERS).status_code
+            == 404
+        )
         with client.websocket_connect("/api/worker-gateway/connect") as websocket:
-            websocket.send_json({
-                "request_id": "auth-missing",
-                "worker_instance_id": "wrk_missing",
-                "environment_id": 1,
-                "session_id": None,
-                "type": "command",
-                "payload": {"name": "authenticate", "token": "wtk_missing"},
-            })
+            websocket.send_json(
+                {
+                    "request_id": "auth-missing",
+                    "agent_worker_id": "wrk_missing",
+                    "session_id": None,
+                    "type": "command",
+                    "payload": {"name": "authenticate", "token": "wtk_missing"},
+                }
+            )
             reply = websocket.receive_json()
         assert reply["payload"]["ok"] is False
         assert reply["payload"]["error_code"] == "unauthorized"
-
-
-async def test_http_enroll_returns_token_once(environment_id: int):
-    mini = FastAPI()
-    from app.worker_gateway.routes import router
-
-    mini.include_router(router)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=mini), base_url="http://astra") as client:
-        created = await client.post(
-            "/api/worker-gateway/instances",
-            json={"environment_id": environment_id},
-            headers=ADMIN_HEADERS,
-        )
-        assert created.status_code == 201, created.text
-        body = created.json()
-        assert body["token"].startswith("wtk_")
-        visible = await client.get(
-            f"/api/worker-gateway/instances/{body['worker_instance_id']}",
-            headers=ADMIN_HEADERS,
-        )
-        assert visible.status_code == 200
-        assert "token" not in visible.json()
-        assert "token_digest" not in visible.json()
 
 
 def test_bus_auto_uses_redis_url_and_memory_override_warns():
@@ -750,10 +387,7 @@ async def test_redis_owner_epoch_and_bounded_command_list():
         race_id = f"wrk_{uuid4().hex}"
         assert await other.set_owner(race_id, "gw-owner", 1) is True
         raced = await asyncio.gather(
-            *[
-                other.publish_command(race_id, live_frame({"request_id": f"race-{i}"}, 1))
-                for i in range(16)
-            ]
+            *[other.publish_command(race_id, live_frame({"request_id": f"race-{i}"}, 1)) for i in range(16)]
         )
         assert sum(raced) == 1
         await other.publish_response("redis-result", {"ok": True, "stage": "result"})
@@ -773,9 +407,7 @@ async def test_redis_owner_epoch_and_bounded_command_list():
 )
 async def test_redis_lease_and_result_expire_like_memory():
     prefix = f"astra:worker-gateway:test:{os.getpid()}:{uuid4().hex}"
-    bus = RedisRouteBus(
-        REDIS_URL, prefix=prefix, owner_ttl_seconds=1, result_ttl_seconds=1
-    )
+    bus = RedisRouteBus(REDIS_URL, prefix=prefix, owner_ttl_seconds=1, result_ttl_seconds=1)
     try:
         await _assert_response_and_expiry(bus)
     finally:

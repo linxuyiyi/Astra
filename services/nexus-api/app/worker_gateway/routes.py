@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.settings import get_settings
 from app.database import get_session
 from app.gateway.security import verify_gateway_key
-from app.models import WorkerCommand, WorkerInstance
+from app.models import AgentWorker, WorkerCommand
 from app.worker_gateway.admin_key import warn_if_admin_key_missing
 from app.worker_gateway.data_channel import DataChannel, RawBody
 from app.worker_gateway.protocol import WorkerGatewayError
@@ -38,7 +38,7 @@ _STATUS = {
 
 
 class EnrollBody(BaseModel):
-    environment_id: int = Field(ge=1)
+    agent_worker_id: str = Field(min_length=1, max_length=64)
 
 
 class CommandBody(BaseModel):
@@ -73,25 +73,16 @@ def _raise(exc: WorkerGatewayError) -> NoReturn:
     ) from exc
 
 
-def _instance_body(instance: WorkerInstance) -> dict[str, Any]:
+def _instance_body(instance):
     return {
-        "worker_instance_id": instance.id,
-        "environment_id": instance.environment_id,
-        "status": instance.status,
-        "epoch": instance.epoch,
-        "agent_version": instance.agent_version,
-        "target_digest": instance.target_digest,
-        "observed_at": instance.observed_at,
-        "last_heartbeat_at": instance.last_heartbeat_at,
-        "connected_at": instance.connected_at,
+        key: getattr(instance, key) for key in ("id", "status", "epoch", "agent_version", "last_heartbeat_at")
     }
 
 
 def _command_body(command: WorkerCommand, *, delivered: bool, replayed: bool, error_code: str | None) -> dict:
     return {
         "request_id": command.request_id,
-        "worker_instance_id": command.worker_instance_id,
-        "environment_id": command.environment_id,
+        "agent_worker_id": command.agent_worker_id,
         "session_id": command.session_id,
         "name": command.name,
         "status": command.status,
@@ -116,40 +107,39 @@ async def health() -> dict[str, Any]:
     }
 
 
-@router.post("/instances", status_code=201)
+@router.post("/workers", status_code=201)
 async def enroll_instance(
     body: EnrollBody,
     session: AsyncSession = Depends(get_session),
     _: None = Depends(require_admin),
 ) -> dict[str, Any]:
     try:
-        result = await get_gateway().enroll(session, body.environment_id)
+        result = await get_gateway().enroll(session, body.agent_worker_id)
     except WorkerGatewayError as exc:
         _raise(exc)
     return {
-        "worker_instance_id": result.worker_instance_id,
-        "environment_id": result.environment_id,
+        "agent_worker_id": result.agent_worker_id,
         "token": result.token,
         "epoch": result.epoch,
         "rotated": result.rotated,
     }
 
 
-@router.get("/instances/{worker_instance_id}")
+@router.get("/workers/{agent_worker_id}")
 async def get_instance(
-    worker_instance_id: str,
+    agent_worker_id: str,
     session: AsyncSession = Depends(get_session),
     _: None = Depends(require_admin),
 ) -> dict[str, Any]:
-    instance = await session.get(WorkerInstance, worker_instance_id)
+    instance = await session.get(AgentWorker, agent_worker_id)
     if instance is None:
         raise HTTPException(status_code=404, detail={"code": "unknown_worker", "message": "Worker 不存在"})
     return _instance_body(instance)
 
 
-@router.post("/instances/{worker_instance_id}/commands")
+@router.post("/workers/{agent_worker_id}/commands")
 async def create_command(
-    worker_instance_id: str,
+    agent_worker_id: str,
     body: CommandBody,
     session: AsyncSession = Depends(get_session),
     _: None = Depends(require_admin),
@@ -162,7 +152,7 @@ async def create_command(
     try:
         result = await get_gateway().dispatch(
             session,
-            worker_instance_id=worker_instance_id,
+            agent_worker_id=agent_worker_id,
             request_id=body.request_id,
             name=body.name,
             payload=body.payload,
@@ -220,8 +210,8 @@ def _bearer(authorization: str | None) -> str:
     return token
 
 
-async def _worker_for_token(session: AsyncSession, token: str) -> WorkerInstance:
-    rows = (await session.scalars(select(WorkerInstance))).all()
+async def _worker_for_token(session: AsyncSession, token: str) -> AgentWorker:
+    rows = (await session.scalars(select(AgentWorker))).all()
     for row in rows:
         if verify_gateway_key(token, row.token_digest):
             return row
@@ -242,7 +232,7 @@ async def fetch_request_body(
         fetched = await DataChannel(get_gateway()).fetch_request(
             session,
             request_id=request_id,
-            worker_instance_id=worker.id,
+            agent_worker_id=worker.id,
             epoch=epoch,
         )
         return request_body_response(fetched)
@@ -265,7 +255,7 @@ async def upload_response_body(
         return await DataChannel(get_gateway()).commit_upload(
             session,
             request_id=request_id,
-            worker_instance_id=worker.id,
+            agent_worker_id=worker.id,
             epoch=epoch,
             upload_id=body.upload_id,
             http_status=body.http_status,

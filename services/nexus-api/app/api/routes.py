@@ -216,12 +216,14 @@ async def patch_task(task_id: str, payload: TaskUpdate, session=Depends(get_sess
 
 @router.post("/tasks/{task_id}/confirm", response_model=TaskRead)
 async def confirm_task_completion(task_id: str, session=Depends(get_session)):
-    from app.runtime.lifecycle import RuntimeService, RuntimeStateError
+    from app.api.workspace_routes import error_response
+    from app.runtime.lifecycle import RuntimeService
 
+    await require_task(task_id, session)
     try:
         return await RuntimeService(session).confirm_completion(task_id)
-    except RuntimeStateError as exc:
-        raise HTTPException(409, str(exc)) from exc
+    except Exception as exc:
+        raise error_response(exc) from exc
 
 
 @router.delete("/tasks/{task_id}")

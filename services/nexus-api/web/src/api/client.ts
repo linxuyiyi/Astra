@@ -80,8 +80,8 @@ export const api = {
     }),
   workers: () => request<Worker[]>('/api/workers'),
   workerPage: (query: URLSearchParams, signal?: AbortSignal) => listPage<Worker>('/api/workers', query, signal),
-  worker: (id: string) =>
-    request<Worker>(`/api/workers/${encodeURIComponent(id)}`),
+  worker: (id: string, signal?: AbortSignal) =>
+    request<Worker>(`/api/workers/${encodeURIComponent(id)}`, { signal }),
   saveWorker: (body: Record<string, unknown>, id?: string) => {
     const payload = { ...body }
     if (id) delete payload.id
@@ -100,26 +100,26 @@ export const api = {
     }),
   tasks: (query = '') => request<Task[]>(`/api/tasks${query}`),
   taskPage: (query: URLSearchParams, signal?: AbortSignal) => listPage<Task>('/api/tasks', query, signal),
-  task: (id: string) => request<Task>(`/api/tasks/${id}`),
-  taskWorkspace: (id: string) =>
-    request<TaskWorkspaceBinding>(`/api/tasks/${id}/workspace`),
-  experienceReviewJobs: (taskId: string) =>
+  task: (id: string, signal?: AbortSignal) => request<Task>(`/api/tasks/${id}`, { signal }),
+  taskWorkspace: (id: string, signal?: AbortSignal) =>
+    request<TaskWorkspaceBinding>(`/api/tasks/${id}/workspace`, { signal }),
+  experienceReviewJobs: (taskId: string, signal?: AbortSignal) =>
     request<ExperienceReviewJob[]>(
-      `/api/library/review-jobs?task_id=${encodeURIComponent(taskId)}`,
+      `/api/library/review-jobs?task_id=${encodeURIComponent(taskId)}`, { signal },
     ),
   retryExperienceReview: (id: string) =>
     request<ExperienceReviewJob>(
       `/api/library/review-jobs/${encodeURIComponent(id)}/retry`,
       { method: 'POST' },
     ),
-  taskRepo: (id: string) =>
+  taskRepo: (id: string, signal?: AbortSignal) =>
     request<{
       name: string
       branch: string
       commit: string
       dirty: boolean
       changes: number
-    }>(`/api/tasks/${id}/repo`),
+    }>(`/api/tasks/${id}/repo`, { signal }),
   uploadTaskFile: async (id: string, file: File): Promise<{ path: string }> => {
     const response = await fetch(
       `${API_BASE}/api/tasks/${id}/files/${encodeURIComponent(file.name)}`,
@@ -130,7 +130,7 @@ export const api = {
     return result
   },
   events: (limit = 50) => request<AstraEvent[]>(`/api/events?limit=${limit}`),
-  taskEvents: (id: string) => request<AstraEvent[]>(`/api/tasks/${id}/events`),
+  taskEvents: (id: string, signal?: AbortSignal) => request<AstraEvent[]>(`/api/tasks/${id}/events`, { signal }),
   taskAction: (
     id: string,
     action: string,

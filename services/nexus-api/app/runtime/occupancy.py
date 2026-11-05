@@ -4,13 +4,15 @@ from sqlalchemy import and_, exists, select
 
 from app.models import AgentWorker, Task
 
+OCCUPYING_STATUSES = ("RUNNING", "WAITING")
+
 
 def task_occupies(task: Task) -> bool:
-    return bool(task.agent_worker_id and task.status in {"RUNNING", "WAITING"})
+    return bool(task.agent_worker_id and task.status in OCCUPYING_STATUSES)
 
 
 def occupying_clause(agent_worker_id):
-    return and_(Task.agent_worker_id == agent_worker_id, Task.status.in_(("RUNNING", "WAITING")))
+    return and_(Task.agent_worker_id == agent_worker_id, Task.status.in_(OCCUPYING_STATUSES))
 
 
 def occupying_exists(agent_worker_id):

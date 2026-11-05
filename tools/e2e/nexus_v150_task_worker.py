@@ -2,6 +2,7 @@
 
 示例：python tools/e2e/nexus_v150_task_worker.py --base-url http://127.0.0.1:8100 --worker-id e2e-worker
 需要已部署且空闲的 Worker 及可用网关模型；会留下本次验收 Task 和原生 Session。
+等待期间只读 Task，让后台 SSE 自行推进状态。
 """
 import argparse
 import time
@@ -23,8 +24,9 @@ def main():
         def waiting(task_id):
             deadline = time.monotonic() + args.timeout
             while time.monotonic() < deadline:
-                task = request('POST',f'/api/tasks/{task_id}/reconnect')
+                task = request('GET',f'/api/tasks/{task_id}')
                 if task['status'] == 'WAITING' and not task['pending_message_id']:
+                    assert task['waiting_reason'] == 'confirmation', task['current_progress']
                     return task
                 time.sleep(1)
             raise TimeoutError(f'{task_id} 未进入人工处理状态')

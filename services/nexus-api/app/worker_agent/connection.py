@@ -751,6 +751,7 @@ class WorkerConnectionManager:
         if current is not None and not current.done():
             asyncio.create_task(self._ack_existing_subscription(transport, incoming))
             return
+        self.stopped_directories.discard(directory)
         task = asyncio.create_task(self._stream_events(transport, incoming, epoch, directory))
         if directory:
             self.event_tasks[directory] = task
@@ -777,44 +778,51 @@ class WorkerConnectionManager:
                 ).to_dict()
             )
             url = self.config.opencode_url.rstrip("/") + "/event"
-            async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream("GET", url, params={"directory": directory}) as response:
-                    response.raise_for_status()
-                    lines = response.aiter_lines()
-                    while True:
-                        while directory in self.paused_directories:
-                            if directory in self.stopped_directories or self.epoch != epoch:
-                                return
-                            waiter = self.resume_waiters.setdefault(directory, asyncio.Event())
-                            try:
-                                await asyncio.wait_for(waiter.wait(), 1)
-                            except TimeoutError:
-                                continue
-                        if directory in self.stopped_directories or self.epoch != epoch:
-                            return
-                        try:
-                            line = await lines.__anext__()
-                        except StopAsyncIteration:
-                            return
-                        if not line.startswith("data: "):
-                            continue
-                        seq = self.event_seq.get(directory, 0) + 1
-                        self.event_seq[directory] = seq
-                        try:
-                            event = json.loads(line[6:])
-                        except json.JSONDecodeError:
-                            continue
-                        await transport.send(
-                            _bounded_event_frame(
-                                incoming,
-                                self.config,
-                                directory=directory,
-                                seq=seq,
-                                event=event if isinstance(event, dict) else {"raw": event},
-                                epoch=epoch,
-                                expires_at=int(self.clock()) + 30,
-                            )
-                        )
+
+            async def emit(event):
+                seq = self.event_seq.get(directory, 0) + 1
+                self.event_seq[directory] = seq
+                await transport.send(
+                    _bounded_event_frame(
+                        incoming, self.config, directory=directory, seq=seq, event=event,
+                        epoch=epoch, expires_at=int(self.clock()) + 30,
+                    )
+                )
+
+            def active():
+                return self.epoch == epoch and directory not in self.stopped_directories
+
+            disconnected = False
+            async with httpx.AsyncClient(timeout=httpx.Timeout(90, connect=10)) as client:
+                while active():
+                    try:
+                        async with client.stream("GET", url, params={"directory": directory}) as response:
+                            response.raise_for_status()
+                            lines = response.aiter_lines()
+                            while active():
+                                if directory in self.paused_directories:
+                                    await self.resume_waiters.setdefault(directory, asyncio.Event()).wait()
+                                    continue
+                                try:
+                                    line = await anext(lines)
+                                except StopAsyncIteration:
+                                    break
+                                if not line.startswith("data: "):
+                                    continue
+                                try:
+                                    event = json.loads(line[6:])
+                                except json.JSONDecodeError:
+                                    event = {"type": "astra.event_gap", "reason": "invalid_native_event"}
+                                if active() and isinstance(event, dict):
+                                    await emit(event)
+                                    disconnected = False
+                    except httpx.HTTPError:
+                        pass
+                    if active():
+                        if not disconnected:
+                            await emit({"type": "astra.event_gap", "reason": "native_stream_closed"})
+                            disconnected = True
+                        await self.sleep(2)
         except asyncio.CancelledError:
             return
         finally:

@@ -86,7 +86,10 @@ class WorkerOpenCodeClient(WorkerCommandTransport, OpenCodeServerClient):
             raise OpenCodeServerUnavailable(failed)
         if not delivered:
             raise OpenCodeServerUnavailable("Worker 没有接收这次调用")
-        frame = await self.gateway.bus.wait_response(request_id, self._timeout_seconds)
+        if method == "GET":
+            frame = await self._wait_read_response(request_id, worker_id, epoch)
+        else:
+            frame = await self.gateway.bus.wait_response(request_id, self._timeout_seconds)
         if frame is None:
             raise OpenCodeExecutionTimeout("Worker 未在时限内上传响应")
         meta = frame.get("result") if isinstance(frame.get("result"), dict) else {}
@@ -100,6 +103,18 @@ class WorkerOpenCodeClient(WorkerCommandTransport, OpenCodeServerClient):
         if meta.get("content_type") and "content-type" not in headers:
             headers["content-type"] = str(meta["content_type"])
         return int(meta.get("http_status") or 502), encoded, headers
+
+    async def _wait_read_response(self, request_id: str, worker_id: str, epoch: int):
+        bus = self.gateway.bus
+        deadline = time.monotonic() + self._timeout_seconds
+        while (remaining := deadline - time.monotonic()) > 0:
+            frame = await bus.wait_response(request_id, min(remaining, 1))
+            if frame is not None:
+                return frame
+            owner = await bus.get_owner(worker_id)
+            if owner is None or owner[1] != epoch:
+                raise OpenCodeServerUnavailable("Worker 连接已变化，请重新查询")
+        return None
 
     async def request(
         self,

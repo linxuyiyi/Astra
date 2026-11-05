@@ -1,5 +1,6 @@
 """v1.5.0 最终结构、Task 独占、原生执行、认证代次、重发和复盘回归。"""
 
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -532,17 +533,118 @@ async def test_old_epoch_http_body_is_rejected_after_reconnect(setup_runtime):
             )
 
 
-async def test_continue_reuses_session_without_sending_another_prompt(setup_runtime):
+async def test_cancel_during_start_does_not_reopen_or_reclaim_worker(setup_runtime, monkeypatch):
+    worker_id, _, native = setup_runtime
+    async with SessionLocal() as db:
+        original = await create_task(db, setup_runtime)
+        replacement = await create_task(db, setup_runtime)
+    real_project = RuntimeService.project
+
+    async def cancel_after_claim(self, task, status, *, detail=None):
+        result = await real_project(self, task, status, detail=detail)
+        if task.id == original.id and detail == "准备工作区":
+            async with SessionLocal() as concurrent:
+                stopped = await RuntimeService(concurrent).stop(original.id)
+                assert stopped.status == "CANCELED"
+                assert (await concurrent.get(AgentWorker, worker_id)).status == "IDLE"
+                started = await RuntimeService(concurrent).start(replacement.id)
+                assert started.status == "RUNNING"
+        return result
+
+    monkeypatch.setattr(RuntimeService, "project", cancel_after_claim)
+    async with SessionLocal() as db:
+        runtime = RuntimeService(db)
+        stopped = await runtime.start(original.id)
+        assert stopped.status == "CANCELED" and not stopped.workspace and not stopped.current_session_id
+        assert native.creates == 1 and len(native.sent) == 1
+        occupied = await db.scalars(select(Task.id).where(occupying_clause(worker_id)))
+        assert occupied.all() == [replacement.id]
+        with pytest.raises(RuntimeStateError, match="任务已结束"):
+            await runtime.start(original.id)
+
+
+async def test_old_start_does_not_continue_after_same_task_is_restarted(setup_runtime, monkeypatch):
+    _, _, native = setup_runtime
+    async with SessionLocal() as db:
+        task_id = (await create_task(db, setup_runtime)).id
+
+    original_claimed = asyncio.Event()
+    new_claimed = asyncio.Event()
+    finish_original = asyncio.Event()
+    finish_new = asyncio.Event()
+    real_project = RuntimeService.project
+
+    async def suspend_after_claim(self, task, status, *, detail=None):
+        result = await real_project(self, task, status, detail=detail)
+        if detail == "准备工作区":
+            if not original_claimed.is_set():
+                original_claimed.set()
+                await finish_original.wait()
+            else:
+                new_claimed.set()
+                await finish_new.wait()
+        return result
+
+    async def start(*, restart=False):
+        async with SessionLocal() as db:
+            return await RuntimeService(db).start(task_id, restart=restart)
+
+    monkeypatch.setattr(RuntimeService, "project", suspend_after_claim)
+    async with asyncio.timeout(5), asyncio.TaskGroup() as group:
+        original = group.create_task(start())
+        await original_claimed.wait()
+        async with SessionLocal() as db:
+            assert (await RuntimeService(db).stop(task_id)).status == "CANCELED"
+        replacement = group.create_task(start(restart=True))
+        await new_claimed.wait()
+        finish_original.set()
+        assert not (await original).workspace
+        assert not native.sent
+        finish_new.set()
+        assert (await replacement).current_session_id
+        assert len(native.sent) == 1
+
+
+async def test_resume_with_native_session_requires_actual_action(setup_runtime):
+    import httpx
+
+    from app.main import app
+    from app.task_tools import TaskTools
+
     _, _, native = setup_runtime
     async with SessionLocal() as db:
         task = await create_task(db, setup_runtime)
         runtime = RuntimeService(db)
         task = await runtime.start(task.id)
-        sid = task.current_session_id
+        task_id, sid = task.id, task.current_session_id
         native.sessions[sid]["status"] = "idle"
-        await runtime.refresh(task.id)
-        await runtime.continue_task(task.id)
-        assert task.current_session_id == sid and len(native.sent) == 1 and task.status == "WAITING"
+        await runtime.refresh(task_id)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(f"/api/tasks/{task_id}/resume")
+        assert response.status_code == 409
+        assert "补充输入" in response.json()["detail"]
+
+    async with SessionLocal() as db:
+        result = await TaskTools(db).resume(task_id)
+        assert result["ok"] is False and "补充输入" in result["error"]
+        task = await db.get(Task, task_id)
+        assert task.current_session_id == sid and task.waiting_reason == "confirmation"
+        assert len(native.sent) == 1 and task.status == "WAITING"
+
+
+async def test_resume_retries_start_without_native_session(setup_runtime):
+    from app.task_tools import TaskTools
+
+    _, _, native = setup_runtime
+    async with SessionLocal() as db:
+        task = await create_task(db, setup_runtime)
+        task.status, task.waiting_reason = "WAITING", "start_error"
+        await db.commit()
+        result = await TaskTools(db).resume(task.id)
+        assert result["ok"] is True
+        assert task.current_session_id and task.status == "RUNNING"
+        assert len(native.sent) == 1
 
 
 async def test_signed_context_is_fully_redacted(setup_runtime):
@@ -915,3 +1017,298 @@ async def test_admin_lists_and_native_workspace_binding(setup_runtime, monkeypat
         binding = (await client.get(f"/api/tasks/{task_id}/workspace")).json()
         assert binding["runtime"]["workspace_ui"] is None
         assert "Worker 不在线" in binding["runtime"]["workspace_ui_error"]
+
+
+async def test_native_sse_drives_task_without_browser_or_periodic_native_reads(setup_runtime, monkeypatch):
+    from app.runtime import lifecycle, recovery
+
+    _, _, native = setup_runtime
+    events = asyncio.Queue()
+    first_read = asyncio.Event()
+    reads = []
+    status = native.status
+
+    async def native_status(directory, session_id):
+        reads.append(session_id)
+        first_read.set()
+        return await status(directory, session_id)
+
+    async def native_events(_directory):
+        yield {"type": "server.connected"}
+        while True:
+            yield await events.get()
+
+    native.status = native_status
+    native.events = native_events
+    monkeypatch.setattr(recovery, "connect", lifecycle.connect)
+    monkeypatch.setattr(recovery, "_SCAN_SECONDS", 0.02)
+
+    async with SessionLocal() as db:
+        task = await create_task(db, setup_runtime)
+        task = await RuntimeService(db).start(task.id)
+        task_id, sid = task.id, task.current_session_id
+
+    async def wait_reason(reason):
+        async with asyncio.timeout(2):
+            while True:
+                async with SessionLocal() as db:
+                    current = await db.get(Task, task_id)
+                    if current.waiting_reason == reason:
+                        return current
+                await asyncio.sleep(0.01)
+
+    watcher = asyncio.create_task(recovery.watch_session(task_id))
+    try:
+        await asyncio.wait_for(first_read.wait(), 2)
+        await events.put({"type": "session.idle", "properties": {"sessionID": "old-session"}})
+        await events.put({"type": "server.heartbeat"})
+        await asyncio.sleep(0.09)
+        assert reads == [sid]
+
+        child = "ses_child"
+        native.sessions[child] = {"status": "idle", "messages": []}
+        children = native.children
+
+        async def native_children(directory, session_id):
+            return [{"id": child}] if session_id == sid else await children(directory, session_id)
+
+        native.children = native_children
+        native.questions_data = [{"id": "question", "sessionID": child}]
+        await events.put({"type": "session.created", "properties": {"info": {"id": child, "parentID": sid}}})
+        await events.put({"type": "question.asked", "properties": {"sessionID": child}})
+        assert (await wait_reason("question")).status == "WAITING"
+
+        native.sessions[sid]["status"] = "idle"
+        # The root's child list can briefly include a child that has just disappeared.
+        del native.sessions[child]
+        await events.put({"type": "session.deleted", "properties": {"info": {"id": child}}})
+        assert (await wait_reason("confirmation")).status == "WAITING"
+
+        native.sessions[sid]["status"] = "busy"
+        await events.put({"type": "astra.event_gap"})
+        assert (await wait_reason(None)).status == "RUNNING"
+        native.sessions[sid]["status"] = "idle"
+        await events.put({"type": "session.idle", "properties": {"sessionID": sid}})
+        assert (await wait_reason("confirmation")).status == "WAITING"
+        async with SessionLocal() as db:
+            completed = await RuntimeService(db).confirm_completion(task_id)
+            assert completed.status == "SUCCEEDED"
+        await asyncio.wait_for(watcher, 2)
+    finally:
+        watcher.cancel()
+        await asyncio.gather(watcher, return_exceptions=True)
+
+
+async def test_event_reconciliation_skips_a_replaced_binding(setup_runtime):
+    from app.runtime.session_connection import task_session_binding
+
+    _, _, native = setup_runtime
+    async with SessionLocal() as db:
+        task = await create_task(db, setup_runtime)
+        runtime = RuntimeService(db)
+        task = await runtime.start(task.id)
+        old = task_session_binding(task)
+        task = await runtime.start(task.id, restart=True)
+        native.sessions[task.current_session_id]["status"] = "idle"
+        result = await runtime.refresh(task.id, expected_binding=old)
+        assert result.status == "RUNNING"
+        result = await runtime.refresh(task.id, expected_binding=task_session_binding(task))
+        assert result.status == "WAITING"
+
+
+async def test_supervisor_retries_pending_submission_without_an_sse_event(setup_runtime, monkeypatch):
+    from app.runtime import lifecycle, recovery
+
+    _, _, native = setup_runtime
+    native.fail_send = True
+
+    async def silent_events(_directory):
+        await asyncio.Future()
+        yield {}
+
+    native.events = silent_events
+    monkeypatch.setattr(recovery, "connect", lifecycle.connect)
+    monkeypatch.setattr(recovery, "_SCAN_SECONDS", 0.02)
+    async with SessionLocal() as db:
+        task = await create_task(db, setup_runtime)
+        task = await RuntimeService(db).start(task.id)
+        task_id, sid = task.id, task.current_session_id
+        assert task.pending_message_id
+    native.fail_send = False
+    watcher = asyncio.create_task(recovery.watch_session(task_id))
+    try:
+        async with asyncio.timeout(2):
+            while True:
+                async with SessionLocal() as db:
+                    current = await db.get(Task, task_id)
+                    if not current.pending_message_id:
+                        assert current.current_session_id == sid and len(native.sent) == 1
+                        break
+                await asyncio.sleep(0.01)
+    finally:
+        watcher.cancel()
+        await asyncio.gather(watcher, return_exceptions=True)
+
+
+@pytest.mark.parametrize("kind", ["question", "permission"])
+async def test_confirm_api_and_mcp_recheck_unfinished_native_interaction(setup_runtime, kind):
+    import httpx
+
+    from app.main import app
+    from app.task_tools import TaskTools
+
+    worker_id, _, native = setup_runtime
+    async with SessionLocal() as db:
+        runtime = RuntimeService(db)
+        task = await create_task(db, setup_runtime)
+        task = await runtime.start(task.id)
+        task_id, sid = task.id, task.current_session_id
+        native.sessions[sid]["status"] = "idle"
+        await runtime.refresh(task_id)
+        assert task.waiting_reason == "confirmation"
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        setattr(native, kind + "s_data", [{"id": "ask", "sessionID": sid}])
+        result = await client.post(f"/api/tasks/{task_id}/confirm")
+        assert result.status_code == 409
+        assert "原生执行、提问或权限请求" in result.json()["detail"]
+        async with SessionLocal() as db:
+            refused = await TaskTools(db).confirm(task_id)
+            assert not refused["ok"] and "原生执行、提问或权限请求" in refused["error"]
+            await RuntimeService(db).refresh(task_id)
+        result = await client.post(f"/api/tasks/{task_id}/confirm")
+        assert result.status_code == 409 and "等待人工确认" in result.json()["detail"]
+
+        setattr(native, kind + "s_data", [])
+        async with SessionLocal() as db:
+            await RuntimeService(db).refresh(task_id)
+            assert (await TaskTools(db).confirm(task_id))["status"] == "SUCCEEDED"
+        assert (await client.get(f"/api/workers/{worker_id}")).json()["occupied_tasks"] == []
+
+
+async def test_worker_console_reports_all_occupancy_independently_of_connection(setup_runtime, monkeypatch):
+    import httpx
+
+    from app.main import app
+    from app.runtime import maintenance
+    from app.schemas import WorkerWrite
+    from app.worker_gateway import service
+
+    worker_id, _, _ = setup_runtime
+    gateway = WorkerGateway(bus=MemoryRouteBus())
+    monkeypatch.setattr(maintenance, "get_gateway", lambda: gateway)
+    monkeypatch.setattr(service, "get_gateway", lambda: gateway)
+    async with SessionLocal() as db:
+        worker = await db.get(AgentWorker, worker_id)
+        worker.status, worker.enabled, worker.epoch = "OFFLINE", False, 2
+        expected = []
+        for state in ("PENDING", "RUNNING", "WAITING", "SUCCEEDED", "CANCELED"):
+            task = await create_task(db, setup_runtime)
+            task.status = state
+            task.title = f"任务 {state}"
+            if state in {"RUNNING", "WAITING"}:
+                expected.append({"id": task.id, "title": task.title})
+            await db.commit()
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        root = f"/api/workers/{worker_id}"
+        worker_row = (await client.get(root)).json()
+        assert (worker_row["status"], worker_row["enabled"], worker_row["occupied_tasks"]) == (
+            "OFFLINE", False, expected,
+        )
+        rows = (await client.get("/api/workers", params={"status": "OFFLINE", "limit": 200})).json()
+        assert next(row for row in rows if row["id"] == worker_id)["occupied_tasks"] == expected
+        assert (await client.delete(root)).status_code == 409
+        config = {key: worker_row[key] for key in WorkerWrite.model_fields if key in worker_row}
+        config["enabled"] = True
+        edited = await client.put(root, json=config)
+        assert edited.status_code == 200
+        assert edited.json()["enabled"] and edited.json()["status"] == "OFFLINE"
+        assert (await client.put(root, json={**config, "branch": "blocked"})).status_code == 409
+        assert (await client.post(f"{root}/pause")).json()["status"] == "PAUSED"
+        health = (await client.get(f"{root}/health")).json()
+        assert health["connection"]["state"] == "offline"
+        assert any(item["code"] == "occupied_task" for item in health["blocking"])
+        await gateway.bus.set_owner(worker_id, "test", 2)
+        resumed = (await client.post(f"{root}/resume")).json()
+        assert resumed["status"] == "WORKING" and resumed["enabled"]
+        assert resumed["occupied_tasks"] == expected
+        assert (await client.get(f"{root}/health")).json()["connection"]["state"] == "online"
+        for occupied in expected:
+            result = await client.post(f"/api/tasks/{occupied['id']}/stop")
+            assert result.json()["status"] == "CANCELED"
+        assert (await client.get(root)).json()["occupied_tasks"] == []
+        assert (await client.delete(root)).status_code == 200
+        assert (await client.get(root)).status_code == 404
+
+
+async def test_restart_preserves_active_session_and_allows_canceled_task(setup_runtime):
+    import httpx
+
+    from app.main import app
+    from app.task_tools import TaskTools
+
+    _, _, native = setup_runtime
+    async with SessionLocal() as db:
+        runtime = RuntimeService(db)
+        task = await create_task(db, setup_runtime)
+        task = await runtime.start(task.id)
+        task_id, original = task.id, task.current_session_id
+        assert (await TaskTools(db).intervene(task_id, "请补充验收条件"))["ok"]
+        assert (await runtime.refresh(task_id)).waiting_reason == "intervention"
+        with pytest.raises(RuntimeStateError, match="等待人工确认"):
+            await runtime.confirm_completion(task_id)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        root = f"/api/tasks/{task_id}"
+        assert (await client.post(f"{root}/restart")).status_code == 409
+        async with SessionLocal() as db:
+            assert not (await TaskTools(db).retry(task_id))["ok"]
+        assert (await client.get(root)).json()["current_session_id"] == original
+        assert (await client.post(f"{root}/stop")).json()["status"] == "CANCELED"
+        async with SessionLocal() as db:
+            assert (await TaskTools(db).retry(task_id))["status"] == "RUNNING"
+        assert (await client.get(root)).json()["current_session_id"] != original
+
+        assert (await client.post(f"{root}/stop")).json()["status"] == "CANCELED"
+        restarted = (await client.post(f"{root}/restart")).json()
+        assert restarted["status"] == "RUNNING" and restarted["current_session_id"] != original
+
+        del native.sessions[restarted["current_session_id"]]
+        async with SessionLocal() as db:
+            assert (await RuntimeService(db).refresh(task_id)).waiting_reason == "session_missing"
+            assert (await TaskTools(db).retry(task_id))["status"] == "RUNNING"
+        assert (await client.get(root)).json()["current_session_id"] != restarted["current_session_id"]
+
+
+async def test_completed_task_restart_is_rejected_by_rest_and_mcp(setup_runtime):
+    import httpx
+
+    from app.main import app
+    from app.task_mcp import build_mcp_server
+
+    worker_id, _, native = setup_runtime
+    async with SessionLocal() as db:
+        runtime = RuntimeService(db)
+        task = await create_task(db, setup_runtime)
+        task = await runtime.start(task.id)
+        task_id, sid = task.id, task.current_session_id
+        native.sessions[sid]["status"] = "idle"
+        await runtime.refresh(task_id)
+        assert (await runtime.confirm_completion(task_id)).status == "SUCCEEDED"
+        with pytest.raises(RuntimeStateError, match="已完成的任务不能重新开始"):
+            await runtime.start(task_id, restart=True)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        root = f"/api/tasks/{task_id}"
+        original = (await client.get(root)).json()
+        rejected = await client.post(f"{root}/restart")
+        assert rejected.status_code == 409
+        result = await build_mcp_server().call_tool("nexus_task_retry", {"task_id": task_id})
+        assert not result.structured_content["ok"]
+        assert result.structured_content["status"] == "SUCCEEDED"
+        assert result.structured_content["error"] == rejected.json()["detail"]
+        assert (await client.get(root)).json() == original
+        worker = (await client.get(f"/api/workers/{worker_id}")).json()
+        assert worker["status"] == "IDLE" and worker["occupied_tasks"] == []
+        assert native.creates == 1 and native.aborts == 0

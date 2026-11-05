@@ -64,10 +64,10 @@ description: 仅在明确查询或操作 Nexus 任务、需要 Worker 工程执�
 执行结束等待验收时，从求助详情的原生输出核实执行结果后在原对话汇报。
 OpenCode 输出为脱敏摘要，包含摘要（`excerpt`）、状态（`status`）与退出码（`exit_code`），不能把截断摘要当成完整文件内容；
 输出不足时如实说明并在对话里商定后续核验，不要求人进入工作区或 Worker 页面。
-数字员工保留 `nexus_task_confirm` 关单能力。核实完整业务目标和验收要求均已达成后可确认完成；
+数字员工保留 `nexus_task_confirm` 关单能力。仅在 `waiting_reason=confirmation` 时，核实完整业务目标和验收要求均已达成后确认完成；
 `stop/end_turn`、Session 成功或阶段检视通过只表示本轮结束，不能单凭这些关单。
 若仍需等待检视、Commit 或其他约定工作，保留任务并按人的补充指令续答。
-`nexus_task_resume` 仅保留原绑定，不发送文本；实际执行指令走 `nexus_task_input`。
+`nexus_task_resume` 用于尚未创建原生会话的启动重试。已有会话时，通过 `nexus_task_input` 提交补充指令，通过 `nexus_task_reply` 回答或授权。
 
 ## 工具
 

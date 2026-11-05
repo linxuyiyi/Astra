@@ -6,9 +6,11 @@ import asyncio
 import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import NamedTuple
 
 from app.config.settings import get_settings
 from app.domain import ExecutionMode
+from app.executors.errors import OpenCodeSessionNotFound
 from app.executors.opencode_local_server import LocalOpenCodeServerExecutor
 from app.executors.opencode_server import OpenCodeServerClient
 from app.models import AgentWorker, Task
@@ -16,12 +18,31 @@ from app.runtime.worker_client import WorkerOpenCodeClient
 from app.runtime.worker_files import environment_uses_worker
 
 
+class TaskSessionBinding(NamedTuple):
+    worker_id: str
+    workspace: str
+    session_id: str
+
+
+def task_session_binding(task: Task) -> TaskSessionBinding | None:
+    if task.agent_worker_id and task.workspace and task.current_session_id:
+        return TaskSessionBinding(task.agent_worker_id, task.workspace, task.current_session_id)
+    return None
+
+
 async def session_tree(client, directory: Path, root: str) -> set[str]:
     """Return the native root Session plus all current descendants."""
 
     allowed, pending = {root}, [root]
     while pending:
-        children = await client.children(directory, pending.pop())
+        session_id = pending.pop()
+        try:
+            children = await client.children(directory, session_id)
+        except OpenCodeSessionNotFound:
+            if session_id == root:
+                raise
+            allowed.remove(session_id)
+            continue
         for child in children:
             child_id = child.get("id")
             if child_id and child_id not in allowed:

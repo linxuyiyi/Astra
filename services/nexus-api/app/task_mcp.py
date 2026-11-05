@@ -122,7 +122,7 @@ def build_mcp_server() -> MCPServer:
 
     @server.tool(name="nexus_task_resume", structured_output=True)
     async def nexus_task_resume(task_id: str) -> dict[str, Any]:
-        """保留原 Task 和执行会话；补充执行指令使用 nexus_task_input，不会重新开始。"""
+        """重试尚未创建原生 Session 的等待任务；已有会话时使用 nexus_task_input 或 nexus_task_reply。"""
         return await _call("resume", task_id=task_id)
 
     @server.tool(name="nexus_task_terminate", structured_output=True)
@@ -132,7 +132,7 @@ def build_mcp_server() -> MCPServer:
 
     @server.tool(name="nexus_task_retry", structured_output=True)
     async def nexus_task_retry(task_id: str) -> dict[str, Any]:
-        """重试失败或已终止的任务。"""
+        """为已取消或原生 Session 不存在的任务创建新的执行会话。"""
         return await _call("retry", task_id=task_id)
 
     @server.tool(name="nexus_task_logs", structured_output=True)

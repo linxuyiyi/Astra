@@ -9,6 +9,11 @@ def test_canceled_task_does_not_accept_late_success():
         TaskStateMachine.validate(TaskStatus.CANCELED, TaskStatus.SUCCEEDED)
 
 
+def test_succeeded_task_cannot_transition_back_to_running():
+    with pytest.raises(InvalidTransition):
+        TaskStateMachine.validate(TaskStatus.SUCCEEDED, TaskStatus.RUNNING)
+
+
 def test_only_five_business_states_exist():
     assert {state.value for state in TaskStatus} == {
         "PENDING",

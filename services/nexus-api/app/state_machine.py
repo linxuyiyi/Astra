@@ -10,7 +10,7 @@ class TaskStateMachine:
         TaskStatus.PENDING: {TaskStatus.RUNNING, TaskStatus.CANCELED},
         TaskStatus.RUNNING: {TaskStatus.WAITING, TaskStatus.CANCELED},
         TaskStatus.WAITING: {TaskStatus.RUNNING, TaskStatus.SUCCEEDED, TaskStatus.CANCELED},
-        TaskStatus.SUCCEEDED: {TaskStatus.RUNNING},
+        TaskStatus.SUCCEEDED: set(),
         TaskStatus.CANCELED: {TaskStatus.RUNNING},
     }
 

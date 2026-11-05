@@ -19,7 +19,13 @@ from app.executors.opencode_prompt import (
 from app.models import AgentWorker, Task, TaskCategory, WorkerMaintenanceOperation
 from app.runtime.occupancy import occupying_clause, sync_worker_occupancy
 from app.runtime.opencode_model import gateway_model
-from app.runtime.session_connection import connect, prepare_workspace, resolve_environment, session_tree
+from app.runtime.session_connection import (
+    connect,
+    prepare_workspace,
+    resolve_environment,
+    session_tree,
+    task_session_binding,
+)
 from app.runtime.wake_outbox import record_assistance_requests
 from app.runtime.workspace_files import materialize_task_attachments
 from app.services import TaskService
@@ -52,12 +58,10 @@ class RuntimeService:
         await self.session.commit()
         return task
 
-    async def _worker(self, task):
+    async def _worker(self, task, *, lock=True):
+        query = select(AgentWorker).where(AgentWorker.id == task.agent_worker_id)
         worker = await self.session.scalar(
-            select(AgentWorker)
-            .where(AgentWorker.id == task.agent_worker_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
+            (query.with_for_update() if lock else query).execution_options(populate_existing=True)
         )
         if (
             not worker
@@ -65,39 +69,56 @@ class RuntimeService:
             or worker.status in {"OFFLINE", "PAUSED"}
         ):
             raise RuntimeStateError("Worker 未启用、离线或已暂停")
-        occupied = await self.session.scalar(
-            select(Task.id).where(occupying_clause(worker.id), Task.id != task.id).limit(1).with_for_update()
-        )
+        occupying = select(Task.id).where(occupying_clause(worker.id), Task.id != task.id).limit(1)
+        occupied = await self.session.scalar(occupying.with_for_update() if lock else occupying)
         if occupied:
             raise RuntimeStateError("Worker 正在处理其他任务")
-        maintenance = await self.session.scalar(
+        maintaining = (
             select(WorkerMaintenanceOperation.id)
             .where(WorkerMaintenanceOperation.active_worker_id == worker.id)
             .limit(1)
-            .with_for_update()
         )
+        maintenance = await self.session.scalar(maintaining.with_for_update() if lock else maintaining)
         if maintenance:
             raise RuntimeStateError("Worker 正在维护")
         return worker
 
     async def start(self, task_id, *, restart=False, expected_session_id=None):
         task = await self.lock_task(task_id)
+        if task.status == "SUCCEEDED":
+            raise RuntimeStateError("已完成的任务不能重新开始")
         if expected_session_id and task.current_session_id != expected_session_id:
             raise RuntimeStateError("Session 已切换")
         if task.pending_message_id:
             raise RuntimeStateError("已有待确认输入，请等待自动重发")
-        if task.current_session_id and not restart:
-            raise RuntimeStateError("任务已有 Session，请继续当前会话")
+        if not restart:
+            if task.status == "CANCELED":
+                raise RuntimeStateError("任务已结束，需显式重新开始")
+            if task.current_session_id:
+                raise RuntimeStateError("任务已有 Session，请在当前会话处理")
         worker = await self._worker(task)
+        worker_id = worker.id
         previous_session = task.current_session_id
+        if restart or task.status == "WAITING":
+            task.started_at = datetime.now(UTC)
         task.claimed_at = task.claimed_at or datetime.now(UTC)
         worker.status = "WORKING"
         await self.project(task, "RUNNING", detail="准备工作区")
+        started_at = task.started_at
         task = await self.lock_task(task_id)
-        if task.pending_message_id or task.current_session_id != previous_session:
+        if (
+            task.status != "RUNNING"
+            or task.agent_worker_id != worker_id
+            or task.started_at != started_at
+            or task.pending_message_id
+            or task.current_session_id != previous_session
+        ):
             await self.session.commit()
             return task
         try:
+            # The Task lock preserves its committed occupancy. Remote preparation
+            # writes Gateway commands in another transaction, so leave the Worker unlocked.
+            worker = await self._worker(task, lock=False)
             if restart and task.current_session_id:
                 async with connect(worker, start=True) as client:
                     await self._stop_native(client, Path(task.workspace), task.current_session_id)
@@ -132,14 +153,18 @@ class RuntimeService:
             task.waiting_reason = None
             task.claimed_at = task.claimed_at or datetime.now(UTC)
             worker.status = "WORKING"
-            if restart:
-                task.started_at = datetime.now(UTC)
             await self.project(task, "RUNNING", detail="正在提交任务")
             return await self.deliver_first_submission(task_id)
         except Exception as exc:
             await self.session.rollback()
             current = await self.lock_task(task_id)
-            if current.status == "RUNNING" and not current.pending_message_id:
+            if (
+                current.status == "RUNNING"
+                and current.agent_worker_id == worker_id
+                and current.started_at == started_at
+                and current.current_session_id == previous_session
+                and not current.pending_message_id
+            ):
                 from app.runtime.redaction import redact_text
 
                 current.waiting_reason = "start_error"
@@ -305,10 +330,14 @@ class RuntimeService:
             )
             return task
 
-    async def _native_busy(self, client, directory, sessions):
-        for session_id in sessions:
-            if await client.status(directory, session_id) in {"busy", "retry"}:
-                return True
+    async def _native_busy(self, client, directory, root, sessions):
+        for session_id in (root, *sorted(sessions - {root})):
+            try:
+                if await client.status(directory, session_id) in {"busy", "retry"}:
+                    return True
+            except OpenCodeSessionNotFound:
+                if session_id == root:
+                    raise
         return False
 
     async def _stop_native(self, client, directory, session_id):
@@ -379,9 +408,12 @@ class RuntimeService:
         task.waiting_reason = None
         return await self.project(task, "CANCELED", detail="已由操作者确认停止并释放")
 
-    async def refresh(self, task_id, *, client=None):
+    async def refresh(self, task_id, *, client=None, expected_binding=None, observed_sessions=None):
         task = await self.lock_task(task_id)
-        if task.status not in {"RUNNING", "WAITING"}:
+        if task.status not in {"RUNNING", "WAITING"} or (
+            expected_binding is not None
+            and (task_session_binding(task) != expected_binding or task.pending_message_id)
+        ):
             await self.session.commit()
             return task
         if task.pending_message_id:
@@ -393,9 +425,9 @@ class RuntimeService:
         worker = await resolve_environment(self.session, task)
         try:
             if client:
-                return await self._refresh_native(task, client)
+                return await self._refresh_native(task, client, observed_sessions)
             async with connect(worker) as native:
-                return await self._refresh_native(task, native)
+                return await self._refresh_native(task, native, observed_sessions)
         except OpenCodeSessionNotFound:
             task.waiting_reason = "session_missing"
             return await self.project(task, "WAITING", detail="原生 Session 不存在，请重新开始")
@@ -404,12 +436,15 @@ class RuntimeService:
             await self.session.commit()
             return task
 
-    async def _refresh_native(self, task, client):
+    async def _refresh_native(self, task, client, observed_sessions=None):
         directory = Path(task.workspace)
         allowed = await session_tree(client, directory, task.current_session_id)
+        if observed_sessions is not None:
+            observed_sessions.clear()
+            observed_sessions.update(allowed)
         questions = [q for q in await client.questions(directory) if q.get("sessionID") in allowed]
         permissions = [p for p in await client.permissions(directory) if p.get("sessionID") in allowed]
-        busy = await self._native_busy(client, directory, allowed)
+        busy = await self._native_busy(client, directory, task.current_session_id, allowed)
         if questions or permissions:
             task.waiting_reason = "question" if questions else "permission"
             await self.project(task, "WAITING", detail="执行端需要回答或授权")
@@ -418,35 +453,53 @@ class RuntimeService:
         elif busy:
             task.waiting_reason = None
             await self.project(task, "RUNNING", detail="执行中")
-        elif task.waiting_reason not in {"paused", "input_rejected", "start_error"}:
+        elif task.waiting_reason not in {"paused", "input_rejected", "start_error", "intervention"}:
             task.waiting_reason = "confirmation"
             await self.project(task, "WAITING", detail="本轮执行结束，请人工处理或确认完成")
         else:
             await self.session.commit()
         return task
 
-    async def continue_task(self, task_id):
+    async def restart(self, task_id):
         task = await self.lock_task(task_id)
-        if task.status not in {"RUNNING", "WAITING"} or not task.current_session_id:
-            raise RuntimeStateError("任务尚未绑定可继续的 Session")
-        await TaskService(self.session).add_event(
-            task, "TASK_CONTINUED", "work", "继续当前 Session", {"session_id": task.current_session_id}
+        allowed = (
+            task.status == "CANCELED"
+            or (task.status == "WAITING" and task.waiting_reason == "session_missing")
         )
-        return task
+        if not allowed:
+            raise RuntimeStateError("只有已取消或原生 Session 不存在的任务可以重新开始")
+        return await self.start(task_id, restart=True)
+
+    async def resume(self, task_id):
+        task = await self.lock_task(task_id)
+        if task.status != "WAITING":
+            raise RuntimeStateError("只有等待中的任务可以恢复")
+        if task.pending_message_id:
+            raise RuntimeStateError("已有待确认输入，请等待自动重发")
+        if task.waiting_reason == "session_missing":
+            raise RuntimeStateError("原生 Session 不存在，请重新开始")
+        if task.current_session_id:
+            raise RuntimeStateError("已有原生会话，请提交补充输入、回答或授权，或按验收结果确认完成")
+        return await self.start(task_id)
 
     async def confirm_completion(self, task_id):
         task = await self.lock_task(task_id)
         if task.status == "SUCCEEDED":
             await self.session.commit()
             return task
-        if task.status != "WAITING" or task.pending_message_id or not task.current_session_id:
-            raise RuntimeStateError("请先结束当前执行再确认完成")
+        if (
+            task.status != "WAITING"
+            or task.waiting_reason != "confirmation"
+            or task.pending_message_id
+            or not task.current_session_id
+        ):
+            raise RuntimeStateError("只有等待人工确认的任务可以确认完成")
         worker = await resolve_environment(self.session, task)
         async with connect(worker) as client:
             directory = Path(task.workspace)
             allowed = await session_tree(client, directory, task.current_session_id)
             if (
-                await self._native_busy(client, directory, allowed)
+                await self._native_busy(client, directory, task.current_session_id, allowed)
                 or any(q.get("sessionID") in allowed for q in await client.questions(directory))
                 or any(p.get("sessionID") in allowed for p in await client.permissions(directory))
             ):

@@ -11,6 +11,7 @@
     :before-close="requestClose"
   >
     <ElForm
+      :key="formVersion"
       ref="formRef"
       class="task-create-form"
       :model="form"
@@ -79,8 +80,9 @@
 
       <ElFormItem prop="agent_worker_id">
         <template #label>执行 Worker</template>
-        <ElSelect v-model="form.agent_worker_id" :disabled="Boolean(task && task.status !== 'PENDING')">
+        <ElSelect v-model="form.agent_worker_id" :disabled="Boolean(task && (task.status !== 'PENDING' || task.claimed_at))">
           <ElOption value="" label="自动分配" />
+          <ElOption v-if="preservedWorker" :value="preservedWorker" :label="task?.worker_name || '当前 Worker 不可用'" />
           <ElOption v-for="item in compatibleEmployees" :key="item.id" :value="item.id" :label="`${workerDisplayName(item)}`" />
         </ElSelect>
       </ElFormItem>
@@ -114,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { ArrowDown, ArrowUp, Paperclip, Plus, Trash2 } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElDivider, ElDrawer, ElForm, ElFormItem, ElInput, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSpace, ElTag, ElText, ElUpload } from 'element-plus'
@@ -123,11 +125,12 @@ import { api } from '@/api/client'
 import type { Task, TaskPriority, TaskType } from '@/api/types'
 import { listEmployees } from '../../api'
 import type { Employee as NexusEmployee } from '../../types'
+import { useFormGuard } from '@/composables/useFormGuard'
 import { confirmDialog } from '@/composables/useConfirm'
 import { useAstraStore } from '@/stores/astra'
 import { priorityLabel, safeUUID } from '@/utils/format'
 import { workerDisplayName } from '@/utils/workerName'
-import { applyDefaultCategory, taskDraftSnapshot, type TaskDraftSnapshot } from '@/components/task/taskDraft'
+import { taskDraftSnapshot, type TaskDraftSnapshot } from '@/components/task/taskDraft'
 
 const props = defineProps<{ open: boolean; task?: Task | null }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'created', id: string): void; (e: 'saved', id: string): void }>()
@@ -144,17 +147,20 @@ function criteriaFrom(task?: Task | null) {
   const source = task?.acceptance_criteria.length ? task.acceptance_criteria : [{ id: safeUUID(), content: '' }]
   return source.map((item) => ({ key: item.id || safeUUID(), content: item.content }))
 }
-const form = reactive({
-  title: props.task?.title ?? '',
-  task_type: (props.task?.task_type ?? 'ISSUE') as TaskType,
-  category_id: props.task?.category_id ?? '',
-  priority: (props.task?.priority ?? 'MEDIUM') as TaskPriority,
-  description: props.task?.description ?? '',
-  criteria: criteriaFrom(props.task),
-  agent_worker_id: props.task?.agent_worker_id || '',
-  origin_employee_id: props.task?.origin_employee_id || '',
-})
-const openedSnapshot = ref('')
+function initialForm(task?: Task | null) {
+  return {
+    title: task?.title ?? '',
+    task_type: (task?.task_type ?? 'ISSUE') as TaskType,
+    category_id: task?.category_id ?? '',
+    priority: (task?.priority ?? 'MEDIUM') as TaskPriority,
+    description: task?.description ?? '',
+    criteria: criteriaFrom(task),
+    agent_worker_id: task?.agent_worker_id || '',
+    origin_employee_id: task?.origin_employee_id || '',
+  }
+}
+const form = reactive(initialForm())
+const formVersion = ref(0)
 
 function currentDraft(): TaskDraftSnapshot {
   return {
@@ -170,56 +176,56 @@ function currentDraft(): TaskDraftSnapshot {
   }
 }
 
-function syncBaseline() {
-  const applied = applyDefaultCategory(
-    currentDraft(),
-    store.categories.map((item) => item.id),
-    openedSnapshot.value,
-  )
-  if (applied.draft.category_id !== form.category_id) form.category_id = applied.draft.category_id
-  openedSnapshot.value = applied.baseline
-}
-
 const formRules: FormRules = {
   title: [{ required: true, message: '请输入任务标题', trigger: 'blur' }],
   category_id: [{ required: true, message: '请选择任务分类', trigger: 'change' }],
   description: [{ required: true, message: '请输入任务描述', trigger: 'blur' }],
 }
 
-// 不预选第一项分类。列表晚到时只确立基线，不替用户选分类。
-watch(() => store.categories.map((item) => item.id).join('\0'), () => syncBaseline())
-onMounted(async () => {
-  await nextTick()
-  syncBaseline()
-  owners.value = await listEmployees().catch(() => [])
-})
+onMounted(async () => { owners.value = await listEmployees().catch(() => []) })
 
-const compatibleEmployees = computed(() => store.employees.filter((item) => item.enabled && item.task_types.includes(form.task_type) && item.category_ids.includes(form.category_id)))
+const compatibleEmployees = computed(() => store.employees.filter((item) =>
+  item.enabled && item.task_types.includes(form.task_type) && item.category_ids.includes(form.category_id),
+))
+const preservedWorker = computed(() => {
+  const id = props.task?.agent_worker_id
+  return id && !compatibleEmployees.value.some(item => item.id === id) ? id : ''
+})
 watch(() => [form.task_type, form.category_id], () => {
-  if (form.agent_worker_id && !compatibleEmployees.value.some((item) => item.id === form.agent_worker_id)) form.agent_worker_id = ''
+  if (!props.task && form.agent_worker_id && !compatibleEmployees.value.some(item => item.id === form.agent_worker_id)) {
+    form.agent_worker_id = ''
+  }
 })
 
-const createDirty = computed(() => openedSnapshot.value !== '' && taskDraftSnapshot(currentDraft()) !== openedSnapshot.value)
+const { dirty: createDirty, capture, canClose } = useFormGuard({
+  isOpen: () => props.open,
+  isSaving: () => submitting.value,
+  snapshot: () => taskDraftSnapshot(currentDraft()),
+  confirmDiscard: () => confirmDialog({
+    title: props.task ? '放弃未保存的修改？' : '放弃未保存的任务草稿？',
+    message: '关闭后将无法恢复未保存的内容。',
+    confirmLabel: '放弃并关闭',
+    cancelLabel: '继续编辑',
+    danger: true,
+  }),
+})
 
-// 创建表单是草稿：遮罩点击与 ESC 不关闭，只走显式取消/关闭，且有未保存内容时先二次确认。
-// before-close 不调用 done()，关闭始终由父级把 open 置为 false 驱动。
+watch([() => props.open, () => props.task?.id], ([open]) => {
+  Object.assign(form, initialForm(open ? props.task : null))
+  fileList.value = []
+  createError.value = ''
+  formVersion.value++
+  capture()
+}, { immediate: true })
+
 async function requestClose() {
   if (!props.open) return true
-  if (submitting.value) return false
-  if (createDirty.value) {
-    const confirmed = await confirmDialog({
-      title: props.task ? '放弃未保存的修改？' : '放弃未保存的任务草稿？',
-      message: props.task ? '任务修改尚未提交，关闭后将无法恢复。' : '创建任务的内容尚未提交，关闭后将无法恢复。',
-      confirmLabel: '放弃并关闭',
-      cancelLabel: '继续编辑',
-      danger: true,
-    })
-    if (!confirmed) return false
-  }
+  if (!await canClose()) return false
   emit('close')
   return true
 }
 onBeforeRouteLeave(() => requestClose())
+onBeforeRouteUpdate((to, from) => to.params.id === from.params.id || requestClose())
 
 function addCriterion() { form.criteria.push({ key: safeUUID(), content: '' }) }
 function removeCriterion(index: number) { form.criteria.splice(index, 1) }
@@ -247,13 +253,15 @@ function attachmentPayload() {
 }
 
 async function submit() {
-  const valid = formRef.value ? await formRef.value.validate().catch(() => false) : false
-  if (!valid) return
+  if (submitting.value) return
   submitting.value = true
+  const version = formVersion.value
+  const editingTask = props.task
   createError.value = ''
   try {
+    if (!await formRef.value?.validate().catch(() => false) || version !== formVersion.value) return
     const acceptance_criteria = form.criteria.filter((item) => item.content.trim()).map((item) => ({ content: item.content }))
-    if (props.task) {
+    if (editingTask) {
       const body: Record<string, unknown> = {
         title: form.title,
         description: form.description,
@@ -261,9 +269,11 @@ async function submit() {
         acceptance_criteria,
         origin_employee_id: form.origin_employee_id || null,
       }
-      if (props.task.status === 'PENDING') body.agent_worker_id = form.agent_worker_id || null
-      const task = await api.updateTask(props.task.id, body)
-      emit('saved', task.id)
+      if (editingTask.status === 'PENDING' && !editingTask.claimed_at && form.agent_worker_id !== (editingTask.agent_worker_id || '')) {
+        body.agent_worker_id = form.agent_worker_id || null
+      }
+      const task = await api.updateTask(editingTask.id, body)
+      if (version === formVersion.value) emit('saved', task.id)
       return
     }
     const task = await api.createTask({
@@ -278,9 +288,9 @@ async function submit() {
       agent_worker_id: form.agent_worker_id || null,
       origin_employee_id: form.origin_employee_id || null,
     })
-    emit('created', task.id)
+    if (version === formVersion.value) emit('created', task.id)
   } catch (error) {
-    createError.value = error instanceof Error ? error.message : '创建失败'
+    if (version === formVersion.value) createError.value = error instanceof Error ? error.message : '保存失败'
   } finally {
     submitting.value = false
   }

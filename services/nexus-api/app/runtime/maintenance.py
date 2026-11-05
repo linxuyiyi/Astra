@@ -1324,11 +1324,16 @@ async def environment_health(session, agent_worker_id):
     operation = await active_operation(session, worker.id) or await latest_operation(session, worker.id)
     tasks = (await session.scalars(select(Task.id).where(occupying_clause(worker.id)))).all()
     desired = await build_desired_spec(session, worker)
-    observation = await get_gateway().observed_snapshot(worker)
+    gateway = get_gateway()
+    owner = await gateway.bus.get_owner(worker.id)
+    local = worker.mode == ExecutionMode.LOCAL and get_settings().executor_type == "opencode_server"
+    online = (local and worker.status != "OFFLINE") or bool(owner and owner[1] == worker.epoch)
+    observation = await gateway.observed_snapshot(worker) if online else None
     return evaluate_worker_readiness(
         desired,
         worker,
         observation=observation,
         occupying_task_ids=tasks,
         latest_operation=operation,
+        online=online,
     )

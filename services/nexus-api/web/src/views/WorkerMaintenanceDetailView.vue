@@ -34,7 +34,7 @@
         <div v-for="event in events" :key="event.id" class="log-line">
           <time>{{ formatTime(event.created_at) }}</time>
           <SemanticTag :tone="maintenanceSemanticTone(event.state, event.type)" :label="logState(event)" />
-          <span v-if="event.name" class="log-name">{{ event.name }}</span>
+          <span class="log-name">{{ event.name || event.stage || '—' }}</span>
           <span class="log-message">{{ redactMaintenanceText(event.message) }}</span>
         </div>
       </div>
@@ -100,7 +100,7 @@ async function observe() {
   try {
     const [row, selectedWorker] = await Promise.all([
       getMaintenanceOperation(id, controller.signal),
-      api.worker(parentId),
+      api.worker(parentId, controller.signal),
     ])
     if (controller.signal.aborted) return
     if (row.agent_worker_id !== parentId) throw new Error('此操作不属于当前 Worker')

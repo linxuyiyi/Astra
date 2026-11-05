@@ -22,8 +22,8 @@
     <div class="astra-table-panel astra-table-panel--clickable">
       <el-table v-loading="loading" :data="tasks" row-key="id" height="100%" aria-label="任务列表" @row-click="openTask">
         <el-table-column prop="title" label="任务" min-width="220" show-overflow-tooltip />
-        <el-table-column label="状态" width="108">
-          <template #default="{ row }"><el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag></template>
+        <el-table-column label="状态" width="158">
+          <template #default="{ row }"><SemanticTag :tone="semanticTone(statusTone(row.status))" :label="statusLabel(row.status)" /></template>
         </el-table-column>
         <el-table-column label="Worker" min-width="145" show-overflow-tooltip>
           <template #default="{ row }">{{ row.worker_name || (row.agent_worker_id ? '不可用' : '未分配') }}</template>
@@ -53,12 +53,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, RefreshCw, Search } from 'lucide-vue-next'
 import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
+import SemanticTag from '@/components/astra/SemanticTag.vue'
+import { semanticTone } from '@/features/workers/semantic'
 import RowMenu from '@/components/astra/RowMenu.vue'
 import TaskCreateDrawer from '@/components/task/TaskCreateDrawer.vue'
 import { api } from '@/api/client'
 import type { Task } from '@/api/types'
 import { runTaskAction, taskActions } from '@/features/tasks/actions'
-import { statusLabel, statusTagType, formatTime } from '@/utils/format'
+import { statusLabel, statusTone, formatTime } from '@/utils/format'
 
 const router = useRouter()
 const route = useRoute()
@@ -127,6 +129,10 @@ function openTask(task: Task) {
   void router.push({ name: 'task-detail', params: { id: task.id } })
 }
 async function act(task: Task, command: string) {
+  if (command === 'workspace') {
+    void router.push({ name: 'task-detail', params: { id: task.id }, query: { tab: 'workspace' } })
+    return
+  }
   if (command === 'edit') {
     editing.value = task
     return

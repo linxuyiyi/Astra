@@ -55,15 +55,20 @@ def bind_local_opencode(manager, *, timeout: float = 60) -> None:
             query = dict(fetched.get("query") or {})
             raw = fetched.get("body")
         content = raw if isinstance(raw, str) else json.dumps(raw if raw is not None else {})
-        async with asyncio.timeout(timeout):
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.request(
-                    method,
-                    f"{opencode}{path}",
-                    params=query,
-                    content=content.encode("utf-8"),
-                    headers={"content-type": "application/json"},
-                )
+        try:
+            async with asyncio.timeout(timeout):
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.request(
+                        method,
+                        f"{opencode}{path}",
+                        params=query,
+                        content=content.encode("utf-8"),
+                        headers={"content-type": "application/json"},
+                    )
+        except httpx.TransportError:
+            if method != "GET":
+                raise
+            return {"status": 503}
         headers = {
             key.lower(): value
             for key, value in response.headers.items()

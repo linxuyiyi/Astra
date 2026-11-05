@@ -23,16 +23,3 @@ export function taskDraftSnapshot(draft: TaskDraftSnapshot): string {
     files: draft.files,
   })
 }
-
-/**
- * 创建任务不预选分类。分类列表晚于抽屉打开时也不要改用户还没选的值，
- * 否则空表单会被当成已修改。编辑已有任务时分类本来就有值。
- */
-export function applyDefaultCategory(
-  draft: TaskDraftSnapshot,
-  categoryIds: string[],
-  baseline: string,
-): { draft: TaskDraftSnapshot; baseline: string } {
-  void categoryIds
-  return { draft, baseline: baseline || taskDraftSnapshot(draft) }
-}

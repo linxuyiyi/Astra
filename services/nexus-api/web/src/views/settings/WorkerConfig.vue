@@ -24,24 +24,25 @@
           :value="c.id"
           :label="c.name" /></el-select
     ></el-form-item>
+    <el-alert v-if="executionLocked" title="有未释放任务或维护操作，执行配置暂不可修改。" type="warning" :closable="false" />
     <el-form-item label="运行方式"
-      ><el-select v-model="form.mode"
+      ><el-select v-model="form.mode" :disabled="executionLocked"
         ><el-option value="LINUX_REMOTE" label="Linux 远程 Worker" /><el-option
           value="LOCAL"
           label="本机开发调试" /></el-select
     ></el-form-item>
     <template v-if="form.mode === 'LINUX_REMOTE'"
-      ><el-form-item label="Host"><el-input v-model="form.host" /></el-form-item
+      ><el-form-item label="Host"><el-input v-model="form.host" :disabled="executionLocked" /></el-form-item
       ><el-form-item label="SSH 端口"
         ><el-input-number
-          v-model="form.port"
+          v-model="form.port" :disabled="executionLocked"
           :min="1"
           :max="65535" /></el-form-item
       ><el-form-item label="用户名"
-        ><el-input v-model="form.username" /></el-form-item
+        ><el-input v-model="form.username" :disabled="executionLocked" /></el-form-item
       ><el-form-item label="SSH 密码"
         ><el-input
-          v-model="password"
+          v-model="password" :disabled="executionLocked"
           type="password"
           show-password
           :placeholder="
@@ -50,29 +51,29 @@
     ></template>
     <el-form-item label="模型路由"
       ><el-input
-        v-model="form.model_name"
+        v-model="form.model_name" :disabled="executionLocked"
         placeholder="已启用的 Nexus 网关模型别名"
     /></el-form-item>
     <el-form-item label="Workspace 根目录"
-      ><el-input v-model="form.workspace_root"
+      ><el-input v-model="form.workspace_root" :disabled="executionLocked"
     /></el-form-item>
     <el-form-item label="Git 仓库"
-      ><el-input v-model="form.repository_url"
+      ><el-input v-model="form.repository_url" :disabled="executionLocked"
     /></el-form-item>
     <el-form-item label="Git Token"
       ><el-input
-        v-model="gitToken"
+        v-model="gitToken" :disabled="executionLocked"
         type="password"
         show-password
         :placeholder="worker?.has_git_token ? '已保存，留空保持' : '可选'"
     /></el-form-item>
-    <el-form-item label="分支"><el-input v-model="form.branch" /></el-form-item>
+    <el-form-item label="分支"><el-input v-model="form.branch" :disabled="executionLocked" /></el-form-item>
     <el-form-item label="Skill 名称"
-      ><el-input v-model="skills" placeholder="以逗号分隔平台 Skill 名称"
+      ><el-input v-model="skills" :disabled="executionLocked" placeholder="以逗号分隔平台 Skill 名称"
     /></el-form-item>
     <el-form-item label="MCP 配置"
       ><el-input
-        v-model="mcps"
+        v-model="mcps" :disabled="executionLocked"
         type="textarea"
         :rows="4"
         placeholder='[{"name":"example","url":"http://host/mcp","config":{}}]'
@@ -89,7 +90,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { api } from '@/api/client'
 import type { Worker, TaskCategory, TaskType } from '@/api/types'
-const props = defineProps<{ worker?: Worker }>(),
+const props = defineProps<{ worker?: Worker; executionLocked?: boolean }>(),
   emit = defineEmits<{ saved: [worker: Worker] }>()
 const worker = props.worker
 const form = reactive({

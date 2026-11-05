@@ -44,6 +44,11 @@ class WorkerCreate(WorkerWrite):
     id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 
+class WorkerOccupiedTask(ORMModel):
+    id: str
+    title: str
+
+
 class WorkerRead(ORMModel):
     id: str
     name: str
@@ -68,6 +73,7 @@ class WorkerRead(ORMModel):
     epoch: int
     last_heartbeat_at: datetime | None
     agent_version: str | None
+    occupied_tasks: list[WorkerOccupiedTask] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

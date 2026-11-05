@@ -174,8 +174,10 @@ def evaluate_worker_readiness(
     observation=None,
     occupying_task_ids=(),
     latest_operation=None,
+    online=None,
 ):
-    online = worker.status in {"IDLE", "WORKING", "PAUSED"}
+    if online is None:
+        online = worker.status in {"IDLE", "WORKING", "PAUSED"}
     normalized = _normalize_snapshot(observation, worker) if observation else None
     rows = build_equipment_rows(desired, normalized)
     states = [row["state"] for row in rows if row.get("configured")]
@@ -183,7 +185,8 @@ def evaluate_worker_readiness(
     if not online:
         blockers.append({"code": "offline", "message": "Worker 通道离线"})
     if not worker.enabled or worker.status == "PAUSED":
-        blockers.append({"code": "disabled", "message": "Worker 已暂停调度"})
+        message = "Worker 已停用调度" if not worker.enabled else "Worker 运行已暂停"
+        blockers.append({"code": "disabled", "message": message})
     if latest_operation and latest_operation.active_worker_id:
         blockers.append({"code": "maintenance_active", "message": "Worker 正在维护"})
     if occupying_task_ids:
@@ -270,6 +273,7 @@ def build_repository_summary(
     else:
         error = _text(observed.get("error")) or "Git 仓库探测失败"
     return {
+        "authentication_verified": observed.get("authentication_verified"),
         "url": actual_url or desired_url or None,
         "target_branch": repository.get("target_branch"),
         "branch": _text(observed.get("branch")) or None,

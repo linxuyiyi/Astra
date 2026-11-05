@@ -20,8 +20,14 @@
     <div class="astra-table-panel astra-table-panel--clickable">
       <el-table v-loading="loading" :data="workers" row-key="id" height="100%" aria-label="Worker 列表" @row-click="openWorker">
         <el-table-column prop="name" label="Worker" min-width="150" show-overflow-tooltip />
-        <el-table-column label="状态" width="104">
-          <template #default="{ row }"><el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag></template>
+        <el-table-column label="运行状态" width="104">
+          <template #default="{ row }"><SemanticTag :tone="semanticTone(statusTone(row.status))" :label="statusLabel(row.status)" /></template>
+        </el-table-column>
+        <el-table-column label="任务调度" width="108">
+          <template #default="{ row }"><span>{{ row.enabled ? '已启用' : '已停用' }}</span></template>
+        </el-table-column>
+        <el-table-column label="占用任务" min-width="200">
+          <template #default="{ row }"><WorkerOccupiedTasks :tasks="row.occupied_tasks" /></template>
         </el-table-column>
         <el-table-column prop="host" label="主机" min-width="144" show-overflow-tooltip />
         <el-table-column prop="workspace_root" label="工作区" min-width="180" show-overflow-tooltip />
@@ -51,7 +57,10 @@ import { useRouter } from 'vue-router'
 import { Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { api } from '@/api/client'
 import type { Worker } from '@/api/types'
-import { statusLabel, statusTagType, formatTime } from '@/utils/format'
+import { statusLabel, statusTone, formatTime } from '@/utils/format'
+import { semanticTone } from '@/features/workers/semantic'
+import SemanticTag from '@/components/astra/SemanticTag.vue'
+import WorkerOccupiedTasks from '@/components/worker/WorkerOccupiedTasks.vue'
 import SettingsHeaderActions from './settings/SettingsHeaderActions.vue'
 import WorkerConfig from './settings/WorkerConfig.vue'
 

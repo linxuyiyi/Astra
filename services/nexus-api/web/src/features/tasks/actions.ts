@@ -19,15 +19,20 @@ export function taskActions(task: Task): RowMenuItem[] {
   const terminal = task.status === 'SUCCEEDED' || task.status === 'CANCELED'
   if (task.status === 'PENDING' && assigned) add('start', '开始', pending || !!task.current_session_id)
   if (task.status === 'RUNNING') add('pause', '停止回复')
+  if (active && task.current_session_id && task.waiting_reason !== 'session_missing') {
+    add('workspace', '打开原生工作区')
+  }
   if (task.status === 'WAITING') {
-    add('resume', '继续', pending)
-    if (task.current_session_id) add('confirm', '确认完成', pending)
+    if (assigned && !task.current_session_id && !pending) add('resume', '重试启动')
+    if (task.waiting_reason === 'confirmation' && task.current_session_id && !pending) add('confirm', '确认完成')
   }
   if (!terminal) {
     add('edit', '编辑')
     add('stop', '取消任务')
   }
-  if (assigned && (task.status === 'WAITING' || terminal)) add('restart', '重新开始', pending)
+  if (assigned && (task.status === 'CANCELED' || (task.status === 'WAITING' && task.waiting_reason === 'session_missing'))) {
+    add('restart', '重新开始', pending)
+  }
   if (active && task.current_session_id) add('reconnect', '重新检查连接')
   if (active) add('confirm-execution-stop', '确认强制释放')
   if (terminal || task.status === 'PENDING') add('delete', '删除', pending)
@@ -53,6 +58,14 @@ export async function runTaskAction(task: Task, command: string): Promise<boolea
     throw error
   }
   if (command === 'delete') await api.deleteTask(task.id)
-  else await api.taskAction(task.id, command, body)
+  else {
+    const result = await api.taskAction(task.id, command, body)
+    if ((command === 'stop' && result.status !== 'CANCELED') ||
+        (command === 'confirm' && result.status !== 'SUCCEEDED') ||
+        (command === 'restart' && (!result.current_session_id || result.current_session_id === task.current_session_id)) ||
+        (['start', 'resume', 'restart'].includes(command) && ['start_error', 'input_rejected'].includes(result.waiting_reason ?? ''))) {
+      throw new Error(result.current_progress || '任务操作未完成，请刷新状态')
+    }
+  }
   return true
 }

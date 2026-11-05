@@ -5,8 +5,14 @@
     </el-alert>
     <template v-if="task">
       <AstraPageHeader :title="task.title" :description="task.current_progress">
-        <el-tag :type="statusTagType(task.status)">{{ statusLabel(task.status) }}</el-tag>
-        <span>Worker · {{ task.worker_name || (task.agent_worker_id ? '不可用' : '未分配') }}</span>
+        <SemanticTag :tone="semanticTone(statusTone(task.status))" :label="statusLabel(task.status)" />
+        <dl class="task-context" aria-label="任务执行上下文">
+          <div><dt>Task ID</dt><dd><IdDisplay :value="task.id" /></dd></div>
+          <div><dt>AgentWorker</dt><dd>{{ task.worker_name || (task.agent_worker_id ? '不可用' : '未分配') }}</dd></div>
+          <div><dt>Session ID</dt><dd><IdDisplay v-if="task.current_session_id" :value="task.current_session_id" /><span v-else>—</span></dd></div>
+          <div><dt>Git 仓库</dt><dd :title="repo?.name">{{ repo?.name || (repoError ? '暂不可读' : '—') }}</dd></div>
+          <div><dt>当前分支</dt><dd :title="repo?.branch">{{ repo?.branch || (repo?.commit ? '分离 HEAD' : '—') }}</dd></div>
+        </dl>
         <template #actions>
           <el-button @click="router.push({ name: 'tasks' })">返回任务大厅</el-button>
           <el-button v-if="primaryAction" type="primary" :disabled="primaryAction.disabled" :loading="acting" @click="act(primaryAction.command)">
@@ -20,13 +26,12 @@
         <el-tab-pane label="原生工作区" name="workspace" class="task-pane">
           <iframe v-if="frameUrl" :key="frameUrl" :src="frameUrl" title="OpenCode 任务工作区" allow="clipboard-read; clipboard-write" />
           <el-empty v-else-if="!checkingWorkspace" :description="workspaceMessage">
-            <el-button v-if="task.current_session_id" @click="loadWorkspace">重试连接</el-button>
+            <el-button v-if="task.current_session_id && task.waiting_reason !== 'session_missing'" @click="reload">重试连接</el-button>
           </el-empty>
           <p v-else class="workspace-loading">正在读取原生工作区</p>
         </el-tab-pane>
         <el-tab-pane label="任务详情" name="details" class="task-pane task-pane--scroll">
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="任务编号">{{ task.id }}</el-descriptions-item>
             <el-descriptions-item label="更新时间">{{ formatTime(task.updated_at) }}</el-descriptions-item>
           </el-descriptions>
           <h3>任务描述</h3>
@@ -36,7 +41,8 @@
             <ul><li v-for="criterion in task.acceptance_criteria" :key="criterion.id">{{ criterion.content }}</li></ul>
           </template>
         </el-tab-pane>
-        <el-tab-pane label="事件" name="events" class="task-pane">
+        <el-tab-pane label="事件" name="events" class="task-pane task-pane--events">
+          <el-alert v-if="contentError" :title="contentError" type="error" :closable="false"><el-button @click="loadTab">重试</el-button></el-alert>
           <el-table :data="events" height="100%" row-key="id">
             <el-table-column label="时间" width="180">
               <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
@@ -46,7 +52,8 @@
           </el-table>
         </el-tab-pane>
         <el-tab-pane label="经验复盘" name="review" class="task-pane task-pane--scroll">
-          <el-empty v-if="!reviews.length" description="确认完成后按平台开关触发复盘" />
+          <el-alert v-if="contentError" :title="contentError" type="error" :closable="false"><el-button @click="loadTab">重试</el-button></el-alert>
+          <el-empty v-else-if="!reviews.length" description="确认完成后按平台开关触发复盘" />
           <el-card v-for="job in reviews" :key="job.id" shadow="never">
             <p>{{ job.status }} · {{ job.phase }}</p>
             <p>{{ job.error_message || job.zero_reason }}</p>
@@ -67,10 +74,13 @@ import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import type { Task, TaskWorkspaceBinding, AstraEvent, ExperienceReviewJob } from '@/api/types'
 import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
+import IdDisplay from '@/components/astra/IdDisplay.vue'
+import SemanticTag from '@/components/astra/SemanticTag.vue'
+import { semanticTone } from '@/features/workers/semantic'
 import RowMenu from '@/components/astra/RowMenu.vue'
 import TaskCreateDrawer from '@/components/task/TaskCreateDrawer.vue'
 import { runTaskAction, taskActions } from '@/features/tasks/actions'
-import { statusLabel, statusTagType, formatTime } from '@/utils/format'
+import { statusLabel, statusTone, formatTime } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -84,70 +94,145 @@ const checkingWorkspace = ref(false)
 const acting = ref(false)
 const error = ref('')
 const editing = ref(false)
-const tab = ref('workspace')
+const tabs = ['workspace', 'details', 'events', 'review']
+const tab = computed({
+  get: () => tabs.includes(String(route.query.tab)) ? String(route.query.tab) : 'workspace',
+  set: value => { if (value !== tab.value) void router.replace({ query: { ...route.query, tab: value } }) },
+})
+const repo = ref<Awaited<ReturnType<typeof api.taskRepo>>>()
+const repoError = ref(false)
+const workspaceError = ref('')
+const contentError = ref('')
 const actions = computed(() => task.value ? taskActions(task.value) : [])
-const primaryAction = computed(() => actions.value.find(item => ['start', 'pause', 'resume'].includes(item.command)))
-const secondaryActions = computed(() => actions.value.filter(item => item !== primaryAction.value))
+const primaryAction = computed(() => actions.value.find(item => ['start', 'pause', 'resume', 'confirm'].includes(item.command)))
+const secondaryActions = computed(() => actions.value.filter(item => item !== primaryAction.value &&
+  (item.command !== 'workspace' || tab.value !== 'workspace')))
 const frameUrl = computed(() => {
   const session = task.value?.current_session_id
   const runtime = binding.value?.runtime
-  if (!session || runtime?.session_id !== session || !runtime.workspace_ui) return ''
+  if (!session || task.value?.waiting_reason === 'session_missing' || runtime?.session_id !== session || !runtime.workspace_ui) return ''
   return `${runtime.workspace_ui}?task=${encodeURIComponent(id.value)}&session=${encodeURIComponent(session)}`
 })
-const workspaceMessage = computed(() =>
-  task.value?.current_session_id
-    ? binding.value?.runtime.workspace_ui_error || '工作区暂不可用，请重试'
-    : '任务尚未创建原生会话',
-)
+const workspaceMessage = computed(() => {
+  if (task.value?.waiting_reason === 'session_missing') return '原生 Session 已不存在，请重新开始'
+  if (!task.value?.current_session_id) return '任务尚未创建原生会话'
+  return workspaceError.value || binding.value?.runtime.workspace_ui_error || '工作区暂不可用，请重试'
+})
 let timer: ReturnType<typeof setInterval> | undefined
-let updating = false
+let taskRequest: AbortController | undefined
+let workspaceRequest: AbortController | undefined
+let repoRequest: AbortController | undefined
+let tabRequest: AbortController | undefined
 
 async function loadWorkspace() {
-  const taskId = id.value
-  if (!task.value?.current_session_id || checkingWorkspace.value) return
+  if (!task.value?.current_session_id || task.value.waiting_reason === 'session_missing' || workspaceRequest) return
+  const controller = new AbortController()
+  workspaceRequest = controller
   checkingWorkspace.value = true
+  workspaceError.value = ''
   try {
-    const result = await api.taskWorkspace(taskId)
-    if (id.value === taskId) binding.value = result
+    const result = await api.taskWorkspace(id.value, controller.signal)
+    if (!controller.signal.aborted) binding.value = result
   } catch (reason) {
-    if (id.value === taskId) ElMessage.error(String(reason))
+    if (!controller.signal.aborted) workspaceError.value = String(reason)
   } finally {
-    checkingWorkspace.value = false
+    if (workspaceRequest === controller) {
+      workspaceRequest = undefined
+      checkingWorkspace.value = false
+    }
+  }
+}
+async function loadRepo() {
+  if (!task.value?.workspace || repoRequest) return
+  const controller = new AbortController()
+  repoRequest = controller
+  try {
+    const result = await api.taskRepo(id.value, controller.signal)
+    if (!controller.signal.aborted) {
+      repo.value = result.commit ? result : undefined
+      repoError.value = false
+    }
+  } catch {
+    if (!controller.signal.aborted) repoError.value = true
+  } finally {
+    if (repoRequest === controller) repoRequest = undefined
+  }
+}
+async function loadTab() {
+  const name = tab.value
+  if (tabRequest || (name !== 'events' && name !== 'review')) return
+  const controller = new AbortController()
+  tabRequest = controller
+  try {
+    if (name === 'events') {
+      const result = await api.taskEvents(id.value, controller.signal)
+      if (!controller.signal.aborted) events.value = result
+    } else {
+      const result = await api.experienceReviewJobs(id.value, controller.signal)
+      if (!controller.signal.aborted) reviews.value = result
+    }
+    if (!controller.signal.aborted) contentError.value = ''
+  } catch (reason) {
+    if (!controller.signal.aborted) contentError.value = String(reason)
+  } finally {
+    if (tabRequest === controller) tabRequest = undefined
   }
 }
 async function load() {
-  if (updating) return
-  updating = true
-  const taskId = id.value
+  if (taskRequest) return
+  const controller = new AbortController()
+  taskRequest = controller
   try {
-    const [next, history, jobs] = await Promise.all([
-      api.task(taskId), api.taskEvents(taskId), api.experienceReviewJobs(taskId),
-    ])
-    if (id.value !== taskId) return
-    const changed = next.current_session_id !== task.value?.current_session_id
+    const next = await api.task(id.value, controller.signal)
+    if (controller.signal.aborted) return
+    const previous = task.value
     task.value = next
-    events.value = history
-    reviews.value = jobs
     error.value = ''
-    if (changed) void loadWorkspace()
+    const changed = next.current_session_id !== previous?.current_session_id || next.agent_worker_id !== previous?.agent_worker_id
+    if (changed) {
+      workspaceRequest?.abort()
+      workspaceRequest = undefined
+      checkingWorkspace.value = false
+      binding.value = undefined
+      repoRequest?.abort()
+      repoRequest = undefined
+      repo.value = undefined
+      repoError.value = false
+    }
+    if (changed || next.status !== previous?.status || next.current_progress !== previous?.current_progress) {
+      if (!frameUrl.value) void loadWorkspace()
+      void loadRepo()
+    }
   } catch (reason) {
-    if (id.value === taskId) error.value = String(reason)
+    if (!controller.signal.aborted) error.value = String(reason)
   } finally {
-    updating = false
-    loading.value = false
-    if (id.value !== taskId && route.name === 'task-detail') void load()
+    if (taskRequest === controller) {
+      taskRequest = undefined
+      loading.value = false
+    }
   }
 }
+function refreshTask() {
+  taskRequest?.abort()
+  taskRequest = undefined
+  return load()
+}
 function reload() {
-  void load()
+  void refreshTask()
   void loadWorkspace()
+  void loadRepo()
+  void loadTab()
 }
 function saved() {
   editing.value = false
-  void load()
+  void refreshTask()
 }
 async function act(command: string) {
   if (!task.value || acting.value) return
+  if (command === 'workspace') {
+    tab.value = 'workspace'
+    return
+  }
   if (command === 'edit') {
     editing.value = true
     return
@@ -157,11 +242,11 @@ async function act(command: string) {
     if (await runTaskAction(task.value, command)) {
       if (command === 'delete') await router.push({ name: 'tasks' })
       else if (command === 'reconnect') reload()
-      else await load()
+      else await refreshTask()
     }
   } catch (reason) {
     ElMessage.error(String(reason))
-    await load()
+    await refreshTask()
   } finally {
     acting.value = false
   }
@@ -169,22 +254,51 @@ async function act(command: string) {
 async function retryReview(jobId: string) {
   try {
     await api.retryExperienceReview(jobId)
-    await load()
+    await loadTab()
   } catch (reason) {
     ElMessage.error(String(reason))
   }
 }
+function abortRequests() {
+  taskRequest?.abort()
+  workspaceRequest?.abort()
+  repoRequest?.abort()
+  tabRequest?.abort()
+  taskRequest = workspaceRequest = repoRequest = tabRequest = undefined
+}
 watch(id, () => {
-  task.value = undefined
-  binding.value = undefined
+  abortRequests()
+  task.value = binding.value = repo.value = undefined
+  checkingWorkspace.value = repoError.value = editing.value = false
+  error.value = contentError.value = workspaceError.value = ''
+  events.value = []
+  reviews.value = []
   loading.value = true
   void load()
+  void loadTab()
+})
+watch(tab, name => {
+  tabRequest?.abort()
+  tabRequest = undefined
+  contentError.value = ''
+  if (name === 'workspace' && !frameUrl.value) void loadWorkspace()
+  if (name === 'details') void loadRepo()
+  void loadTab()
 })
 onMounted(() => {
   void load()
-  timer = setInterval(load, 4000)
+  void loadTab()
+  timer = setInterval(() => {
+    if (!document.hidden) {
+      void load()
+      void loadTab()
+    }
+  }, 4000)
 })
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => {
+  clearInterval(timer)
+  abortRequests()
+})
 </script>
 
 <style scoped>
@@ -194,8 +308,13 @@ onUnmounted(() => clearInterval(timer))
   flex-direction: column;
   min-height: 0;
 }
-.task-tabs :deep(.el-tabs__content) { flex: 1; min-height: 0; }
+.task-tabs :deep(.el-tabs__content) { flex: 1; min-height: 0; overflow: hidden; }
 .task-pane { height: 100%; min-height: 0; }
+.task-pane--events { display: flex; flex-direction: column; }
+.task-context { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; min-width: 0; }
+.task-context div { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.task-context dt { color: var(--astra-text-muted); white-space: nowrap; }
+.task-context dd { margin: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-pane--scroll { overflow-y: auto; padding-right: 12px; scrollbar-gutter: stable; }
 iframe { display: block; width: 100%; height: 100%; border: 0; }
 .description { white-space: pre-wrap; overflow-wrap: anywhere; }

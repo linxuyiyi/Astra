@@ -18,9 +18,9 @@ from app.models import (
     WorkerHttpSlot,
     WorkerMaintenanceOperation,
 )
-from app.runtime.occupancy import occupying_exists, sync_worker_occupancy
+from app.runtime.occupancy import OCCUPYING_STATUSES, occupying_exists, sync_worker_occupancy
 from app.runtime.repository import cipher
-from app.schemas import WorkerCreate, WorkerRead, WorkerWrite
+from app.schemas import WorkerCreate, WorkerOccupiedTask, WorkerRead, WorkerWrite
 
 router = APIRouter(prefix="/api/workers")
 
@@ -39,6 +39,26 @@ async def guard_worker(session, worker):
     )
     if occupied or maintenance:
         raise HTTPException(409, "Worker 有未释放任务或维护操作，不能修改执行配置")
+
+
+async def worker_reads(session, workers):
+    if not workers:
+        return []
+    tasks = await session.execute(
+        select(Task.agent_worker_id, Task.id, Task.title)
+        .where(
+            Task.agent_worker_id.in_([worker.id for worker in workers]),
+            Task.status.in_(OCCUPYING_STATUSES),
+        )
+        .order_by(Task.created_at, Task.id)
+    )
+    occupied = {}
+    for worker_id, task_id, title in tasks:
+        occupied.setdefault(worker_id, []).append(WorkerOccupiedTask(id=task_id, title=title))
+    return [
+        WorkerRead.model_validate(worker).model_copy(update={"occupied_tasks": occupied.get(worker.id, [])})
+        for worker in workers
+    ]
 
 
 def config_values(payload):
@@ -70,11 +90,12 @@ async def list_workers(
     response.headers["X-Total-Count"] = str(
         await session.scalar(select(func.count()).select_from(query.subquery()))
     )
-    return (
+    workers = (
         await session.scalars(
             query.order_by(AgentWorker.created_at, AgentWorker.id).offset(offset).limit(limit)
         )
     ).all()
+    return await worker_reads(session, workers)
 
 
 @router.post("", response_model=WorkerRead, status_code=201)
@@ -94,7 +115,10 @@ async def create_worker(payload: WorkerCreate, session=Depends(get_session)):
 
 @router.get("/{worker_id}", response_model=WorkerRead)
 async def get_worker(worker_id: str, session=Depends(get_session)):
-    return await require_worker(worker_id, session)
+    worker = await session.get(AgentWorker, worker_id)
+    if not worker:
+        raise HTTPException(404, "Worker 不存在")
+    return (await worker_reads(session, [worker]))[0]
 
 
 @router.put("/{worker_id}", response_model=WorkerRead)
@@ -134,7 +158,7 @@ async def update_worker(worker_id: str, payload: WorkerWrite, session=Depends(ge
         gateway = get_gateway()
         await gateway.bus.clear_owner(worker.id, previous_epoch, None)
         gateway._close_local_socket(worker.id, previous_epoch)
-    return worker
+    return (await worker_reads(session, [worker]))[0]
 
 
 @router.post("/{worker_id}/pause", response_model=WorkerRead)
@@ -142,7 +166,7 @@ async def pause_worker(worker_id: str, session=Depends(get_session)):
     worker = await require_worker(worker_id, session)
     worker.status = "PAUSED"
     await session.commit()
-    return worker
+    return (await worker_reads(session, [worker]))[0]
 
 
 @router.post("/{worker_id}/resume", response_model=WorkerRead)
@@ -155,7 +179,7 @@ async def resume_worker(worker_id: str, session=Depends(get_session)):
     worker.status = "IDLE" if local or (owner and owner[1] == worker.epoch) else "OFFLINE"
     await sync_worker_occupancy(session, worker.id)
     await session.commit()
-    return worker
+    return (await worker_reads(session, [worker]))[0]
 
 
 @router.delete("/{worker_id}")

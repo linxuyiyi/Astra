@@ -245,13 +245,7 @@ class TaskTools:
         task = await self._task(task_id)
         if isinstance(task, dict):
             return task
-        if task.status != TaskStatus.WAITING.value:
-            return self._refuse(task, "只有等待中的任务可以恢复")
-        runtime = RuntimeService(self.session)
-        return await self._runtime(
-            task,
-            lambda: runtime.continue_task(task.id) if task.current_session_id else runtime.start(task.id),
-        )
+        return await self._runtime(task, lambda: RuntimeService(self.session).resume(task.id))
 
     async def terminate(self, task_id: str) -> dict[str, Any]:
         task = await self._task(task_id)
@@ -265,9 +259,7 @@ class TaskTools:
         task = await self._task(task_id)
         if isinstance(task, dict):
             return task
-        if task.status not in {TaskStatus.CANCELED.value}:
-            return self._refuse(task, "只有失败或已终止的任务可以重试")
-        return await self._runtime(task, lambda: RuntimeService(self.session).start(task.id, restart=True))
+        return await self._runtime(task, lambda: RuntimeService(self.session).restart(task.id))
 
     async def logs(self, task_id: str) -> dict[str, Any]:
         task = await self._task(task_id)
@@ -371,7 +363,6 @@ class TaskTools:
             task = await self.session.get(Task, task_id)
         elif task.status == TaskStatus.PENDING.value:
             return self._refuse(task, "任务尚未开始")
-            task = await self.session.get(Task, task_id)
         task.current_progress = reason.strip()
         task.waiting_reason = "intervention"
         await self.session.commit()
@@ -453,10 +444,6 @@ class TaskTools:
         task = await self._task(task_id)
         if isinstance(task, dict):
             return task
-        if task.status == TaskStatus.SUCCEEDED.value:
-            return self._ok(task)
-        if task.status in {TaskStatus.CANCELED.value, TaskStatus.PENDING.value}:
-            return self._refuse(task, "当前状态不能确认完成")
         return await self._runtime(task, lambda: RuntimeService(self.session).confirm_completion(task.id))
 
     async def _runtime(self, task: Task, call) -> dict[str, Any]:

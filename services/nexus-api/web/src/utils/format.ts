@@ -21,16 +21,14 @@ export const statusLabel = (value: string) => isRuntimeState(value) ? runtimeSta
 export const taskTypeLabel = (value: string) => value === 'ISSUE' ? '问题' : value === 'REQUIREMENT' ? '需求' : '未知类型'
 export const priorityLabel = (value: string) => ({ VERY_HIGH: '很高', HIGH: '高', MEDIUM: '中', LOW: '低' }[value] ?? '未设置')
 
-const STATUS_TAG_TYPES = { info: 'primary', success: 'success', warning: 'warning', danger: 'danger', neutral: 'info' } as const
-export const statusTagType = (status: string) => STATUS_TAG_TYPES[statusTone(status)]
-
 export function statusTone(status: string): 'info' | 'success' | 'warning' | 'danger' | 'neutral' {
-  if (['WORKING', 'COLLABORATING', 'AVAILABLE'].includes(status)) return 'success'
+  if (isRuntimeState(status)) return runtimeStatusTone(status)
+  if (['COLLABORATING', 'AVAILABLE'].includes(status)) return 'success'
   if (['WAIT_HUMAN', 'NEED_HUMAN', 'WAITING', 'PAUSED', 'DRIFTED'].includes(status)) return 'warning'
   if (['ERROR', 'UNAVAILABLE'].includes(status)) return 'danger'
   if (['IDLE', 'OFFLINE', 'UNKNOWN'].includes(status)) return 'neutral'
   if (status === 'CHECKING') return 'info'
-  return isRuntimeState(status) ? runtimeStatusTone(status) : 'neutral'
+  return 'neutral'
 }
 
 const parseApiTime = (value: string) => new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(value) ? value : `${value}Z`)

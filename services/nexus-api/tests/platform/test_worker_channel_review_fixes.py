@@ -13,8 +13,10 @@ import pytest
 
 from app.api.workspace_routes import native_events
 from app.database import SessionLocal
+from app.executors.errors import OpenCodeServerUnavailable
 from app.main import app
 from app.models import WorkerCommand
+from app.runtime.worker_client import WorkerOpenCodeClient
 from app.worker_agent.connection import (
     AgentConfig,
     WorkerConnectionManager,
@@ -23,6 +25,7 @@ from app.worker_agent.connection import (
 from app.worker_agent.local_opencode import bind_local_opencode
 from app.worker_agent.process_env import child_environ
 from app.worker_agent.workspace import prepare_workspace_local
+from app.worker_gateway.bus import MemoryRouteBus
 from app.worker_gateway.events import EventLog
 from app.worker_gateway.protocol import WorkerMessage, envelope
 from app.worker_gateway.service import (
@@ -159,6 +162,44 @@ async def test_local_opencode_call_has_an_overall_timeout(monkeypatch):
     bind_local_opencode(manager, timeout=0.05)
     with pytest.raises(TimeoutError):
         await manager.local_request("GET", "/global/health", {"query": {}, "body": {}})
+
+
+@pytest.mark.asyncio
+async def test_local_opencode_reports_transport_failure_for_reads(monkeypatch):
+    async def unreachable(_client, *_args, **_kwargs):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(httpx.AsyncClient, "request", unreachable)
+    manager = SimpleNamespace(
+        config=SimpleNamespace(
+            gateway_url="http://127.0.0.1:9",
+            token="wtk_test",
+            opencode_url="http://127.0.0.1:9",
+        )
+    )
+    bind_local_opencode(manager)
+    assert await manager.local_request("GET", "/session/status", None) == {"status": 503}
+    with pytest.raises(httpx.ConnectError):
+        await manager.local_request("POST", "/session/ses_1/prompt_async", None)
+
+
+@pytest.mark.asyncio
+async def test_native_read_releases_wait_when_worker_reconnects(monkeypatch):
+    bus = MemoryRouteBus()
+    await bus.set_owner("wrk", "gateway", 1)
+    client = WorkerOpenCodeClient(agent_worker_id="wrk", gateway=SimpleNamespace(bus=bus))
+    started = asyncio.Event()
+
+    async def dispatch(*_args):
+        started.set()
+        return "wrk", 1, True, None
+
+    monkeypatch.setattr(client, "_dispatch", dispatch)
+    query = asyncio.create_task(client.request("GET", "/session/status"))
+    await started.wait()
+    await bus.set_owner("wrk", "gateway", 2)
+    with pytest.raises(OpenCodeServerUnavailable, match="Worker 连接已变化"):
+        await asyncio.wait_for(query, 3)
 
 
 def test_mysql_dialect_compiles_sweep_without_returning():
@@ -382,3 +423,53 @@ async def _until(predicate) -> None:
             return
         await asyncio.sleep(0.02)
     raise AssertionError("timed out")
+
+
+async def test_worker_sse_reconnects_after_native_stream_closes(monkeypatch):
+    calls = []
+    real_client = httpx.AsyncClient
+    directory = "/srv/app"
+
+    def native(request):
+        assert request.url.path == "/event" and request.url.params["directory"] == directory
+        calls.append(request)
+        kind = "server.connected" if len(calls) == 1 else "session.idle"
+        return httpx.Response(200, text=f'data: {{"type":"{kind}"}}\n\n')
+
+    monkeypatch.setattr(
+        httpx, "AsyncClient", lambda **kw: real_client(transport=httpx.MockTransport(native), **kw)
+    )
+
+    async def retry_delay(_):
+        await asyncio.sleep(0)
+
+    manager = WorkerConnectionManager(
+        AgentConfig(gateway_url="ws://nexus", agent_worker_id="wrk", token="wtk_test"),
+        sleep=retry_delay,
+    )
+    manager.epoch = 1
+    manager.stopped_directories.add(directory)
+    received = []
+
+    class Transport:
+        async def send(self, frame):
+            if frame["type"] == "event":
+                received.append(frame["payload"])
+                if received[-1]["event"]["type"] == "session.idle":
+                    manager.stopped_directories.add(directory)
+
+    incoming = envelope(
+        request_id="sub",
+        agent_worker_id="wrk",
+        session_id=None,
+        message_type="command",
+        payload={"name": "subscribe_events", "data": {"directory": directory}},
+    )
+    incoming.epoch = 1
+    incoming.expires_at = int(manager.clock()) + 30
+    manager._start_events(Transport(), incoming, 1)
+    await asyncio.wait_for(manager.event_tasks[directory], 2)
+    assert [item["seq"] for item in received] == [1, 2, 3]
+    assert [item["event"]["type"] for item in received] == [
+        "server.connected", "astra.event_gap", "session.idle",
+    ]

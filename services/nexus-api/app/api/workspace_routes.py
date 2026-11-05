@@ -623,7 +623,7 @@ async def start_task(task_id: str, session=Depends(get_session)):
 async def restart_task(task_id: str, session=Depends(get_session)):
     await require_task(task_id, session)
     try:
-        return await RuntimeService(session).start(task_id, restart=True)
+        return await RuntimeService(session).restart(task_id)
     except Exception as exc:
         raise error_response(exc) from exc
 
@@ -641,13 +641,9 @@ async def pause_task(task_id: str, session=Depends(get_session)):
 
 @router.post("/resume", response_model=TaskRead)
 async def resume_task(task_id: str, session=Depends(get_session)):
-    task = await require_task(task_id, session)
-    if task.status != TaskStatus.WAITING.value:
-        raise HTTPException(409, "只有等待中的任务可以恢复")
+    await require_task(task_id, session)
     try:
-        if task.current_session_id:
-            return await RuntimeService(session).continue_task(task_id)
-        return await RuntimeService(session).start(task_id)
+        return await RuntimeService(session).resume(task_id)
     except Exception as exc:
         raise error_response(exc) from exc
 

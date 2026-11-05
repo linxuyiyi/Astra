@@ -24,6 +24,11 @@ export type TaskCategoryWrite = Pick<
   | 'question_prompt'
 >
 
+export interface WorkerOccupiedTask {
+  id: string
+  title: string
+}
+
 export interface Worker {
   id: string
   name: string
@@ -52,6 +57,7 @@ export interface Worker {
   epoch: number
   last_heartbeat_at: string | null
   agent_version: string | null
+  occupied_tasks: WorkerOccupiedTask[]
   created_at: string
   updated_at: string
 }

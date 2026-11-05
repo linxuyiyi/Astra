@@ -1,8 +1,36 @@
 <template>
   <section class="admin-page" data-testid="worker-maintenance">
+    <section aria-label="运行环境">
+      <AstraPageHeader title="运行环境">
+        <SemanticTag :tone="readiness[health?.readiness ?? 'UNKNOWN'].tone" :label="readiness[health?.readiness ?? 'UNKNOWN'].label" />
+      </AstraPageHeader>
+      <el-descriptions v-if="health" :column="1" border class="equipment">
+        <el-descriptions-item v-for="item in health.runtime_health.equipment" :key="item.key" :label="item.label">
+          <div class="equipment-row">
+            <SemanticTag :tone="equipmentState[item.state].tone" :label="equipmentState[item.state].label" />
+            <template v-if="item.key === 'worker_agent'">
+              <span>{{ worker.mode === 'LOCAL' ? '本机运行' : (health.connection.state === 'online' ? '已连接' : '未连接') }}</span>
+              <span v-if="worker.mode !== 'LOCAL' && (item.actual_revision || worker.agent_version)">版本 {{ item.actual_revision || worker.agent_version }}</span>
+            </template>
+            <span v-else-if="item.key === 'opencode' && item.actual_revision">版本 {{ item.actual_revision }}</span>
+            <span v-else-if="item.key !== 'git' && item.detail">{{ item.detail }}</span>
+            <template v-if="item.key === 'git' && health.repository">
+              <span>远端 {{ health.repository.authentication_verified === true ? '已验证' : health.repository.authentication_verified === false ? '验证失败' : '未检查' }}</span>
+              <span v-if="health.repository.url" class="repository-url" :title="health.repository.url">{{ health.repository.url }}</span>
+              <span v-if="health.repository.branch">分支 {{ health.repository.branch }}</span>
+              <span v-if="health.repository.commit">Commit <IdDisplay :value="health.repository.commit" :max-width="13" /></span>
+              <span v-if="health.repository.dirty !== null">{{ health.repository.dirty ? '有未提交修改' : '工作树干净' }}</span>
+            </template>
+          </div>
+          <ul v-if="diagnostics(item).length" class="equipment-reasons" :class="{ 'equipment-reasons--error': item.state === 'degraded' || item.error }">
+            <li v-for="reason in diagnostics(item)" :key="reason">{{ reason }}</li>
+          </ul>
+        </el-descriptions-item>
+      </el-descriptions>
+      <el-empty v-else :image-size="56" description="暂无运行环境诊断" />
+    </section>
     <AstraPageHeader title="运维操作">
       <template #default>
-        <span v-if="health">运行环境 · {{ readinessLabels[health.readiness] }}</span>
         <span v-if="blocking">{{ blocking }}</span>
       </template>
       <template #actions>
@@ -60,17 +88,17 @@ import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { RefreshCw } from 'lucide-vue-next'
 import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
+import IdDisplay from '@/components/astra/IdDisplay.vue'
 import SemanticTag from '@/components/astra/SemanticTag.vue'
 import type { Worker } from '@/api/types'
-import { getWorkerHealth, listMaintenanceOperations, submitMaintenance, type MaintenanceOperation, type MaintenanceAction, type WorkerHealth } from '@/api/maintenance'
+import { listMaintenanceOperations, submitMaintenance, type MaintenanceOperation, type MaintenanceAction, type WorkerHealth, type WorkerEquipmentItem } from '@/api/maintenance'
 import { maintenanceActions, maintenanceActive, maintenanceStates } from '@/features/workers/maintenance'
-import { maintenanceSemanticTone } from '@/features/workers/semantic'
+import { maintenanceSemanticTone, type SemanticTone } from '@/features/workers/semantic'
 import { formatTime } from '@/utils/format'
 
-const props = defineProps<{ worker: Worker }>()
+const props = defineProps<{ worker: Worker; health?: WorkerHealth }>()
 const router = useRouter()
 const operations = ref<MaintenanceOperation[]>([])
-const health = ref<WorkerHealth>()
 const error = ref('')
 const loading = ref(false)
 const submitting = ref(false)
@@ -79,14 +107,32 @@ const stateFilter = ref('')
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-const readinessLabels = { READY: '就绪', DRIFTED: '待同步', DEGRADED: '不可用', UNKNOWN: '未检查' }
+const readiness: Record<WorkerHealth['readiness'], { label: string; tone: SemanticTone }> = {
+  READY: { label: '就绪', tone: 'success' },
+  DRIFTED: { label: '待同步', tone: 'attention' },
+  DEGRADED: { label: '异常', tone: 'danger' },
+  UNKNOWN: { label: '未检查', tone: 'neutral' },
+}
+const equipmentState: Record<WorkerEquipmentItem['state'], { label: string; tone: SemanticTone }> = {
+  ready: { label: '正常', tone: 'success' },
+  drifted: { label: '待同步', tone: 'attention' },
+  degraded: { label: '异常', tone: 'danger' },
+  unknown: { label: '未检查', tone: 'neutral' },
+}
+function diagnostics(item: WorkerEquipmentItem) {
+  const reasons = item.key === 'git' && item.state === 'ready' ? [] : [...item.diff]
+  const error = item.error || (item.key === 'git' ? props.health?.repository?.error : null)
+  if (error && !reasons.some(reason => reason.includes(error))) reasons.push(error)
+  return [...new Set(reasons)]
+}
 const blocking = computed(() =>
-  health.value?.blocking.filter(item => ['maintenance_active', 'occupied_task'].includes(item.code)).map(item => item.message).join('；'),
+  props.health?.blocking.filter(item => ['maintenance_active', 'occupied_task'].includes(item.code)).map(item => item.message).join('；'),
 )
 let request: AbortController | undefined
 let timer: ReturnType<typeof setInterval> | undefined
 
 async function load(background = false) {
+  if (background && (request || document.hidden)) return
   request?.abort()
   const controller = new AbortController()
   request = controller
@@ -98,14 +144,10 @@ async function load(background = false) {
   if (actionFilter.value) query.set('action', actionFilter.value)
   if (stateFilter.value) query.set('state', stateFilter.value)
   try {
-    const [result, status] = await Promise.all([
-      listMaintenanceOperations(props.worker.id, query, controller.signal),
-      getWorkerHealth(props.worker.id, controller.signal),
-    ])
+    const result = await listMaintenanceOperations(props.worker.id, query, controller.signal)
     if (request !== controller) return
     operations.value = result.items
     total.value = result.total
-    health.value = status
   } catch (reason) {
     if (!controller.signal.aborted) error.value = String(reason)
   } finally {
@@ -124,12 +166,13 @@ function openOperation(operationId: string) {
 }
 function canSubmit(action: MaintenanceAction) {
   const worker = props.worker
-  if (submitting.value || !health.value || health.value.blocking.some(item => item.code === 'maintenance_active')) return false
-  if (action === 'check') return true
-  if (worker.mode !== 'LINUX_REMOTE' || blocking.value) return false
+  if (submitting.value || !props.health || props.health.blocking.some(item => item.code === 'maintenance_active')) return false
+  const online = props.health.connection.state === 'online'
+  if (action === 'check') return online
+  if (worker.mode !== 'LINUX_REMOTE' || blocking.value || worker.occupied_tasks.length) return false
   if (action === 'deploy') return Boolean(worker.host && worker.username && worker.has_ssh_password)
-  if (action === 'update') return Boolean(worker.repository_url)
-  return true
+  if (action === 'update') return online && Boolean(worker.repository_url)
+  return online || worker.status === 'OFFLINE'
 }
 async function submit(action: MaintenanceAction) {
   submitting.value = true
@@ -149,7 +192,7 @@ watch([page, pageSize], () => load())
 onMounted(() => {
   void load()
   timer = setInterval(() => {
-    if (health.value?.maintenance && maintenanceActive(health.value.maintenance.state) && !request) void load(true)
+    if (operations.value.some(operation => maintenanceActive(operation.state))) void load(true)
   }, 3000)
 })
 onUnmounted(() => {
@@ -157,3 +200,11 @@ onUnmounted(() => {
   request?.abort()
 })
 </script>
+
+<style scoped>
+.equipment { margin-top: 8px; }
+.equipment-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.repository-url { max-width: min(380px, 100%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.equipment-reasons { margin: 4px 0 0; padding: 0; list-style: none; color: var(--astra-text-muted); overflow-wrap: anywhere; }
+.equipment-reasons--error { color: var(--astra-danger); }
+</style>

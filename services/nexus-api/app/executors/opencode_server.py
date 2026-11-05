@@ -58,6 +58,7 @@ class OpenCodeServerClient:
         return httpx.Timeout(
             None if stream else self._timeout_seconds,
             connect=10,
+            read=90 if stream else self._timeout_seconds,
         )
 
     async def request(

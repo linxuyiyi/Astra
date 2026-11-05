@@ -37,7 +37,7 @@ export interface WorkerEquipmentItem {
 }
 
 export interface WorkerRepositoryHealth {
-  id: string
+  authentication_verified: boolean | null
   url: string | null
   target_branch: string | null
   branch: string | null

@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -235,9 +234,22 @@ async def confirm_task_completion(task_id: str, session=Depends(get_session)):
 
 @router.delete("/tasks/{task_id}")
 async def delete_task(task_id: str, session=Depends(get_session)):
+    from app.runtime.experience_review.coordinator import ACTIVE_STATUSES, lock_review_source_task
+
+    await lock_review_source_task(session, task_id)
     task = await require_task(task_id, session)
     if task.status not in {"PENDING", "SUCCEEDED", "CANCELED"} or task.pending_message_id:
         raise HTTPException(409, "任务尚未释放，不能删除")
+    active_review = await session.scalar(
+        select(ExperienceReviewJob.id)
+        .where(
+            ExperienceReviewJob.task_id_snapshot == task_id,
+            ExperienceReviewJob.status.in_(ACTIVE_STATUSES),
+        )
+        .limit(1)
+    )
+    if active_review:
+        raise HTTPException(409, "任务仍有未完成的经验复盘，请在复盘结束后删除")
     # 数字图书馆引用属于历史审计信息，任务删除后置空引用而不是级联删除知识条目。
     await session.execute(
         update(KnowledgeItem)
@@ -254,25 +266,6 @@ async def delete_task(task_id: str, session=Depends(get_session)):
         update(ExperienceEvidence)
         .where(ExperienceEvidence.task_id == task_id)
         .values(task_id=None, source_session_id=None)
-    )
-    now = datetime.now(UTC)
-    await session.execute(
-        update(ExperienceReviewJob)
-        .where(
-            ExperienceReviewJob.task_id_snapshot == task_id,
-            ExperienceReviewJob.status.in_(
-                ("PENDING", "COLLECTING", "ANALYZING", "VALIDATING", "WRITING", "RETRY_WAIT")
-            ),
-        )
-        .values(
-            status="SKIPPED_SOURCE_MISSING",
-            error_code="task_deleted",
-            error_message="任务已删除，复盘来源不可用",
-            finished_at=now,
-            lease_owner=None,
-            lease_token=None,
-            lease_until=None,
-        )
     )
     await session.execute(delete(TaskWakeOutbox).where(TaskWakeOutbox.task_id == task_id))
     await session.delete(task)

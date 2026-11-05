@@ -126,7 +126,7 @@ function diagnostics(item: WorkerEquipmentItem) {
   return [...new Set(reasons)]
 }
 const blocking = computed(() =>
-  props.health?.blocking.filter(item => ['maintenance_active', 'occupied_task'].includes(item.code)).map(item => item.message).join('；'),
+  props.health?.blocking.filter(item => ['maintenance_active', 'occupied_task', 'review_active'].includes(item.code)).map(item => item.message).join('；'),
 )
 let request: AbortController | undefined
 let timer: ReturnType<typeof setInterval> | undefined
@@ -179,7 +179,7 @@ async function submit(action: MaintenanceAction) {
   submitting.value = true
   try {
     if (action !== 'check') {
-      await ElMessageBox.confirm('维护将操作 Worker 的原生运行环境。有未释放任务时禁止执行。', maintenanceActions[action], { type: 'warning' })
+      await ElMessageBox.confirm('维护将操作 Worker 的原生运行环境。请等待占用任务释放和来源复盘结束。', maintenanceActions[action], { type: 'warning' })
     }
     const operation = await submitMaintenance(props.worker.id, action)
     await openOperation(operation.id)

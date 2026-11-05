@@ -740,6 +740,114 @@ async def test_review_reads_frozen_native_source_and_writes_real_candidate(setup
             await trace_reader.read_trace(job.source_snapshot)
 
 
+async def test_task_delete_protects_active_review_and_keeps_completed_evidence(setup_runtime, monkeypatch):
+    import httpx
+
+    from app.main import app
+    from app.models import ExperienceEvidence, KnowledgeItem
+    from app.runtime.experience_review import coordinator
+
+    _, _, native = setup_runtime
+    monkeypatch.setattr(get_settings(), "experience_review_enabled", True)
+    async with SessionLocal() as db:
+        task = await create_task(db, setup_runtime)
+        runtime = RuntimeService(db)
+        await runtime.start(task.id)
+        sid = task.current_session_id
+        native.sessions[sid]["status"] = "idle"
+        await runtime.refresh(task.id)
+        await runtime.confirm_completion(task.id)
+        task_id = task.id
+        job = await db.scalar(select(ExperienceReviewJob).where(ExperienceReviewJob.task_id == task_id))
+        job_id = job.id
+        snapshot = job.source_snapshot
+        item = KnowledgeItem(
+            id="knowledge-" + uuid4().hex,
+            type="experience",
+            title="已有经验候选",
+            status="candidate",
+            source_task_id=task_id,
+            source_session_id=sid,
+            created_by="fixture",
+            updated_by="fixture",
+        )
+        evidence = ExperienceEvidence(
+            knowledge_id=item.id, task_id=task_id, source_session_id=sid, native_session_id=sid,
+            evidence_type="verification", review_job_id=job_id,
+        )
+        job.status = coordinator.FAILED
+        job.candidate_ids = [item.id]
+        db.add_all([item, evidence])
+        await db.commit()
+        item_id, evidence_id = item.id, evidence.id
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        path = f"/api/tasks/{task_id}"
+        async with SessionLocal() as retry_db:
+            retry_ready = asyncio.Event()
+            delete_started = asyncio.Event()
+            commit_retry = asyncio.Event()
+            commit = retry_db.commit
+            lock_source = coordinator.lock_review_source_task
+
+            async def pause_retry_commit():
+                await retry_db.flush()
+                retry_ready.set()
+                await commit_retry.wait()
+                await commit()
+
+            async def observe_delete_lock(session, source_task_id):
+                if session is not retry_db:
+                    delete_started.set()
+                await lock_source(session, source_task_id)
+
+            with monkeypatch.context() as patch:
+                patch.setattr(retry_db, "commit", pause_retry_commit)
+                patch.setattr(coordinator, "lock_review_source_task", observe_delete_lock)
+                async with asyncio.TaskGroup() as group:
+                    retried = group.create_task(coordinator.retry_job(retry_db, job_id))
+                    await asyncio.wait_for(retry_ready.wait(), timeout=5)
+                    deleting = group.create_task(client.delete(path))
+                    await asyncio.wait_for(delete_started.wait(), timeout=5)
+                    commit_retry.set()
+                assert retried.result().status == coordinator.PENDING
+                assert deleting.result().status_code == 409
+
+        for review_status in coordinator.ACTIVE_STATUSES:
+            async with SessionLocal() as db:
+                job = await db.get(ExperienceReviewJob, job_id)
+                job.status = review_status
+                job.lease_token = "fixture-lease"
+                await db.commit()
+
+            blocked = await client.delete(path)
+            assert blocked.status_code == 409 and "未完成的经验复盘" in blocked.json()["detail"]
+            async with SessionLocal() as db:
+                job = await db.get(ExperienceReviewJob, job_id)
+                assert job.status == review_status and job.lease_token == "fixture-lease"
+                assert (await db.get(Task, task_id)).status == "SUCCEEDED"
+                assert (await db.get(KnowledgeItem, item_id)).source_task_id == task_id
+                assert (await db.get(ExperienceEvidence, evidence_id)).task_id == task_id
+
+        async with SessionLocal() as db:
+            job = await db.get(ExperienceReviewJob, job_id)
+            job.status = coordinator.SUCCEEDED
+            job.lease_token = None
+            await db.commit()
+
+        deleted = await client.delete(path)
+        assert deleted.status_code == 200 and deleted.json() == {"deleted": task_id}
+        assert (await client.get(path)).status_code == 404
+
+    async with SessionLocal() as db:
+        job = await db.get(ExperienceReviewJob, job_id)
+        assert job.status == coordinator.SUCCEEDED and job.source_snapshot == snapshot
+        assert job.candidate_ids == [item_id]
+        assert (await db.get(KnowledgeItem, item_id)).source_task_id is None
+        evidence = await db.get(ExperienceEvidence, evidence_id)
+        assert evidence.task_id is None and evidence.native_session_id == sid
+
+
 async def test_paused_worker_remains_paused_across_disconnect_and_reconnect(setup_runtime):
     worker, _, _ = setup_runtime
     gateway = WorkerGateway(bus=MemoryRouteBus())
@@ -861,6 +969,9 @@ async def test_unknown_mutating_maintenance_keeps_worker_locked(setup_runtime, m
         operation = await db.get(WorkerMaintenanceOperation, operation_id)
         assert operation.state == "FAILED" and operation.stage == "stop_unconfirmed"
         assert operation.active_worker_id == worker
+        with pytest.raises(HTTPException, match="请先确认远端维护已停止") as exc:
+            await maintenance.retry_operation(db, operation_id)
+        assert exc.value.status_code == 409
         with pytest.raises(HTTPException):
             await submit_operation(db, worker, "check")
 
@@ -1385,6 +1496,67 @@ async def test_active_review_protects_source_worker_only_until_finished(setup_ru
             await db.commit()
         assert (await client.put(path, json={**config, "branch": "next"})).status_code == 200
         assert (await client.delete(path)).status_code == 200
+
+
+@pytest.mark.parametrize("action", ["deploy", "update", "restart"])
+async def test_active_review_blocks_disruptive_maintenance(setup_runtime, monkeypatch, action):
+    import httpx
+
+    from app.main import app
+
+    worker_id, _, native = setup_runtime
+    monkeypatch.setattr(get_settings(), "experience_review_enabled", True)
+    monkeypatch.setattr(get_settings(), "mcp_transport", "streamable-http")
+    async with SessionLocal() as db:
+        worker = await db.get(AgentWorker, worker_id)
+        worker.repository_url = "https://example.test/repository.git"
+        worker.ssh_password = "fixture-password"
+        await db.commit()
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test", headers={"X-Owner-Id": "review-test"},
+    ) as client:
+        path = f"/api/workers/{worker_id}/maintenance"
+        previous = await client.post(path, json={"action": action})
+        assert previous.status_code == 202
+        operation_path = f"/api/maintenance/{previous.json()['id']}"
+        assert (await client.post(operation_path + "/cancel")).status_code == 200
+
+        async with SessionLocal() as db:
+            task = await create_task(db, setup_runtime)
+            runtime = RuntimeService(db)
+            await runtime.start(task.id)
+            native.sessions[task.current_session_id]["status"] = "idle"
+            await runtime.refresh(task.id)
+            await runtime.confirm_completion(task.id)
+            assert task.status == "SUCCEEDED"
+            job = await db.scalar(select(ExperienceReviewJob).where(ExperienceReviewJob.task_id == task.id))
+            job_id = job.id
+
+        for review_status in ("PENDING", "ANALYZING", "RETRY_WAIT"):
+            async with SessionLocal() as db:
+                job = await db.get(ExperienceReviewJob, job_id)
+                job.status = review_status
+                await db.commit()
+            for result in (
+                await client.post(path, json={"action": action}),
+                await client.post(operation_path + "/retry"),
+            ):
+                assert result.status_code == 409
+                assert "未完成经验复盘" in result.json()["detail"]
+
+        check = await client.post(path, json={"action": "check"})
+        assert check.status_code == 202
+        assert (await client.post(f"/api/maintenance/{check.json()['id']}/cancel")).status_code == 200
+
+        async with SessionLocal() as db:
+            job = await db.get(ExperienceReviewJob, job_id)
+            job.status = "SUCCEEDED"
+            await db.commit()
+        retried = await client.post(operation_path + "/retry")
+        assert retried.status_code == 200 and retried.json()["attempt"] == 2
+        assert (await client.post(operation_path + "/cancel")).status_code == 200
+        assert (await client.post(path, json={"action": action})).status_code == 202
 
 
 async def test_event_and_maintenance_history_use_bounded_id_windows(setup_runtime):

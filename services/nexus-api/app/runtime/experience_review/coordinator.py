@@ -112,6 +112,16 @@ async def source_worker_in_use(session: AsyncSession, worker_id: str) -> bool:
     ))
 
 
+async def lock_review_source_task(session: AsyncSession, task_id: str) -> None:
+    """串行化来源 Task 的删除与手动重试，SQLite 也通过写语句持锁。"""
+    await session.execute(
+        update(Task)
+        .where(Task.id == task_id)
+        .values(updated_at=Task.updated_at)
+        .execution_options(synchronize_session=False)
+    )
+
+
 async def claim_job(session: AsyncSession, job_id: str, owner: str) -> ExperienceReviewJob | None:
     now = _now()
     token = uuid4().hex
@@ -138,8 +148,14 @@ async def claim_job(session: AsyncSession, job_id: str, owner: str) -> Experienc
 
 
 async def retry_job(session: AsyncSession, job_id: str) -> ExperienceReviewJob | None:
+    retryable_statuses = (FAILED, NO_FINDINGS, SKIPPED_SOURCE_MISSING)
     job = await session.get(ExperienceReviewJob, job_id)
-    if job is None or job.status not in {FAILED, NO_FINDINGS, SKIPPED_SOURCE_MISSING}:
+    if job is None or job.status not in retryable_statuses:
+        return None
+    if job.task_id is not None:
+        await lock_review_source_task(session, job.task_id)
+    await session.refresh(job, with_for_update=True)
+    if job.status not in retryable_statuses:
         return None
     job.status = PENDING
     job.phase = PENDING

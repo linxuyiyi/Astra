@@ -74,6 +74,7 @@ DISRUPTIVE_ACTIONS = frozenset(
         MaintenanceAction.RESTART.value,
     }
 )
+REVIEW_ACTIVE_MESSAGE = "Worker 仍是未完成经验复盘的来源"
 
 
 class MaintenanceCanceled(RuntimeError):
@@ -197,12 +198,8 @@ async def require_no_active_maintenance(session, agent_worker_id: str | None) ->
         return
     active = await session.scalar(
         select(WorkerMaintenanceOperation.id)
-        .where(
-            WorkerMaintenanceOperation.agent_worker_id == agent_worker_id,
-            WorkerMaintenanceOperation.active_worker_id.is_not(None),
-        )
+        .where(WorkerMaintenanceOperation.active_worker_id == agent_worker_id)
         .with_for_update()
-        .limit(1)
     )
     if active is not None:
         raise HTTPException(409, "远程环境正在维护，请等待完成或先取消当前操作")
@@ -257,13 +254,22 @@ def _target_revision(environment: AgentWorker) -> dict[str, Any]:
     }
 
 
-async def _occupancy_blockers(session, employee_id: str | None) -> list[str]:
-    if not employee_id:
-        return []
+async def _occupancy_blockers(session, worker_id: str) -> list[str]:
+    from app.runtime.experience_review.coordinator import source_worker_in_use
+
     blockers: list[str] = []
-    if await session.scalar(select(1).where(occupying_exists(employee_id))):
-        blockers.append("occupied_task")
+    if await session.scalar(select(1).where(occupying_exists(worker_id))):
+        blockers.append("Worker 正在执行任务或等待人工确认")
+    if await source_worker_in_use(session, worker_id):
+        blockers.append(REVIEW_ACTIVE_MESSAGE)
     return blockers
+
+
+async def _require_safe_to_disrupt(session, worker_id: str) -> None:
+    blockers = await _occupancy_blockers(session, worker_id)
+    if blockers:
+        await session.rollback()
+        raise HTTPException(409, "；".join(blockers) + "，不能部署、更新或重启")
 
 
 def _initial_execution_route(environment: AgentWorker, action: str) -> tuple[str | None, str | None]:
@@ -287,22 +293,15 @@ async def submit_operation(
 ) -> WorkerMaintenanceOperation:
     """原子校验并写入排队维护操作。"""
 
-    environment = await session.scalar(select(AgentWorker).where(AgentWorker.id == agent_worker_id))
+    # 在持有 Worker 锁之后才建立 MySQL 一致性快照，避免读到锁等待前的占用与复盘状态。
+    environment = await session.get(AgentWorker, agent_worker_id, with_for_update=True)
     if environment is None:
         raise HTTPException(404, "Worker 环境不存在")
     _validate_action(environment, action)
     await lock_environment_row(session, environment)
     await require_no_active_maintenance(session, environment.id)
     if action in DISRUPTIVE_ACTIONS:
-        blockers = await _occupancy_blockers(session, environment.id)
-        if blockers:
-            await session.rollback()
-            raise HTTPException(
-                409,
-                "员工存在占用或未结束 Session，不能部署或重启"
-                if len(blockers) > 1
-                else "员工正在执行任务或等待人工确认，不能部署或重启",
-            )
+        await _require_safe_to_disrupt(session, environment.id)
     now = datetime.now(UTC)
     snapshot = environment_snapshot(environment)
     channel, reason = _initial_execution_route(environment, action)
@@ -807,28 +806,22 @@ async def cancel_operation(
 async def retry_operation(
     session, operation_id: str, *, actor: str | None = None
 ) -> WorkerMaintenanceOperation:
-    operation = await session.get(WorkerMaintenanceOperation, operation_id)
+    operation = await session.get(WorkerMaintenanceOperation, operation_id, with_for_update=True)
     if operation is None:
         raise HTTPException(404, "维护操作不存在")
     if operation.state not in {MaintenanceState.FAILED.value, MaintenanceState.CANCELED.value}:
         raise HTTPException(409, "仅失败或已取消的维护操作支持重试")
+    if operation.active_worker_id is not None:
+        raise HTTPException(409, "请先确认远端维护已停止，再重试操作")
 
-    environment = await session.get(AgentWorker, operation.agent_worker_id)
+    environment = await session.get(AgentWorker, operation.agent_worker_id, with_for_update=True)
     if environment is None:
         raise HTTPException(404, "Worker 环境不存在")
     _validate_action(environment, operation.action)
     await lock_environment_row(session, environment)
     await require_no_active_maintenance(session, environment.id)
     if operation.action in DISRUPTIVE_ACTIONS:
-        blockers = await _occupancy_blockers(session, environment.id)
-        if blockers:
-            await session.rollback()
-            raise HTTPException(
-                409,
-                "员工存在占用或未结束 Session，不能部署或重启"
-                if len(blockers) > 1
-                else "员工正在执行任务或等待人工确认，不能部署或重启",
-            )
+        await _require_safe_to_disrupt(session, environment.id)
 
     now = datetime.now(UTC)
     previous_attempt = operation.attempt
@@ -953,7 +946,7 @@ class OperationLease:
         async with SessionLocal() as session:
             blockers = await _occupancy_blockers(session, agent_worker_id)
         if blockers:
-            raise MaintenanceBlocked("Worker 有未释放任务，已中止破坏性维护动作")
+            raise MaintenanceBlocked("；".join(blockers) + "，已中止破坏性维护动作")
 
     async def set_execution_route(self, channel: str, reason: str) -> None:
         now = datetime.now(UTC)
@@ -1338,5 +1331,5 @@ async def environment_health(session, agent_worker_id):
     from app.runtime.experience_review.coordinator import source_worker_in_use
 
     if await source_worker_in_use(session, worker.id):
-        health["blocking"].append({"code": "review_active", "message": "Worker 仍是未完成经验复盘的来源"})
+        health["blocking"].append({"code": "review_active", "message": REVIEW_ACTIVE_MESSAGE})
     return health

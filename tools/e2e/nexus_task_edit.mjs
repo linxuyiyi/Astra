@@ -39,6 +39,7 @@ let created, saved, lastQuery, lastEventsQuery, listReads = 0
 const eventRows = Array.from({ length: 1200 }, (_, n) => ({ id: n + 1, message: '任务事件 ' + (n + 1), created_at: timestamp }))
 const actionRequests = []
 const eventRequests = []
+let runWorkspaceReads = 0
 await context.route('**/api/**', async route => {
   const request = route.request(), url = new URL(request.url()), method = request.method()
   const parts = url.pathname.split('/')
@@ -69,6 +70,7 @@ await context.route('**/api/**', async route => {
       Object.assign(row, saved)
       json = row
     } else if (parts[4] === 'workspace') {
+      if (row.id === 'run') runWorkspaceReads++
       json = { task_id: row.id, task_status: row.status, runtime: { session_id: row.current_session_id, workspace_ui: '/fixture-workspace.html' } }
     } else if (parts[4] === 'repo') json = { name: 'nexus-fixture', branch: 'topic/ui', commit: 'cafe123' }
     else if (parts[4] === 'events') {
@@ -222,13 +224,18 @@ try {
   await detail.getByRole('button', { name: '复制 run', exact: true }).click()
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), 'run')
   const liveRun = tasks.find(row => row.id === 'run')
+  const workspaceReadsBeforeDisconnect = runWorkspaceReads
   liveRun.worker_online = false
   await page.clock.fastForward(4_001)
   await detail.getByRole('status').filter({ hasText: 'Worker 离线' }).waitFor()
-  await frame.contentFrame().getByRole('heading', { name: '原生工作区夹具' }).waitFor()
+  await frame.waitFor({ state: 'detached' })
+  await detail.getByText('Worker 离线，等待连接恢复', { exact: true }).waitFor()
+  assert.equal(runWorkspaceReads, workspaceReadsBeforeDisconnect)
   liveRun.worker_online = true
   await page.clock.fastForward(4_001)
   await detail.getByRole('status').filter({ hasText: 'Worker 离线' }).waitFor({ state: 'hidden' })
+  await frame.contentFrame().getByRole('heading', { name: '原生工作区夹具' }).waitFor()
+  assert.equal(runWorkspaceReads, workspaceReadsBeforeDisconnect + 1)
   const frameHeight = (await frame.boundingBox()).height
   assert.ok(frameHeight > 350)
   await detail.getByRole('tab', { name: '任务详情' }).click()

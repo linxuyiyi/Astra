@@ -124,7 +124,7 @@ const secondaryActions = computed(() => actions.value.filter(item => item !== pr
 const frameUrl = computed(() => {
   const session = task.value?.current_session_id
   const runtime = binding.value?.runtime
-  if (!session || task.value?.waiting_reason === 'session_missing' || runtime?.session_id !== session || !runtime.workspace_ui) return ''
+  if (!session || task.value?.worker_online === false || task.value?.waiting_reason === 'session_missing' || runtime?.session_id !== session || !runtime.workspace_ui) return ''
   return `${runtime.workspace_ui}?task=${encodeURIComponent(id.value)}&session=${encodeURIComponent(session)}`
 })
 const workspaceMessage = computed(() => {
@@ -140,7 +140,7 @@ let repoRequest: AbortController | undefined
 let tabRequest: AbortController | undefined
 
 async function loadWorkspace() {
-  if (!task.value?.current_session_id || task.value.waiting_reason === 'session_missing' || workspaceRequest) return
+  if (!task.value?.current_session_id || task.value.worker_online === false || task.value.waiting_reason === 'session_missing' || workspaceRequest) return
   const controller = new AbortController()
   workspaceRequest = controller
   checkingWorkspace.value = true
@@ -229,18 +229,21 @@ async function load() {
     task.value = next
     error.value = ''
     const changed = next.current_session_id !== previous?.current_session_id || next.agent_worker_id !== previous?.agent_worker_id
-    if (changed) {
+    const connectionChanged = next.worker_online !== previous?.worker_online
+    if (changed || (connectionChanged && next.worker_online === false)) {
       workspaceRequest?.abort()
       workspaceRequest = undefined
       checkingWorkspace.value = false
       binding.value = undefined
+    }
+    if (changed) {
       repoRequest?.abort()
       repoRequest = undefined
       repo.value = undefined
       repoError.value = false
     }
-    if (changed || next.status !== previous?.status || next.current_progress !== previous?.current_progress || next.worker_online !== previous?.worker_online) {
-      if (!frameUrl.value && next.worker_online !== false) void loadWorkspace()
+    if (changed || next.status !== previous?.status || next.current_progress !== previous?.current_progress || connectionChanged) {
+      if (!frameUrl.value) void loadWorkspace()
       void loadRepo()
     }
   } catch (reason) {

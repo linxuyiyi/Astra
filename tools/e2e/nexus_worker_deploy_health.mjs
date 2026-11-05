@@ -35,12 +35,14 @@ const occupiedTask = {
   attachments: [], acceptance_criteria: [], updated_at: timestamp, description: '真实组件夹具',
 }
 const equipment = (key, label, state, fields = {}) => ({ key, label, state, diff: [], ...fields })
+let reviewActive = false
 const health = () => ({
   agent_worker_id: worker.id, enabled: worker.enabled, readiness: worker.status === 'OFFLINE' ? 'UNKNOWN' : 'DEGRADED',
   connection: { state: worker.status === 'OFFLINE' ? 'offline' : 'online' },
   blocking: [
     ...(worker.occupied_tasks.length ? [{ code: 'occupied_task', message: 'Worker 有未释放任务' }] : []),
     ...(history.some(row => row.stage === 'stop_unconfirmed') ? [{ code: 'maintenance_active', message: 'Worker 正在维护' }] : []),
+    ...(reviewActive ? [{ code: 'review_active', message: 'Worker 仍是未完成经验复盘的来源' }] : []),
   ],
   runtime_health: { equipment: [
     equipment('worker_agent', 'Worker Agent', worker.status === 'OFFLINE' ? 'unknown' : 'ready', { actual_revision: '1.5.0' }),
@@ -234,6 +236,21 @@ try {
   assert.equal(await detail.getByRole('button', { name: '删除', exact: true }).isEnabled(), true)
 
   const maintenance = detail.getByTestId('worker-maintenance')
+  reviewActive = true
+  await manual.click()
+  const reviewBlocker = maintenance.getByText('Worker 仍是未完成经验复盘的来源', { exact: true })
+  await reviewBlocker.waitFor()
+  for (const name of ['一键部署', '更新仓库', '重启']) {
+    assert.equal(await maintenance.getByRole('button', { name, exact: true }).isDisabled(), true)
+  }
+  assert.equal(await maintenance.getByRole('button', { name: '检查', exact: true }).isEnabled(), true)
+  reviewActive = false
+  await manual.click()
+  await reviewBlocker.waitFor({ state: 'hidden' })
+  for (const name of ['一键部署', '更新仓库', '重启']) {
+    assert.equal(await maintenance.getByRole('button', { name, exact: true }).isEnabled(), true)
+  }
+
   const externalOperation = operation('op-external', 'deploy', 'RUNNING', { error_message: '外部用户发起' })
   history.unshift(externalOperation)
   await page.clock.fastForward(10_001)

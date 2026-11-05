@@ -10,6 +10,31 @@ from pathlib import PurePosixPath
 from urllib.parse import urlsplit, urlunsplit
 
 from app.worker_agent.jsonc import loads_jsonc
+from nexus_api.resources import valid_skill_component
+
+
+def worker_mcp_config(item: dict) -> dict:
+    config = item.get("config") or {}
+    return {
+        "type": "remote",
+        "url": item["url"],
+        "enabled": True,
+        "oauth": False,
+        **{key: config[key] for key in ("headers", "oauth", "timeout") if key in config},
+    }
+
+
+def _skill_files(payload: dict) -> dict[str, bytes]:
+    files = {}
+    for item in payload.get("skills", []):
+        name = item["name"]
+        if not valid_skill_component(name):
+            raise RuntimeError("技能名称非法，拒绝写入")
+        files[name] = item["body"].encode()
+        for path, content in item.get("files", {}).items():
+            if path != "SKILL.md":
+                files[f"{name}/{path}"] = content
+    return files
 
 
 def merge_config(current: dict, manifest: dict, payload: dict) -> tuple[dict, dict]:
@@ -23,10 +48,7 @@ def merge_config(current: dict, manifest: dict, payload: dict) -> tuple[dict, di
             raise RuntimeError(f"现有 {key} 配置必须是对象，未覆盖")
         config.setdefault(key, {})
     managed_mcp = set(manifest.get("mcp", []))
-    desired = {
-        item["name"]: {"type": "remote", "url": item["url"], "enabled": True, "oauth": False}
-        for item in payload.get("mcp_refs", [])
-    }
+    desired = {item["name"]: worker_mcp_config(item) for item in payload.get("mcp_refs", [])}
     if payload.get("mcp"):
         desired["nexus-library"] = payload["mcp"]
     for name in managed_mcp - desired.keys():
@@ -52,12 +74,7 @@ def merge_config(current: dict, manifest: dict, payload: dict) -> tuple[dict, di
             "enabled_providers": ["nexus-gateway"],
         }
     )
-    skills = {}
-    for item in payload.get("skills", []):
-        name = item["name"]
-        if not re.fullmatch(r"[A-Za-z0-9._-]+", name) or name in {".", ".."}:
-            raise RuntimeError("技能名称非法，拒绝写入")
-        skills[name] = hashlib.sha256(item["body"].encode()).hexdigest()
+    skills = {key: hashlib.sha256(body).hexdigest() for key, body in _skill_files(payload).items()}
     return config, {
         "provider": "nexus-gateway" if payload.get("provider") else None,
         "mcp": sorted(desired),
@@ -77,11 +94,12 @@ async def configure_runtime(worker, payload: dict) -> dict:
         raise RuntimeError("已有 OpenCode 配置或管理清单不是有效 JSON，请人工处理，未覆盖") from exc
     config, new_manifest = merge_config(current, manifest, payload)
     writes, removals = [], []
-    desired = {item["name"]: item["body"].encode() for item in payload.get("skills", [])}
-    for name in set(manifest.get("skills", {})) | desired.keys():
-        if not re.fullmatch(r"[A-Za-z0-9._-]+", name) or name in {".", ".."}:
-            raise RuntimeError("已有管理清单含非法技能名称，未修改")
-        target = f"{root}/skill/{name}/SKILL.md"
+    desired = _skill_files(payload)
+    for name in sorted(set(manifest.get("skills", {})) | desired.keys()):
+        if not all(valid_skill_component(part) for part in name.split("/")):
+            raise RuntimeError("管理清单含非法技能路径，未修改")
+        relative = name if "/" in name else f"{name}/SKILL.md"
+        target = f"{root}/skill/{relative}"
         existing = await worker.ssh.read_file(target)
         if existing == desired.get(name):
             continue
@@ -97,8 +115,8 @@ async def configure_runtime(worker, payload: dict) -> dict:
 
     async def backup_skill(target, body):
         if body is not None:
-            name = PurePosixPath(target).parent.name
-            backup = f"{root}/.nexus-backups/{worker.operation_id}/skill-{name}.md"
+            relative = PurePosixPath(target).relative_to(f"{root}/skill")
+            backup = f"{root}/.nexus-backups/{worker.operation_id}/skill/{relative}"
             await worker._write_atomic_if_changed(backup, body, 0o600)
 
     for target, body, existing in writes:

@@ -49,11 +49,11 @@ sudo bash ops/deploy/install_nexus.sh --sources ops/deploy/sources/huawei.json
 
 唯一 Python 进程清单管理以下 11 个进程：AgentScope、网关、Nexus API、Library/Task/Schedule MCP、三个 Celery Worker、Celery Beat、Nginx。复用 `ops/dev/procman.py` 的进程组原语，记录 PID、创建时间、进程组、工作目录和发布提交；停止前重新核对，等待旧进程与端口退出再启动。已有正确的 Python 进程记录可迁移；未知进程/端口拒绝接管，可交互修改端口。旧 systemd 自启服务需管理员先停用，安装器不调用 systemctl。
 
-所有模型客户端统一使用平台一键部署生成的 Nginx HTTP 入口 `http://<控制机内网IP>:<NEXUS_DEPLOY_WORKER_PORT>/v1`，默认端口 18130，唯一配置项为 `NEXUS_GATEWAY_OPENAI_BASE`。平台聊天、AgentScope credential、embedding、ASR、复盘和 Worker/本机受管 OpenCode 共用该基址；复盘附加 `/chat/completions`。网关数据面监听 `127.0.0.1:18110`，仅供 Nginx upstream 转发。Worker 一键部署自动下发相同代理地址，不要求管理员另填。不再提供独立 Worker/复盘模型 URL，也不增加旧配置转换。
+所有模型客户端统一使用平台一键部署生成的 Nginx HTTP 入口 `http://<控制机内网IP>:<NEXUS_DEPLOY_WORKER_PORT>/v1`，交互安装建议端口 18130，运行时基址为 `NEXUS_GATEWAY_OPENAI_BASE`。平台聊天、AgentScope credential、embedding、ASR、复盘和 Worker/本机受管 OpenCode 共用该基址；复盘附加 `/chat/completions`。网关数据面监听 `127.0.0.1:18110`，仅供 Nginx upstream 转发。Worker 一键部署自动下发相同代理地址，不要求管理员另填。不再提供独立 Worker/复盘模型 URL，也不增加旧配置转换。
 
-内置 MCP 使用标准 HTTP，监听地址和端口由 `NEXUS_MCP_HOST/PORT`、`NEXUS_TASK_MCP_HOST/PORT`、`NEXUS_SCHEDULE_MCP_HOST/PORT` 统一生成，默认回环；AgentScope 分机部署时显式改为实际内网地址，Nexus 与 AgentScope 读取同一个 `NEXUS_TASK_MCP_URL` / `NEXUS_SCHEDULE_MCP_URL`。内网部署不生成或校验 MCP 共享 Bearer key；升级时旧 `NEXUS_MCP_API_KEY`、`NEXUS_TASK_MCP_KEY`、`NEXUS_SCHEDULE_MCP_KEY` 会被静默清理，不阻断升级。
+内置 MCP 使用标准 HTTP，监听地址和端口由对应的 `NEXUS_*_MCP_HOST/PORT` 控制，默认回环。部署器生成经 Nginx 的调用地址。Library 通过 Worker HTTP 入口的 `/mcp` 提供服务，Task 和 Schedule 通过控制机 Nginx 回环入口的 `/mcp/task` 与 `/mcp/schedule` 提供服务。Nexus、AgentScope 及服务间调用统一使用生成的地址。
 
-验收包括所有 HTTP 健康、每个 MCP 实际执行 `initialize` 和 `tools/list`、通过真实 AgentScope `/workspace/mcp` 注册 Task/Schedule MCP 并核对连接状态与工具、进程身份与发布环境、Nginx 实际配置响应版本、三条 Celery 队列 ping、HTTPS、Worker HTTP 管理路径隔离及网关鉴权。临时校验 Agent/Session 在验收后删除，不创建永久测试员工或业务任务。任意失败返回非零并显示阶段，不把部分启动算成功。模型路由未配置时不验证真实模型生成任务。
+验收包括所有 HTTP 健康、每个 MCP 实际执行 `initialize` 和 `tools/list`、通过真实 AgentScope MCP 登记接口注册并挂载 Task/Schedule MCP 并核对连接状态与工具、进程身份与发布环境、Nginx 实际配置响应版本、三条 Celery 队列 ping、HTTPS、Worker HTTP 管理路径隔离及网关鉴权。临时校验 Agent/Session 在验收后删除，不创建永久测试员工或业务任务。任意失败返回非零并显示阶段，不把部分启动算成功。模型路由未配置时不验证真实模型生成任务。
 
 ```bash
 # 同一入口的运维操作，不是另一套部署方案
@@ -67,13 +67,14 @@ sudo bash ops/deploy/install_nexus.sh --action stop
 
 | 入口/服务 | 默认地址 | 访问范围 |
 | --- | --- | --- |
-| Web / API / 网关 / WebSocket / SSE | `https://主IP:443` | Nginx HTTPS，代理到同机回环服务 |
+| 浏览器 Web、页面 API、SSE | `https://主IP:443` | Nginx HTTPS，代理 Nexus API |
+| 控制机内部 API / AgentScope / Task 与 Schedule MCP | `http://127.0.0.1:18130` | Nginx 回环监听，代理 `/api/`、`/agentscope/`、`/mcp/task` 和 `/mcp/schedule` |
 | Worker 专用入口 | `http://主IP:18130` | 指定 CIDR；仅 `/v1/`、`/mcp`、精确 Worker WebSocket 连接与 `/api/worker-gateway/data/`，保留 token/epoch 鉴权，其余 404 |
 | Nexus API / 网关 | `127.0.0.1:18120` / `127.0.0.1:18110` | 同容器内部 |
 | AgentScope | `127.0.0.1:18000` | 同容器内部 |
 | Library / Task / Schedule MCP | `127.0.0.1:18201/18202/18203` | 同容器内部，Library 经专用入口提供给 Worker |
 
-Nginx 使用部署器生成的完整配置，前台受管运行，不覆盖系统 Nginx 配置。已有外部 Nginx 占用入口时，明确处理冲突后才继续。平台自动生成非回环 Worker 地址；HTTPS 可通过 `NEXUS_DEPLOY_PUBLIC_HOST` 使用与证书匹配的域名。
+Nginx 使用部署器生成的完整配置，前台受管运行，不覆盖系统 Nginx 配置。已有外部 Nginx 占用入口时，明确处理冲突后才继续。平台按 `NEXUS_DEPLOY_PUBLIC_IP` 与 `NEXUS_DEPLOY_WORKER_PORT` 生成 Worker 调用地址。非交互部署必须显式提供端口。公司环境需要放行 Worker 到该端口，并把 Worker 的实际出口 IP 或网段加入 `NEXUS_DEPLOY_WORKER_ALLOW`。更换端口后重新运行平台部署，再重新部署 Worker 下发新地址。HTTPS 可通过 `NEXUS_DEPLOY_PUBLIC_HOST` 使用与证书匹配的域名。
 
 ## Worker 一键部署与升级
 
@@ -81,7 +82,11 @@ Nginx 使用部署器生成的完整配置，前台受管运行，不覆盖系�
 
 全新部署使用单守护管理 Worker 和 OpenCode；重复部署继续使用现有受管启停流程。不增加旧版进程识别、旧配置迁移或独立交接模块，不使用 systemd。
 
-MCP 就绪只依赖 `nexus-library` 和管理员显式绑定的服务。OpenCode 自行配置的额外 MCP 故障在维护面板保留告警，受管项健康时仍可调度；受管服务连接失败仍阻止新派单。
+Worker 安装运行环境前，通过 SSH 在目标主机验证模型、Library MCP、Worker HTTP 数据和 WebSocket 入口。安装完成后使用部署总时限的剩余预算，等待本次认证连接和当前装备快照。守护退出、认证失败和重复重连失败会返回相应的阻塞原因。
+
+MCP 验收覆盖 `nexus-library` 和显式绑定的服务，受管配置保留自定义请求头、OAuth 和超时参数。网络超时、连接错误等可识别的瞬时故障最多自动重连两次。额外 MCP 故障在维护面板显示告警。
+
+Worker 的 Skill 按平台登记名称绑定。每次部署复制当前启用版本的 `SKILL.md` 和附件。切换 Skill 版本后重新部署 Worker 应用更新。
 
 ## 验证边界
 

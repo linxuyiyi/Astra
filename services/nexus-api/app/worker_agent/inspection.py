@@ -716,11 +716,11 @@ def _secrets(config: Any) -> set[str]:
     if isinstance(mcp, dict):
         for entry in mcp.values():
             headers = entry.get("headers") if isinstance(entry, dict) else None
-            if not isinstance(headers, dict):
-                continue
-            for key, value in headers.items():
-                if isinstance(value, str) and _secret_key(str(key)) and len(value) >= 4:
-                    found.add(value)
+            if isinstance(headers, dict):
+                found.update(value for value in headers.values() if isinstance(value, str) and value)
+            oauth = entry.get("oauth") if isinstance(entry, dict) else None
+            if isinstance(oauth, dict) and isinstance(secret := oauth.get("clientSecret"), str) and secret:
+                found.add(secret)
     return found
 
 

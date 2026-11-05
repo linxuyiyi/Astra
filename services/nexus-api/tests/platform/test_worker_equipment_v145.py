@@ -180,3 +180,34 @@ def test_unbound_repository_is_explicitly_unconfigured():
     assert row["deployed"] is False
     assert row["verified"] is None
     assert row["error"] == "未绑定 Git 仓库"
+
+
+@pytest.mark.asyncio
+async def test_worker_skill_source_tracks_active_platform_version(session, tmp_path, monkeypatch):
+    from sqlalchemy import insert, update
+
+    from app.runtime.repository import load_worker_skills
+    from app.runtime.worker_readiness import load_readiness_context
+    from nexus_api.db_models import skills
+    from nexus_api.resources import ResourceStore
+
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    store = ResourceStore(tmp_path)
+    name = "任务管理"
+    version_one = b"---\nname: fixture\ndescription: v1\n---\nOld"
+    version_two = b"---\nname: fixture\ndescription: v2\n---\nNew"
+    store.write_version("nsk_test", 1, {"SKILL.md": version_one})
+    store.write_version("nsk_test", 2, {"SKILL.md": version_two, "references/guide.md": b"guide"})
+    await session.execute(insert(skills).values(
+        id="nsk_test", name=name, description="fixture", version=2, runtime_name="fixture",
+        enabled=1, created_at="now", updated_at="now",
+    ))
+    loaded = await load_worker_skills(session, [name], include_assets=True)
+    assert loaded[0]["body"].encode() == version_two
+    assert loaded[0]["files"]["references/guide.md"] == b"guide"
+    binding = SimpleNamespace(skill_refs=[name])
+    assert (await load_readiness_context(session, [binding])).skills[name]["body"] == version_two.decode()
+    await session.execute(update(skills).where(skills.c.id == "nsk_test").values(version=1))
+    assert (await load_readiness_context(session, [binding])).skills[name]["body"] == version_one.decode()
+    await session.execute(update(skills).where(skills.c.id == "nsk_test").values(enabled=0))
+    assert not await load_worker_skills(session, [name], include_assets=True)

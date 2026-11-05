@@ -200,7 +200,7 @@ def usable_address(value):
 
 
 def mcp_url(host: str, port: str, path: str = "/mcp") -> str:
-    """把监听地址和端口收敛成 AgentScope 使用的 URL；通配监听回落到回环。"""
+    """生成 Nginx upstream 地址；通配监听使用回环。"""
 
     address = str(host or "").strip() or "127.0.0.1"
     if address in {"0.0.0.0", "::", "[::]"}:
@@ -325,6 +325,11 @@ def initialize(values, root, state, dialog, addresses=None):
         "ASTRA_RUNTIME_DIR": str(state / "runtime"),
         "AGENTSCOPE_WORKSPACE_DIR": str(state / "agentscope-workspaces"),
     }
+    if not values.get("NEXUS_DEPLOY_WORKER_PORT"):
+        values["NEXUS_DEPLOY_WORKER_PORT"] = dialog.ask(
+            "已获公司放行的 Nginx Worker HTTP 端口（NEXUS_DEPLOY_WORKER_PORT）",
+            defaults["NEXUS_DEPLOY_WORKER_PORT"],
+        )
     for key, value in defaults.items():
         values.setdefault(key, value)
     for key in (
@@ -373,36 +378,36 @@ def initialize(values, root, state, dialog, addresses=None):
         "ASTRA_SERVICE_GATEWAY_HOST": "127.0.0.1",
         "AGENTSCOPE_HOST": "127.0.0.1",
         "NEXUS_MCP_TRANSPORT": "streamable-http",
+        "NEXUS_MCP_STREAMABLE_HTTP_PATH": "/mcp",
         "NEXUS_AGENTSCOPE_USER_ID": "nexus",
         "ASTRA_AGENTSCOPE_USER_ID": "nexus",
-        "NEXUS_API_BASE": "http://127.0.0.1:" + values["NEXUS_API_PORT"],
-        "NEXUS_AGENTSCOPE_BASE_URL": "http://127.0.0.1:" + values["AGENTSCOPE_PORT"],
         "NEXUS_RUNTIME_ENV_FILE": str(state / "nexus.env"),
     }
-    expected["ASTRA_NEXUS_API_BASE"] = expected["NEXUS_API_BASE"]
-    expected["ASTRA_AGENTSCOPE_BASE_URL"] = expected["NEXUS_AGENTSCOPE_BASE_URL"]
-    worker_base = "http://" + current + ":" + values["NEXUS_DEPLOY_WORKER_PORT"]
-    expected.update(
-        NEXUS_GATEWAY_OPENAI_BASE=worker_base + "/v1",
-        NEXUS_MCP_RESOURCE_SERVER_URL=worker_base + "/mcp",
-        NEXUS_WORKER_AGENT_GATEWAY_URL=worker_base.replace("http:", "ws:")
-        + "/api/worker-gateway/connect",
-    )
     for key, value in expected.items():
-        if key in values and values[key] != value and key not in {
-            "NEXUS_GATEWAY_OPENAI_BASE", "NEXUS_MCP_RESOURCE_SERVER_URL",
-            "NEXUS_WORKER_AGENT_GATEWAY_URL",
-        }:
+        if key in values and values[key] != value:
             chosen = dialog.resolve(key, values[key], value, "与单机受管服务拓扑不一致")
             if chosen != value:
                 raise DeploymentError(f"{key} 尚未修正，部署停止")
         values[key] = value
-    # MCP 监听地址默认回环；AgentScope 分机部署时显式改为实际内网地址。
-    # AgentScope 只读取同一个 URL，避免 Nexus 与 AgentScope 各记一份。
-    for prefix in ("NEXUS_TASK_MCP", "NEXUS_SCHEDULE_MCP"):
-        host_key = prefix + "_HOST"
-        values[host_key] = str(values.get(host_key) or "127.0.0.1").strip() or "127.0.0.1"
-        values[prefix + "_URL"] = mcp_url(values[host_key], values[prefix + "_PORT"])
+
+    port = values["NEXUS_DEPLOY_WORKER_PORT"]
+    local_proxy = f"http://127.0.0.1:{port}"
+    worker_proxy = f"http://{current}:{port}"
+    derived = {
+        "NEXUS_API_BASE": local_proxy,
+        "ASTRA_NEXUS_API_BASE": local_proxy,
+        "NEXUS_AGENTSCOPE_BASE_URL": local_proxy + "/agentscope",
+        "ASTRA_AGENTSCOPE_BASE_URL": local_proxy + "/agentscope",
+        "NEXUS_TASK_MCP_URL": local_proxy + "/mcp/task",
+        "NEXUS_SCHEDULE_MCP_URL": local_proxy + "/mcp/schedule",
+        "NEXUS_GATEWAY_OPENAI_BASE": worker_proxy + "/v1",
+        "NEXUS_MCP_RESOURCE_SERVER_URL": worker_proxy + "/mcp",
+        "NEXUS_WORKER_AGENT_GATEWAY_URL": f"ws://{current}:{port}/api/worker-gateway/connect",
+    }
+    for key, value in derived.items():
+        if key in values and values[key] != value:
+            print(f"[配置诊断] {key} 由 Nginx 入口重新生成：{value}")
+        values[key] = value
     for key in (
         "NEXUS_INTERNAL_KEY",
         "NEXUS_WORKER_GATEWAY_ADMIN_KEY",

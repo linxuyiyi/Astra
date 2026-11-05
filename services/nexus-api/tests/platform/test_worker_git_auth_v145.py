@@ -370,7 +370,7 @@ async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkey
         return True
 
     async def credentials():
-        return SimpleNamespace(token="wtk", agent_worker_id=str(provisioner.environment.id))
+        return SimpleNamespace(token="wtk", agent_worker_id=str(provisioner.environment.id), epoch=1)
 
     async def emit(_event):
         return None
@@ -470,7 +470,7 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
         return True
 
     async def credentials():
-        return SimpleNamespace(token="wtk", agent_worker_id=str(provisioner.environment.id))
+        return SimpleNamespace(token="wtk", agent_worker_id=str(provisioner.environment.id), epoch=1)
 
     async def emit(_event):
         return None

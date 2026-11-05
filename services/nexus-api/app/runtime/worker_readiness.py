@@ -28,7 +28,7 @@ from app.models import (
 )
 from app.runtime.opencode_model import route_model_id
 from app.runtime.redaction import redact_data, redact_text
-from app.runtime.repository import collect_skill_files
+from app.runtime.repository import load_worker_skills
 from app.worker_agent import __version__ as WORKER_AGENT_VERSION
 from app.worker_agent.inspection import skill_content_hash
 
@@ -46,7 +46,7 @@ class ReadinessLookupContext:
 
     ordered_chat_routes: list[str] = field(default_factory=list)
     enabled_chat_routes: set[str] = field(default_factory=set)
-    skill_bodies: dict[str, str] = field(default_factory=dict)
+    skills: dict[str, dict] = field(default_factory=dict)
 
 
 def compute_target_digest(environment: AgentWorker) -> str:
@@ -111,7 +111,6 @@ async def load_readiness_context(
     environments: Iterable[AgentWorker],
     settings: Settings | None = None,
 ) -> ReadinessLookupContext:
-    resolved = settings or get_settings()
     env_list = [env for env in environments if env is not None]
     ordered_routes = [
         str(model)
@@ -126,15 +125,12 @@ async def load_readiness_context(
     skill_names = sorted(
         {str(name).strip() for env in env_list for name in (env.skill_refs or []) if str(name).strip()}
     )
-    skill_bodies: dict[str, str] = {}
-    if skill_names:
-        source_dir = Path(resolved.workspace_root) / "worker-skills"
-        skill_bodies = {item["name"]: item["body"] for item in collect_skill_files(skill_names, source_dir)}
+    bound_skills = {item["name"]: item for item in await load_worker_skills(session, skill_names)}
 
     return ReadinessLookupContext(
         ordered_chat_routes=ordered_routes,
         enabled_chat_routes=set(ordered_routes),
-        skill_bodies=skill_bodies,
+        skills=bound_skills,
     )
 
 
@@ -152,6 +148,7 @@ def build_desired_spec_from_context(
         "repository": _desired_repository(environment, context),
         "skills": _desired_skills(environment, context),
         "mcp": _desired_mcp(environment, resolved),
+        "capability_revision": capability_spec_revision(environment.skill_refs, environment.mcp_refs),
     }
     payload["revision"] = _revision(payload)
     return payload
@@ -435,7 +432,7 @@ def _mcp_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[str, 
             if status == UNKNOWN:
                 unknown = True
             elif status != "connected":
-                missing.append(name)
+                missing.append(redact_text(f"{name}（{_text(entry.get('error')) or status}）"))
         for name, entry in sorted(servers.items()):
             if name in required or not isinstance(entry, dict):
                 continue
@@ -471,14 +468,14 @@ def _mcp_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[str, 
         state = "drifted"
         verified: bool | None = False
         diff = [f"MCP 待同步：{'、'.join(drift_problems)}"]
-    elif unknown or endpoints is None:
-        state = "unknown"
-        verified = None
-        diff = ["MCP 逐服务连接状态尚未核验"]
     elif missing:
         state = "degraded"
         verified = False
         diff = ["MCP 连接异常：" + "、".join(missing)]
+    elif unknown or endpoints is None:
+        state = "unknown"
+        verified = None
+        diff = ["MCP 逐服务连接状态尚未核验"]
     else:
         state = "ready"
         verified = True
@@ -748,19 +745,21 @@ def _desired_skills(environment: AgentWorker, context: ReadinessLookupContext) -
     names = sorted({str(name).strip() for name in (environment.skill_refs or []) if str(name).strip()})
     items = []
     for name in names:
-        body = context.skill_bodies.get(name)
+        skill = context.skills.get(name, {})
+        body = skill.get("body")
         items.append(
             {
                 "name": name,
+                "version": skill.get("version"),
                 "content_hash": skill_content_hash(body) if body is not None else None,
                 "fullfile_hash": _hash(body) if body is not None else None,
             }
         )
-    missing = [name for name in names if name not in context.skill_bodies]
+    missing = [name for name in names if name not in context.skills]
     unverifiable = [
         item["name"]
         for item in items
-        if item["name"] in context.skill_bodies and item["content_hash"] is None
+        if item["name"] in context.skills and item["content_hash"] is None
     ]
     return {
         "items": items,

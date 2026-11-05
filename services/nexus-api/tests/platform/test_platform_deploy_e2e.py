@@ -1,11 +1,12 @@
 """隔离组件端到端；显式提供 Nginx 二进制才执行，不宣称 Linux 安装器验收。"""
 
+import asyncio
 import os
 import shutil
 import socket
 import subprocess
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -54,6 +55,9 @@ def test_isolated_real_core_services_migrations_restart_and_health(tmp_path, mon
     """已有依赖、独立 SQLite/Redis/端口，不替代 Linux 自动安装验收。"""
     import psutil
 
+    from app.runtime.remote_provisioning import RemoteProvisioner
+    from tests.platform.deployment_target import LocalTarget
+
     root = DEPLOY.parents[1]
     apipy = root / "services/nexus-api/.venv/bin/python"
     agentpy = root / "services/agent-service/.venv-agentscope/bin/python"
@@ -65,14 +69,26 @@ def test_isolated_real_core_services_migrations_restart_and_health(tmp_path, mon
         for process in [psutil.Process(), *psutil.Process().children(recursive=True)]:
             if not process.is_running():
                 continue
-            for connection in process.net_connections(kind=kind):
+            try:
+                connections = process.net_connections(kind=kind)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+            for connection in connections:
                 found.append(
                     SimpleNamespace(status=connection.status, laddr=connection.laddr, pid=process.pid)
                 )
         return found
 
     monkeypatch.setattr(psutil, "net_connections", inventory)
-    monkeypatch.setattr(cfg, "usable_address", lambda value: value == "127.0.0.1")
+    worker_ip = next((
+        address.address
+        for interface, addresses in psutil.net_if_addrs().items()
+        if interface.startswith(("en", "eth", "wl"))
+        for address in addresses
+        if address.family == socket.AF_INET and cfg.usable_address(address.address)
+    ), None)
+    if not worker_ip:
+        pytest.skip("真实 Nginx 测试需要一个非回环 IPv4 监听地址")
     redis_port = port()
     redis_log = (tmp_path / "redis.log").open("wb")
     redis = subprocess.Popen(
@@ -96,8 +112,9 @@ def test_isolated_real_core_services_migrations_restart_and_health(tmp_path, mon
         "ASTRA_DATABASE_URL": "sqlite+aiosqlite:///" + str(tmp_path / "nexus.db"),
         "AGENTSCOPE_SQL_URL": "sqlite+aiosqlite:///" + str(tmp_path / "agent.db"),
         "ASTRA_REDIS_URL": f"redis://127.0.0.1:{redis_port}/1",
-        "NEXUS_DEPLOY_PUBLIC_IP": "127.0.0.1",
-        "NEXUS_DEPLOY_WORKER_ALLOW": "127.0.0.1/32",
+        "NEXUS_DEPLOY_PUBLIC_IP": worker_ip,
+        "NEXUS_DEPLOY_PUBLIC_HOST": "127.0.0.1",
+        "NEXUS_DEPLOY_WORKER_ALLOW": f"{worker_ip}/32",
     }
     for field in (
         "NEXUS_API_PORT",
@@ -154,6 +171,21 @@ def test_isolated_real_core_services_migrations_restart_and_health(tmp_path, mon
         controller.validate_connections()
         assert controller.values["ASTRA_REDIS_URL"] == values["ASTRA_REDIS_URL"]
         controller.external_health()
+        target = LocalTarget(tmp_path)
+        worker = RemoteProvisioner(SimpleNamespace(id="probe", model_name=None), {"id": "probe"})
+        worker._command = target._command
+        worker._agent_interpreter = target._agent_interpreter
+        worker.settings = SimpleNamespace(
+            gateway_openai_base=values["NEXUS_GATEWAY_OPENAI_BASE"],
+            mcp_resource_server_url=values["NEXUS_MCP_RESOURCE_SERVER_URL"],
+            worker_agent_gateway_url=values["NEXUS_WORKER_AGENT_GATEWAY_URL"],
+        )
+        asyncio.run(worker._probe_ingress(AsyncMock()))
+        mcp = subprocess.run(
+            [str(apipy), "-m", "app.deployment", "mcp"],
+            cwd=root / "services/nexus-api", env=env, capture_output=True, text=True, timeout=90, check=False,
+        )
+        assert mcp.returncode == 0, mcp.stdout + mcp.stderr
         manager.health()
         manager.stop()
         assert all(not manager.procman.leader_live(pid) for pid in first.values())

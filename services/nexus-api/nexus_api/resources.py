@@ -142,7 +142,7 @@ def _safe_relative(path: str) -> str:
     if raw.startswith("/") or re.match(r"^[a-zA-Z]:", raw):
         raise ResourceError(f"不安全的文件路径：{path}")
     parts = [part for part in raw.split("/") if part not in ("", ".")]
-    if not parts or any(part == ".." for part in parts):
+    if not parts or any(not valid_skill_component(part) for part in parts):
         raise ResourceError(f"不安全的文件路径：{path}")
     return "/".join(parts)
 
@@ -199,6 +199,8 @@ def parse_skill_markdown(data: bytes) -> tuple[str, str, str]:
     description = str(meta.get("description") or "").strip()
     if not name or not description:
         raise ResourceError("SKILL.md frontmatter 缺少 name 或 description")
+    if not valid_skill_component(name):
+        raise ResourceError("技能名称不能包含路径分隔符或非法字符")
     return name, description, text
 
 
@@ -240,6 +242,25 @@ def file_payloads(files: dict[str, bytes]) -> list[dict[str, Any]]:
             item["encoding"] = "base64"
         payloads.append(item)
     return payloads
+
+
+def data_dir() -> Path:
+    """Resolve the platform resource root independently of the process cwd."""
+    root = Path(__file__).resolve()
+    raw = os.environ.get("NEXUS_DATA_DIR", "").strip()
+    return (root.parents[3] / Path(raw).expanduser()).resolve() if raw else root.parents[1] / "data"
+
+
+def valid_skill_component(name: str) -> bool:
+    return (
+        bool(name)
+        and name not in {".", ".."}
+        and "/" not in name
+        and "\\" not in name
+        and not re.match(r"^[A-Za-z]:", name)
+        and all(ord(char) >= 32 and ord(char) != 127 for char in name)
+        and len(name.encode("utf-8")) <= 255
+    )
 
 
 class ResourceStore:

@@ -29,6 +29,7 @@ from configuration import (
     atomic_write,
     initialize,
     load_config,
+    mcp_url,
     save_env,
 )
 
@@ -224,6 +225,9 @@ def nginx_config(root, state, env, *, tls_protocols=("TLSv1.2", "TLSv1.3")):
         env["ASTRA_SERVICE_GATEWAY_PORT"],
         env["NEXUS_MCP_PORT"],
     )
+    library_upstream = quote_nginx(mcp_url(env["NEXUS_MCP_HOST"], library))
+    task_upstream = quote_nginx(mcp_url(env["NEXUS_TASK_MCP_HOST"], env["NEXUS_TASK_MCP_PORT"]))
+    schedule_upstream = quote_nginx(mcp_url(env["NEXUS_SCHEDULE_MCP_HOST"], env["NEXUS_SCHEDULE_MCP_PORT"]))
     common = """proxy_http_version 1.1;
       proxy_set_header Host $http_host;
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -262,7 +266,15 @@ http {{
     ssl_certificate_key {quote_nginx(env["NEXUS_DEPLOY_TLS_KEY"])};
     ssl_protocols {" ".join(tls_protocols)};
     location / {{ proxy_pass http://127.0.0.1:{api}; {common} }}
-    location /v1/ {{ proxy_pass http://127.0.0.1:{gateway}; {common} }}
+  }}
+  server {{
+    listen 127.0.0.1:{int(env["NEXUS_DEPLOY_WORKER_PORT"])};
+    server_name _;
+    location /api/ {{ proxy_pass http://127.0.0.1:{api}; {common} }}
+    location /agentscope/ {{ proxy_pass http://127.0.0.1:{env["AGENTSCOPE_PORT"]}/; {common} }}
+    location = /mcp/task {{ proxy_pass {task_upstream}; {common} }}
+    location = /mcp/schedule {{ proxy_pass {schedule_upstream}; {common} }}
+    location / {{ return 404; }}
   }}
   server {{
     listen {worker_ip}:{int(env["NEXUS_DEPLOY_WORKER_PORT"])};
@@ -272,7 +284,7 @@ http {{
     allow {worker_ip};
     deny all;
     location /v1/ {{ proxy_pass http://127.0.0.1:{gateway}; {common} }}
-    location = /mcp {{ proxy_pass http://127.0.0.1:{library}; {common} }}
+    location = /mcp {{ proxy_pass {library_upstream}; {common} }}
     location = /api/worker-gateway/connect {{ proxy_pass http://127.0.0.1:{api}; {common} }}
     location ^~ /api/worker-gateway/data/ {{ proxy_pass http://127.0.0.1:{api}; {common} }}
     location / {{ return 404; }}
@@ -1272,6 +1284,9 @@ Settings()
                 with opener.open(base + path, timeout=10) as response:
                     if response.status != 200:
                         raise DeploymentError("HTTPS 入口健康检查失败")
+            with opener.open(self.values["NEXUS_API_BASE"] + "/api/health", timeout=10) as response:
+                if response.status != 200:
+                    raise DeploymentError("Nginx 内部 HTTP API 健康检查失败")
             worker = f"http://{ip}:{self.values['NEXUS_DEPLOY_WORKER_PORT']}"
             for path, expected in (("/api/agent-workers", 404), ("/v1/models", 401)):
                 try:

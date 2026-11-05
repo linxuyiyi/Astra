@@ -56,6 +56,7 @@ from .resources import (
     all_employees,
     create_mcp,
     create_skill,
+    data_dir,
     delete_mcp,
     delete_skill,
     employee_session_ids,
@@ -273,21 +274,6 @@ def package_dir() -> Path:
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
-
-
-def data_dir() -> Path:
-    """数据目录不跟着启动时的工作目录走。
-
-    未设置时用 API 包旁边的 data。相对路径按仓库根目录解析，
-    这样从 services/nexus-api 启动也不会把相对路径再拼一次服务目录。
-    """
-    raw = os.environ.get("NEXUS_DATA_DIR", "").strip()
-    if not raw:
-        return package_dir() / "data"
-    path = Path(raw).expanduser()
-    if path.is_absolute():
-        return path
-    return (repo_root() / path).resolve()
 
 
 def db_path() -> Path:

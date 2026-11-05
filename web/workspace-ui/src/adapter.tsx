@@ -68,7 +68,6 @@ function rewriteOpenCodeUrl(input: RequestInfo | URL, endpoint: string) {
 }
 
 const OFFLINE_NOTICE = 'Worker 不在线。正在自动重试…'
-const SOLID_CRASH = ['加载应用程序时发生错误', 'An error occurred while loading the application']
 const RECOVER_KEY = 'astra-workspace-recover'
 
 function workspaceURL() {
@@ -91,22 +90,10 @@ function showOfflineNotice() {
   root.append(notice)
 }
 
-function pageCrashed() {
-  const text = root.textContent || ''
-  return SOLID_CRASH.some(item => text.includes(item))
-}
-
 function watchWorker(endpoint: string, sessionID = selected || '') {
   let lastBinding = ''
-  const observer = new MutationObserver(() => {
-    if (pageCrashed()) showOfflineNotice()
-  })
-  observer.observe(root, { subtree: true, childList: true, characterData: true })
   window.setInterval(async () => {
-    if (offline || pageCrashed()) {
-      if (pageCrashed()) showOfflineNotice()
-      return
-    }
+    if (offline) return
     try {
       const response = await nativeFetch(workspaceURL())
       if (!response.ok) return
@@ -180,6 +167,7 @@ async function boot() {
   }
   const sessionID = selected || binding.runtime.session_id
   if (!sessionID) throw new Error('任务尚未绑定 OpenCode Session')
+  if (!Array.isArray(binding.sessions)) throw new Error('任务工作区返回的 Session 列表无效')
   if (!binding.sessions.some((session: { id: string }) => session.id === sessionID)) throw new Error('Session 不属于此任务')
   const endpoint = `${location.origin}${binding.runtime.server}/${encodeURIComponent(sessionID)}`
   installFetchRewrite(endpoint)

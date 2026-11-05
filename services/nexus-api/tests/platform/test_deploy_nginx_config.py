@@ -11,6 +11,12 @@ def network_config(tmp_path):
         "NEXUS_API_PORT": "19120",
         "ASTRA_SERVICE_GATEWAY_PORT": "19110",
         "NEXUS_MCP_PORT": "19201",
+        "NEXUS_TASK_MCP_PORT": "19202",
+        "NEXUS_SCHEDULE_MCP_PORT": "19203",
+        "NEXUS_MCP_HOST": "127.0.0.1",
+        "NEXUS_TASK_MCP_HOST": "127.0.0.1",
+        "NEXUS_SCHEDULE_MCP_HOST": "127.0.0.1",
+        "AGENTSCOPE_PORT": "19000",
         "NEXUS_DEPLOY_HTTPS_PORT": "19443",
         "NEXUS_DEPLOY_WORKER_PORT": "19130",
         "NEXUS_DEPLOY_PUBLIC_IP": "7.1.2.3",
@@ -21,8 +27,16 @@ def network_config(tmp_path):
     return deploy.nginx_config(tmp_path, tmp_path, values)
 
 
-def test_web_and_gateway_use_one_https_entry_and_loopback_upstreams(network_config):
-    assert "listen 19443 ssl;" in network_config
+def test_web_uses_https_and_internal_services_use_http(network_config):
+    web, internal, worker = network_config.split("  server {")[1:]
+    assert "listen 19443 ssl;" in web
+    assert "/v1/" not in web
+    assert "listen 127.0.0.1:19130;" in internal
+    assert "location /api/" in internal
+    assert "location /agentscope/" in internal
+    assert 'location = /mcp/task { proxy_pass "http://127.0.0.1:19202/mcp";' in internal
+    assert 'location = /mcp/schedule { proxy_pass "http://127.0.0.1:19203/mcp";' in internal
+    assert "location /v1/" in worker
     assert "proxy_pass http://127.0.0.1:19120" in network_config
     assert "proxy_pass http://127.0.0.1:19110" in network_config
     assert "proxy_buffering off;" in network_config

@@ -17,7 +17,7 @@ import shlex
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode, urlsplit
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -42,15 +42,41 @@ from app.runtime.opencode_model import route_model_id
 from app.runtime.remote_artifacts import install_node, install_opencode
 from app.runtime.remote_bootstrap import managed_python, prepare_python
 from app.runtime.remote_package_config import configure_sources
-from app.runtime.remote_workspace import configure_runtime, git_workspace
-from app.runtime.repository import cipher, collect_skill_files
+from app.runtime.remote_workspace import configure_runtime, git_workspace, worker_mcp_config
+from app.runtime.repository import cipher, load_worker_skills
 from app.runtime.worker_readiness import (
+    ReadinessLookupContext,
     build_desired_spec,
+    build_desired_spec_from_context,
     evaluate_worker_readiness,
 )
 from app.worker_agent import __version__ as WORKER_AGENT_VERSION
 from app.worker_agent.jsonc import loads_jsonc
 from app.worker_gateway.service import get_gateway
+
+# Executed on the SSH target, before credentials or runtime files are changed.
+INGRESS_PROBE = """
+import http.client
+import json
+import sys
+from urllib.parse import urlsplit
+
+for name, url, headers, accepted in json.loads(sys.argv[1]):
+    parsed = urlsplit(url)
+    connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=5)
+    try:
+        connection.request("GET", parsed.path, headers=headers)
+        response = connection.getresponse()
+        if response.status not in accepted:
+            print(f"{name} {parsed.path} 返回 HTTP {response.status}，预期 {accepted}")
+            sys.exit(1)
+    except OSError as exc:
+        print(f"{name} {parsed.netloc}{parsed.path}：{exc}")
+        sys.exit(1)
+    finally:
+        connection.close()
+"""
+
 
 PROVIDER_ID = "nexus-gateway"
 WORKER_SECRET_DIR = "/etc/nexus"
@@ -461,6 +487,9 @@ class RemoteProvisioner:
         self.installer_meta: dict = {}
         self.install_lock = None
         self.verified_evaluation: dict | None = None
+        self.enrollment_epoch = 0
+        self.deployed_spec_revision = ""
+        self.readiness_blocking = ""
 
     def _agent_interpreter(self) -> str:
         if getattr(self, "python_interpreter", None):
@@ -750,6 +779,18 @@ printf STILL_LISTENING
                     .order_by(GatewayRoute.model)
                 )
             )
+            skill_names = set(self.environment.skill_refs or [])
+            skill_files = await load_worker_skills(db, skill_names, include_assets=True)
+        context = ReadinessLookupContext(
+            ordered_chat_routes=models, enabled_chat_routes=set(models),
+            skills={item["name"]: item for item in skill_files},
+        )
+        self.deployed_spec_revision = build_desired_spec_from_context(
+            self.environment, context, self.settings
+        )["revision"]
+        missing_skills = skill_names - {item["name"] for item in skill_files}
+        if missing_skills:
+            raise RuntimeError("平台 Skill 未启用或当前版本文件缺失：" + "、".join(sorted(missing_skills)))
         if not self.settings.gateway_enabled or not models:
             raise RuntimeError("请先在 API 中转配置至少一个启用的模型路由")
         selected = models[0]
@@ -770,7 +811,15 @@ printf STILL_LISTENING
         cache = f"{home}/.cache/nexus-provision"
         await self._command(f"install -d -m 700 {shlex.quote(cache)}")
         stem = f"{cache}/{self.operation_id}"
-        skill_source = Path(self.settings.workspace_root) / "worker-skills"
+        mcp_refs = list(self.environment.mcp_refs or [])
+        for item in mcp_refs:
+            config = worker_mcp_config(item)
+            self.secrets.extend(
+                value for value in (config.get("headers") or {}).values() if isinstance(value, str)
+            )
+            oauth = config.get("oauth")
+            if isinstance(oauth, dict) and isinstance(secret := oauth.get("clientSecret"), str):
+                self.secrets.append(secret)
         payload = managed_config(
             config_path=config_path,
             model=selected,
@@ -778,8 +827,8 @@ printf STILL_LISTENING
             gateway_url=gateway_url,
             gateway_key=raw,
             mcp_url=mcp_url,
-            skills=collect_skill_files(list(self.environment.skill_refs or []), skill_source),
-            mcp_refs=list(self.environment.mcp_refs or []),
+            skills=skill_files,
+            mcp_refs=mcp_refs,
         )
         payload["deployment"] = deployment_manifest(self.settings)
         payload.update(
@@ -875,6 +924,40 @@ printf STILL_LISTENING
             require_direct_url(self.settings.mcp_resource_server_url, "图书馆 MCP"),
         )
 
+    async def _probe_ingress(self, emit):
+        await self.step(emit, "Worker Nginx 入口", "running")
+        model, mcp = self._direct_endpoints()
+        socket_url = require_direct_url(self.settings.worker_agent_gateway_url, "Worker Gateway")
+        gateway = urlsplit(socket_url)
+        library = urlsplit(mcp)
+        origin = urlsplit(model).netloc
+        if (
+            urlsplit(model).scheme != "http"
+            or library.scheme != "http"
+            or gateway.scheme != "ws"
+            or library.netloc != origin
+            or library.path != "/mcp"
+            or library.query or library.fragment
+            or gateway.netloc != origin
+            or gateway.path != "/api/worker-gateway/connect"
+            or gateway.query or gateway.fragment
+        ):
+            raise RuntimeError("Worker Gateway、模型中转和图书馆 MCP 必须使用同一个 Nginx HTTP 入口")
+        checks = [
+            ["模型中转", model + "/models", {}, [401]],
+            ["图书馆 MCP", mcp, {"Accept": "text/event-stream"}, [200, 400, 405]],
+            ["Worker 数据通道", f"http://{origin}/api/worker-gateway/data/preflight/request", {}, [401]],
+            ["Worker Gateway", socket_url, {
+                "Connection": "Upgrade", "Upgrade": "websocket",
+                "Sec-WebSocket-Version": "13", "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+            }, [101]],
+        ]
+        await self._command(
+            shlex.join([self._agent_interpreter(), "-I", "-c", INGRESS_PROBE, json.dumps(checks)]),
+            timeout=25,
+        )
+        await self.step(emit, "Worker Nginx 入口", "passed", f"http://{origin}")
+
     async def _probe_gateway(self, emit):
         await self.step(emit, "模型中转连接", "running")
         if not self.config_path:
@@ -885,7 +968,7 @@ printf STILL_LISTENING
             "request=urllib.request.Request(provider['options']['baseURL']+'/models',"
             "headers={'Authorization':'Bearer '+provider['options']['apiKey']})\n"
             "try:\n"
-            " response=urllib.request.urlopen(request,timeout=5)\n"
+            " response=urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request,timeout=5)\n"
             " print(json.dumps({'status':response.status,'body':json.load(response)}))\n"
             "except urllib.error.HTTPError as error:print(json.dumps({'status':error.code}))\n"
         )
@@ -1061,10 +1144,9 @@ printf STILL_LISTENING
         await self._native_idle(strict=True)
         enrolled = await self._enroll_worker()
         token, agent_worker_id = enrolled.token, enrolled.agent_worker_id
+        self.enrollment_epoch = enrolled.epoch
         self.secrets.append(token)
 
-        async with SessionLocal() as session:
-            deployed_spec = await build_desired_spec(session, self.environment, self.settings)
         worker_env = {
             "HOME": home,
             "PATH": path_value,
@@ -1073,7 +1155,7 @@ printf STILL_LISTENING
             **safe_git_environment(self.environment.id),
             "NEXUS_GIT_CREDENTIAL_REVISION": self.git_credential_revision or "",
             "NEXUS_WORKER_STATE_DIR": state_dir,
-            "NEXUS_WORKER_SPEC_REVISION": deployed_spec["revision"],
+            "NEXUS_WORKER_SPEC_REVISION": self.deployed_spec_revision,
             "NEXUS_WORKER_TOKEN": token,
             "NEXUS_AGENT_WORKER_ID": agent_worker_id,
             "NEXUS_WORKER_GATEWAY_URL": agent_gateway,
@@ -1120,37 +1202,107 @@ printf STILL_LISTENING
         await self._run_ctl("restart" if should_restart else "start")
         await self.step(emit, "安装 Worker Agent", "passed", agent_worker_id)
 
+    async def _reconnect_mcp(self, name: str) -> None:
+        path = f"/mcp/{quote(name, safe='')}/connect"
+        query = urlencode({"directory": self.environment.workspace_root})
+        source = (
+            "import sys,urllib.request;"
+            "req=urllib.request.Request(sys.argv[1],data=b'{}',"
+            "headers={'Content-Type':'application/json'},method='POST');"
+            "urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req,timeout=10).close()"
+        )
+        await self._command(
+            shlex.join([
+                self._agent_interpreter(), "-I", "-c", source,
+                f"http://127.0.0.1:{self.opencode_port}{path}?{query}",
+            ]),
+            timeout=12,
+        )
+
     async def _converge_readiness(self, emit) -> dict:
         await self.step(emit, "就绪验收", "running")
-        deadline = asyncio.get_running_loop().time() + min(
-            30.0, float(self.settings.remote_deploy_timeout_seconds)
-        )
-        last_blocking: list[str] = ["Worker 尚未建立在线握手"]
-        while asyncio.get_running_loop().time() < deadline:
+        self.readiness_blocking = "Worker 尚未建立本次部署的认证连接"
+        gateway = get_gateway()
+        retries: dict[str, tuple[int, float]] = {}
+        next_status_check = 0.0
+        clock = asyncio.get_running_loop().time
+        async with SessionLocal() as session:
+            desired = await build_desired_spec(session, self.environment, self.settings)
+        while True:  # run() owns the single deployment deadline.
             await self._ensure_safe()
             async with SessionLocal() as session:
-                env_row = await session.get(AgentWorker, self.environment.id)
-                if env_row is None:
-                    raise RuntimeError("执行环境已不存在")
-                if env_row.status not in {"IDLE", "WORKING", "PAUSED"}:
-                    await asyncio.sleep(0.25)
-                    continue
-                desired = await build_desired_spec(session, env_row, self.settings)
-                evaluated = evaluate_worker_readiness(
-                    desired, env_row, observation=await get_gateway().observed_snapshot(env_row)
+                worker = await session.get(AgentWorker, self.environment.id)
+                if worker is None:
+                    raise RuntimeError("Worker 已不存在")
+                owner = await gateway.bus.get_owner(worker.id)
+                online = (
+                    owner is not None and owner[1] == worker.epoch and worker.epoch > self.enrollment_epoch
                 )
-            if evaluated["readiness"] == "READY":
+                observation = await gateway.observed_snapshot(worker) if online else None
+                evaluated = evaluate_worker_readiness(desired, worker, observation=observation, online=online)
+            if online and evaluated["readiness"] == "READY":
                 self.verified_evaluation = evaluated
-                await self.step(emit, "就绪验收", "passed", "网关在线且装备快照已对齐")
+                await self.step(emit, "就绪验收", "passed", "本次部署的认证连接在线且装备快照已对齐")
                 return evaluated
 
-            opencode_err = evaluated["runtime_health"].get("last_error")
-            if evaluated["readiness"] == "DEGRADED" and opencode_err:
-                raise RuntimeError(f"远端 OpenCode 启动或健康异常：{opencode_err}")
-            last_blocking = [item["message"] for item in evaluated["blocking"]] or ["装备尚未收敛就绪"]
-            await asyncio.sleep(0.3)
-
-        raise RuntimeError("就绪验收未通过：" + "；".join(last_blocking))
+            now = clock()
+            if not online:
+                if now >= next_status_check:
+                    next_status_check = now + 5
+                    ctl = shlex.join([worker_ctl_path(worker.id), "status"])
+                    log = shlex.quote(f"{worker_log_dir(worker.id)}/agent.log")
+                    output = await self._command(
+                        f"{ctl} || true; tail -n 3 -- {log} 2>/dev/null || true", timeout=8
+                    )
+                    state, _, detail = output.partition("\n")
+                    self.readiness_blocking = "Worker Agent 尚未通过 Gateway 认证"
+                    if detail:
+                        self.readiness_blocking += "：" + self.redact(detail)
+                    if state == "stopped":
+                        raise RuntimeError("Worker Agent 守护已退出；" + self.readiness_blocking)
+            elif observation:
+                health = evaluated["runtime_health"]
+                diagnostics = [
+                    f"{row['label']}：{'；'.join(row['diff']) or row.get('error') or row['state']}"
+                    for row in health["equipment"]
+                    if row["configured"] and row["state"] != "ready"
+                ]
+                self.readiness_blocking = "；".join(diagnostics) or "Worker 装备配置版本尚未对齐"
+                opencode_error = health.get("last_error")
+                if opencode_error:
+                    self.readiness_blocking = f"OpenCode：{opencode_error}；{self.readiness_blocking}"
+                    if "启动健康检查超时" not in opencode_error:
+                        raise RuntimeError(self.readiness_blocking)
+                mcp = observation.get("mcp", {}).get("servers") or {}
+                for name in desired["mcp"]["required"]:
+                    entry = mcp.get(name, {})
+                    status = entry.get("status")
+                    error = entry.get("error") or ""
+                    if status in {"needs_auth", "needs_client_registration"} or re.search(
+                        r"\b(?:401|403)\b|unauthorized|forbidden", error, re.I
+                    ):
+                        raise RuntimeError(f"MCP {name} 鉴权失败：{error or status}")
+                    if status != "failed":
+                        continue
+                    if not re.search(
+                        r"timed? ?out|timeout|ECONN|network|connection|socket|\b(?:429|5[0-9]{2})\b",
+                        error, re.I,
+                    ):
+                        raise RuntimeError(f"MCP {name} 连接失败：{error or status}")
+                    count, retry_at = retries.get(name, (0, 0.0))
+                    if now < retry_at:
+                        continue
+                    if count >= 2:
+                        raise RuntimeError(f"MCP {name} 重连两次后仍失败：{error}")
+                    await self._ensure_safe()
+                    retries[name] = (count + 1, now + 16)
+                    try:
+                        await self._reconnect_mcp(name)
+                    except RuntimeError as exc:
+                        self.readiness_blocking += f"；MCP {name} 重连失败：{self.redact(exc)}"
+            else:
+                self.readiness_blocking = "Worker 已认证，等待本次连接的装备快照"
+            await asyncio.sleep(1)
 
     async def _finish(self, success: bool, error: str = "") -> bool:
         if self.lease is None:
@@ -1186,6 +1338,7 @@ printf STILL_LISTENING
                 self.ssh = await self.runtime.open_session(self.environment)
                 await self._load_local_runtime(allocate=False)
                 await prepare_python(self, emit)
+                await self._probe_ingress(emit)
                 await self._load_local_runtime()
                 await self._native_idle(strict=True)
                 await self.step(emit, "SSH 连接与执行检查", "passed")
@@ -1204,7 +1357,7 @@ printf STILL_LISTENING
             skip_finish = True
             raise
         except TimeoutError:
-            error = "部署超时；请确认远端部署进程已停止后释放维护占用"
+            error = "部署超时" + ("：" + self.readiness_blocking if self.readiness_blocking else "")
         except Exception as exc:
             error = self.redact(exc)
         finally:

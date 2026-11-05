@@ -57,15 +57,6 @@ async def check_wiki_project() -> None:
     await client.search("Nexus deployment verification", limit=1)
 
 
-def _local_mcp_url(host: str, port: int, path: str) -> str:
-    address = str(host or "").strip()
-    if address in {"", "0.0.0.0", "::", "[::]"}:
-        address = "127.0.0.1"
-    if ":" in address and not address.startswith("["):
-        address = f"[{address}]"
-    return f"http://{address}:{port}{path}"
-
-
 async def _direct_mcp_tools(url: str) -> list[str]:
     """用官方 MCP 客户端完成 initialize 和 tools/list。"""
 
@@ -92,13 +83,8 @@ async def verify_mcp() -> None:
         raise RuntimeError("库 MCP 未使用 streamable-http，无法执行标准 MCP 验收")
     task_url = task_mcp_url()
     schedule_url = schedule_mcp_url()
-    library_url = _local_mcp_url(
-        settings.mcp_host,
-        settings.mcp_port,
-        settings.mcp_streamable_http_path,
-    )
     direct = (
-        ("Library", library_url, "library_search"),
+        ("Library", settings.mcp_resource_server_url, "library_search"),
         ("Task", task_url, "nexus_task_get"),
         ("Schedule", schedule_url, "schedule_create"),
     )

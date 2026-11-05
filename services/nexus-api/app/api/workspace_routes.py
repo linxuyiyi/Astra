@@ -251,6 +251,11 @@ def _collect_configured_secrets(value: Any, found: set[str]) -> None:
     if not isinstance(value, dict):
         return
     for key, item in value.items():
+        if key == "mcp" and isinstance(item, dict):
+            for server in item.values():
+                headers = server.get("headers") if isinstance(server, dict) else None
+                if isinstance(headers, dict):
+                    found.update(header for header in headers.values() if isinstance(header, str) and header)
         if _is_secret_field(key) and isinstance(item, str) and len(item) >= 8:
             found.add(item)
             continue

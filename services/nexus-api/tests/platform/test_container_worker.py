@@ -89,8 +89,8 @@ def _provisioner(monkeypatch):
         "_enroll_worker",
         AsyncMock(
             side_effect=[
-                SimpleNamespace(token="worker-token-canary", agent_worker_id="71"),
-                SimpleNamespace(token="worker-token-next", agent_worker_id="71"),
+                SimpleNamespace(token="worker-token-canary", agent_worker_id="71", epoch=1),
+                SimpleNamespace(token="worker-token-next", agent_worker_id="71", epoch=3),
             ]
         ),
     )

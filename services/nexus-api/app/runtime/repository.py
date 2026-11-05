@@ -6,10 +6,13 @@ Git 凭据仅提供加解密入口；实际 Git 操作由 Worker 的部署和运
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
+
+from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.gateway.security import CredentialCipher
+from nexus_api.db_models import skills
+from nexus_api.resources import ResourceStore, data_dir
 
 
 class WorkerCopyError(RuntimeError):
@@ -43,12 +46,24 @@ def fresh_workspace(source: str, employee_id: str) -> str:
     return f"./workspaces/{employee_id}"
 
 
-def collect_skill_files(names: list[str], source: Path) -> list[dict[str, str]]:
-    """从平台技能目录复制引用。不读取仓库里的 `.opencode/`。"""
-
-    files: list[dict[str, str]] = []
-    for name in names:
-        path = source / name / "SKILL.md"
-        if path.is_file():
-            files.append({"name": name, "body": path.read_text(encoding="utf-8")})
-    return files
+async def load_worker_skills(session, names, *, include_assets=False) -> list[dict]:
+    """Resolve enabled Worker bindings against the platform's active Skill versions."""
+    if not names:
+        return []
+    store = ResourceStore(data_dir())
+    rows = await session.execute(
+        select(skills.c.id, skills.c.name, skills.c.version).where(
+            skills.c.enabled == 1, skills.c.name.in_(names)
+        )
+    )
+    result = []
+    for row in rows:
+        directory = store.version_dir(row.id, row.version)
+        main = directory / "SKILL.md"
+        if main.is_file():
+            files = store.read_version_files(row.id, row.version) if include_assets else {}
+            body = files["SKILL.md"] if include_assets else main.read_bytes()
+            result.append({
+                "name": row.name, "body": body.decode("utf-8"), "version": row.version, "files": files,
+            })
+    return result

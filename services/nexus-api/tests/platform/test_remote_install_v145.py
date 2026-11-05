@@ -6,6 +6,8 @@ import subprocess
 import time
 from pathlib import Path
 
+import pytest
+
 from app.runtime.remote_workspace import configure_runtime, git_workspace
 from tests.platform.deployment_target import LocalTarget
 
@@ -321,3 +323,34 @@ def test_clone_consumes_and_removes_one_time_token(tmp_path):
     assert result.returncode == 0, result.stderr
     assert not token.exists()
     assert "ghp_private_token_value" not in result.stdout + result.stderr
+
+
+@pytest.mark.asyncio
+async def test_managed_unicode_skill_assets_and_mcp_credentials(tmp_path):
+    config = tmp_path / "opencode.jsonc"
+    target = LocalTarget(tmp_path)
+    headers = {"X-Company-Credential": "fixture-auth"}
+    payload = _payload(
+        config,
+        mcp_refs=[{
+            "name": "vision", "url": "http://vision.test/mcp",
+            "config": {"headers": headers, "oauth": False, "timeout": 4000},
+        }],
+        skills=[{"name": "任务管理", "body": "first", "files": {"references/指南.md": b"guide"}}],
+    )
+    await configure_runtime(target, payload)
+    native = json.loads(config.read_text())["mcp"]["vision"]
+    assert native["headers"] == headers
+    assert native["oauth"] is False
+    assert native["timeout"] == 4000
+    skill = tmp_path / "skill" / "任务管理"
+    assert (skill / "SKILL.md").read_text() == "first"
+    assert (skill / "references" / "指南.md").read_bytes() == b"guide"
+    payload["skills"] = [{"name": "任务管理", "body": "second"}]
+    await configure_runtime(target, payload)
+    assert (skill / "SKILL.md").read_text() == "second"
+    assert not (skill / "references" / "指南.md").exists()
+    payload["skills"] = [{"name": "任务管理", "body": "bad", "files": {"../escape": b"no"}}]
+    with pytest.raises(RuntimeError, match="非法技能路径"):
+        await configure_runtime(target, payload)
+    assert (skill / "SKILL.md").read_text() == "second"

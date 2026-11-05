@@ -200,6 +200,7 @@ def _agent_install_worker(monkeypatch):
     )
     worker = RemoteProvisioner(environment, {"id": "op", "action": "deploy"})
     worker.opencode_port = 4096
+    worker.deployed_spec_revision = "test-revision"
     worker.home = "/root"
     worker.config_path = "/etc/nexus/opencode/7/opencode.jsonc"
     worker._run_ctl = AsyncMock()
@@ -268,7 +269,7 @@ async def test_enroll_happens_after_the_venv_and_writes_the_token(monkeypatch):
     class Gateway:
         async def enroll(self, session, agent_worker_id, *, target_digest=None):
             calls.append(("enroll", target_digest))
-            return SimpleNamespace(token="wtk_secret", agent_worker_id="7")
+            return SimpleNamespace(token="wtk_secret", agent_worker_id="7", epoch=3)
 
     monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda *_a, **_kw: Gateway())
 
@@ -536,3 +537,53 @@ async def test_bootstrap_without_interpreter_rejects_unreleased_listener(state):
 
     with pytest.raises(RuntimeError, match="受管 OpenCode"):
         await worker._bootstrap_idle(interpreter_ready=False)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["HTTP 503 Service Unavailable", "HTTP 401 Unauthorized"])
+async def test_readiness_retries_transient_mcp_on_current_epoch_only(monkeypatch, failure):
+    from app.runtime import remote_provisioning
+
+    row = SimpleNamespace(id="7", epoch=5, status="PAUSED", enabled=False, model_name=None)
+    worker = RemoteProvisioner(row, {"id": "deploy"})
+    worker.enrollment_epoch = 4
+    worker._command = AsyncMock(return_value="running\nconnecting")
+    worker._reconnect_mcp = AsyncMock()
+    db = AsyncMock()
+    db.get.return_value = row
+    session = AsyncMock()
+    session.__aenter__.return_value = db
+    monkeypatch.setattr(remote_provisioning, "SessionLocal", lambda: session)
+    # Jump past the former 30-second check window without delaying the test.
+    ticks = iter((0.0, 40.0, 50.0))
+    clock = SimpleNamespace(time=lambda: next(ticks))
+    monkeypatch.setattr(
+        remote_provisioning, "asyncio", SimpleNamespace(get_running_loop=lambda: clock, sleep=AsyncMock()),
+    )
+    desired = {"mcp": {"required": ["vision"]}}
+    monkeypatch.setattr(remote_provisioning, "build_desired_spec", AsyncMock(return_value=desired))
+
+    failed = {"mcp": {"servers": {"vision": {"status": "failed", "error": failure}}}}
+    ready = {"mcp": {"servers": {"vision": {"status": "connected"}}}}
+    owner = AsyncMock(side_effect=[("gateway", 4), ("gateway", 5), ("gateway", 5)])
+    observation = AsyncMock(side_effect=[failed, ready])
+    gateway = SimpleNamespace(bus=SimpleNamespace(get_owner=owner), observed_snapshot=observation)
+    monkeypatch.setattr(remote_provisioning, "get_gateway", lambda: gateway)
+
+    def evaluation(_spec, _row, *, observation, online):
+        assert online is (observation is not None)
+        return {
+            "readiness": "READY" if observation is ready else "DEGRADED",
+            "runtime_health": {"equipment": []},
+        }
+
+    monkeypatch.setattr(remote_provisioning, "evaluate_worker_readiness", evaluation)
+    if "401" in failure:
+        with pytest.raises(RuntimeError, match="vision 鉴权失败"):
+            await worker._converge_readiness(AsyncMock())
+        worker._reconnect_mcp.assert_not_awaited()
+    else:
+        result = await worker._converge_readiness(AsyncMock())
+        assert result["readiness"] == "READY"
+        worker._reconnect_mcp.assert_awaited_once_with("vision")
+    worker._command.assert_awaited_once()

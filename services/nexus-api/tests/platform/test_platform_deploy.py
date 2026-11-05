@@ -40,6 +40,7 @@ def settings(tmp_path, monkeypatch):
             "AGENTSCOPE_SQL_URL": "sqlite+aiosqlite:///" + str(tmp_path / "agent.db"),
             "ASTRA_REDIS_URL": "redis://127.0.0.1:6379/15",
             "NEXUS_DEPLOY_PUBLIC_IP": "7.1.2.3",
+            "NEXUS_DEPLOY_WORKER_PORT": "18130",
             "NEXUS_DEPLOY_WORKER_ALLOW": "7.0.0.0/8,10.1.0.0/16",
         },
         DEPLOY.parents[1],
@@ -65,6 +66,26 @@ def test_configuration_reinstall_keeps_keys_and_one_canonical_environment(tmp_pa
     assert not list(tmp_path.glob("*.backup-*"))
     assert values["NEXUS_GATEWAY_OPENAI_BASE"] == "http://7.1.2.3:18130/v1"
     assert values["NEXUS_WORKER_AGENT_GATEWAY_URL"] == "ws://7.1.2.3:18130/api/worker-gateway/connect"
+
+
+def test_unattended_deploy_requires_the_allowed_worker_http_port(tmp_path, monkeypatch):
+    values = settings(tmp_path, monkeypatch)
+    values.pop("NEXUS_DEPLOY_WORKER_PORT")
+    with pytest.raises(cfg.DeploymentError, match="NEXUS_DEPLOY_WORKER_PORT"):
+        cfg.initialize(values, DEPLOY.parents[1], tmp_path, cfg.Dialog(False))
+
+
+def test_changing_http_port_rebuilds_all_proxy_addresses(tmp_path, monkeypatch, capsys):
+    values = settings(tmp_path, monkeypatch)
+    values["NEXUS_DEPLOY_WORKER_PORT"] = "18880"
+    derived = cfg.initialize(values, DEPLOY.parents[1], tmp_path, cfg.Dialog(False))
+    assert derived["NEXUS_GATEWAY_OPENAI_BASE"] == "http://7.1.2.3:18880/v1"
+    assert derived["NEXUS_MCP_RESOURCE_SERVER_URL"] == "http://7.1.2.3:18880/mcp"
+    assert derived["NEXUS_WORKER_AGENT_GATEWAY_URL"] == "ws://7.1.2.3:18880/api/worker-gateway/connect"
+    assert derived["NEXUS_API_BASE"] == "http://127.0.0.1:18880"
+    assert derived["ASTRA_AGENTSCOPE_BASE_URL"] == "http://127.0.0.1:18880/agentscope"
+    assert derived["NEXUS_TASK_MCP_URL"] == "http://127.0.0.1:18880/mcp/task"
+    assert "由 Nginx 入口重新生成" in capsys.readouterr().out
 
 
 def test_backup_precedes_config_replacement_and_shell_input_is_never_executed(tmp_path):
@@ -102,7 +123,7 @@ def test_invalid_existing_key_never_automatically_regenerated(tmp_path, monkeypa
         cfg.initialize(values, DEPLOY.parents[1], tmp_path, cfg.Dialog(False))
 
 
-def test_mcp_addresses_derive_from_listener_and_old_keys_are_removed(tmp_path, monkeypatch):
+def test_mcp_addresses_derive_from_nginx_and_old_keys_are_removed(tmp_path, monkeypatch):
     old_env = tmp_path / "old.env"
     old_env.write_text(
         "NEXUS_MCP_API_KEY=old-library-key\n"
@@ -126,8 +147,8 @@ def test_mcp_addresses_derive_from_listener_and_old_keys_are_removed(tmp_path, m
         "NEXUS_SCHEDULE_MCP_KEY",
         "ASTRA_TASK_MCP_KEY",
     } & result.keys()
-    assert result["NEXUS_TASK_MCP_URL"] == "http://10.1.2.3:19202/mcp"
-    assert result["NEXUS_SCHEDULE_MCP_URL"] == "http://127.0.0.1:19203/mcp"
+    assert result["NEXUS_TASK_MCP_URL"] == "http://127.0.0.1:18130/mcp/task"
+    assert result["NEXUS_SCHEDULE_MCP_URL"] == "http://127.0.0.1:18130/mcp/schedule"
     assert cfg.mcp_url("0.0.0.0", "18202") == "http://127.0.0.1:18202/mcp"
     assert cfg.mcp_url("::", "18202") == "http://127.0.0.1:18202/mcp"
 

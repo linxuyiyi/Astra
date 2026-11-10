@@ -42,12 +42,20 @@ def _reply_frame(reply_id: str) -> bytes:
     ).encode()
 
 
-def test_im_http_round_trip_claims_and_acks_the_reply(tmp_path, monkeypatch):
+@pytest.mark.parametrize("mcps", [[], ["ext-mcp"]])
+def test_im_http_round_trip_claims_and_acks_the_reply(tmp_path, monkeypatch, mcps):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    from tests.nexus.test_resources import FakeAgentScope
+
+    resources = FakeAgentScope()
     chats: list[dict] = []
     turns: list[dict[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.startswith("/workspace/") or request.url.path == "/mcp":
+            return resources.handler(request)
+        if request.url.path.endswith("/status"):
+            return resources.handler(request)
         if request.url.path == "/agent/" and request.method == "POST":
             return httpx.Response(201, json={"agent_id": "agent-1"})
         if request.url.path == "/sessions/" and request.method == "POST":
@@ -56,6 +64,9 @@ def test_im_http_round_trip_claims_and_acks_the_reply(tmp_path, monkeypatch):
             return httpx.Response(201, json={"session_id": session_id})
         if request.url.path == "/chat/":
             body = json.loads(request.content.decode())
+            if mcps:
+                installed = resources.workspace(body["agent_id"], body["session_id"])[1]
+                assert {item["name"] for item in installed} == {"外部 MCP"}
             chats.append(body)
             turns.append({"id": f"r{len(turns) + 1}", "text": "已经收到"})
             return httpx.Response(200, json={"status": "started", "session_id": body["session_id"]})
@@ -94,7 +105,7 @@ def test_im_http_round_trip_claims_and_acks_the_reply(tmp_path, monkeypatch):
             "nexus",
             httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
         )
-        employee = test_client.post("/api/v1/employees", json=employee_body()).json()["employee"]
+        employee = test_client.post("/api/v1/employees", json=employee_body(mcps=mcps)).json()["employee"]
         saved = test_client.post(
             "/api/v1/im/bots",
             json={"employee_id": employee["id"], "provider": "mock", "bot_id": "bot-1"},
@@ -165,6 +176,7 @@ def test_im_http_round_trip_claims_and_acks_the_reply(tmp_path, monkeypatch):
         assert duplicate.json()["duplicate"] is True
         assert [item["input"]["content"][0]["text"] for item in chats].count("你好") == 1
         assert test_client.get("/api/v1/im/outbox").status_code == 404
+        resources.workspace("agent-1", "ses-private")[1].clear()
         followed = test_client.post(
             "/api/v1/im/events",
             json={

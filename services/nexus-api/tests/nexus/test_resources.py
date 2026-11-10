@@ -957,3 +957,142 @@ def test_unbound_mcp_register_retry_update_and_delete(tmp_path, monkeypatch, fak
         fake.registry_failure = False
         assert client.delete(path).status_code == 200
         assert not any(row["name"] == name for row in fake.mcp_records)
+
+
+def test_all_bound_mcps_are_installed_per_private_session(tmp_path, monkeypatch, fake):
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    fake.mcp_records.append({"id": "second-mcp", "name": "第二个 MCP", "enabled": True})
+    original, chats = fake.handler, []
+
+    def handler(request):
+        if request.url.path == "/chat/":
+            body = json.loads(request.content)
+            installed = fake.workspace(body["agent_id"], body["session_id"])[1]
+            assert {item["name"] for item in installed} == {"外部 MCP", "第二个 MCP"}
+            chats.append(body)
+        return original(request)
+
+    fake.handler = handler
+    with TestClient(create_app()) as client:
+        attach(client, fake)
+        employee = client.post(
+            "/api/v1/employees", json=employee_body(mcps=["ext-mcp", "second-mcp"]),
+        ).json()["employee"]
+        sessions = []
+        for owner in ("browser-a", "browser-b"):
+            headers = {"X-Owner-Id": owner}
+            conversation = client.post(
+                f"/api/v1/employees/{employee['id']}/conversations", headers=headers, json={},
+            ).json()
+            path = f"/api/v1/conversations/{conversation['id']}/messages"
+            response = client.post(path, headers=headers, json={"text": "首次运行"})
+            assert response.status_code == 200, response.text
+            sid = response.json()["agentscope"]["session_id"]
+            sessions.append(sid)
+            fake.workspace(employee["agentscope_agent_id"], sid)[1].clear()
+            response = client.post(path, headers=headers, json={"text": "继续运行"})
+            assert response.status_code == 200, response.text
+        assert len(set(sessions)) == 2 and len(chats) == 4
+
+
+@pytest.mark.parametrize("fault", ["missing", "unhealthy", "permission", "status", "catalog"])
+def test_mcp_partial_mount_blocks_chat_and_recovers_same_session(tmp_path, monkeypatch, fake, fault):
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    fake.mcp_records.append({"id": "second-mcp", "name": "第二个 MCP", "enabled": True})
+    original, chats, broken = fake.handler, [], False
+
+    def handler(request):
+        if request.url.path == "/chat/":
+            chats.append(json.loads(request.content))
+        if broken:
+            if fault == "permission" and request.method == "PATCH":
+                if json.loads(request.content).get("permission_mode") == "bypass":
+                    return httpx.Response(503, json={"detail": "permission update unavailable"})
+            if fault == "status" and request.url.path.endswith("/status"):
+                return httpx.Response(503, json={"detail": "native status unavailable"})
+            if fault == "catalog" and request.url.path == "/mcp":
+                return httpx.Response(200, json=[fake.mcp_records[0]])
+        response = original(request)
+        if broken and request.url.path == "/workspace/mcp/from-library":
+            _, mcps = fake.workspace(
+                request.url.params["agent_id"], request.url.params["session_id"],
+            )
+            if fault == "missing":
+                mcps[:] = [item for item in mcps if item["name"] != "第二个 MCP"]
+            elif fault == "unhealthy":
+                for item in mcps:
+                    if item["name"] == "第二个 MCP":
+                        item["is_healthy"] = False
+        return response
+
+    fake.handler = handler
+    with TestClient(create_app()) as client:
+        attach(client, fake)
+        employee = client.post(
+            "/api/v1/employees", json=employee_body(mcps=["ext-mcp", "second-mcp"]),
+        ).json()["employee"]
+        headers = {"X-Owner-Id": "browser-a"}
+        conversation = client.post(
+            f"/api/v1/employees/{employee['id']}/conversations", headers=headers, json={},
+        ).json()
+        path = f"/api/v1/conversations/{conversation['id']}/messages"
+        first = client.post(path, headers=headers, json={"text": "首次运行"})
+        assert first.status_code == 200, first.text
+        sid = first.json()["agentscope"]["session_id"]
+        workspace = fake.workspace(employee["agentscope_agent_id"], sid)[1]
+        if fault in {"missing", "unhealthy"}:
+            # Even an applied sync record must not mask a disappeared/broken attachment.
+            workspace[-1]["is_healthy"] = False
+        broken = True
+        refused = client.post(path, headers=headers, json={"text": "缺少工具时不要运行"})
+        assert refused.status_code == 503, refused.text
+        assert "资源未就绪" in refused.json()["detail"]
+        assert len(chats) == 1
+        broken = False
+        recovered = client.post(path, headers=headers, json={"text": "恢复后继续"})
+        assert recovered.status_code == 200, recovered.text
+        assert recovered.json()["agentscope"]["session_id"] == sid
+        assert len(chats) == 2
+        assert {item["name"] for item in workspace} == {"外部 MCP", "第二个 MCP"}
+        assert all(item["is_healthy"] for item in workspace)
+
+
+def test_peer_mailbox_mount_failure_blocks_delivery_and_preserves_mcp_permission(
+    tmp_path, monkeypatch, fake,
+):
+    monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    original, modes, broken = fake.handler, {}, False
+
+    def handler(request):
+        if request.method == "PATCH" and request.url.path.startswith("/sessions/"):
+            modes[request.url.path.removeprefix("/sessions/")] = json.loads(request.content).get(
+                "permission_mode",
+            )
+        if broken and request.url.path == "/workspace/mcp":
+            return httpx.Response(503, json={"detail": "workspace unavailable"})
+        return original(request)
+
+    fake.handler = handler
+    with TestClient(create_app()) as client:
+        attach(client, fake)
+        sender = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
+        target = client.post(
+            "/api/v1/employees", json=employee_body(name="知微", domain="防线运营人员", mcps=["ext-mcp"]),
+        ).json()["employee"]
+        headers = {"X-Owner-Id": "browser-a"}
+        conversation = client.post(
+            f"/api/v1/employees/{sender['id']}/conversations", headers=headers, json={},
+        ).json()
+        private = client.post(
+            f"/api/v1/conversations/{conversation['id']}/messages", headers=headers, json={"text": "开始"},
+        ).json()["agentscope"]["session_id"]
+        for origin in (sender["mailbox_session_id"], private):
+            params = {"session_id": origin, "name": "知微", "message": "协作请求"}
+            broken = True
+            refused = client.get("/api/v1/peers/resolve", params=params)
+            assert refused.status_code == 503, refused.text
+            broken = False
+            accepted = client.get("/api/v1/peers/resolve", params=params)
+            assert accepted.status_code == 200, accepted.text
+            assert accepted.json()["session_id"] == target["mailbox_session_id"]
+            assert modes[target["mailbox_session_id"]] == "bypass"

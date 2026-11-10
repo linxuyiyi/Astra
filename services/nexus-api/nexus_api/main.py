@@ -774,7 +774,6 @@ def inbound_private_scope(connection, agent_id: str | None) -> str | None:
 
 async def hand_off(
     connection,
-    client: AgentScopeClient,
     scope: str,
     sender: dict,
     target: dict,
@@ -787,11 +786,6 @@ async def hand_off(
         sender["agentscope_agent_id"],
         target["agentscope_agent_id"],
         message,
-    )
-    await client.set_permission_mode(
-        target["agentscope_agent_id"],
-        session_id,
-        UNATTENDED_PERMISSION,
     )
     return {
         "agent_id": target["agentscope_agent_id"],
@@ -930,6 +924,27 @@ async def sync_employee_skills(
         store,
         previous=previous,
     )
+
+
+async def prepare_employee_session(client, employee, session_ids, connection, store):
+    """只有绑定资源在本会话全部就绪，才允许接收新的推理输入。"""
+    if not employee.get("skills") and not employee.get("mcps"):
+        pending = any(
+            connection.execute(
+                sql_text(
+                    "SELECT 1 FROM t_nexus_resource_sync WHERE employee_id=:e "
+                    "AND session_id=:s AND status='pending_remove' LIMIT 1"
+                ),
+                {"e": employee["id"], "s": session_id},
+            ).first()
+            for session_id in session_ids
+        )
+        if not pending:
+            return {"ok": True, "status": "applied"}
+    result = await sync_employee_skills(client, employee, session_ids, connection, store)
+    if not result["ok"]:
+        raise AgentScopeError(f"员工会话资源未就绪：{result['detail']}", 503)
+    return result
 
 
 _conversation_locks: dict[str, asyncio.Lock] = {}
@@ -2820,7 +2835,7 @@ def create_app() -> FastAPI:
                                 session_id,
                                 workspace_id,
                             )
-                await sync_employee_skills(
+                await prepare_employee_session(
                     client,
                     employee,
                     [session_id],
@@ -2920,13 +2935,16 @@ def create_app() -> FastAPI:
             {"p0": session_id, "p1": workspace_id, "p2": utcnow(), "p3": conversation_id},
         )
         connection.commit()
-        await sync_employee_skills(
-            client,
-            employee,
-            [session_id],
-            connection,
-            request.app.state.resources,
-        )
+        try:
+            await prepare_employee_session(
+                client,
+                employee,
+                [session_id],
+                connection,
+                request.app.state.resources,
+            )
+        except AgentScopeError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
         return {"session_id": session_id, "workspace_id": workspace_id}
 
     @app.get("/api/v1/conversations/{conversation_id}/stream")
@@ -2954,7 +2972,7 @@ def create_app() -> FastAPI:
         app,
         load_employee=load_employee,
         claim_session=claim_member_session,
-        sync_resources=sync_employee_skills,
+        sync_resources=prepare_employee_session,
         model_for=model_for,
         load_attachments=load_attachments,
         model_input_blocks=model_input_blocks,
@@ -2992,16 +3010,21 @@ def create_app() -> FastAPI:
             )
             if unreachable:
                 raise HTTPException(status_code=404, detail="没有找到可联系的员工")
-            await sync_employee_skills(
-                client_of(request),
-                target,
-                [target["mailbox_session_id"]],
-                connection,
-                request.app.state.resources,
-            )
+            try:
+                await client_of(request).set_permission_mode(
+                    target["agentscope_agent_id"], target["mailbox_session_id"], UNATTENDED_PERMISSION,
+                )
+                await prepare_employee_session(
+                    client_of(request),
+                    target,
+                    [target["mailbox_session_id"]],
+                    connection,
+                    request.app.state.resources,
+                )
+            except AgentScopeError as exc:
+                raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
             return await hand_off(
                 connection,
-                client_of(request),
                 f"private:{private['id']}",
                 sender,
                 target,
@@ -3042,16 +3065,21 @@ def create_app() -> FastAPI:
             scope = inbound_private_scope(connection, sender["agentscope_agent_id"])
             if scope is None:
                 scope = f"mailbox:{sender['id']}"
-            await sync_employee_skills(
-                client_of(request),
-                target,
-                [target["mailbox_session_id"]],
-                connection,
-                request.app.state.resources,
-            )
+            try:
+                await client_of(request).set_permission_mode(
+                    target["agentscope_agent_id"], target["mailbox_session_id"], UNATTENDED_PERMISSION,
+                )
+                await prepare_employee_session(
+                    client_of(request),
+                    target,
+                    [target["mailbox_session_id"]],
+                    connection,
+                    request.app.state.resources,
+                )
+            except AgentScopeError as exc:
+                raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
             return await hand_off(
                 connection,
-                client_of(request),
                 scope,
                 sender,
                 target,
@@ -3235,6 +3263,9 @@ def create_app() -> FastAPI:
             agent_id = employee["agentscope_agent_id"]
             if not client.configured or not agent_id:
                 raise ImError("AgentScope 还没有接受这次输入", 503)
+            await prepare_employee_session(
+                client, employee, [session_id], connection, request.app.state.resources,
+            )
             prior_reply["cursor"] = await client.latest_event_cursor(agent_id, session_id)
             try:
                 existing = await client.list_session_messages(agent_id, session_id)

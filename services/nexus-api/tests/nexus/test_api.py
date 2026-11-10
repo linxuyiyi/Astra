@@ -404,6 +404,11 @@ def test_connected_catalog_accepts_only_returned_resources(tmp_path, monkeypatch
     application = create_app()
     chat_calls: list[str] = []
 
+    from tests.nexus.test_resources import FakeAgentScope
+
+    resources = FakeAgentScope()
+    resources.skill_records = [{"id": "failure-analysis", "name": "失败分析"}]
+
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/health":
             return httpx.Response(200, json={"version": "2.0.10"})
@@ -433,7 +438,7 @@ def test_connected_catalog_accepts_only_returned_resources(tmp_path, monkeypatch
             body = json.loads(request.content.decode())
             chat_calls.append(body["agent_id"])
             return httpx.Response(200, json={"status": "started", "session_id": "session-chat"})
-        return httpx.Response(404, json={"detail": "missing"})
+        return resources.handler(request)
 
     with TestClient(application) as test_client:
         test_client.app.state.agentscope = AgentScopeClient(
@@ -522,6 +527,11 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_AGENTSCOPE_BASE_URL", "")
     seen: list[httpx.Request] = []
 
+    from tests.nexus.test_resources import FakeAgentScope
+
+    resources = FakeAgentScope()
+    resources.skill_records = [{"id": "failure-analysis", "name": "失败分析"}]
+
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
         if request.url.path == "/agent/":
@@ -536,7 +546,7 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
             if request.method == "POST":
                 return httpx.Response(201, json={"ok": True})
             return httpx.Response(200, json=[])
-        return httpx.Response(404, json={"detail": "missing"})
+        return resources.handler(request)
 
     application = create_app()
     with TestClient(application) as test_client:

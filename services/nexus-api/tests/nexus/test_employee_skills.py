@@ -61,6 +61,8 @@ class FakeAgentScope:
             self.sessions += 1
             body = json.loads(request.content.decode())
             return httpx.Response(201, json={"session_id": f"ses-{self.sessions}-{body['name']}"})
+        if method == "GET" and path.endswith("/status"):
+            return httpx.Response(200, json={"status": "idle"})
         if method == "PATCH" and path.startswith("/sessions/"):
             return httpx.Response(200, json={})
         if path == "/skill" and method == "GET":

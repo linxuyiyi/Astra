@@ -879,3 +879,25 @@ def test_task_notification_survives_closed_discussion_and_is_idempotent(setup):
         owner.post("/api/v1/internal/group-task-event", headers=headers, json={"event_id": eid}).status_code
         == 403
     )
+
+
+def test_group_resource_failure_blocks_inference_then_retries(setup, monkeypatch):
+    _, owner, _, cid, fake = setup
+    ready = False
+
+    async def sync(*args, **kwargs):
+        return {"ok": ready, "status": "applied" if ready else "error", "detail": "MCP 未就绪"}
+
+    monkeypatch.setattr("nexus_api.main.sync_employee_skills", sync)
+    with connect() as db:
+        db.execute(text("UPDATE t_nexus_employees SET mcp_json='[\"ext-mcp\"]' WHERE id='qa'"))
+        db.commit()
+    assert send(owner, cid, "@小掌柜 检查工程").status_code == 200
+    page = wait_done(owner, cid)
+    assert page["channel"]["discussion"]["state"] == "failed"
+    assert fake.calls == []
+    ready = True
+    assert send(owner, cid, "@小掌柜 恢复后继续").status_code == 200
+    page = wait_done(owner, cid)
+    assert page["channel"]["discussion"]["state"] == "completed"
+    assert [agent for agent, _ in fake.calls] == ["agent-qa"]

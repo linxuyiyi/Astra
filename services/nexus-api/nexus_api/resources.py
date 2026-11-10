@@ -1080,12 +1080,18 @@ async def _sync_one_session(
             and bool(external_mcps.get(item, {}).get("enabled", True))
         )
     ]
+    for ref in active_mcp_refs:
+        if ref not in local_mcps and ref not in external_mcps:
+            raise ResourceError(catalog_error or f"已绑定 MCP {ref} 不在资源目录中，无法确认挂载")
     generic_skill_refs = active_skill_refs
 
     installed_skill_items = await client.list_workspace_skills(agent_id, session_id)
     installed_mcp_items = await client.list_workspace_mcp(agent_id, session_id)
     installed_skills = _installed_names(installed_skill_items)
     installed_mcps = _installed_names(installed_mcp_items)
+    unhealthy_mcps = {
+        str(item.get("name")) for item in installed_mcp_items if item.get("is_healthy") is False
+    }
     def skill_runtime_names(ref: str) -> list[str]:
         if is_nexus_skill(ref):
             row = local_skills.get(ref)
@@ -1252,6 +1258,7 @@ async def _sync_one_session(
             row_state is None
             or row_state["status"] != "applied"
             or int(row_state["revision"] or 0) != int(row["revision"])
+            or name in unhealthy_mcps
         )
         if name in installed_mcps and needs_add:
             stale_mcp_names.append(name)
@@ -1270,8 +1277,13 @@ async def _sync_one_session(
             continue
         name = str(record.get("name") or ref)
         row_state = _sync_row_state(connection, "mcp", ref, employee["id"], session_id)
-        if row_state is not None and row_state["status"] == "applied" and name in installed_mcps:
+        if (
+            row_state is not None and row_state["status"] == "applied"
+            and name in installed_mcps and name not in unhealthy_mcps
+        ):
             continue
+        if name in unhealthy_mcps:
+            stale_mcp_names.append(name)
         external_mcp_installs.append(ref)
 
     mutating = bool(
@@ -1310,17 +1322,13 @@ async def _sync_one_session(
         return {"status": "ok", "detail": ""}
 
     # 运行中的会话不中途拆改工作区，等下一次发消息或手动重试。
-    try:
-        state = await client.session_status(agent_id, session_id)
-    except AgentScopeError:
-        state = "idle"
+    state = await client.session_status(agent_id, session_id)
     if state != "running":
         # 有 MCP 的会话使用 bypass：dont_ask 会把 MCP Tool 的 PASSTHROUGH 权限
         # 转成 DENY，员工就永远调不到 Tool。这是 AgentScope 官方权限模式，不改源码。
-        await client.set_permission_mode(
-            agent_id,
-            session_id,
-            "bypass" if active_mcp_refs else UNATTENDED_PERMISSION,
+        await client.request(
+            "PATCH", f"/sessions/{session_id}", params={"agent_id": agent_id},
+            json={"permission_mode": "bypass" if active_mcp_refs else UNATTENDED_PERMISSION},
         )
     if mutating and state == "running":
         detail = "会话正在运行，等待下一次同步"
@@ -1434,6 +1442,17 @@ async def _sync_one_session(
                 failures.append(f"MCP 库资源未装入：{detail}")
         except AgentScopeError as exc:
             failures.append(f"MCP 库资源未装入：{exc.detail}")
+
+    if active_mcp_refs:
+        actual = {
+            str(item.get("name")): item for item in await client.list_workspace_mcp(agent_id, session_id)
+        }
+        for ref in active_mcp_refs:
+            name = current_mcp_name(ref)
+            if name not in actual:
+                failures.append(f"MCP {name} 未出现在当前会话工作区")
+            elif actual[name].get("is_healthy") is False:
+                failures.append(f"MCP {name} 当前会话连接未就绪")
 
     failure_detail = _redact(
         "；".join(dict.fromkeys(failures))[:800],

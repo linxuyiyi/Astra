@@ -73,7 +73,7 @@ class TaskService:
         return task
 
     async def update(self, task, payload):
-        if task.status in {"SUCCEEDED", "CANCELED"}:
+        if task.status in {"SUCCEEDED", "CANCELED", "FAILED"}:
             raise ValueError("已结束的任务不能修改")
         data = payload.model_dump(exclude_unset=True, mode="json")
         if "agent_worker_id" in data and (task.status != "PENDING" or task.claimed_at):
@@ -96,7 +96,7 @@ class TaskService:
             task.claimed_at = task.claimed_at or now
             task.started_at = task.started_at or now
             task.finished_at = None
-        elif target in {TaskStatus.SUCCEEDED, TaskStatus.CANCELED}:
+        elif target in {TaskStatus.SUCCEEDED, TaskStatus.CANCELED, TaskStatus.FAILED}:
             task.finished_at = now
         if current_progress is not None:
             task.current_progress = current_progress
@@ -148,7 +148,7 @@ async def dashboard_metrics(session):
     from app.runtime.worker_connection import worker_connections
 
     rows = (await session.execute(
-        select(AgentWorker.id, AgentWorker.status, AgentWorker.mode, AgentWorker.epoch)
+        select(AgentWorker.id, AgentWorker.status, AgentWorker.mode)
     )).all()
     workers = Counter(worker.status for worker in rows)
     online = await worker_connections(rows)

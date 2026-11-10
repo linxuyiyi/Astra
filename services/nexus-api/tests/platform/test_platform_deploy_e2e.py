@@ -178,7 +178,6 @@ def test_isolated_real_core_services_migrations_restart_and_health(tmp_path, mon
         worker.settings = SimpleNamespace(
             gateway_openai_base=values["NEXUS_GATEWAY_OPENAI_BASE"],
             mcp_resource_server_url=values["NEXUS_MCP_RESOURCE_SERVER_URL"],
-            worker_agent_gateway_url=values["NEXUS_WORKER_AGENT_GATEWAY_URL"],
         )
         asyncio.run(worker._probe_ingress(AsyncMock()))
         mcp = subprocess.run(

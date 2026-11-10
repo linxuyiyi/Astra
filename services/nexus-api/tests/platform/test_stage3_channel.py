@@ -6,13 +6,13 @@ APP = Path(__file__).resolve().parents[2] / "app"
 SSH_ALLOW = {
     ("app/runtime/environment.py", "SSHSession("),
     ("app/runtime/environment.py", ".open_session("),
-    ("app/runtime/maintenance.py", ".open_session("),
+    ("app/runtime/worker_connection.py", ".open_session("),
     ("app/runtime/remote_provisioning.py", ".open_session("),
     ("app/runtime/ssh_client.py", ".open_session("),
 }
 
 
-def test_daily_workspace_and_health_do_not_open_ssh():
+def test_runtime_ssh_connections_are_owned_by_the_pool():
     found = set()
     for path in APP.rglob("*.py"):
         text = path.read_text(encoding="utf-8")

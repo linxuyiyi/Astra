@@ -1,24 +1,12 @@
-"""File, read-only Git, and upload calls for an environment marked worker.
-
-The browser still uses the Workspace routes. These helpers only move the work
-onto the Worker and never read the SSH password copied onto the environment.
-"""
-
+"""通过 SSH 复用远端受限文件及只读 Git 操作。"""
 from __future__ import annotations
 
 import base64
 import hashlib
 from typing import Any
-from uuid import uuid4
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.database import SessionLocal
 from app.domain import ExecutionMode
-from app.models import AgentWorker
-from app.runtime.worker_client import WorkerCommandError, WorkerOpenCodeClient
-from app.worker_gateway.data_channel import DataChannel, request_key
+from app.runtime.ssh_operations import WorkerOperationError, run_worker_operation
 
 _PATH_CODES = frozenset({"path_forbidden", "path_outside", "symlink_escape"})
 _VALUE_CODES = frozenset(
@@ -38,23 +26,8 @@ class WorkerFileError(ValueError):
         super().__init__(message)
 
 
-async def environment_enrolled_in_gateway(session: AsyncSession, agent_worker_id: str | None) -> bool:
-    if not isinstance(agent_worker_id, str):
-        return False
-    worker_id = await session.scalar(select(AgentWorker.id).where(AgentWorker.id == agent_worker_id))
-    return worker_id is not None
-
-
 async def environment_uses_worker(environment) -> bool:
-    """远程环境只要已完成网关登记，即统一走 Worker Gateway 通道。"""
-
-    if str(getattr(environment, "mode", "")) != ExecutionMode.LINUX_REMOTE.value:
-        return False
-    agent_worker_id = getattr(environment, "id", None)
-    if not isinstance(agent_worker_id, str):
-        return False
-    async with SessionLocal() as session:
-        return await environment_enrolled_in_gateway(session, agent_worker_id)
+    return environment.mode == ExecutionMode.LINUX_REMOTE
 
 
 def git_command_payload(args: tuple[str, ...]) -> dict[str, Any]:
@@ -133,43 +106,28 @@ async def worker_git(environment, workspace: str, args: tuple[str, ...]) -> tupl
 
 
 async def worker_upload(environment, workspace: str, filename: str, content: bytes) -> str:
-    client = _client(environment)
-    request_id = f"upl_{uuid4().hex}"
     payload = {
-        "workspace": workspace,
-        "filename": filename,
-        "size": len(content),
-        "sha256": hashlib.sha256(content).hexdigest(),
+        "workspace": workspace, "filename": filename,
+        "size": len(content), "sha256": hashlib.sha256(content).hexdigest(),
     }
-    channel = DataChannel(client.gateway)
-    ttl = float(
-        client.settings.worker_gateway_command_timeout_seconds
-        + client.settings.worker_gateway_dispatch_lease_seconds
-    )
-    await channel.stage_upload(request_id, content, ttl)
     try:
-        result = await client.run_command("upload_file", payload, request_id=request_id)
-    finally:
-        await client.gateway.bus.delete_text(request_key(request_id))
+        result = await run_worker_operation(environment, "upload_file", payload, content=content)
+    except WorkerOperationError as exc:
+        raise _mapped(exc) from exc
     path = result.get("path")
     if not isinstance(path, str) or not path:
         raise RuntimeError("上传没有返回路径")
     return path
 
 
-def _client(environment):
-    return WorkerOpenCodeClient(agent_worker_id=environment.id)
-
-
 async def _run(environment, name: str, payload: dict[str, Any]) -> dict[str, Any]:
-    client = _client(environment)
     try:
-        return await client.run_command(name, payload)
-    except WorkerCommandError as exc:
+        return await run_worker_operation(environment, name, payload)
+    except WorkerOperationError as exc:
         raise _mapped(exc) from exc
 
 
-def _mapped(exc: WorkerCommandError) -> Exception:
+def _mapped(exc: WorkerOperationError) -> Exception:
     message = str(exc)
     if exc.code in _PATH_CODES:
         return WorkerPathError(exc.code, message)

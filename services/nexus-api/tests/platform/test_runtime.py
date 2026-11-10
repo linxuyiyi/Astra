@@ -98,8 +98,8 @@ async def test_add_event_can_join_caller_transaction_without_implicit_commit(ses
     assert [event.event_type for event in events] == ["TASK_CREATED"]
 
 
-def test_dispatch_starts_claimed_task(monkeypatch):
-    """已领取任务直接启动，不再有自动执行开关。"""
+def test_dispatch_claims_task_for_api_supervisor(monkeypatch):
+    """Celery 只领取任务，SSH 与启动由统一 API 负责。"""
     from types import SimpleNamespace
 
     from app.runtime import celery_app
@@ -126,10 +126,10 @@ def test_dispatch_starts_claimed_task(monkeypatch):
     monkeypatch.setattr(celery_app, "validate_database", no_init)
     monkeypatch.setattr(celery_app, "worker_session", worker_scope)
     monkeypatch.setattr(celery_app.Dispatcher, "claim_once", claim_once)
-    monkeypatch.setattr(celery_app.RuntimeService, "start", start)
+    monkeypatch.setattr("app.runtime.lifecycle.RuntimeService.start", start)
 
     assert celery_app.dispatch() == "T-auto"
-    assert started == ["T-auto"]
+    assert started == []
 
 
 class FakeSource(TaskSource):
@@ -320,8 +320,8 @@ async def test_paramiko_exec_channel_closes_stdin_and_streams_output():
     assert exit_code == 0
 
 
-def test_ssh_session_has_no_forwarding_tunnel():
-    assert not hasattr(SSHSession, "open_tunnel")
+def test_ssh_session_supports_local_forwarding_without_reverse_tunnels():
+    assert hasattr(SSHSession, "forward_local")
     assert not hasattr(SSHSession, "open_reverse_tunnel")
 
 

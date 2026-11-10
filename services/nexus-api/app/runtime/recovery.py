@@ -1,9 +1,8 @@
-"""原生 SSE 触发 Task 对账，定时扫描仅管理绑定及未完成的启动和提交。"""
+"""原生 SSE 与周期巡检触发同一个 Task 原生状态对账入口。"""
 
 import asyncio
 import logging
 from pathlib import Path
-from uuid import uuid4
 
 from sqlalchemy import select
 
@@ -25,7 +24,7 @@ _RECONCILE_EVENTS = {
 
 def _needs_reconcile(event, sessions):
     kind = event.get("type")
-    if kind in {"astra.event_gap", "server.connected", "server.instance.disposed"}:
+    if kind in {"server.connected", "server.instance.disposed"}:
         return True
     if kind != "session.created" and kind not in _RECONCILE_EVENTS:
         return False
@@ -44,7 +43,6 @@ def _needs_reconcile(event, sessions):
 
 
 async def _watch_events(task_id, worker, binding, sessions, wake):
-    consumer = f"task:{task_id}:{uuid4().hex}"
     disconnected = False
 
     def subscribed():
@@ -56,14 +54,8 @@ async def _watch_events(task_id, worker, binding, sessions, wake):
         try:
             async with connect(worker) as client:
                 directory = Path(binding.workspace)
-                stream = (
-                    client.events(directory, consumer=consumer, on_subscribed=subscribed)
-                    if getattr(client, "records_fetch", False)
-                    else client.events(directory, on_subscribed=subscribed)
-                )
+                stream = client.events(directory, on_subscribed=subscribed)
                 async for event in stream:
-                    if event.get("type") == "astra.keepalive":
-                        continue
                     if _needs_reconcile(event, sessions):
                         wake.set()
                     disconnected = False
@@ -110,11 +102,10 @@ async def watch_session(task_id):
                     elif task.status == "RUNNING" and not task.current_session_id:
                         await runtime.start(task_id)
                     elif binding is not None:
-                        if wake.is_set():
-                            wake.clear()
-                            await runtime.refresh(
-                                task_id, expected_binding=binding, observed_sessions=sessions
-                            )
+                        wake.clear()
+                        await runtime.refresh(
+                            task_id, expected_binding=binding, observed_sessions=sessions
+                        )
                         delay = False
             except Exception:
                 logger.exception("Task %s 运行状态对账失败", task_id)

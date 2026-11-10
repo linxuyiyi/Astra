@@ -48,7 +48,8 @@ class RuntimeService:
     async def lock_task(self, task_id, *, nowait=False):
         try:
             task = await self.session.scalar(
-                select(Task).where(Task.id == task_id)
+                select(Task)
+                .where(Task.id == task_id)
                 .with_for_update(nowait=nowait)
                 .execution_options(populate_existing=True)
             )
@@ -100,7 +101,7 @@ class RuntimeService:
         if task.pending_message_id:
             raise RuntimeStateError("已有待确认输入，请等待自动重发")
         if not restart:
-            if task.status == "CANCELED":
+            if task.status in {"CANCELED", "FAILED"}:
                 raise RuntimeStateError("任务已结束，需显式重新开始")
             if task.current_session_id:
                 raise RuntimeStateError("任务已有 Session，请在当前会话处理")
@@ -124,8 +125,7 @@ class RuntimeService:
             await self.session.commit()
             return task
         try:
-            # The Task lock preserves its committed occupancy. Remote preparation
-            # writes Gateway commands in another transaction, so leave the Worker unlocked.
+            # Task 行锁保留已提交的独占占用，远程准备不占用 Worker 行锁。
             worker = await self._worker(task, lock=False)
             if restart and task.current_session_id:
                 async with connect(worker, start=True) as client:
@@ -244,10 +244,7 @@ class RuntimeService:
                 if task.current_session_id:
                     try:
                         status = await client.status(directory, task.current_session_id)
-                        if pending.get("request_id"):
-                            from app.worker_gateway.data_channel import retire_submission
-
-                            await retire_submission(pending["request_id"])
+                        if pending.get("attempted"):
                             messages = await self._all_messages(client, directory, task.current_session_id)
                             if any((x.get("info") or {}).get("id") == outbound for x in messages):
                                 task.last_message_id = outbound
@@ -258,9 +255,13 @@ class RuntimeService:
                             if status in {"busy", "retry"}:
                                 await self.session.commit()
                                 return task
-                            await self._stop_native(client, directory, task.current_session_id)
                     except OpenCodeSessionNotFound:
-                        task.current_session_id = None
+                        task.pending_message_id = None
+                        task.pending_prompt = None
+                        task.waiting_reason = "session_missing"
+                        return await self.project(
+                            task, "WAITING", detail="原生 Session 不存在，请人工处理或重新开始"
+                        )
                 if not task.current_session_id:
                     native = await client.create_session(
                         directory,
@@ -287,17 +288,12 @@ class RuntimeService:
                         build_runtime_context_part(generate_runtime_context(task)),
                     ]
                     pending["body"] = body
-                request_id = "submit_" + uuid4().hex
-                pending["request_id"] = request_id
+                pending["attempted"] = True
                 task.pending_prompt = pending
                 # Native pointer + pending round are durable before transmission.
                 await self.session.commit()
                 task = await self.lock_task(task_id)
-                if (
-                    task.pending_message_id != outbound
-                    or task.current_session_id is None
-                    or (task.pending_prompt or {}).get("request_id") != request_id
-                ):
+                if task.pending_message_id != outbound or task.current_session_id is None:
                     await self.session.rollback()
                     return task
                 session_id = task.current_session_id
@@ -306,11 +302,8 @@ class RuntimeService:
                     f"/session/{session_id}/{pending['action']}",
                     directory=directory,
                     body=pending["body"],
-                    command_request_id=request_id,
-                    session_id=session_id,
-                    task_id=task.id,
                 )
-                # Row lock serializes send/stop/restart; epoch is checked by Gateway.
+                # 同一 Task 行锁串行化提交、停止和重新开始。
                 if task.pending_message_id == outbound and task.current_session_id == session_id:
                     task.last_message_id = outbound
                     task.pending_message_id = None
@@ -375,13 +368,9 @@ class RuntimeService:
 
     async def stop(self, task_id, *, cancel_task=True):
         task = await self.lock_task(task_id, nowait=True)
-        if task.status in {"SUCCEEDED", "CANCELED"}:
+        if task.status in {"SUCCEEDED", "CANCELED", "FAILED"}:
             await self.session.commit()
             return task
-        if task.pending_prompt and task.pending_prompt.get("request_id"):
-            from app.worker_gateway.data_channel import retire_submission
-
-            await retire_submission(task.pending_prompt["request_id"])
         if task.current_session_id:
             worker = await resolve_environment(self.session, task)
             async with connect(worker) as client:
@@ -407,10 +396,6 @@ class RuntimeService:
             {"operator": operator, "reason": reason},
             commit=False,
         )
-        if task.pending_prompt and task.pending_prompt.get("request_id"):
-            from app.worker_gateway.data_channel import retire_submission
-
-            await retire_submission(task.pending_prompt["request_id"])
         task.pending_message_id = None
         task.pending_prompt = None
         task.waiting_reason = None
@@ -461,21 +446,48 @@ class RuntimeService:
         elif busy:
             task.waiting_reason = None
             await self.project(task, "RUNNING", detail="执行中")
-        elif task.waiting_reason not in {"paused", "input_rejected", "start_error", "intervention"}:
-            task.waiting_reason = "confirmation"
-            await self.project(task, "WAITING", detail="本轮执行结束，请人工处理或确认完成")
         else:
-            await self.session.commit()
+            try:
+                failed = await self._native_failure(task, client, directory)
+            except OpenCodeSessionNotFound:
+                raise
+            except (OpenCodeExecutionError, ConnectionError, TimeoutError):
+                task.waiting_reason = "result_pending"
+                return await self.project(
+                    task, "WAITING", detail="本轮已空闲，执行结果暂不可读取，正在重试核对",
+                )
+            if failed:
+                task.waiting_reason = None
+                await self.project(task, "FAILED", detail="OpenCode 已确认本轮执行失败")
+            elif task.waiting_reason not in {"paused", "input_rejected", "start_error", "intervention"}:
+                task.waiting_reason = "confirmation"
+                await self.project(task, "WAITING", detail="本轮执行结束，请人工处理或确认完成")
+            else:
+                await self.session.commit()
         return task
+
+    async def _native_failure(self, task, client, directory):
+        if not task.last_message_id or task.waiting_reason in {"paused", "input_rejected"}:
+            return False
+        messages = await self._all_messages(client, directory, task.current_session_id)
+        responses = [
+            message["info"]
+            for message in messages
+            if (message.get("info") or {}).get("role") == "assistant"
+            and message["info"].get("parentID") == task.last_message_id
+        ]
+        if not responses:
+            return False
+        latest = max(responses, key=lambda info: info["id"])
+        return bool(latest.get("error"))
 
     async def restart(self, task_id):
         task = await self.lock_task(task_id)
-        allowed = (
-            task.status == "CANCELED"
-            or (task.status == "WAITING" and task.waiting_reason == "session_missing")
+        allowed = task.status in {"CANCELED", "FAILED"} or (
+            task.status == "WAITING" and task.waiting_reason == "session_missing"
         )
         if not allowed:
-            raise RuntimeStateError("只有已取消或原生 Session 不存在的任务可以重新开始")
+            raise RuntimeStateError("只有已取消、已失败或原生 Session 不存在的任务可以重新开始")
         return await self.start(task_id, restart=True)
 
     async def resume(self, task_id):

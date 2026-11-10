@@ -1,16 +1,16 @@
 # Nexus v1.5.0 数据库最终结构
 
-从最终 ORM 元数据生成，共 52 张 Nexus 业务表；另有 Alembic 自身的 `alembic_version`。不新增业务表，移除原执行会话、实例、执行环境与连接历史四张表。
+从最终 ORM 元数据生成，共 50 张 Nexus 业务表；另有 Alembic 自身的 `alembic_version`。不新增业务表，移除原执行会话、实例、执行环境与连接历史四张表。
 
 公司目标为全新 MySQL 8.0.36；由单个 `0001_init` 创建，不提供旧库升级或双写。AgentScope 自有数据库由官方维护，不在此清单内。
 
-核心表：Task 27 列、AgentWorker 26 列、WorkerCommand 20 列、维护操作 24 列。`ssh_password` 与 `git_token_ciphertext` 均存密文；接口只返回是否已配置。
+核心表：Task 27 列、AgentWorker 25 列、维护操作 24 列。`ssh_password` 与 `git_token_ciphertext` 均存密文；接口只返回是否已配置。
 
 知识与证据表的 `source_session_id` / `session_id` 为 OpenCode 原生来源引用字符串，已移除到旧 Session 表的外键。旧 Session 状态快照字段已删除；来源 Job、消息、证据及人工审核机制保留。
 
-## t_nexus_agent_workers（26 列）
+## t_nexus_agent_workers（25 列）
 
-`id`, `name`, `description`, `enabled`, `created_at`, `updated_at`, `status`, `task_types`, `category_ids`, `runtime_engine`, `mode`, `host`, `port`, `username`, `ssh_password`, `model_name`, `workspace_root`, `repository_url`, `git_token_ciphertext`, `branch`, `skill_refs`, `mcp_refs`, `token_digest`, `epoch`, `last_heartbeat_at`, `agent_version`
+`id`, `name`, `description`, `enabled`, `created_at`, `updated_at`, `status`, `task_types`, `category_ids`, `runtime_engine`, `mode`, `host`, `port`, `username`, `ssh_password`, `model_name`, `workspace_root`, `repository_url`, `git_token_ciphertext`, `branch`, `skill_refs`, `mcp_refs`, `opencode_port`, `last_checked_at`, `opencode_version`
 
 ## t_nexus_attachments（7 列）
 
@@ -199,14 +199,6 @@
 ## t_nexus_tasks（27 列）
 
 `id`, `title`, `description`, `task_type`, `category_id`, `priority`, `acceptance_criteria`, `attachments`, `source`, `external_task_id`, `origin_employee_id`, `external_reference_id`, `agent_worker_id`, `current_session_id`, `workspace`, `last_message_id`, `pending_message_id`, `pending_prompt`, `status`, `waiting_reason`, `current_progress`, `created_at`, `updated_at`, `claimed_at`, `started_at`, `finished_at`, `last_activity_at`
-
-## t_nexus_worker_commands（20 列）
-
-`id`, `request_id`, `agent_worker_id`, `session_id`, `name`, `payload`, `status`, `epoch`, `result`, `error_code`, `deadline_at`, `body_fetched_at`, `delivery_attempts`, `delivery_state`, `slot_held`, `last_dispatched_at`, `dispatched_epoch`, `created_at`, `updated_at`, `finished_at`
-
-## t_nexus_worker_http_slots（3 列）
-
-`agent_worker_id`, `epoch`, `inflight`
 
 ## t_nexus_worker_maintenance_events（10 列）
 

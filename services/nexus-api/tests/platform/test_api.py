@@ -140,7 +140,9 @@ def test_worker_crud_uses_flat_config_and_releases_historical_references():
         config = {key: value for key, value in payload.items() if key != "id"}
         config.update(model_name="", repository_url="", branch="", name="改名后的资源")
         updated = client.put(f"/api/workers/{worker_id}", json=config)
-        assert updated.status_code == 200 and updated.json()["epoch"] == created.json()["epoch"]
+        assert (
+            updated.status_code == 200 and updated.json()["opencode_port"] == created.json()["opencode_port"]
+        )
         task = client.post("/api/tasks", json=task_payload(agent_worker_id=worker_id)).json()
 
         async def occupy():

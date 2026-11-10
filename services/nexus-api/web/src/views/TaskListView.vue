@@ -79,7 +79,7 @@ const pageSize = ref(20)
 const total = ref(0)
 const creating = ref(false)
 const editing = ref<Task>()
-const statuses = ['PENDING', 'RUNNING', 'WAITING', 'SUCCEEDED', 'CANCELED']
+const statuses = ['PENDING', 'RUNNING', 'WAITING', 'SUCCEEDED', 'FAILED', 'CANCELED']
 let request: AbortController | undefined
 
 async function load(background = false) {

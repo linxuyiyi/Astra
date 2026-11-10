@@ -54,8 +54,7 @@ export interface WorkerHealth {
   connection: {
     channel: string
     state: string
-    last_heartbeat_at: string | null
-    epoch: number | null
+    last_checked_at: string | null
   }
   runtime_health: {
     status: string
@@ -75,7 +74,6 @@ export interface WorkerHealth {
 
 export interface MaintenanceTargetRevision {
   opencode_version: string | null
-  worker_agent_version: string | null
   model_name: string | null
   branch: string | null
   skills: string[]
@@ -101,7 +99,6 @@ export interface MaintenanceChanged {
 
 export interface MaintenanceAfterSnapshot {
   opencode_version: string | null
-  worker_agent_version: string | null
   model_name: string | null
   repository: MaintenanceRepositorySnapshot | null
   capability_revision: string | null

@@ -8,10 +8,16 @@ class InvalidTransition(ValueError):
 class TaskStateMachine:
     transitions = {
         TaskStatus.PENDING: {TaskStatus.RUNNING, TaskStatus.CANCELED},
-        TaskStatus.RUNNING: {TaskStatus.WAITING, TaskStatus.CANCELED},
-        TaskStatus.WAITING: {TaskStatus.RUNNING, TaskStatus.SUCCEEDED, TaskStatus.CANCELED},
+        TaskStatus.RUNNING: {TaskStatus.WAITING, TaskStatus.CANCELED, TaskStatus.FAILED},
+        TaskStatus.WAITING: {
+            TaskStatus.RUNNING,
+            TaskStatus.SUCCEEDED,
+            TaskStatus.CANCELED,
+            TaskStatus.FAILED,
+        },
         TaskStatus.SUCCEEDED: set(),
         TaskStatus.CANCELED: {TaskStatus.RUNNING},
+        TaskStatus.FAILED: {TaskStatus.RUNNING, TaskStatus.CANCELED},
     }
 
     @classmethod

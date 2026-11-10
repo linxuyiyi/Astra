@@ -8,11 +8,7 @@
         <el-descriptions-item v-for="item in health.runtime_health.equipment" :key="item.key" :label="item.label">
           <div class="equipment-row">
             <SemanticTag :tone="equipmentState[item.state].tone" :label="equipmentState[item.state].label" />
-            <template v-if="item.key === 'worker_agent'">
-              <span>{{ worker.mode === 'LOCAL' ? '本机运行' : (health.connection.state === 'online' ? '已连接' : '未连接') }}</span>
-              <span v-if="worker.mode !== 'LOCAL' && (item.actual_revision || worker.agent_version)">版本 {{ item.actual_revision || worker.agent_version }}</span>
-            </template>
-            <span v-else-if="item.key === 'opencode' && item.actual_revision">版本 {{ item.actual_revision }}</span>
+            <span v-if="item.key === 'opencode' && item.actual_revision">版本 {{ item.actual_revision }}</span>
             <span v-else-if="item.key !== 'git' && item.detail">{{ item.detail }}</span>
             <template v-if="item.key === 'git' && health.repository">
               <span>远端 {{ health.repository.authentication_verified === true ? '已验证' : health.repository.authentication_verified === false ? '验证失败' : '未检查' }}</span>

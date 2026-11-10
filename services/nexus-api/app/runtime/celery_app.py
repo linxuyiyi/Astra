@@ -6,7 +6,6 @@ from app.config.settings import get_settings
 from app.database import validate_database, worker_session
 from app.runtime.dispatcher import Dispatcher
 from app.runtime.experience_review.coordinator import process_job, scan_jobs
-from app.runtime.lifecycle import RuntimeService
 from app.runtime.scout import TaskScout
 from app.runtime.task_wakeup import HttpWakeSender, deliver_pending
 from app.sources.nr_test_system import NrTestSystemSource
@@ -106,7 +105,7 @@ def dispatch() -> str | None:
             task = await Dispatcher(session).claim_once()
             if not task:
                 return None
-            await RuntimeService(session).start(task.id)
+            # API 的任务巡检发现 RUNNING / 无 Session 后启动，SSH 归统一 API 所有。
             return task.id
 
     return run_async(execute())

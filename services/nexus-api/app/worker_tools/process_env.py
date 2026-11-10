@@ -1,9 +1,4 @@
-"""Environment handed to processes the Worker Agent starts.
-
-The Agent's own token and Gateway address stay in the Agent process. A model
-shell tool inherits the OpenCode process environment, so that process must not
-see Worker or Gateway credentials.
-"""
+"""OpenCode 子进程只继承运行需要的环境，不传入控制器凭据。"""
 
 from __future__ import annotations
 

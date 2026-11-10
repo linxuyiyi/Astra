@@ -33,5 +33,12 @@
     "group": "finished",
     "rank": 5,
     "pulse": false
+  },
+  "FAILED": {
+    "label": "执行失败",
+    "tone": "danger",
+    "group": "finished",
+    "rank": 4,
+    "pulse": false
   }
 }

@@ -22,7 +22,7 @@ const worker = {
   task_types: ['ISSUE'], category_ids: [], status: 'OFFLINE', runtime_engine: 'opencode', mode: 'LINUX_REMOTE',
   host: 'fixture.invalid', port: 22, username: 'nexus', workspace_root: '/srv/project', model_name: 'route-test',
   repository_url: 'https://git.fixture/project', branch: 'main', skill_refs: [], mcp_refs: [],
-  online: false, has_ssh_password: true, has_git_token: false, epoch: 3, last_heartbeat_at: timestamp, agent_version: '1.5.0',
+  online: false, has_ssh_password: true, has_git_token: false, opencode_port: 14096, last_checked_at: timestamp, opencode_version: '1.18.35',
   created_at: timestamp, updated_at: timestamp,
   occupied_tasks: [{ id: 'T-A', title: '研发占用任务' }, { id: 'T-B', title: '等待验收任务' }],
 }
@@ -45,7 +45,6 @@ const health = () => ({
     ...(reviewActive ? [{ code: 'review_active', message: 'Worker 仍是未完成经验复盘的来源' }] : []),
   ],
   runtime_health: { equipment: [
-    equipment('worker_agent', 'Worker Agent', worker.status === 'OFFLINE' ? 'unknown' : 'ready', { actual_revision: '1.5.0' }),
     equipment('opencode', 'OpenCode', worker.status === 'OFFLINE' ? 'unknown' : 'ready', { actual_revision: worker.status === 'OFFLINE' ? null : '1.18.35' }),
     equipment('model', '模型', 'ready', { detail: '生效模型 route-test' }),
     equipment('mcp', 'MCP', 'degraded', { diff: ['MCP 调用超时'], error: 'MCP 调用超时' }),
@@ -112,7 +111,7 @@ await page.route('**/api/**', async route => {
       const frames = Array.from({ length: 1050 }, (_, n) => ({
         id: n + 1, name: '部署日志', message: '日志 ' + (n + 1), attempt: 1, type: 'step', state: 'RUNNING',
       }))
-      frames.at(-1).message = '当前连接代次验证通过'
+      frames.at(-1).message = 'SSH 与原生服务验证通过'
       if (id === 'op-deploy') Object.assign(row, { state: 'SUCCEEDED', stage: 'completed' })
       const after = Number(q.get('after_id'))
       const selected = id !== 'op-deploy' ? [] : after === 0 ? frames : [
@@ -175,7 +174,7 @@ try {
   const detail = page.getByTestId('worker-detail')
   const env = detail.getByRole('region', { name: '运行环境' })
   const manual = detail.locator('header').first().getByRole('button', { name: '刷新', exact: true })
-  await env.getByText('未连接', { exact: true }).waitFor()
+  await detail.getByText('连接 离线', { exact: true }).waitFor()
   await env.getByText('MCP 调用超时', { exact: true }).waitFor()
   await env.getByText('Skill qa 文件缺失', { exact: true }).waitFor()
   await env.getByText('有未提交修改', { exact: true }).waitFor()
@@ -193,7 +192,6 @@ try {
   await detail.getByText('任务调度 已启用').waitFor()
 
   worker.status = 'WORKING'
-  worker.epoch++
   await page.clock.fastForward(10_001)
   await env.getByText('版本 1.18.35', { exact: true }).waitFor()
   await detail.getByText('工作中', { exact: true }).waitFor()
@@ -271,7 +269,7 @@ try {
   await page.getByRole('dialog').getByRole('button', { name: '确定', exact: true }).click()
   const operationDetail = page.getByTestId('worker-maintenance-detail')
   const log = operationDetail.getByRole('log')
-  await log.getByText('当前连接代次验证通过').waitFor()
+  await log.getByText('SSH 与原生服务验证通过').waitFor()
   assert.equal(await log.locator('.log-message').count(), 500)
   assert.equal(await log.locator('.log-message').first().textContent(), '日志 551')
   await operationDetail.getByRole('button', { name: '更早日志' }).click()
@@ -279,11 +277,11 @@ try {
   assert.equal(historyBefore, 551)
   assert.equal(await log.locator('.log-message').count(), 200)
   await operationDetail.getByRole('button', { name: '返回最新' }).click()
-  await log.getByText('当前连接代次验证通过').waitFor()
+  await log.getByText('SSH 与原生服务验证通过').waitFor()
   assert.equal(deployed, true)
   await operationDetail.getByRole('button', { name: '重试读取' }).click()
   await log.getByText('续订追加日志', { exact: true }).waitFor()
-  assert.equal(await log.getByText('当前连接代次验证通过', { exact: true }).count(), 1)
+  assert.equal(await log.getByText('SSH 与原生服务验证通过', { exact: true }).count(), 1)
   assert.equal(await log.locator('.log-message').count(), 500)
   assert.equal(streams, 2)
   const readsAfterLeave = healthReads

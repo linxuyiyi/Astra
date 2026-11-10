@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import threading
-import time
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -13,22 +11,12 @@ from urllib.parse import urlsplit
 
 import pytest
 
-import app.worker_agent as worker_agent
-from app.worker_agent import supervisor as supervisor_mod
-from app.worker_agent.connection import (
-    AgentConfig,
-    WorkerConnectionManager,
-    handle_command,
-    load_agent_config,
-)
-from app.worker_agent.process_env import child_environ
-from app.worker_agent.supervisor import (
-    RuntimeSupervisor,
+from app.worker_tools import supervisor as supervisor_mod
+from app.worker_tools.process_env import child_environ
+from app.worker_tools.supervisor import (
     _check_local_health,
     assert_native_idle,
 )
-from app.worker_gateway.protocol import envelope
-from tests.platform.test_worker_gateway_faults import _auth_reply
 
 
 @contextmanager
@@ -57,36 +45,8 @@ def _server(routes: dict[str, tuple[int, object]]):
         thread.join(timeout=2)
 
 
-def _restart_message(workspace: Path, port: int, request_id: str = "req-restart"):
-    message = envelope(
-        request_id=request_id,
-        agent_worker_id="wrk_agent",
-        session_id=None,
-        message_type="command",
-        payload={
-            "name": "restart_opencode",
-            "data": {"workspace": str(workspace)},
-        },
-    )
-    message.epoch = 3
-    message.expires_at = int(time.time()) + 60
-    return message
 
 
-def _update_message(workspace: Path, port: int, request_id: str = "req-update"):
-    message = envelope(
-        request_id=request_id,
-        agent_worker_id="wrk_agent",
-        session_id=None,
-        message_type="command",
-        payload={
-            "name": "update_workspace",
-            "data": {"workspace": str(workspace), "branch": "main"},
-        },
-    )
-    message.epoch = 3
-    message.expires_at = int(time.time()) + 60
-    return message
 
 
 def _workspace(tmp_path: Path) -> Path:
@@ -163,97 +123,12 @@ def test_health_check_accepts_only_healthy_true():
         assert _check_local_health(port) is True
 
 
-@pytest.mark.parametrize("name", ["restart_opencode", "update_workspace"])
-def test_command_data_must_match_worker_binding(tmp_path: Path, name: str):
-    workspace = _workspace(tmp_path)
-    other = tmp_path / "other"
-    other.mkdir()
-    build = _restart_message if name == "restart_opencode" else _update_message
-
-    result, error = handle_command(
-        build(other, 14096),
-        RuntimeSupervisor(),
-        workspace_root=str(workspace),
-        opencode_url="http://127.0.0.1:14096",
-    )
-    assert result is None
-    assert "工作区" in str(error)
-
-    result, error = handle_command(
-        build(workspace, 14097),
-        RuntimeSupervisor(),
-        workspace_root=str(workspace),
-        opencode_url="http://127.0.0.1",
-    )
-    assert result is None
-    assert "端口" in str(error)
-
-    result, error = handle_command(
-        build(workspace, 14096),
-        RuntimeSupervisor(),
-        workspace_root=str(workspace),
-        opencode_url="http://10.0.0.9:14096",
-    )
-    assert result is None
-    assert "未绑定" in str(error)
 
 
-def test_switch_channel_command_is_retired(tmp_path: Path):
-    workspace = _workspace(tmp_path)
-    message = envelope(
-        request_id="req-switch",
-        agent_worker_id="wrk_agent",
-        session_id=None,
-        message_type="command",
-        payload={"name": "switch_channel", "data": {"workspace": str(workspace), "port": 14096}},
-    )
-    result, error = handle_command(
-        message,
-        RuntimeSupervisor(),
-        workspace_root=str(workspace),
-        opencode_url="http://127.0.0.1:14096",
-    )
-    assert result is None
-    assert error is not None
 
 
-def test_version_contract_comes_from_the_module_not_env():
-    assert worker_agent.__version__ == "1.5.0"
-    config = load_agent_config(
-        {
-            "NEXUS_WORKER_TOKEN": "wtk_test",
-            "NEXUS_WORKER_GATEWAY_URL": "ws://nexus/api/worker-gateway/connect",
-            "NEXUS_AGENT_WORKER_ID": "wrk_test",
-            "NEXUS_WORKER_AGENT_VERSION": "0.1.0",
-            "NEXUS_WORKER_OPENCODE_URL": "http://127.0.0.1:14096",
-            "NEXUS_WORKER_WORKSPACE_ROOT": "/srv/project",
-        }
-    )
-    assert config.agent_version == worker_agent.__version__
-    assert config.opencode_url == "http://127.0.0.1:14096"
-    assert config.workspace_root == "/srv/project"
-    assert (
-        AgentConfig(
-            gateway_url="ws://nexus",
-            agent_worker_id="wrk",
-            token="wtk_test",
-        ).agent_version
-        == worker_agent.__version__
-    )
 
 
-def test_load_agent_config_does_not_read_old_astra_keys():
-    with pytest.raises(SystemExit) as error:
-        load_agent_config(
-            {
-                "ASTRA_WORKER_TOKEN": "wtk_old",
-                "ASTRA_WORKER_GATEWAY_URL": "ws://old",
-                "ASTRA_WORKER_INSTANCE_ID": "wrk_old",
-                "ASTRA_WORKER_ENVIRONMENT_ID": "7",
-            }
-        )
-    assert "NEXUS_WORKER_TOKEN" in str(error.value)
-    assert "wtk_old" not in str(error.value)
 
 
 def test_child_environment_never_contains_nexus_or_astra_credentials():
@@ -273,79 +148,3 @@ def test_child_environment_never_contains_nexus_or_astra_credentials():
     assert cleaned["PATH"] == "/usr/bin"
     assert cleaned["SAFE_VALUE"] == "kept"
     assert not [name for name in cleaned if name.startswith(("NEXUS_", "ASTRA_"))]
-
-
-class _Transport:
-    def __init__(self, inbound: list[dict]) -> None:
-        self.inbound = list(inbound)
-        self.sent: list[dict] = []
-        self.socket_release = threading.Event()
-
-    async def send(self, message: dict) -> None:
-        self.sent.append(message)
-
-    async def recv(self) -> dict:
-        if self.inbound:
-            return self.inbound.pop(0)
-        while not self.socket_release.is_set():
-            await asyncio.sleep(0.01)
-        raise ConnectionError("closed")
-
-    async def close(self) -> None:
-        return
-
-
-@pytest.mark.asyncio
-async def test_thread_gate_stops_restart_before_the_real_side_effect(tmp_path: Path, monkeypatch):
-    workspace = _workspace(tmp_path)
-    sup = RuntimeSupervisor(enabled=True, workspace_root=str(workspace), port=14096)
-    sup._loop = asyncio.get_running_loop()
-    manager = WorkerConnectionManager(
-        AgentConfig(
-            gateway_url="ws://nexus.internal/api/worker-gateway/connect",
-            agent_worker_id="wrk_agent",
-            token="wtk_test",
-            ping_seconds=3600,
-            report_interval_seconds=0.0,
-            opencode_url="http://127.0.0.1:14096",
-            workspace_root=str(workspace),
-        ),
-        supervisor=sup,
-    )
-    entered = threading.Event()
-    release = threading.Event()
-    restarted: list[bool] = []
-
-    def slow_native_idle(_workspace, _port, *, gate=None):
-        entered.set()
-        release.wait(5)
-        if gate is not None:
-            gate()
-        return False
-
-    monkeypatch.setattr(supervisor_mod, "assert_native_idle", slow_native_idle)
-
-    async def fake_terminate():
-        restarted.append(True)
-
-    monkeypatch.setattr(sup, "_terminate_child", fake_terminate)
-    transport = _Transport([_auth_reply(), _restart_message(workspace, 14096).to_dict()])
-    task = asyncio.create_task(manager.run_session(transport))
-
-    for _ in range(100):
-        if entered.is_set():
-            break
-        await asyncio.sleep(0.02)
-    manager.epoch = 4
-    release.set()
-
-    for _ in range(100):
-        if not manager.control_tasks:
-            break
-        await asyncio.sleep(0.02)
-
-    assert restarted == []
-    assert not [item for item in transport.sent if item["payload"].get("stage") == "result"]
-    transport.socket_release.set()
-    with pytest.raises(ConnectionError):
-        await asyncio.wait_for(task, 5)

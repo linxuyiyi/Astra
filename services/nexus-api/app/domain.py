@@ -9,6 +9,7 @@ class WorkerStatus(StrEnum):
 
 
 class TaskStatus(StrEnum):
+    FAILED = "FAILED"
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     WAITING = "WAITING"

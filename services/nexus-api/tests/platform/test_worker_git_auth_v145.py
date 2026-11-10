@@ -17,8 +17,8 @@ import pytest
 
 from app.config.settings import get_settings
 from app.runtime.remote_provisioning import RemoteProvisioner
-from app.worker_agent import inspection
-from app.worker_agent.process_env import child_environ
+from app.worker_tools import inspection
+from app.worker_tools.process_env import child_environ
 
 
 def _git(*args, cwd=None, env=None):
@@ -305,15 +305,12 @@ async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkey
 
     from app.runtime.remote_provisioning import (
         RemoteProvisioner,
-        agent_wheel,
         git_askpass_path,
         git_token_path,
+        worker_tools_wheel,
     )
 
     settings = get_settings()
-    monkeypatch.setattr(
-        settings, "worker_agent_gateway_url", "ws://10.0.0.8:18100/api/worker-gateway/connect"
-    )
     monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:18110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
@@ -345,7 +342,7 @@ async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkey
             "repository": False,
         }
     }
-    digest = hashlib.sha256(agent_wheel()[1]).hexdigest()
+    digest = hashlib.sha256(worker_tools_wheel()[1]).hexdigest()
     commands: list[str] = []
     atomic: list[tuple[str, int]] = []
 
@@ -369,9 +366,6 @@ async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkey
     async def idle(*_args, **_kwargs):
         return True
 
-    async def credentials():
-        return SimpleNamespace(token="wtk", agent_worker_id=str(provisioner.environment.id), epoch=1)
-
     async def emit(_event):
         return None
 
@@ -379,7 +373,6 @@ async def test_token_rotation_reloads_daemon_without_reinstalling_runtime(monkey
     monkeypatch.setattr(provisioner, "_write_atomic_if_changed", atomic_write)
     monkeypatch.setattr(provisioner, "_ensure_safe", safe)
     monkeypatch.setattr(provisioner, "_native_idle", idle)
-    monkeypatch.setattr(provisioner, "_enroll_worker", credentials)
     await provisioner._install_worker(emit)
 
     assert (git_token_path(77), 0o600) in atomic
@@ -396,16 +389,13 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
     from app.runtime import remote_provisioning
     from app.runtime.remote_provisioning import (
         RemoteProvisioner,
-        agent_wheel,
         safe_git_environment,
+        worker_tools_wheel,
     )
 
     workspace, _token, _token_file, _askpass, _server = http_git
     monkeypatch.setattr(remote_provisioning, "WORKER_SECRET_DIR", str(tmp_path / "etc-nexus"))
     settings = get_settings()
-    monkeypatch.setattr(
-        settings, "worker_agent_gateway_url", "ws://10.0.0.8:18100/api/worker-gateway/connect"
-    )
     monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:18110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:18201/mcp")
     environment = SimpleNamespace(
@@ -437,7 +427,7 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
             "repository": False,
         }
     }
-    wheel_digest = hashlib.sha256(agent_wheel()[1]).hexdigest()
+    wheel_digest = hashlib.sha256(worker_tools_wheel()[1]).hexdigest()
     commands: list[str] = []
     written: dict[str, bytes] = {}
 
@@ -469,9 +459,6 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
     async def idle(*_args, **_kwargs):
         return True
 
-    async def credentials():
-        return SimpleNamespace(token="wtk", agent_worker_id=str(provisioner.environment.id), epoch=1)
-
     async def emit(_event):
         return None
 
@@ -479,7 +466,6 @@ async def test_generated_worker_env_authenticates_real_git_and_matches_unit(http
     monkeypatch.setattr(provisioner, "_write_atomic_if_changed", atomic)
     monkeypatch.setattr(provisioner, "_ensure_safe", safe)
     monkeypatch.setattr(provisioner, "_native_idle", idle)
-    monkeypatch.setattr(provisioner, "_enroll_worker", credentials)
 
     await provisioner._install_worker(emit)
     env_path = f"{remote_provisioning.WORKER_SECRET_DIR}/worker-88.env"

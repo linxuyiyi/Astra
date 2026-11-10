@@ -11,10 +11,10 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
+from paramiko import SSHException
 
 from app.api.routes import require_task
 from app.config.settings import SERVICE_ROOT
@@ -178,8 +178,8 @@ _CONCAT_SECRET_FIELDS = frozenset(
         "bearer",
     }
 )
-# (environment id, worker epoch, workspace) -> (monotonic time, secret values). Not logged.
-_REMOTE_SECRET_CACHE: dict[tuple[str, int, str], tuple[float, frozenset[str]]] = {}
+# (environment id, configuration revision, workspace) -> (monotonic time, secret values). Not logged.
+_REMOTE_SECRET_CACHE: dict[tuple[str, str, str], tuple[float, frozenset[str]]] = {}
 _CONFIG_FILES = (
     Path("opencode.json"),
     Path("opencode.jsonc"),
@@ -265,7 +265,7 @@ def _collect_configured_secrets(value: Any, found: set[str]) -> None:
 def configured_secret_values(workspace: str) -> set[str]:
     """Secret values written in this workspace's OpenCode config. Missing files add nothing."""
 
-    from app.worker_agent.jsonc import loads_jsonc
+    from app.worker_tools.jsonc import loads_jsonc
 
     found: set[str] = set()
     root = Path(workspace)
@@ -347,41 +347,19 @@ async def _secrets_from_opencode(client, workspace: str) -> tuple[set[str], bool
     return found, config_parsed
 
 
-async def _worker_epoch(environment) -> int:
-    """Current Worker epoch for this environment. Missing rows stay at 0."""
-
-    explicit = getattr(environment, "worker_epoch", None)
-    if isinstance(explicit, int):
-        return explicit
-    agent_worker_id = getattr(environment, "id", None)
-    if not isinstance(agent_worker_id, str):
-        return 0
-    try:
-        from sqlalchemy import select
-
-        from app.database import SessionLocal
-        from app.models import AgentWorker
-
-        async with SessionLocal() as session:
-            epoch = await session.scalar(select(AgentWorker.epoch).where(AgentWorker.id == agent_worker_id))
-    except Exception:
-        return 0
-    return int(epoch or 0)
-
-
 def clear_proxy_secret_cache() -> None:
     _REMOTE_SECRET_CACHE.clear()
 
 
-async def _remote_secret_cache_key(environment, workspace: str) -> tuple[str, int, str] | None:
+async def _remote_secret_cache_key(environment, workspace: str) -> tuple[str, str, str] | None:
     agent_worker_id = getattr(environment, "id", None)
     if not isinstance(agent_worker_id, str):
         return None
-    epoch = await _worker_epoch(environment)
-    return agent_worker_id, epoch, _secret_cache_workspace(workspace)
+    revision = str(getattr(environment, "updated_at", ""))
+    return agent_worker_id, revision, _secret_cache_workspace(workspace)
 
 
-def _cached_remote_secrets(key: tuple[str, int, str] | None) -> set[str]:
+def _cached_remote_secrets(key: tuple[str, str, str] | None) -> set[str]:
     if key is None:
         return set()
     cached = _REMOTE_SECRET_CACHE.get(key)
@@ -391,7 +369,7 @@ def _cached_remote_secrets(key: tuple[str, int, str] | None) -> set[str]:
 
 
 async def _remote_configured_secrets(environment, client, workspace: str) -> tuple[set[str], bool]:
-    """Worker config values, reused per environment, epoch, and workspace for 30 seconds.
+    """Worker config values, reused per environment, configuration revision, and workspace for 30 seconds.
 
     Known requires a parsed merged ``/config``, or a cache entry from one.
     ``/global/config`` alone is not stored and is not known on a cold cache.
@@ -701,20 +679,19 @@ async def task_workspace(task_id: str, session=Depends(get_session)):
 
     worker_online = (await worker_connections([worker]))[worker.id] if worker else False
     version, ui, error = "unknown", None, None
-    if task.current_session_id:
-        if not worker_online:
-            error = "Worker 不在线，连接恢复后可打开原生工作区"
-        else:
-            try:
-                async with connect(worker) as client:
-                    # Version discovery reports the actual server version even if it is
-                    # incompatible with the execution version gate.
-                    health = await client.request("GET", "/global/health")
-                version, ui, error = workspace_ui_for(
-                    {"opencode_version": health.get("version") if isinstance(health, dict) else None}
-                )
-            except (RuntimeError, ValueError, TimeoutError):
-                error = "无法读取 OpenCode 版本，请检查 Worker 和原生服务连接"
+    if task.current_session_id and worker is None:
+        error = "任务尚未绑定 Worker"
+    elif task.current_session_id:
+        try:
+            async with connect(worker) as client:
+                # Version discovery reports the actual server version even if it is
+                # incompatible with the execution version gate.
+                health = await client.request("GET", "/global/health")
+            version, ui, error = workspace_ui_for(
+                {"opencode_version": health.get("version") if isinstance(health, dict) else None}
+            )
+        except (RuntimeError, ValueError, OSError, SSHException):
+            error = "无法读取 OpenCode 版本，请检查 Worker 和原生服务连接"
     return {
         "task_id": task.id,
         "task_status": task.status,
@@ -772,22 +749,12 @@ async def native_events(environment, workspace, root, global_stream):
     async with connect(environment, start=True) as client:
         allowed = await session_tree(client, Path(workspace), root)
         secrets = await load_proxy_secrets(str(workspace), environment, client)
-        if getattr(client, "records_fetch", False):
-            stream = client.events(Path(workspace), consumer=f"browser:{uuid4().hex}")
-        else:
-            stream = client.events(Path(workspace))
+        stream = client.events(Path(workspace))
         async for event in stream:
             props = event.get("properties", {})
             info = props.get("info", {})
             if event.get("type") == "session.created" and info.get("parentID") in allowed:
                 allowed.add(info["id"])
-            if event.get("type") == "astra.keepalive":
-                yield ": keepalive\n\n"
-                continue
-            if event.get("type") == "astra.event_gap":
-                value = {"directory": workspace, "payload": event} if global_stream else event
-                yield _sse_data(value, secrets)
-                continue
             sid = event_session(event)
             if sid and sid not in allowed:
                 continue
@@ -907,7 +874,7 @@ async def native_proxy(
     pending = (
         (reply[1], reply[2]) if reply else (("permission", permission_reply[2]) if permission_reply else None)
     )
-    if method != "GET" and task.status in {"SUCCEEDED", "CANCELED"}:
+    if method != "GET" and task.status in {"SUCCEEDED", "CANCELED", "FAILED"}:
         raise HTTPException(409, "任务已结束；请显式重新开始")
     if method != "GET" and session_id != task.current_session_id:
         raise HTTPException(403, "历史 Session 只读")
@@ -955,8 +922,6 @@ async def native_proxy(
                     "GET",
                     f"/{pending[0]}",
                     directory=Path(workspace),
-                    session_id=session_id,
-                    task_id=task.id,
                 )
                 if not any(item["id"] == pending[1] and item.get("sessionID") in allowed for item in items):
                     raise PermissionError("请求不属于此任务 Session")
@@ -989,8 +954,6 @@ async def native_proxy(
                 forward_path,
                 params=params,
                 body=body,
-                session_id=session_id,
-                task_id=task.id,
             )
             if forward_path.startswith("/api/") and _api_route_missing(status, headers):
                 # v1 OpenCode answers an unknown /api path with the SPA document (200
@@ -1001,8 +964,6 @@ async def native_proxy(
                     alternate,
                     params=params,
                     body=body,
-                    session_id=session_id,
-                    task_id=task.id,
                 )
             upstream = _Upstream(status, content, headers)
             # Reuse the gate's read so one request never pays the config timeout twice.

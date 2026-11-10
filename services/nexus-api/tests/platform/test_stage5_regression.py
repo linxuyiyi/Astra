@@ -22,13 +22,13 @@ BANNED = (
 SSH_CALLS = {
     ("app/runtime/environment.py", "SSHSession("),
     ("app/runtime/environment.py", ".open_session("),
-    ("app/runtime/maintenance.py", ".open_session("),
+    ("app/runtime/worker_connection.py", ".open_session("),
     ("app/runtime/remote_provisioning.py", ".open_session("),
     ("app/runtime/ssh_client.py", ".open_session("),
 }
 
 
-def test_deleted_tunnel_and_ssh_execution_have_no_callers():
+def test_deleted_reverse_tunnels_have_no_callers():
     found = set()
     for path in APP.rglob("*.py"):
         text = path.read_text(encoding="utf-8")

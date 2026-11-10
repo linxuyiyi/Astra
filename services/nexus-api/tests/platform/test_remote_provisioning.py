@@ -28,7 +28,6 @@ def isolated_settings(monkeypatch):
     monkeypatch.setattr(settings, "mcp_transport", "streamable-http")
     monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:8110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:8201/mcp")
-    monkeypatch.setattr(settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect")
 
 
 @pytest.mark.asyncio
@@ -37,7 +36,7 @@ async def test_ctl_and_start_all_scripts_are_non_systemd_and_target_digest_track
     start_all = render_start_all_script()
     assert "systemctl" not in ctl and "systemd" not in ctl
     assert "systemctl" not in start_all and "systemd" not in start_all
-    assert "app.worker_agent" in ctl
+    assert "app.worker_tools" in ctl
     assert all(branch in ctl for branch in ("start)", "stop)", "restart)", "status)"))
     assert "/opt/nexus/workers" in start_all
 
@@ -232,14 +231,8 @@ def _agent_install_worker(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_failed_venv_does_not_rotate_the_worker_token(monkeypatch):
+async def test_failed_venv_does_not_write_runtime_configuration(monkeypatch):
     worker, calls = _agent_install_worker(monkeypatch)
-
-    class Gateway:
-        async def enroll(self, session, agent_worker_id, *, target_digest=None):
-            raise AssertionError("venv 失败不应轮换 token")
-
-    monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda *_a, **_kw: Gateway())
 
     async def command(self, text, timeout=30):
         calls.append((timeout, text))
@@ -263,15 +256,8 @@ async def test_failed_venv_does_not_rotate_the_worker_token(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_enroll_happens_after_the_venv_and_writes_the_token(monkeypatch):
+async def test_runtime_configuration_is_written_after_the_venv(monkeypatch):
     worker, calls = _agent_install_worker(monkeypatch)
-
-    class Gateway:
-        async def enroll(self, session, agent_worker_id, *, target_digest=None):
-            calls.append(("enroll", target_digest))
-            return SimpleNamespace(token="wtk_secret", agent_worker_id="7", epoch=3)
-
-    monkeypatch.setattr("app.worker_gateway.service.get_gateway", lambda *_a, **_kw: Gateway())
 
     async def emit(_event):
         return None
@@ -280,7 +266,6 @@ async def test_enroll_happens_after_the_venv_and_writes_the_token(monkeypatch):
     pip_at = next(
         i for i, item in enumerate(calls) if isinstance(item, tuple) and "pip install" in str(item[1])
     )
-    enroll_at = next(i for i, item in enumerate(calls) if isinstance(item, tuple) and item[0] == "enroll")
     token_at = next(i for i, item in enumerate(calls) if isinstance(item, str) and ".env.tmp-" in item)
     ctl_at = next(
         i for i, item in enumerate(calls) if isinstance(item, str) and f"{worker_ctl_path(7)}.tmp-" in item
@@ -288,7 +273,7 @@ async def test_enroll_happens_after_the_venv_and_writes_the_token(monkeypatch):
     start_all_at = next(
         i for i, item in enumerate(calls) if isinstance(item, str) and f"{START_ALL_PATH}.tmp-" in item
     )
-    assert pip_at < enroll_at < token_at < ctl_at < start_all_at
+    assert pip_at < token_at < ctl_at < start_all_at
     assert calls[pip_at][0] == 300
     worker._run_ctl.assert_awaited_once_with("restart")
 
@@ -541,12 +526,11 @@ async def test_bootstrap_without_interpreter_rejects_unreleased_listener(state):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["HTTP 503 Service Unavailable", "HTTP 401 Unauthorized"])
-async def test_readiness_retries_transient_mcp_on_current_epoch_only(monkeypatch, failure):
+async def test_readiness_retries_transient_mcp_after_ssh_recovers(monkeypatch, failure):
     from app.runtime import remote_provisioning
 
-    row = SimpleNamespace(id="7", epoch=5, status="PAUSED", enabled=False, model_name=None)
+    row = SimpleNamespace(id="7", status="PAUSED", enabled=False, model_name=None)
     worker = RemoteProvisioner(row, {"id": "deploy"})
-    worker.enrollment_epoch = 4
     worker._command = AsyncMock(return_value="running\nconnecting")
     worker._reconnect_mcp = AsyncMock()
     db = AsyncMock()
@@ -565,10 +549,8 @@ async def test_readiness_retries_transient_mcp_on_current_epoch_only(monkeypatch
 
     failed = {"mcp": {"servers": {"vision": {"status": "failed", "error": failure}}}}
     ready = {"mcp": {"servers": {"vision": {"status": "connected"}}}}
-    owner = AsyncMock(side_effect=[("gateway", 4), ("gateway", 5), ("gateway", 5)])
-    observation = AsyncMock(side_effect=[failed, ready])
-    gateway = SimpleNamespace(bus=SimpleNamespace(get_owner=owner), observed_snapshot=observation)
-    monkeypatch.setattr(remote_provisioning, "get_gateway", lambda: gateway)
+    monkeypatch.setattr(remote_provisioning, "check_worker", AsyncMock(side_effect=[False, True, True]))
+    monkeypatch.setattr(remote_provisioning, "probe_online_worker", AsyncMock(side_effect=[failed, ready]))
 
     def evaluation(_spec, _row, *, observation, online):
         assert online is (observation is not None)

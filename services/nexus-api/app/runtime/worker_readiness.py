@@ -1,6 +1,6 @@
-"""Worker 配置与当前 epoch 观测的就绪展示和部署检查。
+"""Worker 配置与 SSH 诊断的就绪展示和部署检查。
 
-期望配置来自 AgentWorker，观测仅缓存于 Gateway 总线，均不保存独立环境状态。
+期望配置来自 AgentWorker，观测仅缓存于当前 SSH 连接。
 任务调度只取 Worker 状态、enabled 和 Task/维护占用。
 """
 
@@ -29,8 +29,7 @@ from app.models import (
 from app.runtime.opencode_model import route_model_id
 from app.runtime.redaction import redact_data, redact_text
 from app.runtime.repository import load_worker_skills
-from app.worker_agent import __version__ as WORKER_AGENT_VERSION
-from app.worker_agent.inspection import skill_content_hash
+from app.worker_tools.inspection import skill_content_hash
 
 DEFAULT_MCP = "nexus-library"
 GATEWAY_PROVIDER = "nexus-gateway"
@@ -143,7 +142,6 @@ def build_desired_spec_from_context(
     payload: dict[str, Any] = {
         "target_digest": compute_target_digest(environment),
         "opencode": {"version": str(resolved.remote_opencode_version)},
-        "worker_agent": {"version": WORKER_AGENT_VERSION},
         "model": _desired_model(environment, context),
         "repository": _desired_repository(environment, context),
         "skills": _desired_skills(environment, context),
@@ -205,10 +203,9 @@ def evaluate_worker_readiness(
         "enabled": worker.enabled,
         "readiness": readiness,
         "connection": {
-            "channel": "worker",
+            "channel": "ssh",
             "state": "online" if online else "offline",
-            "epoch": worker.epoch,
-            "last_heartbeat_at": _iso(worker.last_heartbeat_at),
+            "last_checked_at": _iso(worker.last_checked_at),
         },
         "maintenance": _maintenance_summary(latest_operation),
         "runtime_health": {
@@ -230,7 +227,6 @@ def build_equipment_rows(
     seen = observation if isinstance(observation, dict) else {}
     return [
         _opencode_row(want, seen),
-        _worker_agent_row(want, seen),
         _model_row(want, seen),
         _mcp_row(want, seen),
         _skills_row(want, seen),
@@ -318,49 +314,6 @@ def _opencode_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[
         diff=diff,
         error=error or None,
         detail=f"OpenCode {actual}" if actual else None,
-    )
-
-
-def _worker_agent_row(desired: dict[str, Any], observation: dict[str, Any]) -> dict[str, Any]:
-    want = _text((desired.get("worker_agent") or {}).get("version"))
-    actual = _text(observation.get("worker_agent_version"))
-    source = _text(observation.get("source"))
-    if source == "local":
-        return _row(
-            key="worker_agent",
-            label="Worker Agent",
-            state="ready",
-            configured=False,
-            deployed=True,
-            verified=True,
-            desired_revision=None,
-            actual_revision="local",
-            diff=[],
-            error=None,
-            detail="本地模式无需远程守护",
-        )
-    if actual and want:
-        matched = _same_version(want, actual)
-        state = "ready" if matched else "drifted"
-        verified: bool | None = matched
-        diff = [] if matched else [f"Worker Agent 版本待同步：期望 {want}，当前 {actual}"]
-    else:
-        matched = False
-        state = "unknown"
-        verified = None
-        diff = ["Worker Agent 尚未建立在线握手"]
-    return _row(
-        key="worker_agent",
-        label="Worker Agent",
-        state=state,
-        configured=bool(want),
-        deployed=matched,
-        verified=verified,
-        desired_revision=want or None,
-        actual_revision=actual or None,
-        diff=diff,
-        error=None,
-        detail=f"Worker Agent {actual}" if actual else None,
     )
 
 
@@ -795,11 +748,6 @@ def _normalize_snapshot(
     default_source: str = "worker",
 ) -> dict[str, Any]:
     raw = snapshot if isinstance(snapshot, dict) else {}
-    agent_ver = (
-        _text(worker.agent_version)
-        if (worker is not None and _text(worker.agent_version))
-        else _text(raw.get("worker_agent_version"))
-    )
     normalized: dict[str, Any] = {
         "spec_revision": raw.get("spec_revision"),
         "opencode": raw.get("opencode") if isinstance(raw.get("opencode"), dict) else {},
@@ -808,7 +756,6 @@ def _normalize_snapshot(
         "skills": raw.get("skills") if isinstance(raw.get("skills"), dict) else {},
         "repository": raw.get("repository") if isinstance(raw.get("repository"), dict) else {},
         "checked_at": _text(raw.get("checked_at")) or None,
-        "worker_agent_version": agent_ver or None,
         "source": _text(raw.get("source")) or default_source,
         "error": _text(raw.get("error")) or None,
     }

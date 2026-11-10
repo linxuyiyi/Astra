@@ -13,18 +13,16 @@ import os
 import platform
 import re
 import subprocess
-import threading
 import time
 from collections.abc import Callable
 from pathlib import PurePosixPath
 from typing import Any
 from uuid import uuid4
 
-from app.worker_agent.process_env import child_environ
+from app.worker_tools.process_env import child_environ
 
 MAX_FILE_BYTES = 20 * 1024 * 1024
 FILE_COMMANDS = frozenset({"validate_path", "read_file", "git_readonly", "upload_file"})
-FILE_COMMAND_LIMIT = 4
 # linux/openat2.h. 0x04 is RESOLVE_NO_SYMLINKS and would reject an in-workspace
 # relative symlink that sftp.normalize still accepts.
 _RESOLVE_NO_MAGICLINKS = 0x02
@@ -367,14 +365,6 @@ def execute_file_command(
     finally:
         os.close(directory)
     raise FileCommandError("unsupported_operation", "不支持的 Git 操作")
-
-
-def connection_gate(closed: threading.Event, epoch_matches: Callable[[], bool]) -> Callable[[], None]:
-    def gate() -> None:
-        if closed.is_set() or not epoch_matches():
-            raise FileCommandError("epoch_conflict", "epoch 已切换")
-
-    return gate
 
 
 def _git_tail(operation: str, data: dict[str, Any]) -> list[str]:

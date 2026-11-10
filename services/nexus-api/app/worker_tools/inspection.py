@@ -20,8 +20,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.worker_agent.jsonc import loads_jsonc
-from app.worker_agent.process_env import child_environ
+from app.worker_tools.jsonc import loads_jsonc
+from app.worker_tools.process_env import child_environ
 
 HEALTHY = "healthy"
 UNHEALTHY = "unhealthy"
@@ -652,7 +652,7 @@ def global_config_path(environ: Mapping[str, str] | None = None) -> Path:
 
 
 def _local_config_path() -> Path | None:
-    """Worker wheel 只带 worker_agent，不能依赖控制端的 app.runtime。"""
+    """Worker wheel 只带 worker_tools，不能依赖控制端的 app.runtime。"""
 
     return global_config_path()
 

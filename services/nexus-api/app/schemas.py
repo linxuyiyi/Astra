@@ -22,6 +22,7 @@ class WorkerWrite(BaseModel):
     mode: ExecutionMode = ExecutionMode.LINUX_REMOTE
     host: str | None = None
     port: int = Field(default=22, ge=1, le=65535)
+    opencode_port: int | None = Field(default=None, ge=1, le=65535)
     username: str | None = None
     ssh_password: str | None = Field(default=None, max_length=1024)
     model_name: str | None = None
@@ -70,9 +71,9 @@ class WorkerRead(ORMModel):
     branch: str | None
     skill_refs: list[str]
     mcp_refs: list[dict[str, Any]]
-    epoch: int
-    last_heartbeat_at: datetime | None
-    agent_version: str | None
+    opencode_port: int | None
+    last_checked_at: datetime | None
+    opencode_version: str | None
     online: bool | None = None
     occupied_tasks: list[WorkerOccupiedTask] = Field(default_factory=list)
     created_at: datetime
@@ -159,7 +160,7 @@ class TaskRead(ORMModel):
     agent_worker_id: str | None
     worker_name: str | None = None
     worker_online: bool | None = None
-    worker_last_heartbeat_at: datetime | None = None
+    worker_last_checked_at: datetime | None = None
     current_session_id: str | None
     workspace: str | None
     last_message_id: str | None

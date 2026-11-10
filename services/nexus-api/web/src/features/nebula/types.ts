@@ -3,7 +3,7 @@
 export type InteractionStatus = "available" | "unavailable" | "unknown";
 export type WorkerHealth = "online" | "offline" | "error" | "unknown";
 export type WorkerOccupancy = "idle" | "running" | "waiting" | "unknown";
-export type NebulaTaskStatus = "PENDING" | "RUNNING" | "WAITING" | "SUCCEEDED" | "CANCELED";
+export type NebulaTaskStatus = "PENDING" | "RUNNING" | "WAITING" | "SUCCEEDED" | "CANCELED" | "FAILED";
 
 export interface NebulaCounts {
   running: number;
@@ -38,7 +38,7 @@ export interface NebulaWorker {
   taskCount: number;
   runningTaskCount: number;
   waitingTaskCount: number;
-  lastHeartbeatAt: string | null;
+  lastCheckedAt: string | null;
 }
 
 export interface NebulaTask {

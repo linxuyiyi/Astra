@@ -5,11 +5,13 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from app.config.settings import get_settings
 from app.database import SessionLocal
+from app.executors.opencode_server import OpenCodeServerClient
 from app.models import AgentWorker
-from app.runtime.session_connection import connect, session_tree
+from app.runtime.session_connection import session_tree
 
 from .schemas import TraceResult
 from .trace_normalizer import normalize_messages
@@ -55,63 +57,55 @@ async def read_trace(snapshot: dict[str, Any]) -> TraceResult:
     total_messages = 0
     total_bytes = 0
     try:
-        async with connect(environment, start=False) as client:
-            if not workspace:
-                raise TraceUnavailable("复盘来源没有 Workspace")
-            allowed = await session_tree(client, directory, root)
-            if not set(sessions).issubset(allowed):
-                raise TraceUnavailable("Session 不属于冻结的复盘来源")
-            for session_id in sessions:
-                before: str | None = None
-                session_messages: list[dict[str, Any]] = []
-                seen: set[str] = set()
-                while True:
-                    reader = getattr(client, "read_review_trace", None)
-                    if callable(reader):
-                        page = await reader(
-                            directory,
-                            session_id,
-                            limit=settings.experience_review_page_size,
-                            before=before,
-                        )
-                    else:
-                        page = await client.messages_page(
-                            directory,
-                            session_id,
-                            limit=settings.experience_review_page_size,
-                            before=before,
-                        )
-                    if isinstance(page, dict) and page.get("too_large"):
-                        # Worker 明确报告“单条消息放不进一帧”；以受控终态结束，
-                        # 不把缺口当成“读取完成”。
-                        raise TraceTooLarge(str(page["too_large"]))
-                    if isinstance(page, dict) and page.get("truncated"):
-                        # 仍然出现被裁剪的页说明游标不再覆盖全部消息；不能静默跳过。
-                        raise TraceTooLarge("原生轨迹分页被裁剪，无法保证完整读取")
-                    batch = page.get("messages") if isinstance(page, dict) else []
-                    if not isinstance(batch, list) or not batch:
-                        break
-                    for message in batch:
-                        if not isinstance(message, dict):
-                            continue
-                        info = message.get("info") if isinstance(message.get("info"), dict) else {}
-                        message_id = str(info.get("id") or "")
-                        if message_id and message_id in seen:
-                            continue
-                        if message_id:
-                            seen.add(message_id)
-                        session_messages.append(message)
-                        total_messages += 1
-                        total_bytes += _message_bytes(message)
-                        if total_messages > settings.experience_review_max_messages:
-                            raise TraceTooLarge("原生消息数超过复盘硬上限")
-                        if total_bytes > settings.experience_review_max_source_bytes:
-                            raise TraceTooLarge("原生轨迹字节数超过复盘硬上限")
-                    before = page.get("next_before") if isinstance(page, dict) else None
-                    if not before:
-                        break
-                # OpenCode 分页按新到旧返回；统一恢复为旧到新。
-                events.extend(normalize_messages(list(reversed(session_messages)), session_id))
+        # Celery 只经现有 Task 工作区代理读取；SSH 始终属于统一 API 进程。
+        task_id = str(snapshot.get("task_id") or "")
+        if not task_id:
+            raise TraceUnavailable("复盘来源没有 Task")
+        client = OpenCodeServerClient(
+            settings,
+            base_url=(f"{settings.nexus_api_base.rstrip('/')}/api/tasks/"
+                      f"{quote(task_id, safe='')}/opencode/{quote(root, safe='')}"),
+        )
+        if not workspace:
+            raise TraceUnavailable("复盘来源没有 Workspace")
+        allowed = await session_tree(client, directory, root)
+        if not set(sessions).issubset(allowed):
+            raise TraceUnavailable("Session 不属于冻结的复盘来源")
+        for session_id in sessions:
+            before: str | None = None
+            session_messages: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            while True:
+                page = await client.messages_page(
+                    directory, session_id, limit=settings.experience_review_page_size, before=before,
+                )
+                if isinstance(page, dict) and page.get("truncated"):
+                    # 仍然出现被裁剪的页说明游标不再覆盖全部消息；不能静默跳过。
+                    raise TraceTooLarge("原生轨迹分页被裁剪，无法保证完整读取")
+                batch = page.get("messages") if isinstance(page, dict) else []
+                if not isinstance(batch, list) or not batch:
+                    break
+                for message in batch:
+                    if not isinstance(message, dict):
+                        continue
+                    info = message.get("info") if isinstance(message.get("info"), dict) else {}
+                    message_id = str(info.get("id") or "")
+                    if message_id and message_id in seen:
+                        continue
+                    if message_id:
+                        seen.add(message_id)
+                    session_messages.append(message)
+                    total_messages += 1
+                    total_bytes += _message_bytes(message)
+                    if total_messages > settings.experience_review_max_messages:
+                        raise TraceTooLarge("原生消息数超过复盘硬上限")
+                    if total_bytes > settings.experience_review_max_source_bytes:
+                        raise TraceTooLarge("原生轨迹字节数超过复盘硬上限")
+                before = page.get("next_before") if isinstance(page, dict) else None
+                if not before:
+                    break
+            # OpenCode 分页按新到旧返回；统一恢复为旧到新。
+            events.extend(normalize_messages(list(reversed(session_messages)), session_id))
     except (TraceTooLarge, TraceUnavailable):
         raise
     except Exception as exc:  # noqa: BLE001 - OpenCode/Worker transport boundary

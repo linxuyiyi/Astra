@@ -206,7 +206,7 @@ async def get_task(task_id: str, session=Depends(get_session)):
     online = await worker_connections([worker])
     return task_read(task, worker.name).model_copy(update={
         "worker_online": online[worker.id],
-        "worker_last_heartbeat_at": worker.last_heartbeat_at,
+        "worker_last_checked_at": worker.last_checked_at,
     })
 
 
@@ -238,7 +238,7 @@ async def delete_task(task_id: str, session=Depends(get_session)):
 
     await lock_review_source_task(session, task_id)
     task = await require_task(task_id, session)
-    if task.status not in {"PENDING", "SUCCEEDED", "CANCELED"} or task.pending_message_id:
+    if task.status not in {"PENDING", "SUCCEEDED", "CANCELED", "FAILED"} or task.pending_message_id:
         raise HTTPException(409, "任务尚未释放，不能删除")
     active_review = await session.scalar(
         select(ExperienceReviewJob.id)

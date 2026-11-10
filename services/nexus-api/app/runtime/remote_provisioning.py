@@ -1,8 +1,7 @@
-"""远程 Worker 一键部署与轻量唤醒（无 systemd 单守护模型）。
+"""通过 SSH 部署独立 OpenCode 监管进程与本地运维辅助。
 
-保留 Python 3.11 / Node / OpenCode 制品引导（``remote_bootstrap``、``remote_artifacts``），
-统一由 ``/opt/nexus/workers/{id}/ctl.sh`` 与 ``/opt/nexus/workers/start-all.sh`` 拉起单实例
-``nexus-worker-agent`` 守护，并在上线推送就绪快照后直接宣告部署成功，不再做收尾通道切换。
+原生服务只监听 loopback，由 Nexus 主动经 SSH 转发访问并核验就绪。
+部署继续使用独立 SSH/flock，保持长耗时运维与运行时重连的生命周期分离。
 """
 
 from __future__ import annotations
@@ -44,15 +43,16 @@ from app.runtime.remote_bootstrap import managed_python, prepare_python
 from app.runtime.remote_package_config import configure_sources
 from app.runtime.remote_workspace import configure_runtime, git_workspace, worker_mcp_config
 from app.runtime.repository import cipher, load_worker_skills
+from app.runtime.worker_connection import check_worker, connections
+from app.runtime.worker_health import probe_online_worker
 from app.runtime.worker_readiness import (
     ReadinessLookupContext,
     build_desired_spec,
     build_desired_spec_from_context,
     evaluate_worker_readiness,
 )
-from app.worker_agent import __version__ as WORKER_AGENT_VERSION
-from app.worker_agent.jsonc import loads_jsonc
-from app.worker_gateway.service import get_gateway
+from app.worker_tools import __version__ as WORKER_TOOLS_VERSION
+from app.worker_tools.jsonc import loads_jsonc
 
 # Executed on the SSH target, before credentials or runtime files are changed.
 INGRESS_PROBE = """
@@ -120,7 +120,7 @@ def credential_revision(ciphertext: str) -> str:
 
 
 def safe_git_environment(agent_worker_id: int) -> dict[str, str]:
-    """The only safe Git variables shared by OpenCode and Worker Agent."""
+    """The only safe Git variables shared by OpenCode and OpenCode 进程监管器."""
 
     return {
         "GIT_ASKPASS": git_askpass_path(agent_worker_id),
@@ -185,14 +185,14 @@ def render_worker_ctl_script(agent_worker_id: int, *, port: int) -> str:
         "\n"
         "stop_daemon() {\n"
         "  if ! is_locked; then\n"
-        '  "$PYTHON" -c "from app.worker_agent.supervisor import cleanup_orphan_opencode; '
+        '  "$PYTHON" -c "from app.worker_tools.supervisor import cleanup_orphan_opencode; '
         'cleanup_orphan_opencode($ENV_ID)" >/dev/null 2>&1 || true\n'
         "    printf 'already_stopped\\n'\n"
         "    return 0\n"
         "  fi\n"
         '  "$PYTHON" -I - "$LOCK_FILE" "$ENV_ID" <<\'PY\'\n'
         "import errno, fcntl, os, pathlib, signal, sys, time\n"
-        "from app.worker_agent.supervisor import cleanup_orphan_opencode\n"
+        "from app.worker_tools.supervisor import cleanup_orphan_opencode\n"
         "lock_path, env_id = pathlib.Path(sys.argv[1]), sys.argv[2]\n"
         "\n"
         "def locked() -> bool:\n"
@@ -261,7 +261,7 @@ def render_worker_ctl_script(agent_worker_id: int, *, port: int) -> str:
         "    printf 'already_running\\n'\n"
         "    return 0\n"
         "  fi\n"
-        '  nohup "$PYTHON" -m app.worker_agent --env-file "$ENV_FILE" '
+        '  nohup "$PYTHON" -m app.worker_tools --env-file "$ENV_FILE" '
         '>> "$LOG_DIR/agent.log" 2>&1 < /dev/null &\n'
         '  "$PYTHON" -I - "$LOCK_FILE" "$PORT" "$LOG_DIR/agent.log" <<\'PY\'\n'
         "import errno, fcntl, json, os, pathlib, sys, time, urllib.request\n"
@@ -299,12 +299,12 @@ def render_worker_ctl_script(agent_worker_id: int, *, port: int) -> str:
         "    if log_path.is_file():\n"
         "        lines = log_path.read_text(encoding='utf-8', errors='replace').splitlines()[-20:]\n"
         "        tail = '\\n'.join(lines)\n"
-        "    raise SystemExit('Worker Agent 守护启动后未能持有排他锁' + (f'：{tail}' if tail else ''))\n"
+        "    raise SystemExit('OpenCode 监管进程启动后未能持有排他锁' + (f'：{tail}' if tail else ''))\n"
         "\n"
         "health_deadline = time.monotonic() + 12.0\n"
         "while time.monotonic() < health_deadline:\n"
         "    if not locked():\n"
-        "        raise SystemExit('Worker Agent 守护在启动期间退出')\n"
+        "        raise SystemExit('OpenCode 监管进程在启动期间退出')\n"
         "    if healthy():\n"
         "        print('started')\n"
         "        raise SystemExit(0)\n"
@@ -388,32 +388,25 @@ def _wheel_digest(data: bytes) -> str:
     return "sha256=" + encoded.decode("ascii")
 
 
-def agent_wheel() -> tuple[str, bytes]:
-    """Reproducible Worker Agent wheel: same source always yields the same bytes."""
+def worker_tools_wheel() -> tuple[str, bytes]:
+    """Reproducible OpenCode 进程监管器 wheel: same source always yields the same bytes."""
 
-    dist = f"nexus_worker_agent-{WORKER_AGENT_VERSION}"
+    dist = f"nexus_worker_tools-{WORKER_TOOLS_VERSION}"
     app_root = Path(__file__).resolve().parents[1]
     names = [
         "app/__init__.py",
-        "app/worker_gateway/__init__.py",
-        "app/worker_gateway/protocol.py",
-        "app/worker_gateway/heartbeat.py",
-        "app/runtime/__init__.py",
-        "app/runtime/redaction.py",
     ]
     names.extend(
-        str(path.relative_to(app_root.parent)) for path in sorted((app_root / "worker_agent").rglob("*.py"))
+        str(path.relative_to(app_root.parent)) for path in sorted((app_root / "worker_tools").rglob("*.py"))
     )
     files = sorted((name, (app_root.parent / name).read_bytes()) for name in set(names))
     info = f"{dist}.dist-info"
     metadata = (
         "Metadata-Version: 2.1\n"
-        "Name: nexus-worker-agent\n"
-        f"Version: {WORKER_AGENT_VERSION}\n"
-        "Summary: Nexus Worker Agent\n"
+        "Name: nexus-worker-tools\n"
+        f"Version: {WORKER_TOOLS_VERSION}\n"
+        "Summary: Nexus SSH Worker tools\n"
         "Requires-Python: >=3.11\n"
-        "Requires-Dist: httpx>=0.27,<1\n"
-        "Requires-Dist: websockets>=12\n"
     ).encode()
     wheel_meta = b"Wheel-Version: 1.0\nGenerator: nexus-provision\nRoot-Is-Purelib: true\nTag: py3-none-any\n"
     files.extend([(f"{info}/METADATA", metadata), (f"{info}/WHEEL", wheel_meta)])
@@ -487,7 +480,6 @@ class RemoteProvisioner:
         self.installer_meta: dict = {}
         self.install_lock = None
         self.verified_evaluation: dict | None = None
-        self.enrollment_epoch = 0
         self.deployed_spec_revision = ""
         self.readiness_blocking = ""
 
@@ -782,7 +774,8 @@ printf STILL_LISTENING
             skill_names = set(self.environment.skill_refs or [])
             skill_files = await load_worker_skills(db, skill_names, include_assets=True)
         context = ReadinessLookupContext(
-            ordered_chat_routes=models, enabled_chat_routes=set(models),
+            ordered_chat_routes=models,
+            enabled_chat_routes=set(models),
             skills={item["name"]: item for item in skill_files},
         )
         self.deployed_spec_revision = build_desired_spec_from_context(
@@ -907,7 +900,6 @@ printf STILL_LISTENING
                     "version": manifest["opencode_version"],
                     "binary": self.target_binary,
                 },
-                "worker_agent": {"version": WORKER_AGENT_VERSION},
                 "changed": {
                     "runtime": node_changed or package_changed or link_changed,
                     "repository": repository_changed,
@@ -927,30 +919,20 @@ printf STILL_LISTENING
     async def _probe_ingress(self, emit):
         await self.step(emit, "Worker Nginx 入口", "running")
         model, mcp = self._direct_endpoints()
-        socket_url = require_direct_url(self.settings.worker_agent_gateway_url, "Worker Gateway")
-        gateway = urlsplit(socket_url)
         library = urlsplit(mcp)
         origin = urlsplit(model).netloc
         if (
             urlsplit(model).scheme != "http"
             or library.scheme != "http"
-            or gateway.scheme != "ws"
             or library.netloc != origin
             or library.path != "/mcp"
-            or library.query or library.fragment
-            or gateway.netloc != origin
-            or gateway.path != "/api/worker-gateway/connect"
-            or gateway.query or gateway.fragment
+            or library.query
+            or library.fragment
         ):
-            raise RuntimeError("Worker Gateway、模型中转和图书馆 MCP 必须使用同一个 Nginx HTTP 入口")
+            raise RuntimeError("模型中转和图书馆 MCP 必须使用同一个 Nginx HTTP 入口")
         checks = [
             ["模型中转", model + "/models", {}, [401]],
             ["图书馆 MCP", mcp, {"Accept": "text/event-stream"}, [200, 400, 405]],
-            ["Worker 数据通道", f"http://{origin}/api/worker-gateway/data/preflight/request", {}, [401]],
-            ["Worker Gateway", socket_url, {
-                "Connection": "Upgrade", "Upgrade": "websocket",
-                "Sec-WebSocket-Version": "13", "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
-            }, [101]],
         ]
         await self._command(
             shlex.join([self._agent_interpreter(), "-I", "-c", INGRESS_PROBE, json.dumps(checks)]),
@@ -1026,21 +1008,8 @@ printf STILL_LISTENING
                 pass
         return True
 
-    async def _enroll_worker(self):
-        from app.worker_gateway.service import get_gateway
-
-        async with SessionLocal() as session:
-            return await get_gateway().enroll(session, self.environment.id)
-
     async def _load_local_runtime(self, *, allocate=True):
-        # The deployed worker.env is the only persisted source of the native port.
-        from urllib.parse import urlsplit
-
-        content = await self._read_optional(f"{WORKER_SECRET_DIR}/worker-{self.environment.id}.env")
-        if content:
-            text = content.decode() if isinstance(content, bytes) else content
-            values = dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
-            self.opencode_port = urlsplit(values.get("NEXUS_WORKER_OPENCODE_URL", "")).port
+        self.opencode_port = self.environment.opencode_port
         if self.opencode_port is None and allocate:
             script = (
                 "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); "
@@ -1049,16 +1018,21 @@ printf STILL_LISTENING
             self.opencode_port = int(
                 await self._command(shlex.join([self._agent_interpreter(), "-c", script]))
             )
+            async with SessionLocal() as session:
+                worker = await session.get(AgentWorker, self.environment.id)
+                worker.opencode_port = self.opencode_port
+                await session.commit()
+            self.environment.opencode_port = self.opencode_port
+        await connections.close(self.environment.id)
 
     async def _run_ctl(self, action: str) -> str:
         ctl_path = worker_ctl_path(self.environment.id)
         return await self._command(shlex.join([ctl_path, action]), timeout=45)
 
     async def _install_worker(self, emit):
-        await self.step(emit, "安装 Worker Agent", "running")
+        await self.step(emit, "安装 OpenCode 监管与运维工具", "running")
         await self._ensure_safe()
         gateway_url, mcp_url = self._direct_endpoints()
-        agent_gateway = require_direct_url(self.settings.worker_agent_gateway_url, "Worker Gateway")
         port = int(self.opencode_port)
         home = self.home
         if not home:
@@ -1096,7 +1070,7 @@ printf STILL_LISTENING
         else:
             await self._command(shlex.join(["rm", "-f", token_path_git, askpass_git]))
 
-        wheel_name, wheel_bytes = agent_wheel()
+        wheel_name, wheel_bytes = worker_tools_wheel()
         wheel_digest = hashlib.sha256(wheel_bytes).hexdigest()
         wheel_path, marker_path = f"{install_dir}/{wheel_name}", f"{install_dir}/wheel.sha256"
         marker = (await self._command(shlex.join(["cat", marker_path]) + " 2>/dev/null || true")).strip()
@@ -1140,12 +1114,8 @@ printf STILL_LISTENING
             await self._write_atomic_if_changed(marker_path, wheel_digest.encode(), 0o600)
 
         token_path = f"{WORKER_SECRET_DIR}/worker-{self.environment.id}.env"
-        # No recoverable Token copy in Nexus. Every deployment distributes a fresh Token.
         await self._native_idle(strict=True)
-        enrolled = await self._enroll_worker()
-        token, agent_worker_id = enrolled.token, enrolled.agent_worker_id
-        self.enrollment_epoch = enrolled.epoch
-        self.secrets.append(token)
+        agent_worker_id = self.environment.id
 
         worker_env = {
             "HOME": home,
@@ -1156,9 +1126,7 @@ printf STILL_LISTENING
             "NEXUS_GIT_CREDENTIAL_REVISION": self.git_credential_revision or "",
             "NEXUS_WORKER_STATE_DIR": state_dir,
             "NEXUS_WORKER_SPEC_REVISION": self.deployed_spec_revision,
-            "NEXUS_WORKER_TOKEN": token,
             "NEXUS_AGENT_WORKER_ID": agent_worker_id,
-            "NEXUS_WORKER_GATEWAY_URL": agent_gateway,
             "NEXUS_REMOTE_GATEWAY_URL": gateway_url,
             "NEXUS_MCP_RESOURCE_URL": mcp_url,
             "NEXUS_WORKER_OPENCODE_URL": f"http://127.0.0.1:{port}",
@@ -1200,7 +1168,7 @@ printf STILL_LISTENING
             or changes.get("repository")
         )
         await self._run_ctl("restart" if should_restart else "start")
-        await self.step(emit, "安装 Worker Agent", "passed", agent_worker_id)
+        await self.step(emit, "安装 OpenCode 监管与运维工具", "passed", agent_worker_id)
 
     async def _reconnect_mcp(self, name: str) -> None:
         path = f"/mcp/{quote(name, safe='')}/connect"
@@ -1212,17 +1180,21 @@ printf STILL_LISTENING
             "urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req,timeout=10).close()"
         )
         await self._command(
-            shlex.join([
-                self._agent_interpreter(), "-I", "-c", source,
-                f"http://127.0.0.1:{self.opencode_port}{path}?{query}",
-            ]),
+            shlex.join(
+                [
+                    self._agent_interpreter(),
+                    "-I",
+                    "-c",
+                    source,
+                    f"http://127.0.0.1:{self.opencode_port}{path}?{query}",
+                ]
+            ),
             timeout=12,
         )
 
     async def _converge_readiness(self, emit) -> dict:
         await self.step(emit, "就绪验收", "running")
-        self.readiness_blocking = "Worker 尚未建立本次部署的认证连接"
-        gateway = get_gateway()
+        self.readiness_blocking = "SSH/OpenCode 尚未就绪"
         retries: dict[str, tuple[int, float]] = {}
         next_status_check = 0.0
         clock = asyncio.get_running_loop().time
@@ -1234,15 +1206,12 @@ printf STILL_LISTENING
                 worker = await session.get(AgentWorker, self.environment.id)
                 if worker is None:
                     raise RuntimeError("Worker 已不存在")
-                owner = await gateway.bus.get_owner(worker.id)
-                online = (
-                    owner is not None and owner[1] == worker.epoch and worker.epoch > self.enrollment_epoch
-                )
-                observation = await gateway.observed_snapshot(worker) if online else None
+                online = await check_worker(worker)
+                observation = await probe_online_worker(worker, desired) if online else None
                 evaluated = evaluate_worker_readiness(desired, worker, observation=observation, online=online)
             if online and evaluated["readiness"] == "READY":
                 self.verified_evaluation = evaluated
-                await self.step(emit, "就绪验收", "passed", "本次部署的认证连接在线且装备快照已对齐")
+                await self.step(emit, "就绪验收", "passed", "SSH/OpenCode 在线且装备诊断已对齐")
                 return evaluated
 
             now = clock()
@@ -1255,11 +1224,11 @@ printf STILL_LISTENING
                         f"{ctl} || true; tail -n 3 -- {log} 2>/dev/null || true", timeout=8
                     )
                     state, _, detail = output.partition("\n")
-                    self.readiness_blocking = "Worker Agent 尚未通过 Gateway 认证"
+                    self.readiness_blocking = "SSH/OpenCode 健康检查尚未通过"
                     if detail:
                         self.readiness_blocking += "：" + self.redact(detail)
                     if state == "stopped":
-                        raise RuntimeError("Worker Agent 守护已退出；" + self.readiness_blocking)
+                        raise RuntimeError("OpenCode 监管进程已退出；" + self.readiness_blocking)
             elif observation:
                 health = evaluated["runtime_health"]
                 diagnostics = [
@@ -1286,7 +1255,8 @@ printf STILL_LISTENING
                         continue
                     if not re.search(
                         r"timed? ?out|timeout|ECONN|network|connection|socket|\b(?:429|5[0-9]{2})\b",
-                        error, re.I,
+                        error,
+                        re.I,
                     ):
                         raise RuntimeError(f"MCP {name} 连接失败：{error or status}")
                     count, retry_at = retries.get(name, (0, 0.0))
@@ -1301,7 +1271,7 @@ printf STILL_LISTENING
                     except RuntimeError as exc:
                         self.readiness_blocking += f"；MCP {name} 重连失败：{self.redact(exc)}"
             else:
-                self.readiness_blocking = "Worker 已认证，等待本次连接的装备快照"
+                self.readiness_blocking = "SSH 已连接，等待装备诊断"
             await asyncio.sleep(1)
 
     async def _finish(self, success: bool, error: str = "") -> bool:

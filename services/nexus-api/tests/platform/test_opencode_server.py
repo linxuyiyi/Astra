@@ -164,7 +164,6 @@ async def test_messages_page_uses_native_opaque_cursor(monkeypatch):
         lambda **kwargs: real_client(
             **kwargs,
             transport=httpx.MockTransport(respond),
-            trust_env=False,
         ),
     )
     client = OpenCodeServerClient(Settings(), base_url="http://localhost:1")
@@ -175,7 +174,7 @@ async def test_messages_page_uses_native_opaque_cursor(monkeypatch):
     assert calls[0]["limit"] == "1" and calls[0]["directory"] == "/workspace"
 
 
-async def test_direct_client_accepts_task_submission_request_id(monkeypatch):
+async def test_direct_client_submits_native_prompt_body(monkeypatch):
     from unittest.mock import AsyncMock
 
     client = OpenCodeServerClient(Settings())
@@ -184,7 +183,6 @@ async def test_direct_client_accepts_task_submission_request_id(monkeypatch):
     await client.request(
         "POST",
         "/session/ses_local/prompt_async",
-        command_request_id="submit_current",
         body={"messageID": "msg_current"},
     )
     assert exchange.await_count == 1

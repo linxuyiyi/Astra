@@ -225,17 +225,18 @@ try {
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), 'run')
   const liveRun = tasks.find(row => row.id === 'run')
   const workspaceReadsBeforeDisconnect = runWorkspaceReads
+  await frame.contentFrame().locator("body").evaluate(node => { node.dataset.continuity = "preserved" })
   liveRun.worker_online = false
   await page.clock.fastForward(4_001)
   await detail.getByRole('status').filter({ hasText: 'Worker 离线' }).waitFor()
-  await frame.waitFor({ state: 'detached' })
-  await detail.getByText('Worker 离线，等待连接恢复', { exact: true }).waitFor()
+  assert.equal(await frame.contentFrame().locator('body').getAttribute('data-continuity'), 'preserved')
   assert.equal(runWorkspaceReads, workspaceReadsBeforeDisconnect)
   liveRun.worker_online = true
   await page.clock.fastForward(4_001)
   await detail.getByRole('status').filter({ hasText: 'Worker 离线' }).waitFor({ state: 'hidden' })
   await frame.contentFrame().getByRole('heading', { name: '原生工作区夹具' }).waitFor()
-  assert.equal(runWorkspaceReads, workspaceReadsBeforeDisconnect + 1)
+  assert.equal(await frame.contentFrame().locator('body').getAttribute('data-continuity'), 'preserved')
+  assert.equal(runWorkspaceReads, workspaceReadsBeforeDisconnect)
   const frameHeight = (await frame.boundingBox()).height
   assert.ok(frameHeight > 350)
   await detail.getByRole('tab', { name: '任务详情' }).click()

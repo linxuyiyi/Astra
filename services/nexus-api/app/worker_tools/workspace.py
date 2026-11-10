@@ -9,7 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from app.worker_agent.process_env import child_environ
+from app.worker_tools.process_env import child_environ
 
 _CONFIG_NAMES = (
     Path("opencode.json"),

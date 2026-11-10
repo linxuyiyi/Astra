@@ -353,48 +353,6 @@ async def test_review_jobs_api_lists_and_retries(monkeypatch):
         assert retried.json()["status"] == "PENDING"
 
 
-def test_worker_trace_read_trimming_and_cursor(tmp_path, monkeypatch):
-    import json
-
-    from app.worker_agent import trace_read
-
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    payload = [
-        {
-            "info": {"id": "msg_1", "role": "assistant"},
-            "parts": [
-                {
-                    "id": "prt_1",
-                    "type": "tool",
-                    "tool": "bash",
-                    "state": {"status": "passed", "output": "x" * 20000},
-                }
-            ],
-        }
-    ]
-
-    class Response:
-        headers = {"x-next-cursor": "msg_0"}
-
-        def read(self):
-            return json.dumps(payload).encode()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-    monkeypatch.setattr(trace_read.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
-    result = trace_read.read_trace_from_payload(
-        "http://127.0.0.1:4096",
-        str(tmp_path),
-        {"session_id": "ses_1", "workspace": str(workspace), "limit": 20},
-    )
-    assert result["next_before"] == "msg_0"
-    assert result["messages"][0]["parts"][0]["state"]["output"].endswith("x")
-    assert len(result["messages"][0]["parts"][0]["state"]["output"]) < 20000
 
 
 @pytest.mark.asyncio
@@ -519,64 +477,8 @@ def _paged_server(messages: list[dict]):
     return urlopen, calls
 
 
-def test_worker_trace_pages_are_never_trimmed_off_the_cursor(tmp_path, monkeypatch):
-    """页内放不下时必须缩小原生请求页，不能丢消息却沿用整页游标。"""
-
-    from app.worker_agent import trace_read
-
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    messages = [
-        {
-            "info": {"id": f"msg_{index:02d}", "role": "assistant"},
-            "parts": [{"id": f"prt_{index}", "type": "text", "text": "x" * 8000}],
-        }
-        for index in range(20, 0, -1)
-    ]
-    urlopen, calls = _paged_server(messages)
-    monkeypatch.setattr(trace_read.urllib.request, "urlopen", urlopen)
-
-    seen: list[str] = []
-    before = None
-    while True:
-        page = trace_read.read_trace_from_payload(
-            "http://127.0.0.1:4096",
-            str(tmp_path),
-            {"session_id": "ses_1", "workspace": str(workspace), "limit": 20, "before": before},
-        )
-        assert page["truncated"] is False
-        seen.extend(item["info"]["id"] for item in page["messages"])
-        if not page["next_before"]:
-            break
-        before = page["next_before"]
-
-    assert seen == [f"msg_{index:02d}" for index in range(20, 0, -1)]
-    assert any(call["limit"] < 20 for call in calls)
 
 
-def test_worker_trace_reports_a_single_oversized_message(tmp_path, monkeypatch):
-    """单条消息超过单帧预算时明确报告，交给协调面按受控终态结束。"""
-
-    from app.worker_agent import trace_read
-
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    messages = [
-        {
-            "info": {"id": "msg_1", "role": "assistant"},
-            "parts": [{"id": f"prt_{index}", "type": "text", "text": "y" * 8000} for index in range(20)],
-        }
-    ]
-    urlopen, _calls = _paged_server(messages)
-    monkeypatch.setattr(trace_read.urllib.request, "urlopen", urlopen)
-
-    page = trace_read.read_trace_from_payload(
-        "http://127.0.0.1:4096",
-        str(tmp_path),
-        {"session_id": "ses_1", "workspace": str(workspace), "limit": 20},
-    )
-    assert page["messages"] == []
-    assert page["too_large"]
 
 
 def _review_snapshot(task_id: str, session_id: str = "ses_1") -> dict:
@@ -872,65 +774,6 @@ async def test_supersede_between_claim_and_map_is_not_overwritten(monkeypatch):
     assert await coordinator.process_job(job_id, llm=FakeLLM()) is None
 
 
-@pytest.mark.parametrize("target_kind", ["registered", "unregistered", "foreign", "symlink", "missing"])
-def test_worker_review_reads_only_its_registered_worktrees(tmp_path, monkeypatch, target_kind):
-    import subprocess
-
-    from app.worker_agent import trace_read
-
-    root = tmp_path.resolve() / "repo"
-    root.mkdir()
-
-    def git(*args):
-        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
-
-    git("init", "-b", "main")
-    git("-c", "user.name=QA", "-c", "user.email=qa@example.invalid", "commit", "--allow-empty", "-m", "seed")
-    target = tmp_path.resolve() / ".astra-tasks" / "worker" / "task"
-    target.parent.mkdir(parents=True)
-    git("worktree", "add", "--detach", str(target))
-    called = []
-
-    class Response:
-        headers = {}
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-        def read(self):
-            return b"[]"
-
-    def fetch(request, **_):
-        called.append(request.full_url)
-        return Response()
-
-    monkeypatch.setattr(trace_read.urllib.request, "urlopen", fetch)
-    if target_kind == "unregistered":
-        target = target.parent / "arbitrary"
-        target.mkdir()
-    elif target_kind == "foreign":
-        target = target.parent / "foreign"
-        target.mkdir()
-        subprocess.run(["git", "-C", str(target), "init", "-b", "main"], check=True, capture_output=True)
-    elif target_kind == "symlink":
-        link = root / "link"
-        link.symlink_to(target, target_is_directory=True)
-        target = link
-    elif target_kind == "missing":
-        target = ""
-    payload = {"session_id": "ses_qa", "workspace": str(target)}
-    if target_kind == "registered":
-        result = trace_read.read_trace_from_payload("http://127.0.0.1:14096", str(root), payload)
-        assert result["messages"] == []
-        assert len(called) == 1
-        assert "ses_qa/message?" in called[0]
-    else:
-        with pytest.raises((ValueError, RuntimeError)):
-            trace_read.read_trace_from_payload("http://127.0.0.1:14096", str(root), payload)
-        assert called == []
 
 
 def test_trace_redacts_runtime_capabilities_before_model_and_evidence():
@@ -1060,3 +903,63 @@ async def test_single_candidate_is_compared_against_read_knowledge():
     )
     assert result == []
     assert model.calls == 2
+
+
+async def test_review_reads_through_task_proxy_without_creating_ssh(monkeypatch):
+    import json
+    from uuid import uuid4
+
+    import httpx
+
+    from app.database import SessionLocal
+    from app.executors.opencode_server import OpenCodeServerClient
+    from app.models import AgentWorker, Task
+    from app.runtime.experience_review import trace_reader
+    from app.runtime.worker_connection import connections
+
+    worker_id, task_id = "trace-worker-" + uuid4().hex, "trace-task-" + uuid4().hex
+    async with SessionLocal() as db:
+        db.add(AgentWorker(id=worker_id, name="trace", status="OFFLINE"))
+        await db.flush()
+        db.add(Task(
+            id=task_id, title="trace", task_type="ISSUE", status="SUCCEEDED",
+            agent_worker_id=worker_id, workspace="/workspace/task", current_session_id="ses_trace",
+        ))
+        await db.commit()
+    paths = []
+
+    async def no_ssh(*args, **kwargs):
+        raise AssertionError("复盘进程不能直接建立 SSH")
+
+    monkeypatch.setattr(connections, "get", no_ssh)
+
+    def respond(request):
+        paths.append(request.url.path)
+        assert request.url.params["directory"] == "/workspace/task"
+        if request.url.path.endswith("/children"):
+            return httpx.Response(200, json=[])
+        assert request.url.path.endswith("/message")
+        return httpx.Response(200, json=[{
+            "info": {"id": "msg_trace", "role": "assistant", "sessionID": "ses_trace"},
+            "parts": [{"id": "prt_trace", "type": "text", "text": "验证通过"}],
+        }])
+
+    def proxy_client(*args, **kwargs):
+        client = OpenCodeServerClient(*args, **kwargs)
+
+        async def exchange(method, path, *, params=None, body=None):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
+                result = await http.request(method, client.base_url + path, params=params, json=body)
+            return result.status_code, result.content, dict(result.headers)
+
+        client.exchange = exchange
+        return client
+
+    monkeypatch.setattr(trace_reader, "OpenCodeServerClient", proxy_client)
+    trace = await trace_reader.read_trace({
+        "task_id": task_id, "agent_worker_id": worker_id, "workspace": "/workspace/task",
+        "root_session_id": "ses_trace", "source_session_ids": ["ses_trace"],
+    })
+    assert trace.message_count == 1 and trace.sessions == ["ses_trace"]
+    assert all(path.startswith(f"/api/tasks/{task_id}/opencode/ses_trace/") for path in paths)
+    assert "验证通过" in json.dumps(trace.model_dump(), ensure_ascii=False)

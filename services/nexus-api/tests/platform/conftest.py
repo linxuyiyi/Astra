@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-SESSION_REDIS_PREFIX = f"astra:worker-gateway:test:{os.getpid()}"
 SESSION_REVOKED_MEMBER_PREFIX = f"astra-test-revoked:{os.getpid()}:"
 _OLD_REVOKED_MEMBER = re.compile(r"rev-[0-9a-f]{8}-[abc]")
 
@@ -15,7 +14,6 @@ TEST_DB = TEMP_ROOT / f"astra-test-{os.getpid()}.db"
 TEST_WORKSPACES = TEMP_ROOT / f"astra-workspaces-{os.getpid()}"
 os.environ["ASTRA_DATABASE_URL"] = f"sqlite+aiosqlite:///{TEST_DB.as_posix()}"
 os.environ["ASTRA_SEED_DEMO"] = "false"
-os.environ["NEXUS_WORKER_GATEWAY_ADMIN_KEY"] = "wgk_test"
 os.environ["ASTRA_LLM_WIKI_ENABLED"] = "false"
 os.environ["ASTRA_WORKSPACE_ROOT"] = str(TEST_WORKSPACES)
 
@@ -62,13 +60,13 @@ async def clear_worker_maintenance(prepare_process_schema):
 
 
 @pytest.fixture(autouse=True)
-async def isolate_worker_gateway(monkeypatch):
-    from app.worker_gateway import service
+async def isolate_worker_connections(monkeypatch):
+    from app.runtime import worker_connection
 
-    monkeypatch.setattr(service, "_gateway", None)
+    pool = worker_connection.connections
+    pool.locks.clear()
     yield
-    if service._gateway is not None:
-        await service._gateway.aclose()
+    await pool.aclose()
 
 
 @pytest.fixture(autouse=True)
@@ -83,11 +81,6 @@ def keep_redis_url_stable():
 
     if get_settings.cache_info().currsize and expected and get_settings().redis_url != expected:
         get_settings.cache_clear()
-    import app.worker_gateway.service as gateway_service
-
-    gateway = gateway_service._gateway
-    if gateway is not None and expected and gateway.settings.redis_url != expected:
-        gateway_service._gateway = None
 
 
 def pytest_sessionfinish(session, exitstatus):
@@ -102,13 +95,6 @@ def pytest_sessionfinish(session, exitstatus):
 
     client = Redis.from_url(url)
     try:
-        cursor = 0
-        while True:
-            cursor, keys = client.scan(cursor=cursor, match=f"{SESSION_REDIS_PREFIX}:*", count=500)
-            if keys:
-                client.delete(*keys)
-            if cursor == 0:
-                break
         members = client.smembers("nexus:gateway:revoked_keys")
         stale = []
         for member in members:

@@ -39,7 +39,13 @@ class ExecutionEnvironmentRuntime:
             password=cipher().decrypt(worker.ssh_password),
             connect_timeout=self.settings.ssh_connect_timeout_seconds,
         )
-        await session.connect()
+        connecting = asyncio.create_task(session.connect())
+        try:
+            await asyncio.shield(connecting)
+        except BaseException:
+            await asyncio.gather(connecting, return_exceptions=True)
+            await session.close()
+            raise
         return session
 
     async def run_remote(self, worker, command, *, timeout=None):

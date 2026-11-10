@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.domain import TaskStatus
 from app.models import Base, Task
-from app.worker_agent.jsonc import loads_jsonc as parse_jsonc
+from app.worker_tools.jsonc import loads_jsonc as parse_jsonc
 
 PAT = "ghp_fixb3tokenvalue"
 
@@ -43,7 +43,7 @@ def test_shared_jsonc_accepts_inline_comments_and_trailing_commas(tmp_path):
     target = tmp_path / "opencode.jsonc"
     target.write_text('{ "skill": "review", }\n', encoding="utf-8")
     completed = subprocess.run(
-        [sys.executable, "app/worker_agent/jsonc.py", str(target)],
+        [sys.executable, "app/worker_tools/jsonc.py", str(target)],
         check=False,
         capture_output=True,
         text=True,

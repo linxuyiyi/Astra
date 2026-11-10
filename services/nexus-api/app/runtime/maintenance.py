@@ -31,14 +31,14 @@ from app.models import (
     WorkerMaintenanceEvent,
     WorkerMaintenanceOperation,
 )
-from app.runtime.environment import ExecutionEnvironmentRuntime, environment_snapshot
+from app.runtime.environment import environment_snapshot
 from app.runtime.occupancy import (
     occupying_clause,
     occupying_exists,
 )
 from app.runtime.redaction import redact_data, redact_text
-from app.runtime.worker_client import WorkerOpenCodeClient
-from app.runtime.worker_connection import worker_connections
+from app.runtime.ssh_operations import WorkerOperationError, run_worker_operation
+from app.runtime.worker_connection import check_worker, connections, worker_connections
 from app.runtime.worker_health import (
     probe_online_worker,
 )
@@ -48,9 +48,6 @@ from app.runtime.worker_readiness import (
     compute_target_digest,
     evaluate_worker_readiness,
 )
-from app.runtime.worker_transport import WorkerCommandError
-from app.worker_agent import __version__ as WORKER_AGENT_VERSION
-from app.worker_gateway.service import get_gateway
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +241,6 @@ def _target_revision(environment: AgentWorker) -> dict[str, Any]:
     return {
         "target_digest": compute_target_digest(environment),
         "opencode_version": settings.remote_opencode_version,
-        "worker_agent_version": WORKER_AGENT_VERSION,
         "model_name": environment.model_name,
         "repository_url": environment.repository_url,
         "branch": environment.branch,
@@ -276,11 +272,11 @@ def _initial_execution_route(environment: AgentWorker, action: str) -> tuple[str
     if action == MaintenanceAction.DEPLOY.value:
         return "ssh", "通过 SSH 执行一键部署与守护拉起"
     if action == MaintenanceAction.UPDATE.value:
-        return "worker", "通过在线 Worker Gateway 更新分支代码"
+        return "ssh", "通过 SSH 更新分支代码"
     if action == MaintenanceAction.CHECK.value:
         if environment.mode == ExecutionMode.LOCAL:
             return "local", "检查本机开发运行环境"
-        return "worker", "通过在线 Worker Gateway 执行深度健康检查"
+        return "ssh", "通过 SSH 执行深度健康检查"
     return None, None
 
 
@@ -699,8 +695,13 @@ async def operation_detail(session, operation_id: str) -> dict[str, Any] | None:
 
 
 async def list_operations(
-    session, agent_worker_id: str, *, limit: int, offset: int,
-    action: str | None = None, state: str | None = None,
+    session,
+    agent_worker_id: str,
+    *,
+    limit: int,
+    offset: int,
+    action: str | None = None,
+    state: str | None = None,
 ) -> dict[str, Any]:
     query = select(WorkerMaintenanceOperation).where(
         WorkerMaintenanceOperation.agent_worker_id == agent_worker_id
@@ -714,7 +715,9 @@ async def list_operations(
         query.order_by(
             WorkerMaintenanceOperation.requested_at.desc(),
             WorkerMaintenanceOperation.id.desc(),
-        ).offset(offset).limit(limit)
+        )
+        .offset(offset)
+        .limit(limit)
     )
     return {"items": [operation_payload(item) for item in rows], "total": total}
 
@@ -1056,12 +1059,11 @@ async def _execute_check(environment, lease, emit):
         return
     async with SessionLocal() as db:
         desired = await build_desired_spec(db, environment)
+    online = await check_worker(environment)
     observation = await probe_online_worker(environment, desired, deep=True)
-    evaluated = evaluate_worker_readiness(desired, environment, observation=observation)
+    evaluated = evaluate_worker_readiness(desired, environment, observation=observation, online=online)
     await _emit_equipment_steps(emit, evaluated["runtime_health"]["equipment"])
     ok = evaluated["readiness"] == "READY"
-    async with SessionLocal() as db:
-        await get_gateway().update_observed_snapshot(db, environment.id, environment.epoch, observation)
     await lease.finish(
         "SUCCEEDED" if ok else "FAILED",
         after_snapshot=evaluated,
@@ -1071,41 +1073,32 @@ async def _execute_check(environment, lease, emit):
 
 async def _execute_restart(environment, lease, emit):
     await lease.assert_safe_to_disrupt(environment.id)
-    if environment.status in {"IDLE", "WORKING", "PAUSED"}:
-        await lease.set_execution_route("worker", "通过 Worker 重启原生 OpenCode")
-        result = await WorkerOpenCodeClient(agent_worker_id=environment.id).run_command(
-            "restart_opencode", {"workspace": environment.workspace_root}
-        )
-        if not result.get("restarted"):
-            raise _ActionError("restart_failed", "Worker 未确认重启")
-    else:
-        from app.runtime.remote_provisioning import worker_ctl_path
+    from app.runtime.remote_provisioning import worker_ctl_path
 
-        await lease.set_execution_route("ssh", "通过受管启动入口唤醒 Worker")
-        ssh = await ExecutionEnvironmentRuntime().open_session(environment)
-        try:
-            code, _, error = await ssh.run_command(shlex.join([worker_ctl_path(environment.id), "start"]))
-            if code:
-                raise _ActionError("restart_failed", redact_text(error))
-        finally:
-            await ssh.close()
-        for _ in range(60):
-            await lease.check_canceled()
-            async with SessionLocal() as db:
-                fresh = await db.get(AgentWorker, environment.id)
-            if fresh.status in {"IDLE", "WORKING", "PAUSED"} and fresh.epoch > environment.epoch:
-                break
-            await asyncio.sleep(0.5)
-        else:
-            raise _ActionError("worker_offline", "启动后 Worker 未连接网关")
-        result = {"connected": True}
+    await lease.set_execution_route("ssh", "通过 SSH 重启 OpenCode 进程")
+    connection = await connections.get(environment)
+    code, _, error = await connection.ssh.run_command(
+        shlex.join([worker_ctl_path(environment.id), "restart"])
+    )
+    if code:
+        raise _ActionError("restart_failed", redact_text(error))
+    for _ in range(60):
+        await lease.check_canceled()
+        if await check_worker(environment):
+            break
+        await asyncio.sleep(0.5)
+    else:
+        raise _ActionError("worker_offline", "重启后 OpenCode 未通过健康检查")
+    result = {"restarted": True}
     await lease.finish("SUCCEEDED", after_snapshot=redact_data(result))
 
 
 async def _execute_update(environment, lease, emit):
     await lease.assert_safe_to_disrupt(environment.id)
-    result = await WorkerOpenCodeClient(agent_worker_id=environment.id).run_command(
-        "update_workspace", {"workspace": environment.workspace_root, "branch": environment.branch or "main"}
+    result = await run_worker_operation(
+        environment,
+        "update_workspace",
+        {"workspace": environment.workspace_root, "branch": environment.branch or "main"},
     )
     await lease.finish("SUCCEEDED", after_snapshot=redact_data(result))
 
@@ -1184,7 +1177,7 @@ async def _execute_operation(operation_id: str, owner: str) -> None:
             error_message=exc.message,
             event_message=exc.message,
         )
-    except (WorkerCommandError, OpenCodeServerUnavailable) as exc:
+    except (WorkerOperationError, OpenCodeServerUnavailable) as exc:
         await lease.finish(
             "FAILED",
             stage="failed",
@@ -1317,9 +1310,8 @@ async def environment_health(session, agent_worker_id):
     operation = await active_operation(session, worker.id) or await latest_operation(session, worker.id)
     tasks = (await session.scalars(select(Task.id).where(occupying_clause(worker.id)))).all()
     desired = await build_desired_spec(session, worker)
-    gateway = get_gateway()
-    online = (await worker_connections([worker], bus=gateway.bus))[worker.id]
-    observation = await gateway.observed_snapshot(worker) if online else None
+    online = (await worker_connections([worker]))[worker.id]
+    observation = connections.observation(worker.id)
     health = evaluate_worker_readiness(
         desired,
         worker,

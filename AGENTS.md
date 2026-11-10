@@ -2,7 +2,7 @@
 
 只放所有代码任务都要遵守的规则。OpenSpec 产物规则在 `openspec/config.yaml`，工具与集成细节见 `docs/architecture/OPENSPEC_SUPERPOWERS.md`；按需查阅，不要每轮加载整套教程。
 
-本分支的产品是 **Nexus v1.5.0**。`services/nexus-api` 是唯一的 Nexus 服务：同一进程提供 `/api/v1`（数字员工、私聊、团队、`contact_employee`）、`/api`（任务、Worker、网关控制面、图书馆）、Worker Gateway WebSocket 和前端静态资源。前端在 `services/nexus-api/web`，聊天岛在 `services/nexus-api/chat-island`；OpenCode 网关数据面、Task MCP、Library MCP 与 AgentScope 仍是独立基础设施进程。
+本分支的产品是 **Nexus v1.5.0**。`services/nexus-api` 是唯一的 Nexus 服务：同一进程提供 `/api/v1`（数字员工、私聊、团队、`contact_employee`）、`/api`（任务、Worker、网关控制面、图书馆）和前端静态资源。前端在 `services/nexus-api/web`，聊天岛在 `services/nexus-api/chat-island`；OpenCode 网关数据面、Task MCP、Library MCP 与 AgentScope 仍是独立基础设施进程。
 
 ## 项目范围
 
@@ -15,7 +15,7 @@ Astra 负责长期任务的分配、执行、状态跟踪、人工介入和异�
 
 ## Runtime
 
-正式运行方式为 **OpenCode Server / Session / Event**。
+正式运行方式为 **Nexus → SSH 隧道 → OpenCode 原生 HTTP / SSE**。每个 Worker 复用 SSH 与 loopback 转发，断线重连不重启远端 OpenCode。SSE 通知和周期巡检都查询原生状态对账，不保存事件历史或通信租约。
 公司正式部署为 `ASTRA_EXECUTOR_TYPE=worker`，控制机不安装、启动或校验本机 OpenCode；实际 Worker 保留版本校验。显式本机 `opencode_server` 仅作开发调试，受管主模型与 small model 也必须走 Nexus 网关。
 `opencode run` 只作为独立手工 CLI fallback。
 
@@ -35,10 +35,10 @@ Task → AgentWorker → OpenCode Session
 
 ## 数据结构
 
-Task 为 27 字段，AgentWorker 为 26 字段；四张执行历史/环境表已移除。字段清单见 `docs/architecture/nexus-v1.5.0-schema.md`。
+Task 为 27 字段，AgentWorker 为 25 字段；四张执行历史/环境表已移除。字段清单见 `docs/architecture/nexus-v1.5.0-schema.md`。
 
-Task 仅有 PENDING / RUNNING / WAITING / SUCCEEDED / CANCELED；Worker 仅有 OFFLINE / IDLE / WORKING / PAUSED。
-未知提交在原 Task、原 Session 上自动串行重发，接受重复执行；确认 Session 不存在后才新建。
+Task 仅有 PENDING / RUNNING / WAITING / SUCCEEDED / FAILED / CANCELED；Worker 仅有 OFFLINE / IDLE / WORKING / PAUSED。
+未知提交在原 Task、原 Session 上自动串行重发，接受重复执行；确认 Session 不存在时进入 WAITING，人工重新开始才新建。
 维护租约失效不等于远端进程停止，未确认停止的维护仍占用 Worker 维护锁。
 
 ## 数据兼容

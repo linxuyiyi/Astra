@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+import httpx
 from mcp.server.mcpserver import MCPServer
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from app.config.settings import get_settings
-from app.database import SessionLocal
-from app.task_tools import TaskTools
+from nexus_api.auth import internal_headers
 
 
 class HealthMiddleware(BaseHTTPMiddleware):
@@ -36,8 +36,14 @@ def build_mcp_server() -> MCPServer:
     )
 
     async def _call(name: str, **kwargs):
-        async with SessionLocal() as session:
-            return await getattr(TaskTools(session), name)(**kwargs)
+        settings = get_settings()
+        async with httpx.AsyncClient(timeout=settings.opencode_timeout_seconds, trust_env=False) as client:
+            response = await client.post(
+                f"{settings.nexus_api_base.rstrip('/')}/api/v1/internal/task-tools/{name}",
+                headers=internal_headers(), json=kwargs,
+            )
+            response.raise_for_status()
+            return response.json()
 
     @server.tool(name="nexus_task_create", structured_output=True)
     async def nexus_task_create(

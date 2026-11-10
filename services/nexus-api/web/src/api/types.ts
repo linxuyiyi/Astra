@@ -54,9 +54,9 @@ export interface Worker {
     url: string
     config?: Record<string, unknown>
   }>
-  epoch: number
-  last_heartbeat_at: string | null
-  agent_version: string | null
+  opencode_port: number | null
+  last_checked_at: string | null
+  opencode_version: string | null
   occupied_tasks: WorkerOccupiedTask[]
   online: boolean | null
   created_at: string
@@ -84,7 +84,7 @@ export interface Task {
   agent_worker_id: string | null
   worker_name?: string | null
   worker_online?: boolean | null
-  worker_last_heartbeat_at?: string | null
+  worker_last_checked_at?: string | null
   current_session_id: string | null
   workspace: string | null
   last_message_id: string | null

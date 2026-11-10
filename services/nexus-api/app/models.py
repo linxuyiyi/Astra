@@ -91,15 +91,11 @@ class AgentWorker(RuntimeProjection, Base):
     branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
     skill_refs: Mapped[list[str]] = mapped_column(JSON, default=list)
     mcp_refs: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
-    token_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    epoch: Mapped[int] = mapped_column(Integer, default=0)
-    last_heartbeat_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    agent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    opencode_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_checked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    opencode_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     tasks: Mapped[list["Task"]] = relationship(back_populates="agent_worker")
-    commands: Mapped[list["WorkerCommand"]] = relationship(
-        back_populates="worker", cascade="all, delete-orphan"
-    )
 
     @property
     def has_ssh_password(self) -> bool:
@@ -486,50 +482,6 @@ class KnowledgeAudit(Base):
     actor_role: Mapped[str] = mapped_column(String(32))
     detail: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)
-
-
-class WorkerCommand(Base):
-    """已持久化的控制指令。投递前先落库，旧 epoch 的结果不能覆盖新状态。"""
-
-    __tablename__ = "t_nexus_worker_commands"
-    __table_args__ = (Index("ix_worker_commands_status_deadline", "status", "deadline_at"),)
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    request_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
-    agent_worker_id: Mapped[str] = mapped_column(
-        ForeignKey("t_nexus_agent_workers.id", ondelete="CASCADE"), index=True
-    )
-    session_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    name: Mapped[str] = mapped_column(String(64))
-    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
-    epoch: Mapped[int] = mapped_column(Integer)
-    result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    deadline_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    body_fetched_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    delivery_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    delivery_state: Mapped[str] = mapped_column(
-        String(16), default="unpublished", server_default="unpublished"
-    )
-    slot_held: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
-    last_dispatched_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    dispatched_epoch: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
-    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-
-    worker: Mapped[AgentWorker] = relationship(back_populates="commands")
-
-
-class WorkerHttpSlot(Base):
-    """同一 Worker、同一 epoch 上正在执行的 http 数量。认领时对这一行做条件加一。"""
-
-    __tablename__ = "t_nexus_worker_http_slots"
-
-    agent_worker_id: Mapped[str] = mapped_column(String(80), primary_key=True)
-    epoch: Mapped[int] = mapped_column(Integer, primary_key=True)
-    inflight: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class WorkerMaintenanceOperation(Base):

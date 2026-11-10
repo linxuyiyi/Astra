@@ -10,7 +10,7 @@
           <div><dt>Task ID</dt><dd><IdDisplay :value="task.id" /></dd></div>
           <div><dt>AgentWorker</dt><dd>{{ task.worker_name || (task.agent_worker_id ? '不可用' : '未分配') }}</dd></div>
           <div v-if="task.worker_online === true">
-            <dt>连接</dt><dd>在线<span v-if="task.worker_last_heartbeat_at"> · 最近心跳 {{ formatTime(task.worker_last_heartbeat_at) }}</span></dd>
+            <dt>连接</dt><dd>在线<span v-if="task.worker_last_checked_at"> · 最近检查 {{ formatTime(task.worker_last_checked_at) }}</span></dd>
           </div>
           <div><dt>Session ID</dt><dd><IdDisplay v-if="task.current_session_id" :value="task.current_session_id" /><span v-else>—</span></dd></div>
           <div><dt>Git 仓库</dt><dd :title="repo?.name">{{ repo?.name || (repoError ? '暂不可读' : '—') }}</dd></div>
@@ -25,7 +25,7 @@
         </template>
       </AstraPageHeader>
       <p v-if="task.worker_online === false" class="task-connection" role="status">
-        Worker 离线<span v-if="task.worker_last_heartbeat_at"> · 最近心跳 {{ formatTime(task.worker_last_heartbeat_at) }}</span>
+        Worker 离线<span v-if="task.worker_last_checked_at"> · 最近检查 {{ formatTime(task.worker_last_checked_at) }}</span>
       </p>
       <el-alert v-if="task.pending_message_id" title="提交尚未确认，连接恢复后自动重发，可能重复执行。" type="warning" :closable="false" />
       <el-tabs v-model="tab" class="task-tabs">
@@ -124,7 +124,7 @@ const secondaryActions = computed(() => actions.value.filter(item => item !== pr
 const frameUrl = computed(() => {
   const session = task.value?.current_session_id
   const runtime = binding.value?.runtime
-  if (!session || task.value?.worker_online === false || task.value?.waiting_reason === 'session_missing' || runtime?.session_id !== session || !runtime.workspace_ui) return ''
+  if (!session || task.value?.waiting_reason === 'session_missing' || runtime?.session_id !== session || !runtime.workspace_ui) return ''
   return `${runtime.workspace_ui}?task=${encodeURIComponent(id.value)}&session=${encodeURIComponent(session)}`
 })
 const workspaceMessage = computed(() => {
@@ -140,7 +140,7 @@ let repoRequest: AbortController | undefined
 let tabRequest: AbortController | undefined
 
 async function loadWorkspace() {
-  if (!task.value?.current_session_id || task.value.worker_online === false || task.value.waiting_reason === 'session_missing' || workspaceRequest) return
+  if (!task.value?.current_session_id || task.value.waiting_reason === 'session_missing' || workspaceRequest) return
   const controller = new AbortController()
   workspaceRequest = controller
   checkingWorkspace.value = true
@@ -230,7 +230,7 @@ async function load() {
     error.value = ''
     const changed = next.current_session_id !== previous?.current_session_id || next.agent_worker_id !== previous?.agent_worker_id
     const connectionChanged = next.worker_online !== previous?.worker_online
-    if (changed || (connectionChanged && next.worker_online === false)) {
+    if (changed) {
       workspaceRequest?.abort()
       workspaceRequest = undefined
       checkingWorkspace.value = false

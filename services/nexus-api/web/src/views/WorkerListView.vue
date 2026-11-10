@@ -34,8 +34,8 @@
         </el-table-column>
         <el-table-column prop="host" label="主机" min-width="144" show-overflow-tooltip />
         <el-table-column prop="workspace_root" label="工作区" min-width="180" show-overflow-tooltip />
-        <el-table-column label="最后心跳" width="168">
-          <template #default="{ row }">{{ formatTime(row.last_heartbeat_at) }}</template>
+        <el-table-column label="最后检查" width="168">
+          <template #default="{ row }">{{ formatTime(row.last_checked_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="96" align="right" fixed="right">
           <template #default="{ row }">

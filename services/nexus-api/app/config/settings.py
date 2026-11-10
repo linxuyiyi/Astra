@@ -60,65 +60,16 @@ class Settings(BaseSettings):
     )
 
     redis_url: str = "redis://localhost:6379/1"
-    # auto：redis_url 非空时用 Redis 共享连接所有者；URL 为空才退回 memory。
-    # memory / redis 可显式覆盖。memory 会在健康接口提示仅单进程可用。
-    worker_gateway_bus: Literal["auto", "memory", "redis"] = Field(
-        default="auto", validation_alias="NEXUS_WORKER_GATEWAY_BUS"
-    )
-    worker_gateway_ping_seconds: int = Field(
-        default=20, ge=1, le=300, validation_alias="NEXUS_WORKER_GATEWAY_PING_SECONDS"
-    )
-    worker_gateway_ping_timeout_seconds: int = Field(
-        default=10, ge=1, le=300, validation_alias="NEXUS_WORKER_GATEWAY_PING_TIMEOUT_SECONDS"
-    )
-    worker_gateway_reconnect_min_seconds: float = Field(
-        default=1, ge=0.1, le=60, validation_alias="NEXUS_WORKER_GATEWAY_RECONNECT_MIN_SECONDS"
-    )
-    worker_gateway_reconnect_max_seconds: float = Field(
-        default=30, ge=1, le=300, validation_alias="NEXUS_WORKER_GATEWAY_RECONNECT_MAX_SECONDS"
-    )
-    worker_gateway_max_frame_bytes: int = Field(
-        default=262144, ge=1024, le=1048576, validation_alias="NEXUS_WORKER_GATEWAY_MAX_FRAME_BYTES"
-    )
-    worker_gateway_control_queue_size: int = Field(
-        default=64, ge=1, le=10000, validation_alias="NEXUS_WORKER_GATEWAY_CONTROL_QUEUE_SIZE"
-    )
-    worker_gateway_event_queue_size: int = Field(
-        default=64, ge=1, le=10000, validation_alias="NEXUS_WORKER_GATEWAY_EVENT_QUEUE_SIZE"
-    )
-    worker_gateway_heartbeat_misses: int = Field(
-        default=2, ge=1, le=10, validation_alias="NEXUS_WORKER_GATEWAY_HEARTBEAT_MISSES"
-    )
-    worker_gateway_command_timeout_seconds: int = Field(
-        default=30, ge=1, le=600, validation_alias="NEXUS_WORKER_GATEWAY_COMMAND_TIMEOUT_SECONDS"
-    )
-    worker_gateway_auth_timeout_seconds: int = Field(
-        default=10, ge=1, le=60, validation_alias="NEXUS_WORKER_GATEWAY_AUTH_TIMEOUT_SECONDS"
-    )
-    worker_gateway_dispatch_lease_seconds: int = Field(
-        default=10, ge=1, le=600, validation_alias="NEXUS_WORKER_GATEWAY_DISPATCH_LEASE_SECONDS"
-    )
-    # 空值时由启动流程生成并写入 ops/env/.env。管理接口校验这把密钥，WebSocket 不使用它。
-    worker_gateway_admin_key: str = Field(default="", validation_alias="NEXUS_WORKER_GATEWAY_ADMIN_KEY")
-    # How long an open event stream waits for a disconnected Worker before it
-    # emits a gap and ends. A new epoch inside this window resumes the stream.
-    worker_event_offline_grace_seconds: float = Field(
-        default=30, ge=1, le=600, validation_alias="NEXUS_WORKER_EVENT_OFFLINE_GRACE_SECONDS"
-    )
     # Extra environment names copied into OpenCode, comma-separated. ASTRA_* and
     # token/key/secret names are never copied, even when listed here.
     worker_child_env_allow: str = Field(default="", validation_alias="NEXUS_WORKER_CHILD_ENV_ALLOW")
     scout_interval: int = 30
     dispatcher_interval: int = 5
-    heartbeat_interval: int = 10
-    heartbeat_timeout: int = 60
     inactivity_timeout: int = 900
     outbox_interval: int = Field(default=2, ge=1, le=3600)
     outbox_retry_seconds: int = Field(default=5, ge=1, le=3600)
     outbox_retry_cap_seconds: int = Field(default=300, ge=1, le=86400)
     outbox_lease_seconds: int = Field(default=30, ge=5, le=3600)
-    runtime_startup_timeout: int = Field(default=120, ge=10, le=86400)
-    runtime_heartbeat_timeout: int = Field(default=90, ge=10, le=86400)
     executor_type: str = "opencode_server"
     opencode_binary: str = "opencode"
     opencode_agent: str | None = None
@@ -194,14 +145,9 @@ class Settings(BaseSettings):
         default=1.0, ge=0.05, le=60, validation_alias="NEXUS_WORKER_MAINTENANCE_POLL_SECONDS"
     )
     worker_health_interval_seconds: int = Field(
-        default=30, ge=0, le=3600, validation_alias="NEXUS_WORKER_HEALTH_INTERVAL_SECONDS"
-    )
-    worker_health_max_age_seconds: int = Field(
-        default=90, ge=5, le=86400, validation_alias="NEXUS_WORKER_HEALTH_MAX_AGE_SECONDS"
+        default=30, ge=1, le=3600, validation_alias="NEXUS_WORKER_HEALTH_INTERVAL_SECONDS"
     )
     gateway_openai_base: str = Field(default="", validation_alias="NEXUS_GATEWAY_OPENAI_BASE")
-    # WebSocket the remote Worker Agent dials. Deploy rejects an empty or loopback value.
-    worker_agent_gateway_url: str = Field(default="", validation_alias="NEXUS_WORKER_AGENT_GATEWAY_URL")
 
     mcp_transport: Literal["stdio", "streamable-http"] = Field(
         default="stdio", validation_alias="NEXUS_MCP_TRANSPORT"

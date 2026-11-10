@@ -285,8 +285,6 @@ http {{
     deny all;
     location /v1/ {{ proxy_pass http://127.0.0.1:{gateway}; {common} }}
     location = /mcp {{ proxy_pass {library_upstream}; {common} }}
-    location = /api/worker-gateway/connect {{ proxy_pass http://127.0.0.1:{api}; {common} }}
-    location ^~ /api/worker-gateway/data/ {{ proxy_pass http://127.0.0.1:{api}; {common} }}
     location / {{ return 404; }}
   }}
 }}

@@ -15,8 +15,8 @@ from app.runtime.remote_provisioning import (
     worker_ctl_path,
     worker_state_dir,
 )
-from app.worker_agent.inspection import _managed_by
-from app.worker_agent.process_env import child_environ
+from app.worker_tools.inspection import _managed_by
+from app.worker_tools.process_env import child_environ
 
 
 def test_config_environment_is_preserved_without_worker_credentials():
@@ -62,10 +62,9 @@ def _provisioner(monkeypatch):
     commands, files = [], {}
     wheel = b"worker-package"
     digest = hashlib.sha256(wheel).hexdigest()
-    monkeypatch.setattr(remote_provisioning, "agent_wheel", lambda: ("worker.whl", wheel))
+    monkeypatch.setattr(remote_provisioning, "worker_tools_wheel", lambda: ("worker.whl", wheel))
     monkeypatch.setattr(worker.settings, "gateway_openai_base", "http://gateway.invalid:8110")
     monkeypatch.setattr(worker.settings, "mcp_resource_server_url", "http://mcp.invalid:8201/mcp")
-    monkeypatch.setattr(worker.settings, "worker_agent_gateway_url", "ws://gateway.invalid/connect")
 
     async def command(text, timeout=30):
         commands.append(text)
@@ -84,21 +83,11 @@ def _provisioner(monkeypatch):
     monkeypatch.setattr(worker, "_write_atomic_if_changed", write)
     monkeypatch.setattr(worker, "_ensure_safe", AsyncMock())
     monkeypatch.setattr(worker, "_native_idle", AsyncMock(return_value=True))
-    monkeypatch.setattr(
-        worker,
-        "_enroll_worker",
-        AsyncMock(
-            side_effect=[
-                SimpleNamespace(token="worker-token-canary", agent_worker_id="71", epoch=1),
-                SimpleNamespace(token="worker-token-next", agent_worker_id="71", epoch=3),
-            ]
-        ),
-    )
     return worker, commands, files
 
 
 @pytest.mark.asyncio
-async def test_install_writes_ctl_and_start_all_without_systemd_and_rotates_token(monkeypatch):
+async def test_install_writes_ctl_and_start_all_without_network_agent(monkeypatch):
     worker, commands, files = _provisioner(monkeypatch)
     await worker._install_worker(AsyncMock())
 
@@ -111,19 +100,20 @@ async def test_install_writes_ctl_and_start_all_without_systemd_and_rotates_toke
     assert not any("opencode-71.env" in path for path in files)
 
     env_bytes = files["/etc/nexus/worker-71.env"][0]
-    assert b"NEXUS_WORKER_TOKEN=worker-token-canary" in env_bytes
+    assert b"NEXUS_WORKER_TOKEN" not in env_bytes
+    assert b"NEXUS_WORKER_GATEWAY_URL" not in env_bytes
+    assert b"NEXUS_WORKER_OPENCODE_URL=http://127.0.0.1:14096" in env_bytes
     assert f"NEXUS_WORKER_STATE_DIR={worker_state_dir(71)}".encode() in env_bytes
     assert b"NEXUS_GIT_CREDENTIAL_REVISION=cred-rev-71" in env_bytes
 
     ctl_script = files[ctl_file][0].decode("utf-8")
     assert "fcntl.flock" in ctl_script
-    assert "app.worker_agent" in ctl_script
+    assert "app.worker_tools" in ctl_script
     assert any(f"{ctl_file}" in cmd and "restart" in cmd for cmd in commands)
 
     commands.clear()
     await worker._install_worker(AsyncMock())
-    assert any(f"{ctl_file}" in cmd and "restart" in cmd for cmd in commands)
-    assert worker._enroll_worker.await_count == 2
+    assert any(f"{ctl_file}" in cmd and "start" in cmd for cmd in commands)
 
 
 def test_health_reports_supervisor_managed_by(monkeypatch):

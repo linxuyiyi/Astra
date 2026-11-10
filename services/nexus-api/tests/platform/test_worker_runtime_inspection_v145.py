@@ -2,29 +2,23 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import subprocess
 import sys
 import threading
-import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
 
-from app.worker_agent.connection import AgentConfig, WorkerConnectionManager, handle_command
-from app.worker_agent.inspection import (
+from app.worker_tools.inspection import (
     inspect_runtime,
     inspect_runtime_from_payload,
     skill_content_hash,
     status_summary,
 )
-from app.worker_agent.supervisor import RuntimeSupervisor
-from app.worker_gateway.protocol import envelope
-from tests.platform.test_worker_gateway_faults import _auth_reply
 
 CANARY = "sk-canary-secret-value"
 URL_USERINFO = "git-user-info-canary"
@@ -248,7 +242,7 @@ def test_worker_artifact_imports_without_control_plane_runtime():
         "            raise ImportError('blocked control-plane runtime')\n"
         "        return None\n"
         "sys.meta_path.insert(0, Block())\n"
-        "from app.worker_agent import inspection\n"
+        "from app.worker_tools import inspection\n"
         "assert inspection._local_config_path() is not None\n"
         "print('ok')\n"
     )
@@ -321,342 +315,15 @@ def test_missing_gateway_credentials_still_blocks_configuration(tmp_path, openco
 def test_payload_cannot_supply_paths_urls_or_shell(tmp_path: Path, opencode_server):
     _state, base = opencode_server
     workspace = _repo(tmp_path / "ws", remote="https://example.test/org/repo.git")
-    message = envelope(
-        request_id="req-inspect",
-        agent_worker_id="wrk_agent",
-        session_id=None,
-        message_type="command",
-        payload={
-            "name": "inspect_runtime",
-            "data": {
-                "expected_skills": ["alpha"],
-                "expected_mcp": ["nexus-library"],
-                "expected_model": "custom-relay/route-1",
-                "expected_opencode_version": "1.18.33",
-                "workspace": "/nonexistent",
-                "opencode_url": "http://127.0.0.1:1",
-                "config_path": "/etc/passwd",
-                "shell": "touch /tmp/should-not-run",
-            },
-        },
-    )
-
-    result, error = handle_command(
-        message,
-        RuntimeSupervisor(),
-        workspace_root=str(workspace),
-        opencode_url=base,
-    )
-
-    assert error is None
+    result = inspect_runtime_from_payload(base, str(workspace), {
+        "expected_skills": ["alpha"], "expected_mcp": ["nexus-library"],
+        "expected_opencode_version": "1.18.33", "workspace": "/nonexistent",
+        "opencode_url": "http://127.0.0.1:1", "config_path": "/etc/passwd",
+        "shell": "touch /tmp/should-not-run",
+    })
     assert result is not None
     assert result["repository"]["url"] == "https://example.test/org/repo.git"
     assert result["opencode"]["status"] == "healthy"
-
-
-class _Hold:
-    def __init__(self, inbound: list[dict]) -> None:
-        self.inbound = list(inbound)
-        self.sent: list[dict] = []
-        self.release = asyncio.Event()
-
-    async def send(self, message: dict) -> None:
-        self.sent.append(message)
-
-    async def recv(self) -> dict:
-        if self.inbound:
-            return self.inbound.pop(0)
-        await self.release.wait()
-        raise ConnectionError("closed")
-
-    async def close(self) -> None:
-        return
-
-
-def _inspect_command(request_id: str, epoch: int = 3) -> dict:
-    message = envelope(
-        request_id=request_id,
-        agent_worker_id="wrk_agent",
-        session_id=None,
-        message_type="command",
-        payload={
-            "name": "inspect_runtime",
-            "data": {
-                "expected_skills": ["alpha"],
-                "expected_mcp": ["nexus-library"],
-                "expected_model": "custom-relay/route-1",
-                "expected_opencode_version": "1.18.33",
-            },
-        },
-    )
-    message.epoch = epoch
-    message.expires_at = int(time.time()) + 60
-    return message.to_dict()
-
-
-def _heartbeat_ping(epoch: int = 3) -> dict:
-    message = envelope(
-        request_id="hb-1",
-        agent_worker_id="wrk_agent",
-        session_id=None,
-        message_type="heartbeat",
-        payload={"kind": "ping"},
-    )
-    message.epoch = epoch
-    message.expires_at = int(time.time()) + 60
-    return message.to_dict()
-
-
-class _ControlTransport:
-    def __init__(self, inbound: list[dict]) -> None:
-        self.inbound = list(inbound)
-        self.sent: list[dict] = []
-        self.socket_release = asyncio.Event()
-
-    async def send(self, message: dict) -> None:
-        self.sent.append(message)
-
-    async def recv(self) -> dict:
-        if self.inbound:
-            return self.inbound.pop(0)
-        await self.socket_release.wait()
-        raise ConnectionError("closed")
-
-    async def close(self) -> None:
-        return
-
-
-def _slow_inspection(monkeypatch, *, release: threading.Event) -> dict:
-    state = {"calls": 0, "current": 0, "peak": 0}
-    lock = threading.Lock()
-
-    def slow(*_args, **_kwargs):
-        with lock:
-            state["calls"] += 1
-            state["current"] += 1
-            state["peak"] = max(state["peak"], state["current"])
-        release.wait(5)
-        with lock:
-            state["current"] -= 1
-        return {
-            "opencode": {"status": "healthy", "version": "1.18.33", "error": None},
-            "model": {
-                "status": "healthy",
-                "configured": True,
-                "authenticated": True,
-                "model": "custom-relay/route-1",
-                "error": None,
-            },
-            "mcp": {"status": "healthy", "connected": True, "missing": [], "error": None},
-            "skills": {"status": "healthy", "discovered": [], "missing": [], "error": None},
-            "repository": {
-                "status": "healthy",
-                "url": "https://example.test/org/repo.git",
-                "branch": "main",
-                "commit": "abc",
-                "dirty": False,
-                "error": None,
-            },
-            "checked_at": "2026-10-19T00:00:00+00:00",
-        }
-
-    monkeypatch.setattr("app.worker_agent.inspection.inspect_runtime_from_payload", slow)
-    return state
-
-
-def _manager(base: str, workspace: Path) -> WorkerConnectionManager:
-    config = AgentConfig(
-        gateway_url="ws://nexus.internal/api/worker-gateway/connect",
-        agent_worker_id="wrk_agent",
-        token="wtk_test",
-        ping_seconds=3600,
-        opencode_url=base,
-        workspace_root=str(workspace),
-    )
-    return WorkerConnectionManager(config, supervisor=RuntimeSupervisor())
-
-
-async def test_slow_inspection_does_not_block_heartbeat_and_dedups(
-    monkeypatch, tmp_path: Path, opencode_server
-):
-    _state, base = opencode_server
-    workspace = _repo(tmp_path / "ws", remote="https://example.test/org/repo.git")
-    release = threading.Event()
-    counters = _slow_inspection(monkeypatch, release=release)
-    manager = _manager(base, workspace)
-    transport = _ControlTransport(
-        [
-            _auth_reply(),
-            _inspect_command("req-a"),
-            _inspect_command("req-a"),
-            _inspect_command("req-b"),
-            _heartbeat_ping(),
-        ]
-    )
-    task = asyncio.create_task(manager.run_session(transport))
-
-    for _ in range(100):
-        if any(
-            item["type"] == "heartbeat" and item["payload"].get("kind") == "pong" for item in transport.sent
-        ):
-            break
-        await asyncio.sleep(0.02)
-
-    assert any(
-        item["type"] == "heartbeat" and item["payload"].get("kind") == "pong" for item in transport.sent
-    )
-    assert any(item["payload"].get("stage") == "duplicate" for item in transport.sent)
-    assert counters["calls"] == 1
-
-    release.set()
-    for _ in range(100):
-        if len([item for item in transport.sent if item["payload"].get("stage") == "result"]) >= 2:
-            break
-        await asyncio.sleep(0.02)
-
-    assert counters["calls"] == 2
-    assert counters["peak"] == 1
-    transport.socket_release.set()
-    with pytest.raises(ConnectionError):
-        await asyncio.wait_for(task, 5)
-
-
-async def test_epoch_switch_discards_old_inspection_result(monkeypatch, tmp_path: Path, opencode_server):
-    _state, base = opencode_server
-    workspace = _repo(tmp_path / "ws", remote="https://example.test/org/repo.git")
-    release = threading.Event()
-    counters = _slow_inspection(monkeypatch, release=release)
-    manager = _manager(base, workspace)
-    transport = _ControlTransport([_auth_reply(), _inspect_command("req-old")])
-    task = asyncio.create_task(manager.run_session(transport))
-
-    for _ in range(100):
-        if counters["calls"] == 1:
-            break
-        await asyncio.sleep(0.02)
-    manager.epoch = 4
-    release.set()
-
-    for _ in range(100):
-        if not manager.control_tasks:
-            break
-        await asyncio.sleep(0.02)
-
-    assert not [item for item in transport.sent if item["payload"].get("stage") == "result"]
-    transport.socket_release.set()
-    with pytest.raises(ConnectionError):
-        await asyncio.wait_for(task, 5)
-    assert manager.control_tasks == {}
-
-
-def _restart_command(workspace: Path, port: int, request_id: str = "req-restart") -> dict:
-    message = envelope(
-        request_id=request_id,
-        agent_worker_id="wrk_agent",
-        session_id=None,
-        message_type="command",
-        payload={
-            "name": "restart_opencode",
-            "data": {"workspace": str(workspace), "port": port},
-        },
-    )
-    message.epoch = 3
-    message.expires_at = int(time.time()) + 60
-    return message.to_dict()
-
-
-async def test_disconnect_gate_stops_queued_restart_before_side_effect(monkeypatch, tmp_path: Path):
-    workspace = tmp_path / "ws"
-    workspace.mkdir()
-    manager = _manager("http://127.0.0.1:14096", workspace)
-    manager.supervisor = RuntimeSupervisor(
-        port=14096,
-        opencode_bin="opencode",
-        enabled=True,
-    )
-    manager.supervisor._loop = asyncio.get_running_loop()
-    entered = threading.Event()
-    release = threading.Event()
-
-    def slow_native_idle(_workspace, _port, *, gate=None):
-        entered.set()
-        release.wait(5)
-        if gate is not None:
-            gate()
-        return False
-
-    calls: list[str] = []
-
-    async def _unexpected_stop():
-        calls.append("stop")
-
-    monkeypatch.setattr("app.worker_agent.supervisor.assert_native_idle", slow_native_idle)
-    monkeypatch.setattr(
-        manager.supervisor,
-        "_terminate_child",
-        _unexpected_stop,
-    )
-    transport = _ControlTransport([_auth_reply(), _restart_command(workspace, 14096)])
-    task = asyncio.create_task(manager.run_session(transport))
-
-    for _ in range(100):
-        if entered.is_set():
-            break
-        await asyncio.sleep(0.02)
-    manager.epoch = 4
-    release.set()
-
-    for _ in range(100):
-        if not manager.control_tasks:
-            break
-        await asyncio.sleep(0.02)
-
-    assert calls == []
-    assert not [item for item in transport.sent if item["payload"].get("stage") == "result"]
-    transport.socket_release.set()
-    with pytest.raises(ConnectionError):
-        await asyncio.wait_for(task, 5)
-
-
-async def test_socket_disconnect_does_not_restart_and_result_has_no_canary(
-    tmp_path: Path, opencode_server, monkeypatch
-):
-    # This test owns transport/disconnect/canary behavior. Git auth is covered
-    # by the real HTTP git-http-backend tests, so keep this fixture local and
-    # deterministic instead of depending on external DNS.
-    monkeypatch.setattr(
-        "app.worker_agent.inspection._verify_remote_read",
-        lambda *_args, **_kwargs: (True, None),
-    )
-    _state, base = opencode_server
-    workspace = _repo(tmp_path / "ws", remote="https://example.test/org/repo.git")
-    config = AgentConfig(
-        gateway_url="ws://nexus.internal/api/worker-gateway/connect",
-        agent_worker_id="wrk_agent",
-        token="wtk_test",
-        ping_seconds=3600,
-        opencode_url=base,
-        workspace_root=str(workspace),
-    )
-    supervisor = RuntimeSupervisor()
-    manager = WorkerConnectionManager(config, supervisor=supervisor)
-    transport = _Hold([_auth_reply(), _inspect_command("req-inspect")])
-    task = asyncio.create_task(manager.run_session(transport))
-
-    for _ in range(100):
-        if any(item["payload"].get("stage") == "result" for item in transport.sent):
-            break
-        await asyncio.sleep(0.02)
-    transport.release.set()
-    with pytest.raises(ConnectionError):
-        await asyncio.wait_for(task, 5)
-
-    results = [item for item in transport.sent if item["payload"].get("stage") == "result"]
-    assert len(results) == 1
-    result = results[0]["payload"]["result"]
-    assert result["opencode"]["status"] == "healthy"
-    assert CANARY not in json.dumps(result, ensure_ascii=False)
-    assert supervisor.restart_count == 0
 
 
 def test_skill_body_hash_strips_frontmatter_and_ignores_empty_content():

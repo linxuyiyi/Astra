@@ -1,4 +1,5 @@
 import asyncio
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -51,7 +52,7 @@ class RemoteExecChannel:
 
     async def terminate(self) -> None:
         if not self._channel.closed:
-            await _run_blocking(self._channel.close)
+            await asyncio.to_thread(self._channel.close)
         if self._returncode is None:
             self._returncode = -15
 
@@ -116,6 +117,21 @@ class SSHSession:
 
         return RemoteExecChannel(await _run_blocking(open_channel))
 
+    async def open_forward(self, port: int, origin: tuple[str, int]):
+        transport = self._client.get_transport()
+        if transport is None or not transport.is_active():
+            raise ConnectionError("SSH 连接已断开")
+        channel = await _run_blocking(
+            lambda: transport.open_channel(
+                "direct-tcpip", ("127.0.0.1", port), origin, timeout=self.connect_timeout
+            )
+        )
+        channel.setblocking(False)
+        return channel
+
+    async def forward_local(self, port: int):
+        return await LocalForward.create(self, port)
+
     async def hold_lock(self, paths: list[str]) -> RemoteExecChannel:
         """An SSH-owned flock is released on disconnect; no remote lock daemon."""
         import shlex
@@ -132,14 +148,39 @@ class SSHSession:
             await channel.close()
             raise
 
-    async def run_command(self, command: str) -> tuple[int, str, str]:
-        channel = await self.open_exec(command)
+    async def run_command(self, command: str, *, stdin: bytes | None = None) -> tuple[int, str, str]:
+        channel = await self.open_exec(command, keep_stdin=stdin is not None)
+
+        def exchange():
+            # One thread drains both outputs while feeding stdin, so concurrent
+            # commands cannot exhaust the pool with blocked stream readers.
+            remote = channel._channel
+            remote.setblocking(False)
+            pending = memoryview(stdin or b"")
+            out, err = bytearray(), bytearray()
+            eof_sent = stdin is None
+            while True:
+                if pending and remote.send_ready():
+                    sent = remote.send(pending[:65536])
+                    if not sent:
+                        raise ConnectionError("SSH 命令输入中断")
+                    pending = pending[sent:]
+                if not pending and not eof_sent:
+                    remote.shutdown_write()
+                    eof_sent = True
+                if remote.recv_ready():
+                    out.extend(remote.recv(65536))
+                if remote.recv_stderr_ready():
+                    err.extend(remote.recv_stderr(65536))
+                if remote.exit_status_ready() and not remote.recv_ready() and not remote.recv_stderr_ready():
+                    code = remote.recv_exit_status()
+                    if code < 0:
+                        raise ConnectionError("SSH 未返回退出码，远端执行结果未知")
+                    return code, out, err
+                time.sleep(0.01)
+
         try:
-            stdout, stderr, exit_code = await asyncio.gather(
-                channel.stdout.read(),
-                channel.stderr.read(),
-                channel.wait(),
-            )
+            exit_code, stdout, stderr = await _run_blocking(exchange)
             return (
                 exit_code,
                 stdout.decode("utf-8", errors="replace"),
@@ -172,4 +213,95 @@ class SSHSession:
         await _run_blocking(write)
 
     async def close(self) -> None:
-        await _run_blocking(self._client.close)
+        await asyncio.to_thread(self._client.close)
+
+
+class LocalForward:
+    """一个 loopback 监听器，所有 HTTP/SSE TCP 通道复用同一 SSH Transport。"""
+
+    def __init__(self, ssh: SSHSession, remote_port: int):
+        self.ssh, self.remote_port = ssh, remote_port
+        self.connections: set[asyncio.Task] = set()
+
+    @classmethod
+    async def create(cls, ssh, remote_port):
+        forward = cls(ssh, remote_port)
+        forward.server = await asyncio.start_server(forward._accept, "127.0.0.1", 0)
+        return forward
+
+    @property
+    def base_url(self):
+        return f"http://127.0.0.1:{self.server.sockets[0].getsockname()[1]}"
+
+    async def _accept(self, reader, writer):
+        task = asyncio.current_task()
+        self.connections.add(task)
+        channel = None
+        channel_fd = None
+        pumps = []
+        loop = asyncio.get_running_loop()
+        try:
+            channel = await self.ssh.open_forward(self.remote_port, writer.get_extra_info("peername"))
+            readable = asyncio.Event()
+            channel_fd = channel.fileno()
+            loop.add_reader(channel_fd, readable.set)
+
+            async def upstream():
+                while data := await reader.read(65536):
+                    view = memoryview(data)
+                    while view:
+                        try:
+                            sent = channel.send(view)
+                        except TimeoutError:
+                            await asyncio.sleep(0.01)
+                            continue
+                        if not sent:
+                            return
+                        view = view[sent:]
+                channel.shutdown_write()
+
+            async def downstream():
+                while True:
+                    await readable.wait()
+                    readable.clear()
+                    while True:
+                        try:
+                            data = channel.recv(65536)
+                        except TimeoutError:
+                            break
+                        if not data:
+                            return
+                        writer.write(data)
+                        await writer.drain()
+
+            pumps = [asyncio.create_task(upstream()), asyncio.create_task(downstream())]
+            done, _ = await asyncio.wait(pumps, return_when=asyncio.FIRST_COMPLETED)
+            for completed in done:
+                completed.result()
+        except (OSError, EOFError, paramiko.SSHException):
+            pass  # HTTP/SSE observes EOF; its owner reconnects and reconciles.
+        finally:
+            for pump in pumps:
+                pump.cancel()
+            await asyncio.gather(*pumps, return_exceptions=True)
+            if channel is not None:
+                if channel_fd is not None:
+                    loop.remove_reader(channel_fd)
+                try:
+                    channel.close()
+                except (OSError, EOFError):
+                    pass
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except OSError:
+                pass
+            self.connections.discard(task)
+
+    async def close(self):
+        self.server.close()
+        await self.server.wait_closed()
+        connections = list(self.connections)
+        for connection in connections:
+            connection.cancel()
+        await asyncio.gather(*connections, return_exceptions=True)

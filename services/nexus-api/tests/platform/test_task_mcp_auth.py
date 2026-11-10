@@ -39,7 +39,23 @@ async def mcp(monkeypatch):
             ]
         )
         await db.commit()
-    monkeypatch.setattr("app.task_mcp.SessionLocal", factory)
+    import httpx
+    from fastapi import FastAPI
+
+    from app.api.task_tool_routes import router
+    from app.database import get_session
+
+    api = FastAPI()
+    api.include_router(router)
+    async def session():
+        async with factory() as db:
+            yield db
+    api.dependency_overrides[get_session] = session
+    monkeypatch.setenv("NEXUS_INTERNAL_KEY", "mcp-internal-test")
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr("app.task_mcp.httpx.AsyncClient", lambda **kwargs: real_client(
+        **kwargs, transport=httpx.ASGITransport(app=api),
+    ))
     yield build_mcp_server(), factory
     await engine.dispose()
 
@@ -108,3 +124,50 @@ def test_task_mcp_initializes_and_lists_tools_without_business_context():
         assert {"nexus_task_get", "nexus_task_create", "nexus_task_reply"} <= {
             item["name"] for item in tools.json()["result"]["tools"]
         }
+
+
+async def test_internal_task_tools_require_key_and_reject_private_methods(monkeypatch):
+    import httpx
+
+    from app.main import app
+
+    monkeypatch.setenv("NEXUS_INTERNAL_KEY", "internal-route-test")
+    root = "/api/v1/internal/task-tools"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        assert (await client.post(root + "/categories", json={})).status_code == 401
+        assert (await client.post(root + "/categories", json={}, headers={
+            "X-Nexus-Internal-Key": "wrong",
+        })).status_code == 401
+        valid = {"X-Nexus-Internal-Key": "internal-route-test"}
+        assert (await client.post(root + "/categories", json={}, headers=valid)).status_code == 200
+        assert (await client.post(root + "/_runtime", json={}, headers=valid)).status_code == 422
+        assert (await client.get("/api/worker-gateway/health")).status_code == 404
+
+
+async def test_task_mcp_calls_control_api_without_owning_ssh(monkeypatch):
+    import json
+
+    import httpx
+
+    from app.runtime.worker_connection import connections
+
+    async def no_ssh(*args, **kwargs):
+        raise AssertionError("Task MCP 不能直接建立 SSH")
+
+    monkeypatch.setattr(connections, "get", no_ssh)
+    monkeypatch.setenv("NEXUS_INTERNAL_KEY", "mcp-route-test")
+    seen = []
+
+    def respond(request):
+        seen.append(request)
+        assert request.headers["X-Nexus-Internal-Key"] == "mcp-route-test"
+        assert json.loads(request.content) == {"task_id": "T-mcp"}
+        return httpx.Response(200, json={"ok": True, "task_id": "T-mcp", "status": "RUNNING"})
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr("app.task_mcp.httpx.AsyncClient", lambda **kwargs: real_client(
+        **kwargs, transport=httpx.MockTransport(respond),
+    ))
+    result = await build_mcp_server().call_tool("nexus_task_get", {"task_id": "T-mcp"})
+    assert result.structured_content["status"] == "RUNNING"
+    assert len(seen) == 1 and seen[0].url.path == "/api/v1/internal/task-tools/get"

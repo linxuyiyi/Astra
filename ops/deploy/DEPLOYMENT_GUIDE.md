@@ -69,7 +69,7 @@ sudo bash ops/deploy/install_nexus.sh --action stop
 | --- | --- | --- |
 | 浏览器 Web、页面 API、SSE | `https://主IP:443` | Nginx HTTPS，代理 Nexus API |
 | 控制机内部 API / AgentScope / Task 与 Schedule MCP | `http://127.0.0.1:18130` | Nginx 回环监听，代理 `/api/`、`/agentscope/`、`/mcp/task` 和 `/mcp/schedule` |
-| Worker 专用入口 | `http://主IP:18130` | 指定 CIDR；仅 `/v1/`、`/mcp`、精确 Worker WebSocket 连接与 `/api/worker-gateway/data/`，保留 token/epoch 鉴权，其余 404 |
+| Worker 专用入口 | `http://主IP:18130` | 指定 CIDR；仅模型 `/v1/` 和图书馆 `/mcp`，其余 404。控制机通过 SSH 隧道访问 Worker 的 OpenCode loopback HTTP/SSE |
 | Nexus API / 网关 | `127.0.0.1:18120` / `127.0.0.1:18110` | 同容器内部 |
 | AgentScope | `127.0.0.1:18000` | 同容器内部 |
 | Library / Task / Schedule MCP | `127.0.0.1:18201/18202/18203` | 同容器内部，Library 经专用入口提供给 Worker |

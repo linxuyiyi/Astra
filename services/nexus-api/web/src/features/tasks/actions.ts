@@ -16,7 +16,7 @@ export function taskActions(task: Task): RowMenuItem[] {
   const pending = Boolean(task.pending_message_id)
   const assigned = Boolean(task.agent_worker_id)
   const active = task.status === 'RUNNING' || task.status === 'WAITING'
-  const terminal = task.status === 'SUCCEEDED' || task.status === 'CANCELED'
+  const terminal = ['SUCCEEDED', 'CANCELED', 'FAILED'].includes(task.status)
   if (task.status === 'PENDING' && assigned) add('start', '开始', pending || !!task.current_session_id)
   if (task.status === 'RUNNING') add('pause', '停止回复')
   if (active && task.current_session_id && task.waiting_reason !== 'session_missing') {
@@ -30,7 +30,7 @@ export function taskActions(task: Task): RowMenuItem[] {
     add('edit', '编辑')
     add('stop', '取消任务')
   }
-  if (assigned && (task.status === 'CANCELED' || (task.status === 'WAITING' && task.waiting_reason === 'session_missing'))) {
+  if (assigned && (['CANCELED', 'FAILED'].includes(task.status) || (task.status === 'WAITING' && task.waiting_reason === 'session_missing'))) {
     add('restart', '重新开始', pending)
   }
   if (active && task.current_session_id) add('reconnect', '重新检查连接')

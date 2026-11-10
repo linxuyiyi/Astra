@@ -14,7 +14,8 @@ from app.executors.errors import OpenCodeSessionNotFound
 from app.executors.opencode_local_server import LocalOpenCodeServerExecutor
 from app.executors.opencode_server import OpenCodeServerClient
 from app.models import AgentWorker, Task
-from app.runtime.worker_client import WorkerOpenCodeClient
+from app.runtime.ssh_operations import run_worker_operation
+from app.runtime.worker_connection import connections
 from app.runtime.worker_files import environment_uses_worker
 
 
@@ -68,13 +69,10 @@ async def connect(environment, *, start: bool = False):
             await LocalOpenCodeServerExecutor(environment, settings).ensure_ready()
         yield OpenCodeServerClient(settings)
         return
-    if await environment_uses_worker(environment):
-        client = WorkerOpenCodeClient(settings, agent_worker_id=environment.id)
-        if start:
-            await client.health()
-        yield client
-        return
-    raise RuntimeError("远程环境尚未安装 Worker")
+    if start:
+        await connections.probe(environment)
+    connection = await connections.get(environment)
+    yield connection.client()
 
 
 async def _local_git(args: list[str]) -> tuple[int, str, str]:
@@ -224,8 +222,7 @@ async def prepare_workspace(task: Task, environment, *, reuse_existing: bool = T
 
 
 async def _prepare_worker_workspace(environment, *, root: str, target: str, reuse_existing: bool) -> None:
-    client = WorkerOpenCodeClient(get_settings(), agent_worker_id=environment.id)
-    await client.run_command(
-        "prepare_workspace",
+    await run_worker_operation(
+        environment, "prepare_workspace",
         {"root": root, "target": target, "reuse_existing": reuse_existing},
     )

@@ -23,8 +23,8 @@
       <el-descriptions :column="2" border>
         <el-descriptions-item label="主机">{{ worker.host || '—' }}</el-descriptions-item>
         <el-descriptions-item label="工作区">{{ worker.workspace_root }}</el-descriptions-item>
-        <el-descriptions-item label="连接代次">{{ worker.epoch }}</el-descriptions-item>
-        <el-descriptions-item label="最后心跳">{{ formatTime(worker.last_heartbeat_at) }}</el-descriptions-item>
+        <el-descriptions-item label="OpenCode 端口">{{ worker.opencode_port || '待部署' }}</el-descriptions-item>
+        <el-descriptions-item label="最后检查">{{ formatTime(worker.last_checked_at) }}</el-descriptions-item>
         <el-descriptions-item label="占用任务" :span="2"><WorkerOccupiedTasks :tasks="worker.occupied_tasks" /></el-descriptions-item>
       </el-descriptions>
       <WorkerMaintenancePanel :key="worker.id" :worker="worker" :health="health" />

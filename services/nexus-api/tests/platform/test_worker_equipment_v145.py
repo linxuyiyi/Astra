@@ -21,7 +21,6 @@ from app.runtime.worker_readiness import (
 from app.runtime.worker_readiness import (
     build_repository_summary as repository_payload,
 )
-from app.worker_agent import __version__ as WORKER_AGENT_VERSION
 
 CANARY = "sk-canary-secret-value"
 
@@ -56,7 +55,6 @@ def _desired() -> dict:
     mcp_items = [{"name": "nexus-library", "url": "https://mcp.example.test/mcp", "required": True}]
     return {
         "opencode": {"version": "1.18.33"},
-        "worker_agent": {"version": WORKER_AGENT_VERSION},
         "model": {"name": "nexus-gateway/route-1", "route": "route-1", "provider": "nexus-gateway"},
         "repository": {
             "url": "https://example.test/org/repo.git",
@@ -119,8 +117,6 @@ def _observation(desired: dict | None = None) -> dict:
             "error": None,
         },
         "checked_at": "2026-10-19T00:00:00+00:00",
-        "worker_agent_version": want["worker_agent"]["version"],
-        "observed_epoch": 7,
         "source": "worker",
         "error": None,
     }

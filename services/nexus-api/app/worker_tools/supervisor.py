@@ -25,7 +25,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import IO
 
-from app.worker_agent.process_env import child_environ
+from app.worker_tools.process_env import child_environ
 
 Gate = Callable[[], None]
 
@@ -250,7 +250,6 @@ class OpenCodeSupervisor:
         workspace_root: str = "",
         agent_worker_id: str | None = None,
         environ: Mapping[str, str] | None = None,
-        on_state_change: Callable[[], None] | None = None,
         health_interval_seconds: float = 5.0,
         backoff_min_seconds: float = 1.0,
         backoff_max_seconds: float = 30.0,
@@ -265,7 +264,6 @@ class OpenCodeSupervisor:
         self.workspace_root = workspace_root
         self.agent_worker_id = agent_worker_id
         self._environ = dict(environ) if environ is not None else None
-        self._on_state_change = on_state_change
         self.health_interval_seconds = health_interval_seconds
         self.backoff_min_seconds = backoff_min_seconds
         self.backoff_max_seconds = backoff_max_seconds
@@ -281,29 +279,6 @@ class OpenCodeSupervisor:
         self._stdout_task: asyncio.Task[None] | None = None
         self._monitor_task: asyncio.Task[None] | None = None
         self._stopping = asyncio.Event()
-        self._wake_monitor = asyncio.Event()
-        self._restart_lock = asyncio.Lock()
-        self._restarting = False
-        self._loop: asyncio.AbstractEventLoop | None = None
-
-    def set_state_change_callback(self, callback: Callable[[], None] | None) -> None:
-        self._on_state_change = callback
-
-    def notify_state_change(self) -> None:
-        if self._on_state_change is None:
-            return
-        if self._loop is not None and self._loop.is_running():
-            self._loop.call_soon_threadsafe(self._on_state_change)
-        else:
-            self._on_state_change()
-
-    def on_connection_lost(self) -> None:
-        """网关网络断连不重启本地 OpenCode 子进程。"""
-
-        return
-
-    def on_process_exit(self, _code: int) -> None:
-        self.restart_count += 1
 
     @property
     def pid(self) -> int | None:
@@ -314,7 +289,6 @@ class OpenCodeSupervisor:
     async def start(self) -> None:
         if not self.enabled:
             return
-        self._loop = asyncio.get_running_loop()
         self._stopping.clear()
         spawned = await self._spawn_child()
         if spawned:
@@ -323,56 +297,11 @@ class OpenCodeSupervisor:
 
     async def stop(self) -> None:
         self._stopping.set()
-        self._wake_monitor.set()
         if self._monitor_task is not None:
             self._monitor_task.cancel()
             await asyncio.gather(self._monitor_task, return_exceptions=True)
             self._monitor_task = None
         await self._terminate_child()
-
-    async def restart(self, *, gate: Gate | None = None) -> None:
-        if not self.enabled:
-            raise RuntimeError("当前 Worker 未启用内置 OpenCode 监管器，无法重启")
-        async with self._restart_lock:
-            await asyncio.to_thread(assert_native_idle, self.workspace_root, self.port, gate=gate)
-            if gate is not None:
-                gate()
-            self._restarting = True
-            self._wake_monitor.set()
-            try:
-                await self._terminate_child()
-                if gate is not None:
-                    gate()
-                self._tail.clear()
-                spawned = await self._spawn_child()
-                if not spawned:
-                    self.notify_state_change()
-                    raise RuntimeError(self.last_error or "OpenCode 启动失败")
-                healthy = await self._wait_until_healthy_or_exit(
-                    timeout=self.ready_timeout_seconds,
-                    gate=gate,
-                )
-                if not healthy:
-                    self.notify_state_change()
-                    raise RuntimeError(self.last_error or "OpenCode 重载后健康检查失败")
-                self.restart_count += 1
-                self.last_error = None
-                self.notify_state_change()
-            finally:
-                self._restarting = False
-                self._wake_monitor.set()
-
-    def restart_from_thread(self, *, gate: Gate | None = None, timeout: float = 30.0) -> None:
-        if not self.enabled:
-            raise RuntimeError("当前 Worker 未启用内置 OpenCode 监管器，无法重启")
-        if self._loop is None or not self._loop.is_running():
-            raise RuntimeError("OpenCode 监管器事件循环未运行，无法重启")
-        future = asyncio.run_coroutine_threadsafe(self.restart(gate=gate), self._loop)
-        try:
-            future.result(timeout=timeout)
-        except TimeoutError:
-            future.cancel()
-            raise
 
     async def _spawn_child(self) -> bool:
         workspace = Path(self.workspace_root) if self.workspace_root else None
@@ -483,14 +412,6 @@ class OpenCodeSupervisor:
         consecutive_unhealthy = 0
 
         while not self._stopping.is_set():
-            if self._restarting:
-                self._wake_monitor.clear()
-                await self._wait_event_or_timeout(self._wake_monitor, 0.2)
-                healthy_since = time.monotonic() if self.last_error is None else None
-                consecutive_unhealthy = 0
-                attempt = 0
-                continue
-
             proc = self._proc
             if proc is None or proc.returncode is not None:
                 if proc is not None and proc.returncode is not None:
@@ -501,7 +422,6 @@ class OpenCodeSupervisor:
                     self.restart_count += 1
                     self.last_error = self._format_failure(f"OpenCode 进程异常退出 (exit={proc.returncode})")
                     healthy_since = None
-                    self.notify_state_change()
 
                 delay = min(
                     self.backoff_max_seconds,
@@ -510,24 +430,19 @@ class OpenCodeSupervisor:
                 attempt = min(attempt + 1, 30)
                 if await self._sleep_unless_stopping(delay):
                     return
-                if self._restarting:
-                    continue
                 self._tail.clear()
                 spawned = await self._spawn_child()
                 if not spawned:
-                    self.notify_state_change()
                     continue
                 healthy = await self._wait_until_healthy_or_exit(timeout=self.ready_timeout_seconds)
                 if healthy:
                     self.last_error = None
                     healthy_since = time.monotonic()
                     consecutive_unhealthy = 0
-                self.notify_state_change()
                 continue
 
-            self._wake_monitor.clear()
             exited = await self._wait_proc_or_interval(proc, self.health_interval_seconds)
-            if self._stopping.is_set() or self._restarting:
+            if self._stopping.is_set():
                 continue
             if exited:
                 continue
@@ -541,7 +456,6 @@ class OpenCodeSupervisor:
                     attempt = 0
                 if self.last_error is not None:
                     self.last_error = None
-                    self.notify_state_change()
                 continue
 
             consecutive_unhealthy += 1
@@ -550,25 +464,23 @@ class OpenCodeSupervisor:
                 healthy_since = None
                 self.restart_count += 1
                 self.last_error = self._format_failure("OpenCode 健康探活连续超时")
-                self.notify_state_change()
                 await self._terminate_child()
 
     async def _wait_proc_or_interval(self, proc: asyncio.subprocess.Process, interval: float) -> bool:
         proc_task = asyncio.create_task(proc.wait())
-        wake_task = asyncio.create_task(self._wake_monitor.wait())
         stop_task = asyncio.create_task(self._stopping.wait())
         try:
             done, _ = await asyncio.wait(
-                {proc_task, wake_task, stop_task},
+                {proc_task, stop_task},
                 timeout=max(interval, 0.05),
                 return_when=asyncio.FIRST_COMPLETED,
             )
             return proc_task in done
         finally:
-            for task in (proc_task, wake_task, stop_task):
+            for task in (proc_task, stop_task):
                 if not task.done():
                     task.cancel()
-            await asyncio.gather(proc_task, wake_task, stop_task, return_exceptions=True)
+            await asyncio.gather(proc_task, stop_task, return_exceptions=True)
 
     async def _sleep_unless_stopping(self, delay: float) -> bool:
         try:
@@ -577,12 +489,6 @@ class OpenCodeSupervisor:
         except TimeoutError:
             return self._stopping.is_set()
 
-    @staticmethod
-    async def _wait_event_or_timeout(event: asyncio.Event, timeout: float) -> None:
-        try:
-            await asyncio.wait_for(event.wait(), timeout=timeout)
-        except TimeoutError:
-            return
 
 
 def _terminate_process_group(pid: int, sig: signal.Signals) -> None:
@@ -595,6 +501,3 @@ def _terminate_process_group(pid: int, sig: signal.Signals) -> None:
         os.kill(pid, sig)
     except OSError:
         pass
-
-
-RuntimeSupervisor = OpenCodeSupervisor

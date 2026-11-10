@@ -25,7 +25,7 @@ from app.services import acceptance_criteria as normalize_criteria
 from app.state_machine import InvalidTransition
 from nexus_api.db_models import employees
 
-_CONCLUDED = {TaskStatus.SUCCEEDED.value, TaskStatus.CANCELED.value}
+_CONCLUDED = {TaskStatus.SUCCEEDED.value, TaskStatus.CANCELED.value, TaskStatus.FAILED.value}
 
 
 def _text(value: str | None) -> str:

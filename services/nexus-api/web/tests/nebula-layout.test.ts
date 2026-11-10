@@ -34,7 +34,7 @@ function worker(id: string, owner: string, overrides: Partial<NebulaWorker> = {}
     taskCount: 1,
     runningTaskCount: 1,
     waitingTaskCount: 0,
-    lastHeartbeatAt: null,
+    lastCheckedAt: null,
     ...overrides,
   }
 }

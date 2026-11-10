@@ -39,7 +39,7 @@ const active = computed(() => props.tasks.filter((task) => !isHistory(task)).sli
 const history = computed(() => props.tasks.filter((task) => isHistory(task)).slice().sort((a, b) => a.title.localeCompare(b.title, 'zh')))
 
 function isHistory(task: PlatformTask) {
-  return task.status === 'SUCCEEDED' || task.status === 'CANCELED'
+  return ['SUCCEEDED', 'CANCELED', 'FAILED'].includes(task.status)
 }
 
 function byRank(a: PlatformTask, b: PlatformTask) {

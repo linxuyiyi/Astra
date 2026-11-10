@@ -23,7 +23,6 @@ def test_process_defaults_do_not_collide_with_v09():
         "database name",
         "database user",
         "redis db",
-        "redis prefix",
         "celery queue",
         "managed processes",
         "opt and etc paths",

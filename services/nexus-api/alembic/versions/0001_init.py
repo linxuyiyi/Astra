@@ -39,10 +39,9 @@ def upgrade():
         sa.Column("branch", sa.String(length=255), nullable=True),
         sa.Column("skill_refs", sa.JSON(), nullable=False),
         sa.Column("mcp_refs", sa.JSON(), nullable=False),
-        sa.Column("token_digest", sa.String(length=64), nullable=True),
-        sa.Column("epoch", sa.Integer(), nullable=False),
-        sa.Column("last_heartbeat_at", app.models.UTCDateTime(), nullable=True),
-        sa.Column("agent_version", sa.String(length=64), nullable=True),
+        sa.Column("opencode_port", sa.Integer(), nullable=True),
+        sa.Column("last_checked_at", app.models.UTCDateTime(), nullable=True),
+        sa.Column("opencode_version", sa.String(length=64), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -1167,13 +1166,6 @@ def upgrade():
         op.f("ix_t_nexus_task_categories_sort_order"), "t_nexus_task_categories", ["sort_order"], unique=False
     )
     op.create_table(
-        "t_nexus_worker_http_slots",
-        sa.Column("agent_worker_id", sa.String(length=80), nullable=False),
-        sa.Column("epoch", sa.Integer(), nullable=False),
-        sa.Column("inflight", sa.Integer(), server_default="0", nullable=False),
-        sa.PrimaryKeyConstraint("agent_worker_id", "epoch"),
-    )
-    op.create_table(
         "t_nexus_gateway_nodes",
         sa.Column("id", sa.String(length=64), nullable=False),
         sa.Column("name", sa.String(length=160), nullable=False),
@@ -1290,49 +1282,6 @@ def upgrade():
     op.create_index(op.f("ix_t_nexus_tasks_status"), "t_nexus_tasks", ["status"], unique=False)
     op.create_index(op.f("ix_t_nexus_tasks_task_type"), "t_nexus_tasks", ["task_type"], unique=False)
     op.create_index("ix_tasks_dispatch", "t_nexus_tasks", ["status", "priority", "created_at"], unique=False)
-    op.create_table(
-        "t_nexus_worker_commands",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("request_id", sa.String(length=80), nullable=False),
-        sa.Column("agent_worker_id", sa.String(length=64), nullable=False),
-        sa.Column("session_id", sa.String(length=160), nullable=True),
-        sa.Column("name", sa.String(length=64), nullable=False),
-        sa.Column("payload", sa.JSON(), nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("epoch", sa.Integer(), nullable=False),
-        sa.Column("result", sa.JSON(), nullable=True),
-        sa.Column("error_code", sa.String(length=64), nullable=True),
-        sa.Column("deadline_at", app.models.UTCDateTime(), nullable=True),
-        sa.Column("body_fetched_at", app.models.UTCDateTime(), nullable=True),
-        sa.Column("delivery_attempts", sa.Integer(), server_default="0", nullable=False),
-        sa.Column("delivery_state", sa.String(length=16), server_default="unpublished", nullable=False),
-        sa.Column("slot_held", sa.Boolean(), server_default="0", nullable=False),
-        sa.Column("last_dispatched_at", app.models.UTCDateTime(), nullable=True),
-        sa.Column("dispatched_epoch", sa.Integer(), nullable=True),
-        sa.Column("created_at", app.models.UTCDateTime(), nullable=False),
-        sa.Column("updated_at", app.models.UTCDateTime(), nullable=False),
-        sa.Column("finished_at", app.models.UTCDateTime(), nullable=True),
-        sa.ForeignKeyConstraint(["agent_worker_id"], ["t_nexus_agent_workers.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_commands_agent_worker_id"),
-        "t_nexus_worker_commands",
-        ["agent_worker_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_commands_request_id"), "t_nexus_worker_commands", ["request_id"], unique=True
-    )
-    op.create_index(
-        op.f("ix_t_nexus_worker_commands_status"), "t_nexus_worker_commands", ["status"], unique=False
-    )
-    op.create_index(
-        "ix_worker_commands_status_deadline",
-        "t_nexus_worker_commands",
-        ["status", "deadline_at"],
-        unique=False,
-    )
     op.create_table(
         "t_nexus_worker_maintenance_operations",
         sa.Column("id", sa.String(length=64), nullable=False),

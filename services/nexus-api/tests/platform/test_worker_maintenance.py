@@ -15,7 +15,7 @@ from app.models import WorkerMaintenanceOperation
 from app.runtime.maintenance import (
     submit_operation,
 )
-from app.runtime.remote_provisioning import agent_wheel
+from app.runtime.remote_provisioning import worker_tools_wheel
 
 ACTOR_HEADERS = {"X-Owner-Id": "admin-test"}
 
@@ -27,7 +27,6 @@ def maintenance_settings(monkeypatch):
     monkeypatch.setattr(settings, "mcp_transport", "streamable-http")
     monkeypatch.setattr(settings, "gateway_openai_base", "http://10.0.0.8:8110")
     monkeypatch.setattr(settings, "mcp_resource_server_url", "http://10.0.0.8:8201/mcp")
-    monkeypatch.setattr(settings, "worker_agent_gateway_url", "ws://10.0.0.8:8100/api/worker-gateway/connect")
 
 
 async def make_operation(worker_id: str, action: str = "deploy") -> WorkerMaintenanceOperation:
@@ -68,11 +67,11 @@ async def expire_lease(operation_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_agent_wheel_is_reproducible_and_named_for_nexus():
-    name1, bytes1 = agent_wheel()
-    name2, bytes2 = agent_wheel()
+def test_worker_tools_wheel_is_reproducible_and_named_for_nexus():
+    name1, bytes1 = worker_tools_wheel()
+    name2, bytes2 = worker_tools_wheel()
     assert name1 == name2
-    assert name1.startswith("nexus_worker_agent-")
+    assert name1.startswith("nexus_worker_tools-")
     assert bytes1 == bytes2
 
 

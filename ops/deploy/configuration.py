@@ -402,7 +402,6 @@ def initialize(values, root, state, dialog, addresses=None):
         "NEXUS_SCHEDULE_MCP_URL": local_proxy + "/mcp/schedule",
         "NEXUS_GATEWAY_OPENAI_BASE": worker_proxy + "/v1",
         "NEXUS_MCP_RESOURCE_SERVER_URL": worker_proxy + "/mcp",
-        "NEXUS_WORKER_AGENT_GATEWAY_URL": f"ws://{current}:{port}/api/worker-gateway/connect",
     }
     for key, value in derived.items():
         if key in values and values[key] != value:
@@ -410,7 +409,6 @@ def initialize(values, root, state, dialog, addresses=None):
         values[key] = value
     for key in (
         "NEXUS_INTERNAL_KEY",
-        "NEXUS_WORKER_GATEWAY_ADMIN_KEY",
         "NEXUS_GATEWAY_API_KEY",
     ):
         if not values.get(key):

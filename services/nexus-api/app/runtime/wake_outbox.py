@@ -13,6 +13,7 @@ _TERMINAL_OR_WAITING = {
     TaskStatus.SUCCEEDED,
     TaskStatus.WAITING,
     TaskStatus.CANCELED,
+    TaskStatus.FAILED,
 }
 
 

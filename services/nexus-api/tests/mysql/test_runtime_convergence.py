@@ -15,9 +15,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.models import AgentWorker, Task, TaskCategory, WorkerMaintenanceOperation
 from app.runtime.dispatcher import Dispatcher
 from app.runtime.maintenance import submit_operation
-from app.worker_gateway.bus import MemoryRouteBus
-from app.worker_gateway.protocol import envelope
-from app.worker_gateway.service import WorkerGateway
 
 pytestmark = pytest.mark.skipif(not os.environ.get("ASTRA_TEST_MYSQL_URL"), reason="需要独立 MySQL 测试实例")
 
@@ -27,7 +24,7 @@ async def mysql_case():
     url = make_url(os.environ["ASTRA_TEST_MYSQL_URL"])
     assert url.get_backend_name() == "mysql" and "test" in (url.database or "")
     name = "nexus_v150_test_" + uuid4().hex
-    admin = create_async_engine(url.set(drivername="mysql+asyncmy", database=None))
+    admin = create_async_engine(url.set(drivername="mysql+asyncmy", database="mysql"))
     async with admin.begin() as connection:
         await connection.execute(text(f"CREATE DATABASE `{name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_bin"))
     scoped = url.set(drivername="mysql+asyncmy", database=name)
@@ -103,63 +100,58 @@ async def test_concurrent_maintenance_is_exclusive(mysql_case):
         assert await db.scalar(select(func.count()).select_from(WorkerMaintenanceOperation)) == 1
 
 
-async def test_gateway_old_epoch_cannot_disconnect_or_reply(mysql_case):
-    gateway = WorkerGateway(bus=MemoryRouteBus())
-    async with mysql_case() as db:
-        enrolled = await gateway.enroll(db, "worker")
-        auth = envelope(
-            request_id="auth",
-            agent_worker_id="worker",
-            session_id=None,
-            message_type="command",
-            payload={"name": "authenticate"},
-        )
-        first = await gateway.authenticate(db, auth, enrolled.token)
-    async with mysql_case() as db:
-        second = await gateway.authenticate(db, auth, enrolled.token)
-        assert second.epoch > first.epoch
-    async with mysql_case() as db:
-        await gateway.disconnect(db, "worker", first.epoch)
-    async with mysql_case() as db:
-        assert (await db.get(AgentWorker, "worker")).status == "IDLE"
-        assert not await gateway.epoch_is_current(db, "worker", first.epoch)
 
 
-async def test_worker_deletion_respects_mysql_foreign_keys(mysql_case):
-    from app.api.worker_routes import delete_worker
-    from app.models import Event, WorkerCommand, WorkerHttpSlot
+
+
+async def test_empty_mysql_schema_matches_final_models_exactly(mysql_case):
+    from sqlalchemy import inspect
+
+    from app.sql_storage import metadata
 
     async with mysql_case() as db:
-        db.add(
-            Task(
-                id="finished",
-                title="已完成任务",
-                task_type="ISSUE",
-                category_id="cat",
-                status="SUCCEEDED",
-                agent_worker_id="worker",
-            )
-        )
-        db.add(
-            WorkerCommand(
-                request_id="http_finished", agent_worker_id="worker", name="http", status="succeeded", epoch=2
-            )
-        )
-        db.add(WorkerHttpSlot(agent_worker_id="worker", epoch=2, inflight=0))
+        connection = await db.connection()
+
+        def verify(sync):
+            inspector = inspect(sync)
+            tables = metadata().tables
+            assert set(inspector.get_table_names()) == set(tables) | {"alembic_version"}
+            for name, table in tables.items():
+                assert {column["name"] for column in inspector.get_columns(name)} == set(table.columns.keys())
+            assert "t_nexus_worker_commands" not in tables
+            assert "t_nexus_worker_http_slots" not in tables
+
+        await connection.run_sync(verify)
+
+
+async def test_ssh_health_disconnect_keeps_task_occupancy_and_paused_state(mysql_case, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from app.runtime import worker_connection
+    from app.runtime.occupancy import occupying_clause
+
+    monkeypatch.setattr(worker_connection, "SessionLocal", mysql_case)
+    probe = AsyncMock(side_effect=[ConnectionError("SSH disconnected"), {"version": "1.18.35"}])
+    monkeypatch.setattr(worker_connection.connections, "probe", probe)
+    async with mysql_case() as db:
+        worker = await db.get(AgentWorker, "worker")
+        worker.opencode_port = 14096
+        db.add(Task(id="active", title="task", task_type="ISSUE", agent_worker_id="worker", status="RUNNING"))
         await db.commit()
-        db.add(
-            Event(
-                task_id="finished",
-                employee_id="worker",
-                event_type="TASK_SUCCEEDED",
-                phase="work",
-                message="已确认",
-            )
-        )
+        db.expunge(worker)
+    assert not await worker_connection.check_worker(worker)
+    async with mysql_case() as db:
+        assert (await db.get(AgentWorker, "worker")).status == "OFFLINE"
+        assert (await db.get(Task, "active")).status == "RUNNING"
+        assert await db.scalar(select(Task.id).where(occupying_clause("worker"))) == "active"
+    assert await worker_connection.check_worker(worker)
+    async with mysql_case() as db:
+        fresh = await db.get(AgentWorker, "worker")
+        assert fresh.status == "WORKING" and fresh.last_checked_at
+        fresh.status = "PAUSED"
         await db.commit()
-        await delete_worker("worker", db)
-        assert await db.get(AgentWorker, "worker") is None
-        assert (await db.get(Task, "finished")).agent_worker_id is None
-        assert (await db.scalar(select(Event).where(Event.task_id == "finished"))).employee_id is None
-        assert await db.scalar(select(WorkerCommand)) is None
-        assert await db.scalar(select(WorkerHttpSlot)) is None
+    probe.side_effect = ConnectionError("SSH disconnected again")
+    assert not await worker_connection.check_worker(worker)
+    async with mysql_case() as db:
+        assert (await db.get(AgentWorker, "worker")).status == "PAUSED"
+        assert await db.scalar(select(Task.id).where(occupying_clause("worker"))) == "active"

@@ -107,11 +107,11 @@ def _prompt_event() -> dict:
     }
 
 
-def _gap_event() -> dict:
+def _connected_event() -> dict:
     return {
-        "type": "astra.event_gap",
+        "type": "server.connected",
         "directory": "/srv/worker/task",
-        "reason": "worker_reconnected",
+        "reason": "connected",
         "detail": f"lost {VALUE}",
     }
 
@@ -171,7 +171,7 @@ def _unwrap(chunk: str, global_stream: bool) -> dict:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("global_stream", [False, True])
 async def test_sse_redacts_tool_part_canaries_on_both_event_modes(monkeypatch, global_stream):
-    client = _RemoteClient([_tool_event(), _prompt_event(), _usage_event(), _gap_event()])
+    client = _RemoteClient([_tool_event(), _prompt_event(), _usage_event(), _connected_event()])
     environment = SimpleNamespace(mode="LINUX_REMOTE", id="7")
 
     @asynccontextmanager
@@ -196,14 +196,13 @@ async def test_sse_redacts_tool_part_canaries_on_both_event_modes(monkeypatch, g
         if item.get("type") == "message.part.updated" and item["properties"]["part"]["type"] == "text"
     )
     usage = next(item for item in events if item.get("type") == "message.updated")
-    gap = next(item for item in events if item.get("type") == "astra.event_gap")
+
     assert tool["type"] == "message.part.updated"
     state = tool["properties"]["part"]["state"]
     state_input = state["input"]
     assert state_input["command"] == "curl -H 'Authorization: Bearer [redacted]'"
     assert state["output"] == "echo [redacted]"
     assert prompt["properties"]["part"]["text"] == "user prompt [redacted] please"
-    assert gap["detail"] == "lost [redacted]"
     assert state_input["request"]["headers"] == {"accept": "application/json"}
     assert state_input["request"]["body"] == {"options": {}, "model": "keep-model"}
     assert state_input["nested"] == {"one": {"two": {"name": "kept"}}}
@@ -434,7 +433,7 @@ async def test_remote_workspace_loads_secret_values_through_the_connected_client
 @pytest.mark.asyncio
 async def test_failed_remote_config_keeps_cached_secrets(monkeypatch):
     secret = "stale-cache-canary-value"
-    environment = SimpleNamespace(mode="LINUX_REMOTE", id="11", worker_epoch=4)
+    environment = SimpleNamespace(mode="LINUX_REMOTE", id="11")
     clock = {"now": 1_000.0}
     monkeypatch.setattr("app.api.workspace_routes.time.monotonic", lambda: clock["now"])
     state = {"fail": False}
@@ -465,7 +464,7 @@ async def test_failed_remote_config_keeps_cached_secrets(monkeypatch):
     assert secret in stale
     assert client.reads == 4
 
-    cold = SimpleNamespace(mode="LINUX_REMOTE", id="12", worker_epoch=4)
+    cold = SimpleNamespace(mode="LINUX_REMOTE", id="12")
     empty = await load_proxy_secrets("/srv/missing", cold, client)
     assert secret not in empty
 
@@ -474,7 +473,7 @@ async def test_failed_remote_config_keeps_cached_secrets(monkeypatch):
 async def test_remote_secret_cache_is_per_workspace(monkeypatch):
     secret = "workspace-cache-canary-value"
     other = "other-workspace-canary-value"
-    environment = SimpleNamespace(mode="LINUX_REMOTE", id="21", worker_epoch=2)
+    environment = SimpleNamespace(mode="LINUX_REMOTE", id="21")
     calls: list[tuple[str, str]] = []
 
     class Client:
@@ -504,7 +503,7 @@ async def test_remote_secret_cache_is_per_workspace(monkeypatch):
 @pytest.mark.asyncio
 async def test_partial_config_read_keeps_cached_secret_values(monkeypatch):
     secret = "partial-config-canary-value"
-    environment = SimpleNamespace(mode="LINUX_REMOTE", id="22", worker_epoch=1)
+    environment = SimpleNamespace(mode="LINUX_REMOTE", id="22")
     clock = {"now": 5_000.0}
     monkeypatch.setattr("app.api.workspace_routes.time.monotonic", lambda: clock["now"])
     state = {"config": "ok"}
@@ -546,7 +545,7 @@ async def test_partial_config_read_keeps_cached_secret_values(monkeypatch):
     assert secret in still
     assert client.reads == 6
 
-    cold = SimpleNamespace(mode="LINUX_REMOTE", id="23", worker_epoch=1)
+    cold = SimpleNamespace(mode="LINUX_REMOTE", id="23")
     missing = await load_proxy_secrets("/srv/cold", cold, client)
     assert secret not in missing
     after_miss = client.reads

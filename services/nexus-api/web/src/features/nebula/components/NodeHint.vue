@@ -34,7 +34,7 @@
         <div><dt>占用</dt><dd>{{ occupancyText(worker.occupancy) }}</dd></div>
         <div><dt>关联任务</dt><dd>{{ worker.taskCount }} 项</dd></div>
         <div><dt>执行环境</dt><dd>{{ worker.environmentName || "—" }}</dd></div>
-        <div><dt>最近心跳</dt><dd>{{ formatTime(worker.lastHeartbeatAt) }}</dd></div>
+        <div><dt>最近检查</dt><dd>{{ formatTime(worker.lastCheckedAt) }}</dd></div>
       </dl>
 
       <dl v-if="kind === 'execution' && execution" class="hint-facts">

@@ -47,10 +47,9 @@ def test_web_uses_https_and_internal_services_use_http(network_config):
 def test_worker_http_is_acl_limited_and_management_paths_are_not_proxied(network_config):
     worker = network_config[network_config.index("listen 7.1.2.3:19130") :]
     assert "allow 7.0.0.0/8;" in worker and "deny all;" in worker
-    assert "location = /api/worker-gateway/connect" in worker
+    assert "worker-gateway" not in worker
     assert "location = /mcp" in worker
     assert "location / { return 404; }" in worker
-    assert "location ^~ /api/worker-gateway/data/" in worker
     assert "location /api/" not in worker
     assert "Authorization" not in network_config  # 原请求鉴权由上游验证，不由代理伪造。
 

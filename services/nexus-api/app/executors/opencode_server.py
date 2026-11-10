@@ -70,17 +70,12 @@ class OpenCodeServerClient:
         body: Any = None,
         query: dict[str, Any] | None = None,
         include_headers: bool = False,
-        command_request_id: str | None = None,
-        session_id: str | None = None,
-        task_id: str | None = None,
     ) -> Any:
         params = dict(query or {})
         if directory:
             params["directory"] = str(directory)
         try:
-            status, content, headers = await self.exchange(
-                method, path, params=params, body=body, session_id=session_id, task_id=task_id
-            )
+            status, content, headers = await self.exchange(method, path, params=params, body=body)
         except httpx.TimeoutException as exc:
             raise OpenCodeExecutionTimeout(str(exc)) from exc
         except httpx.TransportError as exc:
@@ -101,10 +96,8 @@ class OpenCodeServerClient:
         *,
         params: dict[str, Any] | None = None,
         body: Any = None,
-        session_id: str | None = None,
-        task_id: str | None = None,
     ) -> tuple[int, bytes, dict[str, str]]:
-        async with httpx.AsyncClient(auth=self.auth, timeout=self._timeout()) as client:
+        async with httpx.AsyncClient(auth=self.auth, timeout=self._timeout(), trust_env=False) as client:
             response = await client.request(
                 method,
                 f"{self.base_url}{path}",
@@ -116,7 +109,7 @@ class OpenCodeServerClient:
 
     async def health(self) -> dict[str, Any]:
         try:
-            async with httpx.AsyncClient(auth=self.auth, timeout=3) as client:
+            async with httpx.AsyncClient(auth=self.auth, timeout=self._timeout(), trust_env=False) as client:
                 response = await client.get(f"{self.base_url}/global/health")
                 response.raise_for_status()
                 payload = response.json()
@@ -135,7 +128,9 @@ class OpenCodeServerClient:
     async def events(
         self, directory: WorkspacePath, *, on_subscribed: Callable[[], None] | None = None
     ) -> AsyncIterator[dict[str, Any]]:
-        async with httpx.AsyncClient(auth=self.auth, timeout=self._timeout(stream=True)) as client:
+        async with httpx.AsyncClient(
+            auth=self.auth, timeout=self._timeout(stream=True), trust_env=False
+        ) as client:
             async with client.stream(
                 "GET",
                 f"{self.base_url}/event",
@@ -171,7 +166,7 @@ class OpenCodeServerClient:
         return await self.request("POST", "/session", directory=directory, body=body)
 
     async def session(self, directory: WorkspacePath, session_id: str) -> dict[str, Any]:
-        return await self.request("GET", f"/session/{session_id}", directory=directory, session_id=session_id)
+        return await self.request("GET", f"/session/{session_id}", directory=directory)
 
     async def prompt(
         self,
@@ -193,13 +188,10 @@ class OpenCodeServerClient:
             f"/session/{session_id}/prompt_async",
             directory=directory,
             body=body,
-            session_id=session_id,
         )
 
     async def messages(self, directory: WorkspacePath, session_id: str) -> list[dict[str, Any]]:
-        return await self.request(
-            "GET", f"/session/{session_id}/message", directory=directory, session_id=session_id
-        )
+        return await self.request("GET", f"/session/{session_id}/message", directory=directory)
 
     async def messages_page(
         self, directory: WorkspacePath, session_id: str, *, limit: int, before: str | None = None
@@ -213,14 +205,11 @@ class OpenCodeServerClient:
             directory=directory,
             query=query,
             include_headers=True,
-            session_id=session_id,
         )
         return {"messages": messages, "next_before": headers.get("x-next-cursor")}
 
     async def children(self, directory: WorkspacePath, session_id: str) -> list[dict[str, Any]]:
-        return await self.request(
-            "GET", f"/session/{session_id}/children", directory=directory, session_id=session_id
-        )
+        return await self.request("GET", f"/session/{session_id}/children", directory=directory)
 
     async def questions(self, directory: WorkspacePath) -> list[dict[str, Any]]:
         return await self.request("GET", "/question", directory=directory)
@@ -259,13 +248,12 @@ class OpenCodeServerClient:
         )
 
     async def abort(self, directory: WorkspacePath, session_id: str) -> bool:
-        return bool(
-            await self.request(
-                "POST", f"/session/{session_id}/abort", directory=directory, session_id=session_id
-            )
-        )
+        return bool(await self.request("POST", f"/session/{session_id}/abort", directory=directory))
 
     async def status(self, directory: WorkspacePath, session_id: str) -> str:
         await self.session(directory, session_id)
-        statuses = await self.request("GET", "/session/status", directory=directory, session_id=session_id)
-        return str((statuses.get(session_id) or {"type": "idle"}).get("type"))
+        statuses = await self.request("GET", "/session/status", directory=directory)
+        state = (statuses.get(session_id) or {"type": "idle"}).get("type")
+        if state not in {"idle", "busy", "retry"}:
+            raise OpenCodeServerCapabilityError(f"OpenCode 返回未知 Session 状态: {state}")
+        return state

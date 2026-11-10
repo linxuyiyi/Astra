@@ -32,6 +32,7 @@ from app.models import (
     AgentWorker,
     Task,
 )
+from app.runtime.worker_connection import worker_connections
 from app.worker_presentation import worker_display_name
 
 from .db import connect
@@ -46,6 +47,7 @@ RUNNING = "RUNNING"
 WAITING = "WAITING"
 SUCCEEDED = "SUCCEEDED"
 CANCELED = "CANCELED"
+FAILED = "FAILED"
 
 COUNTED_STATUSES = (PENDING, RUNNING, WAITING)
 PREVIEW_STATUSES = (PENDING, RUNNING, WAITING)
@@ -197,17 +199,6 @@ async def _worker_task_counts(session: AsyncSession) -> dict[str, dict[str, int]
     return dict(result)
 
 
-def _worker_health(
-    worker: AgentWorker,
-    environment: AgentWorker | None,
-    instance: AgentWorker | None,
-    *,
-    now: datetime,
-    stale_after: timedelta,
-) -> str:
-    return "offline" if worker.status in {"OFFLINE", "PAUSED"} else "online"
-
-
 def _worker_occupancy(counts: dict[str, int]) -> str:
     if counts.get("waiting"):
         return "waiting"
@@ -216,30 +207,21 @@ def _worker_occupancy(counts: dict[str, int]) -> str:
     return "idle"
 
 
-def _worker_dto(
-    worker: AgentWorker,
-    environment: AgentWorker | None,
-    instance: AgentWorker | None,
-    counts: dict[str, int],
-    *,
-    now: datetime,
-    stale_after: timedelta,
-) -> dict[str, Any]:
-    health = _worker_health(worker, environment, instance, now=now, stale_after=stale_after)
+def _worker_dto(worker: AgentWorker, counts: dict[str, int], *, online: bool) -> dict[str, Any]:
     labels = list(worker.task_types or [])
     return {
         "id": worker.id,
         "name": worker_display_name(worker),
         "capabilityLabels": labels,
-        "environmentMode": environment.mode if environment else None,
-        "environmentName": environment.name if environment else None,
-        "modelName": environment.model_name if environment else None,
-        "health": health,
+        "environmentMode": worker.mode,
+        "environmentName": worker.name,
+        "modelName": worker.model_name,
+        "health": "online" if online else "offline",
         "occupancy": _worker_occupancy(counts),
         "taskCount": int(counts.get("running", 0)) + int(counts.get("waiting", 0)),
         "runningTaskCount": int(counts.get("running", 0)),
         "waitingTaskCount": int(counts.get("waiting", 0)),
-        "lastHeartbeatAt": _iso(instance.last_heartbeat_at if instance else None),
+        "lastCheckedAt": _iso(worker.last_checked_at),
     }
 
 
@@ -491,10 +473,6 @@ async def _collect_core(
     now: datetime,
     owner_id: str | None = None,
 ) -> dict[str, Any]:
-    settings = get_settings()
-    stale_after = timedelta(
-        seconds=settings.worker_gateway_ping_seconds + settings.worker_gateway_ping_timeout_seconds
-    )
     start, end, timezone_name = _day_window(now)
 
     employee_rows = _employee_rows(connection)
@@ -510,38 +488,31 @@ async def _collect_core(
     unassigned_tasks = 0
 
     workers: list[AgentWorker] = []
-    instances: dict[str, AgentWorker] = {}
     worker_task_counts: dict[str, dict[str, int]] = {}
     worker_owner: dict[str, str] = {}
     worker_known: set[str] = set()
     try:
-        workers, instances = await _load_workers(session)
+        workers, _instances = await _load_workers(session)
         worker_task_counts = await _worker_task_counts(session)
     except SQLAlchemyError:
         logger.exception("Nebula 无法读取 Worker 事实")
         degraded.extend(["workers", "tasks"])
         workers = []
-        instances = {}
         worker_task_counts = {}
 
     for worker in workers:
         worker_known.add(worker.id)
 
     worker_names = {worker.id: worker_display_name(worker) for worker in workers}
-    worker_dtos: list[dict[str, Any]] = []
-    for worker in workers:
-        environment = worker
-        instance = instances.get(environment.id) if environment is not None else None
-        worker_dtos.append(
-            _worker_dto(
-                worker,
-                environment,
-                instance,
-                worker_task_counts.get(worker.id, {"running": 0, "waiting": 0}),
-                now=now,
-                stale_after=stale_after,
-            )
+    online = await worker_connections(workers)
+    worker_dtos = [
+        _worker_dto(
+            worker,
+            worker_task_counts.get(worker.id, {"running": 0, "waiting": 0}),
+            online=online[worker.id],
         )
+        for worker in workers
+    ]
 
     active_tasks: list[Task] = []
     queued_tasks: list[Task] = []
@@ -1486,6 +1457,7 @@ async def nebula_employee_tasks(
         WAITING,
         SUCCEEDED,
         CANCELED,
+        FAILED,
     }:
         raise HTTPException(status_code=422, detail="未知任务状态")
     try:
@@ -1517,6 +1489,7 @@ async def nebula_link_tasks(
         WAITING,
         SUCCEEDED,
         CANCELED,
+        FAILED,
     }:
         raise HTTPException(status_code=422, detail="未知任务状态")
     try:

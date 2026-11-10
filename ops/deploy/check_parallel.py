@@ -8,7 +8,6 @@ developer override cannot hide a default collision. Exit 1 when any name overlap
 from __future__ import annotations
 
 import importlib.util
-import inspect
 import os
 import re
 import sys
@@ -23,7 +22,6 @@ V09_DATABASE_NAME = "astra"
 V09_DATABASE_USER = "astra"
 V09_SQLITE_FILE = "astra.db"
 V09_REDIS_DB = "0"
-V09_REDIS_PREFIXES = ("astra:worker-gateway", "astra:gateway:")
 V09_CELERY_APP = "astra"
 V09_CELERY_QUEUE = "control"
 V09_CELERY_TASK_PREFIX = "astra."
@@ -75,7 +73,6 @@ def collect() -> list[tuple[bool, str, str]]:
         agent_venv,
         worker_install_dir,
     )
-    from app.worker_gateway.bus import RedisRouteBus
 
     settings = Settings(_env_file=None)
     service = _load_astra_service()
@@ -86,7 +83,7 @@ def collect() -> list[tuple[bool, str, str]]:
         TASK_PLATFORM / "app" / "runtime" / "remote_provisioning.py"
     ).read_text(encoding="utf-8")
     supervisor = (
-        TASK_PLATFORM / "app" / "worker_agent" / "supervisor.py"
+        TASK_PLATFORM / "app" / "worker_tools" / "supervisor.py"
     ).read_text(encoding="utf-8")
     rows: list[tuple[bool, str, str]] = []
 
@@ -118,13 +115,7 @@ def collect() -> list[tuple[bool, str, str]]:
     )
 
     redis_db = urlparse(settings.redis_url).path.strip("/")
-    prefix = inspect.signature(RedisRouteBus.__init__).parameters["prefix"].default
     add(redis_db == "1" and redis_db != V09_REDIS_DB, "redis db", redis_db)
-    add(
-        prefix == "nexus:worker-gateway" and prefix not in V09_REDIS_PREFIXES,
-        "redis prefix",
-        prefix,
-    )
     add(
         LEASE_KEY.startswith("nexus:gateway:")
         and REVOKED_KEYS_KEY.startswith("nexus:gateway:"),

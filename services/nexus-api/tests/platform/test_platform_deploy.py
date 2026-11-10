@@ -65,7 +65,6 @@ def test_configuration_reinstall_keeps_keys_and_one_canonical_environment(tmp_pa
     assert file.stat().st_mode & 0o777 == 0o600
     assert not list(tmp_path.glob("*.backup-*"))
     assert values["NEXUS_GATEWAY_OPENAI_BASE"] == "http://7.1.2.3:18130/v1"
-    assert values["NEXUS_WORKER_AGENT_GATEWAY_URL"] == "ws://7.1.2.3:18130/api/worker-gateway/connect"
 
 
 def test_unattended_deploy_requires_the_allowed_worker_http_port(tmp_path, monkeypatch):
@@ -81,7 +80,6 @@ def test_changing_http_port_rebuilds_all_proxy_addresses(tmp_path, monkeypatch, 
     derived = cfg.initialize(values, DEPLOY.parents[1], tmp_path, cfg.Dialog(False))
     assert derived["NEXUS_GATEWAY_OPENAI_BASE"] == "http://7.1.2.3:18880/v1"
     assert derived["NEXUS_MCP_RESOURCE_SERVER_URL"] == "http://7.1.2.3:18880/mcp"
-    assert derived["NEXUS_WORKER_AGENT_GATEWAY_URL"] == "ws://7.1.2.3:18880/api/worker-gateway/connect"
     assert derived["NEXUS_API_BASE"] == "http://127.0.0.1:18880"
     assert derived["ASTRA_AGENTSCOPE_BASE_URL"] == "http://127.0.0.1:18880/agentscope"
     assert derived["NEXUS_TASK_MCP_URL"] == "http://127.0.0.1:18880/mcp/task"
@@ -173,7 +171,6 @@ def test_generated_proxy_address_follows_configured_listener(tmp_path, monkeypat
     result = cfg.initialize(values, DEPLOY.parents[1], tmp_path, cfg.Dialog(False))
     assert result["NEXUS_GATEWAY_OPENAI_BASE"] == "http://7.1.2.3:19130/v1"
     assert result["NEXUS_MCP_RESOURCE_SERVER_URL"] == "http://7.1.2.3:19130/mcp"
-    assert result["NEXUS_WORKER_AGENT_GATEWAY_URL"] == "ws://7.1.2.3:19130/api/worker-gateway/connect"
     cfg.save_env(tmp_path / "nexus.env", result)
     assert cfg.parse_env(tmp_path / "nexus.env", cfg.Dialog(False)) == result
 

@@ -129,8 +129,6 @@ class WorkerAssistance:
                 f"/{kind}/{quote(request_id, safe='')}/reply",
                 directory=directory,
                 body=body,
-                session_id=binding.id,
-                task_id=task.id,
             )
             if result is False:
                 raise RuntimeStateError("任务执行端未受理回复，请重新查询")

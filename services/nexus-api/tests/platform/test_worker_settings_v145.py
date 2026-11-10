@@ -45,13 +45,11 @@ def test_old_astra_worker_and_mcp_env_names_are_not_accepted(monkeypatch):
     for name in (
         "NEXUS_MCP_HOST",
         "NEXUS_REMOTE_OPENCODE_VERSION",
-        "NEXUS_WORKER_GATEWAY_BUS",
         "NEXUS_OPENCODE_CONTROL_TIMEOUT_SECONDS",
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("ASTRA_MCP_HOST", "10.9.9.9")
     monkeypatch.setenv("ASTRA_REMOTE_OPENCODE_VERSION", "0.0.1")
-    monkeypatch.setenv("ASTRA_WORKER_GATEWAY_BUS", "redis")
     monkeypatch.setenv("ASTRA_OPENCODE_CONTROL_TIMEOUT_SECONDS", "90")
     with pytest.raises(ValidationError, match="NEXUS_"):
         Settings(_env_file=None)

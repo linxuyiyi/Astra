@@ -523,17 +523,6 @@ def _blocks_start(info: dict[str, Any]) -> bool:
     return port is not None and procman.port_in_use(port)
 
 
-def _provision_gateway_admin_key() -> None:
-    """在拉起 API 之前生成一次管理密钥。失败只告警，不阻止其余服务启动。"""
-
-    try:
-        from app.worker_gateway.admin_key import provision_worker_gateway_admin_key
-
-        provision_worker_gateway_admin_key(ROOT / "ops" / "env" / ".env")
-    except Exception as exc:
-        print(f"[WARN] worker gateway admin key was not provisioned: {exc}")
-
-
 def start(
     mode: str,
     settings: Any,
@@ -551,7 +540,6 @@ def start(
         npm = find_npm()
         prepare(mode, settings, npm, local_command)
         start_opencode(settings, OpenCodeServerManager, processes)
-        _provision_gateway_admin_key()
         start_core(mode, settings, npm, local_command, processes)
         save_state(settings, mode, processes)
     except KeyboardInterrupt:

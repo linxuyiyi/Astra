@@ -9,7 +9,7 @@ import shlex
 from pathlib import PurePosixPath
 from urllib.parse import urlsplit, urlunsplit
 
-from app.worker_agent.jsonc import loads_jsonc
+from app.worker_tools.jsonc import loads_jsonc
 from nexus_api.resources import valid_skill_component
 
 

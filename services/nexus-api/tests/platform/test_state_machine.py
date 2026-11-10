@@ -14,11 +14,12 @@ def test_succeeded_task_cannot_transition_back_to_running():
         TaskStateMachine.validate(TaskStatus.SUCCEEDED, TaskStatus.RUNNING)
 
 
-def test_only_five_business_states_exist():
+def test_only_six_business_states_exist():
     assert {state.value for state in TaskStatus} == {
         "PENDING",
         "RUNNING",
         "WAITING",
         "SUCCEEDED",
         "CANCELED",
+        "FAILED",
     }

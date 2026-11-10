@@ -1,7 +1,7 @@
 """统一 Worker 配置接口；认证摘要、SSH 和 Git 密文均不返回。"""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.routes import validate_category_ids
@@ -15,12 +15,11 @@ from app.models import (
     KnowledgeItem,
     KnowledgeUsage,
     Task,
-    WorkerHttpSlot,
     WorkerMaintenanceOperation,
 )
 from app.runtime.occupancy import OCCUPYING_STATUSES, occupying_exists, sync_worker_occupancy
 from app.runtime.repository import cipher
-from app.runtime.worker_connection import worker_connections
+from app.runtime.worker_connection import connections, worker_connections
 from app.schemas import WorkerCreate, WorkerOccupiedTask, WorkerRead, WorkerWrite
 
 router = APIRouter(prefix="/api/workers")
@@ -140,6 +139,7 @@ async def update_worker(worker_id: str, payload: WorkerWrite, session=Depends(ge
         "mode",
         "host",
         "port",
+        "opencode_port",
         "username",
         "ssh_password",
         "model_name",
@@ -151,22 +151,16 @@ async def update_worker(worker_id: str, payload: WorkerWrite, session=Depends(ge
         "mcp_refs",
     }
     changed = any(key in execution_fields and value != getattr(worker, key) for key, value in values.items())
-    previous_epoch = worker.epoch
     if changed:
         await guard_worker(session, worker)
-        worker.token_digest = None
-        worker.epoch += 1
-        worker.last_heartbeat_at = None
+        worker.last_checked_at = None
+        worker.opencode_version = None
         worker.status = "PAUSED" if worker.status == "PAUSED" else "OFFLINE"
     for key, value in values.items():
         setattr(worker, key, value)
     await session.commit()
     if changed:
-        from app.worker_gateway.service import get_gateway
-
-        gateway = get_gateway()
-        await gateway.bus.clear_owner(worker.id, previous_epoch, None)
-        gateway._close_local_socket(worker.id, previous_epoch)
+        await connections.close(worker.id)
     return (await worker_reads(session, [worker]))[0]
 
 
@@ -180,12 +174,9 @@ async def pause_worker(worker_id: str, session=Depends(get_session)):
 
 @router.post("/{worker_id}/resume", response_model=WorkerRead)
 async def resume_worker(worker_id: str, session=Depends(get_session)):
-    from app.worker_gateway.service import get_gateway
-
     worker = await require_worker(worker_id, session)
-    owner = await get_gateway().bus.get_owner(worker.id)
     local = worker.mode == "LOCAL" and get_settings().executor_type == "opencode_server"
-    worker.status = "IDLE" if local or (owner and owner[1] == worker.epoch) else "OFFLINE"
+    worker.status = "IDLE" if local or connections.online(worker.id) else "OFFLINE"
     await sync_worker_occupancy(session, worker.id)
     await session.commit()
     return (await worker_reads(session, [worker]))[0]
@@ -203,13 +194,7 @@ async def delete_worker(worker_id: str, session=Depends(get_session)):
     )
     for model in (Event, KnowledgeUsage, KnowledgeFeedback):
         await session.execute(update(model).where(model.employee_id == worker_id).values(employee_id=None))
-    previous_epoch = worker.epoch
-    await session.execute(delete(WorkerHttpSlot).where(WorkerHttpSlot.agent_worker_id == worker_id))
     await session.delete(worker)
     await session.commit()
-    from app.worker_gateway.service import get_gateway
-
-    gateway = get_gateway()
-    await gateway.bus.clear_owner(worker_id, previous_epoch, None)
-    gateway._close_local_socket(worker_id, previous_epoch)
+    await connections.close(worker_id)
     return {"deleted": worker_id}

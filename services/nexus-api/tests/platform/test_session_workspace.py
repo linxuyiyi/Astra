@@ -8,7 +8,7 @@ import pytest
 
 from app.api.workspace_routes import redact_secret_fields
 from app.executors.errors import OpenCodeSessionNotFound
-from app.worker_agent.workspace import prepare_workspace_local
+from app.worker_tools.workspace import prepare_workspace_local
 
 
 class NativeServer:

@@ -49,6 +49,9 @@
             worker?.has_ssh_password ? '已保存，留空保持' : '请输入 SSH 密码'
           " /></el-form-item
     ></template>
+    <el-form-item v-if="form.mode === 'LINUX_REMOTE'" label="OpenCode 端口">
+      <el-input-number v-model="form.opencode_port" :disabled="executionLocked" :min="1" :max="65535" placeholder="部署时分配" />
+    </el-form-item>
     <el-form-item label="模型路由"
       ><el-input
         v-model="form.model_name" :disabled="executionLocked"
@@ -106,6 +109,7 @@ const form = reactive({
   mode: worker?.mode || 'LINUX_REMOTE',
   host: worker?.host || '',
   port: worker?.port || 22,
+  opencode_port: worker?.opencode_port ?? undefined,
   username: worker?.username || '',
   model_name: worker?.model_name || '',
   workspace_root: worker?.workspace_root || '/opt/nexus/workspace',

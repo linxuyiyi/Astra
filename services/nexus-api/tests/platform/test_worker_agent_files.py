@@ -14,14 +14,11 @@ from app.worker_tools.files import (
     FileCommandError,
     build_git_argv,
     execute_file_command,
-    map_open_error,
-    open_workspace,
     run_git,
     sweep_partials,
 )
 
-# 这些命令走 Linux openat2/O_PATH；在 Darwin 上调用 syscall 437 会直接触发 SIGSYS。
-pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Worker 文件命令依赖 Linux openat2/O_PATH")
+pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Worker 文件命令依赖 Linux O_PATH/renameat2")
 
 
 def _run(root: Path, workspace: Path, name: str, **payload):
@@ -36,64 +33,50 @@ def _run(root: Path, workspace: Path, name: str, **payload):
     )
 
 
-def test_external_final_symlink_is_rejected_and_deleted_parent_is_not(tmp_path: Path):
+def test_validate_path_allows_only_a_missing_final_component(tmp_path: Path):
+    root = tmp_path / "root"
+    workspace = root / "ws"
+    (workspace / "dir" / "nested").mkdir(parents=True)
+    result, body = _run(root, workspace, "validate_path", path="dir/nested/gone.txt")
+    assert body is None
+    assert result == {"relative": "dir/nested/gone.txt"}
+    with pytest.raises(FileCommandError) as missing:
+        _run(root, workspace, "validate_path", path="dir/missing/gone.txt")
+    assert missing.value.code == "io"
+    with pytest.raises(FileCommandError) as forbidden:
+        _run(root, workspace, "validate_path", path="dir/../other")
+    assert forbidden.value.code == "path_forbidden"
+
+
+@pytest.mark.parametrize("command", ["validate_path", "read_file"])
+def test_file_commands_reject_intermediate_and_final_symlinks(tmp_path: Path, command: str):
     root = tmp_path / "root"
     workspace = root / "ws"
     (workspace / "dir").mkdir(parents=True)
-    (workspace / "link").symlink_to("/etc/passwd")
-    with pytest.raises(FileCommandError) as escaped:
-        _run(root, workspace, "validate_path", path="link")
-    assert escaped.value.code == "symlink_escape"
-    result, body = _run(root, workspace, "validate_path", path="dir/gone.txt")
-    assert body is None
-    assert result == {"relative": "dir/gone.txt"}
+    (workspace / "dir" / "keep").write_bytes(b"inside")
+    (workspace / "dir-link").symlink_to("dir", target_is_directory=True)
+    (workspace / "file-link").symlink_to("dir/keep")
+    (workspace / "outside-link").symlink_to(tmp_path / "missing")
+    for path in ("dir-link/keep", "file-link", "outside-link"):
+        with pytest.raises(FileCommandError) as escaped:
+            _run(root, workspace, command, path=path)
+        assert escaped.value.code == "symlink_escape"
 
-
-def test_absolute_inside_symlink_is_rejected_and_relative_symlink_is_readable(tmp_path: Path):
-    root = tmp_path / "root"
-    workspace = root / "ws"
-    workspace.mkdir(parents=True)
-    (workspace / "keep").write_bytes(b"inside")
-    (workspace / "absolute").symlink_to(workspace / "keep")
-    (workspace / "relative").symlink_to("keep")
-    with pytest.raises(FileCommandError) as escaped:
-        _run(root, workspace, "read_file", path="absolute")
-    assert escaped.value.code == "symlink_escape"
-    meta, body = _run(root, workspace, "read_file", path="relative")
+    meta, body = _run(root, workspace, "read_file", path="dir/keep")
     assert body == b"inside"
     assert meta["missing"] is False
     assert meta["size"] == len(body)
 
 
-def test_open_errors_and_workspace_open_do_not_use_realpath(tmp_path: Path, monkeypatch):
-    assert map_open_error(OSError(errno.EXDEV, "out")).code == "symlink_escape"
-    assert map_open_error(OSError(errno.ELOOP, "loop")).code == "symlink_escape"
-    assert map_open_error(OSError(errno.ENOSYS, "missing")).code == "io"
-    assert map_open_error(OSError(errno.EPERM, "seccomp")).code == "io"
+def test_workspace_open_rejects_symlink_components(tmp_path: Path):
     root = tmp_path / "root"
-    root.mkdir()
-
-    def refuse_realpath(*_args, **_kwargs):
-        raise AssertionError("realpath")
-
-    monkeypatch.setattr(os.path, "realpath", refuse_realpath)
-    directory = open_workspace(str(root), str(root))
-    os.close(directory)
-
-    def fail_open(*_args, **_kwargs):
-        raise OSError(errno.ENOSYS, "openat2")
-
-    monkeypatch.setattr("app.worker_tools.files.openat2", fail_open)
-    with pytest.raises(FileCommandError) as missing:
-        _run(root, root, "validate_path", path=".")
-    assert missing.value.code == "io"
-    monkeypatch.setattr(
-        "app.worker_tools.files.openat2",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError(errno.EPERM, "blocked")),
-    )
-    with pytest.raises(FileCommandError) as blocked:
-        _run(root, root, "validate_path", path=".")
-    assert blocked.value.code == "io"
+    (root / "group" / "workspace").mkdir(parents=True)
+    (root / "group-link").symlink_to("group", target_is_directory=True)
+    (root / "workspace-link").symlink_to("group/workspace", target_is_directory=True)
+    for workspace in (root / "group-link" / "workspace", root / "workspace-link"):
+        with pytest.raises(FileCommandError) as escaped:
+            _run(root, workspace, "git_readonly", operation="head")
+        assert escaped.value.code == "symlink_escape"
 
 
 def test_git_argv_pins_fsmonitor_and_rejects_caller_config(tmp_path: Path, monkeypatch):
@@ -144,8 +127,6 @@ def test_git_argv_pins_fsmonitor_and_rejects_caller_config(tmp_path: Path, monke
     assert (code, output) == (124, b"")
 
 
-
-
 def test_checksum_mismatch_writes_nothing_and_rename_does_not_replace(tmp_path: Path):
     root = tmp_path / "root"
     workspace = root / "ws"
@@ -168,8 +149,6 @@ def test_checksum_mismatch_writes_nothing_and_rename_does_not_replace(tmp_path: 
         )
     assert mismatch.value.code == "checksum_mismatch"
     assert not (workspace / "uploads").exists()
-    directory = open_workspace(str(root), str(workspace))
-    os.close(directory)
     first = _run(
         root,
         workspace,
@@ -181,6 +160,7 @@ def test_checksum_mismatch_writes_nothing_and_rename_does_not_replace(tmp_path: 
         gate=lambda: None,
     )
     assert first[0]["path"].endswith("-a.txt")
+    assert Path(first[0]["path"]).read_bytes() == b"hi"
     from app.worker_tools.files import _rename_noreplace
 
     uploads = os.open(workspace / "uploads", os.O_RDONLY | os.O_DIRECTORY)
@@ -190,8 +170,9 @@ def test_checksum_mismatch_writes_nothing_and_rename_does_not_replace(tmp_path: 
         os.close(source)
         destination = os.open("dest", os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600, dir_fd=uploads)
         os.close(destination)
-        with pytest.raises(OSError):
+        with pytest.raises(FileExistsError) as collision:
             _rename_noreplace(uploads, "source", uploads, "dest")
+        assert collision.value.errno == errno.EEXIST
         assert os.stat("source", dir_fd=uploads).st_size == 3
         assert os.stat("dest", dir_fd=uploads).st_size == 0
     finally:

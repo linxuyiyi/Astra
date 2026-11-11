@@ -1,7 +1,7 @@
 """Local file and read-only Git commands for a migrated Worker.
 
-Paths are opened from the configured workspace root with openat2. The browser
-still talks to Nexus; this module only runs on the Worker host.
+Paths are opened one component at a time from the configured workspace root.
+The browser still talks to Nexus; this module only runs on the Worker host.
 """
 
 from __future__ import annotations
@@ -12,9 +12,11 @@ import hashlib
 import os
 import platform
 import re
+import stat
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import PurePosixPath
 from typing import Any
 from uuid import uuid4
@@ -23,13 +25,7 @@ from app.worker_tools.process_env import child_environ
 
 MAX_FILE_BYTES = 20 * 1024 * 1024
 FILE_COMMANDS = frozenset({"validate_path", "read_file", "git_readonly", "upload_file"})
-# linux/openat2.h. 0x04 is RESOLVE_NO_SYMLINKS and would reject an in-workspace
-# relative symlink that sftp.normalize still accepts.
-_RESOLVE_NO_MAGICLINKS = 0x02
-_RESOLVE_BENEATH = 0x08
-_RESOLVE = _RESOLVE_BENEATH | _RESOLVE_NO_MAGICLINKS
 _RENAME_NOREPLACE = 1
-_OPENAT2 = 437
 _HEX = set("0123456789abcdefABCDEF")
 _PARTIAL_ID = re.compile(r"[A-Za-z0-9._-]{1,80}")
 
@@ -40,37 +36,35 @@ class FileCommandError(Exception):
         super().__init__(message)
 
 
-class _OpenHow(ctypes.Structure):
-    _fields_ = (
-        ("flags", ctypes.c_uint64),
-        ("mode", ctypes.c_uint64),
-        ("resolve", ctypes.c_uint64),
-    )
+def _open_directory(dir_fd: int, name: str) -> int:
+    try:
+        return os.open(name, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+    except NotADirectoryError:
+        # Linux reports ENOTDIR for a symlink opened with O_DIRECTORY.
+        if stat.S_ISLNK(os.stat(name, dir_fd=dir_fd, follow_symlinks=False).st_mode):
+            raise OSError(errno.ELOOP, os.strerror(errno.ELOOP), name) from None
+        raise
 
 
-def openat2(dir_fd: int, path: str, flags: int, *, mode: int = 0) -> int:
-    """Open path beneath dir_fd. ENOSYS and seccomp EPERM stay OSError."""
-
-    how = _OpenHow(flags | os.O_CLOEXEC, mode, _RESOLVE)
-    libc = ctypes.CDLL(None, use_errno=True)
-    fd = libc.syscall(
-        ctypes.c_long(_OPENAT2),
-        ctypes.c_int(dir_fd),
-        ctypes.c_char_p(os.fsencode(path)),
-        ctypes.byref(how),
-        ctypes.c_size_t(ctypes.sizeof(how)),
-    )
-    if fd < 0:
-        err = ctypes.get_errno()
-        raise OSError(err, os.strerror(err), path)
-    return int(fd)
+@contextmanager
+def _open_parent(dir_fd: int, relative: str) -> Iterator[tuple[int, str]]:
+    path = PurePosixPath(relative)
+    if path.is_absolute() or ".." in path.parts:
+        raise FileCommandError("path_forbidden", "不允许访问此路径")
+    parent_fd = os.dup(dir_fd)
+    try:
+        for component in path.parts[:-1]:
+            child_fd = _open_directory(parent_fd, component)
+            os.close(parent_fd)
+            parent_fd = child_fd
+        yield parent_fd, path.name or "."
+    finally:
+        os.close(parent_fd)
 
 
 def map_open_error(exc: OSError) -> FileCommandError:
-    if exc.errno in {errno.EXDEV, errno.ELOOP}:
-        return FileCommandError("symlink_escape", "符号链接指向任务 Workspace 之外")
-    if exc.errno in {errno.ENOSYS, errno.EPERM}:
-        return FileCommandError("io", exc.strerror or "openat2 不可用")
+    if exc.errno == errno.ELOOP:
+        return FileCommandError("symlink_escape", "任务 Workspace 不允许使用符号链接")
     if exc.errno == errno.ENOENT:
         return FileCommandError("io", "路径不存在")
     return FileCommandError("io", exc.strerror or "打开路径失败")
@@ -168,7 +162,8 @@ def open_workspace(allowed_root: str, workspace: str) -> int:
     try:
         if relative == ".":
             return os.dup(base_fd)
-        return openat2(base_fd, relative, os.O_RDONLY | os.O_DIRECTORY)
+        with _open_parent(base_fd, relative) as (parent_fd, name):
+            return _open_directory(parent_fd, name)
     except OSError as exc:
         raise map_open_error(exc) from exc
     finally:
@@ -176,31 +171,27 @@ def open_workspace(allowed_root: str, workspace: str) -> int:
 
 
 def validate_inside(workspace_fd: int, relative: str) -> str:
-    """Open the full path. Only a missing final component may fall back to its parent."""
+    """Validate an entry without following links. The final entry may be missing."""
 
     relative = relative or "."
     try:
-        fd = openat2(workspace_fd, relative, os.O_PATH)
+        with _open_parent(workspace_fd, relative) as (parent_fd, name):
+            try:
+                mode = os.stat(name, dir_fd=parent_fd, follow_symlinks=False).st_mode
+            except FileNotFoundError:
+                return relative
+            if stat.S_ISLNK(mode):
+                raise OSError(errno.ELOOP, os.strerror(errno.ELOOP), name)
     except OSError as exc:
-        if exc.errno != errno.ENOENT:
-            raise map_open_error(exc) from exc
-        parent = PurePosixPath(relative).parent.as_posix()
-        if parent in {"", "."}:
-            parent = "."
-        try:
-            parent_fd = openat2(workspace_fd, parent, os.O_PATH | os.O_DIRECTORY)
-        except OSError as parent_exc:
-            raise map_open_error(parent_exc) from parent_exc
-        os.close(parent_fd)
-        return relative
-    os.close(fd)
+        raise map_open_error(exc) from exc
     return relative
 
 
 def read_inside(workspace_fd: int, relative: str) -> tuple[bytes | None, dict[str, Any]]:
     empty = hashlib.sha256(b"").hexdigest()
     try:
-        fd = openat2(workspace_fd, relative, os.O_RDONLY)
+        with _open_parent(workspace_fd, relative) as (parent_fd, name):
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent_fd)
     except OSError as exc:
         if exc.errno == errno.ENOENT:
             return None, {"size": 0, "sha256": empty, "missing": True}

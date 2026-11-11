@@ -7,7 +7,7 @@
         <div class="chat-search-row">
           <el-input v-model="search" placeholder="搜索联系人 / 群组" clearable />
           <el-tooltip content="新建群组" placement="top">
-            <el-button circle aria-label="新建群组" data-testid="chat-create-group" @click="openGroupDialog()">＋</el-button>
+            <el-button :icon="Plus" aria-label="新建群组" data-testid="chat-create-group" @click="openGroupDialog()" />
           </el-tooltip>
         </div>
         <button type="button" class="chat-join-link" @click="joinDialogOpen = true">通过邀请加入群组</button>
@@ -33,19 +33,19 @@
           v-for="target in filteredTargets"
           :key="target.key"
           class="rail-item chat-target"
+          :aria-current="target.key === selectedKey ? 'true' : undefined"
           :class="{ active: target.key === selectedKey }"
           type="button"
           @click="selectTarget(target.key)"
         >
           <EmployeeAvatar v-if="target.kind === 'contact'" :avatar="target.avatar" :size="36" :disabled="!target.enabled" />
-          <span v-else class="avatar">{{ target.avatar }}</span>
+          <span v-else class="avatar" aria-hidden="true"><UsersRound :size="16" /></span>
           <span class="chat-target__meta">
             <b>{{ target.name }}</b>
             <small class="muted">{{ railSummary(target.key) || target.subtitle }}</small>
           </span>
           <span v-if="unreadOf(target.key)" class="unread-badge" :aria-label="`${unreadOf(target.key)} 条未读`">{{ unreadOf(target.key) > 99 ? '99+' : unreadOf(target.key) }}</span>
         </button>
-        <div v-if="!filteredTargets.length" class="muted" style="padding: 12px 4px">没有匹配的联系人或群组</div>
       </aside>
 
       <article class="panel chat">
@@ -146,7 +146,7 @@
           </div>
           <div v-for="person in activeTarget.channel?.members || []" :key="`${person.member_type}:${person.member_id}`" class="member">
             <EmployeeAvatar v-if="person.member_type === 'employee'" :avatar="person.avatar" :size="36" />
-            <span v-else class="avatar">{{ person.avatar }}</span>
+            <span v-else class="avatar" aria-hidden="true"><UserRound :size="16" /></span>
             <div class="member-identity">
               <b class="member-name">{{ person.name }}{{ person.member_id === currentUid() ? '（你）' : '' }}</b>
               <small class="member-role muted">{{ person.member_type === 'employee' ? '数字员工' : `${roleLabels[person.role]} · ${person.online ? '在线' : '离线'}` }}</small>
@@ -247,6 +247,7 @@ import {
   listEmployees,
   saveChannel,
 } from "@/api";
+import { Plus, UserRound, UsersRound } from "lucide-vue-next";
 import TaskRail from "@/components/TaskRail.vue";
 import { listTasks, listWorkers, type PlatformTask, type PlatformWorker } from "@/platform";
 import type { Channel, Employee, ResourceCatalog } from "@/types";
@@ -328,7 +329,7 @@ const targets = computed<ChatTarget[]>(() => {
       id: channel.id,
       name: channel.name,
       subtitle: `${channel.members.filter(m => m.member_type === "human").length} 位人类 · ${channel.members.filter(m => m.member_type === "employee").length} 位数字员工`,
-      avatar: "☷",
+      avatar: "",
       enabled: true,
       searchText: `${channel.name} ${channel.description} ${members.map((item) => item.name).join(" ")}`.toLowerCase(),
       createdAt: channel.created_at ?? "",
@@ -698,7 +699,7 @@ onBeforeUnmount(() => {
 .member { flex-wrap:nowrap; }
 .member-identity { flex:1; min-width:0; overflow-wrap:anywhere; display:grid; gap:2px; }
 .member-name { font-size: 12px; font-weight: 600; line-height: 1.3; }
-.member-role { font-size: 10.5px; line-height: 1.35; }
+.member-role { font-size: var(--astra-font-helper); line-height: 1.35; }
 .member-more,
 .chat-head-more {
   flex: none;
@@ -708,76 +709,62 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #6b8979;
+  color: var(--astra-text-secondary);
   font-size: 16px;
   line-height: 1;
   letter-spacing: 0.5px;
   cursor: pointer;
 }
 .member-more:hover,
-.chat-head-more:hover { background: #eef7f2; color: #188b69; }
+.chat-head-more:hover { background: var(--astra-bg-elevated); color: var(--astra-primary-bright); }
 .chat-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.chat-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.chat-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .chat-search-row :deep(.el-input) { flex: 1; }
 .chat-join-link {
   display: inline-block;
-  margin: 0 0 10px 2px;
+  margin: 0 0 12px;
   padding: 0;
   border: 0;
   background: transparent;
-  color: #91a59a;
-  font-size: 11px;
+  color: var(--astra-text-muted);
+  font-size: var(--astra-font-helper);
   line-height: 1.4;
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.chat-join-link:hover { color: #188b69; }
+.chat-join-link:hover { color: var(--astra-primary-bright); }
 .chat-filter-seg {
   display: flex;
   align-items: stretch;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   padding: 2px;
-  border: 1px solid #e5eee9;
+  border: 1px solid var(--astra-border);
   border-radius: 8px;
-  background: #f5faf7;
+  background: var(--astra-bg-base);
   gap: 0;
 }
 .chat-filter-seg__item {
   flex: 1;
   border: 0;
   background: transparent;
-  color: #6b8979;
+  color: var(--astra-text-secondary);
   border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 11px;
+  padding: 8px;
+  font-size: var(--astra-font-helper);
   line-height: 1.3;
   cursor: pointer;
-  position: relative;
 }
-.chat-filter-seg__item + .chat-filter-seg__item::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 22%;
-  bottom: 22%;
-  width: 1px;
-  background: #dde8e1;
-}
+.chat-filter-seg__item:hover { background: var(--astra-bg-elevated); }
 .chat-filter-seg__item.is-active {
-  background: #ffffff;
-  color: #187956;
+  background: var(--astra-bg-panel);
+  color: var(--astra-primary-bright);
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(24, 139, 105, 0.06);
-}
-.chat-filter-seg__item.is-active::before,
-.chat-filter-seg__item.is-active + .chat-filter-seg__item::before {
-  opacity: 0;
 }
 .chat-aside-tab {
   border: 0;
   background: transparent;
-  color: #6b8979;
+  color: var(--astra-text-secondary);
   padding: 8px 2px 10px;
   margin: 0;
   font-size: 12px;
@@ -787,11 +774,11 @@ onBeforeUnmount(() => {
   border-radius: 0;
 }
 .chat-aside-tab.is-active {
-  color: #188b69;
+  color: var(--astra-primary-bright);
   font-weight: 600;
-  border-bottom-color: #188b69;
+  border-bottom-color: var(--astra-primary-bright);
 }
-.chat-counts { margin: 0 0 8px 2px; font-size: 11px; }
+.chat-counts { margin: 0 0 8px 2px; font-size: var(--astra-font-helper); }
 .chat-target { width: 100%; border: 0; background: transparent; text-align: left; }
 .chat-target__meta { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .chat-target__meta b, .chat-target__meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -804,7 +791,7 @@ onBeforeUnmount(() => {
 }
 .chat-head__desc {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--astra-font-helper);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -813,7 +800,7 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
 }
 .chat-target__meta small {
-  font-size: 11px;
+  font-size: var(--astra-font-helper);
   line-height: 1.35;
 }
 .unread-badge {
@@ -822,7 +809,7 @@ onBeforeUnmount(() => {
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #e45757;
+  background: var(--astra-primary);
   color: #fff;
   font-size: 10px;
   line-height: 18px;
@@ -833,7 +820,7 @@ onBeforeUnmount(() => {
 @media (max-width: 1000px) {
   .chat-page .workspace, .chat-page .workspace.workspace--focus { position: relative; grid-template-columns: minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
   .chat-page .left-rail { display: none; }
-  .chat-mobile-only { display: inline-flex; align-items: center; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px; padding: 7px 9px; cursor: pointer; }
+  .chat-mobile-only { display: inline-flex; align-items: center; border: 1px solid var(--astra-border); background: #fff; color: var(--astra-text-primary); border-radius: 8px; padding: 7px 9px; cursor: pointer; }
   .chat-mobile-close { margin: 10px 0; }
   .chat-page .left-rail.is-mobile-open, .chat-page .aside { display: block; position: absolute; z-index: 20; top: 0; bottom: 0; width: min(320px, 92%); overflow: auto; box-shadow: 0 0 30px #20383022; }
   .chat-page .left-rail.is-mobile-open { left: 0; }

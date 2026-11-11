@@ -27,7 +27,7 @@
       type="info"
       show-icon
       :closable="false"
-      title="全平台共用一份配置。保存只写入配置中心；数字员工 Agent 将在下次同步或新建 Session 前刷新，不会一点保存立刻改写全部既有会话。"
+      title="保存后，数字员工在下次同步或新建 Session 前读取平台提示词。"
       data-testid="platform-prompt-hint"
     />
 
@@ -39,7 +39,7 @@
           :rows="16"
           :disabled="loading || Boolean(loadError)"
           resize="vertical"
-          placeholder="留空表示不注入平台块；首次可由后端种子默认文案。"
+          placeholder="留空时不注入平台提示词"
           data-testid="platform-prompt-editor"
         />
       </ElFormItem>
@@ -247,7 +247,7 @@ onMounted(async () => {
   padding: 12px;
   border: 1px solid var(--astra-border, #e5e7eb);
   border-radius: 8px;
-  background: var(--astra-surface-muted, #f8fafc);
+  background: var(--astra-bg-base);
   color: var(--astra-text-primary, #111827);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;

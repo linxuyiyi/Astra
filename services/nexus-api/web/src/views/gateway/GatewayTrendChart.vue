@@ -56,52 +56,58 @@ function axisLabels() {
 function render() {
   if (!chart) return
   const typography = chartTypography()
+  const theme = getComputedStyle(document.documentElement)
+  const primary = theme.getPropertyValue('--astra-primary').trim()
+  const neutral = theme.getPropertyValue('--astra-neutral').trim()
+  const danger = theme.getPropertyValue('--astra-danger').trim()
+  const muted = theme.getPropertyValue('--astra-text-muted').trim()
+  const border = theme.getPropertyValue('--astra-border').trim()
   const series = props.mode === 'tokens'
     ? [
-        { name: '输入 Token', data: props.buckets.map((item) => item.input_tokens), color: '#3d8ff0' },
-        { name: '输出 Token', data: props.buckets.map((item) => item.output_tokens), color: '#159d65' },
+        { name: '输入 Token', data: props.buckets.map((item) => item.input_tokens), color: neutral },
+        { name: '输出 Token', data: props.buckets.map((item) => item.output_tokens), color: primary },
       ]
     : props.mode === 'value'
-      ? [{ name: props.valueName, data: props.points.map((item) => item.value), color: '#0f6e4c' }]
+      ? [{ name: props.valueName, data: props.points.map((item) => item.value), color: primary }]
       : props.mode === 'calls'
         ? [
-            { name: '请求数', data: props.callPoints.map((item) => item.requests), color: '#159d65' },
-            { name: '失败数', data: props.callPoints.map((item) => item.errors), color: '#e45d6a' },
+            { name: '请求数', data: props.callPoints.map((item) => item.requests), color: primary },
+            { name: '失败数', data: props.callPoints.map((item) => item.errors), color: danger },
           ]
         : [
-            { name: '请求数', data: props.buckets.map((item) => item.requests), color: '#159d65' },
-            { name: '成功', data: props.buckets.map((item) => item.success), color: '#3d8ff0' },
-            { name: '失败', data: props.buckets.map((item) => item.errors), color: '#e45d6a' },
+            { name: '请求数', data: props.buckets.map((item) => item.requests), color: primary },
+            { name: '成功', data: props.buckets.map((item) => item.success), color: neutral },
+            { name: '失败', data: props.buckets.map((item) => item.errors), color: danger },
           ]
   chart.setOption({
+    animation: false,
     textStyle: typography,
     backgroundColor: 'transparent',
     grid: { top: 34, right: 14, bottom: 26, left: 52 },
-    legend: { top: 0, right: 0, textStyle: { ...typography, color: '#3a524c' } },
+    legend: { top: 0, right: 0, textStyle: { ...typography, color: muted } },
     tooltip: { trigger: 'axis', backgroundColor: '#102522', borderColor: '#102522', textStyle: { ...typography, color: '#eaf6f1' } },
     xAxis: {
       type: 'category',
       boundaryGap: false,
       data: axisLabels(),
-      axisLine: { lineStyle: { color: '#d7e1dd' } },
-      axisLabel: { ...typography, color: '#3a524c' },
+      axisLine: { lineStyle: { color: border } },
+      axisLabel: { ...typography, color: muted },
     },
     yAxis: {
       type: 'value',
       splitNumber: 4,
       min: (extent: { min: number; max: number }) => (extent.max <= 0 && extent.min >= 0 ? 0 : extent.min),
-      axisLabel: { ...typography, color: '#3a524c' },
-      splitLine: { lineStyle: { color: '#e7eeeb' } },
+      axisLabel: { ...typography, color: muted },
+      splitLine: { lineStyle: { color: border } },
     },
-    series: series.map((item, index) => ({
+    series: series.map((item) => ({
       name: item.name,
       type: 'line',
-      smooth: true,
+      smooth: 0.25,
       symbol: 'none',
       data: item.data,
       itemStyle: { color: item.color },
       lineStyle: { color: item.color, width: 2 },
-      areaStyle: index === 0 ? { color: `${item.color}14` } : undefined,
     })),
   })
 }

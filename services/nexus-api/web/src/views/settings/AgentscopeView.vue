@@ -84,10 +84,10 @@ onMounted(async () => {
   flex: 1 1 auto;
   width: 100%;
   height: 100%;
-  min-height: 520px;
+  min-height: 0;
   border: 1px solid var(--astra-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--astra-bg-panel);
 }
 .agentscope-loading {
   flex: 1 1 auto;

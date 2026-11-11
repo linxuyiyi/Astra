@@ -28,7 +28,6 @@
         @issue-page="setIssuePage"
     /></Transition>
     <div v-if="!store.snapshot" class="office-message" role="status">
-      <span class="message-eyebrow">NEXUS / 数字办公室</span>
       <h1>{{ store.error ? "暂时无法读取办公室" : "办公室准备中" }}</h1>
       <p>{{ store.error || "正在读取数字员工与工作计划…" }}</p>
       <button v-if="store.error" type="button" @click="refresh">
@@ -36,9 +35,8 @@
       </button>
     </div>
     <div v-else-if="!store.employees.length" class="office-message">
-      <span class="message-eyebrow">WELCOME TO NEXUS</span>
-      <h1>为团队迎来第一位数字员工</h1>
-      <p>配置数字员工后，他们会在这里拥有自己的工位。</p>
+      <h1>配置第一位数字员工</h1>
+      <p>员工配置完成后会出现在办公室工位上</p>
       <RouterLink to="/settings/employees"
         >配置数字员工 <ArrowUpRight :size="14"
       /></RouterLink>
@@ -73,7 +71,7 @@
         class="menu-toggle"
         type="button"
         :aria-expanded="menuOpen"
-        aria-label="打开 Nexus 模块入口"
+        :aria-label="menuOpen ? '关闭 Nexus 模块入口' : '打开 Nexus 模块入口'"
         @click="menuOpen = !menuOpen"
       >
         <component :is="menuOpen ? X : PanelsTopLeft" :size="18" /><span
@@ -147,7 +145,7 @@
       "
       class="office-guide"
     >
-      <span>点击工位，查看同事的工作</span><small>点击空白关闭工作台</small>
+      <span>点击工位，查看员工的任务与日程</span>
     </div>
   </section>
 </template>
@@ -397,24 +395,22 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: #e9ddc5;
   color: #3d654d;
-  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--astra-font-family);
 }
 .office-dock {
   position: absolute;
   z-index: 12;
   left: 50%;
-  bottom: 14px;
+  bottom: 16px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 8px;
   background: #fcfcf0f5;
   border: 1px solid #bacdb1;
-  box-shadow:
-    0 5px 20px #4766441a,
-    0 2px 0 #9eb29555;
+  box-shadow: var(--astra-shadow-panel);
   border-radius: 10px;
-  padding: 7px 10px;
+  padding: 4px 8px;
   max-width: calc(100% - 26px);
   box-sizing: border-box;
   white-space: nowrap;
@@ -422,14 +418,14 @@ onBeforeUnmount(() => {
 .office-dock button {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   color: #53735a;
   background: transparent;
   border: 0;
   border-radius: 5px;
   cursor: pointer;
   padding: 6px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .office-dock button:hover {
   background: #e8eede;
@@ -439,11 +435,11 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 .menu-toggle span {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
 }
 .dock-divider {
-  height: 19px;
+  height: 20px;
   width: 1px;
   background: #dce4cf;
 }
@@ -457,20 +453,20 @@ onBeforeUnmount(() => {
   background: transparent;
   border: 0;
   color: #587456;
-  font-size: 11px;
+  font-size: 12px;
   max-width: 150px;
   padding: 6px 0;
   cursor: pointer;
 }
 .connection {
-  color: #83957b;
-  font-size: 9px;
-  padding: 0 5px;
+  color: #53694f;
+  font-size: 12px;
+  padding: 0 4px;
 }
 .connection i {
   display: inline-block;
-  width: 5px;
-  height: 5px;
+  width: 8px;
+  height: 8px;
   background: #7ba379;
   margin-right: 5px;
 }
@@ -499,31 +495,23 @@ onBeforeUnmount(() => {
 }
 .office-guide span {
   font-size: 12px;
-  letter-spacing: 2px;
-}
-.office-guide small {
-  font-size: 9px;
-  display: block;
-  margin-top: 7px;
-  color: #8e9b80;
-  letter-spacing: 1px;
 }
 .office-menu {
   position: absolute;
   z-index: 11;
   left: 50%;
-  bottom: 74px;
+  bottom: 72px;
   transform: translateX(-50%);
   width: 240px;
   background: #fbfcf1;
   border: 1px solid #b9cdb2;
   border-radius: 9px;
   padding: 12px;
-  box-shadow: 0 8px 28px #385e3d2b;
+  box-shadow: var(--astra-shadow-panel);
 }
 .menu-title {
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 600;
   color: #406a4d;
   letter-spacing: 1px;
   padding: 7px 9px 12px;
@@ -540,7 +528,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 10px;
+  min-height: 36px;
+  padding: 8px;
   text-decoration: none;
   color: #617b5e;
   font-size: 12px;
@@ -558,27 +547,22 @@ onBeforeUnmount(() => {
   left: 50%;
   transform: translate(-50%, -50%);
   width: min(400px, calc(100% - 65px));
-  padding: 30px;
+  padding: 24px;
   background: #fbfcf1ed;
   border: 1px solid #bfd1b4;
   border-radius: 10px;
-  box-shadow: 0 8px 28px #5b775f1a;
+  box-shadow: var(--astra-shadow-panel);
   text-align: center;
   z-index: 5;
 }
-.message-eyebrow {
-  font-size: 9px;
-  letter-spacing: 2px;
-  color: #8a9c80;
-}
 .office-message h1 {
   font-size: 21px;
-  font-weight: 750;
-  margin: 16px 0 10px;
+  font-weight: 600;
+  margin: 0 0 8px;
 }
 .office-message p {
   font-size: 12px;
-  color: #8a957f;
+  color: #53694f;
   line-height: 1.8;
   overflow-wrap: anywhere;
 }
@@ -586,8 +570,8 @@ onBeforeUnmount(() => {
 .office-message button {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  background: #588363;
+  gap: 8px;
+  background: #396848;
   border: 0;
   border-radius: 6px;
   color: #fffff4;

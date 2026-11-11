@@ -76,7 +76,7 @@
         </div>
       </template>
       <ElAlert v-if="instanceError" type="warning" show-icon :closable="false" :title="instanceError" />
-      <ElTable v-else :data="instances" empty-text="暂无实例心跳。">
+      <ElTable v-else :data="instances" empty-text="暂无实例心跳">
         <ElTableColumn label="实例" prop="instance_id" min-width="150" show-overflow-tooltip />
         <ElTableColumn label="状态" width="90">
           <template #default="{ row }"><ElTag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? '在线' : '已过期' }}</ElTag></template>
@@ -297,5 +297,5 @@ onMounted(load)
 
 <style scoped>
 .gateway-nodes__card-head { display: grid; gap: 2px; }
-.gateway-nodes__card-head h4 { margin: 0; color: var(--astra-text-primary); }
+.gateway-nodes__card-head h4 { margin: 0; font-size: var(--astra-font-subtitle); font-weight: 600; color: var(--astra-text-primary); }
 </style>

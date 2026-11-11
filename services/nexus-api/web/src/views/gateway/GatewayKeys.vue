@@ -257,7 +257,7 @@ const pagedKeys = computed(() => {
 const hasFilters = computed(() => Boolean(filters.keyword.trim() || filters.status))
 const emptyText = computed(() => (hasFilters.value
   ? '没有匹配的 Key'
-  : '暂无 Gateway Key'))
+  : '暂无 API Key'))
 
 watch(filters, () => { page.value = 1 })
 watch(pageSize, () => { page.value = 1 })
@@ -451,9 +451,9 @@ onMounted(load)
 .key-cell__id { overflow: hidden; color: var(--astra-text-muted); font-size: var(--astra-font-helper); text-overflow: ellipsis; white-space: nowrap; }
 .key-mono { font-family: var(--astra-font-family); font-size: var(--astra-font-helper); }
 .key-muted { color: var(--astra-text-muted); }
-.key-form :deep(.el-form-item) { margin-bottom: 14px; }
+.key-form :deep(.el-form-item) { margin-bottom: 16px; }
 .key-form :deep(.el-date-editor) { width: 100%; }
-.gateway-drawer__footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.gateway-drawer__footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .gateway-key-plaintext__warn { margin-top: 10px; }
 .gateway-key-plaintext__row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .gateway-key-plaintext__value { flex: 1; }

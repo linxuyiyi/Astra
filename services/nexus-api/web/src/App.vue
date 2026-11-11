@@ -1,8 +1,7 @@
 <template>
   <div class="app" :class="{ 'app--office': route.path === '/', 'app--chat': route.path === '/chat' }">
     <header v-if="route.path !== '/'" class="top">
-      <router-link to="/" class="brand" title="数字办公室">
-        <div class="mark">✦</div>
+      <router-link to="/" class="brand" aria-label="Nexus 数字办公室">
         <div class="brandname">NEXUS <span class="version">v1.5.0</span></div>
       </router-link>
       <nav class="top-nav" aria-label="页面导航">
@@ -10,11 +9,11 @@
           v-for="item in navItems"
           :key="item.to"
           :to="item.to"
-          :class="{ active: item.active }"
+          :aria-current="item.active ? 'page' : undefined"
         >{{ item.label }}</router-link>
       </nav>
       <span class="env-banner" :title="banner">
-        <i class="dot" :class="{ off: !runtime?.reachable }"></i>
+        <i class="astra-service-dot" :data-state="runtime?.reachable ? 'live' : 'unknown'" aria-hidden="true" />
         <span class="env-text">{{ banner }}</span>
       </span>
     </header>
@@ -110,19 +109,25 @@ onBeforeUnmount(() => {
 
 .top-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .top-nav a {
-  padding: 7px 12px; border-radius: 10px; color: #6c897a; text-decoration: none;
-  white-space: nowrap; font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--astra-text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
 }
-.top-nav a:hover { background: #edf7f1; color: #187956; }
-.top-nav a.active { background: #dff3e7; color: #147d59; font-weight: 750; }
+.top-nav a:hover { background: var(--astra-bg-elevated); }
+.top-nav a[aria-current='page'] {
+  background: var(--astra-primary-soft);
+  color: var(--astra-primary-bright);
+  font-weight: 600;
+}
 .env-text { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.uid-gate { display: flex; gap: 12px; align-items: end; max-width: 420px; }
-.uid-gate label { display: flex; flex-direction: column; gap: 6px; flex: 1; }
-.uid-gate input { padding: 8px 10px; border: 1px solid #c9ddd2; border-radius: 8px; }
-.uid-gate button { padding: 8px 14px; border: 0; border-radius: 8px; background: #187956; color: white; }
 @media (max-width: 900px) {
   .env-text { max-width: 120px; }
-  .top-nav a { padding: 6px 9px; }
+  .top-nav a { padding: 0 8px; }
   .app--office { height: 100dvh; min-height: 100dvh; overflow: hidden; }
 }
 </style>

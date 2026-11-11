@@ -133,7 +133,7 @@
       </ElTableColumn>
 
       <template #empty>
-        <ElEmpty v-if="!loading" :image-size="64" description="没有找到符合条件的员工" />
+        <ElEmpty v-if="!loading" :image-size="64" description="暂无匹配员工" />
       </template>
     </ElTable>
 

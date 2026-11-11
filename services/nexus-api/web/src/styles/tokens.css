@@ -1,40 +1,38 @@
 :root {
-  --astra-bg-base: #f3f6f4;
-  --astra-bg-sidebar: #fbfcfb;
+  --astra-bg-base: #f4f5f5;
+  --astra-bg-sidebar: #f9faf9;
   --astra-bg-panel: #ffffff;
   --astra-bg-card: #ffffff;
-  --astra-bg-elevated: #e7eeeb;
-  --astra-border: #d7e1dd;
-  --astra-border-hover: #abcabf;
-  --astra-primary: #159d65;
-  --astra-primary-bright: #0c8553;
-  --astra-primary-soft: rgba(24, 184, 117, .10);
-  --astra-primary-border: rgba(24, 184, 117, .34);
-  --astra-primary-glow: rgba(24, 184, 117, .16);
+  --astra-bg-elevated: #ebeeed;
+  --astra-border: #d9dfdc;
+  --astra-border-hover: #9baca3;
+  --astra-primary: #147451;
+  --astra-primary-bright: #105d41;
+  --astra-primary-soft: rgba(20, 116, 81, .08);
+  --astra-primary-border: rgba(20, 116, 81, .34);
+  --astra-primary-glow: rgba(37, 120, 79, .16);
   --astra-secondary: #7658d9;
-  --astra-success: #18b875;
-  --astra-success-soft: rgba(24, 184, 117, .10);
-  --astra-warning: #e9953f;
+  --astra-success: #25784f;
+  --astra-success-soft: rgba(20, 116, 81, .08);
+  --astra-warning: #946018;
   --astra-warning-soft: rgba(255, 173, 91, .11);
-  --astra-danger: #e45d6a;
+  --astra-danger: #b3404d;
   --astra-danger-soft: rgba(255, 111, 125, .11);
-  --astra-info: #3d8ff0;
+  --astra-info: #3269a3;
   /* 中性语义：空闲、已取消、未知、未核验等既不是成功也不是失败的状态。
      Element Plus 的 info 是蓝色，不能拿它当灰色使用。 */
   --astra-neutral: #6b7d78;
   --astra-neutral-text: #455854;
   --astra-neutral-soft: rgba(107, 125, 120, .12);
   --astra-neutral-border: rgba(107, 125, 120, .30);
-  --astra-text-primary: #102522;
-  --astra-text-secondary: #3e5752;
-  --astra-text-muted: #617771;
-  --astra-font-family: "Times New Roman", "Microsoft YaHei", "微软雅黑", serif;
+  --astra-text-primary: #192622;
+  --astra-text-secondary: #44524d;
+  --astra-text-muted: #5f6c65;
+  --astra-font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
   --astra-font-sans: var(--astra-font-family);
   --astra-font-display: var(--astra-font-family);
   --astra-weight-regular: 400;
-  --astra-weight-bold: 700;
-  /* Latin/digits/punctuation use Times New Roman; CJK uses Microsoft YaHei.
-     Both fonts must be installed on the client. Keep the existing UI size scale. */
+  --astra-weight-bold: 600;
   --astra-font-micro: 9px;
   /* 辅助说明文字（副标题、计数、提示行）。11px 在 1280×720 下已不可读，
      与控件字号取同一档；更小的场景仍用 --astra-font-micro。 */
@@ -68,7 +66,7 @@
      由 styles/element-plus-theme.css 这一个全局覆盖层统一回同一基准。 */
   --astra-control-height: 32px;
   --astra-content-gap: 16px;
-  --astra-shadow-panel: 0 10px 30px rgba(28, 58, 49, .075);
+  --astra-shadow-panel: 0 1px 2px rgba(25, 38, 34, .06);
   --nexus-table-max-height: calc(100vh - 280px);
   --nexus-table-max-height-dense: calc(100vh - 340px);
 }
@@ -78,8 +76,9 @@
    so these :root declarations win over the Element Plus defaults.
    Light/dark variants follow the Element Plus mixing ratios (white/black). */
 :root {
+  --el-border-radius-base: 8px;
   --el-color-primary: var(--astra-primary);
-  --el-color-primary-rgb: 21, 157, 101;
+  --el-color-primary-rgb: 20, 116, 81;
   --el-color-primary-light-3: color-mix(in srgb, var(--astra-primary) 70%, white);
   --el-color-primary-light-5: color-mix(in srgb, var(--astra-primary) 50%, white);
   --el-color-primary-light-7: color-mix(in srgb, var(--astra-primary) 30%, white);
@@ -87,7 +86,7 @@
   --el-color-primary-light-9: color-mix(in srgb, var(--astra-primary) 10%, white);
   --el-color-primary-dark-2: var(--astra-primary-bright);
   --el-color-success: var(--astra-success);
-  --el-color-success-rgb: 24, 184, 117;
+  --el-color-success-rgb: 37, 120, 79;
   --el-color-success-light-3: color-mix(in srgb, var(--astra-success) 70%, white);
   --el-color-success-light-5: color-mix(in srgb, var(--astra-success) 50%, white);
   --el-color-success-light-7: color-mix(in srgb, var(--astra-success) 30%, white);
@@ -95,7 +94,7 @@
   --el-color-success-light-9: color-mix(in srgb, var(--astra-success) 10%, white);
   --el-color-success-dark-2: color-mix(in srgb, var(--astra-success) 80%, black);
   --el-color-warning: var(--astra-warning);
-  --el-color-warning-rgb: 233, 149, 63;
+  --el-color-warning-rgb: 148, 96, 24;
   --el-color-warning-light-3: color-mix(in srgb, var(--astra-warning) 70%, white);
   --el-color-warning-light-5: color-mix(in srgb, var(--astra-warning) 50%, white);
   --el-color-warning-light-7: color-mix(in srgb, var(--astra-warning) 30%, white);
@@ -103,7 +102,7 @@
   --el-color-warning-light-9: color-mix(in srgb, var(--astra-warning) 10%, white);
   --el-color-warning-dark-2: color-mix(in srgb, var(--astra-warning) 80%, black);
   --el-color-danger: var(--astra-danger);
-  --el-color-danger-rgb: 228, 93, 106;
+  --el-color-danger-rgb: 179, 64, 77;
   --el-color-danger-light-3: color-mix(in srgb, var(--astra-danger) 70%, white);
   --el-color-danger-light-5: color-mix(in srgb, var(--astra-danger) 50%, white);
   --el-color-danger-light-7: color-mix(in srgb, var(--astra-danger) 30%, white);
@@ -111,7 +110,7 @@
   --el-color-danger-light-9: color-mix(in srgb, var(--astra-danger) 10%, white);
   --el-color-danger-dark-2: color-mix(in srgb, var(--astra-danger) 80%, black);
   --el-color-error: var(--astra-danger);
-  --el-color-error-rgb: 228, 93, 106;
+  --el-color-error-rgb: 179, 64, 77;
   --el-color-error-light-3: color-mix(in srgb, var(--astra-danger) 70%, white);
   --el-color-error-light-5: color-mix(in srgb, var(--astra-danger) 50%, white);
   --el-color-error-light-7: color-mix(in srgb, var(--astra-danger) 30%, white);
@@ -119,7 +118,7 @@
   --el-color-error-light-9: color-mix(in srgb, var(--astra-danger) 10%, white);
   --el-color-error-dark-2: color-mix(in srgb, var(--astra-danger) 80%, black);
   --el-color-info: var(--astra-info);
-  --el-color-info-rgb: 61, 143, 240;
+  --el-color-info-rgb: 50, 105, 163;
   --el-color-info-light-3: color-mix(in srgb, var(--astra-info) 70%, white);
   --el-color-info-light-5: color-mix(in srgb, var(--astra-info) 50%, white);
   --el-color-info-light-7: color-mix(in srgb, var(--astra-info) 30%, white);

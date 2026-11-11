@@ -8,7 +8,7 @@
       <ElButton :loading="loading" :icon="RefreshCw" data-testid="gateway-requests-refresh" @click="load">刷新</ElButton>
     </GatewayHeaderActions>
 
-    <div class="admin-page__toolbar" role="search" aria-label="调用日志筛选" data-testid="gateway-requests-filter">
+    <div class="admin-page__toolbar log-filter" role="search" aria-label="调用日志筛选" data-testid="gateway-requests-filter">
       <div class="admin-page__filters">
         <ElSelect v-model="filters.model" class="admin-page__select" data-testid="log-filter-model" aria-label="模型筛选" placeholder="模型：全部" clearable>
           <ElOption v-for="model in models" :key="model" :value="model" :label="model" />
@@ -287,16 +287,18 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.log-filter .admin-page__select { width: 136px; }
+.log-filter .admin-page__keyword { width: 192px; }
 .log-filter__range { flex: none; --el-date-editor-datetimerange-width: 300px; }
 .log-num { white-space: nowrap; font-size: var(--astra-font-helper); font-variant-numeric: tabular-nums; }
-.log-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; padding: 10px 14px; background: var(--astra-bg-elevated); border-radius: 8px; font-size: var(--astra-font-helper); }
+.log-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; padding: 12px 16px; background: var(--astra-bg-elevated); border-radius: 8px; font-size: var(--astra-font-helper); }
 .log-detail-item { display: flex; flex-direction: column; gap: 2px; }
-.log-detail-label { color: var(--astra-text-muted); font-size: 11px; }
+.log-detail-label { color: var(--astra-text-muted); font-size: 12px; }
 .log-detail-value { color: var(--astra-text-primary); }
 .log-detail-value.mono { font-family: var(--astra-font-mono, monospace); font-size: 12px; }
 .log-detail-value.highlight { color: var(--astra-primary); font-weight: var(--astra-weight-bold); }
 .log-detail-item--error .log-detail-value { color: var(--astra-danger); }
-.log-model-cell { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.log-routed-tag { font-size: 11px; padding: 0 6px; height: 20px; line-height: 18px; }
+.log-model-cell { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.log-routed-tag { font-size: 12px; padding: 0 6px; height: 20px; line-height: 18px; }
 .log-interrupted { margin-left: 6px; }
 </style>

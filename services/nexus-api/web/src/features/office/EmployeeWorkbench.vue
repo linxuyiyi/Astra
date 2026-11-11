@@ -331,7 +331,7 @@ function formatTime(value: string) {
   z-index: 8;
   background: #fcfcf3;
   border: 1px solid #9db9a3;
-  box-shadow: 0 12px 45px #345e4533;
+  box-shadow: var(--astra-shadow-panel);
   border-radius: 12px;
   overflow: hidden;
   color: #355c46;
@@ -346,7 +346,7 @@ function formatTime(value: string) {
 .section-eyebrow {
   color: #7b937d;
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 1.5px;
 }
 .eyebrow {
@@ -386,7 +386,7 @@ function formatTime(value: string) {
 }
 .status-pill {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   background: #e2eddb;
   padding: 4px 8px;
   color: #4e7b57;

@@ -23,7 +23,7 @@
       :data-status="summary?.status ?? 'unknown'"
       data-testid="gateway-health-bar"
     >
-      <span class="gateway-overview__status-pill" data-testid="gateway-health-status">{{ statusLabel }}</span>
+      <span class="gateway-health-label" data-testid="gateway-health-status"><i class="astra-service-dot" :data-state="summary?.status ?? 'unknown'" aria-hidden="true" />{{ statusLabel }}</span>
       <div class="gateway-overview__status-copy">
         <p class="gateway-overview__impact" data-testid="gateway-health-impact">{{ impactText }}</p>
         <p v-if="reasonText" class="gateway-overview__reasons">{{ reasonText }}</p>
@@ -396,7 +396,7 @@ function schedulingTag(value: string): 'success' | 'danger' | 'warning' | 'info'
 async function showAbnormal() {
   abnormalOnly.value = true
   await nextTick()
-  nodesCard.value?.$el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  nodesCard.value?.$el?.scrollIntoView({ block: 'start' })
 }
 function openNodeLogs(row: GatewayNodeMetric) {
   const end = new Date()
@@ -566,7 +566,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* 运行总览：状态 → 核心指标 → 趋势与事件 → 节点表 → 辅助指标。
+/* 运行总览：状态 → 核心指标 → 节点与事件 → 调用趋势 → 辅助指标。
    卡片之间统一 16px 间距，卡片标题区统一「标题 + 一句范围说明」两行结构。 */
 .gateway-overview { display: flex; flex-direction: column; gap: 16px; padding-bottom: 8px; }
 .gateway-overview__window { width: 112px; }
@@ -577,23 +577,10 @@ onBeforeUnmount(() => {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 16px;
   border: 1px solid var(--astra-border);
-  border-radius: 12px;
-  background: var(--astra-bg-panel);
+  border-radius: 8px;
+  background: var(--astra-bg-base);
 }
-.gateway-overview__status[data-status='normal'] { border-color: #cfe9dd; background: #f3fbf6; }
-.gateway-overview__status[data-status='degraded'] { border-color: #e8cd8f; background: #fff9ec; }
-.gateway-overview__status[data-status='down'] { border-color: #e7a8ae; background: #fff5f6; }
-.gateway-overview__status[data-status='unknown'] { border-color: #d5e0da; background: #f6f8f7; }
-.gateway-overview__status-pill {
-  flex: none;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: #e3f4ec; color: #187956;
-  font-size: 12px; font-weight: var(--astra-weight-bold);
-}
-.gateway-overview__status[data-status='degraded'] .gateway-overview__status-pill { background: #fbeac4; color: #8a5a08; }
-.gateway-overview__status[data-status='down'] .gateway-overview__status-pill { background: #f8dadd; color: #9f2f3a; }
-.gateway-overview__status[data-status='unknown'] .gateway-overview__status-pill { background: #e7eeeb; color: #5c736a; }
+
 .gateway-overview__status-copy { display: grid; flex: 1 1 auto; gap: 2px; min-width: 0; }
 .gateway-overview__impact { margin: 0; color: var(--astra-text-primary); font-weight: 600; }
 .gateway-overview__reasons { margin: 0; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); }
@@ -606,7 +593,7 @@ onBeforeUnmount(() => {
 }
 .gateway-overview__metric { border-radius: 0; background: transparent; }
 .gateway-overview__metric:not(:first-child) { border-left: 1px solid var(--astra-border); }
-.gateway-overview__metric :deep(.el-card__body) { display: grid; gap: 6px; padding: 14px 16px; }
+.gateway-overview__metric :deep(.el-card__body) { display: grid; gap: 4px; padding: 16px; }
 .gateway-overview__metric-label {
   margin: 0; color: var(--astra-text-secondary); font-size: 12px; line-height: 16px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -649,7 +636,7 @@ onBeforeUnmount(() => {
 .gateway-overview__event-list li:last-child { border-bottom: none; }
 .gateway-overview__event-list button {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px;
-  width: 100%; padding: 10px 8px;
+  width: 100%; padding: 8px;
   border: 0; border-radius: 6px; background: transparent;
   color: var(--astra-text-primary); text-align: left; cursor: pointer;
 }
@@ -669,7 +656,7 @@ onBeforeUnmount(() => {
 .gateway-overview__details summary::-webkit-details-marker { display: none; }
 .gateway-overview__details summary::before { content: '▸'; color: var(--astra-text-muted); }
 .gateway-overview__details[open] summary::before { transform: rotate(90deg); }
-.gateway-overview__detail-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; padding: 0 16px 16px; }
+.gateway-overview__detail-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 0 16px 16px; }
 .gateway-overview__detail { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--astra-border); border-radius: 8px; background: var(--astra-bg-elevated); }
 .gateway-overview__detail span { color: var(--astra-text-muted); font-size: 11px; }
 .gateway-overview__detail strong { color: var(--astra-text-primary); font-size: 14px; font-variant-numeric: tabular-nums; }

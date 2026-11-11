@@ -27,7 +27,7 @@
     <section class="astra-table-panel log-panel" v-loading="loading">
       <header class="log-heading">
         <h3>执行日志</h3>
-        <div>
+        <div class="log-heading__actions">
           <span v-if="!history && streaming && operation && maintenanceActive(operation.state)">实时更新</span>
           <el-button :loading="loadingHistory" :disabled="historyCursor === null || !visibleEvents.length" @click="older">更早日志</el-button>
           <el-button v-if="history" @click="latest">返回最新</el-button>
@@ -212,10 +212,12 @@ onUnmounted(() => {
 <style scoped>
 .log-panel { display: flex; flex-direction: column; }
 .log-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--astra-border); }
-.log-heading h3 { margin: 0; font-size: var(--astra-font-section); }
+.log-heading h3 { margin: 0; font-size: var(--astra-font-subtitle); font-weight: 600; }
+.log-heading__actions { display: flex; align-items: center; gap: 8px; }
+.log-heading__actions .el-button + .el-button { margin-left: 0; }
 .log-heading span, .log-line time { color: var(--astra-text-muted); }
 .log-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px 16px; scrollbar-gutter: stable; }
-.log-line { display: grid; grid-template-columns: 156px 76px minmax(125px, max-content) minmax(0, 1fr); align-items: start; gap: 12px; padding: 6px 0; font-size: var(--astra-font-helper); }
+.log-line { display: grid; grid-template-columns: 156px 76px minmax(125px, max-content) minmax(0, 1fr); align-items: start; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--astra-border); font-size: var(--astra-font-helper); }
 .log-line time { font-variant-numeric: tabular-nums; }
 .log-line .el-tag { justify-self: start; }
 .log-name { font-weight: 600; }

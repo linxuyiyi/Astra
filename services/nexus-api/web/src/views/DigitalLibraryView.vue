@@ -502,14 +502,14 @@ function normalizeSpaces(nodes: KnowledgeSpace[]): KnowledgeSpace[] {
    本页只保留「左目录树 + 右知识表格」的双栏骨架与页面独有的排版。 */
 .hidden-input{display:none}
 .digital-library-card :deep(> .el-card__body){display:flex;flex-direction:column;gap:8px;overflow:hidden}
-.library-status-bar{display:flex;align-items:center;justify-content:space-between;height:36px;min-height:36px;max-height:40px;padding:0 12px;border:1px solid #fde2b3;border-radius:8px;background:#fdf6ec;color:#a36200;font-size:12px;flex:none;box-sizing:border-box}
+.library-status-bar{display:flex;align-items:center;justify-content:space-between;height:36px;min-height:36px;max-height:40px;padding:0 12px;border:1px solid #fde2b3;border-radius:8px;background:#fdf6ec;color:#a36200;font-size:var(--astra-font-helper);flex:none;box-sizing:border-box}
 .library-status-bar__text{font-weight:500;color:#a36200}
 .library-status-bar :deep(.el-button){padding:0 8px;height:28px;font-size:12px}
 .library-service-alert{flex:none}
 .library-body{--el-main-padding:0;display:flex;flex-direction:column;gap:8px;min-width:0;flex:1 1 auto;min-height:0;overflow:hidden}
 .library-error{flex:none}
 .library-service-reason{overflow:hidden;max-width:340px;color:var(--astra-danger);text-overflow:ellipsis;white-space:nowrap}
-.library-workspace{display:flex;flex:1 1 auto;min-height:0;border:1px solid var(--astra-border);border-radius:12px;background:var(--astra-bg-panel);box-shadow:var(--astra-shadow-panel);overflow:hidden}
+.library-workspace{display:flex;flex:1 1 auto;min-height:0;border:1px solid var(--astra-border);border-radius:8px;background:var(--astra-bg-panel);overflow:hidden}
 .library-aside{--el-aside-width:220px;width:220px;flex:0 0 220px;min-width:200px;max-width:240px;overflow:hidden}
 .library-content{--el-main-padding:0;min-width:0;overflow:hidden;flex:1 1 auto;min-height:0}
 /* 发布弹窗用原生 select：标签行高与控件高度都对齐全局 32px 基准，

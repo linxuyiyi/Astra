@@ -6,7 +6,7 @@
       <div class="admin-card__header">
         <div class="schedule-heading-lead">
           <h2 class="admin-card__title">日程安排</h2>
-          <ElText type="info">我的安排 · {{ currentUid() }}</ElText>
+          <ElText>我的安排 · {{ currentUid() }}</ElText>
         </div>
         <div class="admin-card__actions">
           <ElButton :icon="RefreshCw" :loading="loading" data-testid="schedules-refresh" @click="reload">刷新</ElButton>
@@ -56,7 +56,7 @@
           <ElEmpty v-if="error" :image-size="72" description="日程数据加载失败">
             <ElText type="danger">{{ error }}</ElText><ElButton :icon="RefreshCw" @click="reload">重新加载</ElButton>
           </ElEmpty>
-          <ElEmpty v-else-if="!loading" :image-size="72" :description="hasFilters ? '没有找到符合条件的日程' : '暂无日程'">
+          <ElEmpty v-else-if="!loading" :image-size="72" :description="hasFilters ? '暂无匹配日程' : '暂无日程'">
             <ElButton v-if="hasFilters" @click="resetFilters">清除筛选</ElButton>
             <ElButton v-else type="primary" :icon="Plus" @click="openCreate">新建日程</ElButton>
           </ElEmpty>

@@ -136,7 +136,7 @@ onBeforeUnmount(() => {
   min-height: 22px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
-  color: var(--muted, #7b9386);
+  color: var(--astra-text-muted);
 }
 .msg-footer.is-user {
   justify-content: flex-end;

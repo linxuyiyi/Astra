@@ -126,7 +126,7 @@ const pagedRows = computed(() => {
 const emptyText = computed(() => (
   keyword.value.trim() || resourceType.value
     ? '没有匹配的审计事件'
-    : '暂无配置审计'
+    : '暂无配置审计记录'
 ))
 
 watch([keyword, resourceType], () => { page.value = 1 })

@@ -25,13 +25,14 @@
         </template>
       </AstraPageHeader>
       <p v-if="task.worker_online === false" class="task-connection" role="status">
-        Worker 离线<span v-if="task.worker_last_checked_at"> · 最近检查 {{ formatTime(task.worker_last_checked_at) }}</span>
+        <i class="astra-service-dot" data-state="warning" aria-hidden="true" />
+        <span>Worker 离线<template v-if="task.worker_last_checked_at"> · 最近检查 {{ formatTime(task.worker_last_checked_at) }}</template></span>
       </p>
       <el-alert v-if="task.pending_message_id" title="提交尚未确认，连接恢复后自动重发，可能重复执行。" type="warning" :closable="false" />
       <el-tabs v-model="tab" class="task-tabs">
         <el-tab-pane label="原生工作区" name="workspace" class="task-pane">
           <iframe v-if="frameUrl" :key="frameUrl" :src="frameUrl" title="OpenCode 任务工作区" allow="clipboard-read; clipboard-write" />
-          <el-empty v-else-if="!checkingWorkspace" :description="workspaceMessage">
+          <el-empty v-else-if="!checkingWorkspace" :image-size="72" :description="workspaceMessage">
             <el-button v-if="task.current_session_id && task.waiting_reason !== 'session_missing'" @click="reload">重试连接</el-button>
           </el-empty>
           <p v-else class="workspace-loading">正在读取原生工作区</p>
@@ -353,17 +354,24 @@ onUnmounted(() => {
   flex-direction: column;
   min-height: 0;
 }
-.task-tabs :deep(.el-tabs__content) { flex: 1; min-height: 0; overflow: hidden; }
+.task-tabs :deep(.el-tabs__content) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--astra-border);
+  border-radius: 12px;
+  background: var(--astra-bg-panel);
+}
 .task-pane { height: 100%; min-height: 0; }
 .task-pane--events { display: flex; flex-direction: column; }
-.event-pages { display: flex; justify-content: flex-end; margin-bottom: 6px; }
-.task-connection { margin: 0; color: var(--astra-warning); }
-.task-context { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; min-width: 0; }
+.event-pages { display: flex; justify-content: flex-end; margin: 8px; }
+.task-connection { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--astra-text-secondary); }
+.task-context { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; min-width: 0; }
 .task-context div { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .task-context dt { color: var(--astra-text-muted); white-space: nowrap; }
 .task-context dd { margin: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.task-pane--scroll { overflow-y: auto; padding-right: 12px; scrollbar-gutter: stable; }
+.task-pane--scroll { overflow-y: auto; padding: 16px; scrollbar-gutter: stable; }
 iframe { display: block; width: 100%; height: 100%; border: 0; }
 .description { white-space: pre-wrap; overflow-wrap: anywhere; }
-.workspace-loading { color: var(--astra-text-muted); }
+.workspace-loading { padding: 0 16px; color: var(--astra-text-muted); }
 </style>

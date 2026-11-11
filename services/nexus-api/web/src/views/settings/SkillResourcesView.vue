@@ -28,7 +28,7 @@
           v-model="keyword"
           class="admin-page__keyword"
           aria-label="搜索技能"
-          placeholder="搜索技能名称 / 说明"
+          placeholder="按名称或说明搜索"
           clearable
           :prefix-icon="Search"
         />

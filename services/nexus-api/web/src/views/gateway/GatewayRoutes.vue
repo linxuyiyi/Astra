@@ -16,7 +16,7 @@
         </ElSelect>
       </ElFormItem>
       <ElButton type="primary" :disabled="loading" :loading="savingSpeech" @click="saveSpeech">保存语音输入</ElButton>
-      <span>私聊与群聊共用此路由，识别文字回填草稿后手动发送。</span>
+      <span>私聊和群聊共用。识别结果会填入草稿。</span>
       <ElAlert v-if="speechRouteUnavailable" type="warning" :closable="false" title="已保存的语音路由不可用，请重新选择已启用的 ASR 路由。" />
     </ElForm>
 
@@ -453,7 +453,7 @@ onMounted(load)
 .route-cell strong { overflow: hidden; color: var(--astra-text-primary); font-size: var(--astra-font-label); text-overflow: ellipsis; white-space: nowrap; }
 .route-cell__desc { overflow: hidden; color: var(--astra-text-muted); font-size: var(--astra-font-helper); text-overflow: ellipsis; white-space: nowrap; }
 .route-target-tag { font-family: monospace; font-size: 13px; }
-.route-target-arrow { color: #0d9e61; font-weight: bold; margin-right: 2px; }
+.route-target-arrow { color: var(--astra-text-muted); font-weight: 500; margin-right: 2px; }
 .route-same-muted { color: var(--astra-text-muted); font-size: 13px; }
 .gateway-drawer__footer { display: flex; align-items: center; gap: 10px; }
 .gateway-drawer__spacer { flex: 1; }

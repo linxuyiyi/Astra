@@ -18,7 +18,7 @@
       element-loading-text="正在加载节点"
       data-testid="gateway-node-state"
     >
-      <ElEmpty v-if="!loading" :image-size="72" description="未找到该节点，或它已被删除。">
+      <ElEmpty v-if="!loading" :image-size="72" description="未找到该节点，或节点已删除">
         <ElButton type="primary" :icon="ArrowLeft" data-testid="gateway-node-back-empty" @click="backToList">返回节点列表</ElButton>
       </ElEmpty>
     </ElCard>
@@ -52,8 +52,8 @@
 
       <section class="gateway-node-status" :data-status="serveTone" data-testid="gateway-node-summary">
         <div class="gateway-node-status__main">
-          <span class="gateway-node-status__pill">{{ serveSummary.title }}</span>
-          <p class="gateway-node-status__detail">{{ serveSummary.detail }}</p>
+          <span class="gateway-health-label"><i class="astra-service-dot" :data-state="serveTone" aria-hidden="true" />{{ serveSummary.title }}</span>
+          <p v-if="serveSummary.detail" class="gateway-node-status__detail">{{ serveSummary.detail }}</p>
         </div>
         <div class="gateway-node-status__facts">
           <span>健康 <b>{{ healthStateLabel(node.health_state) }}</b></span>
@@ -482,16 +482,12 @@ const serveTone = computed(() => {
 const serveSummary = computed(() => {
   const current = node.value
   if (!current) return { title: '正在确认能否接请求', detail: '' }
-  const health = healthStateLabel(current.health_state)
-  const scheduling = schedulingStateLabel(current.scheduling_state)
-  const config = configStateLabel(current.config_state)
-  const facts = `健康 ${health} · 调度 ${scheduling} · 配置 ${config}`
-  if (current.config_state !== 'ENABLED') return { title: '不能接请求', detail: `配置已禁用。${facts}` }
-  if (current.scheduling_state === 'DRAINING') return { title: '正在下线', detail: `不再接新请求。${facts}` }
-  if (current.scheduling_state !== 'ACTIVE') return { title: '不能接请求', detail: facts }
-  if (current.health_state === 'UNHEALTHY' || current.health_state === 'DEGRADED') return { title: '不能稳定接请求', detail: facts }
-  if (current.health_state === 'UNKNOWN' || current.health_state === 'CHECKING') return { title: '还不能确认', detail: `探测还没完成。${facts}` }
-  return { title: '可以接请求', detail: facts }
+  if (current.config_state !== 'ENABLED') return { title: '不能接请求', detail: '节点已禁用' }
+  if (current.scheduling_state === 'DRAINING') return { title: '正在下线', detail: '停止接收新请求' }
+  if (current.scheduling_state !== 'ACTIVE') return { title: '不能接请求', detail: '' }
+  if (current.health_state === 'UNHEALTHY' || current.health_state === 'DEGRADED') return { title: '不能稳定接请求', detail: '' }
+  if (current.health_state === 'UNKNOWN' || current.health_state === 'CHECKING') return { title: '接请求能力待确认', detail: '探测尚未完成' }
+  return { title: '可以接请求', detail: '' }
 })
 const latestProbe = computed(() => healthChecks.value[0] ?? null)
 function onNodeCommand(command: string | number) {
@@ -773,28 +769,17 @@ onMounted(() => {
 
 /* ── 服务状态 ─────────────────────────────────────────────────────── */
 .gateway-node-status {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px;
   padding: 12px 16px; border: 1px solid var(--astra-border); border-radius: 12px; background: var(--astra-bg-panel);
 }
-.gateway-node-status[data-status='normal'] { border-color: #cfe9dd; background: #f3fbf6; }
-.gateway-node-status[data-status='degraded'] { border-color: #e8cd8f; background: #fff9ec; }
-.gateway-node-status[data-status='down'] { border-color: #e7a8ae; background: #fff5f6; }
-.gateway-node-status[data-status='unknown'] { border-color: #d5e0da; background: #f6f8f7; }
 .gateway-node-status__main { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
-.gateway-node-status__pill {
-  flex: none; padding: 3px 10px; border-radius: 999px;
-  background: #e3f4ec; color: #187956; font-size: 12px; font-weight: var(--astra-weight-bold);
-}
-.gateway-node-status[data-status='degraded'] .gateway-node-status__pill { background: #fbeac4; color: #8a5a08; }
-.gateway-node-status[data-status='down'] .gateway-node-status__pill { background: #f8dadd; color: #9f2f3a; }
-.gateway-node-status[data-status='unknown'] .gateway-node-status__pill { background: #e7eeeb; color: #5c736a; }
 .gateway-node-status__detail { margin: 0; color: var(--astra-text-secondary); }
-.gateway-node-status__facts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-left: auto; color: var(--astra-text-muted); font-size: 12px; }
+.gateway-node-status__facts { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-left: auto; color: var(--astra-text-muted); font-size: 12px; }
 .gateway-node-status__facts b { color: var(--astra-text-primary); font-weight: 600; }
 
 /* ── 分段导航 ─────────────────────────────────────────────────────── */
 .gateway-node-tabs {
-  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px;
   padding: 8px 12px; border: 1px solid var(--astra-border); border-radius: 12px; background: var(--astra-bg-panel);
 }
 .gateway-node-tabs__tools { display: flex; align-items: center; gap: 8px; }

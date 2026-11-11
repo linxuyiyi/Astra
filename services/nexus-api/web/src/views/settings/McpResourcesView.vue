@@ -21,7 +21,7 @@
         </ElSelect>
       </div>
       <div class="admin-page__search">
-        <ElInput v-model="keyword" class="admin-page__keyword" aria-label="搜索 MCP" placeholder="搜索名称 / 说明 / 地址" clearable :prefix-icon="Search" />
+        <ElInput v-model="keyword" class="admin-page__keyword" aria-label="搜索 MCP" placeholder="按名称、说明或地址搜索" clearable :prefix-icon="Search" />
       </div>
     </div>
 

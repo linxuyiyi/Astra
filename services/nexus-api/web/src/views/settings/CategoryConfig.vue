@@ -186,7 +186,7 @@ function promptSummary(row: TaskCategory) {
   if (task && question) return '任务和问题提示词都已配置'
   if (task) return '已有任务提示词，还缺问题提示词'
   if (question) return '已有问题提示词，还缺任务提示词'
-  return '提示词还没配置'
+  return '未配置提示词'
 }
 
 function beginEdit(row: TaskCategory) {

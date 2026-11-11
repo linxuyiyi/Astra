@@ -1,9 +1,9 @@
 <template>
   <ElContainer class="gateway-page" data-testid="gateway-page">
-    <ElContainer class="gateway-workspace">
-      <ElAside class="gateway-aside">
-        <div class="gateway-aside__title">API 网关</div>
-        <ElMenu class="gateway-menu" mode="vertical" :default-active="activeMenu" router>
+    <ElContainer class="admin-workspace">
+      <ElAside class="admin-sidebar">
+        <div class="admin-sidebar__title">API 网关</div>
+        <ElMenu class="admin-menu" mode="vertical" :default-active="activeMenu" router>
           <ElMenuItemGroup v-for="group in menuGroups" :key="group.id" :title="group.label">
             <ElMenuItem
               v-for="item in group.items"
@@ -11,19 +11,19 @@
               :index="item.path"
               :data-testid="`gateway-menu-${item.id}`"
             >
-              <component :is="item.icon" :size="16" />
+              <component :is="item.icon" :size="16" aria-hidden="true" />
               <span>{{ item.label }}</span>
             </ElMenuItem>
           </ElMenuItemGroup>
         </ElMenu>
       </ElAside>
-      <ElMain class="gateway-content">
-        <ElCard class="content-shell gateway-shell" shadow="never">
+      <ElMain class="admin-workspace__content">
+        <ElCard class="content-shell" shadow="never">
           <template #header>
-            <div class="gateway-shell__header">
-              <span class="gateway-shell__title">{{ activeSectionLabel }}</span>
+            <div class="admin-workspace__heading">
+              <h2 class="admin-workspace__title">{{ activeSectionLabel }}</h2>
               <!-- 子页把刷新与主操作 Teleport 到这里，工具栏与内容卡顶对齐。 -->
-              <div id="gateway-header-actions" class="gateway-header-actions" />
+              <div id="gateway-header-actions" class="admin-workspace__actions" />
             </div>
           </template>
           <RouterView />
@@ -71,25 +71,3 @@ const activeMenu = computed(() => {
 const activeSectionLabel = computed(() => menuItems.find((item) => item.path === activeMenu.value)?.label ?? '运行总览')
 
 </script>
-
-<style scoped>
-.gateway-page {
-  display: flex; flex-direction: column; height: 100%; min-height: 480px;
-  padding: 0; overflow: hidden; background: var(--astra-bg-base); --astra-text-muted: #3a524c;
-}
-.gateway-page > .gateway-workspace { flex: 1 1 auto; min-height: 0; }
-.gateway-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
-.gateway-workspace { align-items: stretch; min-height: 0; }
-.gateway-aside { --el-aside-width: 210px; min-height: 0; border: 0; border-right: 1px solid var(--astra-border); border-radius: 12px 0 0 12px; background: transparent; overflow: auto; }
-.gateway-aside__title { min-height: 60px; display: flex; align-items: center; padding: 0 18px; color: var(--astra-text-primary); font-size: var(--astra-font-control); font-weight: var(--astra-weight-bold); }
-.gateway-menu { --el-menu-base-level-padding: 14px; --el-menu-item-height: 44px; border-right: 0; background: transparent; }
-.gateway-menu :deep(.el-menu-item) { gap: 8px; }
-.gateway-content { --el-main-padding: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
-.gateway-content > .content-shell { flex: 1 1 auto; min-height: 0; }
-.gateway-shell { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; border: none; border-radius: 0; }
-.gateway-shell > .el-card__header { padding: 16px; flex: none; }
-.gateway-shell :deep(.el-card__body) { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px; scrollbar-gutter: stable; }
-.gateway-shell__header { display: flex; align-items: center; gap: 12px; min-height: 32px; }
-.gateway-shell__title { color: var(--astra-text-primary); font-size: 16px; font-weight: 600; }
-@media (max-width: 860px) { .gateway-aside { --el-aside-width: 170px; } }
-</style>

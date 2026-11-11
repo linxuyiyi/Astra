@@ -3,7 +3,7 @@
     <AstraPageHeader :title="worker?.name || 'Worker 详情'" :description="worker?.description">
       <template v-if="worker">
         <SemanticTag :tone="semanticTone(statusTone(worker.status))" :label="statusLabel(worker.status)" />
-        <span>连接 {{ worker.online === null ? '未知' : worker.online ? '在线' : '离线' }}</span>
+        <span class="worker-connection"><i class="astra-service-dot" :data-state="worker.online ? 'live' : 'unknown'" aria-hidden="true" />连接 {{ worker.online === null ? '未知' : worker.online ? '在线' : '离线' }}</span>
         <span>任务调度 {{ worker.enabled ? '已启用' : '已停用' }}</span>
         <span v-if="lastUpdated">更新于 {{ lastUpdated }}</span>
       </template>
@@ -158,6 +158,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.worker-connection { display: inline-flex; align-items: center; gap: 4px; }
 .worker-detail__content { display: flex; flex: 1 1 auto; flex-direction: column; gap: 16px; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 .worker-detail__content > * { flex: none; }
 </style>

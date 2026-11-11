@@ -19,12 +19,7 @@
         data-testid="chat-empty"
       >
         <div class="chat-empty__title">开始对话</div>
-        <p class="chat-empty__hint">直接输入消息，或拖入、粘贴图片。Enter 发送 · Shift+Enter 换行 · ⌘K 聚焦输入。</p>
-        <ul class="chat-empty__tips">
-          <li v-if="target?.kind === 'group'">可 @ 数字员工</li>
-          <li>点击麦克风语音转文字</li>
-          <li>回复过程中可点击停止</li>
-        </ul>
+        <p class="chat-empty__hint">输入消息，或拖入、粘贴图片</p>
       </div>
       <div
         v-for="message in state.messages"
@@ -299,7 +294,6 @@
                 v-if="runtime.streaming && canType"
                 class="compose-send"
                 type="danger"
-                round
                 :loading="state.phase === 'interrupting'"
                 data-testid="compose-stop"
                 @click="runtime.stop()"
@@ -308,7 +302,6 @@
                 v-else
                 class="compose-send"
                 type="primary"
-                round
                 data-testid="compose-send"
                 :disabled="!canSend"
                 :loading="state.sending || state.uploading"
@@ -319,9 +312,9 @@
         </div>
       </div>
       <div class="compose-hint muted" data-testid="compose-hint">
-        Enter 发送 · Shift+Enter 换行
+        <kbd>Enter</kbd> 发送 · <kbd>Shift+Enter</kbd> 换行
         <template v-if="target?.kind === 'group'"> · @ 提及员工</template>
-        · ⌘K 聚焦输入
+        · <kbd>⌘K</kbd> 聚焦输入
       </div>
       <input ref="fileInput" type="file" multiple hidden accept="image/*,application/pdf,text/*" @change="onFileChange" />
     </div>
@@ -778,7 +771,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 17px;
+  gap: 16px;
 }
 .jump-latest {
   position: absolute;
@@ -792,7 +785,7 @@ onBeforeUnmount(() => {
   font-weight: 650;
   border-radius: 999px;
   padding: 7px 14px;
-  box-shadow: 0 8px 22px rgba(24, 139, 105, 0.16);
+  box-shadow: var(--astra-shadow-panel);
   cursor: pointer;
 }
 .jump-latest:hover { background: #eef8f2; border-color: #188b69; }
@@ -807,7 +800,6 @@ onBeforeUnmount(() => {
   border: 1px solid #f0c7b8;
   background: #fff6f2;
   color: #8a3b22;
-  box-shadow: 0 6px 18px rgba(176, 74, 42, 0.08);
 }
 .fail-bar__text {
   flex: 1;
@@ -839,44 +831,20 @@ onBeforeUnmount(() => {
   text-underline-offset: 2px;
 }
 .chat-empty {
-  margin-top: auto;
-  margin-bottom: auto;
-  padding: 36px 24px 28px;
+  margin: auto 0;
+  padding: 24px;
   text-align: center;
-  border: 1px dashed #cfe3d8;
-  border-radius: 16px;
-  background: #fbfefc;
-  box-shadow: 0 8px 24px rgba(24, 139, 105, 0.04);
 }
 .chat-empty__title {
-  font-size: 16px;
-  font-weight: 750;
-  color: var(--ink, #203830);
   margin-bottom: 8px;
+  color: var(--astra-text-primary);
+  font-size: var(--astra-font-section);
+  font-weight: 600;
 }
 .chat-empty__hint {
-  margin: 0 auto 14px;
-  max-width: 420px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--muted, #7b9386);
-}
-.chat-empty__tips {
-  list-style: none;
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-.chat-empty__tips li {
-  font-size: 12px;
-  color: #3f6b56;
-  background: #eef8f2;
-  border: 1px solid #d5eade;
-  border-radius: 999px;
-  padding: 5px 11px;
+  color: var(--astra-text-muted);
+  font-size: var(--astra-font-helper);
 }
 .msg-body { min-width: 0; display: grid; gap: 6px; flex: 1; }
 .msg-sender-name {
@@ -886,24 +854,30 @@ onBeforeUnmount(() => {
   margin-bottom: -2px; /* with msg-body gap 6 → ~4px to bubble */
 }
 .chat-compose {
-  padding: 10px 20px 12px;
-  border-top: 1px solid #edf2ef;
+  padding: 12px 20px;
+  border-top: 1px solid var(--astra-border);
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-.compose-shell { width: 100%; max-width: 760px; border-radius: 30px; transition: box-shadow 0.15s ease; }
+.compose-shell { width: 100%; max-width: 760px; border-radius: 12px; }
 .compose-shell.is-drop-target {
-  outline: 2px dashed var(--green, #188b69);
-  outline-offset: 3px;
-  box-shadow: 0 0 0 4px rgba(24, 139, 105, 0.12);
+  outline: 2px dashed var(--astra-primary);
+  outline-offset: 2px;
 }
 .compose-shell.is-drop-target :deep(.compose-box),
 .compose-shell.is-drop-target .compose-box {
-  border-color: var(--green, #188b69);
+  border-color: var(--astra-primary);
   border-style: dashed;
 }
-.compose-hint { margin-top: 4px; font-size: 11px; width: 100%; max-width: 760px; }
+.compose-hint { margin-top: 8px; font-size: 12px; width: 100%; max-width: 760px; }
+.compose-hint kbd {
+  padding: 0 4px;
+  border: 1px solid var(--astra-border);
+  border-radius: 4px;
+  background: var(--astra-bg-base);
+  font: inherit;
+}
 .compose-box { position: relative; }
 .compose-mentions {
   position: absolute;
@@ -928,7 +902,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--ink, #203830);
+  color: var(--astra-text-primary);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
@@ -956,7 +930,7 @@ onBeforeUnmount(() => {
   padding: 15.5px 4px;
   line-height: 21px;
   font-size: 14px;
-  color: var(--ink, #203830);
+  color: var(--astra-text-primary);
 }
 .compose-actions {
   display: flex;
@@ -1047,14 +1021,14 @@ onBeforeUnmount(() => {
 .draft-file__name {
   font-size: 12px;
   font-weight: 600;
-  color: var(--ink, #203830);
+  color: var(--astra-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .draft-file__desc {
   font-size: 11px;
-  color: var(--muted, #7b9386);
+  color: var(--astra-text-muted);
 }
 .draft-file__remove {
   width: 24px;
@@ -1139,7 +1113,7 @@ onBeforeUnmount(() => {
   margin: 0.7em 0 0.35em;
   line-height: 1.35;
   font-weight: 700;
-  color: var(--ink, #203830);
+  color: var(--astra-text-primary);
 }
 .markdown :deep(h1:first-child),
 .markdown :deep(h2:first-child),
@@ -1194,7 +1168,7 @@ onBeforeUnmount(() => {
 .markdown :deep(th) {
   background: #eef6f1;
   font-weight: 650;
-  color: var(--ink, #203830);
+  color: var(--astra-text-primary);
 }
 .markdown :deep(tr:nth-child(even) td) { background: #f7fbf8; }
 .markdown :deep(hr) {
@@ -1297,31 +1271,15 @@ onBeforeUnmount(() => {
   height: 1.05em;
   margin-left: 2px;
   vertical-align: -0.12em;
-  background: var(--green, #188b69);
+  background: var(--astra-primary);
   border-radius: 1px;
-  animation: stream-blink 1s step-end infinite;
-  box-shadow: 0 0 8px rgba(24, 139, 105, 0.45);
 }
 .stream-pulse {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--green, #188b69);
-  box-shadow: 0 0 0 0 rgba(24, 139, 105, 0.45);
-  animation: stream-pulse 1.2s ease-out infinite;
+  background: var(--astra-primary);
   flex: none;
-}
-@keyframes stream-blink {
-  50% { opacity: 0; }
-}
-@keyframes stream-pulse {
-  0% { transform: scale(0.85); box-shadow: 0 0 0 0 rgba(24, 139, 105, 0.45); }
-  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(24, 139, 105, 0); }
-  100% { transform: scale(0.85); box-shadow: 0 0 0 0 rgba(24, 139, 105, 0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .stream-cursor, .stream-pulse { animation: none; }
-  .stream-pulse { box-shadow: none; }
 }
 /* M5: reveal message-level Copy on bubble hover (island group-hover/message). */
 .msg:hover :deep(.msg-footer__copy),

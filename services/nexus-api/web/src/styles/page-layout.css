@@ -13,7 +13,7 @@
 .astra-page {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   height: 100%;
   min-height: 0;
   padding: 0 0 12px;
@@ -31,15 +31,16 @@
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px 16px;
+  gap: 8px 16px;
 }
 
-.astra-page-header__lead { display: grid; min-width: 0; gap: 3px; }
+.astra-page-header__lead { display: grid; min-width: 0; gap: 4px; }
 
 .astra-page-header__title {
   margin: 0;
   color: var(--astra-text-primary);
-  font-size: var(--astra-font-section);
+  font-size: var(--astra-font-title);
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -68,7 +69,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
-  margin-top: 1px;
   color: var(--astra-text-muted);
   font-size: var(--astra-font-helper);
 }
@@ -79,13 +79,15 @@
 /* 状态点：服务正常取主色，异常取危险色，由 data-state 切换。 */
 .astra-page-header__meta [data-state='error'] { color: var(--astra-danger); }
 .astra-service-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   flex: none;
   border-radius: 50%;
   background: var(--astra-primary);
 }
-.astra-service-dot[data-state='error'] { background: var(--astra-danger); }
+.astra-service-dot:is([data-state='error'], [data-state='down']) { background: var(--astra-danger); }
+.astra-service-dot:is([data-state='warning'], [data-state='degraded']) { background: var(--astra-warning); }
+.astra-service-dot[data-state='unknown'] { background: var(--astra-neutral); }
 
 .astra-page-header__actions { display: flex; flex: none; align-items: center; gap: 8px; }
 
@@ -104,7 +106,7 @@
   cursor: pointer;
 }
 .astra-mark:hover { border-color: var(--astra-warning); }
-.astra-mark[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--astra-primary-glow); }
+.astra-mark[aria-pressed='true'] { border-color: var(--astra-warning); }
 
 /* ── 表格面板与页脚 ────────────────────────────────────────────────────
    表格占满筛选面板以下的剩余空间，表头固定；分页固定在底部，
@@ -189,11 +191,6 @@
   background: transparent;
   box-shadow: none;
 }
-.content-shell .gateway-overview__metrics .el-card {
-  border-right: 1px solid var(--astra-border);
-  border-radius: 0;
-}
-.content-shell .gateway-overview__metrics .el-card:last-child { border-right: 0; }
 
 
 /* ── 列表管理页统一骨架（Nexus 管理页面统一 UI 规范 v1.1）────────────────
@@ -222,7 +219,7 @@
 .admin-card__title {
   margin: 0;
   color: var(--astra-text-primary);
-  font-size: 16px;
+  font-size: var(--astra-font-section);
   font-weight: 600;
   line-height: 1.4;
 }
@@ -246,7 +243,7 @@
   top: 0;
   z-index: 4;
   background: var(--admin-page-bg, var(--astra-bg-panel));
-  padding-bottom: 2px;
+  padding-bottom: 4px;
 }
 
 .admin-page__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
@@ -271,10 +268,77 @@
    和 flex gap 叠加后疏密不一（下拉按钮前只有 gap、文字按钮前是 12px + gap），这里一并归零。 */
 .admin-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
 
-.admin-actions .el-button + .el-button { margin-left: 0; }
+.admin-actions .el-button + .el-button,
+.admin-page__search .el-button + .el-button,
+.admin-card__actions .el-button + .el-button,
+.astra-page-header__actions .el-button + .el-button { margin-left: 0; }
 
 @media (max-width: 900px) {
   .admin-page__search { margin-left: 0; }
   .admin-page__select { width: 140px; }
   .admin-page__keyword { width: 200px; }
+}
+
+/* 配置中心和 API 网关共用左侧导航与内容标题。 */
+.admin-workspace {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--astra-border);
+  border-radius: 12px;
+  background: var(--astra-bg-panel);
+}
+.admin-sidebar {
+  --el-aside-width: 208px;
+  padding: 0 12px 16px;
+  overflow: auto;
+  border-right: 1px solid var(--astra-border);
+  background: var(--astra-bg-sidebar);
+}
+.admin-sidebar__title {
+  margin: 0;
+  padding: 16px 8px 12px;
+  color: var(--astra-text-primary);
+  font-size: var(--astra-font-subtitle);
+  font-weight: 600;
+}
+.admin-menu {
+  --el-menu-base-level-padding: 8px;
+  --el-menu-item-height: 36px;
+  border-right: 0;
+  background: transparent;
+}
+.admin-menu .el-menu-item {
+  gap: 8px;
+  margin-bottom: 4px;
+  border-inline-start: 2px solid transparent;
+  border-radius: 6px;
+  color: var(--astra-text-secondary);
+}
+.admin-menu .el-menu-item svg { flex: none; stroke-width: 1.5; }
+.admin-menu .el-menu-item:hover { background: var(--astra-bg-elevated); }
+.admin-menu .el-menu-item.is-active {
+  border-inline-start-color: var(--astra-primary);
+  background: var(--astra-primary-soft);
+  color: var(--astra-primary-bright);
+  font-weight: 600;
+}
+.admin-menu .el-menu-item:focus-visible { outline: 2px solid var(--astra-primary); outline-offset: -2px; }
+.admin-menu .el-menu-item-group__title { padding: 12px 8px 4px; color: var(--astra-text-muted); }
+.admin-workspace .content-shell { display: flex; flex-direction: column; border: 0; border-radius: 0; }
+.admin-workspace .content-shell > .el-card__header { flex: none; padding: 12px 16px; }
+.admin-workspace .content-shell > .el-card__body { scrollbar-gutter: stable; }
+.admin-workspace__content { --el-main-padding: 0; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.admin-workspace__heading { display: flex; align-items: center; gap: 12px; min-height: 32px; }
+.admin-workspace__title { margin: 0; font-size: var(--astra-font-section); font-weight: 600; }
+.admin-workspace__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.admin-workspace__actions .el-button + .el-button { margin-left: 0; }
+
+.gateway-health-label {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--astra-text-primary);
+  font-weight: 600;
 }

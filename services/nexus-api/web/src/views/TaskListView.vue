@@ -1,6 +1,6 @@
 <template>
   <section class="astra-page" data-testid="task-list">
-    <AstraPageHeader title="任务大厅" description="查看任务进展、处理执行并确认验收">
+    <AstraPageHeader title="任务大厅">
       <template #actions>
         <el-button :icon="RefreshCw" :loading="loading" @click="load()">刷新</el-button>
         <el-button type="primary" :icon="Plus" @click="creating = true">创建任务</el-button>

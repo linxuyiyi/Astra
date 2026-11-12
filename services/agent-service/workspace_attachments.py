@@ -241,6 +241,31 @@ def register_workspace_attachments(app, storage):
 
                 return await save(target.workdir, key, chunks())
 
+    @app.delete(f"{prefix}/group-member", status_code=204)
+    async def retire_group_member(
+        agent_id: str, session_id: str, channel_id: str, employee_id: str,
+        user_id: str = Depends(get_current_user_id),
+    ):
+        if not re.fullmatch(GROUP_ID, channel_id) or not re.fullmatch(r"[\w-]{1,64}", employee_id):
+            raise HTTPException(422, "群成员标识无效")
+        workspace_id = f"ws-{channel_id}-{employee_id}"
+        session = await storage.get_session(user_id, agent_id, session_id)
+        if session and session.config.workspace_id != workspace_id:
+            raise HTTPException(409, "附件副本会话不属于该群")
+        sessions = app.state.session_service
+        if session and not await sessions.cancel_session_run(session_id):
+            raise HTTPException(409, "会话仍在运行，稍后重试回收")
+        workspace = await app.state.workspace_manager.get_workspace(user_id, agent_id, session_id, workspace_id)
+        try:
+            with attachment_directory(workspace.workdir) as directory:
+                for key in os.listdir(directory):
+                    if re.fullmatch(ATTACHMENT_ID, key):
+                        os.unlink(key, dir_fd=directory)
+        except FileNotFoundError:
+            pass
+        if session:
+            await sessions.delete_session(user_id, agent_id, session_id)
+
     @app.delete(f"{prefix}/{{key}}", status_code=204)
     async def delete(
         agent_id: str, session_id: str,

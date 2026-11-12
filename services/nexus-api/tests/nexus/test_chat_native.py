@@ -189,7 +189,7 @@ def test_native_history_surfaces_upstream_error(tmp_path, monkeypatch):
         client.__exit__(None, None, None)
 
 
-def test_flat_history_stays_unchanged(tmp_path, monkeypatch):
+def test_conversation_binding_has_no_duplicate_history(tmp_path, monkeypatch):
     """旧页面的扁平响应不能被原生接口顺带改掉。"""
 
     remote = {
@@ -210,9 +210,11 @@ def test_flat_history_stays_unchanged(tmp_path, monkeypatch):
 
         flat = client.get(f"/api/v1/conversations/{conversation_id}", headers=OWNER).json()
 
-        assert flat["messages"][0]["text"] == "收到"
-        assert "content" not in flat["messages"][0]
-        assert flat["event_cursor"] == "3-0"
+        assert flat["agentscope_session_id"] == "session-1"
+        assert "messages" not in flat
+        native = client.get(f"/api/v1/conversations/{conversation_id}/messages", headers=OWNER).json()
+        assert native["messages"] == [remote]
+        assert native["event_cursor"] == "3-0"
     finally:
         client.__exit__(None, None, None)
 

@@ -34,7 +34,7 @@ def isolated_sql_database(monkeypatch):
         assert db.execute(text("SELECT VERSION()")).scalar_one().startswith("8.0.36")
         db.execute(text(f"CREATE DATABASE {name} CHARACTER SET utf8mb4 COLLATE utf8mb4_bin"))
     target = url.set(database=name, drivername="mysql+asyncmy")
-    monkeypatch.setenv("ASTRA_DATABASE_URL", str(target))
+    monkeypatch.setenv("ASTRA_DATABASE_URL", target.render_as_string(hide_password=False))
     get_settings.cache_clear()
     create_test_schema(target)
     try:

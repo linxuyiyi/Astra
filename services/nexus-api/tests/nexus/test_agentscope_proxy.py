@@ -149,3 +149,33 @@ async def test_browser_proxy_cannot_access_internal_attachment_routes(upstream):
         )
     assert response.status_code == native.status_code == 404
     assert upstream == []
+
+
+async def test_console_cannot_list_or_access_managed_employee_sessions(upstream):
+    from sqlalchemy import text
+
+    from nexus_api.db import connect
+
+    with connect() as db:
+        db.execute(text(
+            "INSERT INTO t_nexus_employees "
+            "(id,name,domain,description,instructions,avatar,enabled,knowledge_json,skills_json,"
+            "tools_json,agentscope_agent_id,created_at,updated_at) VALUES "
+            "('review','review','review','','','',1,'[]','[]','[]','managed-agent','now','now')"
+        ))
+        db.commit()
+    async with _client() as client:
+        result = await client.get("/agentscope-api/sessions/", params={"agent_id": "managed-agent"})
+        assert result.status_code == 403
+        result = await client.get(
+            "/agentscope-api/sessions/unbound-history/messages", params={"agent_id": "managed-agent"},
+        )
+        assert result.status_code == 403
+        result = await client.post(
+            "/agentscope-api/chat/", params={"agent_id": "console-agent"},
+            json={"agent_id": "managed-agent", "session_id": "unbound-history"},
+        )
+        assert result.status_code == 403
+        assert not upstream
+        result = await client.get("/agentscope-api/sessions/", params={"agent_id": "console-agent"})
+        assert result.status_code == 200

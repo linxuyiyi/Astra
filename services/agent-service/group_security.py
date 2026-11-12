@@ -13,6 +13,7 @@ import httpx
 from starlette.responses import JSONResponse
 
 execution_id: ContextVar[str] = ContextVar("nexus_execution_id", default="")
+delivery_only: ContextVar[bool] = ContextVar("nexus_delivery_only", default=False)
 
 
 def headers():
@@ -28,11 +29,14 @@ def install_run_context(chat_service_class):
     async def run(self, user_id, session_id, agent_id, input_msg=None, sop_dispatch=None):
         inputs = input_msg if isinstance(input_msg, list) else [input_msg]
         fence = ""
+        staging = False
         for msg in inputs:
             metadata = getattr(msg, "metadata", None) or {}
             if metadata.get("discussion_id"):
                 fence = str(metadata["discussion_id"])
+                staging = metadata.get("delivery_only") is True
         token = execution_id.set(fence)
+        delivery_token = delivery_only.set(staging)
         try:
             if not any((getattr(msg, "metadata", None) or {}).get("nexus_deduplicate") for msg in inputs):
                 return await original(self, user_id, session_id, agent_id, input_msg, sop_dispatch)
@@ -51,6 +55,7 @@ def install_run_context(chat_service_class):
                     return None
                 return await original(self, user_id, session_id, agent_id, pending, sop_dispatch)
         finally:
+            delivery_only.reset(delivery_token)
             execution_id.reset(token)
     chat_service_class.run = run
 
@@ -143,6 +148,8 @@ def secure_group_toolkit(factory, nexus_api, policy_loader=None):
             return await mcp_ref_for(tool, current)
 
         async def permitted(name, registered, current):
+            if delivery_only.get():
+                return False
             tool = registered.tool
             if current.get("task_source") and name in {"Bash", "PowerShell"} and not getattr(tool, "is_mcp", False):
                 # LocalBackend executes on the host without a filesystem sandbox.
@@ -183,3 +190,14 @@ def secure_group_toolkit(factory, nexus_api, policy_loader=None):
         toolkit.call_tool = call_tool
         return toolkit
     return assembled
+
+
+def install_nexus_runtime(chat_service, realtime_service, toolkit_factory, nexus_api):
+    """AgentScope 2.0.10 运行入口的授权、去重与日程准备。"""
+    from schedule_resources import install_schedule_preparation, schedule_toolkit
+
+    install_run_context(chat_service.ChatService)
+    install_schedule_preparation(chat_service.ChatService, nexus_api)
+    toolkit = schedule_toolkit(secure_group_toolkit(toolkit_factory, nexus_api))
+    chat_service.get_toolkit = toolkit
+    realtime_service.get_toolkit = toolkit

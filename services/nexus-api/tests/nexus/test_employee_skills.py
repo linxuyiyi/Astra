@@ -137,7 +137,7 @@ def test_task_named_skill_uses_the_library_like_any_other_skill(tmp_path, monkey
     assert fake.from_library[0]["skill_ids"] == ["task-management"]
 
 
-def test_private_send_and_rebind_sync_existing_employee_skills(tmp_path, monkeypatch):
+def test_private_send_mounts_skills_and_rebind_reuses_the_ready_session(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
     fake = FakeAgentScope(workspace_skills=[{"name": SKILL_NAME}])
     with TestClient(create_app()) as test_client:
@@ -170,10 +170,8 @@ def test_private_send_and_rebind_sync_existing_employee_skills(tmp_path, monkeyp
             headers=headers,
         )
         assert rebound.status_code == 200, rebound.text
-        rebound_session = rebound.json()["session_id"]
-        rebound_calls = [item for item in fake.from_library if item["session_id"] == rebound_session]
-        assert rebound_calls, fake.from_library
-        assert rebound_calls[0]["skill_ids"] == [SKILL_ID]
+        assert rebound.json()["session_id"] == session_id
+        assert fake.from_library == []
 
 
 def test_group_session_installs_employee_skills(tmp_path, monkeypatch):

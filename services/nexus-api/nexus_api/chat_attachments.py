@@ -95,6 +95,28 @@ def attachment_content(blocks, attachments, message_id):
     }]
 
 
+def present_private_message(message):
+    files = (message.get("metadata") or {}).get("attachments")
+    if message.get("role") != "user" or not files:
+        return message
+    hint_id = f"nexus-attachments-{message['id']}"
+    blocks = [block for block in message["content"] if block.get("id") != hint_id]
+    urls = {block.get("source", {}).get("url") for block in blocks if block.get("type") == "data"}
+    for file in files:
+        url = f"/api/v1/attachments/{file['id']}"
+        if url not in urls:
+            blocks.append({
+                "type": "data", "id": file["id"], "name": file["name"],
+                "created_at": message.get("created_at") or "",
+                "source": {
+                    "type": "url", "url": url,
+                    "media_type": file.get("type") or "application/octet-stream",
+                },
+            })
+            urls.add(url)
+    return {**message, "content": blocks}
+
+
 class TextBlock(BaseModel):
     type: Literal["text"] = "text"
     text: str = Field(max_length=64_000)

@@ -769,8 +769,8 @@ def test_send_private_passes_message_id_to_trigger_chat(tmp_path, monkeypatch):
         assert chats[0]["input"]["id"] == sent_msg["id"]
         assert chats[0]["input"]["metadata"]["message_id"] == sent_msg["id"]
 
-        # Check get_conversation returns the exact message id
-        get_resp = client.get(f"/api/v1/conversations/{conv['id']}", headers=headers)
+        # 原生历史保留已提交的消息 ID。
+        get_resp = client.get(f"/api/v1/conversations/{conv['id']}/messages", headers=headers)
         assert get_resp.status_code == 200
         history_msgs = get_resp.json()["messages"]
         assert len(history_msgs) == 1

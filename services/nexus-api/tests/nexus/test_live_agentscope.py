@@ -240,12 +240,12 @@ def test_task_6_1_agent_sessions_sse_and_peer_wakeup():
         assert "已把消息交给对方" not in peer_text
         assert "没有生成回复" not in peer_text
         stored_after = client.get(
-            f"{NEXUS}/api/v1/conversations/{first['id']}",
+            f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
             headers=OWNER,
         ).json()["messages"]
-        senders_after = [item["sender"] for item in stored_after]
+        senders_after = [item["role"] for item in stored_after]
         assert [item for item in senders_after if item == "user"] == ["user", "user", "user"]
-        assert star_employee["id"] in senders_after
+        assert "assistant" in senders_after
         print(
             json.dumps(
                 {
@@ -550,7 +550,11 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
             restored = client.get(f"{NEXUS}/api/v1/conversations/{first['id']}", headers=owner_a)
             assert restored.status_code == 200, restored.text
             assert restored.json()["agentscope_session_id"] == first_session
-            assert any(item["text"] == "附件里的标记是什么？" for item in restored.json()["messages"])
+            native = client.get(f"{NEXUS}/api/v1/conversations/{first['id']}/messages", headers=owner_a)
+            assert any(
+                (item.get("metadata") or {}).get("display_text") == "附件里的标记是什么？"
+                for item in native.json()["messages"]
+            )
             blocked = client.get(f"{NEXUS}/api/v1/conversations/{first['id']}", headers=owner_b)
             assert blocked.status_code == 404
 

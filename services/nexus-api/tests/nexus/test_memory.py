@@ -11,7 +11,7 @@ import httpx
 from sqlalchemy import text as sql_text
 
 from nexus_api.agentscope import AgentScopeClient
-from nexus_api.main import create_app, session_transcript
+from nexus_api.main import create_app
 from tests.nexus.clients import TestClient
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -113,6 +113,7 @@ def test_memory_uses_the_workspace_and_a_failure_stays_out_of_the_chat():
 
 def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    session_missing = False
     session_bodies: list[dict] = []
     agent_bodies: list[dict] = []
     sessions = {"session-a": [], "session-b": [], "session-rebind": []}
@@ -129,6 +130,8 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
                 return httpx.Response(201, json={"session_id": "session-rebind"})
             name = body.get("workspace_id") or body.get("name")
             return httpx.Response(201, json={"session_id": f"session-{name}"})
+        if request.method == "GET" and request.url.path.endswith("/status"):
+            return httpx.Response(404 if session_missing else 200, json={"status": "idle"})
         if request.url.path == "/chat/":
             return httpx.Response(200, json={"status": "started", "session_id": "ignored"})
         if request.method == "GET" and request.url.path.endswith("/messages"):
@@ -187,22 +190,23 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
         sessions[session_id] = [
             {
                 "id": "old",
+                "created_at": "2026-11-12T00:00:00Z",
                 "role": "user",
                 "name": "u1",
                 "content": [{"type": "text", "text": "压缩前的那件事"}],
             },
             {
                 "id": "new",
+                "created_at": "2026-11-12T00:00:01Z",
                 "role": "assistant",
                 "content": [{"type": "text", "text": "窗口里只剩这句"}],
             },
         ]
         history = test_client.get(
-            f"/api/v1/conversations/{first['id']}",
+            f"/api/v1/conversations/{first['id']}/messages",
             headers={"X-Verified-UID": "u1"},
         ).json()["messages"]
-        assert [item["text"] for item in history] == ["压缩前的那件事", "窗口里只剩这句"]
-        assert session_transcript(sessions[session_id], employee["id"])[0]["text"] == "压缩前的那件事"
+        assert [item["content"][0]["text"] for item in history] == ["压缩前的那件事", "窗口里只剩这句"]
         from nexus_api.db import connect
 
         connection = connect(tmp_path / "nexus.db")
@@ -212,6 +216,14 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
         )
         connection.commit()
         connection.close()
+        original_count = len(session_bodies)
+        preserved = test_client.post(
+            f"/api/v1/conversations/{first['id']}/rebind",
+            headers={"X-Verified-UID": "u1"},
+        )
+        assert preserved.json() == {"session_id": session_id, "workspace_id": "ws-conv-reused"}
+        assert len(session_bodies) == original_count
+        session_missing = True
         rebound = test_client.post(
             f"/api/v1/conversations/{first['id']}/rebind",
             headers={"X-Verified-UID": "u1"},

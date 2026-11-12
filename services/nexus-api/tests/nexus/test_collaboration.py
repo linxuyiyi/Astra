@@ -563,9 +563,13 @@ def test_attachment_access_is_revoked_with_membership(setup, monkeypatch):
     record_uid(other, "colleague")
     join(owner, other, cid)
     copied = []
+    retired = []
     payload = b"group-only-report"
 
     async def files(method, path, **kwargs):
+        if method == "DELETE" and path.endswith("/group-member"):
+            retired.append(kwargs["params"])
+            return httpx.Response(204)
         if f"/groups/{cid}" in path:
             return httpx.Response(
                 200, json={"agent_id": "nexus-group-resources", "session_id": "group-resources"},
@@ -625,6 +629,23 @@ def test_attachment_access_is_revoked_with_membership(setup, monkeypatch):
     assert other.get(f"/api/v1/attachments/{key}").content == payload
     assert other.post(f"/api/v1/channels/{cid}/leave").status_code == 200
     assert other.get(f"/api/v1/attachments/{key}").status_code == 403
+    removed = owner.patch(
+        f"/api/v1/channels/{cid}", json={"name": "研发协作", "member_ids": ["dev"]},
+    )
+    assert removed.status_code == 200
+    sid = copied[0]["target_session_id"]
+    for _ in range(60):
+        with connect() as db:
+            retained = db.execute(text(
+                "SELECT agentscope_session_id FROM t_nexus_channel_members "
+                "WHERE channel_id=:c AND employee_id='qa'",
+            ), {"c": cid}).scalar()
+        if retained is None:
+            break
+        time.sleep(0.05)
+    assert retained is None
+    assert retired == [{"agent_id": "agent-qa", "session_id": sid, "channel_id": cid, "employee_id": "qa"}]
+    assert owner.get(f"/api/v1/attachments/{key}").content == payload
 
 
 def test_local_account_and_permission_routes_are_removed(setup):
@@ -960,7 +981,7 @@ def test_group_resource_failure_blocks_inference_then_retries(setup, monkeypatch
     assert [agent for agent, _ in fake.calls] == ["agent-qa"]
 
 
-def test_lagging_group_delivery_keeps_messages_before_latest_hundred(setup):
+def test_lagging_group_delivery_keeps_messages_in_bounded_batches(setup):
     from nexus_api.collaboration import append_message
 
     _, owner, uid, cid, fake = setup
@@ -970,14 +991,41 @@ def test_lagging_group_delivery_keeps_messages_before_latest_hundred(setup):
     with connect() as db:
         seeded = [
             append_message(db, cid, "human", uid, uid, f"历史第 {index} 条")["id"]
-            for index in range(105)
+            for index in range(260)
         ]
         db.commit()
     second = send(owner, cid, "@小掌柜 请继续")
     assert second.status_code == 200
     wait_done(owner, cid)
-    inputs = fake.calls[-1][1]
-    ids = [item["id"] for item in inputs]
-    assert ids[:-2] == seeded
+    batches = [inputs for agent, inputs in fake.calls[1:] if agent == "agent-qa"]
+    assert len(batches) == 3
+    assert [batch[-1]["metadata"]["delivery_only"] for batch in batches] == [True, True, False]
+    with connect() as db:
+        public_replies = db.execute(text(
+            "SELECT COUNT(*) FROM t_nexus_messages WHERE channel_id=:c AND sender_type='employee'",
+        ), {"c": cid}).scalar()
+    assert public_replies == 2
+    assert all(len(batch) <= 129 for batch in batches)
+    ids = [item["id"] for batch in batches for item in batch if item["metadata"].get("nexus_deduplicate")]
+    assert ids == [*seeded, second.json()["message"]["id"]]
     assert first.json()["message"]["id"] not in ids
-    assert second.json()["message"]["id"] in ids
+
+
+def test_group_delivery_respects_serialized_byte_budget(setup, monkeypatch):
+    from nexus_api.collaboration import append_message, dumps
+
+    _, owner, uid, cid, fake = setup
+    monkeypatch.setattr("nexus_api.collaboration.GROUP_BATCH_BYTES", 4000)
+    with connect() as db:
+        seeded = [
+            append_message(db, cid, "human", uid, uid, "测" * 600)["id"]
+            for _ in range(5)
+        ]
+        db.commit()
+    sent = send(owner, cid, "@小掌柜 请总结")
+    assert sent.status_code == 200
+    wait_done(owner, cid)
+    batches = [inputs[:-1] for agent, inputs in fake.calls if agent == "agent-qa"]
+    assert len(batches) >= 3
+    assert all(sum(len(dumps(item).encode()) for item in batch) <= 4000 for batch in batches)
+    assert [m["id"] for batch in batches for m in batch] == [*seeded, sent.json()["message"]["id"]]

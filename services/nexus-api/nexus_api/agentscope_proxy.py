@@ -98,24 +98,29 @@ async def proxy_agentscope(path: str, request: Request) -> StreamingResponse:
                 payload = {}
             if isinstance(payload, dict):
                 supplied = payload
-        session_id = (
-            parts[1] if parts[0] == "sessions" and len(parts) > 1
-            else request.query_params.get("session_id") or supplied.get("session_id")
-        )
-        workspace_id = supplied.get("workspace_id")
-        agent_id = request.query_params.get("agent_id") or supplied.get("agent_id")
-        if agent_id == "nexus-group-resources" or (
-            isinstance(session_id, str) and session_id.startswith("resources-ch_")
+        values = {
+            "aq": request.query_params.get("agent_id"), "ab": supplied.get("agent_id"),
+            "sq": request.query_params.get("session_id"), "sb": supplied.get("session_id"),
+            "sp": parts[1] if parts[0] == "sessions" and len(parts) > 1 else None,
+            "w": supplied.get("workspace_id"),
+        }
+        ids = {key: value if isinstance(value, str) else None for key, value in values.items()}
+        if "nexus-group-resources" in (ids["aq"], ids["ab"]) or any(
+            (ids[key] or "").startswith("resources-ch_") for key in ("sq", "sb", "sp")
         ):
             raise HTTPException(404, "Not Found")
-        if isinstance(session_id, str) or isinstance(workspace_id, str):
+        if any(ids.values()):
             with connect() as db:
                 protected = db.execute(text(
-                    "SELECT 1 FROM t_nexus_conversations WHERE agentscope_session_id=:s OR workspace_id=:w "
-                    "UNION ALL SELECT 1 FROM t_nexus_channel_members WHERE agentscope_session_id=:s "
-                    "UNION ALL SELECT 1 FROM t_nexus_attachment_refs WHERE session_id=:s LIMIT 1"
-                ), {"s": session_id if isinstance(session_id, str) else None,
-                    "w": workspace_id if isinstance(workspace_id, str) else None}).first()
+                    "SELECT 1 FROM t_nexus_employees WHERE agentscope_agent_id IN (:aq,:ab) "
+                    "OR mailbox_session_id IN (:sq,:sb,:sp) "
+                    "UNION ALL SELECT 1 FROM t_nexus_conversations "
+                    "WHERE agentscope_session_id IN (:sq,:sb,:sp) OR workspace_id=:w "
+                    "UNION ALL SELECT 1 FROM t_nexus_channel_members "
+                    "WHERE agentscope_session_id IN (:sq,:sb,:sp) "
+                    "UNION ALL SELECT 1 FROM t_nexus_attachment_refs "
+                    "WHERE session_id IN (:sq,:sb,:sp) LIMIT 1"
+                ), ids).first()
             if protected:
                 raise HTTPException(403, "请从 Nexus 对话访问受管会话")
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=120, pool=30))

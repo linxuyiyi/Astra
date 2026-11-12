@@ -430,16 +430,13 @@ def main() -> None:
         session_id = response.json().get("session_id")
         return str(session_id) if session_id else None
 
-    from group_security import AgentServiceKeyMiddleware, headers as service_headers, secure_group_toolkit, install_run_context
-    nexus_api = os.environ.get("NEXUS_API_BASE", "http://127.0.0.1:18120").rstrip("/")
-    peer_toolkit = secure_group_toolkit(without_team_and_task_tools(get_toolkit, mailbox_lookup), nexus_api)
-    from schedule_resources import install_schedule_preparation, register_schedule_resources, schedule_toolkit
+    from group_security import AgentServiceKeyMiddleware, headers as service_headers, install_nexus_runtime
+    from schedule_resources import register_schedule_resources
 
-    install_run_context(chat_service.ChatService)
-    install_schedule_preparation(chat_service.ChatService, nexus_api)
-    peer_toolkit = schedule_toolkit(peer_toolkit)
-    chat_service.get_toolkit = peer_toolkit
-    realtime_service.get_toolkit = peer_toolkit
+    nexus_api = os.environ.get("NEXUS_API_BASE", "http://127.0.0.1:18120").rstrip("/")
+    install_nexus_runtime(
+        chat_service, realtime_service, without_team_and_task_tools(get_toolkit, mailbox_lookup), nexus_api,
+    )
 
     host = os.environ.get("AGENTSCOPE_REDIS_HOST", "localhost")
     port = int(os.environ.get("AGENTSCOPE_REDIS_PORT", "6379"))

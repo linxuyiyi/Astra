@@ -47,13 +47,16 @@ def test_workspace_attachments_real_storage(tmp_path, monkeypatch):
         register_workspace_attachments(app, storage)
         app.add_middleware(AgentServiceKeyMiddleware)
         async with app.router.lifespan_context(app):
-            a = await storage.upsert_session("nexus", "employee", SessionConfig(workspace_id="chat-a"))
+            channel_id = "ch_" + "3" * 12
+            a = await storage.upsert_session(
+                "nexus", "employee", SessionConfig(workspace_id=f"ws-{channel_id}-employee"),
+            )
             b = await storage.upsert_session("nexus", "employee", SessionConfig(workspace_id="chat-b"))
             transport = httpx.ASGITransport(app=app)
             headers = {"X-User-ID": "nexus", "X-Nexus-Internal-Key": "test-service-only"}
             async with httpx.AsyncClient(transport=transport, base_url="http://agent", headers=headers) as client:
                 prefix = "/nexus/workspace-attachments"
-                group_path = f"{prefix}/groups/ch_{'3' * 12}"
+                group_path = f"{prefix}/groups/{channel_id}"
                 assert (await client.put(group_path, headers={"X-Nexus-Internal-Key": ""})).status_code == 401
                 group = (await client.put(group_path)).json()
                 assert (await client.put(group_path)).json() == group
@@ -95,8 +98,14 @@ def test_workspace_attachments_real_storage(tmp_path, monkeypatch):
                 (directory / symlink_id).symlink_to(original)
                 assert (await client.get(f"{prefix}/{symlink_id}", params=location)).status_code == 404
 
-                assert (await client.delete(path, params=location)).status_code == 204
-                assert (await client.get(path, params=location)).status_code == 404
+                retire = f"{prefix}/group-member"
+                scope = {"channel_id": channel_id, "employee_id": "employee"}
+                assert (await client.delete(retire, params={**other, **scope})).status_code == 409
+                assert (await client.delete(retire, params={**location, **scope})).status_code == 204
+                assert (await client.delete(retire, params={**location, **scope})).status_code == 204
+                assert not (directory / original.name).exists()
+                assert not (directory / symlink_id).is_symlink()
+                assert await storage.get_session("nexus", "employee", a.id) is None
                 assert (await client.get(path, params=group)).status_code == 200
 
     asyncio.run(scenario())

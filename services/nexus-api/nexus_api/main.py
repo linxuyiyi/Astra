@@ -48,6 +48,7 @@ from .chat_attachments import (
     link_attachments,
     load_attachments,
     location,
+    present_private_message,
     reference,
 )
 from .chat_attachments import (
@@ -441,158 +442,6 @@ def timestamp_order(value: Any) -> float:
         return datetime.fromisoformat(canonical_timestamp(value)).timestamp()
     except ValueError:
         return 0.0
-
-
-def assistant_turns(messages: list[Any]) -> list[list[str]]:
-    turns: list[list[str]] = []
-    current: list[str] | None = None
-    for message in messages:
-        if not isinstance(message, dict):
-            continue
-        role = message.get("role")
-        if role == "user":
-            if current is not None:
-                turns.append(current)
-            current = []
-        elif role == "assistant" and current is not None:
-            text = block_text(message.get("content"))
-            if text:
-                current.append(text)
-    if current is not None:
-        turns.append(current)
-    return turns
-
-
-def merge_transcript(
-    local: list[dict[str, Any]],
-    turns: list[list[str]],
-    employee_id: str,
-) -> list[dict[str, Any]]:
-    merged: list[dict[str, Any]] = []
-    index = 0
-    for item in local:
-        merged.append(item)
-        if item.get("accepted") and index < len(turns):
-            for text in turns[index]:
-                merged.append(
-                    {
-                        "id": f"agent_{item['id']}_{len(merged)}",
-                        "sender": employee_id,
-                        "text": text,
-                        "attachments": [],
-                        "accepted": True,
-                        "created_at": item["created_at"],
-                    }
-                )
-            index += 1
-    return merged
-
-
-def tool_cards(content: Any) -> list[dict[str, str]]:
-    if not isinstance(content, list):
-        return []
-    cards: dict[str, dict[str, str]] = {}
-    order: list[str] = []
-    for block in content:
-        if not isinstance(block, dict):
-            continue
-        kind = block.get("type")
-        if kind not in {"tool_call", "tool_result"}:
-            continue
-        card_id = str(block.get("id") or "")
-        card = cards.get(card_id)
-        if card is None:
-            card = {"id": card_id, "name": "", "input": "", "output": "", "state": ""}
-            cards[card_id] = card
-            order.append(card_id)
-        if block.get("name"):
-            card["name"] = str(block.get("name"))
-        if kind == "tool_call":
-            card["input"] = str(block.get("input") or "")
-        else:
-            output = block.get("output")
-            card["output"] = block_text(output) if isinstance(output, list) else str(output or "")
-        if block.get("state"):
-            card["state"] = str(block.get("state"))
-    return [cards[card_id] for card_id in order]
-
-
-def session_transcript(remote: list[Any], employee_id: str) -> list[dict[str, Any]]:
-    """私聊历史只读 AgentScope。发言人取 Msg.name，不回退成匿名 user。"""
-
-    found: list[dict[str, Any]] = []
-    for message in remote:
-        if not isinstance(message, dict):
-            continue
-        role = message.get("role")
-        if role not in {"user", "assistant"}:
-            continue
-        metadata = message.get("metadata") if isinstance(message.get("metadata"), dict) else {}
-        display = metadata.get("display_text")
-        text = display if isinstance(display, str) else block_text(message.get("content"))
-        tools = tool_cards(message.get("content"))
-        attachments = metadata.get("attachments") if isinstance(metadata.get("attachments"), list) else []
-        if role == "assistant" and not text and not tools:
-            continue
-        raw_id = message.get("id") or metadata.get("message_id")
-        name = message.get("name") if isinstance(message.get("name"), str) else ""
-        created = message.get("created_at")
-        raw_finished = message.get("finished_at")
-        finished_at = canonical_timestamp(raw_finished) if isinstance(raw_finished, str) else raw_finished
-        usage = message.get("usage") if isinstance(message.get("usage"), dict) else None
-        found.append(
-            {
-                "id": str(raw_id) if raw_id else f"remote_{len(found)}",
-                "sender": "user" if role == "user" else employee_id,
-                "speaker": name or str(metadata.get("verified_uid") or ""),
-                "text": text,
-                "tools": tools,
-                "attachments": [item for item in attachments if isinstance(item, dict)],
-                "accepted": True,
-                "created_at": canonical_timestamp(created) if isinstance(created, str) else "",
-                "finished_at": finished_at,
-                "usage": usage,
-            }
-        )
-    return found
-
-
-def assistant_messages(remote: list[Any], employee_id: str) -> list[dict[str, Any]]:
-    found: list[dict[str, Any]] = []
-    for message in remote:
-        if not isinstance(message, dict) or message.get("role") != "assistant":
-            continue
-        text = block_text(message.get("content"))
-        if not text:
-            continue
-        raw_id = message.get("id")
-        suffix = raw_id if isinstance(raw_id, str) and raw_id else str(len(found))
-        created = message.get("created_at")
-        found.append(
-            {
-                "id": f"agent_{employee_id}_{suffix}",
-                "sender": employee_id,
-                "text": text,
-                "attachments": [],
-                "accepted": True,
-                "created_at": canonical_timestamp(created) if isinstance(created, str) else "",
-            }
-        )
-    return found
-
-
-def interleave_messages(*groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    combined: list[dict[str, Any]] = []
-    for group in groups:
-        combined.extend(group)
-    combined.sort(
-        key=lambda item: (
-            timestamp_order(item.get("created_at")),
-            0 if item.get("sender") == "user" else 1,
-            str(item.get("id") or ""),
-        )
-    )
-    return combined
 
 
 def reserve_peer_delivery(
@@ -2277,6 +2126,15 @@ def create_app() -> FastAPI:
         client = client_of(request)
         if employee["agentscope_agent_id"] and client.configured:
             try:
+                bound_groups = connection.execute(sql_text(
+                    "SELECT channel_id,agentscope_session_id FROM t_nexus_channel_members "
+                    "WHERE member_type='employee' AND employee_id=:e AND agentscope_session_id IS NOT NULL"
+                ), {"e": employee_id}).mappings().all()
+                for group in bound_groups:
+                    await request.app.state.collaboration.retire_group_member(
+                        employee["agentscope_agent_id"], group["agentscope_session_id"],
+                        group["channel_id"], employee_id,
+                    )
                 await client.delete_agent(employee["agentscope_agent_id"])
             except AgentScopeError as exc:
                 raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
@@ -2534,38 +2392,13 @@ def create_app() -> FastAPI:
         return row
 
     @app.get("/api/v1/conversations/{conversation_id}")
-    async def get_conversation(
+    def get_conversation(
         conversation_id: str,
-        request: Request,
         owner_id: str = Depends(require_owner),
         connection=Depends(database),
     ):
         row = owned_conversation(connection, conversation_id, owner_id)
-        employee = load_employee(connection, row["employee_id"])
-        history: list[dict[str, Any]] = []
-        history_error = ""
-        event_cursor = ""
-        if row["agentscope_session_id"] and employee["agentscope_agent_id"]:
-            try:
-                remote, event_cursor = await client_of(request).read_session(
-                    employee["agentscope_agent_id"],
-                    row["agentscope_session_id"],
-                )
-                history = session_transcript(remote, employee["id"])
-            except AgentScopeError as exc:
-                history_error = exc.detail
-        return {
-            "id": row["id"],
-            "employee_id": row["employee_id"],
-            "name": row["name"],
-            "agentscope_session_id": row["agentscope_session_id"],
-            "event_cursor": event_cursor,
-            "messages": interleave_messages(
-                history,
-                await peer_replies_for_conversation(connection, client_of(request), conversation_id),
-            ),
-            "history_error": history_error,
-        }
+        return {key: row[key] for key in ("id", "employee_id", "name", "agentscope_session_id")}
 
     @app.get("/api/v1/conversations/{conversation_id}/messages")
     async def native_conversation_messages(
@@ -2574,11 +2407,6 @@ def create_app() -> FastAPI:
         owner_id: str = Depends(require_owner),
         connection=Depends(database),
     ):
-        """原生消息：完整 content 块、事件游标和运行态，供嵌入式聊天使用。
-
-        扁平响应（GET /conversations/{id}）是旧渲染的契约，保持不动。
-        """
-
         row = owned_conversation(connection, conversation_id, owner_id)
         employee = load_employee(connection, row["employee_id"])
         if not row["agentscope_session_id"] or not employee["agentscope_agent_id"]:
@@ -2591,7 +2419,10 @@ def create_app() -> FastAPI:
         except AgentScopeError as exc:
             raise HTTPException(status_code=502, detail=exc.detail) from exc
         peers = await peer_replies_for_conversation(connection, client_of(request), conversation_id)
-        messages = [m for m in messages if not (m.get("metadata") or {}).get("nexus_peer_context")]
+        messages = [
+            present_private_message(m) for m in messages
+            if not (m.get("metadata") or {}).get("nexus_peer_context")
+        ]
         return {
             "messages": sorted(
                 [*messages, *(p["native"] for p in peers)],
@@ -2651,6 +2482,15 @@ def create_app() -> FastAPI:
             )
             return claim_private_session(connection, row["id"], session_id, workspace_id)
 
+    def private_receipt(connection, message_id, *, lock=False):
+        query = "SELECT native_json,accepted,created_at FROM t_nexus_messages WHERE id=:id"
+        if lock and connection.dialect.name == "mysql":
+            query += " FOR UPDATE"
+        return connection.execute(
+            sql_text(query),
+            {"id": message_id},
+        ).mappings().first()
+
     @app.post("/api/v1/conversations/{conversation_id}/messages")
     async def send_private(
         conversation_id: str,
@@ -2663,26 +2503,48 @@ def create_app() -> FastAPI:
         employee = load_employee(connection, row["employee_id"])
         if not employee["enabled"]:
             raise HTTPException(status_code=409, detail="该员工已禁用")
-        attachments = load_attachments(
-            connection, body.attachment_ids, scope_kind="private",
-            scope_id=conversation_id, owner_id=owner_id,
-        )
-        visible = [attachment_meta(item) for item in attachments]
-        if not body.text.strip() and not attachments:
+        if not body.text.strip() and not body.attachment_ids:
             raise HTTPException(status_code=400, detail="请输入消息或添加附件")
         message_id = new_id("msg")
         if body.client_id:
             identity = json.dumps([conversation_id, owner_id, body.client_id], ensure_ascii=False).encode()
             message_id = f"msg_{hashlib.sha256(identity).hexdigest()[:32]}"
+        canonical = json.dumps(
+            [[block.text for block in body.content], body.attachment_ids], ensure_ascii=False,
+        ).encode()
+        payload = json.dumps({"digest": hashlib.sha256(canonical).hexdigest()})
+        async with await conversation_lock(f"send:{conversation_id}"):
+            connection.commit()
+            return await dispatch_private(
+                conversation_id, owner_id, request, connection, body, employee, message_id, payload,
+            )
+
+    async def dispatch_private(
+        conversation_id, owner_id, request, connection, body, employee, message_id, payload,
+    ):
+        row = owned_conversation(connection, conversation_id, owner_id)
+        receipt = private_receipt(connection, message_id)
+        if receipt and receipt["native_json"] != payload:
+            raise HTTPException(409, "同一消息标识已用于不同的正文或附件")
+        attachments = load_attachments(
+            connection, body.attachment_ids, scope_kind="private",
+            scope_id=conversation_id, owner_id=owner_id,
+        )
+        visible = [attachment_meta(item) for item in attachments]
         message = {
             "id": message_id,
             "sender": "user",
             "speaker": owner_id,
             "text": body.text.strip(),
             "attachments": visible,
-            "accepted": False,
-            "created_at": utcnow(),
+            "accepted": bool(receipt and receipt["accepted"]),
+            "created_at": receipt["created_at"] if receipt else utcnow(),
         }
+        if message["accepted"]:
+            return {
+                "message": message,
+                "agentscope": {"accepted": True, "detail": "", "session_id": row["agentscope_session_id"]},
+            }
         client = client_of(request)
         outcome = {
             "accepted": False,
@@ -2742,6 +2604,25 @@ def create_app() -> FastAPI:
                                 "metadata": {"nexus_peer_context": True, "peer_delivery_id": peer["id"]},
                             }
                         )
+                if not receipt:
+                    insert_record(connection, "t_nexus_messages", {
+                        "id": message_id, "conversation_id": conversation_id, "sender": "user",
+                        "text": "", "attachments_json": json.dumps(body.attachment_ids),
+                        "native_json": payload, "speaker_uid": owner_id, "client_id": body.client_id or None,
+                        "created_at": message["created_at"],
+                    }, ignore_keys=["id"])
+                    saved = private_receipt(connection, message_id, lock=True)
+                    if saved["native_json"] != payload:
+                        raise HTTPException(409, "同一消息标识已用于不同的正文或附件")
+                    link_attachments(connection, attachments)
+                    connection.commit()
+                    message["created_at"] = saved["created_at"]
+                    if saved["accepted"]:
+                        message["accepted"] = True
+                        return {
+                            "message": message,
+                            "agentscope": {"accepted": True, "detail": "", "session_id": session_id},
+                        }
                 await client.trigger_chat(
                     employee["agentscope_agent_id"],
                     session_id,
@@ -2753,7 +2634,9 @@ def create_app() -> FastAPI:
                     message_id=message["id"],
                     context=context,
                 )
-                link_attachments(connection, attachments)
+                connection.execute(
+                    sql_text("UPDATE t_nexus_messages SET accepted=1 WHERE id=:id"), {"id": message_id},
+                )
                 connection.commit()
                 message["accepted"] = True
                 outcome = {"accepted": True, "detail": "", "session_id": session_id}
@@ -2770,12 +2653,31 @@ def create_app() -> FastAPI:
         owner_id: str = Depends(require_owner),
         connection=Depends(database),
     ):
+        async with await conversation_lock(f"send:{conversation_id}"):
+            return await restore_private(conversation_id, owner_id, request, connection)
+
+    async def restore_private(conversation_id, owner_id, request, connection):
         row = owned_conversation(connection, conversation_id, owner_id)
         employee = load_employee(connection, row["employee_id"])
         workspace_id = row["workspace_id"]
         if not employee["agentscope_agent_id"] or not workspace_id:
             raise HTTPException(status_code=409, detail="这条私聊还没有可复用的 workspace")
         client = client_of(request)
+        existing = row["agentscope_session_id"]
+        if existing:
+            try:
+                await client.session_status(employee["agentscope_agent_id"], existing)
+            except AgentScopeError as exc:
+                if exc.status_code != 404:
+                    raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+            else:
+                try:
+                    await prepare_employee_session(
+                        client, employee, [existing], connection, request.app.state.resources,
+                    )
+                except AgentScopeError as exc:
+                    raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+                return {"session_id": existing, "workspace_id": workspace_id}
         try:
             session_id = await client.create_session(
                 employee["agentscope_agent_id"],

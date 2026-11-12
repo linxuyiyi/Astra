@@ -138,20 +138,7 @@ export const sessionApi = {
       `/api/v1/conversations/${conversationId()}/messages`,
     );
     return {
-      messages: (payload.messages ?? []).map(message => {
-        if (message.role !== "user" || !Array.isArray(message.metadata?.attachments)) return message;
-        const content = message.content.filter(block => block.id !== `nexus-attachments-${message.id}`);
-        for (const attachment of message.metadata.attachments as { id: string; name: string; type: string }[]) {
-          const url = `/api/v1/attachments/${attachment.id}`;
-          if (!content.some(block => block.type === "data" && block.source.type === "url" && block.source.url === url)) {
-            content.push({
-              type: "data", id: attachment.id, name: attachment.name, created_at: message.created_at,
-              source: { type: "url", url, media_type: attachment.type },
-            });
-          }
-        }
-        return { ...message, content };
-      }),
+      messages: payload.messages ?? [],
       event_cursor: payload.event_cursor || null,
       is_running: Boolean(payload.is_running),
       has_more: false,

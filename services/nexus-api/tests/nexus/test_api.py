@@ -14,15 +14,12 @@ from sqlalchemy import text as sql_text
 
 from nexus_api.agentscope import AgentScopeClient, AgentScopeError
 from nexus_api.main import (
-    assistant_messages,
     assistant_reply_messages_after,
     create_app,
     data_dir,
-    interleave_messages,
     observe_stream_event,
     package_dir,
     repo_root,
-    session_transcript,
     stream_cursor,
 )
 from tests.nexus.clients import TestClient
@@ -130,7 +127,9 @@ def test_private_chat_keeps_threads_and_does_not_invent_replies(client):
     )
     assert sent.status_code == 503
     assert "AgentScope" in sent.json()["detail"]
-    stored = client.get(f"/api/v1/conversations/{first.json()['id']}", headers=headers).json()["messages"]
+    stored = client.get(
+        f"/api/v1/conversations/{first.json()['id']}/messages", headers=headers,
+    ).json()["messages"]
     assert stored == []
     forged = client.get(
         f"/api/v1/conversations/{first.json()['id']}?uid=browser-a",
@@ -153,45 +152,6 @@ def test_disabled_employee_cannot_receive_private_message(client):
         json={"text": "你好"},
     )
     assert response.status_code == 409
-
-
-def test_session_transcript_keeps_speaker_and_tool_cards():
-    rows = session_transcript(
-        [
-            {
-                "id": "u",
-                "role": "user",
-                "name": "张三",
-                "metadata": {"verified_uid": "u1"},
-                "content": [{"type": "text", "text": "hi"}],
-            },
-            {
-                "id": "a",
-                "role": "assistant",
-                "finished_at": "2026-10-30T00:00:00Z",
-                "usage": {"input_tokens": 12, "output_tokens": 4},
-                "content": [
-                    {"type": "text", "text": "ok"},
-                    {"type": "tool_call", "id": "c1", "name": "read", "input": '{"path":"a"}'},
-                    {"type": "tool_result", "id": "c1", "name": "read", "output": "file", "state": "success"},
-                ],
-            },
-        ],
-        "emp",
-    )
-    assert rows[0]["speaker"] == "张三"
-    assert rows[1]["text"] == "ok"
-    assert rows[1]["finished_at"] == "2026-10-30T00:00:00+00:00"
-    assert rows[1]["usage"] == {"input_tokens": 12, "output_tokens": 4}
-    assert rows[1]["tools"] == [
-        {
-            "id": "c1",
-            "name": "read",
-            "input": '{"path":"a"}',
-            "output": "file",
-            "state": "success",
-        }
-    ]
 
 
 def test_me_ignores_query_uid(client):
@@ -258,28 +218,6 @@ def test_claim_private_session_keeps_the_first_writer(client):
         headers={"X-Owner-Id": "owner"},
     ).json()
     assert stored["agentscope_session_id"] == "session-a"
-    assert stored["event_cursor"] == ""
-
-
-def test_session_transcript_renders_display_text():
-    rows = session_transcript(
-        [
-            {
-                "id": "u",
-                "role": "user",
-                "name": "张三",
-                "metadata": {
-                    "display_text": "看日志",
-                    "attachments": [{"id": "att", "name": "run.log"}],
-                },
-                "content": [{"type": "text", "text": "看日志\n\n文件正文 LOG-TOKEN-88"}],
-            }
-        ],
-        "emp",
-    )
-    assert rows[0]["text"] == "看日志"
-    assert "LOG-TOKEN-88" not in rows[0]["text"]
-    assert rows[0]["attachments"][0]["name"] == "run.log"
 
 
 def test_owners_keep_separate_conversations_across_restart(tmp_path, monkeypatch):
@@ -321,7 +259,7 @@ def test_owners_keep_separate_conversations_across_restart(tmp_path, monkeypatch
         ).json()["items"]
         assert [item["id"] for item in listed] == [first["id"]]
         restored = again.get(f"/api/v1/conversations/{first['id']}", headers=owner_a).json()
-        assert restored["messages"] == []
+        assert restored["agentscope_session_id"] is None
 
 
 def test_new_skills_are_rejected_when_catalog_is_unavailable(client):
@@ -585,9 +523,8 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
         session_calls = [request for request in seen if request.url.path == "/sessions/"]
         # 邮箱一次，私聊一次。第二条消息复用私聊 Session。
         assert len(session_calls) == 2
-        stored = test_client.get(f"/api/v1/conversations/{conversation['id']}", headers=headers).json()
-        assert stored["messages"] == []
-        assert stored["history_error"]
+        stored = test_client.get(f"/api/v1/conversations/{conversation['id']}/messages", headers=headers)
+        assert stored.status_code == 502
         schedule_mcp_calls = [
             request
             for request in seen
@@ -834,6 +771,7 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
 
     seen: list[dict] = []
     sessions_created = []
+    lose_receipt = False
     workspace = {}
     png = (
         b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
@@ -858,22 +796,21 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
                 })
             return httpx.Response(200, content=workspace[key])
         if request.url.path == "/chat/":
+            nonlocal lose_receipt
             seen.append(json.loads(request.content.decode()))
+            if lose_receipt:
+                lose_receipt = False
+                raise httpx.ReadTimeout("已提交，响应丢失", request=request)
             return httpx.Response(200, json={"status": "started", "session_id": "session-chat"})
         if request.url.path == "/sessions/session-chat/messages":
             return httpx.Response(
                 200,
                 json={
                     "messages": [
-                        {
-                            "id": "u1",
-                            "role": "user",
-                            "name": "anon-a",
-                            "metadata": {"verified_uid": "anon-a"},
-                            "content": [{"type": "text", "text": "看日志"}],
-                        },
+                        {**seen[-1]["input"], "created_at": "2026-11-12T00:00:00Z"},
                         {
                             "id": "a1",
+                            "created_at": "2026-11-12T00:00:01Z",
                             "role": "assistant",
                             "content": [{"type": "text", "text": "模型自己的回复"}],
                         },
@@ -929,16 +866,34 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
         downloaded = test_client.get(f"/api/v1/attachments/{log_file.json()['id']}", headers=headers)
         assert downloaded.status_code == 200
         assert downloaded.content == b"LOG-TOKEN-88"
-        sent = test_client.post(
-            f"/api/v1/conversations/{conversation['id']}/messages",
-            headers=headers,
-            json={
-                "text": "看日志",
-                "attachment_ids": [log_file.json()["id"], image.json()["id"]],
-            },
-        )
+        send_path = f"/api/v1/conversations/{conversation['id']}/messages"
+        body = {
+            "text": "看日志", "client_id": "attachment-send-retry",
+            "attachment_ids": [log_file.json()["id"], image.json()["id"]],
+        }
+        lose_receipt = True
+        lost = test_client.post(send_path, headers=headers, json=body)
+        assert lost.status_code == 503, lost.text
+        from nexus_api.db import connect
+
+        with connect() as db:
+            linked = db.execute(sql_text(
+                "SELECT linked FROM t_nexus_attachment_refs WHERE scope_id=:c",
+            ), {"c": conversation["id"]}).scalars().all()
+            assert linked == [1, 1]
+        changed = test_client.post(send_path, headers=headers, json={**body, "text": "不同正文"})
+        assert changed.status_code == 409
+        assert test_client.post(
+            send_path, headers=headers, json={**body, "attachment_ids": [image.json()["id"]]},
+        ).status_code == 409
+        sent = test_client.post(send_path, headers=headers, json=body)
         assert sent.status_code == 200, sent.text
         assert sent.json()["agentscope"]["accepted"] is True
+        assert seen[-2]["input"]["id"] == seen[-1]["input"]["id"]
+        calls = len(seen)
+        repeated = test_client.post(send_path, headers=headers, json=body)
+        assert repeated.json() == sent.json()
+        assert len(seen) == calls
         message = seen[-1]["input"]
         content = message["content"]
         assert all(block["type"] == "text" for block in content)
@@ -957,10 +912,14 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
         )
         assert rejected.status_code == 404
         assert workspace[("session-chat", image.json()["id"])] == png
-        restored = test_client.get(f"/api/v1/conversations/{conversation['id']}", headers=headers).json()
-        assert [item["sender"] for item in restored["messages"]] == ["user", employee["id"]]
-        assert restored["messages"][0]["speaker"] == "anon-a"
-        assert restored["messages"][1]["text"] == "模型自己的回复"
+        restored = test_client.get(send_path, headers=headers).json()
+        assert [item["role"] for item in restored["messages"]] == ["user", "assistant"]
+        assert restored["messages"][0]["name"] == "anon-a"
+        shown = restored["messages"][0]["content"]
+        assert [block["type"] for block in shown] == ["text", "data", "data"]
+        assert shown[0]["text"] == "看日志"
+        assert {block["id"] for block in shown[1:]} == set(body["attachment_ids"])
+        assert restored["messages"][1]["content"][0]["text"] == "模型自己的回复"
         assert seen[-1]["input"]["name"] == "anon-a"
         assert seen[-1]["input"]["metadata"]["verified_uid"] == "anon-a"
         assert seen[-1]["input"]["metadata"]["attachments"][0]["name"] == "run.log"
@@ -1242,9 +1201,6 @@ def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path
         other = resolve("session-other", "知微", "另一条对话还可以联系")
         assert other.status_code == 200
 
-        stored = test_client.get(f"/api/v1/conversations/{first['id']}", headers=headers).json()
-        peer_lines = [item for item in stored["messages"] if item["sender"] == zhi["id"]]
-        assert [item["text"] for item in peer_lines] == ["阈值按账号计算"]
         assert (
             assistant_reply_messages_after(
                 [{"role": "user", "content": [{"type": "text", "text": "方案要点"}]}],
@@ -1300,40 +1256,6 @@ def test_multiline_hint_inside_the_reply_is_returned_once():
     )
     assert len(replies) == 1
     assert replies[0]["content"][1]["text"] == "已转达王五。\n阈值按账号计算"
-
-
-def test_channel_timestamps_sort_by_instant_not_local_text():
-    normalized = assistant_messages(
-        [
-            {
-                "id": "m1",
-                "role": "assistant",
-                "content": [{"type": "text", "text": "同事先说"}],
-                "created_at": "2026-10-15T00:13:55.943",
-            }
-        ],
-        "emp_1",
-    )
-    assert normalized[0]["created_at"].endswith("+00:00")
-    ordered = interleave_messages(
-        [
-            {
-                "id": "user",
-                "sender": "user",
-                "created_at": "2026-10-14T17:00:00+00:00",
-                "text": "后说",
-            }
-        ],
-        [
-            {
-                "id": "agent",
-                "sender": "emp",
-                "created_at": "2026-10-15T00:00:00+08:00",
-                "text": "先说",
-            }
-        ],
-    )
-    assert [item["id"] for item in ordered] == ["agent", "user"]
 
 
 def load_agent_service(name: str):

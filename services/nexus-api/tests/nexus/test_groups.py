@@ -312,6 +312,13 @@ def test_group_toolkit_filters_tools_by_server_origin(monkeypatch):
             "mcp__nexus-schedule__schedule_list",
         }
         assert asyncio.run(_collect(toolkit, "mcp__nexus-task__nexus_task_get")) == ["called"]
+        delivery_token = module.delivery_only.set(True)
+        try:
+            assert asyncio.run(toolkit._get_available_tools(["basic"])) == {}
+            with pytest.raises(PermissionError):
+                asyncio.run(_collect(toolkit, "mcp__nexus-task__nexus_task_get"))
+        finally:
+            module.delivery_only.reset(delivery_token)
         policy["mcp_refs"].pop("task-ref")
         with pytest.raises(PermissionError):
             asyncio.run(_collect(toolkit, "mcp__nexus-task__nexus_task_get"))

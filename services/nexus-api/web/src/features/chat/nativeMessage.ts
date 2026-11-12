@@ -62,7 +62,11 @@ export function projectMessage(native: Msg, identity: MessageIdentity): ChatMess
   const inlineData: DataBlock[] = [];
   for (const block of data) {
     const id = block.source.type === "url" ? block.source.url.match(/^\/api\/v1\/attachments\/([\w-]+)$/)?.[1] : undefined;
-    if (id) attachments.push({ id, name: block.name || "附件", type: block.source.media_type, size: 0 });
+    if (id) {
+      if (!attachments.some(item => item.id === id)) {
+        attachments.push({ id, name: block.name || "附件", type: block.source.media_type, size: 0 });
+      }
+    }
     else if (!(native.role === "user" && uploaded.length)) inlineData.push(block);
   }
   return {

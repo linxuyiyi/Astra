@@ -15,6 +15,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
 from .auth import digest, require_internal, require_user
+from .chat_attachments import (
+    ATTACHMENT_PREFIX,
+    MessageContent,
+    attachment_content,
+    link_attachments,
+    load_attachments,
+    location,
+    visible,
+)
 from .db import connect, employee_from_row, new_id, utcnow
 from .db_models import group_events
 from .sql import upsert_record
@@ -23,8 +32,6 @@ from .tool_policy import employee_tool_policy, require_employee_tool
 logger = logging.getLogger("nexus.groups")
 MAX_TURNS = 6
 MAX_SECONDS = 120
-MAX_OUTPUT_TOKENS = 768
-MAX_CONTEXT_CHARS = 24000
 MAX_TOKEN_BUDGET = 16000
 LEASE_SECONDS = 30
 
@@ -323,10 +330,8 @@ class GroupBody(BaseModel):
     member_ids: list[str] = Field(default_factory=list, max_length=100)
 
 
-class SendBody(BaseModel):
+class SendBody(MessageContent):
     model_config = ConfigDict(extra="forbid")
-    text: str = Field(default="", max_length=64000)
-    attachment_ids: list[str] = Field(default_factory=list, max_length=6)
     client_id: str = Field(min_length=8, max_length=64, pattern=r"^[\w-]+$")
 
 
@@ -350,17 +355,11 @@ class Collaboration:
         load_employee,
         claim_session,
         sync_resources,
-        model_for,
-        load_attachments,
-        model_input_blocks,
     ):
         self.app = app
         self.load_employee = load_employee
         self.claim_session = claim_session
         self.sync_resources = sync_resources
-        self.model_for = model_for
-        self.load_attachments = load_attachments
-        self.model_input_blocks = model_input_blocks
         self.running = {}
 
     def install(self):
@@ -743,7 +742,10 @@ class Collaboration:
                     return {"message": original, "duplicate": True}
                 if not body.text.strip() and not body.attachment_ids:
                     raise HTTPException(422, "消息不能为空")
-                attachments = self.load_attachments(db, body.attachment_ids, user["uid"])
+                attachments = load_attachments(
+                    db, body.attachment_ids, scope_kind="group", scope_id=channel_id, owner_id=user["uid"],
+                )
+                link_attachments(db, attachments)
                 staff = employees(db, channel_id)
                 humans = (
                     db.execute(
@@ -788,7 +790,7 @@ class Collaboration:
                     {"c": channel_id, "u": user["uid"], "all": int(adjust_all)},
                 )
                 did = new_id("dis") if participants else ""
-                content = [{"type": "text", "text": body.text}]
+                content = body.blocks()
                 for a in attachments:
                     content.append(
                         {
@@ -796,7 +798,7 @@ class Collaboration:
                             "name": a["name"],
                             "source": {
                                 "type": "url",
-                                "media_type": a["type"],
+                                "media_type": a["media_type"],
                                 "url": f"/api/v1/attachments/{a['id']}",
                             },
                         }
@@ -808,7 +810,13 @@ class Collaboration:
                     user["uid"],
                     user["display_name"],
                     body.text,
-                    native={"role": "user", "content": content},
+                    native={
+                        "role": "user", "content": content,
+                        "metadata": {
+                            "attachment_targets": participants,
+                            "attachments": [visible(a) for a in attachments],
+                        },
+                    },
                     client_id=body.client_id,
                     discussion_id=did,
                     attachments=body.attachment_ids,
@@ -1054,6 +1062,7 @@ class Collaboration:
                 discussion = {"id": "private:" + private["id"], "generation": 0}
             employee = self.load_employee(db, binding["employee_id"])
             tools_policy = employee_tool_policy(db, employee)
+            tools_policy["allowed_tools"].append("read_chat_attachment")
             require_employee_tool(tools_policy, tool_name, mcp_ref)
             if tool_name:
                 db.execute(
@@ -1074,6 +1083,11 @@ class Collaboration:
                 "initiator_id": initiator_id,
                 "discussion_id": discussion["id"],
                 "generation": discussion["generation"],
+                "task_source": {
+                    "employee_id": employee["id"],
+                    "source": "group_chat" if binding["channel_id"] else "private_chat",
+                    "external_task_id": binding["channel_id"] or private["id"],
+                },
             }
 
     def request_peer(self, session_id, name, body, execution_id=""):
@@ -1372,77 +1386,60 @@ class Collaboration:
                     channel["name"],
                     self.app.state.resources,
                 )
-                config = await self.model_for(self.app.state.agentscope, e)
-                config = {
-                    **config,
-                    "parameters": {**config.get("parameters", {}), "max_tokens": MAX_OUTPUT_TOKENS},
-                }
-                await self.app.state.agentscope.replace_session_model(
-                    e["agentscope_agent_id"], session_id, config
-                )
                 await self.sync_resources(
                     self.app.state.agentscope, e, [session_id], db, self.app.state.resources
                 )
 
-                history = [
-                    dict(r)
-                    for r in db.execute(
-                        text(
-                            "SELECT * FROM t_nexus_messages WHERE channel_id=:c ORDER BY seq DESC LIMIT 100"
-                        ),
-                        {"c": d["channel_id"]},
-                    ).mappings()
-                ][::-1]
                 binding = one(
                     db,
-                    """SELECT last_delivered_message_id FROM t_nexus_channel_members WHERE channel_id=:c AND
+                    """SELECT last_delivered_seq FROM t_nexus_channel_members WHERE channel_id=:c AND
                     employee_id=:e""",
                     c=d["channel_id"],
                     e=eid,
                 )
-                cursor = binding["last_delivered_message_id"]
-                pending = history
-                if cursor:
-                    for index, row in enumerate(history):
-                        if row["id"] == cursor:
-                            pending = history[index + 1 :]
-                            break
-                # 每轮提供受限公开上下文；同事原话保留独立 name 与 sender_type。
-                pending = [r for r in pending if r["sender_type"] != "system" and r["speaker_uid"] != eid]
-                size = 0
-                kept = []
-                for row in reversed(pending):
-                    size += len(row["text"])
-                    if size > MAX_CONTEXT_CHARS and kept:
-                        break
-                    kept.append(row)
+                cursor = binding["last_delivered_seq"]
+                pending = list(db.execute(
+                    text("SELECT * FROM t_nexus_messages WHERE channel_id=:c AND seq>:seq ORDER BY seq"),
+                    {"c": d["channel_id"], "seq": cursor},
+                ).mappings())
+                source = one(
+                    db, "SELECT * FROM t_nexus_messages WHERE channel_id=:c AND id=:id",
+                    c=d["channel_id"], id=d["message_id"],
+                )
                 inputs = []
-                for row in reversed(kept):
-                    content = [{"type": "text", "text": row["text"][:MAX_CONTEXT_CHARS]}]
-                    ids = json.loads(row["attachments_json"])
-                    if ids:
-                        import pathlib
-
-                        files = self.load_attachments(db, ids, None)
-                        content = self.model_input_blocks(
-                            row["text"],
-                            [(a["name"], a["type"], pathlib.Path(a["path"]).read_bytes()) for a in files],
+                client = self.app.state.agentscope
+                for row in pending:
+                    if row["sender_type"] == "system" or row["speaker_uid"] == eid:
+                        continue
+                    native = json.loads(row["native_json"])
+                    metadata = native.get("metadata") or {}
+                    authorized = eid in metadata.get("attachment_targets", [])
+                    ids = json.loads(row["attachments_json"]) if authorized else []
+                    attachments = load_attachments(db, ids, scope_kind="group", scope_id=d["channel_id"])
+                    for item in attachments:
+                        await client.request(
+                            "POST", f"{ATTACHMENT_PREFIX}/{item['id']}/copy",
+                            params={**location(item), "target_agent_id": e["agentscope_agent_id"],
+                                    "target_session_id": session_id},
                         )
-                    inputs.append(
-                        {
+                    blocks = [b for b in native.get("content", []) if b.get("type") == "text"]
+                    if not blocks and row["text"]:
+                        blocks = [{"type": "text", "text": row["text"]}]
+                    files = [visible(item) for item in attachments]
+                    if blocks or files:
+                        inputs.append({
                             "id": row["id"],
                             "name": row["sender_name"],
                             "role": "user",
-                            "content": content,
+                            "content": attachment_content(blocks, files, row["id"]),
                             "metadata": {
-                                "message_id": row["id"],
-                                "sender_id": row["speaker_uid"],
-                                "sender_type": row["sender_type"],
-                                "display_text": row["text"],
+                                "message_id": row["id"], "sender_id": row["speaker_uid"],
+                                "nexus_deduplicate": True,
+                                "sender_type": row["sender_type"], "display_text": row["text"],
+                                "attachments": files,
                             },
-                        }
-                    )
-                source = next((row for row in history if row["id"] == d["message_id"]), None)
+                        })
+                delivered = pending[-1]["seq"] if pending else cursor
                 task_event_id = (
                     json.loads(source["native_json"]).get("metadata", {}).get("task_event_id")
                     if source and source["sender_type"] == "system"
@@ -1471,28 +1468,17 @@ class Collaboration:
                                 "metadata": {"source": "nexus-task"},
                             }
                         )
-                names = "、".join(x["name"] for x in staff)
-                inputs.append(
-                    {
-                        "id": new_id("turn"),
-                        "name": "群讨论规则",
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"当前群成员：{names}。你是{e['name']}。"
-                                "请根据以上真实群发言回应当前讨论目标；前面同事已回答的部分不重复。"
-                                f"如需创建工程任务，来源为source=group_chat，external_task_id={d['channel_id']}，"
-                                f"employee_id={eid}。"
-                                f"这是第{turn + 1}/{MAX_TURNS}次发言。"
-                                "需要同事继续行动或把结果交还请求者时，使用contact_employee向该同事投递，"
-                                "并在原话中说清回传对象和下一步；仅公开陈述结果不会自动唤醒请求者。不要代写同事回答。"
-                                "不需要继续时直接结束，不为客套提出新问题。普通交流不创建工程任务或职责请求。权限由服务端判定。",
-                            }
-                        ],
-                        "metadata": {"discussion_id": d["id"], "verified_uid": d["initiator_id"]},
-                    }
-                )
+                inputs.append({
+                    "id": new_id("turn"),
+                    "name": "群讨论",
+                    "role": "user",
+                    "content": [{
+                        "type": "text",
+                        "text": f"第 {turn + 1}/{MAX_TURNS} 轮。回应当前议题。"
+                        "需要同事接续或接收结果时调用 contact_employee。",
+                    }],
+                    "metadata": {"discussion_id": d["id"], "verified_uid": d["initiator_id"]},
+                })
                 db.commit()
             if not self.current(d["id"])["valid"]:
                 await asyncio.to_thread(self.finish, d["id"], "interrupted")
@@ -1515,10 +1501,10 @@ class Collaboration:
                 )
                 db.execute(
                     text(
-                        """UPDATE t_nexus_channel_members SET last_delivered_message_id=:m WHERE channel_id=:c
+                        """UPDATE t_nexus_channel_members SET last_delivered_seq=:m WHERE channel_id=:c
                         AND employee_id=:e"""
                     ),
-                    {"m": history[-1]["id"], "c": d["channel_id"], "e": eid},
+                    {"m": delivered, "c": d["channel_id"], "e": eid},
                 )
                 db.commit()
             with connect() as db:
@@ -1529,7 +1515,6 @@ class Collaboration:
                         queue.append(target)
                 scheduled_count = len(scheduled)
             body = "".join(b.get("text", "") for b in reply.get("content", []) if b.get("type") == "text")
-            source = next((row for row in history if row["id"] == d["message_id"]), None)
             greeting = bool(
                 source
                 and re.fullmatch(r"\s*(大家好|你们好|各位好|hello|hi)[！!。~～\s]*", source["text"], re.I)

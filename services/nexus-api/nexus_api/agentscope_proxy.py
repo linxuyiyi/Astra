@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import posixpath
 from collections.abc import AsyncIterator
@@ -15,6 +16,9 @@ from urllib.parse import unquote
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import text
+
+from .db import connect
 
 PREFIX = "/agentscope-api"
 METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
@@ -63,7 +67,9 @@ def _user_id() -> str:
 @router.api_route(f"{PREFIX}/{{path:path}}", methods=METHODS, include_in_schema=False)
 async def proxy_agentscope(path: str, request: Request) -> StreamingResponse:
     normalized = posixpath.normpath("/" + unquote(path)).strip("/")
-    if normalized.split("/", 2)[:2] in (["nexus", "mcp-registry"], ["nexus", "mcp-probe"]):
+    parts = normalized.split("/")
+    if parts[0] == "nexus" or parts[:2] in (["workspace", "files"], ["workspace", "directories"]):
+        # The native local backend accepts host-absolute paths even for an unmanaged Session.
         raise HTTPException(404, "Not Found")
     # 人类日程身份只能由 Nexus 的 require_owner 派生，控制台不能冒充。
     if request.headers.get("x-user-id", "").casefold().startswith("nexus-schedule-"):
@@ -83,6 +89,35 @@ async def proxy_agentscope(path: str, request: Request) -> StreamingResponse:
     headers.update(internal_headers())
 
     body = await request.body()
+    if parts[0] in {"workspace", "chat", "sessions", "realtime"}:
+        supplied = {}
+        if body and "application/json" in request.headers.get("content-type", ""):
+            try:
+                payload = json.loads(body)
+            except ValueError:
+                payload = {}
+            if isinstance(payload, dict):
+                supplied = payload
+        session_id = (
+            parts[1] if parts[0] == "sessions" and len(parts) > 1
+            else request.query_params.get("session_id") or supplied.get("session_id")
+        )
+        workspace_id = supplied.get("workspace_id")
+        agent_id = request.query_params.get("agent_id") or supplied.get("agent_id")
+        if agent_id == "nexus-group-resources" or (
+            isinstance(session_id, str) and session_id.startswith("resources-ch_")
+        ):
+            raise HTTPException(404, "Not Found")
+        if isinstance(session_id, str) or isinstance(workspace_id, str):
+            with connect() as db:
+                protected = db.execute(text(
+                    "SELECT 1 FROM t_nexus_conversations WHERE agentscope_session_id=:s OR workspace_id=:w "
+                    "UNION ALL SELECT 1 FROM t_nexus_channel_members WHERE agentscope_session_id=:s "
+                    "UNION ALL SELECT 1 FROM t_nexus_attachment_refs WHERE session_id=:s LIMIT 1"
+                ), {"s": session_id if isinstance(session_id, str) else None,
+                    "w": workspace_id if isinstance(workspace_id, str) else None}).first()
+            if protected:
+                raise HTTPException(403, "请从 Nexus 对话访问受管会话")
     client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=None, write=120, pool=30))
     upstream_request = client.build_request(request.method, url, headers=headers, content=body)
     try:

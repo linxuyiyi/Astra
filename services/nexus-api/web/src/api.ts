@@ -101,13 +101,17 @@ export async function deleteEmployee(id: string): Promise<void> {
   await read(await fetch(`/api/v1/employees/${id}`, { method: "DELETE" }));
 }
 
-export async function uploadAttachment(file: File): Promise<Attachment> {
-  const form = new FormData();
-  form.append("file", file);
-  return read(await fetch("/api/v1/attachments", {
-    method: "POST",
+export async function uploadAttachment(
+  file: File,
+  scope: { conversation_id: string } | { channel_id: string },
+): Promise<Attachment> {
+  if (!file.size || file.size > 20 * 1024 * 1024) throw new Error("单个附件需大于 0 字节且不超过 20 MiB");
+  const id = `att_${crypto.randomUUID().replaceAll("-", "")}`;
+  const query = new URLSearchParams({ ...scope, name: file.name || "未命名文件" });
+  return read(await fetch(`/api/v1/attachments/${id}?${query}`, {
+    method: "PUT",
     headers: headers(false),
-    body: form,
+    body: file,
   }));
 }
 
@@ -138,12 +142,12 @@ export async function getConversation(
   return read(await fetch(`/api/v1/conversations/${id}`, { headers: headers(false) }));
 }
 
-export async function sendConversation(id: string, text: string, attachmentIds: string[]) {
+export async function sendConversation(id: string, text: string, attachmentIds: string[], clientId: string) {
   return read<{ message: ChatMessage; agentscope: AgentScopeOutcome }>(
     await fetch(`/api/v1/conversations/${id}/messages`, {
       method: "POST",
       headers: headers(),
-      body: JSON.stringify({ text, attachment_ids: attachmentIds }),
+      body: JSON.stringify({ content: text ? [{ type: "text", text }] : [], attachment_ids: attachmentIds, client_id: clientId }),
     }),
   );
 }
@@ -210,7 +214,7 @@ export async function sendChannel(id: string, text: string, attachmentIds: strin
     await fetch(`/api/v1/channels/${id}/messages`, {
       method: "POST",
       headers: headers(),
-      body: JSON.stringify({ text, attachment_ids: attachmentIds, client_id: clientId }),
+      body: JSON.stringify({ content: text ? [{ type: "text", text }] : [], attachment_ids: attachmentIds, client_id: clientId }),
     }),
   );
 }

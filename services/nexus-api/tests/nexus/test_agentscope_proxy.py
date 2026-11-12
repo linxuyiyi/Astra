@@ -134,3 +134,18 @@ async def test_console_cannot_impersonate_reserved_schedule_identity(upstream, u
         )
     assert response.status_code == 403
     assert upstream == []
+
+
+async def test_browser_proxy_cannot_access_internal_attachment_routes(upstream):
+    async with _client() as client:
+        response = await client.put(
+            "/agentscope-api/nexus/workspace-attachments/att_" + "a" * 32,
+            headers={"X-User-ID": "nexus"},
+            content=b"browser payload",
+        )
+        native = await client.get(
+            "/agentscope-api/workspace/files",
+            params={"agent_id": "console-agent", "session_id": "console-session", "path": "report.txt"},
+        )
+    assert response.status_code == native.status_code == 404
+    assert upstream == []

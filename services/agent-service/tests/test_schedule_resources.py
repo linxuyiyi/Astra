@@ -173,8 +173,9 @@ def test_schedule_physical_directories_are_isolated_from_chat_and_other_arranger
             chat = await manager.get_workspace("nexus", "agent", "chat", "same-id")
             alice = await manager.get_workspace("nexus-schedule-" + "a" * 64, "agent", "a", "same-id")
             bob = await manager.get_workspace("nexus-schedule-" + "b" * 64, "agent", "b", "same-id")
-            assert chat.workdir == str(tmp_path / "agent")
-            assert len({chat.workdir, alice.workdir, bob.workdir}) == 3
+            other_chat = await manager.get_workspace("nexus", "agent", "other-chat", "other-id")
+            assert Path(chat.workdir).parent == tmp_path / "sessions"
+            assert len({chat.workdir, other_chat.workdir, alice.workdir, bob.workdir}) == 4
             Path(chat.workdir, "chat.txt").write_text("private chat")
             Path(alice.workdir, "alice.txt").write_text("alice schedule")
             assert not Path(alice.workdir, "chat.txt").exists()

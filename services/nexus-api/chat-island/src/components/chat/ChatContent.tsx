@@ -98,7 +98,7 @@ interface ChatContentProps {
 	 */
 	footerSlot?: React.ReactNode;
 	/** @see TextInputProps.allowedInputTypes */
-	allowedInputTypes: string[];
+	allowedInputTypes?: string[];
 	/** @see TextInputProps.fileProcessor */
 	fileProcessor: (file: File) => Promise<ContentBlock | null>;
 	/** Agent owning the open session — drives the directory picker. */

@@ -15,7 +15,7 @@ description: 仅在明确查询或操作 Nexus 任务、需要 Worker 工程执�
 ## 创建时要写清
 
 - `employee_id`：任务责任员工的编号；系统只检查该员工是否存在
-- `source`、`external_task_id`：采用当前内部任务来源上下文。私聊使用 `private_chat` 和会话编号，群聊使用 `group_chat` 和群编号；通知始终回到 `employee_id` 指定员工对应的会话，不用于权限判断。
+- 私聊和群聊的任务来源由服务端根据实际会话填写。
 - `agent_worker_id`：可选的指定执行 Worker；不填时由分类调度。
 - `task_type`：缺陷用 `ISSUE`，需求用 `REQUIREMENT`
 - `category_id`：先调用 `nexus_task_categories`，使用返回的已启用分类 ID

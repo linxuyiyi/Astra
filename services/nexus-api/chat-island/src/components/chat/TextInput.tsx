@@ -447,7 +447,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 							(prev) =>
 								prev
 									.map((f) =>
-										f.name === file.name && f.status === 'processing'
+										f === placeholder
 											? block
 												? { ...f, status: 'done', block }
 												: null
@@ -459,11 +459,7 @@ export const TextInput = forwardRef<TextInputRef, TextInputProps>(
 					.catch(() => {
 						// Caller is responsible for error notification (e.g. toast).
 						// Just silently remove the entry here.
-						setFiles((prev) =>
-							prev.filter(
-								(f) => !(f.name === file.name && f.status === 'processing'),
-							),
-						);
+						setFiles((prev) => prev.filter((f) => f !== placeholder));
 					});
 			});
 		};

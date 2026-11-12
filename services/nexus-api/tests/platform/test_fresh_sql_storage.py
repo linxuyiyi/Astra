@@ -18,9 +18,9 @@ from app.sql_storage import CURRENT_REVISION, metadata
 SERVICE = Path(__file__).resolve().parents[2]
 
 
-def upgrade(path: Path):
+def upgrade(path: Path, revision: str = "head"):
     return subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        [sys.executable, "-m", "alembic", "upgrade", revision],
         cwd=SERVICE,
         env={**os.environ, "ASTRA_DATABASE_URL": f"sqlite+aiosqlite:///{path}"},
         text=True,
@@ -114,8 +114,8 @@ def test_all_revision_identifiers_fit_published_version_column():
     config = Config(str(SERVICE / "alembic.ini"))
     config.set_main_option("script_location", str(SERVICE / "alembic"))
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_current_head() == CURRENT_REVISION == "0001_init"
-    assert len(list(scripts.walk_revisions())) == 1
+    assert scripts.get_current_head() == CURRENT_REVISION == "0002_workspace_attachments"
+    assert [r.revision for r in scripts.walk_revisions()] == [CURRENT_REVISION, "0001_init"]
     assert all(len(r.revision) <= VERSION.c.version_num.type.length for r in scripts.walk_revisions())
 
 
@@ -132,3 +132,30 @@ def test_fresh_schema_has_worker_git_fields_without_repository_registry(tmp_path
         assert "repository_id" not in fields
         task_fields = {row[1] for row in db.execute("PRAGMA table_info(t_nexus_tasks)")}
         assert "repository_id" not in task_fields
+
+
+def test_workspace_revision_backfills_group_cursor_and_retains_legacy_originals(tmp_path):
+    database = tmp_path / "with-attachments.db"
+    first = upgrade(database, "0001_init")
+    assert first.returncode == 0, first.stderr
+    with sqlite3.connect(database) as db:
+        db.execute(
+            "INSERT INTO t_nexus_messages "
+            "(id,channel_id,sender,text,attachments_json,seq,created_at) "
+            "VALUES ('m','g','user','hello','[]',125,'now')"
+        )
+        db.execute(
+            "INSERT INTO t_nexus_channel_members "
+            "(channel_id,member_type,member_id,last_delivered_message_id) "
+            "VALUES ('g','employee','e','m')"
+        )
+        db.execute(
+            "INSERT INTO t_nexus_attachments (id,name,media_type,size,path,created_at) "
+            "VALUES ('att_123456abcdef','file.bin','application/octet-stream',1,'legacy','now')"
+        )
+    updated = upgrade(database)
+    assert updated.returncode == 0, updated.stderr
+    with sqlite3.connect(database) as db:
+        assert db.execute("SELECT last_delivered_seq FROM t_nexus_channel_members").fetchone() == (125,)
+        assert db.execute("SELECT path FROM t_nexus_attachments").fetchone() == ("legacy",)
+        assert db.execute("SELECT COUNT(*) FROM t_nexus_attachment_refs").fetchone() == (0,)

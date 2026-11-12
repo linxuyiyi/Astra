@@ -55,8 +55,8 @@ export class PrivateChatAdapter implements ChatAdapter {
     this.messages = mergeMessages(this.messages, snapshot.messages.map(message => this.project(message, snapshot.event_cursor)));
     return this.messages;
   }
-  async send(text: string, attachmentIds: string[], _signal: AbortSignal, _requestId: string): Promise<ChatSendOutcome> {
-    const result = await sendConversation(this.conversation.id, text, attachmentIds);
+  async send(text: string, attachmentIds: string[], _signal: AbortSignal, requestId: string): Promise<ChatSendOutcome> {
+    const result = await sendConversation(this.conversation.id, text, attachmentIds, requestId);
     if (result.agentscope.session_id) this.conversation.agentscope_session_id = result.agentscope.session_id;
     let messages: ChatMessage[] = [];
     let activity: ReplyPhase = result.agentscope.accepted ? "queued" : "idle";

@@ -1,3 +1,4 @@
+import type { ContentBlock } from "@agentscope-ai/agentscope/message";
 import type { AgentEvent } from "@agentscope-ai/agentscope/event";
 import type { Msg } from "@agentscope-ai/agentscope/message";
 import { nexusFetch, nexusGet } from "./http";
@@ -49,10 +50,10 @@ export interface ChannelEvent {
 export function loadGroupTimeline(channelId: string, before = 0): Promise<GroupTimeline> {
   return nexusGet(`/api/v1/channels/${channelId}/messages?before=${before}&limit=50`);
 }
-export async function sendGroupMessage(channelId: string, text: string, attachmentIds: string[], clientId: string): Promise<{ message: GroupItem }> {
+export async function sendGroupMessage(channelId: string, content: ContentBlock[], attachmentIds: string[], clientId: string): Promise<{ message: GroupItem }> {
   const response = await nexusFetch(`/api/v1/channels/${channelId}/messages`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, attachment_ids: attachmentIds, client_id: clientId }),
+    body: JSON.stringify({ content, attachment_ids: attachmentIds, client_id: clientId }),
   });
   if (!response.ok) {
     const payload = await response.json() as { detail?: string };

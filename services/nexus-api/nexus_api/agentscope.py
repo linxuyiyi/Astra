@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -266,23 +267,28 @@ class AgentScopeClient:
             metadata["display_text"] = display_text
         if message_id:
             metadata["message_id"] = message_id
+            metadata["nexus_deduplicate"] = True
         if metadata:
             message["metadata"] = metadata
-        response = await self.request(
-            "POST",
-            "/chat/",
-            json={
-                "agent_id": agent_id,
-                "session_id": session_id,
-                "input": [*context, message] if context else message,
-            },
-        )
-        payload = response.json()
-        if payload.get("status") != "started":
-            raise AgentScopeError("AgentScope 没有接受这次运行")
-        return str(payload.get("session_id") or session_id)
+        return await self.trigger_inputs(agent_id, session_id, [*context, message] if context else message)
 
-    async def trigger_inputs(self, agent_id: str, session_id: str, messages: list[dict[str, Any]]) -> str:
+    @asynccontextmanager
+    async def download_attachment(self, key: str, location: dict[str, str]):
+        from .chat_attachments import ATTACHMENT_PREFIX
+
+        try:
+            async with self._client().stream(
+                "GET", f"{ATTACHMENT_PREFIX}/{key}", headers=self._headers(), params=location,
+            ) as response:
+                if response.status_code >= 400:
+                    raise AgentScopeError("无法下载 Workspace 附件", response.status_code)
+                yield response
+        except httpx.HTTPError as exc:
+            raise AgentScopeError("AgentScope 文件服务不可用", 502) from exc
+
+    async def trigger_inputs(
+        self, agent_id: str, session_id: str, messages: list[dict[str, Any]] | dict[str, Any],
+    ) -> str:
         """把多条原消息一次送进会话。调用方保留消息 id，这里不新造一条。"""
 
         response = await self.request(
@@ -428,6 +434,22 @@ class AgentScopeClient:
         if isinstance(cursor, str) and cursor:
             return cursor
         return None
+
+    async def iter_session_messages(self, agent_id: str, session_id: str):
+        before = None
+        while True:
+            params = {"agent_id": agent_id, "limit": 200}
+            if before:
+                params["before"] = before
+            payload = (await self.request("GET", f"/sessions/{session_id}/messages", params=params)).json()
+            messages = payload["messages"]
+            for message in messages:
+                yield message
+            if not payload.get("has_more"):
+                return
+            if not messages or not messages[0].get("id") or messages[0]["id"] == before:
+                raise AgentScopeError("AgentScope 历史游标无法继续")
+            before = messages[0]["id"]
 
     async def read_session(self, agent_id: str, session_id: str) -> tuple[list[dict[str, Any]], str]:
         """同一页里取出消息和重放游标，避免历史和流各读一次中间漏事件。"""

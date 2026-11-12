@@ -584,16 +584,19 @@ def external_skill_payload(
 
 
 def mcp_registry_status(row, records: dict[str, Any] | None) -> dict[str, str]:
+    """核对 MCP 是否已登记到 AgentScope 平台库。
+
+    AgentScope 的 MCP 列表接口不返回 revision，这里只按登记存在性和启用状态判定。
+    配置变更后 register_nexus_mcp 会覆盖登记，无需版本比对。
+    """
     if records is None:
         return {"status": "error", "detail": "AgentScope 库不可读"}
     record = records.get(row["runtime_name"])
-    if (
-        record
-        and record.get("version") == str(row["revision"])
-        and record.get("enabled") == bool(row["enabled"])
-    ):
-        return {"status": "applied", "detail": "已登记到 AgentScope 平台库"}
-    return {"status": "pending", "detail": "AgentScope 库登记尚未同步到当前配置"}
+    if record is None:
+        return {"status": "pending", "detail": "AgentScope 库登记尚未同步到当前配置"}
+    if bool(record.get("enabled", True)) != bool(row["enabled"]):
+        return {"status": "pending", "detail": "AgentScope 库登记尚未同步到当前配置"}
+    return {"status": "applied", "detail": "已登记到 AgentScope 平台库"}
 
 
 async def register_nexus_mcp(client: AgentScopeClient, row, store: ResourceStore) -> dict[str, Any]:
@@ -730,6 +733,7 @@ def _set_sync(
     status: str,
     detail: str,
     revision: int,
+    mounted_name: str = "",
 ) -> None:
     upsert_record(
         connection,
@@ -742,10 +746,11 @@ def _set_sync(
             "status": status,
             "detail": detail,
             "revision": revision,
+            "mounted_name": mounted_name,
             "updated_at": utcnow(),
         },
         keys=["resource_type", "resource_id", "employee_id", "session_id"],
-        update=["status", "detail", "revision", "updated_at"],
+        update=["status", "detail", "revision", "mounted_name", "updated_at"],
     )
 
 
@@ -1489,29 +1494,17 @@ async def _sync_one_session(
                 revision=0,
             )
     for ref in desired_mcps:
-        if is_nexus_mcp(ref):
-            revision = int(local_mcps[ref]["revision"]) if ref in local_mcps else 0
-            _set_sync(
-                connection,
-                "mcp",
-                ref,
-                employee["id"],
-                session_id,
-                status="error" if failure_detail else "applied",
-                detail=failure_detail,
-                revision=revision,
-            )
-        elif ref in external_mcp_installs:
-            _set_sync(
-                connection,
-                "mcp",
-                ref,
-                employee["id"],
-                session_id,
-                status="error" if failure_detail else "applied",
-                detail=failure_detail,
-                revision=0,
-            )
+        _set_sync(
+            connection,
+            "mcp",
+            ref,
+            employee["id"],
+            session_id,
+            status="error" if failure_detail else "applied",
+            detail=failure_detail,
+            revision=int(local_mcps[ref]["revision"]) if ref in local_mcps else 0,
+            mounted_name=current_mcp_name(ref) if ref in active_mcp_refs and not failure_detail else "",
+        )
     connection.commit()
     if failure_detail:
         return {"status": "error", "detail": failure_detail}

@@ -12,6 +12,7 @@ import yaml
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app, db_path
+from nexus_api.resources import mcp_registry_status
 from tests.nexus.clients import TestClient
 
 
@@ -106,7 +107,10 @@ class FakeAgentScope:
                 return httpx.Response(404, json={"detail": "missing"})
             return httpx.Response(200, json={**record, "markdown": "# 外部技能\n\n正文"})
         if path == "/mcp" and method == "GET":
-            records = [{k: v for k, v in item.items() if k != "mcp_config"} for item in self.mcp_records]
+            records = [
+                {k: v for k, v in item.items() if k not in {"mcp_config", "version"}}
+                for item in self.mcp_records
+            ]
             return httpx.Response(200, json=records)
         if path.startswith("/nexus/mcp-registry/"):
             assert request.headers["X-User-ID"] == "nexus"
@@ -923,6 +927,23 @@ def test_employee_save_persists_final_resource_sync_snapshot(
         assert current["capability"] == saved
 
 
+@pytest.mark.parametrize(
+    "records,enabled,expected",
+    [
+        (None, True, "error"),
+        ({}, True, "pending"),
+        ({"mcp-test": {"enabled": True}}, True, "applied"),
+        ({"mcp-test": {}}, True, "applied"),
+        ({"mcp-test": {"enabled": False}}, False, "applied"),
+        ({"mcp-test": {"enabled": False}}, True, "pending"),
+        ({"mcp-test": {}}, False, "pending"),
+    ],
+)
+def test_mcp_registry_status_without_version(records, enabled, expected):
+    row = {"runtime_name": "mcp-test", "revision": 2, "enabled": enabled}
+    assert mcp_registry_status(row, records)["status"] == expected
+
+
 def test_unbound_mcp_register_retry_update_and_delete(tmp_path, monkeypatch, fake):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
     base = "/api/v1/config/mcps"
@@ -1040,9 +1061,8 @@ def test_mcp_partial_mount_blocks_chat_and_recovers_same_session(tmp_path, monke
         assert first.status_code == 200, first.text
         sid = first.json()["agentscope"]["session_id"]
         workspace = fake.workspace(employee["agentscope_agent_id"], sid)[1]
-        if fault in {"missing", "unhealthy"}:
-            # Even an applied sync record must not mask a disappeared/broken attachment.
-            workspace[-1]["is_healthy"] = False
+        # Force repair. An applied revision alone cannot mask an unhealthy mount.
+        workspace[-1]["is_healthy"] = False
         broken = True
         refused = client.post(path, headers=headers, json={"text": "缺少工具时不要运行"})
         assert refused.status_code == 503, refused.text

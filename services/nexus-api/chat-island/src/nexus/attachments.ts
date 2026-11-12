@@ -1,10 +1,3 @@
-/**
- * 附件上传：走 Nexus 的 /api/v1/attachments，保留 owner 归属与大小限制。
- *
- * 上游 TextInput 的 fileProcessor 只接受一个 ContentBlock。这里用 DataBlock 的
- * URL source 携带 Nexus 附件地址，发送时再从 URL 里取回 attachment id，
- * 不在浏览器里做 base64 传递。
- */
 import type { DataBlock } from "@agentscope-ai/agentscope/message";
 
 import { nexusFetch } from "./http";
@@ -18,39 +11,31 @@ interface AttachmentMeta {
   size: number;
 }
 
-export async function uploadAttachment(file: File): Promise<DataBlock> {
+export async function uploadAttachment(
+  file: File,
+  scope: { conversation_id: string } | { channel_id: string },
+): Promise<DataBlock> {
   if (!file.size) throw new Error("不能添加空文件");
   if (file.size > MAX_ATTACHMENT_BYTES) throw new Error("单个附件不能超过 20 MB");
 
-  const form = new FormData();
-  form.append("file", file, file.name || "未命名文件");
-  const response = await nexusFetch("/api/v1/attachments", { method: "POST", body: form });
+  const id = `att_${crypto.randomUUID().replaceAll("-", "")}`;
+  const path = `/api/v1/attachments/${id}`;
+  const query = new URLSearchParams({ ...scope, name: file.name || "未命名文件" });
+  const response = await nexusFetch(`${path}?${query}`, { method: "PUT", body: file });
   if (!response.ok) {
-    let detail = response.statusText || "附件上传失败";
-    try {
-      const payload = (await response.json()) as { detail?: string };
-      if (payload.detail) detail = payload.detail;
-    } catch {
-      // 保留状态文本
-    }
-    throw new Error(detail);
+    const payload = await response.json().catch(() => null) as { detail?: string } | null;
+    throw new Error(payload?.detail || "附件上传失败");
   }
   const meta = (await response.json()) as AttachmentMeta;
   return {
     type: "data",
-    id: `att-${meta.id}`,
+    id: meta.id,
     name: meta.name,
     created_at: new Date().toISOString(),
-    source: {
-      type: "url",
-      url: `/api/v1/attachments/${meta.id}`,
-      media_type: meta.type,
-    },
+    source: { type: "url", url: path, media_type: meta.type },
   };
 }
 
-/** 附件在 DataBlock 里以 Nexus 下载地址表示，发送时从地址取回 id。 */
-export function attachmentIdFromBlock(block: { source?: { url?: string } }): string | null {
-  const match = /\/api\/v1\/attachments\/([^/?#]+)/.exec(block.source?.url ?? "");
-  return match ? match[1] : null;
+export function attachmentIdFromBlock(block: { id?: string }): string | null {
+  return block.id && /^att_[0-9a-f]{32}$/.test(block.id) ? block.id : null;
 }

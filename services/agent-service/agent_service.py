@@ -454,7 +454,7 @@ def main() -> None:
     from schedule_workspace import ScheduleWorkspaceManager
 
     workspace_manager = ScheduleWorkspaceManager(
-        basedir=workspace_dir,
+        basedir=os.path.realpath(workspace_dir),
         isolation=IsolationPolicy.PER_SESSION,
     )
     qdrant_path = os.environ.get("AGENTSCOPE_QDRANT_PATH", "services/agent-service/data/qdrant")
@@ -466,6 +466,21 @@ def main() -> None:
     )
 
     async def extra_agent_tools(user_id: str, agent_id: str, session_id: str):
+        async def read_chat_attachment(message_id: str, attachment_id: str, offset: int = 0, page: int = 1):
+            """按需读取当前会话中的附件。
+
+            message_id: 附件引用所在的消息 ID。
+            attachment_id: 附件引用中的附件 ID。
+            offset: 文本的起始字符位置，初次使用 0，续读按返回的 offset。
+            page: PDF 的页码，从 1 开始。图片返回一张受限预览。
+            """
+            from chat_attachments import read_attachment
+
+            return await read_attachment(
+                storage, app.state.workspace_service, nexus_api,
+                user_id, agent_id, session_id, message_id, attachment_id, offset, page,
+            )
+
         async def contact_employee(employee_name: str, message: str) -> str:
             """把一条提示交给另一位数字员工，由对方自己推理后回复。
 
@@ -508,6 +523,11 @@ def main() -> None:
 
         return [
             FunctionTool(
+                read_chat_attachment,
+                is_read_only=True,
+                permission=PermissionDecision(behavior=PermissionBehavior.ALLOW, message="允许读取当前会话附件"),
+            ),
+            FunctionTool(
                 contact_employee,
                 name="contact_employee",
                 permission=PermissionDecision(
@@ -543,6 +563,9 @@ def main() -> None:
 
     register_mcp_registry(app, os.environ.get("NEXUS_AGENTSCOPE_USER_ID", "nexus"))
     register_schedule_resources(app)
+    from workspace_attachments import register_workspace_attachments
+
+    register_workspace_attachments(app, storage)
     app.add_middleware(AgentServiceKeyMiddleware)
     guard_lifespan(app)
     listen_host = os.environ.get("AGENTSCOPE_HOST", "0.0.0.0")

@@ -100,18 +100,23 @@ channel_members = Table(
     Column("read_seq", Integer, nullable=False, server_default=text("0")),
     Column("last_seen", identifier(40), nullable=False, server_default=text("''")),
     Column("agentscope_session_id", identifier(255), nullable=True),
-    Column("last_delivered_message_id", identifier(64), nullable=False, server_default=text("''")),
+    Column("last_delivered_seq", Integer, nullable=False, server_default=text("0")),
 )
 
-attachments = Table(
-    "t_nexus_attachments",
+attachment_refs = Table(
+    "t_nexus_attachment_refs",
     Base.metadata,
     Column("id", identifier(64), primary_key=True),
-    Column("owner_uid", identifier(160), nullable=False, server_default=text("''")),
+    Column("owner_uid", identifier(160), nullable=False),
+    Column("scope_kind", identifier(16), nullable=False),
+    Column("scope_id", identifier(64), nullable=False),
+    Column("agent_id", identifier(255), nullable=False),
+    Column("session_id", identifier(255), nullable=False),
     Column("name", identifier(255), nullable=False),
     Column("media_type", identifier(160), nullable=False),
     Column("size", Integer, nullable=False),
-    Column("path", CONTENT, nullable=False),
+    Column("sha256", identifier(64), nullable=False),
+    Column("linked", Integer, nullable=False),
     Column("created_at", identifier(40), nullable=False),
 )
 
@@ -238,6 +243,7 @@ resource_sync = Table(
     Column("status", identifier(32), nullable=False, server_default=text("'pending'")),
     Column("detail", CONTENT, nullable=False, server_default=text("('')")),
     Column("revision", Integer, nullable=False, server_default=text("0")),
+    Column("mounted_name", identifier(255), nullable=False, server_default=text("''")),
     Column("updated_at", identifier(40), nullable=False),
 )
 

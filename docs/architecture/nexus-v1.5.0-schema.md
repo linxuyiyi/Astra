@@ -2,7 +2,7 @@
 
 从最终 ORM 元数据生成，共 50 张 Nexus 业务表；另有 Alembic 自身的 `alembic_version`。不新增业务表，移除原执行会话、实例、执行环境与连接历史四张表。
 
-公司目标为全新 MySQL 8.0.36；由单个 `0001_init` 创建，不提供旧库升级或双写。AgentScope 自有数据库由官方维护，不在此清单内。
+公司目标为全新 MySQL 8.0.36；由 `0001_init` 初始化，后续 schema 变更由新的 Alembic revision 应用。AgentScope 自有数据库由官方维护，不在此清单内。
 
 核心表：Task 27 列、AgentWorker 25 列、维护操作 24 列。`ssh_password` 与 `git_token_ciphertext` 均存密文；接口只返回是否已配置。
 
@@ -12,13 +12,13 @@
 
 `id`, `name`, `description`, `enabled`, `created_at`, `updated_at`, `status`, `task_types`, `category_ids`, `runtime_engine`, `mode`, `host`, `port`, `username`, `ssh_password`, `model_name`, `workspace_root`, `repository_url`, `git_token_ciphertext`, `branch`, `skill_refs`, `mcp_refs`, `opencode_port`, `last_checked_at`, `opencode_version`
 
-## t_nexus_attachments（7 列）
+## t_nexus_attachment_refs（12 列）
 
-`id`, `owner_uid`, `name`, `media_type`, `size`, `path`, `created_at`
+`id`, `owner_uid`, `scope_kind`, `scope_id`, `agent_id`, `session_id`, `name`, `media_type`, `size`, `sha256`, `linked`, `created_at`
 
 ## t_nexus_channel_members（10 列）
 
-`channel_id`, `employee_id`, `member_type`, `member_id`, `role`, `membership_active`, `read_seq`, `last_seen`, `agentscope_session_id`, `last_delivered_message_id`
+`channel_id`, `employee_id`, `member_type`, `member_id`, `role`, `membership_active`, `read_seq`, `last_seen`, `agentscope_session_id`, `last_delivered_seq`
 
 ## t_nexus_channels（11 列）
 
@@ -172,9 +172,9 @@
 
 `id`, `scope`, `sender_agent_id`, `target_agent_id`, `message_key`, `created_at`
 
-## t_nexus_resource_sync（8 列）
+## t_nexus_resource_sync（9 列）
 
-`resource_type`, `resource_id`, `employee_id`, `session_id`, `status`, `detail`, `revision`, `updated_at`
+`resource_type`, `resource_id`, `employee_id`, `session_id`, `status`, `detail`, `revision`, `mounted_name`, `updated_at`
 
 ## t_nexus_settings（2 列）
 

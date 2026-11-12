@@ -1,10 +1,13 @@
 """按原始运行上下文校验工具；会话复用不能借用下一位发起者的授权。"""
 from __future__ import annotations
 
+import asyncio
 import hmac
+import json
 import os
 from contextvars import ContextVar
 from copy import deepcopy
+from pathlib import Path
 
 import httpx
 from starlette.responses import JSONResponse
@@ -18,6 +21,10 @@ def headers():
 
 def install_run_context(chat_service_class):
     original = chat_service_class.run
+    # AgentScope serializes the run itself with Redis. This lock orders
+    # receipt checks with the run in the Agent Service process.
+    locks = tuple(asyncio.Lock() for _ in range(128))
+
     async def run(self, user_id, session_id, agent_id, input_msg=None, sop_dispatch=None):
         inputs = input_msg if isinstance(input_msg, list) else [input_msg]
         fence = ""
@@ -27,7 +34,22 @@ def install_run_context(chat_service_class):
                 fence = str(metadata["discussion_id"])
         token = execution_id.set(fence)
         try:
-            return await original(self, user_id, session_id, agent_id, input_msg, sop_dispatch)
+            if not any((getattr(msg, "metadata", None) or {}).get("nexus_deduplicate") for msg in inputs):
+                return await original(self, user_id, session_id, agent_id, input_msg, sop_dispatch)
+            async with locks[hash((user_id, session_id)) % len(locks)]:
+                pending = []
+                for msg in inputs:
+                    metadata = getattr(msg, "metadata", None) or {}
+                    if metadata.get("nexus_deduplicate") and await self._storage.get_message(
+                        user_id, session_id, msg.id,
+                    ):
+                        continue
+                    pending.append(msg)
+                if not pending or (not fence and not any(
+                    (getattr(msg, "metadata", None) or {}).get("nexus_deduplicate") for msg in pending
+                )):
+                    return None
+                return await original(self, user_id, session_id, agent_id, pending, sop_dispatch)
         finally:
             execution_id.reset(token)
     chat_service_class.run = run
@@ -44,6 +66,25 @@ class AgentServiceKeyMiddleware:
             if not expected or not hmac.compare_digest(presented, expected):
                 return await JSONResponse({"detail": "服务间认证失败"}, status_code=401)(scope, receive, send)
         await self.app(scope, receive, send)
+
+
+_LOCAL_FILE_ARGUMENT = {"Read": "file_path", "Write": "file_path", "Edit": "file_path", "Grep": "path", "Glob": "path"}
+
+
+def workspace_file_call(tool_call, workdir):
+    field = _LOCAL_FILE_ARGUMENT[tool_call.name]
+    args = json.loads(tool_call.input)
+    root = Path(workdir).resolve(strict=True)
+    supplied = Path(args.get(field) or ".")
+    if ".." in supplied.parts:
+        raise PermissionError("文件路径越出当前工作区")
+    target = (root / supplied).resolve()
+    if not target.is_relative_to(root):
+        raise PermissionError("文件路径越出当前工作区")
+    if target.is_relative_to(root / "attachments") or (tool_call.name == "Grep" and target == root):
+        raise PermissionError("请使用 read_chat_attachment 读取会话附件")
+    args[field] = str(target)
+    return tool_call.model_copy(update={"input": json.dumps(args)})
 
 
 def secure_group_toolkit(factory, nexus_api, policy_loader=None):
@@ -103,6 +144,9 @@ def secure_group_toolkit(factory, nexus_api, policy_loader=None):
 
         async def permitted(name, registered, current):
             tool = registered.tool
+            if current.get("task_source") and name in {"Bash", "PowerShell"} and not getattr(tool, "is_mcp", False):
+                # LocalBackend executes on the host without a filesystem sandbox.
+                return False
             if getattr(tool, "is_mcp", False):
                 return bool(await origin_ref(name, registered, current))
             if name == "Skill":
@@ -121,7 +165,17 @@ def secure_group_toolkit(factory, nexus_api, policy_loader=None):
             ref = await origin_ref(tool_call.name, registered, current) if registered else ""
             if not registered or not await permitted(tool_call.name, registered, current):
                 raise PermissionError("工具来源没有授权")
-            await load(sid, tool_call.name, fence, ref)
+            authorization = await load(sid, tool_call.name, fence, ref)
+            if authorization.get("task_source") and tool_call.name in _LOCAL_FILE_ARGUMENT and not ref:
+                tool_call = workspace_file_call(tool_call, kwargs["workspace"].workdir)
+            tool = registered.tool
+            is_task_create = tool_call.name == "nexus_task_create" or (
+                bool(ref) and tool_call.name == f"mcp__{tool.mcp_name}__nexus_task_create"
+            )
+            if is_task_create and authorization.get("task_source"):
+                arguments = json.loads(tool_call.input)
+                arguments.update(authorization["task_source"])
+                tool_call = tool_call.model_copy(update={"input": json.dumps(arguments)})
             async for chunk in original_call(tool_call, state):
                 yield chunk
 

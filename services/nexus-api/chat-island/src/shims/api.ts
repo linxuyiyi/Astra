@@ -48,6 +48,7 @@ interface SendResponse {
 
 interface ContentBlockLike {
   type: string;
+  id?: string;
   text?: string;
   metadata?: Record<string, unknown>;
   source?: { url?: string };
@@ -115,22 +116,20 @@ async function errorDetail(response: Response): Promise<string> {
   }
 }
 
-/** 把上游的 ContentBlock[] 压成 Nexus 现有发送契约：正文 + 附件 id。 */
-function toSendBody(input: unknown): { text: string; attachment_ids: string[] } {
+function toSendBody(input: unknown) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("暂不支持这种输入类型");
   }
   const content = (input as { content?: ContentBlockLike[] }).content;
   if (!Array.isArray(content)) throw new Error("消息没有内容块");
-  const text = content
+  const blocks = content
     .filter((block) => block.type === "text")
-    .map((block) => block.text ?? "")
-    .join("");
+    .map(({ type, text, id }) => ({ type, text, id }));
   const attachmentIds = content
     .filter((block) => block.type === "data")
     .map((block) => attachmentIdFromBlock(block))
     .filter((value): value is string => Boolean(value));
-  return { text, attachment_ids: attachmentIds };
+  return { content: blocks, attachment_ids: attachmentIds };
 }
 
 export const sessionApi = {
@@ -139,7 +138,20 @@ export const sessionApi = {
       `/api/v1/conversations/${conversationId()}/messages`,
     );
     return {
-      messages: payload.messages ?? [],
+      messages: (payload.messages ?? []).map(message => {
+        if (message.role !== "user" || !Array.isArray(message.metadata?.attachments)) return message;
+        const content = message.content.filter(block => block.id !== `nexus-attachments-${message.id}`);
+        for (const attachment of message.metadata.attachments as { id: string; name: string; type: string }[]) {
+          const url = `/api/v1/attachments/${attachment.id}`;
+          if (!content.some(block => block.type === "data" && block.source.type === "url" && block.source.url === url)) {
+            content.push({
+              type: "data", id: attachment.id, name: attachment.name, created_at: message.created_at,
+              source: { type: "url", url, media_type: attachment.type },
+            });
+          }
+        }
+        return { ...message, content };
+      }),
       event_cursor: payload.event_cursor || null,
       is_running: Boolean(payload.is_running),
       has_more: false,
@@ -212,7 +224,7 @@ export const chatApi = {
     const response = await nexusFetch(`/api/v1/conversations/${conversationId()}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, client_id: localId }),
     });
     if (!response.ok) throw new Error(await errorDetail(response));
     const result = (await response.json()) as SendResponse;

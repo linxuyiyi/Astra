@@ -200,8 +200,9 @@ export class ChatRuntime {
   }
 
   async attach(files: FileList | File[]): Promise<void> {
+    const adapter = this.state.adapter;
     const list = Array.from(files);
-    if (!list.length) return;
+    if (!adapter || !list.length) return;
     if (!this.state.draftPending) this.state.draftPending = [];
     if (this.state.draftFiles.length + this.state.draftPending.length + list.length > 6) {
       this.state.notice = "每条消息最多添加 6 个附件";
@@ -219,7 +220,11 @@ export class ChatRuntime {
     try {
       for (const item of batch) {
         try {
-          const attachment = await uploadAttachment(item.file);
+          const scope = adapter.conversationId
+            ? { conversation_id: adapter.conversationId }
+            : { channel_id: this.state.target.id };
+          const attachment = await uploadAttachment(item.file, scope);
+          if (adapter !== this.state.adapter) return;
           this.state.draftFiles = [...this.state.draftFiles, attachment];
         } finally {
           this.state.draftPending = this.state.draftPending.filter((pending) => pending.id !== item.pending.id);

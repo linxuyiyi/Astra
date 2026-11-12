@@ -316,7 +316,7 @@
         <template v-if="target?.kind === 'group'"> · @ 提及员工</template>
         · <kbd>⌘K</kbd> 聚焦输入
       </div>
-      <input ref="fileInput" type="file" multiple hidden accept="image/*,application/pdf,text/*" @change="onFileChange" />
+      <input ref="fileInput" type="file" multiple hidden @change="onFileChange" />
     </div>
   </div>
 </template>

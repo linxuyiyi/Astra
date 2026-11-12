@@ -129,10 +129,9 @@ function PrivateChatApp({ conversationId }: { conversationId: string }) {
             throw new Error("当前会话不提供人工确认");
           }}
           onInterrupt={() => void chat.interrupt()}
-          allowedInputTypes={["image/*", "application/pdf", "text/*"]}
           fileProcessor={async (file: File) => {
             try {
-              return await uploadAttachment(file);
+              return await uploadAttachment(file, { conversation_id: conversationId });
             } catch (error) {
               setNotice(error instanceof Error ? error.message : "附件上传失败");
               throw error;

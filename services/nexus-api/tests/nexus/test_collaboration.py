@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from threading import Event as ThreadEvent
 
+import httpx
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -36,6 +38,8 @@ class FakeAgentService:
         pass
 
     async def create_session(self, agent_id, name, **kwargs):
+        if kwargs.get("chat_model_config"):
+            self.models.append((agent_id, name, kwargs["chat_model_config"]))
         sid = new_id("session")
         self.sessions[sid] = {"messages": [], "running": False}
         return sid
@@ -520,11 +524,12 @@ def test_tool_policy_checks_human_and_employee_and_retired_binding(setup):
         )
         db.commit()
     policy = app.state.collaboration.policy(sid)
-    assert policy["allowed_tools"] == ["Bash", "contact_employee"]
+    assert policy["allowed_tools"] == ["Bash", "contact_employee", "read_chat_attachment"]
     assert policy["mcp_refs"] == {}
     assert app.state.collaboration.policy(sid, "Bash", policy["discussion_id"])["allowed_tools"] == [
         "Bash",
         "contact_employee",
+        "read_chat_attachment",
     ]
     assert (
         owner.patch(f"/api/v1/channels/{cid}", json={"name": "群组", "member_ids": ["dev"]}).status_code
@@ -552,22 +557,74 @@ def test_routing_suppresses_human_chatter_and_limits_followup():
     assert followup("自动化同事，你怎么看？", staff, "other", {"qa": 2}) == []
 
 
-def test_attachment_access_is_revoked_with_membership(setup):
-    app, owner, _, cid, _ = setup
+def test_attachment_access_is_revoked_with_membership(setup, monkeypatch):
+    app, owner, _, cid, fake = setup
     other = TestClient(app)
     record_uid(other, "colleague")
     join(owner, other, cid)
-    attachment = owner.post(
-        "/api/v1/attachments", files={"file": ("report.txt", b"group-only-report", "text/plain")}
-    ).json()
+    copied = []
+    payload = b"group-only-report"
+
+    async def files(method, path, **kwargs):
+        if f"/groups/{cid}" in path:
+            return httpx.Response(
+                200, json={"agent_id": "nexus-group-resources", "session_id": "group-resources"},
+            )
+        if method == "PUT":
+            received = b"".join([chunk async for chunk in kwargs["content"]])
+            assert received == payload
+            return httpx.Response(200, json={
+                "size": len(received), "sha256": hashlib.sha256(received).hexdigest(),
+                "type": "application/octet-stream",
+            })
+        assert method == "POST" and path.endswith("/copy")
+        copied.append(kwargs["params"])
+        return httpx.Response(200, json={"copied": True})
+
+    @asynccontextmanager
+    async def download(key, location):
+        assert location["session_id"] == "group-resources"
+        yield httpx.Response(200, content=payload)
+
+    monkeypatch.setattr(fake, "request", files, raising=False)
+    monkeypatch.setattr(fake, "download_attachment", download, raising=False)
+    key = "att_" + "f" * 32
+    uploaded = owner.put(
+        f"/api/v1/attachments/{key}", params={"channel_id": cid, "name": "report.txt"}, content=payload,
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    original = fake.trigger_inputs
+    authorization = []
+
+    async def check_access(agent_id, sid, inputs):
+        params = {"session_id": sid, "key": key, "execution_id": inputs[-1]["metadata"]["discussion_id"]}
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://nexus.test",
+        ) as client:
+            route = "/api/v1/internal/chat-attachment-access"
+            assert (await client.get(route, params=params)).status_code == 401
+            headers = {"X-Nexus-Internal-Key": "test-internal-key"}
+            allowed = await client.get(route, params=params, headers=headers)
+            denied = await client.get(route, params={**params, "key": "att_" + "1" * 32}, headers=headers)
+            assert allowed.status_code == 200 and denied.status_code == 404
+            authorization.append(allowed.json())
+        return await original(agent_id, sid, inputs)
+
+    monkeypatch.setattr(fake, "trigger_inputs", check_access)
     sent = owner.post(
         f"/api/v1/channels/{cid}/messages",
-        json={"text": "共享报告", "attachment_ids": [attachment["id"]], "client_id": "attachment-0001"},
+        json={"text": "@小掌柜 请读取共享报告", "attachment_ids": [key], "client_id": "attachment-0001"},
     )
     assert sent.status_code == 200
-    assert other.get(f"/api/v1/attachments/{attachment['id']}").status_code == 200
+    wait_done(owner, cid)
+    assert authorization == [{"allowed": True}]
+    assert [item["target_agent_id"] for item in copied] == ["agent-qa"]
+    message = next(m for _, inputs in fake.calls for m in inputs if m["metadata"].get("attachments"))
+    assert payload.decode() not in json.dumps(message)
+    assert f"attachments/{key}" in message["content"][-1]["text"]
+    assert other.get(f"/api/v1/attachments/{key}").content == payload
     assert other.post(f"/api/v1/channels/{cid}/leave").status_code == 200
-    assert other.get(f"/api/v1/attachments/{attachment['id']}").status_code == 404
+    assert other.get(f"/api/v1/attachments/{key}").status_code == 403
 
 
 def test_local_account_and_permission_routes_are_removed(setup):
@@ -901,3 +958,26 @@ def test_group_resource_failure_blocks_inference_then_retries(setup, monkeypatch
     page = wait_done(owner, cid)
     assert page["channel"]["discussion"]["state"] == "completed"
     assert [agent for agent, _ in fake.calls] == ["agent-qa"]
+
+
+def test_lagging_group_delivery_keeps_messages_before_latest_hundred(setup):
+    from nexus_api.collaboration import append_message
+
+    _, owner, uid, cid, fake = setup
+    first = send(owner, cid, "@小掌柜 首次发言")
+    assert first.status_code == 200
+    wait_done(owner, cid)
+    with connect() as db:
+        seeded = [
+            append_message(db, cid, "human", uid, uid, f"历史第 {index} 条")["id"]
+            for index in range(105)
+        ]
+        db.commit()
+    second = send(owner, cid, "@小掌柜 请继续")
+    assert second.status_code == 200
+    wait_done(owner, cid)
+    inputs = fake.calls[-1][1]
+    ids = [item["id"] for item in inputs]
+    assert ids[:-2] == seeded
+    assert first.json()["message"]["id"] not in ids
+    assert second.json()["message"]["id"] in ids

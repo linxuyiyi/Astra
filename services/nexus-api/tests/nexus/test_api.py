@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import threading
 from pathlib import Path
@@ -18,7 +19,6 @@ from nexus_api.main import (
     create_app,
     data_dir,
     interleave_messages,
-    model_input_blocks,
     observe_stream_event,
     package_dir,
     repo_root,
@@ -280,15 +280,6 @@ def test_session_transcript_renders_display_text():
     assert rows[0]["text"] == "看日志"
     assert "LOG-TOKEN-88" not in rows[0]["text"]
     assert rows[0]["attachments"][0]["name"] == "run.log"
-
-
-def test_model_input_includes_text_and_does_not_invent_binary_analysis():
-    text = model_input_blocks("看日志", [("run.log", "text/plain", b"LOG-TOKEN-88")])
-    assert any("LOG-TOKEN-88" in block.get("text", "") for block in text)
-    binary = model_input_blocks("", [("数据.bin", "application/octet-stream", b"\x00\x01secret")])
-    assert "不要描述它的内容" in binary[0]["text"]
-    assert "secret" not in binary[0]["text"]
-    assert "已解析" not in binary[0]["text"]
 
 
 def test_owners_keep_separate_conversations_across_restart(tmp_path, monkeypatch):
@@ -589,7 +580,7 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
         assert payload["input"]["name"] == "browser-a"
         assert payload["input"]["metadata"]["verified_uid"] == "browser-a"
         assert payload["input"]["content"][0] == {"type": "text", "text": "看一下失败日志"}
-        assert conversation["id"] in payload["input"]["content"][-1]["text"]
+        assert payload["input"]["content"] == [{"type": "text", "text": "看一下失败日志"}]
         assert chat_calls[0].headers["x-user-id"] == "nexus"
         session_calls = [request for request in seen if request.url.path == "/sessions/"]
         # 邮箱一次，私聊一次。第二条消息复用私聊 Session。
@@ -837,9 +828,13 @@ def test_empty_route_does_not_attach_a_vendor_config():
     assert "deepseek-chat" not in seen[0].content.decode()
 
 
-def test_private_attachments_are_forwarded_and_session_replies_restore(tmp_path, monkeypatch):
+def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
+    from concurrent.futures import ThreadPoolExecutor
+
     seen: list[dict] = []
+    sessions_created = []
+    workspace = {}
     png = (
         b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
         b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
@@ -850,7 +845,18 @@ def test_private_attachments_are_forwarded_and_session_replies_restore(tmp_path,
         if request.url.path == "/agent/" and request.method == "POST":
             return httpx.Response(201, json={"agent_id": "agent-1"})
         if request.url.path == "/sessions/" and request.method == "POST":
+            sessions_created.append(json.loads(request.content))
             return httpx.Response(201, json={"session_id": "session-chat"})
+        if request.url.path.startswith("/nexus/workspace-attachments/"):
+            key = (request.url.params["session_id"], request.url.path.rsplit("/", 1)[-1])
+            if request.method == "PUT":
+                workspace[key] = request.content
+                mime = "image/png" if request.content.startswith(b"\x89PNG") else "application/octet-stream"
+                return httpx.Response(200, json={
+                    "size": len(request.content), "sha256": hashlib.sha256(request.content).hexdigest(),
+                    "type": mime,
+                })
+            return httpx.Response(200, content=workspace[key])
         if request.url.path == "/chat/":
             seen.append(json.loads(request.content.decode()))
             return httpx.Response(200, json={"status": "started", "session_id": "session-chat"})
@@ -894,16 +900,25 @@ def test_private_attachments_are_forwarded_and_session_replies_restore(tmp_path,
             headers=headers,
             json={"name": "新对话"},
         ).json()
-        log_file = test_client.post(
-            "/api/v1/attachments",
-            headers=headers,
-            files={"file": ("run.log", b"LOG-TOKEN-88", "text/plain")},
-        )
-        image = test_client.post(
-            "/api/v1/attachments",
-            headers=headers,
-            files={"file": ("shot.png", png, "image/png")},
-        )
+        scope = {"conversation_id": conversation["id"]}
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            log_request = pool.submit(
+                test_client.put, "/api/v1/attachments/att_" + "1" * 32,
+                headers=headers, params={**scope, "name": "run.log"}, content=b"LOG-TOKEN-88",
+            )
+            image_request = pool.submit(
+                test_client.put, "/api/v1/attachments/att_" + "2" * 32,
+                headers=headers, params={**scope, "name": "shot.png"}, content=png,
+            )
+            first_send = pool.submit(
+                test_client.post, f"/api/v1/conversations/{conversation['id']}/messages",
+                headers=headers, json={"text": "首次并发消息"},
+            )
+            log_file, image = log_request.result(), image_request.result()
+            first = first_send.result()
+        assert first.status_code == 200, first.text
+        assert sum(item.get("workspace_id") == f"ws-{conversation['id']}" for item in sessions_created) == 1
+        assert not (tmp_path / "files").exists()
         assert log_file.status_code == 201
         assert image.status_code == 201
         denied = test_client.get(
@@ -924,23 +939,31 @@ def test_private_attachments_are_forwarded_and_session_replies_restore(tmp_path,
         )
         assert sent.status_code == 200, sent.text
         assert sent.json()["agentscope"]["accepted"] is True
-        content = seen[0]["input"]["content"]
-        logged = [
-            block
-            for block in content
-            if block.get("type") == "text" and "LOG-TOKEN-88" in block.get("text", "")
-        ]
-        assert logged
-        image_block = next(block for block in content if block.get("type") == "data")
-        assert image_block["source"]["media_type"] == "image/png"
-        assert image_block["source"]["type"] == "base64"
+        message = seen[-1]["input"]
+        content = message["content"]
+        assert all(block["type"] == "text" for block in content)
+        assert "LOG-TOKEN-88" not in json.dumps(message)
+        assert "read_chat_attachment" in content[1]["text"]
+        assert image.json()["id"] in content[1]["text"]
+        other_owner = {"X-Owner-Id": "anon-b"}
+        other = test_client.post(
+            f"/api/v1/employees/{employee['id']}/conversations",
+            headers=other_owner, json={"name": "另一会话"},
+        ).json()
+        assert other["id"] != conversation["id"]
+        rejected = test_client.post(
+            f"/api/v1/conversations/{other['id']}/messages", headers=other_owner,
+            json={"attachment_ids": [image.json()["id"]]},
+        )
+        assert rejected.status_code == 404
+        assert workspace[("session-chat", image.json()["id"])] == png
         restored = test_client.get(f"/api/v1/conversations/{conversation['id']}", headers=headers).json()
         assert [item["sender"] for item in restored["messages"]] == ["user", employee["id"]]
         assert restored["messages"][0]["speaker"] == "anon-a"
         assert restored["messages"][1]["text"] == "模型自己的回复"
-        assert seen[0]["input"]["name"] == "anon-a"
-        assert seen[0]["input"]["metadata"]["verified_uid"] == "anon-a"
-        assert seen[0]["input"]["metadata"]["attachments"][0]["name"] == "run.log"
+        assert seen[-1]["input"]["name"] == "anon-a"
+        assert seen[-1]["input"]["metadata"]["verified_uid"] == "anon-a"
+        assert seen[-1]["input"]["metadata"]["attachments"][0]["name"] == "run.log"
         assert "已解析" not in json.dumps(restored, ensure_ascii=False)
 
 

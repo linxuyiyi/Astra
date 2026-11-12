@@ -35,7 +35,7 @@ export function GroupApp({ channelId }: { channelId: string }) {
   const [state, setState] = useState("idle");
   const [revoked, setRevoked] = useState(false);
   const [sending, setSending] = useState(false);
-  const [failedDraft, setFailedDraft] = useState<{ text: string; attachments: string[]; key: string } | null>(null);
+  const [failedDraft, setFailedDraft] = useState<{ content: ContentBlock[]; attachments: string[]; key: string } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
@@ -114,10 +114,10 @@ export function GroupApp({ channelId }: { channelId: string }) {
     });
   }, [items.at(-1)?.seq, channelId, revoked]);
 
-  async function sendDraft(draft: { text: string; attachments: string[]; key: string }) {
+  async function sendDraft(draft: { content: ContentBlock[]; attachments: string[]; key: string }) {
     setSending(true); setError("");
     try {
-      const result = await sendGroupMessage(channelId, draft.text, draft.attachments, draft.key);
+      const result = await sendGroupMessage(channelId, draft.content, draft.attachments, draft.key);
       setItems(previous => merge(previous, [result.message])); setFailedDraft(null);
       followLatest.current = true; setAtBottom(true);
     } catch (reason) {
@@ -126,9 +126,9 @@ export function GroupApp({ channelId }: { channelId: string }) {
   }
   function handleSend(blocks: ContentBlock[]) {
     const text = blocks.filter(b => b.type === "text").map(b => (b as { text?: string }).text ?? "").join("");
-    const attachments = blocks.filter(b => b.type === "data").map(b => attachmentIdFromBlock(b as { source?: { url?: string } })).filter((x): x is string => Boolean(x));
+    const attachments = blocks.filter(b => b.type === "data").map(b => attachmentIdFromBlock(b as { id?: string })).filter((x): x is string => Boolean(x));
     if (!text.trim() && !attachments.length) return;
-    void sendDraft({ text, attachments, key: crypto.randomUUID() });
+    void sendDraft({ content: blocks.filter(b => b.type === "text"), attachments, key: crypto.randomUUID() });
   }
   async function older() {
     setOlderLoading(true);
@@ -150,7 +150,7 @@ export function GroupApp({ channelId }: { channelId: string }) {
     </div>
     {notice && <div className="mx-4 mt-2 text-xs text-amber-700">{notice}<button className="ml-3 underline" onClick={() => setNotice("")}>关闭</button></div>}
     {error && <div role="alert" className="mx-4 mt-2 text-sm text-destructive">{error}</div>}
-    {failedDraft && <div className="mx-4 mt-2 text-sm">未发送：{failedDraft.text.slice(0, 120)} <button className="underline" disabled={sending} onClick={() => void sendDraft(failedDraft)}>重试发送</button></div>}
+    {failedDraft && <div className="mx-4 mt-2 text-sm">未发送：{failedDraft.content.map(b => b.type === "text" ? b.text : "").join("").slice(0, 120)} <button className="underline" disabled={sending} onClick={() => void sendDraft(failedDraft)}>重试发送</button></div>}
     <div ref={scroller} className="flex-1 overflow-y-auto px-4 py-4" onScroll={() => {
       const node = scroller.current; if (!node) return;
       const follow = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
@@ -185,8 +185,14 @@ export function GroupApp({ channelId }: { channelId: string }) {
     }}>回到最新消息</button>}
     <div className="px-4 pb-4"><div className="mx-auto w-full max-w-[48rem]">
       <TextInput onSend={handleSend} disabled={loading || revoked || sending} phase="idle"
-        allowedInputTypes={["image/*", "application/pdf", "text/*"]}
-        fileProcessor={async file => uploadAttachment(file)} />
+        fileProcessor={async file => {
+          try {
+            return await uploadAttachment(file, { channel_id: channelId });
+          } catch (reason) {
+            setNotice(reason instanceof Error ? reason.message : "附件上传失败");
+            throw reason;
+          }
+        }} />
     </div></div>
   </div>;
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -19,22 +20,42 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     Response,
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text as sql_text
+from starlette.background import BackgroundTask
 
 from . import __version__
 from .agentscope import PINNED_VERSION, AgentScopeClient, AgentScopeError
-from .auth import install_identity, require_user
+from .auth import install_identity, require_internal, require_user
 from .avatars import AVATAR_IDS, DEFAULT_AVATAR, validate_avatar
 from .capability import inspect_employee
+from .chat_attachments import (
+    ATTACHMENT_ID,
+    ATTACHMENT_PREFIX,
+    MessageContent,
+    assert_attachment_cutover,
+    attachment_content,
+    disposition,
+    expire_attachments,
+    file_name,
+    link_attachments,
+    load_attachments,
+    location,
+    reference,
+)
+from .chat_attachments import (
+    visible as attachment_meta,
+)
 from .collaboration import Collaboration
-from .db import connect, employee_from_row, init_schema, message_from_row, new_id, utcnow
+from .collaboration import member as require_group_member
+from .db import connect, employee_from_row, init_schema, new_id, utcnow
 from .im import (
     ImError,
     accept_inbound,
@@ -87,38 +108,7 @@ from .resources import (
 )
 from .sql import insert_record
 
-MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
-MAX_ATTACHMENTS = 6
-MAX_TEXT_CHARS = 64_000
 STREAM_CURSOR = re.compile(r"^\d+-\d+$")
-TEXT_SUFFIXES = {
-    ".txt",
-    ".md",
-    ".log",
-    ".py",
-    ".json",
-    ".yaml",
-    ".yml",
-    ".js",
-    ".ts",
-    ".vue",
-    ".css",
-    ".html",
-    ".xml",
-    ".csv",
-    ".sh",
-    ".toml",
-    ".ini",
-    ".cfg",
-    ".sql",
-}
-IMAGE_BY_SUFFIX = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-}
 SENDER_CONTACT_LIMIT = 2
 SCOPE_CONTACT_LIMIT = 6
 UNATTENDED_PERMISSION = "dont_ask"
@@ -219,9 +209,8 @@ class ConversationBody(BaseModel):
     name: str = Field(default="新对话", max_length=40)
 
 
-class MessageBody(BaseModel):
-    text: str = ""
-    attachment_ids: list[str] = Field(default_factory=list)
+class MessageBody(MessageContent):
+    client_id: str = Field(default="", max_length=64)
 
 
 class ChannelBody(BaseModel):
@@ -374,82 +363,6 @@ def system_prompt(
     if not cleaned:
         return emp
     return f"{PLATFORM_PROMPT_HEADER}\n{cleaned}\n\n{emp}"
-
-
-def resolved_media_type(name: str, declared: str) -> str:
-    media = (declared or "").split(";", 1)[0].strip().lower()
-    if media.startswith("image/") or media.startswith("text/") or media == "application/pdf":
-        return media
-    return IMAGE_BY_SUFFIX.get(Path(name).suffix.lower(), media or "application/octet-stream")
-
-
-def readable_text(name: str, media: str, data: bytes) -> str | None:
-    suffix = Path(name).suffix.lower()
-    if not (media.startswith("text/") or suffix in TEXT_SUFFIXES):
-        return None
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
-
-
-def model_input_blocks(text: str, files: list[tuple[str, str, bytes]]) -> list[dict[str, Any]]:
-    """把用户输入变成 AgentScope 的 content。读不到的文件不会被说成已经分析过。"""
-    blocks: list[dict[str, Any]] = []
-    if text.strip():
-        blocks.append({"type": "text", "text": text.strip()})
-    for name, declared, data in files:
-        media = resolved_media_type(name, declared)
-        if media.startswith("image/"):
-            blocks.append({"type": "text", "text": f"附件 {name}"})
-            blocks.append(
-                {
-                    "type": "data",
-                    "name": name,
-                    "source": {
-                        "type": "base64",
-                        "media_type": media,
-                        "data": base64.b64encode(data).decode("ascii"),
-                    },
-                }
-            )
-            continue
-        body = readable_text(name, media, data)
-        if body is not None:
-            omitted = ""
-            if len(body) > MAX_TEXT_CHARS:
-                body = body[:MAX_TEXT_CHARS]
-                omitted = "\n其余内容没有放进这次输入。"
-            blocks.append({"type": "text", "text": f"附件 {name}：\n{body}{omitted}"})
-            continue
-        if media == "application/pdf":
-            blocks.append(
-                {
-                    "type": "text",
-                    "text": f"附件 {name} 是 PDF。数据块已附上；如果当前模型不接收 PDF，不要描述文件内容。",
-                }
-            )
-            blocks.append(
-                {
-                    "type": "data",
-                    "name": name,
-                    "source": {
-                        "type": "base64",
-                        "media_type": media,
-                        "data": base64.b64encode(data).decode("ascii"),
-                    },
-                }
-            )
-            continue
-        blocks.append(
-            {
-                "type": "text",
-                "text": f"附件 {name}（{media}）没有放进模型输入。不要描述它的内容。",
-            }
-        )
-    if not blocks:
-        blocks.append({"type": "text", "text": "（空消息）"})
-    return blocks
 
 
 def block_text(content: Any) -> str:
@@ -928,19 +841,44 @@ async def sync_employee_skills(
 
 async def prepare_employee_session(client, employee, session_ids, connection, store):
     """只有绑定资源在本会话全部就绪，才允许接收新的推理输入。"""
-    if not employee.get("skills") and not employee.get("mcps"):
-        pending = any(
-            connection.execute(
-                sql_text(
-                    "SELECT 1 FROM t_nexus_resource_sync WHERE employee_id=:e "
-                    "AND session_id=:s AND status='pending_remove' LIMIT 1"
-                ),
-                {"e": employee["id"], "s": session_id},
-            ).first()
-            for session_id in session_ids
-        )
-        if not pending:
-            return {"ok": True, "status": "applied"}
+    desired_skills = employee.get("skills") or []
+    desired_mcps = employee.get("mcps") or []
+    skills = local_skill_rows(connection, desired_skills)
+    mcps = local_mcp_rows(connection, desired_mcps)
+    revisions = {
+        (kind, ref): int(rows[ref]["revision"]) if ref in rows else 0
+        for kind, refs, rows in (("skill", desired_skills, skills), ("mcp", desired_mcps, mcps))
+        for ref in refs
+    }
+    ready = True
+    for session_id in session_ids:
+        records = connection.execute(
+            sql_text(
+                "SELECT resource_type,resource_id,status,revision,mounted_name FROM t_nexus_resource_sync "
+                "WHERE employee_id=:e AND session_id=:s"
+            ),
+            {"e": employee["id"], "s": session_id},
+        ).mappings().all()
+        applied = {
+            (r["resource_type"], r["resource_id"]): r["revision"] for r in records if r["status"] == "applied"
+        }
+        if any(r["status"] == "pending_remove" for r in records) or any(
+            applied.get(key) != rev for key, rev in revisions.items()
+        ):
+            ready = False
+            break
+        expected = {
+            r["mounted_name"] for r in records
+            if r["resource_type"] == "mcp" and r["resource_id"] in desired_mcps and r["mounted_name"]
+        }
+        if expected:
+            mounted = await client.list_workspace_mcp(employee["agentscope_agent_id"], session_id)
+            healthy = {item["name"] for item in mounted if item.get("is_healthy") is True}
+            if not expected.issubset(healthy):
+                ready = False
+                break
+    if ready:
+        return {"ok": True, "status": "applied"}
     result = await sync_employee_skills(client, employee, session_ids, connection, store)
     if not result["ok"]:
         raise AgentScopeError(f"员工会话资源未就绪：{result['detail']}", 503)
@@ -958,37 +896,6 @@ async def conversation_lock(conversation_id: str) -> asyncio.Lock:
             lock = asyncio.Lock()
             _conversation_locks[conversation_id] = lock
         return lock
-
-
-def attachment_visible(connection, attachment_id: str, owner_uid: str, requester: str) -> bool:
-    if owner_uid == requester:
-        return True
-    rows = (
-        connection.execute(
-            sql_text(
-                """
-                SELECT channel_id FROM t_nexus_messages
-                WHERE channel_id IS NOT NULL AND attachments_json LIKE :p0
-                """
-            ),
-            {"p0": f'%"{attachment_id}"%'},
-        )
-        .mappings()
-        .fetchall()
-    )
-    for item in rows:
-        member = (
-            connection.execute(
-                sql_text("""SELECT 1 FROM t_nexus_channel_members WHERE channel_id = :p0 AND member_type =
-                         'human' AND membership_active=1 AND member_id = :p1"""),
-                {"p0": item["channel_id"], "p1": requester},
-            )
-            .mappings()
-            .fetchone()
-        )
-        if member is not None:
-            return True
-    return False
 
 
 def claim_private_session(connection, conversation_id: str, session_id: str, workspace_id: str) -> str:
@@ -1026,19 +933,21 @@ def create_app() -> FastAPI:
     async def lifespan(app: FastAPI):
         root = data_dir()
         root.mkdir(parents=True, exist_ok=True)
-        (root / "files").mkdir(parents=True, exist_ok=True)
         init_schema()
+        assert_attachment_cutover()
         app.state.resources = ResourceStore(root)
         app.state.agentscope = AgentScopeClient(
             os.environ.get("NEXUS_AGENTSCOPE_BASE_URL") or None,
             os.environ.get("NEXUS_AGENTSCOPE_USER_ID", "nexus"),
         )
         supervisor = asyncio.create_task(app.state.collaboration.supervisor())
+        janitor = asyncio.create_task(expire_attachments(app.state.agentscope))
         try:
             yield
         finally:
             supervisor.cancel()
-            await asyncio.gather(supervisor, return_exceptions=True)
+            janitor.cancel()
+            await asyncio.gather(supervisor, janitor, return_exceptions=True)
             await app.state.collaboration.close()
             await app.state.agentscope.aclose()
 
@@ -1364,116 +1273,6 @@ def create_app() -> FastAPI:
         connection.commit()
         return load_employee(connection, employee_id)
 
-    def list_messages(connection, *, conversation_id: str | None = None, channel_id: str | None = None):
-        if conversation_id:
-            rows = (
-                connection.execute(
-                    sql_text(
-                        "SELECT * FROM t_nexus_messages WHERE conversation_id = :p0 ORDER BY created_at"
-                    ),
-                    {"p0": conversation_id},
-                )
-                .mappings()
-                .fetchall()
-            )
-        else:
-            rows = (
-                connection.execute(
-                    sql_text("SELECT * FROM t_nexus_messages WHERE channel_id = :p0 ORDER BY created_at"),
-                    {"p0": channel_id},
-                )
-                .mappings()
-                .fetchall()
-            )
-        return [message_from_row(row) for row in rows]
-
-    def load_attachments(
-        connection,
-        attachment_ids: list[str],
-        owner_id: str | None = None,
-    ) -> list[dict[str, Any]]:
-        if len(attachment_ids) > MAX_ATTACHMENTS:
-            raise HTTPException(status_code=400, detail="每条消息最多添加 6 个附件")
-        found: list[dict[str, Any]] = []
-        for attachment_id in attachment_ids:
-            row = (
-                connection.execute(
-                    sql_text("SELECT * FROM t_nexus_attachments WHERE id = :p0"), {"p0": attachment_id}
-                )
-                .mappings()
-                .fetchone()
-            )
-            if row is None or (owner_id is not None and row["owner_uid"] != owner_id):
-                raise HTTPException(status_code=404, detail="附件不存在")
-            found.append(
-                {
-                    "id": row["id"],
-                    "name": row["name"],
-                    "type": row["media_type"],
-                    "size": row["size"],
-                    "path": row["path"],
-                }
-            )
-        return found
-
-    def attachment_bytes(connection, message: dict[str, Any]) -> list[tuple[str, str, bytes]]:
-        files: list[tuple[str, str, bytes]] = []
-        for item in message.get("attachments") or []:
-            row = (
-                connection.execute(
-                    sql_text("SELECT * FROM t_nexus_attachments WHERE id = :p0"), {"p0": item["id"]}
-                )
-                .mappings()
-                .fetchone()
-            )
-            if row is None:
-                continue
-            files.append((row["name"], row["media_type"], Path(row["path"]).read_bytes()))
-        return files
-
-    def store_user_message(
-        connection,
-        text: str,
-        attachments: list[dict[str, Any]],
-        *,
-        speaker_uid: str = "",
-        **scope: str | None,
-    ):
-        if not text.strip() and not attachments:
-            raise HTTPException(status_code=400, detail="请输入消息或添加附件")
-        message_id = new_id("msg")
-        created_at = utcnow()
-        visible = [
-            {"id": item["id"], "name": item["name"], "type": item["type"], "size": item["size"]}
-            for item in attachments
-        ]
-        connection.execute(
-            sql_text(
-                """
-                INSERT INTO t_nexus_messages (
-                    id, conversation_id, channel_id, sender, text, attachments_json, accepted,
-                    speaker_uid, created_at
-                ) VALUES (:p0, :p1, :p2, 'user', :p3, :p4, 0, :p5, :p6)
-                """
-            ),
-            {
-                "p0": message_id,
-                "p1": scope.get("conversation_id"),
-                "p2": scope.get("channel_id"),
-                "p3": text.strip(),
-                "p4": json.dumps(visible, ensure_ascii=False),
-                "p5": speaker_uid,
-                "p6": created_at,
-            },
-        )
-        connection.commit()
-        row = (
-            connection.execute(sql_text("SELECT * FROM t_nexus_messages WHERE id = :p0"), {"p0": message_id})
-            .mappings()
-            .fetchone()
-        )
-        return message_from_row(row)
-
     async def ensure_session(
         connection,
         client: AgentScopeClient,
@@ -1493,6 +1292,13 @@ def create_app() -> FastAPI:
         if permission_mode:
             await client.set_permission_mode(agent_id, session_id, permission_mode)
         return session_id
+
+    def group_model_config(config):
+        if not config:
+            return config
+        parameters = config.get("parameters") or {}
+        limit = parameters.get("max_tokens") or 768
+        return {**config, "parameters": {**parameters, "max_tokens": min(limit, 768)}}
 
     async def claim_member_session(
         connection,
@@ -1521,16 +1327,12 @@ def create_app() -> FastAPI:
             )
             current = row["agentscope_session_id"] if row is not None else None
             if current:
-                await client.set_permission_mode(
-                    employee["agentscope_agent_id"],
-                    current,
-                    UNATTENDED_PERMISSION,
-                )
                 return current
             session_id = await client.create_session(
                 employee["agentscope_agent_id"],
                 name,
-                chat_model_config=await model_for(client, employee),
+                workspace_id=f"ws-{channel_id}-{employee['id']}",
+                chat_model_config=group_model_config(await model_for(client, employee)),
                 knowledge_base_ids=bound_knowledge(employee),
             )
             await client.set_permission_mode(
@@ -2422,8 +2224,15 @@ def create_app() -> FastAPI:
         if route_id and route_id != previous_route and employee["agentscope_agent_id"] and client.configured:
             try:
                 config = await chat_config_for_route(client, route_id)
+                group_sessions = set(connection.execute(
+                    sql_text(
+                        "SELECT agentscope_session_id FROM t_nexus_channel_members WHERE employee_id=:e"
+                    ),
+                    {"e": employee_id},
+                ).scalars())
                 for session_id in session_ids(connection, employee):
-                    await client.replace_session_model(employee["agentscope_agent_id"], session_id, config)
+                    effective = group_model_config(config) if session_id in group_sessions else config
+                    await client.replace_session_model(employee["agentscope_agent_id"], session_id, effective)
             except (ModelRouteError, AgentScopeError) as exc:
                 raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
         knowledge_ids = bound_knowledge(employee)
@@ -2481,74 +2290,131 @@ def create_app() -> FastAPI:
         connection.commit()
         return {"deleted": True}
 
-    @app.post("/api/v1/attachments", status_code=201)
+    @app.put("/api/v1/attachments/{key}", status_code=201)
     async def upload_attachment(
-        file: UploadFile = File(...),
+        key: str,
+        request: Request,
+        name: str = Query(min_length=1, max_length=1024),
+        conversation_id: str = "",
+        channel_id: str = "",
         owner_id: str = Depends(require_owner),
         connection=Depends(database),
-    ) -> dict[str, Any]:
-        content = await file.read()
-        if not content:
-            raise HTTPException(status_code=400, detail="不能添加空文件")
-        if len(content) > MAX_ATTACHMENT_BYTES:
-            raise HTTPException(status_code=400, detail="单个附件不能超过 20 MB")
-        attachment_id = new_id("att")
-        target = data_dir() / "files" / attachment_id
-        target.write_bytes(content)
-        media_type = file.content_type or "application/octet-stream"
-        filename = file.filename or "未命名文件"
-        connection.execute(
-            sql_text(
-                """
-                INSERT INTO t_nexus_attachments (id, owner_uid, name, media_type, size, path, created_at)
-                VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)
-                """
-            ),
-            {
-                "p0": attachment_id,
-                "p1": owner_id,
-                "p2": filename,
-                "p3": media_type,
-                "p4": len(content),
-                "p5": str(target),
-                "p6": utcnow(),
-            },
-        )
-        connection.commit()
-        return {"id": attachment_id, "name": filename, "type": media_type, "size": len(content)}
-
-    @app.get("/api/v1/attachments/{attachment_id}")
-    def download_attachment(
-        attachment_id: str,
-        owner_id: str = Depends(require_owner),
-        connection=Depends(database),
-    ) -> FileResponse:
-        row = (
+    ):
+        if bool(conversation_id) == bool(channel_id) or not re.fullmatch(ATTACHMENT_ID, key):
+            raise HTTPException(422, "需要有效的附件标识和唯一作用域")
+        client = client_of(request)
+        scope_kind, scope_id = ("private", conversation_id) if conversation_id else ("group", channel_id)
+        try:
+            if conversation_id:
+                row = owned_conversation(connection, conversation_id, owner_id)
+                employee = load_employee(connection, row["employee_id"])
+                agent_id = employee["agentscope_agent_id"]
+                session_id = await private_session(connection, client, row, employee)
+                target = {"agent_id": agent_id, "session_id": session_id}
+            else:
+                require_group_member(connection, channel_id, owner_id)
+                target = (await client.request("PUT", f"{ATTACHMENT_PREFIX}/groups/{channel_id}")).json()
+            name = file_name(name)
+            claimed = {
+                "id": key, "owner_uid": owner_id, "scope_kind": scope_kind, "scope_id": scope_id,
+                **target, "name": name, "media_type": "application/octet-stream", "size": 0, "sha256": "",
+                "created_at": utcnow(), "linked": 0,
+            }
+            insert_record(connection, "t_nexus_attachment_refs", claimed, ignore_keys=["id"])
+            connection.commit()
+            stored = reference(connection, key)
+            identity_fields = ("owner_uid", "scope_kind", "scope_id", "name")
+            if any(stored[field] != claimed[field] for field in identity_fields):
+                raise HTTPException(409, "附件标识已占用")
+            refreshed = connection.execute(
+                sql_text("UPDATE t_nexus_attachment_refs SET created_at=:now WHERE id=:id AND linked>=0"),
+                {"id": key, "now": utcnow()},
+            )
+            connection.commit()
+            if not refreshed.rowcount:
+                raise HTTPException(410, "附件已过期，请重新选择")
+            result = (await client.request(
+                "PUT", f"{ATTACHMENT_PREFIX}/{key}", params=target, content=request.stream(),
+            )).json()
             connection.execute(
-                sql_text("SELECT * FROM t_nexus_attachments WHERE id = :p0"), {"p0": attachment_id}
+                sql_text(
+                    "UPDATE t_nexus_attachment_refs "
+                    "SET size=:size,sha256=:sha256,media_type=:mime, "
+                    "agent_id=:agent_id,session_id=:session_id "
+                    "WHERE id=:id"
+                ),
+                {
+                    "id": key, "size": result["size"],
+                    "sha256": result["sha256"], "mime": result["type"], **target,
+                },
             )
-            .mappings()
-            .fetchone()
-        )
-        visible = (
-            row is not None
-            and Path(row["path"]).is_file()
-            and attachment_visible(
-                connection,
-                attachment_id,
-                row["owner_uid"],
-                owner_id,
-            )
-        )
-        if not visible or row is None:
-            raise HTTPException(status_code=404, detail="附件内容不存在")
-        disposition = "inline" if str(row["media_type"]).startswith("image/") else "attachment"
-        return FileResponse(
-            row["path"],
-            media_type=row["media_type"],
-            filename=row["name"],
-            content_disposition_type=disposition,
-        )
+            connection.commit()
+        except AgentScopeError as exc:
+            raise HTTPException(exc.status_code, exc.detail) from exc
+        return attachment_meta(reference(connection, key))
+
+    @app.get("/api/v1/attachments/{key}")
+    async def download_attachment(
+        key: str,
+        request: Request,
+        owner_id: str = Depends(require_owner),
+        connection=Depends(database),
+    ):
+        row = reference(connection, key)
+        if not row or not row["sha256"] or row["linked"] < 0:
+            raise HTTPException(404, "附件不存在")
+        if row["scope_kind"] == "private":
+            owned_conversation(connection, row["scope_id"], owner_id)
+        else:
+            require_group_member(connection, row["scope_id"], owner_id)
+            if row["owner_uid"] != owner_id or row["linked"]:
+                messages = connection.execute(
+                    sql_text("SELECT attachments_json FROM t_nexus_messages WHERE channel_id=:c "
+                             "AND attachments_json LIKE :pattern"),
+                    {"c": row["scope_id"], "pattern": f'%"{key}"%'},
+                ).scalars()
+                if not any(key in json.loads(value) for value in messages):
+                    raise HTTPException(404, "附件不存在")
+        upstream = client_of(request).download_attachment(key, location(row))
+        try:
+            response = await upstream.__aenter__()
+        except AgentScopeError as exc:
+            raise HTTPException(exc.status_code, exc.detail) from exc
+
+        async def chunks():
+            try:
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+            finally:
+                await upstream.__aexit__(None, None, None)
+
+        return StreamingResponse(chunks(), media_type=row["media_type"], headers={
+            "Content-Disposition": disposition(row["name"], row["media_type"]),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        }, background=BackgroundTask(upstream.__aexit__, None, None, None))
+
+    @app.get("/api/v1/internal/chat-attachment-access")
+    def authorize_group_attachment(
+        request: Request, session_id: str, key: str, execution_id: str, connection=Depends(database),
+    ):
+        require_internal(request)
+        policy = request.app.state.collaboration.policy(session_id, "read_chat_attachment", execution_id)
+        source = policy.get("task_source") or {}
+        if source.get("source") != "group_chat":
+            raise HTTPException(404, "群附件不存在")
+        rows = connection.execute(
+            sql_text("SELECT attachments_json,native_json FROM t_nexus_messages "
+                     "WHERE channel_id=:channel AND attachments_json LIKE :pattern"),
+            {"channel": source["external_task_id"], "pattern": f'%"{key}"%'},
+        ).mappings()
+        for row in rows:
+            metadata = json.loads(row["native_json"]).get("metadata") or {}
+            if key in json.loads(row["attachments_json"]) and source["employee_id"] in metadata.get(
+                "attachment_targets", [],
+            ):
+                return {"allowed": True}
+        raise HTTPException(404, "群附件不存在")
 
     @app.get("/api/v1/employees/{employee_id}/conversations")
     def list_conversations(
@@ -2757,6 +2623,34 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=502, detail=exc.detail) from exc
         return {"accepted": True}
 
+    async def private_session(connection, client, row, employee):
+        if not employee["enabled"] or not employee["agentscope_agent_id"]:
+            raise AgentScopeError("员工未启用或尚未绑定 Agent", 409)
+        if row["agentscope_session_id"]:
+            return row["agentscope_session_id"]
+        async with await conversation_lock(row["id"]):
+            connection.commit()
+            # 先锁数据库绑定行，再查询最新值，覆盖多个 Nexus 进程同时首次建会话。
+            await asyncio.to_thread(
+                connection.execute,
+                sql_text("UPDATE t_nexus_conversations SET id=id WHERE id=:id AND owner_id=:u"),
+                {"id": row["id"], "u": row["owner_id"]},
+            )
+            current = owned_conversation(connection, row["id"], row["owner_id"])
+            if current["agentscope_session_id"]:
+                connection.commit()
+                return current["agentscope_session_id"]
+            workspace_id = current["workspace_id"] or f"ws-{row['id']}"
+            session_id = await client.create_session(
+                employee["agentscope_agent_id"], row["name"], workspace_id,
+                chat_model_config=await model_for(client, employee),
+                knowledge_base_ids=bound_knowledge(employee),
+            )
+            await client.set_permission_mode(
+                employee["agentscope_agent_id"], session_id, UNATTENDED_PERMISSION,
+            )
+            return claim_private_session(connection, row["id"], session_id, workspace_id)
+
     @app.post("/api/v1/conversations/{conversation_id}/messages")
     async def send_private(
         conversation_id: str,
@@ -2769,15 +2663,19 @@ def create_app() -> FastAPI:
         employee = load_employee(connection, row["employee_id"])
         if not employee["enabled"]:
             raise HTTPException(status_code=409, detail="该员工已禁用")
-        attachments = load_attachments(connection, body.attachment_ids, owner_id)
-        visible = [
-            {"id": item["id"], "name": item["name"], "type": item["type"], "size": item["size"]}
-            for item in attachments
-        ]
+        attachments = load_attachments(
+            connection, body.attachment_ids, scope_kind="private",
+            scope_id=conversation_id, owner_id=owner_id,
+        )
+        visible = [attachment_meta(item) for item in attachments]
         if not body.text.strip() and not attachments:
             raise HTTPException(status_code=400, detail="请输入消息或添加附件")
+        message_id = new_id("msg")
+        if body.client_id:
+            identity = json.dumps([conversation_id, owner_id, body.client_id], ensure_ascii=False).encode()
+            message_id = f"msg_{hashlib.sha256(identity).hexdigest()[:32]}"
         message = {
-            "id": new_id("msg"),
+            "id": message_id,
             "sender": "user",
             "speaker": owner_id,
             "text": body.text.strip(),
@@ -2785,14 +2683,6 @@ def create_app() -> FastAPI:
             "accepted": False,
             "created_at": utcnow(),
         }
-        session_name = row["name"]
-        if message["text"] and row["name"] in {"新对话", "私聊"}:
-            title = message["text"] if len(message["text"]) <= 20 else message["text"][:20] + "…"
-            connection.execute(
-                sql_text("UPDATE t_nexus_conversations SET name = :p0, updated_at = :p1 WHERE id = :p2"),
-                {"p0": title, "p1": utcnow(), "p2": conversation_id},
-            )
-            connection.commit()
         client = client_of(request)
         outcome = {
             "accepted": False,
@@ -2803,38 +2693,17 @@ def create_app() -> FastAPI:
             outcome["detail"] = "AgentScope 尚未创建该员工，没有生成回复"
         else:
             try:
-                if row["agentscope_session_id"]:
-                    session_id = row["agentscope_session_id"]
-                    await client.set_permission_mode(
-                        employee["agentscope_agent_id"],
-                        session_id,
-                        UNATTENDED_PERMISSION,
+                session_id = await private_session(connection, client, row, employee)
+                if message["text"] and row["name"] in {"新对话", "私聊"}:
+                    title = message["text"] if len(message["text"]) <= 20 else message["text"][:20] + "…"
+                    connection.execute(
+                        sql_text(
+                            "UPDATE t_nexus_conversations SET name=:p0,updated_at=:p1 "
+                            "WHERE id=:p2 AND name=:old"
+                        ),
+                        {"p0": title, "p1": utcnow(), "p2": conversation_id, "old": row["name"]},
                     )
-                else:
-                    async with await conversation_lock(conversation_id):
-                        current = owned_conversation(connection, conversation_id, owner_id)
-                        if current["agentscope_session_id"]:
-                            session_id = current["agentscope_session_id"]
-                        else:
-                            workspace_id = current["workspace_id"] or f"ws-{conversation_id}"
-                            session_id = await client.create_session(
-                                employee["agentscope_agent_id"],
-                                session_name,
-                                workspace_id,
-                                chat_model_config=await model_for(client, employee),
-                                knowledge_base_ids=bound_knowledge(employee),
-                            )
-                            await client.set_permission_mode(
-                                employee["agentscope_agent_id"],
-                                session_id,
-                                UNATTENDED_PERMISSION,
-                            )
-                            session_id = claim_private_session(
-                                connection,
-                                conversation_id,
-                                session_id,
-                                workspace_id,
-                            )
+                    connection.commit()
                 await prepare_employee_session(
                     client,
                     employee,
@@ -2842,9 +2711,7 @@ def create_app() -> FastAPI:
                     connection,
                     request.app.state.resources,
                 )
-                files: list[tuple[str, str, bytes]] = []
-                for item in attachments:
-                    files.append((item["name"], item["type"], Path(item["path"]).read_bytes()))
+                content = attachment_content(body.blocks(), visible, message["id"])
                 peers = await peer_replies_for_conversation(connection, client, conversation_id)
                 context = []
                 if peers:
@@ -2878,14 +2745,7 @@ def create_app() -> FastAPI:
                 await client.trigger_chat(
                     employee["agentscope_agent_id"],
                     session_id,
-                    [
-                        *model_input_blocks(body.text, files),
-                        {
-                            "type": "text",
-                            "text": f"内部任务来源：source=private_chat，external_task_id={conversation_id}，"
-                            f"employee_id={employee['id']}。仅在需要创建工程任务时使用此来源。",
-                        },
-                    ],
+                    content,
                     owner_id,
                     verified_uid=owner_id,
                     attachments=visible,
@@ -2893,6 +2753,8 @@ def create_app() -> FastAPI:
                     message_id=message["id"],
                     context=context,
                 )
+                link_attachments(connection, attachments)
+                connection.commit()
                 message["accepted"] = True
                 outcome = {"accepted": True, "detail": "", "session_id": session_id}
             except AgentScopeError as exc:
@@ -2934,6 +2796,12 @@ def create_app() -> FastAPI:
             ),
             {"p0": session_id, "p1": workspace_id, "p2": utcnow(), "p3": conversation_id},
         )
+        connection.execute(
+            sql_text(
+                "UPDATE t_nexus_attachment_refs SET session_id=:s WHERE scope_kind='private' AND scope_id=:c"
+            ),
+            {"s": session_id, "c": conversation_id},
+        )
         connection.commit()
         try:
             await prepare_employee_session(
@@ -2973,9 +2841,6 @@ def create_app() -> FastAPI:
         load_employee=load_employee,
         claim_session=claim_member_session,
         sync_resources=prepare_employee_session,
-        model_for=model_for,
-        load_attachments=load_attachments,
-        model_input_blocks=model_input_blocks,
     )
     app.state.collaboration.install()
 
@@ -3011,9 +2876,6 @@ def create_app() -> FastAPI:
             if unreachable:
                 raise HTTPException(status_code=404, detail="没有找到可联系的员工")
             try:
-                await client_of(request).set_permission_mode(
-                    target["agentscope_agent_id"], target["mailbox_session_id"], UNATTENDED_PERMISSION,
-                )
                 await prepare_employee_session(
                     client_of(request),
                     target,
@@ -3066,9 +2928,6 @@ def create_app() -> FastAPI:
             if scope is None:
                 scope = f"mailbox:{sender['id']}"
             try:
-                await client_of(request).set_permission_mode(
-                    target["agentscope_agent_id"], target["mailbox_session_id"], UNATTENDED_PERMISSION,
-                )
                 await prepare_employee_session(
                     client_of(request),
                     target,
@@ -3222,39 +3081,8 @@ def create_app() -> FastAPI:
             if not client.configured or not employee["agentscope_agent_id"]:
                 return ""
             conversation_id = existing["id"]
-            async with await conversation_lock(conversation_id):
-                current = (
-                    connection.execute(
-                        sql_text("SELECT * FROM t_nexus_conversations WHERE id = :p0"),
-                        {"p0": conversation_id},
-                    )
-                    .mappings()
-                    .fetchone()
-                )
-                if current["agentscope_session_id"]:
-                    return current["agentscope_session_id"]
-                workspace_id = current["workspace_id"] or f"ws-{conversation_id}"
-                session_id = await client.create_session(
-                    employee["agentscope_agent_id"],
-                    current["name"] or "私聊",
-                    workspace_id,
-                    chat_model_config=await model_for(client, employee),
-                    knowledge_base_ids=bound_knowledge(employee),
-                )
-                await client.set_permission_mode(
-                    employee["agentscope_agent_id"],
-                    session_id,
-                    UNATTENDED_PERMISSION,
-                )
-                claimed = claim_private_session(connection, conversation_id, session_id, workspace_id)
-                await sync_employee_skills(
-                    client,
-                    employee,
-                    [claimed],
-                    connection,
-                    request.app.state.resources,
-                )
-                return claimed
+            current = owned_conversation(connection, conversation_id, owner_id)
+            return await private_session(connection, client, current, employee)
 
         prior_reply: dict[str, Any] = {"cursor": None, "known": set()}
 
@@ -3282,6 +3110,9 @@ def create_app() -> FastAPI:
                 [{"type": "text", "text": text}],
                 body.sender_uid or "im",
                 verified_uid=body.sender_uid or None,
+                message_id="im_" + hashlib.sha256(
+                    json.dumps([body.provider, body.event_id]).encode(),
+                ).hexdigest()[:32],
             )
 
         try:

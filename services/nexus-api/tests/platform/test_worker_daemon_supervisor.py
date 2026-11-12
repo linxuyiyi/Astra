@@ -30,7 +30,9 @@ def _free_port() -> int:
 def _init_git_repo(path: Path, *, remote: str = "https://example.test/org/repo.git") -> str:
     path.mkdir(parents=True, exist_ok=True)
     for args in (
-        ["init", "-q", "-b", "main"],
+        # 公司 Git 2.19.1 不支持 git init -b（需要 Git 2.28+）。
+        ["init", "-q"],
+        ["checkout", "-q", "-b", "main"],
         ["config", "user.email", "worker@example.test"],
         ["config", "user.name", "Worker"],
     ):

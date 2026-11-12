@@ -118,7 +118,9 @@ class GitHTTPServer:
 def http_git(tmp_path):
     source = tmp_path / "source"
     source.mkdir()
-    _git("init", "-q", "-b", "main", cwd=source)
+    _git("init", "-q", cwd=source)
+    # 公司 Git 2.19.1 不支持 git init -b（需要 Git 2.28+）。
+    _git("checkout", "-q", "-b", "main", cwd=source)
     _git("config", "user.name", "Nexus", cwd=source)
     _git("config", "user.email", "nexus@example.invalid", cwd=source)
     (source / "README.md").write_text("fixture\n", encoding="utf-8")

@@ -30,7 +30,11 @@ def network_config(tmp_path):
 def test_web_uses_https_and_internal_services_use_http(network_config):
     web, internal, worker = network_config.split("  server {")[1:]
     assert "listen 19443 ssl;" in web
-    assert "/v1/" not in web
+    # HTTPS 入口直调网关 /v1/ 与图书馆 /mcp，其余走 Nexus API。
+    assert "location /v1/" in web
+    assert "location = /mcp" in web
+    assert "proxy_pass http://127.0.0.1:19110" in web
+    assert 'proxy_pass "http://127.0.0.1:19201/mcp"' in web
     assert "listen 127.0.0.1:19130;" in internal
     assert "location /api/" in internal
     assert "location /agentscope/" in internal

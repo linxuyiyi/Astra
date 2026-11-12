@@ -315,7 +315,9 @@ def test_real_git_upgrade_is_fast_forward_only_and_uses_an_immutable_release(tmp
         ).stdout.strip()
 
     git("init", "--bare", str(remote))
-    git("init", "--initial-branch=v1.5.0", str(checkout))
+    git("init", str(checkout))
+    # 公司 Git 2.19.1 不支持 git init --initial-branch（需要 Git 2.28+）。
+    git("checkout", "-q", "-b", "v1.5.0", cwd=checkout)
     git("config", "user.email", "deploy-test@example.invalid", cwd=checkout)
     git("config", "user.name", "Deployment Test", cwd=checkout)
     (checkout / "release.txt").write_text("first")

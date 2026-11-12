@@ -265,6 +265,8 @@ http {{
     ssl_certificate {quote_nginx(env["NEXUS_DEPLOY_TLS_CERT"])};
     ssl_certificate_key {quote_nginx(env["NEXUS_DEPLOY_TLS_KEY"])};
     ssl_protocols {" ".join(tls_protocols)};
+    location /v1/ {{ proxy_pass http://127.0.0.1:{gateway}; {common} }}
+    location = /mcp {{ proxy_pass {library_upstream}; {common} }}
     location / {{ proxy_pass http://127.0.0.1:{api}; {common} }}
   }}
   server {{

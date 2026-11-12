@@ -17,11 +17,11 @@ from nexus_api.main import (
     assistant_reply_messages_after,
     create_app,
     data_dir,
-    observe_stream_event,
     package_dir,
     repo_root,
     stream_cursor,
 )
+from tests.nexus.agent_transport import AgentChatTransport
 from tests.nexus.clients import TestClient
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -123,7 +123,7 @@ def test_private_chat_keeps_threads_and_does_not_invent_replies(client):
     sent = client.post(
         f"/api/v1/conversations/{first.json()['id']}/messages",
         headers=headers,
-        json={"text": "你负责哪些工作？", "attachment_ids": []},
+        json={"client_id": "test-send-126", "text": "你负责哪些工作？", "attachment_ids": []},
     )
     assert sent.status_code == 503
     assert "AgentScope" in sent.json()["detail"]
@@ -149,7 +149,7 @@ def test_disabled_employee_cannot_receive_private_message(client):
     response = client.post(
         f"/api/v1/conversations/{conversation['id']}/messages",
         headers=headers,
-        json={"text": "你好"},
+        json={"client_id": "test-send-152", "text": "你好"},
     )
     assert response.status_code == 409
 
@@ -242,7 +242,7 @@ def test_owners_keep_separate_conversations_across_restart(tmp_path, monkeypatch
         sent = test_client.post(
             f"/api/v1/conversations/{first['id']}/messages",
             headers=owner_a,
-            json={"text": "只属于 a"},
+            json={"client_id": "test-send-245", "text": "只属于 a"},
         )
         assert sent.status_code == 503
         hidden = test_client.get(f"/api/v1/employees/{employee['id']}/conversations", headers=owner_b)
@@ -373,7 +373,7 @@ def test_connected_catalog_accepts_only_returned_resources(tmp_path, monkeypatch
         test_client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         tools = test_client.get("/api/v1/tools").json()
         assert tools["available"] is True
@@ -427,7 +427,7 @@ def test_connected_catalog_accepts_only_returned_resources(tmp_path, monkeypatch
         refused = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"text": "禁用后不要运行"},
+            json={"client_id": "test-send-430", "text": "禁用后不要运行"},
         )
         assert refused.status_code == 409
         assert chat_calls == []
@@ -444,7 +444,7 @@ def test_connected_catalog_accepts_only_returned_resources(tmp_path, monkeypatch
         accepted = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"text": "重新启用后再运行"},
+            json={"client_id": "test-send-447", "text": "重新启用后再运行"},
         )
         assert accepted.status_code == 200
         assert accepted.json()["agentscope"]["accepted"] is True
@@ -482,7 +482,7 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
         test_client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         created = test_client.post("/api/v1/employees", json=employee_body(skills=["failure-analysis"]))
         assert created.status_code == 201
@@ -500,12 +500,12 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
         first = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"text": "看一下失败日志"},
+            json={"client_id": "test-send-503", "text": "看一下失败日志"},
         )
         second = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"text": "再看一次"},
+            json={"client_id": "test-send-508", "text": "再看一次"},
         )
         assert first.json()["agentscope"]["accepted"] is True
         assert second.json()["agentscope"]["accepted"] is True
@@ -655,7 +655,7 @@ def test_peer_resolver_returns_mailbox_without_a_scripted_answer(tmp_path, monke
         test_client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         star = test_client.post("/api/v1/employees", json=employee_body()).json()["employee"]
         zhi = test_client.post(
@@ -718,7 +718,7 @@ def test_peer_resolver_returns_mailbox_without_a_scripted_answer(tmp_path, monke
         refused = test_client.post(
             f"/api/v1/conversations/{peer_conversation['id']}/messages",
             headers=headers,
-            json={"text": "禁用后不应开始运行"},
+            json={"client_id": "test-send-721", "text": "禁用后不应开始运行"},
         )
         assert refused.status_code == 409
 
@@ -751,7 +751,7 @@ def test_empty_route_does_not_attach_a_vendor_config():
     client = AgentScopeClient(
         "http://agentscope.test",
         "nexus",
-        httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+        httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
     )
     with pytest.raises(AgentScopeError) as raised:
         asyncio.run(client.create_session("agent-1", "邮箱"))
@@ -785,6 +785,11 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
         if request.url.path == "/sessions/" and request.method == "POST":
             sessions_created.append(json.loads(request.content))
             return httpx.Response(201, json={"session_id": "session-chat"})
+        if request.url.path == "/nexus/workspace-attachments/verify":
+            body = json.loads(request.content)
+            return httpx.Response(200, json={"missing": [
+                key for key in body["keys"] if (body["session_id"], key) not in workspace
+            ]})
         if request.url.path.startswith("/nexus/workspace-attachments/"):
             key = (request.url.params["session_id"], request.url.path.rsplit("/", 1)[-1])
             if request.method == "PUT":
@@ -794,6 +799,8 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
                     "size": len(request.content), "sha256": hashlib.sha256(request.content).hexdigest(),
                     "type": mime,
                 })
+            if key not in workspace:
+                return httpx.Response(410)
             return httpx.Response(200, content=workspace[key])
         if request.url.path == "/chat/":
             nonlocal lose_receipt
@@ -828,7 +835,7 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
         test_client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         employee = test_client.post("/api/v1/employees", json=employee_body()).json()["employee"]
         headers = {"X-Owner-Id": "anon-a"}
@@ -849,7 +856,7 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
             )
             first_send = pool.submit(
                 test_client.post, f"/api/v1/conversations/{conversation['id']}/messages",
-                headers=headers, json={"text": "首次并发消息"},
+                headers=headers, json={"client_id": "test-send-859", "text": "首次并发消息"},
             )
             log_file, image = log_request.result(), image_request.result()
             first = first_send.result()
@@ -867,6 +874,7 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
         assert downloaded.status_code == 200
         assert downloaded.content == b"LOG-TOKEN-88"
         send_path = f"/api/v1/conversations/{conversation['id']}/messages"
+        assert test_client.post(send_path, headers=headers, json={"text": "缺少发送标识"}).status_code == 422
         body = {
             "text": "看日志", "client_id": "attachment-send-retry",
             "attachment_ids": [log_file.json()["id"], image.json()["id"]],
@@ -898,8 +906,10 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
         content = message["content"]
         assert all(block["type"] == "text" for block in content)
         assert "LOG-TOKEN-88" not in json.dumps(message)
-        assert "read_chat_attachment" in content[1]["text"]
-        assert image.json()["id"] in content[1]["text"]
+        assert content == [{"type": "text", "text": "看日志"}]
+        assert [file["id"] for file in message["metadata"]["attachments"]] == [
+            log_file.json()["id"], image.json()["id"],
+        ]
         other_owner = {"X-Owner-Id": "anon-b"}
         other = test_client.post(
             f"/api/v1/employees/{employee['id']}/conversations",
@@ -908,7 +918,7 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
         assert other["id"] != conversation["id"]
         rejected = test_client.post(
             f"/api/v1/conversations/{other['id']}/messages", headers=other_owner,
-            json={"attachment_ids": [image.json()["id"]]},
+            json={"client_id": "test-send-921", "attachment_ids": [image.json()["id"]]},
         )
         assert rejected.status_code == 404
         assert workspace[("session-chat", image.json()["id"])] == png
@@ -924,6 +934,46 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
         assert seen[-1]["input"]["metadata"]["verified_uid"] == "anon-a"
         assert seen[-1]["input"]["metadata"]["attachments"][0]["name"] == "run.log"
         assert "已解析" not in json.dumps(restored, ensure_ascii=False)
+        key = log_file.json()["id"]
+        del workspace[("session-chat", key)]
+        rejected = test_client.post(send_path, headers=headers, json={
+            "text": "缺失的原件", "client_id": "missing-file", "attachment_ids": [key],
+        })
+        assert rejected.status_code == 404
+        assert len(seen) == calls
+        assert test_client.get(f"/api/v1/attachments/{key}", headers=headers).status_code == 404
+        image_key = image.json()["id"]
+        del workspace[("session-chat", image_key)]
+        assert test_client.get(f"/api/v1/attachments/{image_key}", headers=headers).status_code == 404
+        with connect() as db:
+            assert db.execute(sql_text(
+                "SELECT linked FROM t_nexus_attachment_refs WHERE id=:id",
+            ), {"id": key}).scalar() == -1
+            assert db.execute(sql_text(
+                "SELECT linked FROM t_nexus_attachment_refs WHERE id=:id",
+            ), {"id": image_key}).scalar() == -1
+            engine = db.engine
+
+        from sqlalchemy import event
+
+        def fail_confirmation(_conn, _cursor, statement, *_args):
+            if "UPDATE t_nexus_messages SET accepted=1" in statement:
+                raise RuntimeError("模拟上游接受后 Nexus 无法提交确认")
+
+        event.listen(engine, "before_cursor_execute", fail_confirmation)
+        body = {"text": "确认提交失败后恢复", "client_id": "nexus-commit-retry"}
+        try:
+            failed = TestClient(application, raise_server_exceptions=False).post(
+                send_path, headers=headers, json=body,
+            )
+            assert failed.status_code == 500
+        finally:
+            event.remove(engine, "before_cursor_execute", fail_confirmation)
+        assert len(seen) == calls + 1
+        retried = test_client.post(send_path, headers=headers, json=body)
+        assert retried.status_code == 200, retried.text
+        assert retried.json()["message"]["id"] == seen[-1]["input"]["id"]
+        assert len(seen) == calls + 1
 
 
 def test_peer_toolkit_drops_team_and_task_tools_but_keeps_contact():
@@ -984,13 +1034,13 @@ def test_data_dir_does_not_follow_the_working_directory(monkeypatch, tmp_path):
     assert data_dir() == tmp_path / "absolute"
 
 
-def test_private_stream_skips_the_saved_cursor_and_stops(tmp_path, monkeypatch):
+def test_private_stream_passes_the_requested_cursor_and_keeps_native_events(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
     sse = (
         'data: {"type":"REPLY_START","id":"s1","reply_id":"r1"}\n\n'
         'data: {"type":"TEXT_BLOCK_DELTA","id":"d1","delta":"在"}\n\n'
         'data: {"type":"REPLY_END","id":"e1","reply_id":"r1","finished_reason":"completed"}\n\n'
-        'data: {"type":"TEXT_BLOCK_DELTA","id":"late","delta":"不应再出现"}\n\n'
+        'data: {"type":"TEXT_BLOCK_DELTA","id":"late","delta":"原生事件"}\n\n'
     )
     seen: list[httpx.Request] = []
 
@@ -1018,7 +1068,7 @@ def test_private_stream_skips_the_saved_cursor_and_stops(tmp_path, monkeypatch):
         test_client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         employee = test_client.post("/api/v1/employees", json=employee_body()).json()["employee"]
         headers = {"X-Owner-Id": "browser-a"}
@@ -1040,43 +1090,15 @@ def test_private_stream_skips_the_saved_cursor_and_stops(tmp_path, monkeypatch):
         connection.close()
         with test_client.stream(
             "GET",
-            f"/api/v1/conversations/{conversation['id']}/stream",
+            f"/api/v1/conversations/{conversation['id']}/stream?after=20-1",
             headers=headers,
         ) as response:
             assert response.status_code == 200
             body = response.read().decode()
-    assert "NEXUS_RUN_FINISHED" in body
-    assert "不应再出现" not in body
+    assert "NEXUS_RUN_FINISHED" not in body
+    assert "原生事件" in body
     streamed = [item for item in seen if item.url.path == "/sessions/session-chat/stream"]
     assert streamed[0].url.params["after"] == "20-1"
-
-
-def test_stream_closes_when_the_started_reply_ends():
-    started = 0
-    events = [
-        {"type": "REPLY_END", "reply_id": "old"},
-        {"type": "REPLY_START", "reply_id": "new"},
-        {"type": "TEXT_BLOCK_DELTA", "delta": "在"},
-        {"type": "REPLY_END", "reply_id": "new", "finished_reason": "completed"},
-        {"type": "TEXT_BLOCK_DELTA", "delta": "不应再出现"},
-    ]
-    closed_at = None
-    terminals = []
-    for index, event in enumerate(events):
-        started, terminal, close = observe_stream_event(started, event)
-        if terminal:
-            terminals.append(terminal)
-        if close:
-            closed_at = index
-            break
-    assert closed_at == 3
-    assert terminals == [
-        {
-            "type": "NEXUS_RUN_FINISHED",
-            "reply_id": "new",
-            "finished_reason": "completed",
-        }
-    ]
 
 
 def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path, monkeypatch):
@@ -1127,7 +1149,7 @@ def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path
         test_client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         star = test_client.post("/api/v1/employees", json=employee_body()).json()["employee"]
         zhi = test_client.post(
@@ -1212,7 +1234,8 @@ def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path
         native = test_client.get(f"/api/v1/conversations/{first['id']}/messages", headers=headers).json()
         assert any(m["name"] == "知微" and "阈值按账号计算" in str(m["content"]) for m in native["messages"])
         sent = test_client.post(
-            f"/api/v1/conversations/{first['id']}/messages", headers=headers, json={"text": "同事回复了吗？"}
+            f"/api/v1/conversations/{first['id']}/messages", headers=headers,
+            json={"client_id": "test-send-1237", "text": "同事回复了吗？"}
         )
         assert sent.status_code == 200
         assert sent.json()["agentscope"]["accepted"] is True
@@ -1293,7 +1316,7 @@ def test_private_chat_uses_dont_ask(tmp_path, monkeypatch):
         test_client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         employee = test_client.post("/api/v1/employees", json=employee_body()).json()["employee"]
         headers = {"X-Owner-Id": "browser-a"}
@@ -1305,7 +1328,7 @@ def test_private_chat_uses_dont_ask(tmp_path, monkeypatch):
         sent = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"text": "帮我看一下"},
+            json={"client_id": "test-send-1330", "text": "帮我看一下"},
         )
         assert sent.status_code == 200, sent.text
 

@@ -14,14 +14,15 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
+from .agentscope import AgentScopeError
 from .auth import digest, require_internal, require_user
 from .chat_attachments import (
     ATTACHMENT_PREFIX,
     MessageContent,
-    attachment_content,
     link_attachments,
     load_attachments,
     location,
+    reference,
     visible,
 )
 from .db import connect, employee_from_row, new_id, utcnow
@@ -471,6 +472,10 @@ class Collaboration:
                         {"c": channel_id, "e": eid},
                     )
                 for eid in staff.keys() - current:
+                    if one(db, """SELECT 1 FROM t_nexus_channel_members WHERE channel_id=:c
+                           AND member_type='employee' AND employee_id=:e AND membership_active=0
+                           AND agentscope_session_id IS NOT NULL""", c=channel_id, e=eid):
+                        raise HTTPException(409, "成员会话正在回收，请稍后重新加入")
                     upsert_record(
                         db,
                         "t_nexus_channel_members",
@@ -1234,22 +1239,27 @@ class Collaboration:
 
     async def clean_inactive_members(self, cid):
         with connect() as db:
-            await acquire_channel_lock(db, cid)
             rows = db.execute(text(
                 "SELECT m.employee_id,m.agentscope_session_id,e.agentscope_agent_id "
                 "FROM t_nexus_channel_members m JOIN t_nexus_employees e ON e.id=m.employee_id "
                 "WHERE m.channel_id=:c AND m.member_type='employee' AND m.membership_active=0 "
                 "AND m.agentscope_session_id IS NOT NULL"
             ), {"c": cid}).mappings().all()
-            for row in rows:
-                await self.retire_group_member(
-                    row["agentscope_agent_id"], row["agentscope_session_id"], cid, row["employee_id"],
-                )
-                db.execute(text(
+        for row in rows:
+            await self.retire_group_member(
+                row["agentscope_agent_id"], row["agentscope_session_id"], cid, row["employee_id"],
+            )
+            with connect() as db:
+                updated = db.execute(text(
                     "UPDATE t_nexus_channel_members SET agentscope_session_id=NULL,last_delivered_seq=0 "
-                    "WHERE channel_id=:c AND member_type='employee' AND employee_id=:e"
-                ), {"c": cid, "e": row["employee_id"]})
-            db.commit()
+                    "WHERE channel_id=:c AND member_type='employee' AND employee_id=:e "
+                    "AND membership_active=0 AND agentscope_session_id=:s"
+                ), {"c": cid, "e": row["employee_id"], "s": row["agentscope_session_id"]})
+                if updated.rowcount:
+                    db.execute(text(
+                        "DELETE FROM t_nexus_resource_sync WHERE employee_id=:e AND session_id=:s",
+                    ), {"e": row["employee_id"], "s": row["agentscope_session_id"]})
+                db.commit()
 
     async def run_channel(self, cid):
         token = new_id("lease")
@@ -1359,7 +1369,6 @@ class Collaboration:
                 except Exception as exc:
                     logger.warning("群讨论失败: %s", type(exc).__name__)
                     await asyncio.to_thread(self.finish, d["id"], "failed", str(exc)[:300])
-                    # 未确认上游停止时保留租约，等待过期恢复，避免双执行。
                     return
         except BaseException:
             release = False
@@ -1379,6 +1388,114 @@ class Collaboration:
                     )
                     db.commit()
 
+    async def stage_group_history(self, d, e, session_id, cutoff, started):
+        eid = e["id"]
+        while True:
+            if (
+                not self.current(d["id"])["valid"]
+                or asyncio.get_running_loop().time() - started > MAX_SECONDS
+            ):
+                return False
+            with connect() as db:
+                binding = one(
+                    db,
+                    """SELECT last_delivered_seq FROM t_nexus_channel_members WHERE channel_id=:c AND
+                    employee_id=:e""",
+                    c=d["channel_id"],
+                    e=eid,
+                )
+                cursor = binding["last_delivered_seq"]
+                pending = list(db.execute(
+                    text("SELECT id,seq,sender_type,speaker_uid,sender_name,text,attachments_json,created_at,"
+                         "CASE WHEN sender_type='human' THEN native_json ELSE '{}' END AS native_json "
+                         "FROM t_nexus_messages WHERE channel_id=:c AND seq>:seq "
+                         "AND seq<=:cutoff ORDER BY seq LIMIT :limit"),
+                    {"c": d["channel_id"], "seq": cursor, "cutoff": cutoff, "limit": GROUP_BATCH_ROWS + 1},
+                ).mappings())
+                copies = []
+                inputs = []
+                client = self.app.state.agentscope
+                delivered = cursor
+                input_bytes = 0
+                for row in pending[:GROUP_BATCH_ROWS]:
+                    if row["sender_type"] == "system" or row["speaker_uid"] == eid:
+                        delivered = row["seq"]
+                        continue
+                    native = json.loads(row["native_json"])
+                    metadata = native.get("metadata") or {}
+                    authorized = eid in metadata.get("attachment_targets", [])
+                    ids = json.loads(row["attachments_json"]) if authorized else []
+                    attachments = [
+                        item for key in ids if (item := reference(db, key))
+                        and item["scope_kind"] == "group" and item["scope_id"] == d["channel_id"]
+                        and item["sha256"] and item["linked"] >= 0
+                    ]
+                    blocks = [b for b in native.get("content", []) if b.get("type") == "text"]
+                    if not blocks and row["text"]:
+                        blocks = [{"type": "text", "text": row["text"]}]
+                    files = [visible(item) for item in attachments]
+                    if blocks or files:
+                        message = {
+                            "id": row["id"],
+                            "created_at": row["created_at"],
+                            "name": row["sender_name"],
+                            "role": "user",
+                            "content": blocks,
+                            "metadata": {
+                                "message_id": row["id"], "sender_id": row["speaker_uid"],
+                                "sender_type": row["sender_type"], "attachments": files,
+                            },
+                        }
+                        size = len(dumps(message).encode())
+                        if size > GROUP_BATCH_BYTES:
+                            raise RuntimeError("单条群消息超出投递预算")
+                        if input_bytes + size > GROUP_BATCH_BYTES:
+                            break
+                        copies.extend(attachments)
+                        inputs.append(message)
+                        input_bytes += size
+                    delivered = row["seq"]
+            if delivered == cursor:
+                return True
+            missing = set()
+            for key, item in {item["id"]: item for item in copies}.items():
+                try:
+                    await client.request(
+                        "POST", f"{ATTACHMENT_PREFIX}/{key}/copy",
+                        params={**location(item), "target_agent_id": e["agentscope_agent_id"],
+                                "target_session_id": session_id},
+                    )
+                except AgentScopeError as exc:
+                    if exc.status_code != 410:
+                        raise
+                    missing.add(key)
+            if missing:
+                with connect() as db:
+                    db.execute(text("UPDATE t_nexus_attachment_refs SET linked=-1 WHERE id=:id"),
+                               [{"id": key} for key in missing])
+                    db.commit()
+                for message in inputs:
+                    metadata = message["metadata"]
+                    metadata["attachments"] = [
+                        item for item in metadata["attachments"] if item["id"] not in missing
+                    ]
+                inputs = [
+                    message for message in inputs if message["content"] or message["metadata"]["attachments"]
+                ]
+            if inputs:
+                await client.stage_session_messages(e["agentscope_agent_id"], session_id, inputs)
+            with connect() as db:
+                updated = db.execute(text(
+                    "UPDATE t_nexus_channel_members SET last_delivered_seq=:seq WHERE channel_id=:c "
+                    "AND member_type='employee' AND employee_id=:e AND agentscope_session_id=:sid "
+                    "AND membership_active=1 AND last_delivered_seq=:cursor"
+                ), {"seq": delivered, "c": d["channel_id"], "e": eid, "sid": session_id, "cursor": cursor})
+                db.commit()
+                if not updated.rowcount:
+                    return False
+            if not pending or delivered == pending[-1]["seq"]:
+                return True
+
     async def discuss(self, d, token):
         counts = Counter()
         queue = json.loads(d["participants_json"])
@@ -1386,7 +1503,6 @@ class Collaboration:
         started = asyncio.get_running_loop().time()
         total_tokens = 0
         generated_tokens = 0
-        delivery_cutoffs = {}
         for turn in range(MAX_TURNS):
             if not queue:
                 await asyncio.to_thread(self.finish, d["id"], "completed")
@@ -1422,81 +1538,26 @@ class Collaboration:
                     e,
                     d["channel_id"],
                     channel["name"],
-                    self.app.state.resources,
                 )
                 await self.sync_resources(
                     self.app.state.agentscope, e, [session_id], db, self.app.state.resources
                 )
 
-                binding = one(
-                    db,
-                    """SELECT last_delivered_seq FROM t_nexus_channel_members WHERE channel_id=:c AND
-                    employee_id=:e""",
-                    c=d["channel_id"],
-                    e=eid,
-                )
-                cursor = binding["last_delivered_seq"]
-                cutoff = delivery_cutoffs.setdefault(eid, channel["next_seq"])
-                pending = list(db.execute(
-                    text("SELECT id,seq,sender_type,speaker_uid,sender_name,text,attachments_json,"
-                         "CASE WHEN sender_type='human' THEN native_json ELSE '{}' END AS native_json "
-                         "FROM t_nexus_messages WHERE channel_id=:c AND seq>:seq "
-                         "AND seq<=:cutoff ORDER BY seq LIMIT :limit"),
-                    {"c": d["channel_id"], "seq": cursor, "cutoff": cutoff, "limit": GROUP_BATCH_ROWS + 1},
-                ).mappings())
+                cutoff = channel["next_seq"]
+                db.commit()
+            if not await self.stage_group_history(d, e, session_id, cutoff, started):
+                state = "limited" if self.current(d["id"])["valid"] else "interrupted"
+                await asyncio.to_thread(self.finish, d["id"], state)
+                return
+            with connect() as db:
                 source = one(
                     db, "SELECT * FROM t_nexus_messages WHERE channel_id=:c AND id=:id",
                     c=d["channel_id"], id=d["message_id"],
                 )
                 inputs = []
-                client = self.app.state.agentscope
-                delivered = cursor
-                input_bytes = 0
-                for row in pending[:GROUP_BATCH_ROWS]:
-                    if row["sender_type"] == "system" or row["speaker_uid"] == eid:
-                        delivered = row["seq"]
-                        continue
-                    native = json.loads(row["native_json"])
-                    metadata = native.get("metadata") or {}
-                    authorized = eid in metadata.get("attachment_targets", [])
-                    ids = json.loads(row["attachments_json"]) if authorized else []
-                    attachments = load_attachments(db, ids, scope_kind="group", scope_id=d["channel_id"])
-                    blocks = [b for b in native.get("content", []) if b.get("type") == "text"]
-                    if not blocks and row["text"]:
-                        blocks = [{"type": "text", "text": row["text"]}]
-                    files = [visible(item) for item in attachments]
-                    if blocks or files:
-                        message = {
-                            "id": row["id"],
-                            "name": row["sender_name"],
-                            "role": "user",
-                            "content": attachment_content(blocks, files, row["id"]),
-                            "metadata": {
-                                "message_id": row["id"], "sender_id": row["speaker_uid"],
-                                "nexus_deduplicate": True,
-                                "sender_type": row["sender_type"], "attachments": files,
-                            },
-                        }
-                        size = len(dumps(message).encode())
-                        if size > GROUP_BATCH_BYTES:
-                            raise RuntimeError("单条群消息超出投递预算")
-                        if input_bytes + size > GROUP_BATCH_BYTES:
-                            break
-                        for item in attachments:
-                            await client.request(
-                                "POST", f"{ATTACHMENT_PREFIX}/{item['id']}/copy",
-                                params={**location(item), "target_agent_id": e["agentscope_agent_id"],
-                                        "target_session_id": session_id},
-                            )
-                        inputs.append(message)
-                        input_bytes += size
-                    delivered = row["seq"]
-                has_backlog = bool(pending and delivered < pending[-1]["seq"])
-                if not has_backlog:
-                    delivery_cutoffs.pop(eid)
                 task_event_id = (
                     json.loads(source["native_json"]).get("metadata", {}).get("task_event_id")
-                    if source and source["sender_type"] == "system" and not has_backlog
+                    if source and source["sender_type"] == "system"
                     else None
                 )
                 if task_event_id:
@@ -1523,21 +1584,17 @@ class Collaboration:
                             }
                         )
                 inputs.append({
-                    "id": new_id("turn"),
+                    "id": f"turn:{d['id']}:{turn + 1}",
                     "name": "群讨论",
                     "role": "user",
                     "content": [{
                         "type": "text",
-                        "text": (
-                            "正在补送群消息，本批之后还有待投递的发言。请简短确认，不派发后续任务。"
-                            if has_backlog else
-                            f"第 {turn + 1}/{MAX_TURNS} 轮。回应当前议题。"
-                            "需要同事接续或接收结果时调用 contact_employee。"
-                        ),
+                        "text": f"第 {turn + 1}/{MAX_TURNS} 轮。回应当前议题。"
+                        "需要同事接续或接收结果时调用 contact_employee。",
                     }],
                     "metadata": {
                         "discussion_id": d["id"], "verified_uid": d["initiator_id"],
-                        "delivery_only": has_backlog,
+                        "nexus_deduplicate": True,
                     },
                 })
                 db.commit()
@@ -1546,12 +1603,11 @@ class Collaboration:
                 return
             if not await asyncio.to_thread(self.renew, d["channel_id"], token):
                 raise UnconfirmedStop("发言前租约已失效")
-            reply = await self.reply(d, e, session_id, inputs, token, started, publish=not has_backlog)
+            reply = await self.reply(d, e, session_id, inputs, token, started)
             if reply is None:
                 await asyncio.to_thread(self.finish, d["id"], "interrupted")
                 return
-            if not has_backlog:
-                counts[eid] += 1
+            counts[eid] += 1
             usage = reply.get("usage") or {}
             generated_tokens += int(usage.get("output_tokens", 0) or 0)
             total_tokens += int(usage.get("input_tokens", 0) or 0) + int(usage.get("output_tokens", 0) or 0)
@@ -1561,17 +1617,7 @@ class Collaboration:
                     text("UPDATE t_nexus_discussions SET tokens=:t WHERE id=:i"),
                     {"t": total_tokens, "i": d["id"]},
                 )
-                db.execute(
-                    text(
-                        """UPDATE t_nexus_channel_members SET last_delivered_seq=:m WHERE channel_id=:c
-                        AND employee_id=:e"""
-                    ),
-                    {"m": delivered, "c": d["channel_id"], "e": eid},
-                )
                 db.commit()
-            if has_backlog:
-                queue.insert(0, eid)
-                continue
             with connect() as db:
                 updated = one(db, "SELECT participants_json FROM t_nexus_discussions WHERE id=:i", i=d["id"])
                 scheduled = json.loads(updated["participants_json"])
@@ -1613,10 +1659,9 @@ class Collaboration:
                     scheduled_count = len(scheduled)
         await asyncio.to_thread(self.finish, d["id"], "limited", "讨论已达到最大轮次")
 
-    async def reply(self, d, e, session_id, inputs, token, started, *, publish=True):
+    async def reply(self, d, e, session_id, inputs, token, started):
         client = self.app.state.agentscope
         before = await client.latest_event_cursor(e["agentscope_agent_id"], session_id)
-        await client.trigger_inputs(e["agentscope_agent_id"], session_id, inputs)
         events = asyncio.Queue(maxsize=1000)
 
         async def pump():
@@ -1630,10 +1675,19 @@ class Collaboration:
             except Exception as exc:
                 await events.put(exc)
 
-        task = asyncio.create_task(pump())
+        task = None
         reply_id = ""
         last_renew = 0
         try:
+            agent_id = e["agentscope_agent_id"]
+            try:
+                await client.trigger_inputs(agent_id, session_id, inputs)
+            except AgentScopeError as exc:
+                if exc.status_code != 503 or not await client.session_message_accepted(
+                    agent_id, session_id, inputs[-1]["id"], wait=True,
+                ):
+                    raise
+            task = asyncio.create_task(pump())
             while True:
                 now = asyncio.get_running_loop().time()
                 if now - last_renew > 5:
@@ -1643,7 +1697,7 @@ class Collaboration:
                 current = self.current(d["id"])
                 if not current["valid"] or now - started > MAX_SECONDS:
                     await self.stop_session(e, session_id)
-                    if reply_id and publish:
+                    if reply_id:
                         await self.persist_reply(d, e, session_id, reply_id, interrupted=True)
                     return None
                 try:
@@ -1657,7 +1711,6 @@ class Collaboration:
                 kind = event.get("type", "")
                 if kind == "REPLY_START":
                     reply_id = event["reply_id"]
-                if kind == "REPLY_START" and publish:
                     with connect() as db:
                         await acquire_channel_lock(db, d["channel_id"])
                         append_message(
@@ -1671,7 +1724,7 @@ class Collaboration:
                             discussion_id=d["id"],
                         )
                         db.commit()
-                if reply_id and publish:
+                if reply_id:
                     with connect() as db:
                         await acquire_channel_lock(db, d["channel_id"])
                         row = one(db, "SELECT native_json,seq FROM t_nexus_messages WHERE id=:i", i=reply_id)
@@ -1696,7 +1749,7 @@ class Collaboration:
                         )
                         db.commit()
                 if kind == "REPLY_END":
-                    result = await self.persist_reply(d, e, session_id, reply_id, publish=publish)
+                    result = await self.persist_reply(d, e, session_id, reply_id)
                     if event.get("finished_reason") == "error" or event.get("error"):
                         raise RuntimeError("员工推理失败，请检查模型路由与 Agent Service")
                     return result
@@ -1704,17 +1757,18 @@ class Collaboration:
         except BaseException:
             try:
                 await self.stop_session(e, session_id)
-                if reply_id and publish:
+                if reply_id:
                     await self.persist_reply(d, e, session_id, reply_id, interrupted=True)
             except Exception as stop_error:
                 logger.exception("群回复中断尚未确认")
                 raise UnconfirmedStop("员工停止状态尚未确认") from stop_error
             raise
         finally:
-            task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+            if task is not None:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
 
-    async def persist_reply(self, d, e, session_id, reply_id, interrupted=False, *, publish=True):
+    async def persist_reply(self, d, e, session_id, reply_id, interrupted=False):
         for _ in range(30):
             messages, _, running = await self.app.state.agentscope.read_session_detail(
                 e["agentscope_agent_id"], session_id
@@ -1725,8 +1779,6 @@ class Collaboration:
             await asyncio.sleep(0.1)
         else:
             raise RuntimeError("AgentScope 未完成消息持久化")
-        if not publish:
-            return native
         with connect() as db:
             await acquire_channel_lock(db, d["channel_id"])
             row = one(

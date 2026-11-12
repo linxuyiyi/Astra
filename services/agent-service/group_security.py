@@ -1,7 +1,6 @@
 """按原始运行上下文校验工具；会话复用不能借用下一位发起者的授权。"""
 from __future__ import annotations
 
-import asyncio
 import hmac
 import json
 import os
@@ -13,7 +12,6 @@ import httpx
 from starlette.responses import JSONResponse
 
 execution_id: ContextVar[str] = ContextVar("nexus_execution_id", default="")
-delivery_only: ContextVar[bool] = ContextVar("nexus_delivery_only", default=False)
 
 
 def headers():
@@ -22,25 +20,22 @@ def headers():
 
 def install_run_context(chat_service_class):
     original = chat_service_class.run
-    # AgentScope serializes the run itself with Redis. This lock orders
-    # receipt checks with the run in the Agent Service process.
-    locks = tuple(asyncio.Lock() for _ in range(128))
+    # Native ChatService holds the separate Session run lock itself.
 
     async def run(self, user_id, session_id, agent_id, input_msg=None, sop_dispatch=None):
         inputs = input_msg if isinstance(input_msg, list) else [input_msg]
         fence = ""
-        staging = False
         for msg in inputs:
             metadata = getattr(msg, "metadata", None) or {}
             if metadata.get("discussion_id"):
                 fence = str(metadata["discussion_id"])
-                staging = metadata.get("delivery_only") is True
         token = execution_id.set(fence)
-        delivery_token = delivery_only.set(staging)
         try:
             if not any((getattr(msg, "metadata", None) or {}).get("nexus_deduplicate") for msg in inputs):
                 return await original(self, user_id, session_id, agent_id, input_msg, sop_dispatch)
-            async with locks[hash((user_id, session_id)) % len(locks)]:
+            async with self._message_bus.acquire_lock(f"nexus:dispatch:{session_id}"):
+                from chat_attachments import with_attachment_hint
+
                 pending = []
                 for msg in inputs:
                     metadata = getattr(msg, "metadata", None) or {}
@@ -48,14 +43,11 @@ def install_run_context(chat_service_class):
                         user_id, session_id, msg.id,
                     ):
                         continue
-                    pending.append(msg)
-                if not pending or (not fence and not any(
-                    (getattr(msg, "metadata", None) or {}).get("nexus_deduplicate") for msg in pending
-                )):
+                    pending.append(with_attachment_hint(msg) if metadata.get("attachments") else msg)
+                if not any((getattr(msg, "metadata", None) or {}).get("nexus_deduplicate") for msg in pending):
                     return None
                 return await original(self, user_id, session_id, agent_id, pending, sop_dispatch)
         finally:
-            delivery_only.reset(delivery_token)
             execution_id.reset(token)
     chat_service_class.run = run
 
@@ -148,8 +140,6 @@ def secure_group_toolkit(factory, nexus_api, policy_loader=None):
             return await mcp_ref_for(tool, current)
 
         async def permitted(name, registered, current):
-            if delivery_only.get():
-                return False
             tool = registered.tool
             if current.get("task_source") and name in {"Bash", "PowerShell"} and not getattr(tool, "is_mcp", False):
                 # LocalBackend executes on the host without a filesystem sandbox.

@@ -2,7 +2,9 @@
 
 未设置 NEXUS_LIVE_AGENTSCOPE=1 时跳过。服务没起来时失败，而不是改成模拟回复。
 
-    NEXUS_LIVE_AGENTSCOPE=1 pytest services/nexus-api/tests/test_live_agentscope.py -s
+在 services/nexus-api 下执行，并将 route_example 换成已启用的模型路由。
+    export NEXUS_LIVE_AGENTSCOPE=1 NEXUS_LIVE_MODEL_ROUTE_ID=route_example
+    pytest tests/nexus/test_live_agentscope.py -s
 """
 
 from __future__ import annotations
@@ -25,7 +27,10 @@ NEXUS = os.environ.get("NEXUS_API_BASE", "http://127.0.0.1:18120").rstrip("/")
 AGENTSCOPE = os.environ.get("NEXUS_AGENTSCOPE_BASE_URL", "http://127.0.0.1:18000").rstrip("/")
 USER_ID = os.environ.get("NEXUS_AGENTSCOPE_USER_ID", "nexus")
 OWNER = {"X-Owner-Id": "live-6-1"}
-AGENT_HEADERS = {"X-User-ID": USER_ID}
+AGENT_HEADERS = {
+    "X-User-ID": USER_ID,
+    "X-Nexus-Internal-Key": os.environ.get("NEXUS_INTERNAL_KEY", ""),
+}
 
 
 def _timeout(read: float) -> httpx.Timeout:
@@ -78,16 +83,6 @@ def tool_names(events: list[dict]) -> list[str]:
             if isinstance(name, str):
                 names.append(name)
     return names
-
-
-def tool_fragments(events: list[dict]) -> str:
-    parts: list[str] = []
-    for item in events:
-        if item.get("type") in {"TOOL_CALL_DELTA", "TOOL_RESULT_TEXT_DELTA"}:
-            delta = item.get("delta")
-            if isinstance(delta, str):
-                parts.append(delta)
-    return "".join(parts)
 
 
 def test_task_6_1_agent_sessions_sse_and_peer_wakeup():
@@ -193,12 +188,12 @@ def test_task_6_1_agent_sessions_sse_and_peer_wakeup():
         assert second_session in session_ids
 
         stored_messages = client.get(
-            f"{NEXUS}/api/v1/conversations/{first['id']}",
+            f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
             headers=OWNER,
         ).json()["messages"]
-        senders = [item["sender"] for item in stored_messages]
-        assert [item for item in senders if item == "user"] == ["user", "user"]
-        assert star_employee["id"] in senders
+        roles = [item["role"] for item in stored_messages]
+        assert roles.count("user") == 2
+        assert "assistant" in roles
 
         peer_events: list[dict] = []
         peer_error: list[BaseException] = []
@@ -218,19 +213,21 @@ def test_task_6_1_agent_sessions_sse_and_peer_wakeup():
 
         reader = threading.Thread(target=read_peer, daemon=True)
         reader.start()
+        history = client.get(
+            f"{NEXUS}/api/v1/conversations/{first['id']}/messages", headers=OWNER,
+        )
+        cursor = history.json().get("event_cursor")
         contact = _send(
             client,
             first["id"],
             (f"请立刻调用 contact_employee。employee_name 为{peer_name}。message 为请只回复数字42。"),
         )
         assert contact["agentscope"]["accepted"] is True, contact
-        seen = {item["id"] for item in first_events if isinstance(item.get("id"), str)}
         caller_events = collect_events(
             f"{NEXUS}/api/v1/conversations/{first['id']}/stream",
             OWNER,
-            None,
+            {"after": cursor} if cursor else None,
             240,
-            seen,
         )
         reader.join(timeout=240)
         assert not peer_error, peer_error
@@ -366,7 +363,10 @@ def test_employee_management_against_live_agentscope():
             refused = client.post(
                 f"{NEXUS}/api/v1/conversations/{conversation['id']}/messages",
                 headers=OWNER,
-                json={"text": "禁用后不要开始运行", "attachment_ids": []},
+                json={
+                    "client_id": uuid.uuid4().hex, "text": "禁用后不要开始运行",
+                    "attachment_ids": [],
+                },
             )
             assert refused.status_code == 409, refused.text
 
@@ -386,7 +386,10 @@ def test_employee_management_against_live_agentscope():
             accepted = client.post(
                 f"{NEXUS}/api/v1/conversations/{conversation['id']}/messages",
                 headers=OWNER,
-                json={"text": "重新启用后请只回复一个字：在。不要调用工具。", "attachment_ids": []},
+                json={
+                    "client_id": uuid.uuid4().hex, "text": "重新启用后请只回复一个字：在。不要调用工具。",
+                    "attachment_ids": [],
+                },
             )
             assert accepted.status_code == 200, accepted.text
             assert accepted.json()["agentscope"]["accepted"] is True, accepted.text
@@ -483,7 +486,10 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
             sent = client.post(
                 f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
                 headers=owner_a,
-                json={"text": "请只回复一个字：在。不要调用工具。", "attachment_ids": []},
+                json={
+                    "client_id": uuid.uuid4().hex, "text": "请只回复一个字：在。不要调用工具。",
+                    "attachment_ids": [],
+                },
             )
             assert sent.status_code == 200, sent.text
             assert sent.json()["agentscope"]["accepted"] is True, sent.text
@@ -498,7 +504,10 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
             again = client.post(
                 f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
                 headers=owner_a,
-                json={"text": "再说一次：在。", "attachment_ids": []},
+                json={
+                    "client_id": uuid.uuid4().hex, "text": "再说一次：在。",
+                    "attachment_ids": [],
+                },
             )
             assert again.json()["agentscope"]["session_id"] == first_session
             seen = {item["id"] for item in events if isinstance(item.get("id"), str)}
@@ -511,10 +520,12 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
             )
             assert any(item.get("type") == "TEXT_BLOCK_DELTA" for item in second_events), second_events
 
-            uploaded = client.post(
-                f"{NEXUS}/api/v1/attachments",
+            key = f"att_{uuid.uuid4().hex}"
+            uploaded = client.put(
+                f"{NEXUS}/api/v1/attachments/{key}",
+                params={"conversation_id": first["id"], "name": "run.log"},
                 headers=owner_a,
-                files={"file": ("run.log", b"LOG-TOKEN-88\n", "text/plain")},
+                content=b"LOG-TOKEN-88\n",
             )
             assert uploaded.status_code == 201, uploaded.text
             downloaded = client.get(
@@ -525,7 +536,10 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
             with_file = client.post(
                 f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
                 headers=owner_a,
-                json={"text": "附件里的标记是什么？", "attachment_ids": [uploaded.json()["id"]]},
+                json={
+                    "client_id": uuid.uuid4().hex, "text": "附件里的标记是什么？",
+                    "attachment_ids": [uploaded.json()["id"]],
+                },
             )
             assert with_file.json()["agentscope"]["accepted"] is True, with_file.text
             remote = None
@@ -543,7 +557,10 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
             other = client.post(
                 f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
                 headers=owner_a,
-                json={"text": "还是这一条私聊。", "attachment_ids": []},
+                json={
+                    "client_id": uuid.uuid4().hex, "text": "还是这一条私聊。",
+                    "attachment_ids": [],
+                },
             )
             assert other.json()["agentscope"]["accepted"] is True, other.text
             assert other.json()["agentscope"]["session_id"] == first_session
@@ -566,7 +583,10 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
             refused = client.post(
                 f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
                 headers=owner_a,
-                json={"text": "禁用后不要运行", "attachment_ids": []},
+                json={
+                    "client_id": uuid.uuid4().hex, "text": "禁用后不要运行",
+                    "attachment_ids": [],
+                },
             )
             assert refused.status_code == 409, refused.text
             print(
@@ -588,254 +608,65 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
                 client.delete(f"{NEXUS}/api/v1/employees/{employee_id}")
 
 
-def _assistant_text(client: httpx.Client, session_id: str | None, agent_id: str) -> str:
-    if not session_id:
-        return ""
-    remote = client.get(
-        f"{AGENTSCOPE}/sessions/{session_id}/messages",
-        headers=AGENT_HEADERS,
-        params={"agent_id": agent_id, "limit": 50},
-    )
-    if remote.status_code != 200:
-        return ""
-    parts: list[str] = []
-    for message in remote.json().get("messages", []):
-        if message.get("role") != "assistant":
-            continue
-        content = message.get("content")
-        blocks = content if isinstance(content, list) else []
-        texts = []
-        for block in blocks:
-            if not isinstance(block, dict) or block.get("type") != "text":
-                continue
-            text = block.get("text")
-            if isinstance(text, str):
-                texts.append(text)
-        parts.append("\n".join(texts))
-    return "\n".join(part for part in parts if part)
-
-
-def test_team_discussion_shows_peer_identities_and_stops_repeat_contact():
+def test_group_history_is_staged_in_each_native_session():
     suffix = uuid.uuid4().hex[:6]
-    ops_name = f"运营{suffix}"
-    eng_name = f"自动{suffix}"
-    tool_name = f"工具{suffix}"
-    created_ids: list[str] = []
+    names = [f"开发{suffix}", f"测试{suffix}"]
+    created = []
     with httpx.Client(timeout=_timeout(30)) as client:
         try:
-            ops = _create_employee(
-                client,
-                ops_name,
-                f"运行{suffix}",
-                (
-                    "用户要求联系同事时，必须调用 contact_employee。"
-                    "employee_name 与 message 使用用户给出的原文。"
-                    "不要代替对方写出答复。"
-                ),
-            )["employee"]
-            eng = _create_employee(
-                client,
-                eng_name,
-                f"自动工程{suffix}",
-                (
-                    f"收到同事提示后，调用 contact_employee，employee_name 为{tool_name}。"
-                    "message 写：请看工具侧。不要代替对方写结论。"
-                ),
-            )["employee"]
-            tools = _create_employee(
-                client,
-                tool_name,
-                f"工具工程{suffix}",
-                "收到同事提示后说明你负责工具工程。不要调用 contact_employee。",
-            )["employee"]
-            created_ids.extend([ops["id"], eng["id"], tools["id"]])
-            channel = client.post(
-                f"{NEXUS}/api/v1/channels",
-                json={
-                    "name": f"故障{suffix}",
-                    "description": "自动化失败后的同事协助",
-                    "member_ids": [ops["id"], eng["id"], tools["id"]],
-                },
+            for name in names:
+                employee = _create_employee(client, name, f"{name}协作", "简短回应当前群议题。")["employee"]
+                created.append(employee)
+            group = client.post(
+                f"{NEXUS}/api/v1/channels", headers=OWNER,
+                json={"name": f"群验证{suffix}", "member_ids": [e["id"] for e in created]},
             )
-            assert channel.status_code == 201, channel.text
-            channel_id = channel.json()["id"]
-            uploaded = client.post(
-                f"{NEXUS}/api/v1/attachments",
-                headers={"X-Owner-Id": f"channel-{suffix}"},
-                files={"file": ("fail.log", b"FAIL-TOKEN-55\n", "text/plain")},
-            )
-            assert uploaded.status_code == 201, uploaded.text
-            sent = client.post(
-                f"{NEXUS}/api/v1/channels/{channel_id}/messages",
-                headers={"X-Owner-Id": f"channel-{suffix}"},
-                json={
-                    "text": (
-                        f"@{ops_name} 自动化失败了。"
-                        "请立刻调用 contact_employee。"
-                        f"employee_name 为{eng_name}。"
-                        "message 为请看自动化失败。"
-                        "不要自己写出结论。"
-                    ),
-                    "attachment_ids": [uploaded.json()["id"]],
-                },
-            )
+            assert group.status_code == 201, group.text
+            channel = group.json()["id"]
+            path = f"{NEXUS}/api/v1/channels/{channel}/messages"
+            history_ids = []
+            for index in range(130):
+                initial = client.post(path, headers=OWNER, json={
+                    "client_id": uuid.uuid4().hex, "text": f"第 {index + 1} 条历史发言",
+                })
+                assert initial.status_code == 200, initial.text
+                payload = initial.json()
+                assert payload["participants"] == []
+                history_ids.append(payload["message"]["id"])
+            sent = client.post(path, headers=OWNER, json={
+                "client_id": uuid.uuid4().hex,
+                "text": f"@{names[0]} @{names[1]} 请分别说明下一步工作。",
+            })
             assert sent.status_code == 200, sent.text
-            triggered = sent.json()["triggered"]
-            assert [item["employee_id"] for item in triggered] == [ops["id"]]
-            assert triggered[0]["accepted"] is True, sent.text
-            ops_session = triggered[0]["session_id"]
-            assert ops_session and ops_session != ops["mailbox_session_id"]
-
-            collected: dict[str, list[dict]] = {ops["id"]: [], eng["id"]: [], tools["id"]: []}
-            errors: list[BaseException] = []
-            threads: list[threading.Thread] = []
-            seen_sessions: set[str] = set()
-
-            def read_member(employee_id: str) -> None:
-                url = f"{NEXUS}/api/v1/channels/{channel_id}/members/{employee_id}/stream"
-                try:
-                    with httpx.Client(timeout=_timeout(45)) as stream_client:
-                        with stream_client.stream("GET", url) as response:
-                            response.raise_for_status()
-                            for line in response.iter_lines():
-                                if not line or line.startswith(":") or not line.startswith("data:"):
-                                    continue
-                                payload = json.loads(line[len("data:") :].strip())
-                                collected[employee_id].append(payload)
-                                if payload.get("type") in {"REPLY_END", "NEXUS_UPSTREAM_ERROR"}:
-                                    return
-                except BaseException as exc:  # noqa: BLE001 - 记下真实流错误
-                    errors.append(exc)
-
-            def watch(employee_id: str) -> None:
-                if employee_id in seen_sessions:
-                    return
-                seen_sessions.add(employee_id)
-                thread = threading.Thread(target=read_member, args=(employee_id,), daemon=True)
-                threads.append(thread)
-                thread.start()
-
-            watch(ops["id"])
-            deadline = time.monotonic() + 110
-            ops_done_at: float | None = None
-            while time.monotonic() < deadline:
-                listing = client.get(f"{NEXUS}/api/v1/channels/{channel_id}/messages")
-                assert listing.status_code == 200, listing.text
-                for member in listing.json()["members"]:
-                    if member["agentscope_session_id"]:
-                        watch(member["employee_id"])
-                if any(item.get("type") == "REPLY_END" for item in collected[ops["id"]]):
-                    if ops_done_at is None:
-                        ops_done_at = time.monotonic()
-                    if time.monotonic() - ops_done_at > 25:
-                        break
-                time.sleep(2)
-            for thread in threads:
-                thread.join(timeout=40)
-
-            log_seen = False
-            for _ in range(30):
-                remote = client.get(
-                    f"{AGENTSCOPE}/sessions/{ops_session}/messages",
-                    headers=AGENT_HEADERS,
-                    params={"agent_id": ops["agentscope_agent_id"], "limit": 50},
-                )
-                if remote.status_code == 200 and "FAIL-TOKEN-55" in remote.text:
-                    log_seen = True
+            assert sent.json()["participants"] == [e["id"] for e in created]
+            for _ in range(80):
+                page = client.get(path, headers=OWNER).json()
+                discussion = page["channel"]["discussion"]
+                if discussion["state"] not in {"queued", "running", "superseded"}:
                     break
                 time.sleep(1)
-            transcript = client.get(f"{NEXUS}/api/v1/channels/{channel_id}/messages").json()
-            senders = {item["sender"] for item in transcript["messages"]}
-            assert "user" in senders
-            assert senders <= {"user", ops["id"], eng["id"], tools["id"]}
-            remote_text = {
-                employee["id"]: _assistant_text(client, bound, employee["agentscope_agent_id"])
-                for employee, bound in (
-                    (ops, ops_session),
-                    (
-                        eng,
-                        next(
-                            item["agentscope_session_id"]
-                            for item in transcript["members"]
-                            if item["employee_id"] == eng["id"]
-                        ),
-                    ),
-                    (
-                        tools,
-                        next(
-                            item["agentscope_session_id"]
-                            for item in transcript["members"]
-                            if item["employee_id"] == tools["id"]
-                        ),
-                    ),
+            assert discussion["state"] == "completed", discussion
+            replies = [item for item in page["items"] if item["sender_type"] == "employee"]
+            assert [item["sender_id"] for item in replies[:2]] == [e["id"] for e in created]
+            bindings = client.get(f"{NEXUS}/api/v1/channels/{channel}/members", headers=OWNER).json()
+            for employee in created:
+                session_id = next(
+                    member["agentscope_session_id"] for member in bindings["members"]
+                    if member["employee_id"] == employee["id"]
                 )
-            }
-            for item in transcript["messages"]:
-                if item["sender"] == "user":
-                    continue
-                assert item["text"] in remote_text[item["sender"]]
-                assert item["id"].startswith(f"agent_{item['sender']}_")
-            first = client.get(
-                f"{NEXUS}/api/v1/peers/resolve",
-                params={"session_id": ops_session, "name": eng_name, "message": f"补一句{suffix}"},
-            )
-            second = client.get(
-                f"{NEXUS}/api/v1/peers/resolve",
-                params={"session_id": ops_session, "name": eng_name, "message": f"补一句{suffix}"},
-            )
-            assert second.status_code == 409, second.text
-            if first.status_code == 200:
-                assert first.json()["agent_id"] == eng["agentscope_agent_id"]
-                assert first.json()["session_id"] != eng["mailbox_session_id"]
-                assert "同样的话" in second.json()["detail"]
-            print(
-                json.dumps(
-                    {
-                        "ops_tools": tool_names(collected[ops["id"]]),
-                        "ops_fragments": tool_fragments(collected[ops["id"]])[:400],
-                        "ops_deltas": deltas(collected[ops["id"]])[:180],
-                        "eng_tools": tool_names(collected[eng["id"]]),
-                        "eng_fragments": tool_fragments(collected[eng["id"]])[:400],
-                        "eng_deltas": deltas(collected[eng["id"]])[:180],
-                        "tool_deltas": deltas(collected[tools["id"]])[:180],
-                        "sessions": sorted(seen_sessions),
-                        "senders": sorted(senders),
-                        "log_seen": log_seen,
-                        "resolve_statuses": [first.status_code, second.status_code],
-                        "stream_errors": [str(item) for item in errors],
-                    },
-                    ensure_ascii=False,
+                native = client.get(
+                    f"{AGENTSCOPE}/sessions/{session_id}/messages",
+                    params={"agent_id": employee["agentscope_agent_id"], "limit": 200},
+                    headers=AGENT_HEADERS,
                 )
-            )
-            ops_tool_list = tool_names(collected[ops["id"]])
-            assert not errors, errors
-            assert log_seen
-            assert "contact_employee" in ops_tool_list, ops_tool_list
-            hidden_names = (
-                "TaskCreate",
-                "TaskGet",
-                "TaskList",
-                "AgentCreate",
-                "ToolStop",
-                "ScheduleCreate",
-            )
-            for hidden in hidden_names:
-                assert hidden not in ops_tool_list, ops_tool_list
-            delivered = '"status": "delivered"' in tool_fragments(collected[ops["id"]])
-            assert delivered, tool_fragments(collected[ops["id"]])[:500]
-            assert eng["id"] in seen_sessions
-            eng_tool_list = tool_names(collected[eng["id"]])
-            eng_spoke = bool(deltas(collected[eng["id"]])) or "contact_employee" in eng_tool_list
-            assert eng_spoke, collected[eng["id"]]
-            for hidden in hidden_names:
-                assert hidden not in eng_tool_list, eng_tool_list
-            if eng["id"] in seen_sessions:
-                eng_member = next(item for item in transcript["members"] if item["employee_id"] == eng["id"])
-                assert eng_member["agentscope_session_id"]
-                assert eng_member["agentscope_session_id"] != eng["mailbox_session_id"]
+                assert native.status_code == 200, native.text
+                received_ids = {message["id"] for message in native.json()["messages"]}
+                assert set(history_ids).issubset(received_ids)
+                ids = [message["id"] for message in native.json()["messages"] if message["id"] in history_ids]
+                assert ids == history_ids
         finally:
-            for employee_id in created_ids:
-                client.delete(f"{NEXUS}/api/v1/employees/{employee_id}")
+            for employee in created:
+                client.delete(f"{NEXUS}/api/v1/employees/{employee['id']}")
 
 
 def _body(
@@ -859,6 +690,7 @@ def _body(
         "knowledge": knowledge or [],
         "skills": skills or [],
         "tools": tools or [],
+        "model_route_id": os.environ["NEXUS_LIVE_MODEL_ROUTE_ID"],
     }
 
 
@@ -885,7 +717,10 @@ def _send(client: httpx.Client, conversation_id: str, text: str) -> dict:
     response = client.post(
         f"{NEXUS}/api/v1/conversations/{conversation_id}/messages",
         headers=OWNER,
-        json={"text": text, "attachment_ids": []},
+        json={
+            "client_id": uuid.uuid4().hex, "text": text,
+            "attachment_ids": [],
+        },
     )
     assert response.status_code == 200, response.text
     return response.json()

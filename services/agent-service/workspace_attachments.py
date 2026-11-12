@@ -10,19 +10,18 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from agentscope.app.deps import get_current_user_id, get_workspace_service
+from agentscope.app.deps import get_current_user_id
 from agentscope.app.storage import SessionConfig
 from fastapi import Depends, HTTPException, Request
 from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 MAX_BYTES = 20 * 1024 * 1024
 CHUNK_BYTES = 64 * 1024
-ATTACHMENT_ID = r"^att_[0-9a-f]{12,32}$"
+ATTACHMENT_ID = r"^att_[0-9a-f]{32}$"
 GROUP_ID = r"^ch_[0-9a-f]{12,32}$"
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-WORKSPACE_SERVICE = Depends(get_workspace_service)
 
 
 @contextmanager
@@ -133,16 +132,25 @@ async def save(workdir, key, chunks):
     return {"size": size, "sha256": digest.hexdigest(), "type": media_type(head), "path": f"attachments/{key}"}
 
 
-class LegacyMessage(BaseModel):
+class VerifyAttachments(BaseModel):
     agent_id: str
     session_id: str
-    message_id: str
-    aliases: dict[str, str]
+    workspace_id: str
+    keys: list[str] = Field(max_length=128)
 
 
-def register_workspace_attachments(app, storage):
+def register_workspace_attachments(app, storage, bus):
     slots = asyncio.Semaphore(4)
     prefix = "/nexus/workspace-attachments"
+
+    async def resolve(user_id, agent_id, session_id):
+        session = await storage.get_session(user_id, agent_id, session_id)
+        # AgentScope SQL 按用户和 Session ID 查找，不验证传入的 Agent ID。
+        if not session or session.agent_id != agent_id:
+            raise HTTPException(404, "会话不存在")
+        return await app.state.workspace_manager.get_workspace(
+            user_id, agent_id, session_id, session.config.workspace_id,
+        )
 
     @app.put(f"{prefix}/groups/{{channel_id}}")
     async def group_workspace(
@@ -157,42 +165,16 @@ def register_workspace_attachments(app, storage):
             )
         return {"agent_id": agent_id, "session_id": session_id}
 
-    @app.patch(f"{prefix}/legacy-message")
-    async def rewrite_message(
-        body: LegacyMessage,
-        user_id: str = Depends(get_current_user_id),
-        service=WORKSPACE_SERVICE,
-    ):
-        workspace = await service.resolve(user_id, body.agent_id, body.session_id)
-        message = await storage.get_message(user_id, body.session_id, body.message_id)
-        if not message or message.role != "user":
-            raise HTTPException(404, "消息不存在")
-        metadata = dict(message.metadata or {})
-        attachments = metadata.get("attachments", [])
-        for item in attachments:
-            if item["id"] in body.aliases:
-                key = body.aliases[item["id"]]
-                if not re.fullmatch(ATTACHMENT_ID, key):
-                    raise HTTPException(422, "附件标识无效")
-                with open_attachment(workspace.workdir, key):
-                    item["id"] = key
-        metadata.pop("nexus_attachment_proofs", None)
-        await storage.upsert_message(
-            user_id, body.session_id, message.model_copy(update={"metadata": metadata}),
-        )
-        return {"updated": True}
-
     @app.put(f"{prefix}/{{key}}")
     async def upload(
         request: Request, agent_id: str, session_id: str,
         key: str = PathParam(pattern=ATTACHMENT_ID),
         user_id: str = Depends(get_current_user_id),
-        service=WORKSPACE_SERVICE,
     ):
         if slots.locked():
             raise HTTPException(429, "附件上传繁忙")
         async with slots:
-            workspace = await service.resolve(user_id, agent_id, session_id)
+            workspace = await resolve(user_id, agent_id, session_id)
             return await save(workspace.workdir, key, request.stream())
 
     @app.get(f"{prefix}/{{key}}")
@@ -200,10 +182,14 @@ def register_workspace_attachments(app, storage):
         agent_id: str, session_id: str,
         key: str = PathParam(pattern=ATTACHMENT_ID),
         user_id: str = Depends(get_current_user_id),
-        service=WORKSPACE_SERVICE,
     ):
-        workspace = await service.resolve(user_id, agent_id, session_id)
-        file = open_attachment(workspace.workdir, key)
+        workspace = await resolve(user_id, agent_id, session_id)
+        try:
+            file = open_attachment(workspace.workdir, key)
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            raise HTTPException(410, "附件文件已失效") from exc
 
         def chunks():
             with file:
@@ -218,15 +204,13 @@ def register_workspace_attachments(app, storage):
         agent_id: str, session_id: str, target_agent_id: str, target_session_id: str,
         key: str = PathParam(pattern=ATTACHMENT_ID),
         user_id: str = Depends(get_current_user_id),
-        service=WORKSPACE_SERVICE,
     ):
         if agent_id != "nexus-group-resources" or target_agent_id == agent_id:
             raise HTTPException(403, "附件复制仅支持群资源到员工会话")
         if slots.locked():
             raise HTTPException(429, "附件复制繁忙")
-        async with slots:
-            source = await service.resolve(user_id, agent_id, session_id)
-            target = await service.resolve(user_id, target_agent_id, target_session_id)
+        async with slots, bus.acquire_lock(f"nexus:retire:{target_session_id}"):
+            target = await resolve(user_id, target_agent_id, target_session_id)
             # 目标由 Nexus 校验群成员及讨论，固定文件标识使复制可重试。
             try:
                 with open_attachment(target.workdir, key):
@@ -234,12 +218,45 @@ def register_workspace_attachments(app, storage):
             except HTTPException as exc:
                 if exc.status_code != 404:
                     raise
-            with open_attachment(source.workdir, key) as file:
+            try:
+                source = await resolve(user_id, agent_id, session_id)
+                original = open_attachment(source.workdir, key)
+            except HTTPException as exc:
+                if exc.status_code != 404:
+                    raise
+                raise HTTPException(410, "群附件原件已失效") from exc
+            with original as file:
                 async def chunks():
                     while chunk := await asyncio.to_thread(file.read, CHUNK_BYTES):
                         yield chunk
 
                 return await save(target.workdir, key, chunks())
+
+    @app.post(f"{prefix}/verify")
+    async def verify_files(
+        body: VerifyAttachments,
+        user_id: str = Depends(get_current_user_id),
+    ):
+        if any(not re.fullmatch(ATTACHMENT_ID, key) for key in body.keys):
+            raise HTTPException(422, "附件标识无效")
+        session = await storage.get_session(user_id, body.agent_id, body.session_id)
+        if not session or session.agent_id != body.agent_id:
+            raise HTTPException(404, "会话不存在")
+        if session.config.workspace_id != body.workspace_id:
+            raise HTTPException(409, "会话与工作区不匹配")
+        workspace = await app.state.workspace_manager.get_workspace(
+            user_id, session.agent_id, session.id, session.config.workspace_id,
+        )
+        missing = []
+        for key in body.keys:
+            try:
+                with open_attachment(workspace.workdir, key):
+                    pass
+            except HTTPException as exc:
+                if exc.status_code != 404:
+                    raise
+                missing.append(key)
+        return {"missing": missing}
 
     @app.delete(f"{prefix}/group-member", status_code=204)
     async def retire_group_member(
@@ -249,21 +266,23 @@ def register_workspace_attachments(app, storage):
         if not re.fullmatch(GROUP_ID, channel_id) or not re.fullmatch(r"[\w-]{1,64}", employee_id):
             raise HTTPException(422, "群成员标识无效")
         workspace_id = f"ws-{channel_id}-{employee_id}"
-        session = await storage.get_session(user_id, agent_id, session_id)
-        if session and session.config.workspace_id != workspace_id:
-            raise HTTPException(409, "附件副本会话不属于该群")
-        sessions = app.state.session_service
-        if session and not await sessions.cancel_session_run(session_id):
-            raise HTTPException(409, "会话仍在运行，稍后重试回收")
-        workspace = await app.state.workspace_manager.get_workspace(user_id, agent_id, session_id, workspace_id)
-        try:
-            with attachment_directory(workspace.workdir) as directory:
-                for key in os.listdir(directory):
-                    if re.fullmatch(ATTACHMENT_ID, key):
-                        os.unlink(key, dir_fd=directory)
-        except FileNotFoundError:
-            pass
-        if session:
+        async with bus.acquire_lock(f"nexus:retire:{session_id}"):
+            session = await storage.get_session(user_id, agent_id, session_id)
+            if not session:
+                return
+            if session.agent_id != agent_id or session.config.workspace_id != workspace_id:
+                raise HTTPException(409, "附件副本会话不属于该群")
+            sessions = app.state.session_service
+            if not await sessions.cancel_session_run(session_id):
+                raise HTTPException(409, "会话仍在运行，稍后重试回收")
+            workspace = await app.state.workspace_manager.get_workspace(user_id, agent_id, session_id, workspace_id)
+            try:
+                with attachment_directory(workspace.workdir) as directory:
+                    for key in os.listdir(directory):
+                        if re.fullmatch(ATTACHMENT_ID, key):
+                            os.unlink(key, dir_fd=directory)
+            except FileNotFoundError:
+                pass
             await sessions.delete_session(user_id, agent_id, session_id)
 
     @app.delete(f"{prefix}/{{key}}", status_code=204)
@@ -271,9 +290,8 @@ def register_workspace_attachments(app, storage):
         agent_id: str, session_id: str,
         key: str = PathParam(pattern=ATTACHMENT_ID),
         user_id: str = Depends(get_current_user_id),
-        service=WORKSPACE_SERVICE,
     ):
-        workspace = await service.resolve(user_id, agent_id, session_id)
+        workspace = await resolve(user_id, agent_id, session_id)
         try:
             with attachment_directory(workspace.workdir) as directory:
                 os.unlink(key, dir_fd=directory)

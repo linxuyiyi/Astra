@@ -79,90 +79,13 @@ def test_invite_uses_mailbox_workspace_and_not_a_private_or_other_team():
     assert [item.id for item in listed] == ["mail-a"]
 
 
-def test_record_write_takes_the_checkpoint_lock_and_skips_a_running_session():
-    module = _agent_service()
-
-    class Keys:
-        @staticmethod
-        def session_lock(session_id: str) -> str:
-            return f"run:{session_id}"
-
-        @staticmethod
-        def session_event_checkpoint_lock(session_id: str) -> str:
-            return f"ckpt:{session_id}"
-
-        @staticmethod
-        def session_events(session_id: str) -> str:
-            return f"events:{session_id}"
-
-    class Storage:
-        def __init__(self) -> None:
-            self.saved = []
-
-        async def upsert_message(self, user_id, session_id, message) -> None:
-            self.saved.append((user_id, session_id, message.id))
-
-    class Bus:
-        def __init__(self, locked: bool) -> None:
-            self.locked = locked
-            self.held: list[str] = []
-            self.published = []
-
-        async def is_locked(self, key: str) -> bool:
-            return self.locked and key.startswith("run:")
-
-        def acquire_lock(self, key: str):
-            bus = self
-
-            class Guard:
-                async def __aenter__(self):
-                    bus.held.append(key)
-
-                async def __aexit__(self, *args):
-                    return False
-
-            return Guard()
-
-        async def publish(self, key: str, payload: dict) -> None:
-            self.published.append((key, payload))
-
-    message = type("Msg", (), {"id": "m1"})()
-    storage = Storage()
-    idle = Bus(False)
-    asyncio.run(
-        module.write_record_message(
-            storage,
-            idle,
-            message,
-            user_id="nexus",
-            session_id="record",
-            keys=Keys,
-        )
-    )
-    assert storage.saved == [("nexus", "record", "m1")]
-    assert idle.held == ["ckpt:record"]
-    assert idle.published[0][1]["type"] == "record"
-    with pytest.raises(module.RecordRunning):
-        asyncio.run(
-            module.write_record_message(
-                storage,
-                Bus(True),
-                message,
-                user_id="nexus",
-                session_id="record",
-                keys=Keys,
-            )
-        )
-    assert len(storage.saved) == 1
-
-
 def test_launcher_keeps_team_tools_and_does_not_construct_agent_create():
     source = (ROOT / "services/agent-service/agent_service.py").read_text(encoding="utf-8")
     ast.parse(source)
     assert "AgentCreate" in source
     assert "AgentCreate(" not in source
     assert "TeamCreate(" not in source
-    assert "write_record_message" in source
+    assert "register_session_messages" in source
     assert "MailboxSessionView" in source
 
 
@@ -312,13 +235,6 @@ def test_group_toolkit_filters_tools_by_server_origin(monkeypatch):
             "mcp__nexus-schedule__schedule_list",
         }
         assert asyncio.run(_collect(toolkit, "mcp__nexus-task__nexus_task_get")) == ["called"]
-        delivery_token = module.delivery_only.set(True)
-        try:
-            assert asyncio.run(toolkit._get_available_tools(["basic"])) == {}
-            with pytest.raises(PermissionError):
-                asyncio.run(_collect(toolkit, "mcp__nexus-task__nexus_task_get"))
-        finally:
-            module.delivery_only.reset(delivery_token)
         policy["mcp_refs"].pop("task-ref")
         with pytest.raises(PermissionError):
             asyncio.run(_collect(toolkit, "mcp__nexus-task__nexus_task_get"))

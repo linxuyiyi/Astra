@@ -29,6 +29,7 @@ class FakeAgentService:
     def __init__(self):
         self.sessions = {}
         self.calls = []
+        self.staged = []
         self.delay = 0.01
         self.interrupts = []
         self.models = []
@@ -52,6 +53,12 @@ class FakeAgentService:
 
     async def latest_event_cursor(self, *args):
         return "0-0"
+
+    async def stage_session_messages(self, agent_id, sid, inputs):
+        self.staged.append((agent_id, inputs))
+        messages = self.sessions[sid]["messages"]
+        known = {message["id"] for message in messages}
+        messages.extend(message for message in inputs if message["id"] not in known)
 
     async def trigger_inputs(self, agent_id, sid, inputs):
         # 官方 AgentScope 2.0.10 Msg.validate_role_content 的 HTTP 边界：
@@ -158,7 +165,7 @@ def setup(monkeypatch):
     async def sync(*args, **kwargs):
         return {}
 
-    monkeypatch.setattr("nexus_api.main.sync_employee_skills", sync)
+    monkeypatch.setattr("nexus_api.main.sync_employee_resources", sync)
     app = create_app()
     fake = FakeAgentService()
     with TestClient(app) as owner:
@@ -424,7 +431,7 @@ def test_ordered_real_previous_reply_and_finite_turns(setup):
     assert [a for a, _ in fake.calls] == ["agent-dev", "agent-qa"]
     assert any(
         "小掌柜，你负责哪些工作？" in str(item["content"]) and item["name"] == "小牛码"
-        for item in fake.calls[1][1]
+        for agent, batch in fake.staged if agent == "agent-qa" for item in batch
     )
     replies = [item for item in page["items"] if item["sender_type"] == "employee"]
     assert [item["sender_id"] for item in replies] == ["dev", "qa"]
@@ -623,9 +630,9 @@ def test_attachment_access_is_revoked_with_membership(setup, monkeypatch):
     wait_done(owner, cid)
     assert authorization == [{"allowed": True}]
     assert [item["target_agent_id"] for item in copied] == ["agent-qa"]
-    message = next(m for _, inputs in fake.calls for m in inputs if m["metadata"].get("attachments"))
+    message = next(m for _, inputs in fake.staged for m in inputs if m["metadata"].get("attachments"))
     assert payload.decode() not in json.dumps(message)
-    assert f"attachments/{key}" in message["content"][-1]["text"]
+    assert message["metadata"]["attachments"][0]["id"] == key
     assert other.get(f"/api/v1/attachments/{key}").content == payload
     assert other.post(f"/api/v1/channels/{cid}/leave").status_code == 200
     assert other.get(f"/api/v1/attachments/{key}").status_code == 403
@@ -966,7 +973,7 @@ def test_group_resource_failure_blocks_inference_then_retries(setup, monkeypatch
     async def sync(*args, **kwargs):
         return {"ok": ready, "status": "applied" if ready else "error", "detail": "MCP 未就绪"}
 
-    monkeypatch.setattr("nexus_api.main.sync_employee_skills", sync)
+    monkeypatch.setattr("nexus_api.main.sync_employee_resources", sync)
     with connect() as db:
         db.execute(text("UPDATE t_nexus_employees SET mcp_json='[\"ext-mcp\"]' WHERE id='qa'"))
         db.commit()
@@ -997,16 +1004,16 @@ def test_lagging_group_delivery_keeps_messages_in_bounded_batches(setup):
     second = send(owner, cid, "@小掌柜 请继续")
     assert second.status_code == 200
     wait_done(owner, cid)
-    batches = [inputs for agent, inputs in fake.calls[1:] if agent == "agent-qa"]
+    batches = [inputs for agent, inputs in fake.staged[1:] if agent == "agent-qa"]
+    assert [agent for agent, _ in fake.calls] == ["agent-qa", "agent-qa"]
     assert len(batches) == 3
-    assert [batch[-1]["metadata"]["delivery_only"] for batch in batches] == [True, True, False]
     with connect() as db:
         public_replies = db.execute(text(
             "SELECT COUNT(*) FROM t_nexus_messages WHERE channel_id=:c AND sender_type='employee'",
         ), {"c": cid}).scalar()
     assert public_replies == 2
-    assert all(len(batch) <= 129 for batch in batches)
-    ids = [item["id"] for batch in batches for item in batch if item["metadata"].get("nexus_deduplicate")]
+    assert all(len(batch) <= 128 for batch in batches)
+    ids = [item["id"] for batch in batches for item in batch]
     assert ids == [*seeded, second.json()["message"]["id"]]
     assert first.json()["message"]["id"] not in ids
 
@@ -1025,7 +1032,59 @@ def test_group_delivery_respects_serialized_byte_budget(setup, monkeypatch):
     sent = send(owner, cid, "@小掌柜 请总结")
     assert sent.status_code == 200
     wait_done(owner, cid)
-    batches = [inputs[:-1] for agent, inputs in fake.calls if agent == "agent-qa"]
+    batches = [inputs for agent, inputs in fake.staged if agent == "agent-qa"]
     assert len(batches) >= 3
     assert all(sum(len(dumps(item).encode()) for item in batch) <= 4000 for batch in batches)
     assert [m["id"] for batch in batches for m in batch] == [*seeded, sent.json()["message"]["id"]]
+
+
+def test_group_delivery_retries_an_ack_lost_after_native_commit(setup, monkeypatch):
+    from nexus_api.agentscope import AgentScopeError
+
+    _, owner, _, cid, fake = setup
+    original = fake.stage_session_messages
+    lose_ack = True
+
+    async def stage(agent_id, session_id, inputs):
+        nonlocal lose_ack
+        await original(agent_id, session_id, inputs)
+        if lose_ack:
+            lose_ack = False
+            raise AgentScopeError("补送已落盘，响应丢失")
+
+    monkeypatch.setattr(fake, "stage_session_messages", stage)
+    first = send(owner, cid, "@小掌柜 第一条").json()["message"]["id"]
+    assert wait_done(owner, cid)["channel"]["discussion"]["state"] == "failed"
+    assert not fake.calls
+    second = send(owner, cid, "@小掌柜 第二条").json()["message"]["id"]
+    assert wait_done(owner, cid)["channel"]["discussion"]["state"] == "completed"
+    assert [m["id"] for m in fake.staged[-1][1]] == [first, second]
+    history = next(iter(fake.sessions.values()))["messages"]
+    assert [m["id"] for m in history if m["role"] == "user"] == [first, second]
+    assert len(fake.calls) == 1
+
+
+
+def test_group_trigger_recovers_a_lost_ack_without_executing_again(setup, monkeypatch):
+    from nexus_api.agentscope import AgentScopeError
+
+    _, owner, _, cid, fake = setup
+    original = fake.trigger_inputs
+    accepted = set()
+
+    async def trigger(agent_id, session_id, inputs):
+        await original(agent_id, session_id, inputs)
+        accepted.add((agent_id, session_id, inputs[-1]["id"]))
+        raise AgentScopeError("执行已接受，响应丢失")
+
+    async def lookup(agent_id, session_id, message_id, *, wait):
+        assert wait
+        return (agent_id, session_id, message_id) in accepted
+
+    monkeypatch.setattr(fake, "trigger_inputs", trigger)
+    monkeypatch.setattr(fake, "session_message_accepted", lookup, raising=False)
+    assert send(owner, cid, "@小掌柜 请答复").status_code == 200
+    page = wait_done(owner, cid)
+    assert page["channel"]["discussion"]["state"] == "completed"
+    assert len(fake.calls) == 1
+    assert len([m for m in page["items"] if m["sender_type"] == "employee"]) == 1

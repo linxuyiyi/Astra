@@ -12,6 +12,7 @@ from nexus_api.agentscope import AgentScopeClient
 from nexus_api.capability import inspect_employee
 from nexus_api.db import connect
 from nexus_api.main import create_app, db_path
+from tests.nexus.agent_transport import AgentChatTransport
 from tests.nexus.clients import TestClient
 
 SKILL_ID = "failure-analysis"
@@ -100,7 +101,7 @@ def _client(test_client: TestClient, fake: FakeAgentScope) -> None:
         "http://agentscope.test",
         "nexus",
         httpx.AsyncClient(
-            transport=httpx.MockTransport(fake.handler),
+            transport=AgentChatTransport(fake.handler),
             base_url="http://agentscope.test",
         ),
     )
@@ -155,7 +156,7 @@ def test_private_send_mounts_skills_and_rebind_reuses_the_ready_session(tmp_path
         sent = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"text": "看一下失败日志"},
+            json={"client_id": "test-send-159", "text": "看一下失败日志"},
         )
         assert sent.status_code == 200, sent.text
         session_id = sent.json()["agentscope"]["session_id"]
@@ -274,7 +275,7 @@ def test_capability_resolves_skill_id_to_workspace_name():
     async def scenario():
         fake = FakeAgentScope(workspace_skills=[{"name": SKILL_NAME}])
         async with httpx.AsyncClient(
-            transport=httpx.MockTransport(fake.handler),
+            transport=AgentChatTransport(fake.handler),
             base_url="http://agentscope.test",
         ) as http:
             client = AgentScopeClient("http://agentscope.test", "nexus", http)

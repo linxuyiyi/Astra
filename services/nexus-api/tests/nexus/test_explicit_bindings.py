@@ -13,7 +13,8 @@ def private_session(client, employee):
         f"/api/v1/employees/{employee['id']}/conversations", headers=headers, json={"name": "配置验证"}
     ).json()
     response = client.post(
-        f"/api/v1/conversations/{conversation['id']}/messages", headers=headers, json={"text": "验证绑定"}
+        f"/api/v1/conversations/{conversation['id']}/messages", headers=headers,
+        json={"client_id": "test-send-16", "text": "验证绑定"}
     )
     assert response.status_code == 200, response.text
     return conversation["id"], response.json()["agentscope"]["session_id"]

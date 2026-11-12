@@ -8,7 +8,7 @@ Element Plus 也不变——聊天岛在独立 iframe 文档里跑，Tailwind �
 
 ## 状态
 
-**阶段 B：私聊读写已接管。** 聊天岛读原生消息、订阅 `raw=1` 事件流、经 Nexus 发送与停止；
+**阶段 B：私聊读写已接管。** 聊天岛读原生消息、订阅原生事件流、经 Nexus 发送与停止；
 `?island=1` 时旧适配器不再订阅，避免双消费者。群组、附件、人工确认仍未迁移。
 
 阶段 D 已收敛：聊天岛是默认渲染，`?island=1` 开关、旧消息列表/输入区、
@@ -124,7 +124,7 @@ cd services/nexus-api/web && npm run dev
 ## 阶段 B 进度
 
 - [x] 保真历史：`GET /api/v1/conversations/{id}/messages`（原生 `Msg[]` + 游标 + `is_running`）
-- [x] 原生事件流：`stream?raw=1`，不注入收尾事件、不中途关闭
+- [x] 原生事件流：`stream`，不注入收尾事件、不中途关闭
 - [x] 停止：`POST /api/v1/conversations/{id}/interrupt`，先校验归属与绑定
 - [x] 首次发送：Nexus 返回 Session 后更新绑定，`useMessages` 重挂载并加载原生历史
 - [ ] 附件：`MessageBody` 仍是 `text + attachment_ids`，聊天岛目前只发文本；
@@ -160,7 +160,7 @@ ops/dev/start_nexus_api.sh stop && ops/dev/start_nexus_api.sh start
 ```
 
 验收记录（2026-10-20）：新建员工 → 首条发送建 Session → 原生历史返回
-`hint / tool_call / tool_result / text` 四类块 → `stream?raw=1` 收到
+`hint / tool_call / tool_result / text` 四类块 → `stream` 收到
 `REPLY_START … REPLY_END` 且无 `NEXUS_RUN_FINISHED` → 聊天岛渲染两轮真实对话。
 截图：`docs/reports/evidence/nexus-chat-island/acceptance-20261020.png`。
 
@@ -177,7 +177,7 @@ ops/dev/start_nexus_api.sh stop && ops/dev/start_nexus_api.sh start
 - Key 只写在 `ops/env/.env`（已被 gitignore），不要写进代码或提交
 
 验收记录（2026-10-20）：DeepSeek flash 首轮 4 秒返回「收到」，原生历史为
-`['hint', 'text']`；第二条「好的」同样直出。`stream?raw=1` 收到
+`['hint', 'text']`；第二条「好的」同样直出。`stream` 收到
 `REPLY_START → TEXT_BLOCK_* → REPLY_END`，无私有事件、连接不关闭。
 截图：`docs/reports/evidence/nexus-chat-island/acceptance-deepseek-20261020.png`。
 
@@ -186,7 +186,7 @@ ops/dev/start_nexus_api.sh stop && ops/dev/start_nexus_api.sh start
 用 Chrome DevTools Protocol 驱动真实浏览器（无人工点击）：
 
 - 在输入框写入文本并按 Enter → 用户消息立即出现（乐观插入），POST 返回后保持
-- 同一会话连续多轮：助手回复通过 `stream?raw=1` 增量进入界面，无需刷新
+- 同一会话连续多轮：助手回复通过 `stream` 增量进入界面，无需刷新
 - 流式期间出现停止按钮（0.5s 内），点击后 4s 内回到空闲；Nexus 侧
   `is_running=false`，该条助手消息 `finished_reason=interrupted`
 - 刷新后原生历史完整渲染（含 hint、thinking、工具块与 token 用量）
@@ -203,7 +203,7 @@ ops/dev/start_nexus_api.sh stop && ops/dev/start_nexus_api.sh start
 - `GET /api/v1/channels/{id}/timeline/native` 按来源返回完整 `Msg` 与每位成员的
   `event_cursor`；成员 Session 里的人类消息副本按 `metadata.message_id` 剔除，
   只剩 Nexus 记录的那一条
-- 前端为每位成员订阅 `members/{id}/stream?raw=1`，按 `session_id` 分桶合并；
+- 前端为每位成员订阅 `members/{id}/stream`，按 `session_id` 分桶合并；
   一次回复结束连接不关闭
 - 停止按成员下发到 `POST /channels/{id}/members/{id}/interrupt`
 - 发言人标题渲染在**气泡外**，不改写正文，也不改上游组件

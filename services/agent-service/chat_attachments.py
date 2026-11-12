@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import json
 import re
 from io import BytesIO, TextIOWrapper
 from pathlib import PurePath
@@ -22,6 +23,21 @@ _TEXT_SUFFIXES = {
 }
 _TEXT_CHUNK = 8_000
 _PREVIEW_BYTES = 512 * 1024
+
+
+def with_attachment_hint(message):
+    files = message.metadata.get("attachments")
+    if not files:
+        return message
+    names = "\n".join(
+        f"attachments/{item['id']} {json.dumps(item['name'], ensure_ascii=False)} ({item['type']})"
+        for item in files
+    )
+    hint = TextBlock(
+        id=f"nexus-attachments-{message.id}",
+        text=f"消息 {message.id} 的会话附件（按需调用 read_chat_attachment）：\n{names}",
+    )
+    return message.model_copy(update={"content": [*message.content, hint]})
 
 
 def _image_preview(raw: bytes, name: str) -> ToolChunk:
@@ -64,12 +80,6 @@ def _render(raw: bytes, name: str, media_type: str, offset: int, page: int) -> T
         except (PdfReadError, ValueError):
             return _text("无法读取此 PDF 的文本。")
         label = f"{name} 第 {page}/{len(pdf.pages)} 页"
-    elif media_type.startswith("text/") or suffix in _TEXT_SUFFIXES:
-        try:
-            content = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            return _text("此附件不是 UTF-8 文本。")
-        label = name
     else:
         return _text("此附件格式不支持直接读取，用户仍可从对话中下载原件。")
     if offset >= len(content):

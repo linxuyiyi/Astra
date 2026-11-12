@@ -43,7 +43,7 @@ interface NativeHistory {
 
 interface SendResponse {
   message: { id: string };
-  agentscope: { accepted: boolean; detail?: string; session_id?: string };
+  agentscope: { session_id: string };
 }
 
 interface ContentBlockLike {
@@ -145,10 +145,6 @@ export const sessionApi = {
     };
   },
 
-  /**
-   * `raw=1`：Nexus 原样转发上游事件，不注入 NEXUS_RUN_FINISHED，也不在一轮结束后关闭，
-   * 这样同一会话的多次回复都能在这条连接上收到。
-   */
   async *streamEvents(
     _sessionId: string,
     _agentId: string,
@@ -156,7 +152,7 @@ export const sessionApi = {
     after?: string | null,
   ): AsyncGenerator<AgentEvent> {
     if (!signal) return;
-    const query = new URLSearchParams({ raw: "1" });
+    const query = new URLSearchParams();
     if (after) query.set("after", after);
     let response: Response;
     try {
@@ -203,26 +199,30 @@ export const sessionApi = {
   },
 };
 
+const pendingSends = new Map<string, { fingerprint: string; clientId: string }>();
+
 export const chatApi = {
   async trigger(body?: unknown): Promise<{ status: string; session_id: string }> {
     const input = (body as { input?: unknown } | undefined)?.input;
     const localId = (input as { id?: string } | null | undefined)?.id ?? "";
+    if (!localId) throw new Error("消息缺少发送标识");
     const payload = toSendBody(input);
-    const response = await nexusFetch(`/api/v1/conversations/${conversationId()}/messages`, {
+    const conversation = conversationId();
+    const fingerprint = JSON.stringify([payload.content.map(block => block.text), payload.attachment_ids]);
+    const pending = pendingSends.get(conversation);
+    const clientId = pending?.fingerprint === fingerprint ? pending.clientId : localId;
+    pendingSends.set(conversation, { fingerprint, clientId });
+    const response = await nexusFetch(`/api/v1/conversations/${conversation}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, client_id: localId }),
+      body: JSON.stringify({ ...payload, client_id: clientId }),
     });
     if (!response.ok) throw new Error(await errorDetail(response));
     const result = (await response.json()) as SendResponse;
-    const sessionId = result.agentscope?.session_id ?? "";
+    if (pendingSends.get(conversation)?.clientId === clientId) pendingSends.delete(conversation);
+    const sessionId = result.agentscope.session_id;
     if (sessionId) onBound?.(sessionId);
-    if (result.agentscope && result.agentscope.accepted === false) {
-      // 后端以 200 返回业务结果；不接受时必须让调用方和用户看到原因，
-      // 否则输入框清空、气泡留下，却没有任何失败提示。
-      throw new Error(result.agentscope.detail || "消息未被员工接受");
-    }
-    if (localId && result.message?.id) sentMessageIds.set(localId, result.message.id);
+    sentMessageIds.set(localId, result.message.id);
     return { status: "accepted", session_id: sessionId };
   },
 };

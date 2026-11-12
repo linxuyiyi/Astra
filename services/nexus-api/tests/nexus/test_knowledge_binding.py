@@ -6,6 +6,7 @@ import httpx
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app
+from tests.nexus.agent_transport import AgentChatTransport
 from tests.nexus.clients import TestClient
 
 
@@ -61,7 +62,7 @@ def test_session_receives_only_the_bound_knowledge_bases(tmp_path, monkeypatch):
         client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         bound = client.post("/api/v1/employees", json=employee_body("星河", "资料", ["kb-1"]))
         assert bound.status_code == 201, bound.text
@@ -89,7 +90,7 @@ def test_session_receives_only_the_bound_knowledge_bases(tmp_path, monkeypatch):
         sent = client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"text": "怎么泄压"},
+            json={"client_id": "test-send-93", "text": "怎么泄压"},
         )
         assert sent.status_code == 200, sent.text
         assert sessions["n"] == before + 1

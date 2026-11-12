@@ -11,6 +11,7 @@ import pytest
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app
 from nexus_api.model_route import gateway_base_url
+from tests.nexus.agent_transport import AgentChatTransport
 from tests.nexus.clients import TestClient
 
 
@@ -65,7 +66,7 @@ def test_route_is_injected_and_a_change_keeps_the_private_session(tmp_path, monk
         application.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         created = client.post(
             "/api/v1/employees",
@@ -118,7 +119,7 @@ def test_route_is_injected_and_a_change_keeps_the_private_session(tmp_path, monk
         sent = client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"text": "你好"},
+            json={"client_id": "test-send-122", "text": "你好"},
         )
         assert sent.status_code == 200, sent.text
         assert sessions["n"] == before + 1
@@ -162,7 +163,7 @@ def test_empty_route_refuses_a_vendor_session(tmp_path, monkeypatch):
         application.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         created = client.post(
             "/api/v1/employees",
@@ -208,7 +209,7 @@ def test_gateway_credential_updates_when_the_key_changes():
     client = AgentScopeClient(
         "http://agentscope.test",
         "nexus",
-        httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+        httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
     )
 
     async def once(key: str) -> str:
@@ -263,7 +264,7 @@ def test_empty_route_without_bootstrap_does_not_create_a_session(tmp_path, monke
         application.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         created = client.post("/api/v1/employees", json=employee)
         assert created.status_code == 201, created.text
@@ -282,7 +283,7 @@ def test_empty_route_without_bootstrap_does_not_create_a_session(tmp_path, monke
         sent = client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"text": "你好"},
+            json={"client_id": "test-send-286", "text": "你好"},
         )
         assert sent.status_code == 422, sent.text
         assert "请先选择模型路由" in sent.json()["detail"]

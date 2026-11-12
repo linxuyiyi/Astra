@@ -321,7 +321,7 @@ def test_concurrent_im_event_accepts_once(tmp_path, monkeypatch):
                 sent = await client.post(
                     f"/api/v1/conversations/{opened.json()['id']}/messages",
                     headers={"X-Verified-UID": "u1"},
-                    json={"text": "先有私聊"},
+                    json={"client_id": "test-send-324", "text": "先有私聊"},
                 )
                 assert sent.status_code == 200, sent.text
                 saved = await client.post(
@@ -409,7 +409,7 @@ def test_im_http_waits_for_agentscope_and_web_stays_available(tmp_path, monkeypa
         opened = test_client.post(
             f"/api/v1/conversations/{web.json()['id']}/messages",
             headers={"X-Verified-UID": "u1"},
-            json={"text": "网页上的私聊"},
+            json={"client_id": "test-send-412", "text": "网页上的私聊"},
         )
         assert opened.status_code == 200
         saved = test_client.post(
@@ -740,7 +740,9 @@ def test_send_private_passes_message_id_to_trigger_chat(tmp_path, monkeypatch):
             )
         return httpx.Response(404, json={"detail": "not found"})
 
-    transport = httpx.MockTransport(handler)
+    from tests.nexus.agent_transport import AgentChatTransport
+
+    transport = AgentChatTransport(handler)
     with TestClient(create_app()) as client:
         client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
@@ -759,7 +761,7 @@ def test_send_private_passes_message_id_to_trigger_chat(tmp_path, monkeypatch):
         send_resp = client.post(
             f"/api/v1/conversations/{conv['id']}/messages",
             headers=headers,
-            json={"text": "你好", "attachment_ids": []},
+            json={"client_id": "test-send-764", "text": "你好", "attachment_ids": []},
         )
         assert send_resp.status_code == 200
         sent_msg = send_resp.json()["message"]

@@ -147,3 +147,52 @@ def test_group_history_and_pagination_with_event_cursor():
             original = owner.get(path, params={"before": earlier["before"]}).json()
             assert original["items"] == initial_items
             assert original["before"] == 0
+
+
+def test_revoked_member_cleanup_retries_without_holding_channel_lock(monkeypatch):
+    import asyncio
+
+    from nexus_api.agentscope import AgentScopeError
+    from tests.nexus.test_collaboration import add_staff
+
+    app = create_app()
+    with TestClient(app) as owner:
+        account(owner, "mysql-owner")
+        add_staff()
+        group = owner.post("/api/v1/channels", json={"name": "MySQL回收", "member_ids": ["dev"]})
+        assert group.status_code == 201, group.text
+        cid = group.json()["id"]
+    with connect() as db:
+        db.execute(text(
+            "UPDATE t_nexus_channel_members SET membership_active=0,agentscope_session_id='retired',"
+            "last_delivered_seq=3 WHERE channel_id=:c AND employee_id='dev'",
+        ), {"c": cid})
+        db.commit()
+
+    attempts = []
+
+    async def retire(agent_id, session_id, channel_id, employee_id):
+        with connect() as db:
+            assert db.execute(text(
+                "SELECT id FROM t_nexus_channels WHERE id=:c FOR UPDATE NOWAIT",
+            ), {"c": cid}).scalar_one() == cid
+            db.commit()
+        attempts.append((agent_id, session_id, channel_id, employee_id))
+        if len(attempts) == 1:
+            raise AgentScopeError("模拟回收响应丢失")
+
+    monkeypatch.setattr(app.state.collaboration, "retire_group_member", retire)
+    with pytest.raises(AgentScopeError, match="回收响应丢失"):
+        asyncio.run(app.state.collaboration.clean_inactive_members(cid))
+
+    def binding():
+        with connect() as db:
+            return tuple(db.execute(text(
+                "SELECT membership_active,agentscope_session_id,last_delivered_seq "
+                "FROM t_nexus_channel_members WHERE channel_id=:c AND employee_id='dev'",
+            ), {"c": cid}).one())
+
+    assert binding() == (0, "retired", 3)
+    asyncio.run(app.state.collaboration.clean_inactive_members(cid))
+    assert attempts == [("agent-dev", "retired", cid, "dev")] * 2
+    assert binding() == (0, None, 0)

@@ -13,6 +13,7 @@ import yaml
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app, db_path
 from nexus_api.resources import mcp_registry_status
+from tests.nexus.agent_transport import AgentChatTransport
 from tests.nexus.clients import TestClient
 
 
@@ -249,7 +250,7 @@ def attach(test_client: TestClient, fake: FakeAgentScope) -> None:
         "http://agentscope.test",
         "nexus",
         httpx.AsyncClient(
-            transport=httpx.MockTransport(fake.handler),
+            transport=AgentChatTransport(fake.handler),
             base_url="http://agentscope.test",
         ),
     )
@@ -475,7 +476,7 @@ def test_employee_binds_mcp_and_unbind_removes_it(tmp_path, monkeypatch, fake):
         sent = client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"text": "你好"},
+            json={"client_id": "test-send-479", "text": "你好"},
         )
         assert sent.status_code == 200, sent.text
         session_id = sent.json()["agentscope"]["session_id"]
@@ -849,7 +850,7 @@ def test_unbind_intent_survives_a_sync_crash(tmp_path, monkeypatch, fake):
             raise RuntimeError("模拟同步中途进程退出")
 
         with monkeypatch.context() as patch:
-            patch.setattr("nexus_api.main.sync_employee_skills", crash)
+            patch.setattr("nexus_api.main.sync_employee_resources", crash)
             with pytest.raises(RuntimeError):
                 client.patch(
                     f"/api/v1/employees/{employee['id']}",
@@ -895,7 +896,7 @@ def test_employee_save_persists_final_resource_sync_snapshot(
         sent = client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers={"X-Owner-Id": "owner-a"},
-            json={"text": "初始化测试会话"},
+            json={"client_id": "test-send-899", "text": "初始化测试会话"},
         )
         assert sent.status_code == 200, sent.text
         session_id = sent.json()["agentscope"]["session_id"]
@@ -1006,12 +1007,16 @@ def test_all_bound_mcps_are_installed_per_private_session(tmp_path, monkeypatch,
                 f"/api/v1/employees/{employee['id']}/conversations", headers=headers, json={},
             ).json()
             path = f"/api/v1/conversations/{conversation['id']}/messages"
-            response = client.post(path, headers=headers, json={"text": "首次运行"})
+            response = client.post(
+                path, headers=headers, json={"text": "首次运行", "client_id": "resource-1"},
+            )
             assert response.status_code == 200, response.text
             sid = response.json()["agentscope"]["session_id"]
             sessions.append(sid)
             fake.workspace(employee["agentscope_agent_id"], sid)[1].clear()
-            response = client.post(path, headers=headers, json={"text": "继续运行"})
+            response = client.post(
+                path, headers=headers, json={"text": "继续运行", "client_id": "resource-2"},
+            )
             assert response.status_code == 200, response.text
         assert len(set(sessions)) == 2 and len(chats) == 4
 
@@ -1057,19 +1062,25 @@ def test_mcp_partial_mount_blocks_chat_and_recovers_same_session(tmp_path, monke
             f"/api/v1/employees/{employee['id']}/conversations", headers=headers, json={},
         ).json()
         path = f"/api/v1/conversations/{conversation['id']}/messages"
-        first = client.post(path, headers=headers, json={"text": "首次运行"})
+        first = client.post(
+            path, headers=headers, json={"text": "首次运行", "client_id": "resource-1"},
+        )
         assert first.status_code == 200, first.text
         sid = first.json()["agentscope"]["session_id"]
         workspace = fake.workspace(employee["agentscope_agent_id"], sid)[1]
         # Force repair. An applied revision alone cannot mask an unhealthy mount.
         workspace[-1]["is_healthy"] = False
         broken = True
-        refused = client.post(path, headers=headers, json={"text": "缺少工具时不要运行"})
+        refused = client.post(
+            path, headers=headers, json={"text": "缺少工具时不要运行", "client_id": "resource-3"},
+        )
         assert refused.status_code == 503, refused.text
         assert "资源未就绪" in refused.json()["detail"]
         assert len(chats) == 1
         broken = False
-        recovered = client.post(path, headers=headers, json={"text": "恢复后继续"})
+        recovered = client.post(
+            path, headers=headers, json={"text": "恢复后继续", "client_id": "resource-4"},
+        )
         assert recovered.status_code == 200, recovered.text
         assert recovered.json()["agentscope"]["session_id"] == sid
         assert len(chats) == 2
@@ -1104,7 +1115,8 @@ def test_peer_mailbox_mount_failure_blocks_delivery_and_preserves_mcp_permission
             f"/api/v1/employees/{sender['id']}/conversations", headers=headers, json={},
         ).json()
         private = client.post(
-            f"/api/v1/conversations/{conversation['id']}/messages", headers=headers, json={"text": "开始"},
+            f"/api/v1/conversations/{conversation['id']}/messages", headers=headers,
+            json={"client_id": "test-send-1118", "text": "开始"},
         ).json()["agentscope"]["session_id"]
         for origin in (sender["mailbox_session_id"], private):
             params = {"session_id": origin, "name": "知微", "message": "协作请求"}

@@ -301,25 +301,24 @@ class AgentScopeClient:
             raise AgentScopeError("AgentScope 没有接受这次运行")
         return str(payload.get("session_id") or session_id)
 
-    async def record_message(
-        self,
-        session_id: str,
-        message_id: str,
-        name: str,
-        text: str,
-        metadata: dict[str, Any] | None = None,
-    ) -> None:
+    async def session_message_accepted(
+        self, agent_id: str, session_id: str, message_id: str, *, wait: bool = False,
+    ) -> bool:
+        try:
+            await self.request(
+                "GET", f"/nexus/session-messages/{message_id}",
+                params={"agent_id": agent_id, "session_id": session_id, "wait": str(wait).lower()},
+            )
+        except AgentScopeError as exc:
+            if exc.status_code != 404:
+                raise
+            return False
+        return True
+
+    async def stage_session_messages(self, agent_id: str, session_id: str, messages: list[dict]) -> None:
         await self.request(
-            "POST",
-            "/nexus/record-message",
-            json={
-                "session_id": session_id,
-                "message_id": message_id,
-                "name": name,
-                "text": text,
-                "user_id": self.user_id,
-                "metadata": metadata or {},
-            },
+            "POST", "/nexus/session-messages",
+            json={"agent_id": agent_id, "session_id": session_id, "messages": messages},
         )
 
     async def list_user_mcp(self) -> list[dict[str, str]]:
@@ -434,22 +433,6 @@ class AgentScopeClient:
         if isinstance(cursor, str) and cursor:
             return cursor
         return None
-
-    async def iter_session_messages(self, agent_id: str, session_id: str):
-        before = None
-        while True:
-            params = {"agent_id": agent_id, "limit": 200}
-            if before:
-                params["before"] = before
-            payload = (await self.request("GET", f"/sessions/{session_id}/messages", params=params)).json()
-            messages = payload["messages"]
-            for message in messages:
-                yield message
-            if not payload.get("has_more"):
-                return
-            if not messages or not messages[0].get("id") or messages[0]["id"] == before:
-                raise AgentScopeError("AgentScope 历史游标无法继续")
-            before = messages[0]["id"]
 
     async def read_session(self, agent_id: str, session_id: str) -> tuple[list[dict[str, Any]], str]:
         """同一页里取出消息和重放游标，避免历史和流各读一次中间漏事件。"""

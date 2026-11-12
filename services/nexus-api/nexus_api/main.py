@@ -40,8 +40,6 @@ from .chat_attachments import (
     ATTACHMENT_ID,
     ATTACHMENT_PREFIX,
     MessageContent,
-    assert_attachment_cutover,
-    attachment_content,
     disposition,
     expire_attachments,
     file_name,
@@ -211,7 +209,7 @@ class ConversationBody(BaseModel):
 
 
 class MessageBody(MessageContent):
-    client_id: str = Field(default="", max_length=64)
+    client_id: str = Field(min_length=1, max_length=64, pattern=r"^[\w-]+$")
 
 
 class ChannelBody(BaseModel):
@@ -668,26 +666,6 @@ def lines(values: list[str]) -> list[str]:
     return cleaned
 
 
-async def sync_employee_skills(
-    client: AgentScopeClient,
-    employee: dict[str, Any],
-    session_ids: list[str],
-    connection,
-    store: ResourceStore,
-    previous: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """把员工绑定的 Skill/MCP 收敛到会话。旧调用点共享这一入口。"""
-
-    return await sync_employee_resources(
-        client,
-        employee,
-        session_ids,
-        connection,
-        store,
-        previous=previous,
-    )
-
-
 async def prepare_employee_session(client, employee, session_ids, connection, store):
     """只有绑定资源在本会话全部就绪，才允许接收新的推理输入。"""
     desired_skills = employee.get("skills") or []
@@ -728,7 +706,7 @@ async def prepare_employee_session(client, employee, session_ids, connection, st
                 break
     if ready:
         return {"ok": True, "status": "applied"}
-    result = await sync_employee_skills(client, employee, session_ids, connection, store)
+    result = await sync_employee_resources(client, employee, session_ids, connection, store)
     if not result["ok"]:
         raise AgentScopeError(f"员工会话资源未就绪：{result['detail']}", 503)
     return result
@@ -783,7 +761,6 @@ def create_app() -> FastAPI:
         root = data_dir()
         root.mkdir(parents=True, exist_ok=True)
         init_schema()
-        assert_attachment_cutover()
         app.state.resources = ResourceStore(root)
         app.state.agentscope = AgentScopeClient(
             os.environ.get("NEXUS_AGENTSCOPE_BASE_URL") or None,
@@ -1019,7 +996,7 @@ def create_app() -> FastAPI:
                     knowledge_base_ids=bound_knowledge(employee),
                 )
             current = {**employee, "agentscope_agent_id": agent_id, "mailbox_session_id": mailbox}
-            resources = await sync_employee_skills(client, current, [mailbox], connection, store)
+            resources = await sync_employee_resources(client, current, [mailbox], connection, store)
             return {
                 "ok": True,
                 "agent_id": agent_id,
@@ -1155,7 +1132,6 @@ def create_app() -> FastAPI:
         employee,
         channel_id: str,
         name: str,
-        store: ResourceStore,
     ) -> str:
         """群成员会话只绑定还是空的那一行。并发时使用先写入的那一个。"""
 
@@ -1189,7 +1165,6 @@ def create_app() -> FastAPI:
                 session_id,
                 UNATTENDED_PERMISSION,
             )
-            await sync_employee_skills(client, employee, [session_id], connection, store)
             connection.execute(
                 sql_text(
                     """
@@ -1320,7 +1295,7 @@ def create_app() -> FastAPI:
         results: list[dict[str, Any]] = []
         for employee in bound_employees(connection, field, ref):
             results.append(
-                await sync_employee_skills(
+                await sync_employee_resources(
                     client,
                     employee,
                     employee_session_ids(connection, employee),
@@ -2095,7 +2070,7 @@ def create_app() -> FastAPI:
                     )
             except AgentScopeError as exc:
                 raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-        resource_sync = await sync_employee_skills(
+        resource_sync = await sync_employee_resources(
             client,
             employee,
             session_ids(connection, employee),
@@ -2158,6 +2133,14 @@ def create_app() -> FastAPI:
         owner_id: str = Depends(require_owner),
         connection=Depends(database),
     ):
+        if conversation_id:
+            async with await conversation_lock(f"send:{conversation_id}"):
+                return await store_attachment(
+                    key, request, name, conversation_id, channel_id, owner_id, connection,
+                )
+        return await store_attachment(key, request, name, conversation_id, channel_id, owner_id, connection)
+
+    async def store_attachment(key, request, name, conversation_id, channel_id, owner_id, connection):
         if bool(conversation_id) == bool(channel_id) or not re.fullmatch(ATTACHMENT_ID, key):
             raise HTTPException(422, "需要有效的附件标识和唯一作用域")
         client = client_of(request)
@@ -2237,6 +2220,12 @@ def create_app() -> FastAPI:
         try:
             response = await upstream.__aenter__()
         except AgentScopeError as exc:
+            if exc.status_code == 410:
+                connection.execute(
+                    sql_text("UPDATE t_nexus_attachment_refs SET linked=-1 WHERE id=:id"), {"id": key},
+                )
+                connection.commit()
+                raise HTTPException(404, "附件不存在") from exc
             raise HTTPException(exc.status_code, exc.detail) from exc
 
         async def chunks():
@@ -2505,26 +2494,24 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=409, detail="该员工已禁用")
         if not body.text.strip() and not body.attachment_ids:
             raise HTTPException(status_code=400, detail="请输入消息或添加附件")
-        message_id = new_id("msg")
-        if body.client_id:
-            identity = json.dumps([conversation_id, owner_id, body.client_id], ensure_ascii=False).encode()
-            message_id = f"msg_{hashlib.sha256(identity).hexdigest()[:32]}"
+        identity = json.dumps([conversation_id, owner_id, body.client_id], ensure_ascii=False).encode()
+        message_id = f"msg_{hashlib.sha256(identity).hexdigest()[:32]}"
         canonical = json.dumps(
             [[block.text for block in body.content], body.attachment_ids], ensure_ascii=False,
         ).encode()
-        payload = json.dumps({"digest": hashlib.sha256(canonical).hexdigest()})
+        digest = hashlib.sha256(canonical).hexdigest()
         async with await conversation_lock(f"send:{conversation_id}"):
             connection.commit()
             return await dispatch_private(
-                conversation_id, owner_id, request, connection, body, employee, message_id, payload,
+                conversation_id, owner_id, request, connection, body, employee, message_id, digest,
             )
 
     async def dispatch_private(
-        conversation_id, owner_id, request, connection, body, employee, message_id, payload,
+        conversation_id, owner_id, request, connection, body, employee, message_id, digest,
     ):
         row = owned_conversation(connection, conversation_id, owner_id)
         receipt = private_receipt(connection, message_id)
-        if receipt and receipt["native_json"] != payload:
+        if receipt and json.loads(receipt["native_json"])["digest"] != digest:
             raise HTTPException(409, "同一消息标识已用于不同的正文或附件")
         attachments = load_attachments(
             connection, body.attachment_ids, scope_kind="private",
@@ -2556,6 +2543,18 @@ def create_app() -> FastAPI:
         else:
             try:
                 session_id = await private_session(connection, client, row, employee)
+                if receipt and json.loads(receipt["native_json"])["session_id"] != session_id:
+                    raise HTTPException(409, "原会话的投递结果未确认，请确认后以新消息发送")
+                agent_id = employee["agentscope_agent_id"]
+                known = receipt and await client.session_message_accepted(agent_id, session_id, message_id)
+                if not known and attachments:
+                    workspace_id = row["workspace_id"] or f"ws-{conversation_id}"
+                    missing = await verify_private_attachments(
+                        connection, client, agent_id, session_id, workspace_id, body.attachment_ids,
+                    )
+                    connection.commit()
+                    if missing:
+                        raise HTTPException(404, "附件文件已失效，请重新上传")
                 if message["text"] and row["name"] in {"新对话", "私聊"}:
                     title = message["text"] if len(message["text"]) <= 20 else message["text"][:20] + "…"
                     connection.execute(
@@ -2573,7 +2572,6 @@ def create_app() -> FastAPI:
                     connection,
                     request.app.state.resources,
                 )
-                content = attachment_content(body.blocks(), visible, message["id"])
                 peers = await peer_replies_for_conversation(connection, client, conversation_id)
                 context = []
                 if peers:
@@ -2608,12 +2606,15 @@ def create_app() -> FastAPI:
                     insert_record(connection, "t_nexus_messages", {
                         "id": message_id, "conversation_id": conversation_id, "sender": "user",
                         "text": "", "attachments_json": json.dumps(body.attachment_ids),
-                        "native_json": payload, "speaker_uid": owner_id, "client_id": body.client_id or None,
+                        "native_json": json.dumps({"digest": digest, "session_id": session_id}),
+                        "speaker_uid": owner_id, "client_id": body.client_id,
                         "created_at": message["created_at"],
                     }, ignore_keys=["id"])
                     saved = private_receipt(connection, message_id, lock=True)
-                    if saved["native_json"] != payload:
+                    if json.loads(saved["native_json"])["digest"] != digest:
                         raise HTTPException(409, "同一消息标识已用于不同的正文或附件")
+                    if json.loads(saved["native_json"])["session_id"] != session_id:
+                        raise HTTPException(409, "原会话的投递结果未确认，请确认后以新消息发送")
                     link_attachments(connection, attachments)
                     connection.commit()
                     message["created_at"] = saved["created_at"]
@@ -2623,17 +2624,20 @@ def create_app() -> FastAPI:
                             "message": message,
                             "agentscope": {"accepted": True, "detail": "", "session_id": session_id},
                         }
-                await client.trigger_chat(
-                    employee["agentscope_agent_id"],
-                    session_id,
-                    content,
-                    owner_id,
-                    verified_uid=owner_id,
-                    attachments=visible,
-                    display_text=message["text"],
-                    message_id=message["id"],
-                    context=context,
-                )
+                if not known:
+                    await client.trigger_chat(
+                        employee["agentscope_agent_id"],
+                        session_id,
+                        body.blocks(),
+                        owner_id,
+                        verified_uid=owner_id,
+                        attachments=visible,
+                        display_text=message["text"],
+                        message_id=message["id"],
+                        context=context,
+                    )
+                    if not await client.session_message_accepted(agent_id, session_id, message_id, wait=True):
+                        raise HTTPException(503, "AgentScope 尚未确认消息已落盘，请重试原消息")
                 connection.execute(
                     sql_text("UPDATE t_nexus_messages SET accepted=1 WHERE id=:id"), {"id": message_id},
                 )
@@ -2656,28 +2660,57 @@ def create_app() -> FastAPI:
         async with await conversation_lock(f"send:{conversation_id}"):
             return await restore_private(conversation_id, owner_id, request, connection)
 
+    def private_attachment_ids(connection, conversation_id):
+        return list(connection.execute(sql_text(
+            "SELECT id FROM t_nexus_attachment_refs WHERE scope_kind='private' AND scope_id=:c "
+            "AND sha256<>'' AND linked>=0 ORDER BY id"
+        ), {"c": conversation_id}).scalars())
+
+    async def verify_private_attachments(connection, client, agent_id, session_id, workspace_id, keys):
+        connection.commit()
+        missing = []
+        for offset in range(0, len(keys), 128):
+            response = await client.request(
+                "POST", f"{ATTACHMENT_PREFIX}/verify",
+                json={"agent_id": agent_id, "session_id": session_id, "workspace_id": workspace_id,
+                      "keys": keys[offset:offset + 128]},
+            )
+            missing.extend(response.json()["missing"])
+        if missing:
+            connection.execute(sql_text("UPDATE t_nexus_attachment_refs SET linked=-1 WHERE id=:id"),
+                               [{"id": key} for key in missing])
+        return missing
+
     async def restore_private(conversation_id, owner_id, request, connection):
         row = owned_conversation(connection, conversation_id, owner_id)
         employee = load_employee(connection, row["employee_id"])
         workspace_id = row["workspace_id"]
-        if not employee["agentscope_agent_id"] or not workspace_id:
+        agent_id = employee["agentscope_agent_id"]
+        if not agent_id or not workspace_id:
             raise HTTPException(status_code=409, detail="这条私聊还没有可复用的 workspace")
         client = client_of(request)
         existing = row["agentscope_session_id"]
         if existing:
             try:
-                await client.session_status(employee["agentscope_agent_id"], existing)
+                await client.session_status(agent_id, existing)
             except AgentScopeError as exc:
                 if exc.status_code != 404:
                     raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
             else:
                 try:
+                    missing = await verify_private_attachments(
+                        connection, client, agent_id, existing, workspace_id,
+                        private_attachment_ids(connection, conversation_id),
+                    )
+                    connection.commit()
                     await prepare_employee_session(
                         client, employee, [existing], connection, request.app.state.resources,
                     )
                 except AgentScopeError as exc:
                     raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-                return {"session_id": existing, "workspace_id": workspace_id}
+                return {
+                    "session_id": existing, "workspace_id": workspace_id, "missing_attachment_ids": missing,
+                }
         try:
             session_id = await client.create_session(
                 employee["agentscope_agent_id"],
@@ -2685,6 +2718,11 @@ def create_app() -> FastAPI:
                 workspace_id,
                 chat_model_config=await model_for(client, employee),
                 knowledge_base_ids=bound_knowledge(employee),
+            )
+            await client.set_permission_mode(agent_id, session_id, UNATTENDED_PERMISSION)
+            missing = await verify_private_attachments(
+                connection, client, agent_id, session_id, workspace_id,
+                private_attachment_ids(connection, conversation_id),
             )
         except AgentScopeError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
@@ -2700,9 +2738,10 @@ def create_app() -> FastAPI:
         )
         connection.execute(
             sql_text(
-                "UPDATE t_nexus_attachment_refs SET session_id=:s WHERE scope_kind='private' AND scope_id=:c"
+                "UPDATE t_nexus_attachment_refs SET session_id=:s,agent_id=:a "
+                "WHERE scope_kind='private' AND scope_id=:c"
             ),
-            {"s": session_id, "c": conversation_id},
+            {"s": session_id, "a": agent_id, "c": conversation_id},
         )
         connection.commit()
         try:
@@ -2715,7 +2754,7 @@ def create_app() -> FastAPI:
             )
         except AgentScopeError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-        return {"session_id": session_id, "workspace_id": workspace_id}
+        return {"session_id": session_id, "workspace_id": workspace_id, "missing_attachment_ids": missing}
 
     @app.get("/api/v1/conversations/{conversation_id}/stream")
     async def stream_private(
@@ -2723,7 +2762,6 @@ def create_app() -> FastAPI:
         request: Request,
         owner_id: str = Depends(require_owner),
         after: str | None = None,
-        raw: bool = False,
     ):
         with connect() as connection:
             row = owned_conversation(connection, conversation_id, owner_id)
@@ -2735,7 +2773,6 @@ def create_app() -> FastAPI:
             employee["agentscope_agent_id"],
             row["agentscope_session_id"],
             stream_cursor(after),
-            raw=raw,
         )
 
     app.state.collaboration = Collaboration(
@@ -2856,22 +2893,10 @@ def create_app() -> FastAPI:
         agent_id: str,
         session_id: str,
         after: str | None = None,
-        raw: bool = False,
     ) -> StreamingResponse:
         if not client.configured:
             raise HTTPException(status_code=503, detail="AgentScope 未连接，没有生成回复")
-        if after is None and not raw:
-            # 旧页面只关心“此刻之后”的事件，用最新 checkpoint 作为起点。
-            # raw 客户端（聊天岛）自己带历史游标；没有游标时（会话还没有落盘
-            # 消息）必须让上游从头回放，不能把起点提升成最新 checkpoint——
-            # 那会整轮跳过刚完成、还不在历史快照里的回复。
-            cursor = await client.latest_event_cursor(agent_id, session_id)
-            if cursor and STREAM_CURSOR.fullmatch(cursor):
-                after = cursor
-
         async def generate():
-            started = 0
-            pending = b""
             try:
                 async with client.stream_session(agent_id, session_id, after) as response:
                     if response.status_code >= 400:
@@ -2883,20 +2908,7 @@ def create_app() -> FastAPI:
                         yield f"data: {payload}\n\n"
                         return
                     async for chunk in response.aiter_bytes():
-                        pending += chunk
-                        frames, pending = split_sse(pending)
-                        for frame in frames:
-                            yield frame + b"\n\n"
-                            if raw:
-                                # 原生客户端自己判断一轮是否结束；这里不注入收尾事件，
-                                # 也不因为 REPLY_END 关闭连接，否则第二条回复收不到。
-                                continue
-                            started, terminal, close = observe_stream_event(started, sse_payload(frame))
-                            if terminal is not None:
-                                encoded = json.dumps(terminal, ensure_ascii=False)
-                                yield f"data: {encoded}\n\n".encode()
-                            if close:
-                                return
+                        yield chunk
             except AgentScopeError as exc:
                 payload = json.dumps(
                     {"type": "NEXUS_UPSTREAM_ERROR", "detail": exc.detail},
@@ -3128,31 +3140,6 @@ def sse_payload(frame: bytes) -> dict[str, Any] | None:
     return None
 
 
-def observe_stream_event(
-    started: int,
-    payload: dict[str, Any] | None,
-) -> tuple[int, dict[str, Any] | None, bool]:
-    """REPLY_END 是 AgentScope 暴露的一轮结束信号。
-
-    重放日志里可能只剩上一轮的 REPLY_END。只有本连接里见过 REPLY_START 的那一轮结束时，
-    才额外发出 NEXUS_RUN_FINISHED 并关掉这次 SSE。
-    """
-    if not payload:
-        return started, None, False
-    kind = payload.get("type")
-    if kind == "REPLY_START":
-        return started + 1, None, False
-    if kind == "REPLY_END" and started > 0:
-        started -= 1
-        terminal = {
-            "type": "NEXUS_RUN_FINISHED",
-            "reply_id": payload.get("reply_id"),
-            "finished_reason": payload.get("finished_reason"),
-        }
-        return started, terminal, started == 0
-    return started, None, False
-
-
 def team_peers(views: list[dict[str, Any]], leader_session_id: str) -> list[tuple[str, str, str]]:
     """AgentInvite 写进 team 的成员会话。leader 自己的会话不重复返回。"""
 
@@ -3218,7 +3205,7 @@ async def capture_im_reply(
     if not client.configured or not agent_id or not conversation_key or not session_id:
         return
     known = known_reply_ids or set()
-    started = 0
+    started: set[str] = set()
     pending = b""
     try:
         async with client.stream_session(agent_id, session_id, after=after) as response:
@@ -3228,11 +3215,15 @@ async def capture_im_reply(
                 pending += chunk
                 frames, pending = split_sse(pending)
                 for frame in frames:
-                    started, terminal, close = observe_stream_event(started, sse_payload(frame))
-                    if not close or not terminal:
+                    event = sse_payload(frame)
+                    if not event:
                         continue
-                    reply_id = str(terminal.get("reply_id") or "")
-                    if reply_id and reply_id in known:
+                    reply_id = str(event.get("reply_id") or "")
+                    if not reply_id or reply_id in known:
+                        continue
+                    if event.get("type") == "REPLY_START":
+                        started.add(reply_id)
+                    if event.get("type") != "REPLY_END" or reply_id not in started:
                         continue
                     body = await assistant_reply_text(client, agent_id, session_id, reply_id)
                     if body.strip():

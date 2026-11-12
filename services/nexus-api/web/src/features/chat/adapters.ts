@@ -85,7 +85,7 @@ export class PrivateChatAdapter implements ChatAdapter {
     emit({ type: "activity", phase: this.running ? "streaming" : "idle" });
     if (!this.sessionId) return;
     while (!signal.aborted) {
-      const params = new URLSearchParams({ raw: "1" });
+      const params = new URLSearchParams();
       if (this.cursor) params.set("after", this.cursor);
       try {
         await readEventStream(`/api/v1/conversations/${this.conversation.id}/stream?${params}`, signal, raw => {

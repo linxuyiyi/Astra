@@ -43,8 +43,9 @@ def test_workspace_attachments_real_storage(tmp_path, monkeypatch):
     async def scenario():
         storage = AsyncSQLAlchemyStorage(f"sqlite+aiosqlite:///{tmp_path / 'agent.db'}")
         manager = ScheduleWorkspaceManager(str(tmp_path / "workspace"), isolation=IsolationPolicy.PER_SESSION)
-        app = create_app(storage=storage, workspace_manager=manager, message_bus=InMemoryMessageBus())
-        register_workspace_attachments(app, storage)
+        bus = InMemoryMessageBus()
+        app = create_app(storage=storage, workspace_manager=manager, message_bus=bus)
+        register_workspace_attachments(app, storage, bus)
         app.add_middleware(AgentServiceKeyMiddleware)
         async with app.router.lifespan_context(app):
             channel_id = "ch_" + "3" * 12
@@ -74,21 +75,29 @@ def test_workspace_attachments_real_storage(tmp_path, monkeypatch):
                     assert hashlib.file_digest(file, "sha256").hexdigest() == expected
                 assert (await client.put(path, params=group, content=b"changed")).status_code == 409
                 assert (await client.put(path, params=group, content=binary)).status_code == 200
-                assert (await client.get(path, params=location)).status_code == 404
+                assert (await client.get(path, params=location)).status_code == 410
                 assert (await client.get(path, params=group, headers={"X-User-ID": "other"})).status_code == 404
                 assert (await client.get(path, params={**group, "agent_id": "employee"})).status_code == 404
 
                 params = {**group, "target_agent_id": "employee", "target_session_id": a.id}
                 assert (await client.post(path + "/copy", params=params)).status_code == 200
                 assert (await client.post(path + "/copy", params=params)).json() == {"copied": True}
-                assert (await client.get(path, params=other)).status_code == 404
+                assert (await client.get(path, params=other)).status_code == 410
+                check = {**location, "workspace_id": f"ws-{channel_id}-employee", "keys": [path.rsplit("/", 1)[-1]]}
+                assert (await client.post(f"{prefix}/verify", json=check)).json() == {"missing": []}
+                assert (await client.post(f"{prefix}/verify", json={**check, "workspace_id": "chat-b"})).status_code == 409
+                missing = "att_" + "f" * 32
+                assert (await client.post(f"{prefix}/{missing}/copy", params=params)).status_code == 410
+                assert (await client.post(f"{prefix}/verify", json={**check, "keys": [missing]})).json() == {
+                    "missing": [missing],
+                }
                 data = (await client.get(path, params=location)).content
                 assert hashlib.sha256(data).hexdigest() == expected
                 assert (await client.put(f"{prefix}/att_{'b' * 32}", params=group, content=b"")).status_code == 400
                 assert (await client.put(
                     f"{prefix}/att_{'b' * 32}", params=group, content=binary + b"!",
                 )).status_code == 413
-                assert (await client.get(f"{prefix}/att_{'b' * 32}", params=group)).status_code == 404
+                assert (await client.get(f"{prefix}/att_{'b' * 32}", params=group)).status_code == 410
                 assert not list(original.parent.glob(".upload-*"))
 
                 employee_workspace = await app.state.workspace_service.resolve("nexus", **location)
@@ -96,7 +105,7 @@ def test_workspace_attachments_real_storage(tmp_path, monkeypatch):
                 directory = Path(employee_workspace.workdir) / "attachments"
                 symlink_id = "att_" + "e" * 32
                 (directory / symlink_id).symlink_to(original)
-                assert (await client.get(f"{prefix}/{symlink_id}", params=location)).status_code == 404
+                assert (await client.get(f"{prefix}/{symlink_id}", params=location)).status_code == 410
 
                 retire = f"{prefix}/group-member"
                 scope = {"channel_id": channel_id, "employee_id": "employee"}

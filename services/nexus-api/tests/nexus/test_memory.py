@@ -12,6 +12,7 @@ from sqlalchemy import text as sql_text
 
 from nexus_api.agentscope import AgentScopeClient
 from nexus_api.main import create_app
+from tests.nexus.agent_transport import AgentChatTransport
 from tests.nexus.clients import TestClient
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -114,6 +115,7 @@ def test_memory_uses_the_workspace_and_a_failure_stays_out_of_the_chat():
 def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
     session_missing = False
+    saved_file, missing_file = "att_" + "a" * 32, "att_" + "b" * 32
     session_bodies: list[dict] = []
     agent_bodies: list[dict] = []
     sessions = {"session-a": [], "session-b": [], "session-rebind": []}
@@ -132,6 +134,11 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
             return httpx.Response(201, json={"session_id": f"session-{name}"})
         if request.method == "GET" and request.url.path.endswith("/status"):
             return httpx.Response(404 if session_missing else 200, json={"status": "idle"})
+        if request.url.path == "/nexus/workspace-attachments/verify":
+            body = json.loads(request.content)
+            assert body["workspace_id"] == "ws-conv-reused"
+            assert body["keys"] == [saved_file, missing_file]
+            return httpx.Response(200, json={"missing": [missing_file] if session_missing else []})
         if request.url.path == "/chat/":
             return httpx.Response(200, json={"status": "started", "session_id": "ignored"})
         if request.method == "GET" and request.url.path.endswith("/messages"):
@@ -148,7 +155,7 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
         test_client.app.state.agentscope = AgentScopeClient(
             "http://agentscope.test",
             "nexus",
-            httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://agentscope.test"),
+            httpx.AsyncClient(transport=AgentChatTransport(handler), base_url="http://agentscope.test"),
         )
         employee = test_client.post("/api/v1/employees", json=employee_body()).json()["employee"]
         assert agent_bodies[0]["chat_config"]["context_config"] == {
@@ -169,12 +176,12 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
         opened = test_client.post(
             f"/api/v1/conversations/{first['id']}/messages",
             headers={"X-Verified-UID": "u1"},
-            json={"text": "只属于甲"},
+            json={"client_id": "test-send-179", "text": "只属于甲"},
         )
         test_client.post(
             f"/api/v1/conversations/{second['id']}/messages",
             headers={"X-Verified-UID": "u2"},
-            json={"text": "只属于乙"},
+            json={"client_id": "test-send-184", "text": "只属于乙"},
         )
         private = [item for item in session_bodies if item.get("workspace_id")]
         assert len(private) == 2
@@ -183,7 +190,7 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
         again = test_client.post(
             f"/api/v1/conversations/{first['id']}/messages",
             headers={"X-Verified-UID": "u1"},
-            json={"text": "还是甲"},
+            json={"client_id": "test-send-193", "text": "还是甲"},
         )
         assert again.json()["agentscope"]["session_id"] == opened.json()["agentscope"]["session_id"]
         session_id = opened.json()["agentscope"]["session_id"]
@@ -214,6 +221,15 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
             sql_text("UPDATE t_nexus_conversations SET workspace_id = :p0 WHERE id = :p1"),
             {"p0": "ws-conv-reused", "p1": first["id"]},
         )
+        from nexus_api.sql import insert_record
+
+        for key in (saved_file, missing_file):
+            insert_record(connection, "t_nexus_attachment_refs", {
+                "id": key, "owner_uid": "u1", "scope_kind": "private", "scope_id": first["id"],
+                "agent_id": employee["agentscope_agent_id"], "session_id": session_id, "name": "file.txt",
+                "media_type": "text/plain", "size": 1, "sha256": "f" * 64, "linked": 1,
+                "created_at": "2026-11-12T00:00:00+00:00",
+            }, ignore_keys=["id"])
         connection.commit()
         connection.close()
         original_count = len(session_bodies)
@@ -221,7 +237,9 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
             f"/api/v1/conversations/{first['id']}/rebind",
             headers={"X-Verified-UID": "u1"},
         )
-        assert preserved.json() == {"session_id": session_id, "workspace_id": "ws-conv-reused"}
+        assert preserved.json() == {
+            "session_id": session_id, "workspace_id": "ws-conv-reused", "missing_attachment_ids": [],
+        }
         assert len(session_bodies) == original_count
         session_missing = True
         rebound = test_client.post(
@@ -229,6 +247,16 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
             headers={"X-Verified-UID": "u1"},
         )
         assert rebound.status_code == 200, rebound.text
-        assert rebound.json() == {"session_id": "session-rebind", "workspace_id": "ws-conv-reused"}
+        assert rebound.json() == {
+            "session_id": "session-rebind", "workspace_id": "ws-conv-reused",
+            "missing_attachment_ids": [missing_file],
+        }
         assert session_bodies[-1]["workspace_id"] == "ws-conv-reused"
         assert rebound.json()["session_id"] != session_id
+        with connect(tmp_path / "nexus.db") as db:
+            rows = db.execute(sql_text(
+                "SELECT id,session_id,linked FROM t_nexus_attachment_refs ORDER BY id",
+            )).all()
+        assert rows == [(saved_file, "session-rebind", 1), (missing_file, "session-rebind", -1)]
+        response = test_client.get(f"/api/v1/attachments/{missing_file}", headers={"X-Verified-UID": "u1"})
+        assert response.status_code == 404

@@ -1,7 +1,6 @@
 """Nexus 只保存聊天附件的 Workspace 引用。"""
 
 import asyncio
-import json
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import PurePath
@@ -10,7 +9,7 @@ from urllib.parse import quote
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 
 from .db import connect
 
@@ -28,18 +27,6 @@ def file_name(value):
 def disposition(name, mime):
     kind = "inline" if mime in PREVIEW_TYPES else "attachment"
     return f"{kind}; filename*=UTF-8''{quote(name, safe='')}"
-
-
-def assert_attachment_cutover():
-    with connect() as db:
-        if not inspect(db).has_table("t_nexus_attachments"):
-            return
-        migrated = db.execute(
-            text("SELECT value FROM t_nexus_settings WHERE `key`=:key"),
-            {"key": "workspace_attachments_migrated"},
-        ).scalar()
-        if migrated != "1":
-            raise RuntimeError("旧附件尚未迁移，请先执行 scripts.migrate_workspace_attachments")
 
 
 def reference(db, key):
@@ -80,19 +67,6 @@ def link_attachments(db, rows):
         )
         if not result.rowcount:
             raise HTTPException(409, "附件已过期，请重新上传")
-
-
-def attachment_content(blocks, attachments, message_id):
-    if not attachments:
-        return blocks
-    names = "\n".join(
-        f"attachments/{item['id']} {json.dumps(item['name'], ensure_ascii=False)} ({item['type']})"
-        for item in attachments
-    )
-    label = f"消息 {message_id} 的会话附件（按需调用 read_chat_attachment）"
-    return [*blocks, {
-        "type": "text", "id": f"nexus-attachments-{message_id}", "text": f"{label}：\n{names}",
-    }]
 
 
 def present_private_message(message):

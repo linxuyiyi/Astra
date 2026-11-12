@@ -10,16 +10,7 @@ import json
 import os
 
 from fastapi import HTTPException, Request
-from pydantic import BaseModel, Field, field_validator
-
-
-class RecordMessageBody(BaseModel):
-    session_id: str
-    message_id: str
-    name: str = "user"
-    text: str = ""
-    user_id: str = "nexus"
-    metadata: dict = Field(default_factory=dict)
+from pydantic import BaseModel, field_validator
 
 
 class TaskHintBody(BaseModel):
@@ -82,31 +73,6 @@ async def finish_event(event_id: str | int | None, *, delivered: bool) -> None:
             _seen_events.pop(next(iter(_seen_events)))
 
 
-def register_record_message(app, storage, message_bus, keys, msg_cls) -> None:
-    @app.post("/nexus/record-message")
-    async def record_message(body: RecordMessageBody) -> dict[str, bool]:
-        if not body.session_id.strip() or not body.message_id.strip():
-            raise HTTPException(status_code=422, detail="缺少记录会话或消息")
-        message = msg_cls(
-            id=body.message_id,
-            name=body.name or "user",
-            role="user",
-            content=[{"type": "text", "text": body.text}],
-            metadata=body.metadata,
-        )
-        try:
-            await write_record_message(
-                storage,
-                message_bus,
-                message,
-                user_id=body.user_id or "nexus",
-                session_id=body.session_id,
-                keys=keys,
-            )
-        except RecordRunning as exc:
-            raise HTTPException(status_code=409, detail="会话正在运行，没有写入") from exc
-        return {"ok": True}
-
 
 def register_task_hint(app, deliver) -> None:
     """注册真实唤醒路由。Request 必须在模块全局里，延迟注解才能解析。"""
@@ -145,9 +111,6 @@ REMOVED_AGENT_TOOLS = (
     "ScheduleView",
 )
 
-
-class RecordRunning(RuntimeError):
-    """记录 Session 上已有运行，纯写入直接拒绝。"""
 
 
 def select_invite_session(sessions, mailbox_session_id: str | None):
@@ -380,19 +343,6 @@ async def memory_middlewares(user_id: str, agent_id: str, session_id: str, works
     return attach_memory(workspace, key=agent_id or workdir)
 
 
-async def write_record_message(storage, message_bus, message, *, user_id: str, session_id: str, keys) -> None:
-    """checkpoint 锁下只 upsert。不调用 ChatService.run，也不占用运行锁。"""
-
-    if await message_bus.is_locked(keys.session_lock(session_id)):
-        raise RecordRunning(session_id)
-    async with message_bus.acquire_lock(keys.session_event_checkpoint_lock(session_id)):
-        await storage.upsert_message(user_id, session_id, message)
-    await message_bus.publish(
-        keys.session_events(session_id),
-        {"type": "record", "message_id": str(getattr(message, "id", "") or "")},
-    )
-
-
 def main() -> None:
     import agentscope.app._service._chat as chat_service
     import agentscope.app._service._realtime as realtime_service
@@ -402,7 +352,7 @@ def main() -> None:
     from agentscope.app._bus_ops import deliver_to_inbox
     from agentscope.app.hub import ClawSkillHub, GitHubMCPHub
     from agentscope.app._service._toolkit import get_toolkit
-    from agentscope.app.message_bus import MessageBusKeys, RedisMessageBus
+    from agentscope.app.message_bus import RedisMessageBus
     from agentscope.app.rag.blob_store import LocalBlobStore
     from agentscope.app.rag.knowledge_base_manager import CollectionPerKbManager
     from agentscope_sql import create_storage, guard_lifespan
@@ -410,7 +360,7 @@ def main() -> None:
     from agentscope.app.workspace_manager import (
         IsolationPolicy,
     )
-    from agentscope.message import HintBlock, Msg
+    from agentscope.message import HintBlock
     from agentscope.rag import QdrantStore
     from agentscope.permission import PermissionBehavior, PermissionDecision
     from agentscope.tool import FunctionTool
@@ -562,7 +512,7 @@ def main() -> None:
     register_schedule_resources(app)
     from workspace_attachments import register_workspace_attachments
 
-    register_workspace_attachments(app, storage)
+    register_workspace_attachments(app, storage, message_bus)
     app.add_middleware(AgentServiceKeyMiddleware)
     guard_lifespan(app)
     listen_host = os.environ.get("AGENTSCOPE_HOST", "0.0.0.0")
@@ -580,7 +530,9 @@ def main() -> None:
         )
 
     register_task_hint(app, deliver)
-    register_record_message(app, storage, message_bus, MessageBusKeys, Msg)
+    from session_messages import register_session_messages
+
+    register_session_messages(app, storage, message_bus)
 
     @app.get("/nexus/memory-status")
     async def nexus_memory_status(key: str = "") -> dict[str, str | bool | dict]:

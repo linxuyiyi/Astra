@@ -30,7 +30,7 @@ from app.runtime.maintenance import (
 )
 from app.runtime.occupancy import occupying_clause
 from app.runtime.runtime_context import RuntimeContextError, generate_runtime_context, resolve_runtime_context
-from app.schemas import TaskCreate, WorkerRead
+from app.schemas import TaskCreate, TaskRead, WorkerRead
 from app.services import TaskService
 
 
@@ -253,6 +253,37 @@ async def test_unknown_submission_waits_for_busy_native(setup_runtime):
         native.sessions[task.current_session_id]["status"] = "idle"
         await runtime.retry_submission(task.id)
         assert len(native.sent) == 1
+
+
+async def test_retry_submission_losing_race_returns_serializable_task(setup_runtime, monkeypatch):
+    _, _, native = setup_runtime
+    native.fail_send = True
+    async with SessionLocal() as db:
+        task = await create_task(db, setup_runtime)
+        runtime = RuntimeService(db)
+        task = await runtime.start(task.id)
+        task_id, outbound = task.id, task.pending_message_id
+        native.fail_send = False
+        lock_task = runtime.lock_task
+        locks = 0
+
+        async def lock_after_competing_retry(task_id):
+            nonlocal locks
+            locks += 1
+            if locks == 2:
+                # 提交已持久化、再次加锁前，另一消费者先完成同一条待提交消息。
+                async with SessionLocal() as other:
+                    await RuntimeService(other).retry_submission(task_id)
+            return await lock_task(task_id)
+
+        monkeypatch.setattr(runtime, "lock_task", lock_after_competing_retry)
+        result = await runtime.retry_submission(task_id)
+        response = TaskRead.model_validate(result)
+        assert response.id == task_id
+        assert response.last_message_id == outbound
+        assert response.pending_message_id is None
+        assert response.status == "RUNNING"
+        assert native.sent == [(response.current_session_id, outbound)]
 
 
 async def test_missing_native_session_waits_for_manual_restart(setup_runtime):

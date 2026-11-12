@@ -294,8 +294,13 @@ class RuntimeService:
                 await self.session.commit()
                 task = await self.lock_task(task_id)
                 if task.pending_message_id != outbound or task.current_session_id is None:
+                    # rollback 会把 ORM 实例属性置为过期，返回前重查，避免响应序列化触发懒加载。
                     await self.session.rollback()
-                    return task
+                    return await self.session.scalar(
+                        select(Task)
+                        .where(Task.id == task_id)
+                        .execution_options(populate_existing=True)
+                    )
                 session_id = task.current_session_id
                 await client.request(
                     "POST",

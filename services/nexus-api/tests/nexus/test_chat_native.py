@@ -50,7 +50,7 @@ def build_client(
         if path == "/sessions/":
             return httpx.Response(201, json={"session_id": "session-mailbox"})
         if path.endswith("/messages"):
-            status, payload = message_response
+            status, payload = message_response(request) if callable(message_response) else message_response
             return httpx.Response(status, json=payload)
         if path.endswith("/stream") and stream_sse is not None:
             return httpx.Response(200, content=stream_sse)
@@ -124,10 +124,57 @@ def test_native_history_keeps_content_blocks_and_running_state(tmp_path, monkeyp
 
         assert response.status_code == 200
         payload = response.json()
+        assert payload["session_id"] == "session-1"
         assert payload["event_cursor"] == "7-0"
         assert payload["is_running"] is True
-        assert payload["messages"][0]["content"][0]["type"] == "thinking"
-        assert payload["messages"][0]["content"][1]["name"] == "Grep"
+        assert payload["messages"] == [message]
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_private_history_pages_bound_upstream_reads_and_merge_peer_replies(tmp_path, monkeypatch):
+    def message(prefix, n):
+        return {
+            "id": f"{prefix}-{n}", "role": "assistant", "name": prefix,
+            "created_at": f"2026-11-18T01:00:{n:02d}Z", "metadata": {},
+            "content": [{"type": "text", "text": str(n)}],
+        }
+
+    rows = [message("native", n) for n in (1, 3, 6, 8)]
+    rows[2]["metadata"] = {"nexus_peer_context": True}
+    peers = [{"native": message("peer", n)} for n in (2, 4, 5, 7)]
+    reads = []
+
+    async def peers_of(*_):
+        return peers
+
+    def upstream(request):
+        before = request.url.params.get("before")
+        limit = int(request.url.params["limit"])
+        reads.append((before, limit))
+        end = next(i for i, row in enumerate(rows) if row["id"] == before) if before else len(rows)
+        start = max(0, end - limit)
+        return 200, {"messages": rows[start:end], "event_cursor": "" if before else "7-0",
+                     "is_running": False, "has_more": start > 0}
+
+    monkeypatch.setattr("nexus_api.main.peer_replies_for_conversation", peers_of)
+    client = build_client(tmp_path, monkeypatch, upstream)
+    try:
+        cid = create_conversation(client)
+        bind_session(cid, "session-1")
+        params = {"limit": 2}
+        ids = []
+        for _ in range(10):
+            response = client.get(f"/api/v1/conversations/{cid}/messages", headers=OWNER, params=params)
+            assert response.status_code == 200
+            page = response.json()
+            assert len(page["messages"]) <= 2
+            ids = [row["id"] for row in page["messages"]] + ids
+            if not page["before"]:
+                break
+            params["before"] = page["before"]
+        assert ids == ["native-1", "peer-2", "native-3", "peer-4", "peer-5", "peer-7", "native-8"]
+        assert all(limit == 2 and (before is None or before.startswith("native-")) for before, limit in reads)
     finally:
         client.__exit__(None, None, None)
 
@@ -167,7 +214,10 @@ def test_native_history_without_session_is_empty(tmp_path, monkeypatch):
             headers=OWNER,
         ).json()
 
-        assert payload == {"messages": [], "event_cursor": "", "is_running": False}
+        assert payload["messages"] == [] and payload["before"] is None
+        assert not payload["event_cursor"] and not payload["is_running"]
+        assert not payload["session_id"] and payload["viewer_id"] == OWNER["X-Owner-Id"]
+        assert payload["employee"]["name"] == "星河"
     finally:
         client.__exit__(None, None, None)
 
@@ -189,37 +239,7 @@ def test_native_history_surfaces_upstream_error(tmp_path, monkeypatch):
         client.__exit__(None, None, None)
 
 
-def test_conversation_binding_has_no_duplicate_history(tmp_path, monkeypatch):
-    """旧页面的扁平响应不能被原生接口顺带改掉。"""
-
-    remote = {
-        "id": "msg-1",
-        "name": "星河",
-        "role": "assistant",
-        "created_at": "2026-10-20T01:00:00Z",
-        "content": [{"type": "text", "text": "收到", "id": "b1", "created_at": ""}],
-    }
-    client = build_client(
-        tmp_path,
-        monkeypatch,
-        (200, {"messages": [remote], "event_cursor": "3-0", "is_running": False, "has_more": False}),
-    )
-    try:
-        conversation_id = create_conversation(client)
-        bind_session(conversation_id, "session-1")
-
-        flat = client.get(f"/api/v1/conversations/{conversation_id}", headers=OWNER).json()
-
-        assert flat["agentscope_session_id"] == "session-1"
-        assert "messages" not in flat
-        native = client.get(f"/api/v1/conversations/{conversation_id}/messages", headers=OWNER).json()
-        assert native["messages"] == [remote]
-        assert native["event_cursor"] == "3-0"
-    finally:
-        client.__exit__(None, None, None)
-
-
-def test_raw_stream_keeps_connection_and_skips_private_events(tmp_path, monkeypatch):
+def test_stream_keeps_connection_and_skips_private_events(tmp_path, monkeypatch):
     """原生流：两轮回复同一条连接，且不混入 NEXUS 私有收尾事件。"""
 
     sse = (
@@ -367,7 +387,7 @@ def test_busy_chat_is_an_explicit_conflict(tmp_path, monkeypatch):
         bind_session(cid, "session-1")
         response = client.post(
             f"/api/v1/conversations/{cid}/messages", headers=OWNER,
-            json={"client_id": "busy-message", "text": "不要丢弃"},
+            json={"client_id": "busy-message", "content": [{"type": "text", "text": "不要丢弃"}]},
         )
         assert response.status_code == 409
     finally:

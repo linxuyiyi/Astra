@@ -90,7 +90,7 @@ def test_session_receives_only_the_bound_knowledge_bases(tmp_path, monkeypatch):
         sent = client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"client_id": "test-send-93", "text": "怎么泄压"},
+            json={"client_id": "test-send-93", "content": [{"type": "text", "text": "怎么泄压"}]},
         )
         assert sent.status_code == 200, sent.text
         assert sessions["n"] == before + 1

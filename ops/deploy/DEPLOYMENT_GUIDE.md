@@ -1,6 +1,6 @@
-# Nexus·数字空间 V1.5.0 统一部署
+# Nexus·数字空间 V1.6.0 统一部署
 
-首次安装、代码升级和容器重启后的恢复使用同一入口。在目标 Linux 的 `v1.5.0` Git checkout 中执行：
+首次安装、代码升级和容器重启后的恢复使用同一入口。在目标 Linux 的 `v1.6.0` Git checkout 中执行：
 
 ```bash
 sudo bash ops/deploy/install_nexus.sh
@@ -92,4 +92,4 @@ Worker 的 Skill 按平台登记名称绑定。每次部署复制当前启用版
 
 v1.5.0 仅面向新的空库；Task 27 列、AgentWorker 26 列和全部表字段见 `docs/architecture/nexus-v1.5.0-schema.md`。Worker 的 OpenCode 路径及端口只由其本地运行配置管理，数据库不再保存。
 
-以下是 v1.4.9 的历史部署验证边界，不代表本次 v1.5.0 已在公司目标机重新验收：公司提供的镜像、数据库和代理兼容结论为当时的已验证输入。本次实现的数据库、Nginx、镜像冻结安装与真实 Linux Worker 结果见 `openspec/changes/nexus-intranet-deployment-corrections/verification.md`。隔离验收不等于公司现场整套平台重新部署或宿主机重启验收。开发辅助启动脚本和官方 UI 构建工具保留用于开发/制品维护，不是平台部署入口。
+以下是 v1.4.9 的历史部署验证边界，不代表本次 v1.6.0 已在公司目标机重新验收：公司提供的镜像、数据库和代理兼容结论为当时的已验证输入。本次实现的数据库、Nginx、镜像冻结安装与真实 Linux Worker 结果见 `openspec/changes/nexus-intranet-deployment-corrections/verification.md`。隔离验收不等于公司现场整套平台重新部署或宿主机重启验收。开发辅助启动脚本和官方 UI 构建工具保留用于开发/制品维护，不是平台部署入口。

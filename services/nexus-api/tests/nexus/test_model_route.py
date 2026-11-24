@@ -119,7 +119,7 @@ def test_route_is_injected_and_a_change_keeps_the_private_session(tmp_path, monk
         sent = client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"client_id": "test-send-122", "text": "你好"},
+            json={"client_id": "test-send-122", "content": [{"type": "text", "text": "你好"}]},
         )
         assert sent.status_code == 200, sent.text
         assert sessions["n"] == before + 1
@@ -143,8 +143,10 @@ def test_route_is_injected_and_a_change_keeps_the_private_session(tmp_path, monk
         assert patches
         patched = json.loads(patches[-1].content.decode())
         assert patched["chat_model_config"]["model"] == "gpt-4.1"
-        listed = client.get(f"/api/v1/employees/{employee_id}/conversations", headers=headers).json()
-        assert listed["items"][0]["agentscope_session_id"] == private_id
+        reopened = client.post(f"/api/v1/employees/{employee_id}/conversations", headers=headers, json={})
+        assert reopened.status_code == 200, reopened.text
+        assert reopened.json()["id"] == conversation["id"]
+        assert reopened.json()["agentscope_session_id"] == private_id
 
 
 def test_empty_route_refuses_a_vendor_session(tmp_path, monkeypatch):
@@ -283,7 +285,7 @@ def test_empty_route_without_bootstrap_does_not_create_a_session(tmp_path, monke
         sent = client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"client_id": "test-send-286", "text": "你好"},
+            json={"client_id": "test-send-286", "content": [{"type": "text", "text": "你好"}]},
         )
         assert sent.status_code == 422, sent.text
         assert "请先选择模型路由" in sent.json()["detail"]

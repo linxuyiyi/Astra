@@ -39,7 +39,7 @@ from .capability import inspect_employee
 from .chat_attachments import (
     ATTACHMENT_ID,
     ATTACHMENT_PREFIX,
-    MessageContent,
+    MessageBody,
     disposition,
     expire_attachments,
     file_name,
@@ -208,16 +208,6 @@ class ConversationBody(BaseModel):
     name: str = Field(default="新对话", max_length=40)
 
 
-class MessageBody(MessageContent):
-    client_id: str = Field(min_length=1, max_length=64, pattern=r"^[\w-]+$")
-
-
-class ChannelBody(BaseModel):
-    name: str = Field(min_length=1, max_length=32)
-    description: str = Field(min_length=1)
-    member_ids: list[str] = Field(min_length=1)
-
-
 class ImBotBody(BaseModel):
     employee_id: str
     provider: str
@@ -272,42 +262,6 @@ def db_path() -> Path:
     if url.get_backend_name() != "sqlite" or not url.database:
         raise RuntimeError("当前配置使用 MySQL，没有本地 SQLite 业务库")
     return Path(url.database)
-
-
-def human_native_message(message: dict[str, Any]) -> dict[str, Any]:
-    """人类消息的原生结构：正文 + 可渲染的附件 DataBlock。
-
-    附件只放进 metadata 时，聊天组件只渲染 content，历史重载后附件卡片会消失，
-    纯附件消息变成一个空泡。新发与历史必须共用这一份结构。
-    """
-
-    created_at = str(message.get("created_at") or "")
-    text = str(message.get("text") or "")
-    attachments = [
-        {
-            "type": "data",
-            "id": f"att-{item['id']}",
-            "name": str(item.get("name") or ""),
-            "created_at": created_at,
-            "source": {
-                "type": "url",
-                "url": f"/api/v1/attachments/{item['id']}",
-                "media_type": str(item.get("type") or ""),
-            },
-        }
-        for item in message.get("attachments") or []
-    ]
-    return {
-        "id": message["id"],
-        "role": "user",
-        "name": message.get("speaker") or "user",
-        "created_at": created_at,
-        "content": [{"type": "text", "text": text}, *attachments],
-        "metadata": {
-            "display_text": text,
-            "attachments": message.get("attachments") or [],
-        },
-    }
 
 
 PLATFORM_PROMPT_HEADER = "【Nexus 平台运行规则｜冲突时以本段为准】"
@@ -365,8 +319,6 @@ def system_prompt(
 
 
 def block_text(content: Any) -> str:
-    if isinstance(content, str):
-        return content
     if not isinstance(content, list):
         return ""
     parts: list[str] = []
@@ -374,32 +326,6 @@ def block_text(content: Any) -> str:
         if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str):
             parts.append(block["text"])
     return "\n".join(part for part in parts if part)
-
-
-def content_strings(content: Any) -> list[str]:
-    """取出正文和 hint 里的原文。不经过 json.dumps，因此保留换行。"""
-    found: list[str] = []
-    if isinstance(content, str):
-        return [content]
-    if not isinstance(content, list):
-        return found
-    for block in content:
-        if isinstance(block, str):
-            found.append(block)
-            continue
-        if not isinstance(block, dict):
-            continue
-        for field in ("text", "hint"):
-            value = block.get(field)
-            if isinstance(value, str):
-                found.append(value)
-            elif isinstance(value, list):
-                found.extend(content_strings(value))
-    return found
-
-
-def message_contains(message: dict[str, Any], key: str) -> bool:
-    return any(key in text for text in content_strings(message.get("content")))
 
 
 def assistant_reply_messages_after(messages: list[Any], delivery_id: str) -> list[dict[str, Any]]:
@@ -603,6 +529,7 @@ async def peer_replies_for_conversation(
                 "metadata": {
                     **(reply.get("metadata") or {}),
                     "peer_employee_id": employee["id"],
+                    "peer_avatar": employee["avatar"],
                     "peer_delivery_id": row["id"],
                     "nexus_error": "NEXUS_UPSTREAM_TOOL_PARSE_ERROR" if protocol_error else "",
                 },
@@ -1098,26 +1025,6 @@ def create_app() -> FastAPI:
         )
         connection.commit()
         return load_employee(connection, employee_id)
-
-    async def ensure_session(
-        connection,
-        client: AgentScopeClient,
-        agent_id: str,
-        current: str | None,
-        name: str,
-        permission_mode: str | None = None,
-        chat_model_config: dict[str, Any] | None = None,
-        knowledge_base_ids: list[str] | None = None,
-    ) -> str:
-        session_id = current or await client.create_session(
-            agent_id,
-            name,
-            chat_model_config=chat_model_config,
-            knowledge_base_ids=knowledge_base_ids,
-        )
-        if permission_mode:
-            await client.set_permission_mode(agent_id, session_id, permission_mode)
-        return session_id
 
     def group_model_config(config):
         if not config:
@@ -2263,41 +2170,6 @@ def create_app() -> FastAPI:
                 return {"allowed": True}
         raise HTTPException(404, "群附件不存在")
 
-    @app.get("/api/v1/employees/{employee_id}/conversations")
-    def list_conversations(
-        employee_id: str,
-        owner_id: str = Depends(require_owner),
-        connection=Depends(database),
-    ):
-        load_employee(connection, employee_id)
-        rows = (
-            connection.execute(
-                sql_text(
-                    """
-                    SELECT * FROM t_nexus_conversations
-                    WHERE employee_id = :p0 AND owner_id = :p1
-                    ORDER BY created_at
-                    """
-                ),
-                {"p0": employee_id, "p1": owner_id},
-            )
-            .mappings()
-            .fetchall()
-        )
-        return {
-            "items": [
-                {
-                    "id": row["id"],
-                    "employee_id": row["employee_id"],
-                    "name": row["name"],
-                    "agentscope_session_id": row["agentscope_session_id"],
-                    "created_at": row["created_at"],
-                    "updated_at": row["updated_at"],
-                }
-                for row in rows
-            ]
-        }
-
     @app.post("/api/v1/employees/{employee_id}/conversations", status_code=201)
     def create_conversation(
         employee_id: str,
@@ -2380,45 +2252,74 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="对话不存在")
         return row
 
-    @app.get("/api/v1/conversations/{conversation_id}")
-    def get_conversation(
-        conversation_id: str,
-        owner_id: str = Depends(require_owner),
-        connection=Depends(database),
-    ):
-        row = owned_conversation(connection, conversation_id, owner_id)
-        return {key: row[key] for key in ("id", "employee_id", "name", "agentscope_session_id")}
-
     @app.get("/api/v1/conversations/{conversation_id}/messages")
     async def native_conversation_messages(
         conversation_id: str,
         request: Request,
+        before: str | None = Query(None, max_length=1024),
+        limit: int = Query(50, ge=1, le=100),
         owner_id: str = Depends(require_owner),
         connection=Depends(database),
     ):
         row = owned_conversation(connection, conversation_id, owner_id)
         employee = load_employee(connection, row["employee_id"])
+        native_before, peer_before = None, None
+        if before:
+            try:
+                native_before, timestamp, peer_id = json.loads(before)
+                if not (
+                    (native_before is None or isinstance(native_before, str)) and isinstance(peer_id, str)
+                ):
+                    raise ValueError
+                peer_before = (float(timestamp), peer_id)
+            except (ValueError, TypeError) as exc:
+                raise HTTPException(422, "历史消息游标无效") from exc
+        info = {
+            "session_id": row["agentscope_session_id"], "viewer_id": owner_id,
+            "employee": {key: employee[key] for key in ("id", "name", "domain", "avatar", "enabled")},
+        }
         if not row["agentscope_session_id"] or not employee["agentscope_agent_id"]:
-            return {"messages": [], "event_cursor": "", "is_running": False}
+            return {**info, "messages": [], "before": None, "event_cursor": "", "is_running": False}
         try:
-            messages, event_cursor, is_running = await client_of(request).read_session_detail(
-                employee["agentscope_agent_id"],
-                row["agentscope_session_id"],
+            native, event_cursor, is_running, has_more = await client_of(request).read_message_page(
+                employee["agentscope_agent_id"], row["agentscope_session_id"],
+                before=native_before, limit=limit,
             )
         except AgentScopeError as exc:
             raise HTTPException(status_code=502, detail=exc.detail) from exc
         peers = await peer_replies_for_conversation(connection, client_of(request), conversation_id)
-        messages = [
-            present_private_message(m) for m in messages
-            if not (m.get("metadata") or {}).get("nexus_peer_context")
+
+        def order(message):
+            return timestamp_order(message.get("created_at")), message["id"]
+
+        # 同事在独立邮箱回复。只将本页时间范围内的同事回复归并进来；
+        # 原生分页始终传原生消息 id，不能拿合成的 peer id 作为 AgentScope 游标。
+        lower = order(native[0]) if has_more and native else None
+        candidates = [
+            present_private_message(message) for message in native
+            if not (message.get("metadata") or {}).get("nexus_peer_context")
         ]
+        candidates.extend(
+            peer["native"] for peer in peers
+            if (not lower or order(peer["native"]) >= lower)
+            and (not peer_before or order(peer["native"]) < peer_before)
+        )
+        page = sorted(candidates, key=order)[-limit:]
+        next_cursor = None
+        if (has_more and native) or len(candidates) > limit:
+            boundary = order(page[0]) if page else order(native[0])
+            consumed = [message for message in native if order(message) >= boundary]
+            next_cursor = json.dumps([consumed[0]["id"] if consumed else native_before, *boundary])
+        pending_peers = False
+        if not before:
+            deliveries = connection.execute(
+                sql_text("SELECT COUNT(*) FROM t_nexus_peer_deliveries WHERE scope=:scope"),
+                {"scope": f"private:{conversation_id}"},
+            ).scalar_one()
+            pending_peers = len(peers) < deliveries
         return {
-            "messages": sorted(
-                [*messages, *(p["native"] for p in peers)],
-                key=lambda m: (timestamp_order(m.get("created_at")), m.get("id", "")),
-            ),
-            "event_cursor": event_cursor,
-            "is_running": is_running,
+            **info, "messages": page, "event_cursor": event_cursor, "is_running": is_running,
+            "before": next_cursor, "pending_peer_replies": pending_peers,
         }
 
     @app.post("/api/v1/conversations/{conversation_id}/interrupt")
@@ -3138,36 +3039,6 @@ def sse_payload(frame: bytes) -> dict[str, Any] | None:
             return None
         return payload if isinstance(payload, dict) else None
     return None
-
-
-def team_peers(views: list[dict[str, Any]], leader_session_id: str) -> list[tuple[str, str, str]]:
-    """AgentInvite 写进 team 的成员会话。leader 自己的会话不重复返回。"""
-
-    found: list[tuple[str, str, str]] = []
-    seen: set[str] = set()
-    for view in views:
-        team = view.get("team") if isinstance(view.get("team"), dict) else {}
-        record = team.get("team") if isinstance(team.get("team"), dict) else {}
-        members = team.get("members") if isinstance(team.get("members"), list) else []
-        session = view.get("session") if isinstance(view.get("session"), dict) else {}
-        related = record.get("session_id") == leader_session_id or session.get("id") == leader_session_id
-        if not related:
-            related = any(
-                isinstance(member, dict) and member.get("session_id") == leader_session_id
-                for member in members
-            )
-        if not related:
-            continue
-        for member in members:
-            if not isinstance(member, dict):
-                continue
-            session_id = str(member.get("session_id") or "")
-            if not session_id or session_id == leader_session_id or session_id in seen:
-                continue
-            agent = member.get("agent") if isinstance(member.get("agent"), dict) else {}
-            seen.add(session_id)
-            found.append((session_id, str(agent.get("name") or session_id), str(agent.get("id") or "")))
-    return found
 
 
 REPLY_LOOKUP_DELAYS = (0.2, 0.5, 1.0, 2.0)

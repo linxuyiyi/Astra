@@ -34,6 +34,7 @@ from app.schemas import (
     TaskUpdate,
 )
 from app.services import TaskService, dashboard_metrics
+from nexus_api import __version__
 
 router = APIRouter(prefix="/api")
 
@@ -47,7 +48,7 @@ async def require_task(task_id, session):
 
 @router.get("/system/health")
 async def health():
-    return {"status": "ok", "version": "1.5.0"}
+    return {"status": "ok", "version": __version__}
 
 
 @router.get("/metrics")

@@ -1,0 +1,71 @@
+{
+  "browser": "151.0.7922.34",
+  "node": "v22.23.3",
+  "os": "darwin / 25.5.0 / Apple M4",
+  "viewport": [
+    1440,
+    900
+  ],
+  "samples": [
+    {
+      "coldHistoryMs": 299,
+      "renderedNodes": 726,
+      "scrollWorstFrameMs": 18,
+      "inputToFrameP95Ms": 27,
+      "streamBottomGapPx": 0,
+      "sentMessageFrameMs": 40,
+      "mutationRecords": 69,
+      "mutationCallbacks": 33,
+      "stayedOffBottom": true,
+      "mainThreadTaskMs": 251,
+      "scriptMs": 130,
+      "layoutMs": 13,
+      "layoutCount": 53,
+      "switchToGroupMs": 113,
+      "reloadHistoryMs": 170,
+      "allHistoryInputP95Ms": 27,
+      "allHistoryScrollWorstMs": 17,
+      "pageErrors": []
+    },
+    {
+      "coldHistoryMs": 287,
+      "renderedNodes": 726,
+      "scrollWorstFrameMs": 17,
+      "inputToFrameP95Ms": 18,
+      "streamBottomGapPx": 0,
+      "sentMessageFrameMs": 34,
+      "mutationRecords": 69,
+      "mutationCallbacks": 32,
+      "stayedOffBottom": true,
+      "mainThreadTaskMs": 245,
+      "scriptMs": 131,
+      "layoutMs": 13,
+      "layoutCount": 52,
+      "switchToGroupMs": 114,
+      "reloadHistoryMs": 159,
+      "allHistoryInputP95Ms": 24,
+      "allHistoryScrollWorstMs": 17,
+      "pageErrors": []
+    },
+    {
+      "coldHistoryMs": 288,
+      "renderedNodes": 726,
+      "scrollWorstFrameMs": 17,
+      "inputToFrameP95Ms": 26,
+      "streamBottomGapPx": 0,
+      "sentMessageFrameMs": 33,
+      "mutationRecords": 68,
+      "mutationCallbacks": 32,
+      "stayedOffBottom": true,
+      "mainThreadTaskMs": 258,
+      "scriptMs": 132,
+      "layoutMs": 14,
+      "layoutCount": 52,
+      "switchToGroupMs": 114,
+      "reloadHistoryMs": 171,
+      "allHistoryInputP95Ms": 26,
+      "allHistoryScrollWorstMs": 18,
+      "pageErrors": []
+    }
+  ]
+}

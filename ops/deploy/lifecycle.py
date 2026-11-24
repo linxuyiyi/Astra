@@ -316,7 +316,7 @@ class Manager:
             "params": {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {},
-                "clientInfo": {"name": "nexus-deploy", "version": "1.5.0"},
+                "clientInfo": {"name": "nexus-deploy", "version": "1.6.0"},
             },
         }
         with urllib.request.urlopen(

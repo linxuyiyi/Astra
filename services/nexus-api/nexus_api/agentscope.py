@@ -440,6 +440,21 @@ class AgentScopeClient:
         messages, cursor, _running = await self.read_session_detail(agent_id, session_id)
         return messages, cursor
 
+    async def read_message_page(
+        self, agent_id: str, session_id: str, *, before: str | None, limit: int,
+    ) -> tuple[list[dict[str, Any]], str, bool, bool]:
+        params: dict[str, Any] = {"agent_id": agent_id, "limit": limit}
+        if before:
+            params["before"] = before
+        response = await self.request("GET", f"/sessions/{session_id}/messages", params=params)
+        payload = response.json()
+        if not isinstance(payload, dict) or not isinstance(payload.get("messages"), list):
+            raise AgentScopeError("AgentScope 会话消息返回格式错误")
+        return (
+            [item for item in payload["messages"] if isinstance(item, dict)],
+            payload.get("event_cursor") or "", bool(payload.get("is_running")), bool(payload.get("has_more")),
+        )
+
     async def read_session_detail(
         self,
         agent_id: str,
@@ -452,23 +467,13 @@ class AgentScopeClient:
         is_running = False
         before: str | None = None
         for _ in range(10):
-            params: dict[str, Any] = {"agent_id": agent_id, "limit": 200}
-            if before:
-                params["before"] = before
-            response = await self.request("GET", f"/sessions/{session_id}/messages", params=params)
-            payload = response.json()
-            if not isinstance(payload, dict):
-                raise AgentScopeError("AgentScope 会话消息返回的不是对象")
-            rows = payload.get("messages")
-            if not isinstance(rows, list):
-                raise AgentScopeError("AgentScope 会话消息返回的不是列表")
-            page = [item for item in rows if isinstance(item, dict)]
+            page, cursor, running, has_more = await self.read_message_page(
+                agent_id, session_id, before=before, limit=200,
+            )
             if before is None:
-                cursor = payload.get("event_cursor")
-                event_cursor = cursor if isinstance(cursor, str) else ""
-                is_running = bool(payload.get("is_running"))
+                event_cursor, is_running = cursor, running
             collected = page + collected if before else page
-            if not payload.get("has_more") or not page:
+            if not has_more or not page:
                 break
             older = page[0].get("id")
             if not isinstance(older, str) or older == before:
@@ -484,17 +489,6 @@ class AgentScopeClient:
             f"/sessions/{session_id}/interrupt",
             params={"agent_id": agent_id},
         )
-
-    async def list_agent_sessions(self, agent_id: str) -> list[dict[str, Any]]:
-        response = await self.request("GET", "/sessions/", params={"agent_id": agent_id})
-        payload = response.json()
-        if isinstance(payload, dict):
-            items = payload.get("sessions") or []
-        elif isinstance(payload, list):
-            items = payload
-        else:
-            items = []
-        return [item for item in items if isinstance(item, dict)]
 
     async def list_session_messages(self, agent_id: str, session_id: str) -> list[dict[str, Any]]:
         messages, _cursor = await self.read_session(agent_id, session_id)

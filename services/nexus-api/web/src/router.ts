@@ -45,26 +45,12 @@ function keepQuery(path: string) {
   return (to: RouteLocationGeneric) => ({ path, query: to.query, hash: to.hash });
 }
 
-function teamRedirect(to: RouteLocationGeneric) {
-  const { channel, ...rest } = to.query;
-  return {
-    path: "/chat",
-    query: {
-      ...rest,
-      type: "group",
-      ...(typeof channel === "string" ? { group: channel } : {}),
-    } as LocationQueryRaw,
-    hash: to.hash,
-  };
-}
-
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/", name: "office", component: PixelOfficeHomeView },
     { path: "/employees", redirect: keepQuery("/settings/employees") },
     { path: "/chat", name: "chat", component: DigitalEmployeeChatView },
-    { path: "/team", redirect: teamRedirect },
     { path: "/schedules", name: "schedules", component: SchedulesView },
     { path: "/tasks", name: "tasks", component: TaskListView },
     { path: "/tasks/:id", name: "task-detail", component: TaskDetailView },

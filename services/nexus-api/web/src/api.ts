@@ -1,8 +1,5 @@
 import type {
-  AgentScopeOutcome,
-  Attachment,
   Channel,
-  ChatMessage,
   Conversation,
   Employee,
   McpHeader,
@@ -101,31 +98,6 @@ export async function deleteEmployee(id: string): Promise<void> {
   await read(await fetch(`/api/v1/employees/${id}`, { method: "DELETE" }));
 }
 
-export async function uploadAttachment(
-  file: File,
-  scope: { conversation_id: string } | { channel_id: string },
-): Promise<Attachment> {
-  if (!file.size || file.size > 20 * 1024 * 1024) throw new Error("单个附件需大于 0 字节且不超过 20 MiB");
-  const id = `att_${crypto.randomUUID().replaceAll("-", "")}`;
-  const query = new URLSearchParams({ ...scope, name: file.name || "未命名文件" });
-  return read(await fetch(`/api/v1/attachments/${id}?${query}`, {
-    method: "PUT",
-    headers: headers(false),
-    body: file,
-  }));
-}
-
-export function attachmentUrl(id: string): string {
-  return `/api/v1/attachments/${id}`;
-}
-
-export async function listConversations(employeeId: string): Promise<Conversation[]> {
-  const payload = await read<{ items: Conversation[] }>(
-    await fetch(`/api/v1/employees/${employeeId}/conversations`, { headers: headers(false) }),
-  );
-  return payload.items;
-}
-
 export async function createConversation(employeeId: string): Promise<Conversation> {
   return read(
     await fetch(`/api/v1/employees/${employeeId}/conversations`, {
@@ -134,36 +106,6 @@ export async function createConversation(employeeId: string): Promise<Conversati
       body: JSON.stringify({ name: "新对话" }),
     }),
   );
-}
-
-export async function getConversation(
-  id: string,
-): Promise<Conversation> {
-  return read(await fetch(`/api/v1/conversations/${id}`, { headers: headers(false) }));
-}
-
-export async function sendConversation(id: string, text: string, attachmentIds: string[], clientId: string) {
-  return read<{ message: ChatMessage; agentscope: AgentScopeOutcome }>(
-    await fetch(`/api/v1/conversations/${id}/messages`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ content: text ? [{ type: "text", text }] : [], attachment_ids: attachmentIds, client_id: clientId }),
-    }),
-  );
-}
-
-export async function interruptConversation(id: string): Promise<void> {
-  await read(await fetch(`/api/v1/conversations/${id}/interrupt`, { method: "POST", headers: headers() }));
-}
-
-export async function interruptChannel(id: string): Promise<void> {
-  await read(await fetch(`/api/v1/channels/${id}/interrupt`, { method: "POST", headers: headers() }));
-}
-
-export async function markChannelRead(id: string, seq: number): Promise<void> {
-  await read(await fetch(`/api/v1/channels/${id}/read`, {
-    method: "POST", headers: headers(), body: JSON.stringify({ seq }),
-  }));
 }
 
 export async function listChannels(): Promise<Channel[]> {
@@ -180,87 +122,6 @@ export async function saveChannel(body: { name: string; description: string; mem
     }),
   );
 }
-
-export interface TimelineItem {
-  id: string;
-  seq: number;
-  sender_type: "human" | "employee" | "system";
-  sender_id: string;
-  sender_name: string;
-  text: string;
-  created_at: string;
-  discussion_id: string;
-  message: import("@agentscope-ai/agentscope/message").Msg;
-}
-export interface ChannelTimeline {
-  channel: Channel;
-  items: TimelineItem[];
-  before: number;
-  event_cursor: number;
-}
-export interface NativeHistory {
-  messages: import("@agentscope-ai/agentscope/message").Msg[];
-  event_cursor: string;
-  is_running: boolean;
-}
-export async function nativeConversationMessages(id: string): Promise<NativeHistory> {
-  return read(await fetch(`/api/v1/conversations/${id}/messages`, { headers: headers(false) }));
-}
-export async function channelTimeline(id: string, before = 0): Promise<ChannelTimeline> {
-  return read(await fetch(`/api/v1/channels/${id}/messages?before=${before}&limit=50`, { headers: headers(false) }));
-}
-export async function sendChannel(id: string, text: string, attachmentIds: string[], clientId: string) {
-  return read<{ message: TimelineItem; participants: string[]; discussion_id: string; duplicate: boolean }>(
-    await fetch(`/api/v1/channels/${id}/messages`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ content: text ? [{ type: "text", text }] : [], attachment_ids: attachmentIds, client_id: clientId }),
-    }),
-  );
-}
-
-export async function readEventStream(
-  path: string,
-  signal: AbortSignal,
-  onEvent: (event: Record<string, unknown>) => void,
-): Promise<void> {
-  const response = await fetch(path, { headers: headers(false), signal });
-  if (!response.ok || !response.body) {
-    let detail = "没有收到事件流";
-    try {
-      const payload = (await response.json()) as { detail?: string };
-      if (payload.detail) detail = payload.detail;
-    } catch {
-      /* 使用默认说明 */
-    }
-    throw new Error(detail);
-  }
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    while (!signal.aborted) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const frames = buffer.replace(/\r\n/g, "\n").split("\n\n");
-      buffer = frames.pop() ?? "";
-      for (const frame of frames) {
-        const dataLine = frame.split("\n").find((line) => line.startsWith("data:"));
-        if (!dataLine) continue;
-        const raw = dataLine.slice(5).trim();
-        if (!raw) continue;
-        const event = JSON.parse(raw) as Record<string, unknown>;
-        const eventId = frame.split("\n").find(line => line.startsWith("id:"))?.slice(3).trim();
-        onEvent(eventId ? { ...event, event_cursor: eventId, ...(event.id ? {} : { id: eventId }) } : event);
-      }
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
-  }
-}
-
 
 // ── 配置中心：Skill / MCP 资源 ─────────────────────────────────────────────
 

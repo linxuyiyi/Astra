@@ -8,7 +8,7 @@ from typing import Literal
 from urllib.parse import quote
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
 
 from .db import connect
@@ -97,20 +97,20 @@ class TextBlock(BaseModel):
     id: str | None = Field(default=None, max_length=128)
 
 
-class MessageContent(BaseModel):
-    content: list[TextBlock] = Field(default_factory=list, max_length=128)
-    text: str = Field(default="", max_length=64_000)
+class MessageBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    content: list[TextBlock] = Field(max_length=128)
+    client_id: str = Field(min_length=8, max_length=64, pattern=r"^[\w-]+$")
     attachment_ids: list[str] = Field(default_factory=list, max_length=6)
 
+    @property
+    def text(self) -> str:
+        return "".join(block.text for block in self.content)
+
     @model_validator(mode="after")
-    def derive_display_text(self):
-        if self.content:
-            joined = "".join(block.text for block in self.content)
-            if len(joined) > 64_000 or (self.text and self.text != joined):
-                raise ValueError("消息正文过长或与内容块不一致")
-            self.text = joined
-        elif self.text:
-            self.content = [TextBlock(text=self.text)]
+    def check_text_length(self):
+        if len(self.text) > 64_000:
+            raise ValueError("消息正文不能超过 64,000 字符")
         return self
 
     def blocks(self):

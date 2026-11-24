@@ -15,7 +15,7 @@ export const PRIMARY_NAV_CONFIGS: readonly NavItemConfig[] = [
   {
     to: "/chat",
     label: "数字员工",
-    isActive: (path: string) => path === "/chat" || path === "/team",
+    isActive: (path: string) => path === "/chat",
   },
   {
     to: "/schedules",

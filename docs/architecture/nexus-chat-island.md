@@ -1,6 +1,6 @@
 # Nexus 聊天岛（阶段 A，历史实现）
 
-> 历史说明：当前 `/chat` 使用原生 Vue `ChatPanel`，不再通过 iframe 加载聊天岛。本文保留阶段 A-D 的实现记录；下文旧端口、旧启动命令和“默认渲染”描述不再代表当前部署。
+> 本文记录 2026 年 10 月的阶段 A–D。Nexus v1.6.0 的 `/chat` 统一挂载 assistant-ui。当前入口、构建与接口见[数字员工对话架构](../../openspec/changes/nexus-v160-employee-conversation/design.md)和[验收报告](../reviews/nexus-v1.6.0-conversation.md)。
 
 聊天区中间栏改由 React 子应用渲染，复用 AgentScope v2.0.10 的原生消息组件。
 外层 Vue 页面（联系人/群组列表、顶部信息、右侧任务面板、底部导航）不变，

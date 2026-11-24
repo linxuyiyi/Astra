@@ -3,7 +3,7 @@ import {
 	matchesShortcut,
 	releasedShortcutPart,
 	type AsrShortcut,
-} from '@/lib/asrShortcut.ts';
+} from '../lib/asrShortcut.ts';
 
 interface UseAsrHotkeyOptions {
 	shortcut: AsrShortcut;

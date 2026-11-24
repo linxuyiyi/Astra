@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 const playwrightPath = process.env.PLAYWRIGHT_PATH
   || new URL('../../../frontend/node_modules/playwright/index.mjs', import.meta.url).href;
 const { chromium } = await import(playwrightPath);
-import { ensureBrowserLogin } from './browser-auth.mjs';
+import { prepareChatIdentity, messageText } from './browser-auth.mjs';
 
 const BASE = process.env.NEXUS_BASE || 'http://127.0.0.1:18120';
 const UID = process.env.NEXUS_UID || 'local-qa';
@@ -49,11 +49,9 @@ function launch(fakeUi = true) {
 
 async function newPage(browser, { permissions = ['microphone'], initScripts = [] } = {}) {
   const context = await browser.newContext({ permissions, viewport: { width: 1440, height: 960 } });
-  await context.addCookies([{ name: 'nexus_uid', value: UID, domain: '127.0.0.1', path: '/' }]);
-  await context.addInitScript((uid) => localStorage.setItem('nexus_owner_id', uid), UID);
+
   for (const script of initScripts) await context.addInitScript(script);
-  const auth = await ensureBrowserLogin(context, { base: BASE });
-  apiCookie = auth.cookie;
+  apiCookie = await prepareChatIdentity(context, BASE, UID);
   const page = await context.newPage();
   const requests = [];
   const errors = [];
@@ -66,8 +64,8 @@ async function newPage(browser, { permissions = ['microphone'], initScripts = []
 
 async function openChat(page, search) {
   await page.goto(`${BASE}/chat?${search}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  const frame = page.frameLocator('iframe.chat-island');
-  const textarea = frame.locator('textarea');
+  const frame = page;
+  const textarea = frame.getByTestId('compose-input');
   await textarea.waitFor({ state: 'visible', timeout: 60000 });
   const hint = frame.locator('[data-testid="asr-shortcut-hint"]');
   await hint.waitFor({ state: 'visible', timeout: 60000 });
@@ -75,7 +73,8 @@ async function openChat(page, search) {
 }
 
 async function statusText(frame) {
-  return (await frame.locator('[data-testid="asr-status"]').innerText().catch(() => '')).trim();
+  const status = frame.getByTestId('asr-status');
+  return await status.count() ? (await status.innerText()).trim() : '';
 }
 
 async function waitIdle(frame, timeout = 30000) {
@@ -104,7 +103,7 @@ async function hold(page, frame, ms, { repeat = false, release = 'primary-first'
   await page.keyboard.down('k');
   await new Promise((resolve) => setTimeout(resolve, ms));
   if (repeat) {
-    await frame.locator('textarea').evaluate(() => {
+    await frame.getByTestId('compose-input').evaluate(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', {
         code: 'KeyK', key: 'k', altKey: true, repeat: true, bubbles: true, cancelable: true,
       }));
@@ -150,12 +149,13 @@ async function apiJson(method, path, body) {
 }
 
 async function conversationId(page) {
-  const src = await page.locator('iframe.chat-island').getAttribute('src');
-  return new URL(src, BASE).searchParams.get('conversation');
+  const employee = new URL(page.url()).searchParams.get('employee');
+  const binding = await apiJson('POST', `/api/v1/employees/${encodeURIComponent(employee)}/conversations`, {});
+  return binding.id;
 }
 
 async function messageCount(conversation) {
-  return (await api(`/api/v1/conversations/${conversation}`)).messages.length;
+  return (await api(`/api/v1/conversations/${conversation}/messages`)).messages.length;
 }
 
 async function main() {
@@ -163,8 +163,8 @@ async function main() {
   const browser = await launch();
   const privatePage = await newPage(browser);
   const page = privatePage.page;
-  const { frame, textarea, hint } = await openChat(page, `type=contact&employee=${EMP}`);
-  const hintText = (await hint.innerText()).replace(/\s+/g, ' ');
+  const { frame, textarea, hint } = await openChat(page, `employee=${EMP}`);
+  const hintText = (await hint.getAttribute('title')).replace(/\s+/g, ' ');
   check('default hint', hintText.includes('⌥ K') || hintText.includes('Alt + K'), hintText);
 
   // A single modifier or plain key must never start push-to-talk.
@@ -187,7 +187,7 @@ async function main() {
   await new Promise((resolve) => setTimeout(resolve, 1000));
   await page.screenshot({ path: SCREENSHOT.replace(/\.png$/, '-recording.png'), fullPage: true });
   await new Promise((resolve) => setTimeout(resolve, 1000));
-  await frame.locator('textarea').evaluate(() => {
+  await frame.getByTestId('compose-input').evaluate(() => {
     window.dispatchEvent(new KeyboardEvent('keydown', {
       code: 'KeyK', key: 'k', altKey: true, repeat: true, bubbles: true, cancelable: true,
     }));
@@ -243,14 +243,14 @@ async function main() {
   await page.keyboard.down('Alt');
   await page.keyboard.down('k');
   await new Promise((resolve) => setTimeout(resolve, 900));
-  await frame.locator('textarea').evaluate(() => {
+  await frame.getByTestId('compose-input').evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
   });
   await page.keyboard.up('k');
   await page.keyboard.up('Alt');
   await new Promise((resolve) => setTimeout(resolve, 1200));
-  await frame.locator('textarea').evaluate(() => {
+  await frame.getByTestId('compose-input').evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
     document.dispatchEvent(new Event('visibilitychange'));
   });
@@ -263,7 +263,7 @@ async function main() {
   await page.keyboard.down('Alt');
   await page.keyboard.down('k');
   await new Promise((resolve) => setTimeout(resolve, 900));
-  await frame.locator('textarea').evaluate(() => window.dispatchEvent(new Event('blur')));
+  await frame.getByTestId('compose-input').evaluate(() => window.dispatchEvent(new Event('blur')));
   await page.keyboard.up('k');
   await page.keyboard.up('Alt');
   await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -300,7 +300,7 @@ async function main() {
   await page.waitForTimeout(300);
   await frame.locator('[data-testid="asr-shortcut-save"]').click();
   await page.waitForTimeout(400);
-  const customHint = (await hint.innerText()).replace(/\s+/g, ' ');
+  const customHint = (await hint.getAttribute('title')).replace(/\s+/g, ' ');
   check('custom shortcut saves immediately', customHint.includes('⌥ J') || customHint.includes('Alt + J'), customHint);
 
   await textarea.fill('旧快捷键：');
@@ -323,8 +323,8 @@ async function main() {
   await waitIdle(frame);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
-  const reloaded = await openChat(page, `type=contact&employee=${EMP}`);
-  const reloadedHint = (await reloaded.hint.innerText()).replace(/\s+/g, ' ');
+  const reloaded = await openChat(page, `employee=${EMP}`);
+  const reloadedHint = (await reloaded.hint.getAttribute('title')).replace(/\s+/g, ' ');
   check('shortcut persists after reload', reloadedHint.includes('⌥ J') || reloadedHint.includes('Alt + J'), reloadedHint);
   await reloaded.hint.click();
   const resetDialog = reloaded.frame.locator('[data-testid="asr-shortcut-dialog"]');
@@ -332,7 +332,7 @@ async function main() {
   await reloaded.frame.locator('[data-testid="asr-shortcut-reset"]').click();
   await reloaded.frame.locator('[data-testid="asr-shortcut-save"]').click();
   await page.waitForTimeout(400);
-  const defaultHint = (await reloaded.hint.innerText()).replace(/\s+/g, ' ');
+  const defaultHint = (await reloaded.hint.getAttribute('title')).replace(/\s+/g, ' ');
   check('shortcut reset to default', defaultHint.includes('⌥ K') || defaultHint.includes('Alt + K'), defaultHint);
 
   // ── Original microphone button still works ──────────────────────────
@@ -361,19 +361,20 @@ async function main() {
   let reply = null;
   let userSeen = false;
   while (Date.now() < replyDeadline) {
-    const payload = await api(`/api/v1/conversations/${conversation}`);
+    const payload = await api(`/api/v1/conversations/${conversation}/messages`);
     const messages = payload.messages || [];
-    const userIndex = messages.findLastIndex((item) => item.sender === 'user' && item.text === finalValue);
+    const userIndex = messages.findLastIndex((item) => item.role === 'user' && messageText(item) === finalValue);
     userSeen = userIndex >= 0;
-    reply = [...messages].reverse().find((item) => item.sender !== 'user' && item.text);
+    reply = messages.slice(userIndex + 1).find(item => item.role === 'assistant' && messageText(item));
     const replyIndex = reply ? messages.indexOf(reply) : -1;
     if (userSeen && reply && replyIndex > userIndex) break;
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   check('Enter sends recognized text', userSeen, JSON.stringify(finalValue));
-  check('AgentScope replies', Boolean(reply?.text), reply?.text?.slice(0, 80) || '');
-  if (reply?.text) {
-    const snippet = reply.text.replace(/[*#`>_[\]()]/g, '').replace(/\s+/g, '').slice(0, 8);
+  const replyText = userSeen && reply ? messageText(reply) : '';
+  check('AgentScope replies', Boolean(replyText), replyText.slice(0, 80));
+  if (replyText) {
+    const snippet = replyText.replace(/[*#`>_[\]()]/g, '').replace(/\s+/g, '').slice(0, 8);
     const end = Date.now() + 30000;
     let rendered = false;
     while (Date.now() < end) {
@@ -384,7 +385,7 @@ async function main() {
     check('reply rendered in UI', rendered, snippet);
   }
   await page.screenshot({ path: SCREENSHOT, fullPage: true });
-  results.final = { transcript: finalValue, reply: reply?.text?.slice(0, 300), screenshot: SCREENSHOT };
+  results.final = { transcript: finalValue, reply: replyText.slice(0, 300), screenshot: SCREENSHOT };
 
   await privatePage.context.close();
   await browser.close();
@@ -400,7 +401,7 @@ async function main() {
       };
     }],
   });
-  const pendingChat = await openChat(pending.page, `type=contact&employee=${EMP}`);
+  const pendingChat = await openChat(pending.page, `employee=${EMP}`);
   await pendingChat.textarea.fill('权限未完成：');
   await pendingChat.textarea.focus();
   await pending.page.keyboard.down('Alt');
@@ -423,7 +424,7 @@ async function main() {
       });
     }],
   });
-  const deniedChat = await openChat(denied.page, `type=contact&employee=${EMP}`);
+  const deniedChat = await openChat(denied.page, `employee=${EMP}`);
   await deniedChat.textarea.focus();
   await hold(denied.page, deniedChat.frame, 800);
   await new Promise((resolve) => setTimeout(resolve, 800));
@@ -435,14 +436,14 @@ async function main() {
   // ── Switch conversation while transcribing ──────────────────────────
   const switchBrowser = await launch();
   const switched = await newPage(switchBrowser);
-  const firstChat = await openChat(switched.page, `type=contact&employee=${EMP}`);
+  const firstChat = await openChat(switched.page, `employee=${EMP}`);
   await firstChat.textarea.focus();
   await hold(switched.page, firstChat.frame, 1200);
-  await switched.page.goto(`${BASE}/chat?type=contact&employee=emp_cc1620f70577`, {
+  await switched.page.goto(`${BASE}/chat?employee=emp_cc1620f70577`, {
     waitUntil: 'domcontentloaded', timeout: 60000,
   });
-  const secondFrame = switched.page.frameLocator('iframe.chat-island');
-  const secondTextarea = secondFrame.locator('textarea');
+  const secondFrame = switched.page;
+  const secondTextarea = secondFrame.getByTestId('compose-input');
   await secondTextarea.waitFor({ state: 'visible', timeout: 60000 });
   await switched.page.waitForTimeout(5000);
   check('switch conversation does not leak transcript', (await secondTextarea.inputValue()) === '', JSON.stringify(await secondTextarea.inputValue()));
@@ -457,7 +458,7 @@ async function main() {
     description: 'Push-to-talk 验收群',
     member_ids: [GROUP_EMP],
   })).id;
-  const groupChat = await openChat(group.page, `type=group&group=${channelId}`);
+  const groupChat = await openChat(group.page, `group=${channelId}`);
   const groupBefore = (await api(`/api/v1/channels/${channelId}/messages`)).items.length;
   await groupChat.textarea.fill('@阿明，');
   await groupChat.textarea.focus();
@@ -473,7 +474,7 @@ async function main() {
   // ── PTT ASR outage + retry after service recovery ───────────────────
   const failureBrowser = await launch();
   const failure = await newPage(failureBrowser);
-  const failureChat = await openChat(failure.page, `type=contact&employee=${EMP}`);
+  const failureChat = await openChat(failure.page, `employee=${EMP}`);
   const failureDraft = '失败草稿：';
   await failureChat.textarea.fill(failureDraft);
   await failureChat.textarea.focus();
@@ -499,7 +500,7 @@ async function main() {
         body: JSON.stringify({ probe_types: ['ASR'] }),
       });
     }
-    await failureChat.frame.getByRole('button', { name: '重试' }).click();
+    await failureChat.frame.getByTestId('asr-status').getByRole('button', { name: '重试' }).click();
     const retryValue = await waitAdded(failureChat.textarea, failureDraft, 60000);
     check('PTT retry works after ASR recovery', retryValue.length > failureDraft.length && retryValue.startsWith(failureDraft), JSON.stringify(retryValue));
   } finally {

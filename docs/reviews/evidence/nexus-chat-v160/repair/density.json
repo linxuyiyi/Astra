@@ -1,0 +1,119 @@
+{
+  "chromium": "151.0.7922.34",
+  "node": "v22.23.3",
+  "scenario": "Production bundles with the same 320-private and 95-group history fixtures, bottom anchored",
+  "measurements": [
+    {
+      "variant": "before",
+      "scenario": "private",
+      "viewport": [
+        1440,
+        900
+      ],
+      "viewportHeight": 621,
+      "horizontalOverflow": false,
+      "fullyVisibleMessageRows": 3,
+      "allRenderedRows": 50,
+      "proseFontPx": 15,
+      "proseLineHeightPx": 26.25
+    },
+    {
+      "variant": "before",
+      "scenario": "group",
+      "viewport": [
+        1440,
+        900
+      ],
+      "viewportHeight": 621,
+      "horizontalOverflow": false,
+      "fullyVisibleMessageRows": 7,
+      "allRenderedRows": 50,
+      "proseFontPx": 15,
+      "proseLineHeightPx": 26.25
+    },
+    {
+      "variant": "before",
+      "scenario": "private",
+      "viewport": [
+        1280,
+        720
+      ],
+      "viewportHeight": 441,
+      "horizontalOverflow": false,
+      "fullyVisibleMessageRows": 0,
+      "allRenderedRows": 50,
+      "proseFontPx": 15,
+      "proseLineHeightPx": 26.25
+    },
+    {
+      "variant": "before",
+      "scenario": "group",
+      "viewport": [
+        1280,
+        720
+      ],
+      "viewportHeight": 441,
+      "horizontalOverflow": false,
+      "fullyVisibleMessageRows": 5,
+      "allRenderedRows": 50,
+      "proseFontPx": 15,
+      "proseLineHeightPx": 26.25
+    },
+    {
+      "variant": "after",
+      "scenario": "private",
+      "viewport": [
+        1440,
+        900
+      ],
+      "viewportHeight": 642,
+      "horizontalOverflow": false,
+      "fullyVisibleMessageRows": 5,
+      "allRenderedRows": 50,
+      "proseFontPx": 15,
+      "proseLineHeightPx": 23.25
+    },
+    {
+      "variant": "after",
+      "scenario": "group",
+      "viewport": [
+        1440,
+        900
+      ],
+      "viewportHeight": 642,
+      "horizontalOverflow": false,
+      "fullyVisibleMessageRows": 10,
+      "allRenderedRows": 50,
+      "proseFontPx": 15,
+      "proseLineHeightPx": 23.25
+    },
+    {
+      "variant": "after",
+      "scenario": "private",
+      "viewport": [
+        1280,
+        720
+      ],
+      "viewportHeight": 462,
+      "horizontalOverflow": false,
+      "fullyVisibleMessageRows": 2,
+      "allRenderedRows": 50,
+      "proseFontPx": 15,
+      "proseLineHeightPx": 23.25
+    },
+    {
+      "variant": "after",
+      "scenario": "group",
+      "viewport": [
+        1280,
+        720
+      ],
+      "viewportHeight": 462,
+      "horizontalOverflow": false,
+      "fullyVisibleMessageRows": 7,
+      "allRenderedRows": 50,
+      "proseFontPx": 15,
+      "proseLineHeightPx": 23.25
+    }
+  ]
+}

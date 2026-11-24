@@ -121,40 +121,6 @@ export interface McpTestResult {
   elapsed_ms: number;
 }
 
-export interface Attachment {
-  id: string;
-  name: string;
-  type: string;
-  size: number;
-}
-
-export interface ChatMessageUsage {
-  input_tokens?: number;
-  output_tokens?: number;
-}
-
-export interface ChatMessage {
-  /** 私聊历史/事件的服务端重放游标，仅用于防止旧视图覆盖新消息。 */
-  replay_cursor?: string;
-  native?: import("@agentscope-ai/agentscope/message").Msg;
-  sender_type?: "human" | "employee" | "system";
-  sender_name?: string;
-  thinking?: string[];
-  hints?: { id: string; source: string; text: string }[];
-  data?: import("@agentscope-ai/agentscope/message").DataBlock[];
-  finished_reason?: string | null;
-  id: string;
-  sender: string;
-  speaker?: string;
-  text: string;
-  tools?: { id: string; name: string; input: string; output: string; state: string }[];
-  attachments: Attachment[];
-  created_at: string;
-  /** AgentScope: null while running; ISO string when done. Missing = legacy finished. */
-  finished_at?: string | null;
-  usage?: ChatMessageUsage | null;
-}
-
 export interface Conversation {
   id: string;
   employee_id: string;
@@ -184,12 +150,6 @@ export interface Channel {
   description: string;
   members: ChannelMember[];
   created_at?: string;
-}
-
-export interface AgentScopeOutcome {
-  accepted: boolean;
-  detail: string;
-  session_id?: string | null;
 }
 
 export interface RuntimeStatus {

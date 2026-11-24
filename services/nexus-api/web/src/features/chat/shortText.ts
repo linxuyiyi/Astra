@@ -1,5 +1,5 @@
 /**
- * 把后端/网络错误压成短人话，供气泡旁的失败条与重试按钮使用。
+ * 将会话目录、绑定和关联任务的请求错误转为简短提示。
  * 不暴露堆栈、上游原文或 agentscope 细节。
  */
 const RULES: Array<{ test: RegExp; text: string }> = [

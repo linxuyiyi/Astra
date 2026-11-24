@@ -59,9 +59,9 @@ Element Plus 编辑区高度/滚动统一放在 `styles/element-plus-theme.css`�
 - 按仓库已有方式更新受版本控制的聊天岛与 web 构建产物。
 - `git diff --check` 通过。仍有构建大 chunk 提示，以及聊天岛已有 mime-types/path 浏览器兼容提示；构建退出码为 0。
 
-脚本：`tools/e2e/nexus_ui_coherence.mjs`。结果：[browser-results.json](browser-results.json)。截图：[聊天头](chat-1280.png)、[资料](chat-materials.png)、[星云浮层](nebula-hint.png)、[员工表单](employee-form.png)、[任务复盘](task-review.png)、[知识审核](knowledge-review.png)。
+历史脚本位于提交 `a957d2a7e` 的 `tools/e2e/nexus_ui_coherence.mjs`。截图见[聊天头](chat-1280.png)、[资料](chat-materials.png)、[星云浮层](nebula-hint.png)、[员工表单](employee-form.png)、[任务复盘](task-review.png)和[知识审核](knowledge-review.png)。[浏览器结果](browser-results.json)
 
-复跑：先构建 chat-island，再从 `services/nexus-api/web` 启动 Vite（示例端口 15184），在仓库根目录执行：
+在该历史提交复跑时，先构建 chat-island，再从 `services/nexus-api/web` 启动 Vite。示例使用端口 15184，在该提交的仓库根目录执行下列命令。v1.6.0 的对话检查见[当前验收报告](../nexus-v1.6.0-conversation.md)。
 
 ```bash
 PLAYWRIGHT_PATH=/absolute/path/to/playwright UI_BASE_URL=http://127.0.0.1:15184 node tools/e2e/nexus_ui_coherence.mjs

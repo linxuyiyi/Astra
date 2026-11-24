@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslation } from '@/i18n/useI18n.ts';
 
 export type AsrRecorderState = 'idle' | 'recording' | 'transcribing' | 'error';
 export type AsrRecorderSource = 'button' | 'hotkey' | null;
@@ -32,13 +31,24 @@ interface AsrRecorder {
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 const ASR_ENDPOINT = '/api/asr/transcribe';
 
-function mapMicrophoneError(error: unknown, t: (key: string) => string): string {
+const recognitionErrors: Record<string, string> = {
+  rate_limited: '请求太频繁，请稍后再试',
+  server_busy: '服务繁忙，请稍后重试',
+  audio_too_long: '录音超过 60 秒',
+  unsupported_audio: '音频格式无法识别',
+  empty_audio: '没有识别到语音',
+  recognition_timeout: '识别超时，请重试',
+  payload_too_large: '录音文件超过大小限制',
+  model_not_ready: '语音服务尚未就绪',
+};
+
+function mapMicrophoneError(error: unknown): string {
 	const name = error instanceof DOMException ? error.name : '';
-	if (name === 'NotAllowedError' || name === 'SecurityError') return t('asr.permission');
-	if (name === 'NotFoundError') return t('asr.noDevice');
-	if (name === 'NotSupportedError') return t('asr.unsupported');
+	if (name === 'NotAllowedError' || name === 'SecurityError') return '麦克风权限被拒绝，请在浏览器设置中允许后重试';
+	if (name === 'NotFoundError') return '没有找到麦克风设备';
+	if (name === 'NotSupportedError') return '当前浏览器不支持录音';
 	if (error instanceof Error && error.message) return error.message;
-	return t('asr.unsupported');
+	return '当前浏览器不支持录音';
 }
 
 /**
@@ -57,7 +67,6 @@ export function useAsrRecorder({
 	sessionKey = '',
 	onText,
 }: UseAsrRecorderOptions): AsrRecorder {
-	const { t } = useTranslation();
 	const [state, setState] = useState<AsrRecorderState>('idle');
 	const [seconds, setSeconds] = useState(0);
 	const [error, setError] = useState<string | null>(null);
@@ -119,29 +128,6 @@ export function useAsrRecorder({
 		chunksRef.current = [];
 	}, [clearTimers, releaseMic]);
 
-	const localizedError = useCallback(
-		(code: string): string => {
-			const map: Record<string, string> = {
-				rate_limited: t('asr.rateLimited'),
-				server_busy: t('asr.busy'),
-				audio_too_long: t('asr.tooLong'),
-				unsupported_audio: t('asr.unsupportedFormat'),
-				empty_audio: t('asr.empty'),
-				recognition_timeout: t('asr.timeout'),
-				payload_too_large: t('asr.tooLarge'),
-				model_not_ready: t('asr.notReady'),
-			};
-			return map[code] || '';
-		},
-		[t],
-	);
-
-	const errorMessage = useCallback(
-		(status: number): string =>
-			status ? t('asr.failedWithStatus', { status }) : t('asr.failed'),
-		[t],
-	);
-
 	const transcribe = useCallback(
 		async (blob: Blob, sessionAtStart: string) => {
 			const token = ++transcribeTokenRef.current;
@@ -169,11 +155,11 @@ export function useAsrRecorder({
 					const code = typeof detail === 'object' ? detail?.code : '';
 					const message = typeof detail === 'string' ? detail : detail?.message;
 					throw new Error(
-						localizedError(code || '') || message || errorMessage(response.status),
+						recognitionErrors[code] || message || `识别失败（HTTP ${response.status}）`,
 					);
 				}
 				const text = String(body?.text || '').trim();
-				if (!text) throw new Error(t('asr.empty'));
+				if (!text) throw new Error('没有识别到语音');
 				if (!mountedRef.current || token !== transcribeTokenRef.current) return;
 				// A transcript belongs to the conversation that started the
 				// recording. Never write it into a conversation opened later.
@@ -187,10 +173,10 @@ export function useAsrRecorder({
 				if (!mountedRef.current || token !== transcribeTokenRef.current) return;
 				const message =
 					err instanceof DOMException && err.name === 'AbortError'
-						? t('asr.timeout')
+						? '识别超时，请重试'
 						: err instanceof Error
 							? err.message
-							: t('asr.failed');
+							: '识别失败';
 				setError(message);
 				setPhase('error');
 			} finally {
@@ -198,7 +184,7 @@ export function useAsrRecorder({
 				if (token === transcribeTokenRef.current) transcribeAbortRef.current = null;
 			}
 		},
-		[errorMessage, localizedError, setPhase, setSourcePhase, t],
+		[setPhase, setSourcePhase],
 	);
 
 	const start = useCallback(
@@ -226,7 +212,7 @@ export function useAsrRecorder({
 				startingRef.current = false;
 				setRequesting(false);
 				setSourcePhase(null);
-				setError(t('asr.unsupported'));
+				setError('当前浏览器不支持录音');
 				setPhase('error');
 				return;
 			}
@@ -234,7 +220,7 @@ export function useAsrRecorder({
 				startingRef.current = false;
 				setRequesting(false);
 				setSourcePhase(null);
-				setError(t('asr.unsupported'));
+				setError('当前浏览器不支持录音');
 				setPhase('error');
 				return;
 			}
@@ -272,7 +258,7 @@ export function useAsrRecorder({
 					recorder.onerror = () => {
 						cleanup();
 						if (!mountedRef.current) return;
-						setError(t('asr.failed'));
+						setError('识别失败');
 						setPhase('error');
 						setSourcePhase(null);
 						setRequesting(false);
@@ -292,14 +278,14 @@ export function useAsrRecorder({
 							return;
 						}
 						if (blob.size < 500) {
-							setError(t('asr.empty'));
+							setError('没有识别到语音');
 							setPhase('error');
 							setSourcePhase(null);
 							setRequesting(false);
 							return;
 						}
 						if (blob.size > MAX_UPLOAD_BYTES) {
-							setError(t('asr.tooLarge'));
+							setError('录音文件超过大小限制');
 							setPhase('error');
 							setSourcePhase(null);
 							setRequesting(false);
@@ -330,7 +316,7 @@ export function useAsrRecorder({
 								recorder.stop();
 							} catch {
 								cleanup();
-								setError(t('asr.failed'));
+								setError('识别失败');
 								setPhase('error');
 							}
 						}
@@ -341,12 +327,12 @@ export function useAsrRecorder({
 					setRequesting(false);
 					cleanup();
 					setSourcePhase(null);
-					setError(mapMicrophoneError(err, t));
+					setError(mapMicrophoneError(err));
 					setPhase('error');
 				}
 			})();
 		},
-		[cleanup, clearTimers, enabled, maxSeconds, releaseMic, setPhase, setSourcePhase, t, transcribe],
+		[cleanup, clearTimers, enabled, maxSeconds, releaseMic, setPhase, setSourcePhase, transcribe],
 	);
 
 	const cancel = useCallback(() => {
@@ -398,9 +384,9 @@ export function useAsrRecorder({
 		} catch {
 			cleanup();
 			setPhase('error');
-			setError(t('asr.failed'));
+			setError('识别失败');
 		}
-	}, [cancel, cleanup, clearTimers, releaseMic, setPhase, setSourcePhase, t]);
+	}, [cancel, cleanup, clearTimers, releaseMic, setPhase, setSourcePhase]);
 
 	const retry = useCallback(() => {
 		if (stateRef.current === 'transcribing' || startingRef.current) return;
@@ -451,8 +437,7 @@ export function useAsrRecorder({
 		};
 	}, [clearTimers, releaseMic]);
 
-	// The iframe is remounted for a new conversation, but keep this guard for
-	// any host that reuses the component instance across sessions.
+	// A transcript and its retry buffer belong to the session that started recording.
 	useEffect(() => {
 		const previous = recordingSessionRef.current;
 		if (!previous || previous === sessionKey) return;

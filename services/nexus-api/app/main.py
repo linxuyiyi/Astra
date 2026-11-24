@@ -25,6 +25,7 @@ from app.models import AgentWorker
 from app.runtime.maintenance import maintenance_executor
 from app.runtime.recovery import supervise_sessions
 from app.seed import seed_demo_data
+from nexus_api import __version__
 
 settings = get_settings()
 
@@ -64,7 +65,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Nexus API",
-    version="1.5.0",
+    version=__version__,
     description="长期 Agent Worker 任务分配、工作观察、人工介入和结果管理 API",
     lifespan=lifespan,
 )

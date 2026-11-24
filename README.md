@@ -1,4 +1,4 @@
-# Nexus v1.5.0
+# Nexus v1.6.0
 
 Nexus 是数字员工的目录和交流产品。推理、会话、技能、知识和记忆由 **AgentScope 2.0.10 Agent Service** 承担。Nexus 只通过 HTTP 调用它。
 
@@ -7,6 +7,8 @@ Nexus 是数字员工的目录和交流产品。推理、会话、技能、知�
 公司正式部署使用 **MySQL 8.0.36 空库**。Nexus 的 52 张自有业务表以 `t_nexus_` 开头，由一个 Alembic `0001_init` 初始化。AgentScope 官方 SQL 存储使用独立数据库。SQLite 仅用于显式配置的开发/测试环境；不支持历史库升级或导入。Redis 继续承担消息总线、Celery 和网关运行态。
 
 ## 当前版本
+
+v1.6.0 在员工对话页使用 assistant-ui 渲染私聊与群聊。详情见[对话架构与交互契约](openspec/changes/nexus-v160-employee-conversation/design.md)。
 
 v1.5.0 将执行链路收敛为 **Task → AgentWorker → OpenCode 原生 Session**。平台只保存 Task 五态与 Worker 四态；同一 Worker 独占一项未释放任务，未知提交在原 Task 上串行自动重发，接受重复执行。删除 Session / 实例 / 环境 / 连接历史四张表，保留认证、epoch、部署维护和经验复盘闭环。Worker 按当前任务关联原数字员工，不再静态绑定员工。
 
@@ -38,7 +40,7 @@ services/nexus-api       唯一 Nexus 服务（对话 + 任务 + Runtime + Worke
   nexus_api/             对话、员工目录、会话绑定、Skill/MCP 资源、统一入口
   app/                   任务、Runtime、Worker、网关控制面、图书馆（Alembic）
   web/                   唯一前端（Vue 3 + Element Plus）
-  chat-island/           历史聊天岛（React 子应用，当前 /chat 不再使用）
+  chat-island/           数字员工对话区（React + assistant-ui，由 /chat 按需挂载）
   tests/                 nexus/ 与 platform/ 两套测试
 services/agent-service   AgentScope Agent Service
 web/workspace-ui         OpenCode 工作台静态资源

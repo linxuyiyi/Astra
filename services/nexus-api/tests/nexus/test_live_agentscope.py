@@ -364,7 +364,8 @@ def test_employee_management_against_live_agentscope():
                 f"{NEXUS}/api/v1/conversations/{conversation['id']}/messages",
                 headers=OWNER,
                 json={
-                    "client_id": uuid.uuid4().hex, "text": "禁用后不要开始运行",
+                    "client_id": uuid.uuid4().hex,
+                    "content": [{"type": "text", "text": "禁用后不要开始运行"}],
                     "attachment_ids": [],
                 },
             )
@@ -387,7 +388,8 @@ def test_employee_management_against_live_agentscope():
                 f"{NEXUS}/api/v1/conversations/{conversation['id']}/messages",
                 headers=OWNER,
                 json={
-                    "client_id": uuid.uuid4().hex, "text": "重新启用后请只回复一个字：在。不要调用工具。",
+                    "client_id": uuid.uuid4().hex,
+                    "content": [{"type": "text", "text": "重新启用后请只回复一个字：在。不要调用工具。"}],
                     "attachment_ids": [],
                 },
             )
@@ -487,7 +489,8 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
                 f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
                 headers=owner_a,
                 json={
-                    "client_id": uuid.uuid4().hex, "text": "请只回复一个字：在。不要调用工具。",
+                    "client_id": uuid.uuid4().hex,
+                    "content": [{"type": "text", "text": "请只回复一个字：在。不要调用工具。"}],
                     "attachment_ids": [],
                 },
             )
@@ -505,7 +508,7 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
                 f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
                 headers=owner_a,
                 json={
-                    "client_id": uuid.uuid4().hex, "text": "再说一次：在。",
+                    "client_id": uuid.uuid4().hex, "content": [{"type": "text", "text": "再说一次：在。"}],
                     "attachment_ids": [],
                 },
             )
@@ -537,7 +540,8 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
                 f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
                 headers=owner_a,
                 json={
-                    "client_id": uuid.uuid4().hex, "text": "附件里的标记是什么？",
+                    "client_id": uuid.uuid4().hex,
+                    "content": [{"type": "text", "text": "附件里的标记是什么？"}],
                     "attachment_ids": [uploaded.json()["id"]],
                 },
             )
@@ -558,21 +562,21 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
                 f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
                 headers=owner_a,
                 json={
-                    "client_id": uuid.uuid4().hex, "text": "还是这一条私聊。",
+                    "client_id": uuid.uuid4().hex, "content": [{"type": "text", "text": "还是这一条私聊。"}],
                     "attachment_ids": [],
                 },
             )
             assert other.json()["agentscope"]["accepted"] is True, other.text
             assert other.json()["agentscope"]["session_id"] == first_session
-            restored = client.get(f"{NEXUS}/api/v1/conversations/{first['id']}", headers=owner_a)
-            assert restored.status_code == 200, restored.text
-            assert restored.json()["agentscope_session_id"] == first_session
-            native = client.get(f"{NEXUS}/api/v1/conversations/{first['id']}/messages", headers=owner_a)
+            history = f"{NEXUS}/api/v1/conversations/{first['id']}/messages"
+            native = client.get(history, headers=owner_a)
+            assert native.status_code == 200, native.text
+            assert native.json()["session_id"] == first_session
             assert any(
                 (item.get("metadata") or {}).get("display_text") == "附件里的标记是什么？"
                 for item in native.json()["messages"]
             )
-            blocked = client.get(f"{NEXUS}/api/v1/conversations/{first['id']}", headers=owner_b)
+            blocked = client.get(history, headers=owner_b)
             assert blocked.status_code == 404
 
             disabled = client.patch(
@@ -584,7 +588,7 @@ def test_private_chat_streams_and_isolates_anonymous_owners():
                 f"{NEXUS}/api/v1/conversations/{first['id']}/messages",
                 headers=owner_a,
                 json={
-                    "client_id": uuid.uuid4().hex, "text": "禁用后不要运行",
+                    "client_id": uuid.uuid4().hex, "content": [{"type": "text", "text": "禁用后不要运行"}],
                     "attachment_ids": [],
                 },
             )
@@ -627,7 +631,8 @@ def test_group_history_is_staged_in_each_native_session():
             history_ids = []
             for index in range(130):
                 initial = client.post(path, headers=OWNER, json={
-                    "client_id": uuid.uuid4().hex, "text": f"第 {index + 1} 条历史发言",
+                    "client_id": uuid.uuid4().hex,
+                    "content": [{"type": "text", "text": f"第 {index + 1} 条历史发言"}],
                 })
                 assert initial.status_code == 200, initial.text
                 payload = initial.json()
@@ -635,7 +640,7 @@ def test_group_history_is_staged_in_each_native_session():
                 history_ids.append(payload["message"]["id"])
             sent = client.post(path, headers=OWNER, json={
                 "client_id": uuid.uuid4().hex,
-                "text": f"@{names[0]} @{names[1]} 请分别说明下一步工作。",
+                "content": [{"type": "text", "text": f"@{names[0]} @{names[1]} 请分别说明下一步工作。"}],
             })
             assert sent.status_code == 200, sent.text
             assert sent.json()["participants"] == [e["id"] for e in created]
@@ -648,10 +653,9 @@ def test_group_history_is_staged_in_each_native_session():
             assert discussion["state"] == "completed", discussion
             replies = [item for item in page["items"] if item["sender_type"] == "employee"]
             assert [item["sender_id"] for item in replies[:2]] == [e["id"] for e in created]
-            bindings = client.get(f"{NEXUS}/api/v1/channels/{channel}/members", headers=OWNER).json()
             for employee in created:
                 session_id = next(
-                    member["agentscope_session_id"] for member in bindings["members"]
+                    member["agentscope_session_id"] for member in page["channel"]["members"]
                     if member["employee_id"] == employee["id"]
                 )
                 native = client.get(
@@ -718,7 +722,7 @@ def _send(client: httpx.Client, conversation_id: str, text: str) -> dict:
         f"{NEXUS}/api/v1/conversations/{conversation_id}/messages",
         headers=OWNER,
         json={
-            "client_id": uuid.uuid4().hex, "text": text,
+            "client_id": uuid.uuid4().hex, "content": [{"type": "text", "text": text}],
             "attachment_ids": [],
         },
     )

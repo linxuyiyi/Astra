@@ -1,6 +1,6 @@
 # Nexus 语音输入集成
 
-Nexus v1.5.0 的语音输入链路：
+Nexus v1.6.0 的语音输入链路：
 
 ```text
 services/nexus-api/chat-island  (React 输入框)
@@ -48,7 +48,7 @@ Nexus ASR（FunASR SenseVoiceSmall，127.0.0.1:19899）
 
 ## 2. 前端交互
 
-麦克风在 `chat-island/src/components/chat/TextInput.tsx`，录音/上传状态机在 `useAsrRecorder.ts`：
+麦克风在 `chat-island/src/conversation/VoiceInput.tsx`，录音/上传状态机在 `useAsrRecorder.ts`：
 
 ```text
 idle ──点击──> recording ──点击/60 s──> transcribing ──成功──> idle（文字插入光标）
@@ -57,7 +57,7 @@ idle ──点击──> recording ──点击/60 s──> transcribing ──�
 ```
 
 - 录音中显示“录音中 00:05”，再次点击停止；停止后立即释放麦克风轨道。
-- 录音中/识别中禁用重复提交；`transcribing` 时按钮显示 spinner。
+- 语音识别期间禁用麦克风按钮，并显示“正在识别…”。
 - 识别成功只把文字插入当前光标位置，**不自动发送**；原有草稿保留。
 - 失败显示中文错误和“重试”；重试复用上一段录音，不覆盖输入框。
 - 单聊和群聊复用同一组件；群聊发送仍走原有 `@` 路由规则。
@@ -67,11 +67,11 @@ idle ──点击──> recording ──点击/60 s──> transcribing ──�
 
 ### Push-to-Talk
 
-麦克风按钮旁显示当前快捷键（默认 `⌥ K 按住说话`），点击可修改：
+悬停麦克风可查看当前快捷键（默认 `⌥ K`），点击旁边的键盘图标可修改。
 
 - 按住完整组合键开始录音，松开任意必需键结束；Esc 取消且不上传。
 - 只接受含 Alt/Option、Ctrl 或 Command 的组合；Space/Enter/Esc/Tab 和系统保留组合会被拒绝。
-- 偏好保存在 iframe 源下的 `localStorage`（`nexus:asr:shortcut:v1`），保存后立即生效、刷新保持；没有系统级全局快捷键。
+- 偏好保存在 当前站点的 `localStorage`（`nexus:asr:shortcut:v1`），保存后立即生效、刷新保持；没有系统级全局快捷键。
 - 快捷键和麦克风按钮共用同一个 recorder；转写仍插入光标、不自动发送。
 - 录音时绑定 conversation/channel；切换会话不会把结果写入新会话。
 

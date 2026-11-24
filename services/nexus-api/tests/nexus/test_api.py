@@ -55,8 +55,8 @@ def employee_body(**overrides):
 
 def test_health_and_runtime_report_pinned_version(client):
     assert client.get("/api/health").json()["product"] == "nexus"
-    assert client.get("/api/health").json()["version"] == "1.5.0"
-    assert client.get("/openapi.json").json()["info"]["version"] == "1.5.0"
+    assert client.get("/api/health").json()["version"] == "1.6.0"
+    assert client.get("/openapi.json").json()["info"]["version"] == "1.6.0"
     runtime = client.get("/api/v1/runtime").json()
     assert runtime["agentscope_version"] == "2.0.10"
     assert runtime["configured"] is False
@@ -123,7 +123,11 @@ def test_private_chat_keeps_threads_and_does_not_invent_replies(client):
     sent = client.post(
         f"/api/v1/conversations/{first.json()['id']}/messages",
         headers=headers,
-        json={"client_id": "test-send-126", "text": "你负责哪些工作？", "attachment_ids": []},
+        json={
+            "client_id": "test-send-126",
+            "content": [{"type": "text", "text": "你负责哪些工作？"}],
+            "attachment_ids": [],
+        },
     )
     assert sent.status_code == 503
     assert "AgentScope" in sent.json()["detail"]
@@ -132,10 +136,29 @@ def test_private_chat_keeps_threads_and_does_not_invent_replies(client):
     ).json()["messages"]
     assert stored == []
     forged = client.get(
-        f"/api/v1/conversations/{first.json()['id']}?uid=browser-a",
+        f"/api/v1/conversations/{first.json()['id']}/messages",
+        params={"uid": "browser-a"},
         headers={"X-Owner-Id": "browser-b"},
     )
     assert forged.status_code == 404
+
+
+def test_private_and_group_send_reject_legacy_text_field(client):
+    employee = client.post("/api/v1/employees", json=employee_body()).json()["employee"]
+    headers = {"X-Owner-Id": "browser-a"}
+    conversation = client.post(
+        f"/api/v1/employees/{employee['id']}/conversations", headers=headers, json={},
+    ).json()
+    group = client.post(
+        "/api/v1/channels", headers=headers, json={"name": "评审", "member_ids": [employee["id"]]},
+    ).json()
+    for path in (f"conversations/{conversation['id']}", f"channels/{group['id']}"):
+        response = client.post(
+            f"/api/v1/{path}/messages", headers=headers,
+            json={"client_id": "legacy-send", "text": "你好", "content": [{"type": "text", "text": "你好"}]},
+        )
+        assert response.status_code == 422, response.text
+        assert any(error["loc"] == ["body", "text"] for error in response.json()["detail"])
 
 
 def test_disabled_employee_cannot_receive_private_message(client):
@@ -149,7 +172,7 @@ def test_disabled_employee_cannot_receive_private_message(client):
     response = client.post(
         f"/api/v1/conversations/{conversation['id']}/messages",
         headers=headers,
-        json={"client_id": "test-send-152", "text": "你好"},
+        json={"client_id": "test-send-152", "content": [{"type": "text", "text": "你好"}]},
     )
     assert response.status_code == 409
 
@@ -213,11 +236,14 @@ def test_claim_private_session_keeps_the_first_writer(client):
         connection.close()
     assert first == "session-a"
     assert second == "session-a"
-    stored = client.get(
-        f"/api/v1/conversations/{conversation_id}",
+    restored = client.post(
+        f"/api/v1/employees/{employee['id']}/conversations",
         headers={"X-Owner-Id": "owner"},
-    ).json()
-    assert stored["agentscope_session_id"] == "session-a"
+        json={},
+    )
+    assert restored.status_code == 200
+    assert restored.json()["id"] == conversation_id
+    assert restored.json()["agentscope_session_id"] == "session-a"
 
 
 def test_owners_keep_separate_conversations_across_restart(tmp_path, monkeypatch):
@@ -228,38 +254,31 @@ def test_owners_keep_separate_conversations_across_restart(tmp_path, monkeypatch
     application = create_app()
     with TestClient(application) as test_client:
         employee = test_client.post("/api/v1/employees", json=employee_body()).json()["employee"]
-        first = test_client.post(
-            f"/api/v1/employees/{employee['id']}/conversations",
-            headers=owner_a,
-            json={"name": "新对话"},
-        ).json()
-        second = test_client.post(
-            f"/api/v1/employees/{employee['id']}/conversations",
-            headers=owner_a,
-            json={"name": "新对话"},
-        ).json()
+        binding = f"/api/v1/employees/{employee['id']}/conversations"
+        first = test_client.post(binding, headers=owner_a, json={}).json()
+        second = test_client.post(binding, headers=owner_a, json={}).json()
         assert first["id"] == second["id"]
+        history = f"/api/v1/conversations/{first['id']}/messages"
         sent = test_client.post(
-            f"/api/v1/conversations/{first['id']}/messages",
+            history,
             headers=owner_a,
-            json={"client_id": "test-send-245", "text": "只属于 a"},
+            json={"client_id": "test-send-245", "content": [{"type": "text", "text": "只属于 a"}]},
         )
         assert sent.status_code == 503
-        hidden = test_client.get(f"/api/v1/employees/{employee['id']}/conversations", headers=owner_b)
-        assert hidden.json()["items"] == []
-        missing = test_client.get(f"/api/v1/conversations/{first['id']}", headers=owner_b)
+        other = test_client.post(binding, headers=owner_b, json={}).json()
+        assert other["id"] != first["id"]
+        missing = test_client.get(history, headers=owner_b)
         assert missing.status_code == 404
-        query_only = test_client.get(f"/api/v1/conversations/{first['id']}?uid=anon-a")
+        query_only = test_client.get(history, params={"uid": "anon-a"})
         assert query_only.status_code == 404
     restarted = create_app()
     with TestClient(restarted) as again:
-        listed = again.get(
-            f"/api/v1/employees/{employee['id']}/conversations",
-            headers=owner_a,
-        ).json()["items"]
-        assert [item["id"] for item in listed] == [first["id"]]
-        restored = again.get(f"/api/v1/conversations/{first['id']}", headers=owner_a).json()
-        assert restored["agentscope_session_id"] is None
+        reopened = again.post(binding, headers=owner_a, json={})
+        assert reopened.status_code == 200
+        assert reopened.json()["id"] == first["id"]
+        restored = again.get(history, headers=owner_a)
+        assert restored.status_code == 200
+        assert restored.json()["session_id"] is None
 
 
 def test_new_skills_are_rejected_when_catalog_is_unavailable(client):
@@ -427,7 +446,7 @@ def test_connected_catalog_accepts_only_returned_resources(tmp_path, monkeypatch
         refused = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"client_id": "test-send-430", "text": "禁用后不要运行"},
+            json={"client_id": "test-send-430", "content": [{"type": "text", "text": "禁用后不要运行"}]},
         )
         assert refused.status_code == 409
         assert chat_calls == []
@@ -444,7 +463,7 @@ def test_connected_catalog_accepts_only_returned_resources(tmp_path, monkeypatch
         accepted = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"client_id": "test-send-447", "text": "重新启用后再运行"},
+            json={"client_id": "test-send-447", "content": [{"type": "text", "text": "重新启用后再运行"}]},
         )
         assert accepted.status_code == 200
         assert accepted.json()["agentscope"]["accepted"] is True
@@ -500,12 +519,12 @@ def test_live_client_posts_chat_without_writing_a_reply(tmp_path, monkeypatch):
         first = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"client_id": "test-send-503", "text": "看一下失败日志"},
+            json={"client_id": "test-send-503", "content": [{"type": "text", "text": "看一下失败日志"}]},
         )
         second = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"client_id": "test-send-508", "text": "再看一次"},
+            json={"client_id": "test-send-508", "content": [{"type": "text", "text": "再看一次"}]},
         )
         assert first.json()["agentscope"]["accepted"] is True
         assert second.json()["agentscope"]["accepted"] is True
@@ -718,7 +737,7 @@ def test_peer_resolver_returns_mailbox_without_a_scripted_answer(tmp_path, monke
         refused = test_client.post(
             f"/api/v1/conversations/{peer_conversation['id']}/messages",
             headers=headers,
-            json={"client_id": "test-send-721", "text": "禁用后不应开始运行"},
+            json={"client_id": "test-send-721", "content": [{"type": "text", "text": "禁用后不应开始运行"}]},
         )
         assert refused.status_code == 409
 
@@ -856,7 +875,10 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
             )
             first_send = pool.submit(
                 test_client.post, f"/api/v1/conversations/{conversation['id']}/messages",
-                headers=headers, json={"client_id": "test-send-859", "text": "首次并发消息"},
+                headers=headers, json={
+                    "client_id": "test-send-859",
+                    "content": [{"type": "text", "text": "首次并发消息"}],
+                },
             )
             log_file, image = log_request.result(), image_request.result()
             first = first_send.result()
@@ -874,9 +896,12 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
         assert downloaded.status_code == 200
         assert downloaded.content == b"LOG-TOKEN-88"
         send_path = f"/api/v1/conversations/{conversation['id']}/messages"
-        assert test_client.post(send_path, headers=headers, json={"text": "缺少发送标识"}).status_code == 422
+        no_client_id = test_client.post(
+            send_path, headers=headers, json={"content": [{"type": "text", "text": "缺少发送标识"}]},
+        )
+        assert no_client_id.status_code == 422
         body = {
-            "text": "看日志", "client_id": "attachment-send-retry",
+            "content": [{"type": "text", "text": "看日志"}], "client_id": "attachment-send-retry",
             "attachment_ids": [log_file.json()["id"], image.json()["id"]],
         }
         lose_receipt = True
@@ -889,7 +914,9 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
                 "SELECT linked FROM t_nexus_attachment_refs WHERE scope_id=:c",
             ), {"c": conversation["id"]}).scalars().all()
             assert linked == [1, 1]
-        changed = test_client.post(send_path, headers=headers, json={**body, "text": "不同正文"})
+        changed = test_client.post(
+            send_path, headers=headers, json={**body, "content": [{"type": "text", "text": "不同正文"}]},
+        )
         assert changed.status_code == 409
         assert test_client.post(
             send_path, headers=headers, json={**body, "attachment_ids": [image.json()["id"]]},
@@ -918,7 +945,7 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
         assert other["id"] != conversation["id"]
         rejected = test_client.post(
             f"/api/v1/conversations/{other['id']}/messages", headers=other_owner,
-            json={"client_id": "test-send-921", "attachment_ids": [image.json()["id"]]},
+            json={"client_id": "test-send-921", "content": [], "attachment_ids": [image.json()["id"]]},
         )
         assert rejected.status_code == 404
         assert workspace[("session-chat", image.json()["id"])] == png
@@ -937,7 +964,9 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
         key = log_file.json()["id"]
         del workspace[("session-chat", key)]
         rejected = test_client.post(send_path, headers=headers, json={
-            "text": "缺失的原件", "client_id": "missing-file", "attachment_ids": [key],
+            "content": [{"type": "text", "text": "缺失的原件"}],
+            "client_id": "missing-file",
+            "attachment_ids": [key],
         })
         assert rejected.status_code == 404
         assert len(seen) == calls
@@ -961,7 +990,10 @@ def test_private_attachments_are_referenced_and_read_only_by_bound_session(tmp_p
                 raise RuntimeError("模拟上游接受后 Nexus 无法提交确认")
 
         event.listen(engine, "before_cursor_execute", fail_confirmation)
-        body = {"text": "确认提交失败后恢复", "client_id": "nexus-commit-retry"}
+        body = {
+            "content": [{"type": "text", "text": "确认提交失败后恢复"}],
+            "client_id": "nexus-commit-retry",
+        }
         try:
             failed = TestClient(application, raise_server_exceptions=False).post(
                 send_path, headers=headers, json=body,
@@ -1235,7 +1267,7 @@ def test_mailbox_hop_is_scoped_to_the_conversation_and_reply_is_visible(tmp_path
         assert any(m["name"] == "知微" and "阈值按账号计算" in str(m["content"]) for m in native["messages"])
         sent = test_client.post(
             f"/api/v1/conversations/{first['id']}/messages", headers=headers,
-            json={"client_id": "test-send-1237", "text": "同事回复了吗？"}
+            json={"client_id": "test-send-1237", "content": [{"type": "text", "text": "同事回复了吗？"}]}
         )
         assert sent.status_code == 200
         assert sent.json()["agentscope"]["accepted"] is True
@@ -1328,7 +1360,7 @@ def test_private_chat_uses_dont_ask(tmp_path, monkeypatch):
         sent = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"client_id": "test-send-1330", "text": "帮我看一下"},
+            json={"client_id": "test-send-1330", "content": [{"type": "text", "text": "帮我看一下"}]},
         )
         assert sent.status_code == 200, sent.text
 

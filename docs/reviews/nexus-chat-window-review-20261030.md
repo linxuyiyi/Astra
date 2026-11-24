@@ -101,6 +101,6 @@
 
 ## 复跑
 
-在 Nexus API 的已安装依赖环境运行新工厂 `tools/e2e/nexus_chat_window_fixture.py`。先用既有 `tools/e2e/nexus_pixel_office_fixture.py --directory /tmp/nexus-chat-window-e2e-<unique> --employees 3` 建立全新的临时验收库，再设置 `NEXUS_CHAT_E2E=1`、该目录的 ASTRA_DATA_DIR / SQLite URL，以 uvicorn factory 启动。工厂拒绝普通数据目录。选用未占用端口，正常输入临时 UID，创建测试群。
+复现本次历史结果时，使用提交 `9de16224c` 中的页面和 `tools/e2e/nexus_chat_window_fixture.py`。先用 `tools/e2e/nexus_pixel_office_fixture.py --directory /tmp/nexus-chat-window-e2e-<unique> --employees 3` 建立临时验收库，再设置 `NEXUS_CHAT_E2E=1`、该目录的 ASTRA_DATA_DIR / SQLite URL，以 uvicorn factory 启动。工厂只接受专用临时数据目录。选用未占用端口，正常输入临时 UID，创建测试群。v1.6.0 的浏览器检查见[当前验收报告](nexus-v1.6.0-conversation.md)。
 
 受控触发词：快速回复、慢回复、失败一次、停止失败、工具失败、确认卡。夹具不接触真实厂商凭据，不执行工具与模型。命令行回归见项目 AGENTS.md 与本报告各测试路径。

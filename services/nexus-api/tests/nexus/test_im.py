@@ -124,12 +124,13 @@ def test_im_http_round_trip_claims_and_acks_the_reply(tmp_path, monkeypatch, mcp
         assert accepted.status_code == 200, accepted.text
         assert accepted.json()["duplicate"] is False
         assert accepted.json()["session_id"] == "ses-private"
-        opened = test_client.get(
+        opened = test_client.post(
             f"/api/v1/employees/{employee['id']}/conversations",
             headers={"X-Verified-UID": "u9"},
+            json={},
         )
         assert opened.status_code == 200, opened.text
-        assert opened.json()["items"][0]["agentscope_session_id"] == "ses-private"
+        assert opened.json()["agentscope_session_id"] == "ses-private"
         assert chats[0]["session_id"] == "ses-private"
         assert chats[0]["input"]["metadata"]["verified_uid"] == "u9"
         claimed = test_client.get("/api/v1/im/outbox")
@@ -321,7 +322,7 @@ def test_concurrent_im_event_accepts_once(tmp_path, monkeypatch):
                 sent = await client.post(
                     f"/api/v1/conversations/{opened.json()['id']}/messages",
                     headers={"X-Verified-UID": "u1"},
-                    json={"client_id": "test-send-324", "text": "先有私聊"},
+                    json={"client_id": "test-send-324", "content": [{"type": "text", "text": "先有私聊"}]},
                 )
                 assert sent.status_code == 200, sent.text
                 saved = await client.post(
@@ -409,7 +410,7 @@ def test_im_http_waits_for_agentscope_and_web_stays_available(tmp_path, monkeypa
         opened = test_client.post(
             f"/api/v1/conversations/{web.json()['id']}/messages",
             headers={"X-Verified-UID": "u1"},
-            json={"client_id": "test-send-412", "text": "网页上的私聊"},
+            json={"client_id": "test-send-412", "content": [{"type": "text", "text": "网页上的私聊"}]},
         )
         assert opened.status_code == 200
         saved = test_client.post(
@@ -761,7 +762,11 @@ def test_send_private_passes_message_id_to_trigger_chat(tmp_path, monkeypatch):
         send_resp = client.post(
             f"/api/v1/conversations/{conv['id']}/messages",
             headers=headers,
-            json={"client_id": "test-send-764", "text": "你好", "attachment_ids": []},
+            json={
+                "client_id": "test-send-764",
+                "content": [{"type": "text", "text": "你好"}],
+                "attachment_ids": [],
+            },
         )
         assert send_resp.status_code == 200
         sent_msg = send_resp.json()["message"]

@@ -1,0 +1,10 @@
+{
+  "chromium": "151.0.7922.34",
+  "services": "Nexus + AgentScope 2.0.10 + Redis + SQLite",
+  "model": "local deterministic SSE, 1600 text deltas",
+  "serverPersistedChars": 4814,
+  "liveRenderedChars": 4814,
+  "snapshotReads": 2,
+  "canSendWithoutReload": true,
+  "pageErrors": []
+}

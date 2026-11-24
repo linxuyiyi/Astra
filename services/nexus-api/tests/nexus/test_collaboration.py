@@ -189,7 +189,10 @@ def wait_done(client, cid, timeout=5):
 
 def send(client, cid, body, key=None):
     return client.post(
-        f"/api/v1/channels/{cid}/messages", json={"text": body, "client_id": key or new_id("client")}
+        f"/api/v1/channels/{cid}/messages", json={
+            "content": [{"type": "text", "text": body}],
+            "client_id": key or new_id("client"),
+        }
     )
 
 
@@ -383,11 +386,11 @@ def test_temporary_uid_and_group_membership_boundary(setup):
     # UID 只是临时标识；明确允许恢复同一个 UID，并非认证凭据。
     assert outsider.get(f"/api/v1/channels/{cid}/messages", headers={"X-Owner-Id": uid}).status_code == 200
     record_uid(outsider, "outsider")
-    assert outsider.get(f"/api/v1/channels/{cid}/timeline/native").status_code == 403
+    assert outsider.get(f"/api/v1/channels/{cid}/messages").status_code == 403
     assert (
         outsider.post(
             f"/api/v1/channels/{cid}/messages",
-            json={"text": "伪造", "client_id": "spoof-0001", "sender_id": uid},
+            json={"content": [{"type": "text", "text": "伪造"}], "client_id": "spoof-0001", "sender_id": uid},
         ).status_code
         == 422
     )
@@ -412,7 +415,7 @@ def test_lifecycle_permissions_invite_read_leave_and_revocation(setup):
     join(owner, other, cid)
     member = next(
         m
-        for m in other.get(f"/api/v1/channels/{cid}/members").json()["members"]
+        for m in other.get(f"/api/v1/channels/{cid}/messages").json()["channel"]["members"]
         if m["member_id"] == other_uid
     )
     assert member["role"] == "member" and member["read_seq"] == 0
@@ -624,7 +627,11 @@ def test_attachment_access_is_revoked_with_membership(setup, monkeypatch):
     monkeypatch.setattr(fake, "trigger_inputs", check_access)
     sent = owner.post(
         f"/api/v1/channels/{cid}/messages",
-        json={"text": "@小掌柜 请读取共享报告", "attachment_ids": [key], "client_id": "attachment-0001"},
+        json={
+            "content": [{"type": "text", "text": "@小掌柜 请读取共享报告"}],
+            "attachment_ids": [key],
+            "client_id": "attachment-0001",
+        },
     )
     assert sent.status_code == 200
     wait_done(owner, cid)

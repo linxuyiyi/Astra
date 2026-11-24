@@ -86,7 +86,7 @@ def _mount_frontend(app: FastAPI) -> None:
                 agent_index = WEB_DIST / "agentscope-ui" / "index.html"
                 if agent_index.is_file():
                     return FileResponse(agent_index)
-            if full_path.startswith(("assets/", "opencode-workspace/")):
+            if full_path.startswith(("assets/", "opencode-workspace/", "nexus-chat/")):
                 raise HTTPException(status_code=404, detail="静态资源不存在")
         return FileResponse(index)
 

@@ -18,7 +18,7 @@ from .agentscope import AgentScopeError
 from .auth import digest, require_internal, require_user
 from .chat_attachments import (
     ATTACHMENT_PREFIX,
-    MessageContent,
+    MessageBody,
     link_attachments,
     load_attachments,
     location,
@@ -232,6 +232,7 @@ def channel_payload(db, channel_id, uid):
                 "name": name,
                 "avatar": avatar,
                 "online": online,
+                "enabled": bool(source and source.get("enabled", True)),
                 "read_seq": row["read_seq"],
                 "agentscope_session_id": row["agentscope_session_id"],
             }
@@ -239,7 +240,10 @@ def channel_payload(db, channel_id, uid):
     active = one(
         db,
         """SELECT id,state,turns,detail,active_employee_id FROM t_nexus_discussions WHERE
-        channel_id=:c ORDER BY generation DESC LIMIT 1""",
+        channel_id=:c
+        ORDER BY CASE WHEN state='running' OR (state='superseded' AND active_employee_id<>'') THEN 0
+                      WHEN state IN ('queued','superseded') THEN 1 ELSE 2 END,
+                 generation DESC LIMIT 1""",
         c=channel_id,
     )
     return {
@@ -333,11 +337,6 @@ class GroupBody(BaseModel):
     member_ids: list[str] = Field(default_factory=list, max_length=100)
 
 
-class SendBody(MessageContent):
-    model_config = ConfigDict(extra="forbid")
-    client_id: str = Field(min_length=8, max_length=64, pattern=r"^[\w-]+$")
-
-
 class JoinBody(BaseModel):
     token: str = Field(min_length=20, max_length=200)
 
@@ -417,44 +416,6 @@ class Collaboration:
                 db.commit()
                 return channel_payload(db, cid, user["uid"])
 
-        @app.get("/api/v1/channels/unclaimed")
-        def unclaimed(request: Request):
-            require_user(request)
-            with connect() as db:
-                return {
-                    "items": [
-                        dict(r)
-                        for r in db.execute(
-                            text("""SELECT id,name FROM t_nexus_channels c WHERE NOT EXISTS (SELECT 1 FROM
-                            t_nexus_channel_members m WHERE m.channel_id=c.id AND
-                            m.member_type='human' AND membership_active=1)""")
-                        ).mappings()
-                    ]
-                }
-
-        @app.post("/api/v1/channels/{channel_id}/claim")
-        def claim(channel_id: str, request: Request):
-            user = require_user(request)
-            with connect() as db:
-                lock_channel(db, channel_id)
-                if one(
-                    db,
-                    """SELECT 1 FROM t_nexus_channel_members WHERE channel_id=:c AND member_type='human' AND
-                    membership_active=1""",
-                    c=channel_id,
-                ):
-                    raise HTTPException(409, "群组已有可信成员")
-                db.execute(
-                    text(
-                        """INSERT INTO t_nexus_channel_members (channel_id,member_type,member_id,role) VALUES
-                        (:c,'human',:u,'owner')"""
-                    ),
-                    {"c": channel_id, "u": user["uid"]},
-                )
-                audit(db, channel_id, user["uid"], "claim", label=f"{user['display_name']} 认领了未分配群组")
-                db.commit()
-                return channel_payload(db, channel_id, user["uid"])
-
         @app.patch("/api/v1/channels/{channel_id}")
         def update_channel(channel_id: str, body: GroupBody, request: Request):
             user = require_user(request)
@@ -506,11 +467,6 @@ class Collaboration:
                 )
                 db.commit()
                 return channel_payload(db, channel_id, user["uid"])
-
-        @app.get("/api/v1/channels/{channel_id}/members")
-        def list_members(channel_id: str, request: Request):
-            with connect() as db:
-                return channel_payload(db, channel_id, require_user(request)["uid"])
 
         @app.post("/api/v1/channels/{channel_id}/invitations")
         def invite(channel_id: str, request: Request):
@@ -691,8 +647,6 @@ class Collaboration:
                 return {"ok": True}
 
         @app.get("/api/v1/channels/{channel_id}/messages")
-        @app.get("/api/v1/channels/{channel_id}/timeline/native")
-        @app.get("/api/v1/channels/{channel_id}/timeline")
         def history(channel_id: str, request: Request, before: int = 0, limit: int = 50):
             if not 1 <= limit <= 100 or before < 0:
                 raise HTTPException(422, "分页参数无效")
@@ -727,7 +681,7 @@ class Collaboration:
                 }
 
         @app.post("/api/v1/channels/{channel_id}/messages")
-        def send(channel_id: str, body: SendBody, request: Request):
+        def send(channel_id: str, body: MessageBody, request: Request):
             user = require_user(request)
             with connect() as db:
                 lock_channel(db, channel_id)
@@ -1010,7 +964,9 @@ class Collaboration:
                 native={
                     "role": "user",
                     "content": [{"type": "text", "text": body}],
-                    "metadata": {"task_id": source["id"], "task_event_id": event_id},
+                    "metadata": {
+                        "task_id": source["id"], "task_event_id": event_id, "task_status": source["status"],
+                    },
                 },
             )
             if did:
@@ -1530,6 +1486,9 @@ class Collaboration:
                     text("UPDATE t_nexus_discussions SET active_employee_id=:e,turns=:t WHERE id=:i"),
                     {"e": eid, "t": turn + 1, "i": d["id"]},
                 )
+                emit(db, d["channel_id"], {
+                    "type": "discussion-worker", "id": d["id"], "active_employee_id": eid,
+                })
                 db.commit()
                 channel = one(db, "SELECT * FROM t_nexus_channels WHERE id=:c", c=d["channel_id"])
                 session_id = await self.claim_session(

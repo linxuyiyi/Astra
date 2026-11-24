@@ -2,62 +2,69 @@
   <section class="chat-page">
     <div class="workspace" :class="{ 'workspace--focus': !asideOpen }">
       <button v-if="mobileRailOpen || asideOpen" class="chat-mobile-mask" aria-label="关闭聊天侧栏" @click="mobileRailOpen = false; asideOpen = false" />
-      <aside class="panel left-rail" :class="{ 'is-mobile-open': mobileRailOpen }">
+      <aside class="left-rail" :class="{ 'is-mobile-open': mobileRailOpen }" aria-label="会话列表">
         <button type="button" class="chat-mobile-only chat-mobile-close" @click="mobileRailOpen = false">关闭会话列表</button>
-        <div class="chat-search-row">
-          <el-input v-model="search" placeholder="搜索联系人 / 群组" clearable />
-          <el-tooltip content="新建群组" placement="top">
-            <el-button :icon="Plus" aria-label="新建群组" data-testid="chat-create-group" @click="openGroupDialog()" />
-          </el-tooltip>
+        <div class="chat-directory-head">
+          <h1>会话</h1>
+          <button type="button" class="chat-icon-button" aria-label="新建群组" title="新建群组" data-testid="chat-create-group" @click="openGroupDialog()">
+            <Plus :size="18" :stroke-width="1.7" />
+          </button>
         </div>
-        <button type="button" class="chat-join-link" @click="joinDialogOpen = true">通过邀请加入群组</button>
-        <div class="chat-filter-seg" role="tablist" aria-label="会话筛选">
+        <el-input v-model="search" class="chat-search" placeholder="搜索会话" aria-label="搜索联系人或群组" clearable>
+          <template #prefix><Search :size="16" :stroke-width="1.7" /></template>
+        </el-input>
+        <div class="chat-filter-seg" role="tablist" aria-label="会话筛选" @keydown="moveTab">
           <button
             v-for="item in filterOptions"
             :key="item.value"
             type="button"
             role="tab"
+            :id="`chat-filter-${item.value}`"
+            :tabindex="filter === item.value ? 0 : -1"
+            aria-controls="chat-directory-results"
             class="chat-filter-seg__item"
             :class="{ 'is-active': filter === item.value }"
             :aria-selected="filter === item.value"
             @click="filter = item.value"
           >{{ item.label }}</button>
         </div>
-        <div class="chat-counts muted">{{ filteredTargets.length }} 个会话</div>
-        <el-empty v-if="!directoryLoading && !directoryError && !filteredTargets.length" description="没有匹配的联系人或群组" :image-size="56" />
-        <div v-if="directoryError" role="alert" style="padding: 12px">
-          <p>{{ directoryError }}</p>
-          <el-button @click="loadDirectory">重试</el-button>
+        <div id="chat-directory-results" class="chat-target-list" role="tabpanel" :aria-labelledby="`chat-filter-${filter}`">
+          <p v-if="!directoryLoading && !directoryError && !filteredTargets.length" class="chat-list-note">没有匹配的会话</p>
+          <div v-if="directoryError" class="chat-list-note" role="alert">
+            <p>{{ directoryError }}</p>
+            <el-button @click="loadDirectory">重试</el-button>
+          </div>
+          <button
+            v-for="target in filteredTargets"
+            :key="target.key"
+            class="chat-target"
+            :aria-current="target.key === selectedKey ? 'true' : undefined"
+            type="button"
+            @click="selectTarget(target.key)"
+          >
+            <EmployeeAvatar v-if="target.kind === 'contact'" :avatar="target.avatar" :size="36" :disabled="!target.enabled" />
+            <span v-else class="chat-avatar" aria-hidden="true"><UsersRound :size="18" :stroke-width="1.6" /></span>
+            <span class="chat-target__meta">
+              <b>{{ target.name }}</b>
+              <small>{{ summaries[target.key] || target.subtitle }}</small>
+            </span>
+          </button>
         </div>
-        <button
-          v-for="target in filteredTargets"
-          :key="target.key"
-          class="rail-item chat-target"
-          :aria-current="target.key === selectedKey ? 'true' : undefined"
-          :class="{ active: target.key === selectedKey }"
-          type="button"
-          @click="selectTarget(target.key)"
-        >
-          <EmployeeAvatar v-if="target.kind === 'contact'" :avatar="target.avatar" :size="36" :disabled="!target.enabled" />
-          <span v-else class="avatar" aria-hidden="true"><UsersRound :size="16" /></span>
-          <span class="chat-target__meta">
-            <b>{{ target.name }}</b>
-            <small class="muted">{{ railSummary(target.key) || target.subtitle }}</small>
-          </span>
-          <span v-if="unreadOf(target.key)" class="unread-badge" :aria-label="`${unreadOf(target.key)} 条未读`">{{ unreadOf(target.key) > 99 ? '99+' : unreadOf(target.key) }}</span>
-        </button>
+        <div class="chat-directory-footer">
+          <button type="button" class="chat-join-link" @click="joinDialogOpen = true">
+            <LogIn :size="16" :stroke-width="1.7" /> 加入群组
+          </button>
+        </div>
       </aside>
 
-      <article class="panel chat">
+      <article class="chat">
         <div v-if="activeTarget" class="chat-head">
           <button type="button" class="chat-mobile-only chat-directory-toggle" @click="mobileRailOpen = true; asideOpen = false">会话列表</button>
+          <EmployeeAvatar v-if="activeTarget.kind === 'contact'" :avatar="activeTarget.avatar" :size="40" :disabled="!activeTarget.enabled" />
+          <span v-else class="chat-avatar chat-avatar--head" aria-hidden="true"><UsersRound :size="20" :stroke-width="1.6" /></span>
           <div class="chat-head__copy">
             <h2 :title="activeTarget.name">{{ activeTarget.name }}</h2>
-            <p v-if="activeTarget.kind === 'group' && activeTarget.channel?.description" class="chat-head__desc muted">{{ activeTarget.channel?.description }}</p>
-            <p v-else-if="activeTarget.kind === 'contact'" class="chat-head__desc muted" :title="`${activeTarget.subtitle} · ${activeTarget.employee?.description || ''}`">
-              {{ activeTarget.subtitle }}<template v-if="activeTarget.employee?.description"> · {{ activeTarget.employee.description }}</template><template v-if="!activeTarget.enabled"> · 已禁用</template>
-            </p>
-            <p v-else-if="!activeTarget.enabled" class="muted">已禁用</p>
+            <p class="chat-head__desc muted">{{ activeTarget.subtitle }}<template v-if="!activeTarget.enabled"> · 已禁用</template></p>
           </div>
           <div class="chat-head__actions">
             <el-dropdown
@@ -65,54 +72,59 @@
               trigger="click"
               @command="onChatHeadCommand"
             >
-              <button type="button" class="chat-head-more" aria-label="更多操作" data-testid="chat-head-more">⋯</button>
+              <button type="button" class="chat-icon-button" aria-label="更多操作" title="更多操作" data-testid="chat-head-more"><Ellipsis :size="19" :stroke-width="1.7" /></button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="group-settings">群组设置</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-            <el-button @click="toggleAside">{{ asideOpen ? "收起资料" : "查看资料" }}</el-button>
+            <button type="button" class="chat-profile-toggle" :aria-expanded="asideOpen" @click="toggleAside">
+              <PanelRight :size="17" :stroke-width="1.6" /> {{ asideOpen ? "收起资料" : "查看资料" }}
+            </button>
           </div>
         </div>
         <div v-else class="chat-head"><h2>数字员工</h2></div>
 
-        <div v-if="directoryLoading || activeState?.status === 'loading'" class="muted" style="padding: 24px">正在读取会话…</div>
-        <ChatPanel
-          v-else-if="activeState && activeRuntime"
-          :key="selectedKey"
-          :state="activeState"
-          :target="activeTarget"
-          :runtime="activeRuntime"
-          :employees="employees"
-          @retry="selectTarget(selectedKey, { retry: true })"
+        <div v-if="directoryLoading || bindingLoading" class="chat-start" role="status">正在读取会话…</div>
+        <div v-else-if="bindingError" class="chat-start" role="alert">
+          {{ bindingError }} <el-button size="small" @click="selectTarget(selectedKey, { retry: true })">重试</el-button>
+        </div>
+        <ConversationPanel
+          v-else-if="conversation"
+          :key="JSON.stringify([conversation.kind, conversation.id, conversation.viewerId, conversation.title, conversation.enabled, conversation.avatar])"
+          :conversation="conversation"
         />
-        <div v-else class="muted" style="padding: 24px">选择左侧联系人或群组开始对话</div>
+        <div v-else class="chat-start">选择联系人或群组开始对话</div>
 
       </article>
 
-      <aside v-if="activeState && asideOpen" class="panel aside">
+      <aside v-if="activeTarget && asideOpen" class="chat-aside" aria-label="会话资料">
         <button type="button" class="chat-mobile-only chat-mobile-close" @click="asideOpen = false">关闭资料</button>
-        <div class="right-tabs" role="tablist" aria-label="侧栏">
+        <div class="right-tabs" role="tablist" aria-label="侧栏" @keydown="moveTab">
           <button
             v-for="item in rightTabs"
             :key="item.value"
             type="button"
             role="tab"
+            :id="`chat-aside-${item.value}`"
+            :tabindex="tab === item.value ? 0 : -1"
+            aria-controls="chat-aside-content"
             class="chat-aside-tab"
-            :class="{ 'is-active': activeState.tab === item.value }"
-            :aria-selected="activeState.tab === item.value"
-            @click="activeState.tab = item.value"
+            :class="{ 'is-active': tab === item.value }"
+            :aria-selected="tab === item.value"
+            @click="tab = item.value"
           >{{ item.label }}</button>
         </div>
 
-        <div v-if="activeState.tab === 'tasks'" style="padding: 16px">
-          <div v-if="activeState.taskError" class="muted" style="margin-bottom: 10px">{{ activeState.taskError }}</div>
-          <div v-if="activeState.tasksLoading && !activeState.tasks.length" class="muted">正在读取关联任务…</div>
-          <TaskRail v-else :tasks="activeState.tasks" :names="nameById" hide-responsible empty-text="暂无关联任务" />
+        <div id="chat-aside-content" role="tabpanel" :aria-labelledby="`chat-aside-${tab}`">
+        <div v-if="tab === 'tasks'" style="padding: 16px">
+          <div v-if="taskError" class="muted" style="margin-bottom: 10px">{{ taskError }}</div>
+          <div v-if="tasksLoading && !tasks.length" class="muted">正在读取关联任务…</div>
+          <TaskRail v-else :tasks="tasks" :names="nameById" hide-responsible empty-text="暂无关联任务" />
         </div>
 
-        <div v-else-if="activeState.tab === 'materials' && activeTarget?.kind === 'contact'" style="padding: 16px">
+        <div v-else-if="tab === 'materials' && activeTarget?.kind === 'contact'" style="padding: 16px">
           <div class="section-label">职责范围</div>
           <div class="detail-excerpt">{{ activeTarget.employee?.description }}</div>
           <div class="section-label">工作指令</div>
@@ -139,7 +151,7 @@
           </div>
         </div>
 
-        <div v-else-if="activeState.tab === 'members' && activeTarget?.kind === 'group'" style="padding: 0 16px 16px">
+        <div v-else-if="tab === 'members' && activeTarget?.kind === 'group'" style="padding: 0 16px 16px">
           <div class="member-actions">
             <b>群组成员</b>
             <el-button v-if="canManage" size="small" @click="inviteHuman">邀请人类成员</el-button>
@@ -190,7 +202,8 @@
           <div class="section-label">目标</div>
           <div class="detail-excerpt">{{ activeTarget.channel?.description || "暂无" }}</div>
           <div class="section-label">成员</div>
-          <div class="detail-excerpt">{{ (activeTarget.members || []).map((item) => item.name).join("、") || "暂无" }}</div>
+          <div class="detail-excerpt">{{ (activeTarget.channel?.members || []).map((item) => item.name).join("、") || "暂无" }}</div>
+        </div>
         </div>
       </aside>
     </div>
@@ -247,16 +260,26 @@ import {
   listEmployees,
   saveChannel,
 } from "@/api";
-import { Plus, UserRound, UsersRound } from "lucide-vue-next";
+import { Ellipsis, LogIn, PanelRight, Plus, Search, UserRound, UsersRound } from "lucide-vue-next";
 import TaskRail from "@/components/TaskRail.vue";
 import { listTasks, listWorkers, type PlatformTask, type PlatformWorker } from "@/platform";
 import type { Channel, Employee, ResourceCatalog } from "@/types";
-import { GroupChatAdapter, PrivateChatAdapter } from "@/features/chat/adapters";
-import { ChatRuntime, createSessionState } from "@/features/chat/ChatRuntime";
-import ChatPanel from "@/features/chat/components/ChatPanel.vue";
+import ConversationPanel, { loadConversationBundle } from "@/features/chat/ConversationPanel.vue";
 import { shortText } from "@/features/chat/shortText";
-import type { ChatSessionState, ChatTarget } from "@/features/chat/types";
-import { selectionIsCurrent } from "@/features/chat/sessionState";
+import type { ConversationProps } from "../../../shared/conversation";
+
+interface ChatTarget {
+  key: string;
+  kind: "contact" | "group";
+  id: string;
+  name: string;
+  subtitle: string;
+  avatar: string;
+  enabled: boolean;
+  searchText: string;
+  employee?: Employee;
+  channel?: Channel;
+}
 
 const route = useRoute();
 const router = useRouter();
@@ -272,12 +295,33 @@ const filterOptions = [
   { value: "contact" as const, label: "联系人" },
   { value: "group" as const, label: "群组" },
 ];
+function moveTab(event: KeyboardEvent) {
+  const tabs = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[role=tab]'));
+  const index = tabs.indexOf(event.target as HTMLButtonElement);
+  if (index < 0) return;
+  const next = {
+    ArrowLeft: (index + tabs.length - 1) % tabs.length,
+    ArrowRight: (index + 1) % tabs.length,
+    Home: 0,
+    End: tabs.length - 1,
+  }[event.key as "ArrowLeft" | "ArrowRight" | "Home" | "End"];
+  if (next === undefined) return;
+  event.preventDefault();
+  tabs[next].focus();
+  tabs[next].click();
+}
 const selectedKey = ref("");
-const sessions = reactive<Record<string, ChatSessionState>>({});
+const summaries = reactive<Record<string, string>>({});
+const bindingId = ref("");
+const bindingLoading = ref(false);
+const bindingError = ref("");
+const tab = ref<"tasks" | "members" | "materials">("materials");
+const tasks = ref<PlatformTask[]>([]);
+const tasksLoading = ref(false);
+const taskError = ref("");
 const asideOpen = ref(false);
 function toggleAside() {
   asideOpen.value = !asideOpen.value;
-  if (asideOpen.value && activeTarget.value?.kind === "contact" && activeState.value) activeState.value.tab = "materials";
 }
 const mobileRailOpen = ref(false);
 const groupDialogOpen = ref(false);
@@ -301,7 +345,7 @@ const catalogs = ref({
 let taskTimer = 0;
 let selectionGeneration = 0;
 let disposed = false;
-const preparePromises = new Map<string, Promise<void>>();
+let taskGeneration = 0;
 
 const targets = computed<ChatTarget[]>(() => {
   const list: ChatTarget[] = [];
@@ -315,7 +359,6 @@ const targets = computed<ChatTarget[]>(() => {
       avatar: employee.avatar,
       enabled: employee.enabled,
       searchText: `${employee.name} ${employee.domain} ${employee.description}`.toLowerCase(),
-      createdAt: "",
       employee,
     });
   }
@@ -332,8 +375,6 @@ const targets = computed<ChatTarget[]>(() => {
       avatar: "",
       enabled: true,
       searchText: `${channel.name} ${channel.description} ${members.map((item) => item.name).join(" ")}`.toLowerCase(),
-      createdAt: channel.created_at ?? "",
-      members,
       channel,
     });
   }
@@ -348,33 +389,25 @@ const filteredTargets = computed(() => {
   });
 });
 
-const activeState = computed(() => (selectedKey.value ? sessions[selectedKey.value] : undefined));
-const activeTarget = computed(() => activeState.value?.target ?? null);
-const runtimes = new Map<string, ChatRuntime>();
-const activeRuntime = computed(() => (selectedKey.value ? runtimes.get(selectedKey.value) : undefined));
-
-function ensureRuntime(state: ChatSessionState) {
-  let runtime = runtimes.get(state.key);
-  if (!runtime) {
-    runtime = new ChatRuntime(state, () => selectedKey.value === state.key);
-    runtimes.set(state.key, runtime);
-  }
-  return runtime;
-}
-
-function railSummary(key: string) {
-  return sessions[key]?.lastSummary || "";
-}
-
-function unreadOf(key: string) {
-  return sessions[key]?.unread || 0;
-}
+const activeTarget = computed(() => targets.value.find(item => item.key === selectedKey.value));
+const conversation = computed<ConversationProps | undefined>(() => {
+  const target = activeTarget.value;
+  if (!target || !bindingId.value) return;
+  return {
+    kind: target.kind === "contact" ? "private" : "group",
+    id: bindingId.value,
+    viewerId: currentUid(),
+    title: target.name,
+    avatar: target.avatar,
+    enabled: target.enabled,
+    onActivity(summary) { summaries[target.key] = summary; },
+    onMembersChanged() { void refreshGroups().catch(() => undefined); },
+  };
+});
 
 const rightTabs = computed(() => activeTarget.value?.kind === "group"
   ? [{ value: "tasks" as const, label: "任务" }, { value: "members" as const, label: "成员" }, { value: "materials" as const, label: "资料" }]
   : [{ value: "tasks" as const, label: "任务" }, { value: "materials" as const, label: "资料" }]);
-
-
 
 const nameById = computed(() => {
   const names: Record<string, string> = {};
@@ -382,9 +415,6 @@ const nameById = computed(() => {
   for (const worker of workers.value) names[worker.id] = workerDisplayName(worker);
   return names;
 });
-
-
-
 
 function resourceLabel(catalog: ResourceCatalog, id: string) {
   return catalog.items.find((item) => item.id === id)?.name ?? id;
@@ -396,56 +426,22 @@ function toolLabel(id: string) {
   return name === id ? "工作区工具" : name;
 }
 
-
-
-
-function ensureState(target: ChatTarget) {
-  if (!sessions[target.key]) sessions[target.key] = createSessionState(target);
-  return sessions[target.key];
-}
-
-
-
-async function prepareContact(state: ChatSessionState) {
-  const employee = state.target.employee;
-  if (!employee) return;
-  state.status = "loading";
+async function loadTasks() {
+  const target = activeTarget.value;
+  if (!target || !bindingId.value || !asideOpen.value || tab.value !== "tasks") return;
+  const generation = ++taskGeneration;
+  const query: Record<string, string> = { source: target.kind === "contact" ? "private_chat" : "group_chat", external_task_id: bindingId.value };
+  if (target.kind === "contact") query.origin_employee_id = target.id;
+  tasksLoading.value = true;
   try {
-    const conversation = await createConversation(employee.id);
-    const adapter = new PrivateChatAdapter(employee, conversation);
-    state.error = "";
-    ensureRuntime(state).bind(adapter);
+    const result = await listTasks(query);
+    if (generation !== taskGeneration) return;
+    tasks.value = result;
+    taskError.value = "";
   } catch (error) {
-    ensureRuntime(state).setError(error);
-  }
-}
-
-function ensurePrepared(state: ChatSessionState) {
-  const existing = preparePromises.get(state.key);
-  if (existing) return existing;
-  const promise = prepareContact(state).finally(() => {
-    preparePromises.delete(state.key);
-  });
-  preparePromises.set(state.key, promise);
-  return promise;
-}
-
-async function loadTasks(state: ChatSessionState) {
-  const adapter = state.adapter;
-  if (!adapter) return;
-  const generation = ++state.taskGeneration;
-  state.tasksLoading = true;
-  try {
-    const tasks = await listTasks(adapter.taskQuery());
-    if (state.taskGeneration !== generation || state.adapter !== adapter) return;
-    state.tasks = tasks;
-    state.taskError = "";
-  } catch (error) {
-    if (state.taskGeneration !== generation || state.adapter !== adapter) return;
-    state.tasks = [];
-    state.taskError = shortText(error, "关联任务加载失败");
+    if (generation === taskGeneration) taskError.value = shortText(error, "关联任务加载失败");
   } finally {
-    if (state.taskGeneration === generation) state.tasksLoading = false;
+    if (generation === taskGeneration) tasksLoading.value = false;
   }
 }
 
@@ -460,37 +456,26 @@ async function selectTarget(key: string, options: { fromRoute?: boolean; retry?:
   mobileRailOpen.value = false;
   const target = targets.value.find((item) => item.key === key);
   if (!target) return;
-  if (!options.retry && !options.fromRoute && selectedKey.value === key && sessions[key]?.adapter) return;
-  const previousKey = selectedKey.value;
-  if (previousKey && previousKey !== key && sessions[previousKey]) {
-    runtimes.get(previousKey)?.suspend();
-  }
+  if (!options.retry && selectedKey.value === key && (bindingId.value || bindingLoading.value)) return;
   const generation = ++selectionGeneration;
+  ++taskGeneration;
   selectedKey.value = key;
-  localStorage.setItem("nexus_chat_last", key);
-  if (!options.fromRoute) updateRoute(target);
-  const state = ensureState(target);
-  const runtime = ensureRuntime(state);
-  if (options.retry) {
-    runtime.dispose();
-    state.adapter = null;
-    state.messages = [];
-    state.notice = "";
-    state.failedSend = null;
-    state.noticeSource = "";
-  }
-  if (!state.adapter) {
-    if (target.kind === "contact") await ensurePrepared(state);
-    else if (target.channel) runtime.bind(new GroupChatAdapter(target.channel, employees.value));
-  } else if (options.retry && target.kind === "contact") {
-    await ensurePrepared(state);
-  }
-  if (!selectionIsCurrent(selectedKey.value, key, generation, selectionGeneration, disposed)) return;
-  if (state.adapter) {
-    runtime.resume();
-    if (state.messages.length) state.status = "ready";
-    runtime.markRead();
-    void loadTasks(state);
+  bindingId.value = "";
+  bindingError.value = "";
+  bindingLoading.value = true;
+  tasks.value = [];
+  taskError.value = "";
+  tasksLoading.value = false;
+  tab.value = target.kind === "group" ? "members" : "materials";
+  localStorage.setItem(`nexus_chat_last:${currentUid()}`, key);
+  if (!options.fromRoute && routeTargetKey() !== key) updateRoute(target);
+  try {
+    const id = target.kind === "group" ? target.id : (await createConversation(target.id)).id;
+    if (generation === selectionGeneration) bindingId.value = id;
+  } catch (error) {
+    if (generation === selectionGeneration) bindingError.value = shortText(error, "无法打开对话");
+  } finally {
+    if (generation === selectionGeneration) bindingLoading.value = false;
   }
 }
 
@@ -502,24 +487,11 @@ function routeTargetKey() {
   return "";
 }
 
-function routeType(): "contact" | "group" | "" {
-  return route.query.type === "group" ? "group" : route.query.type === "contact" ? "contact" : "";
-}
-
 async function applyRouteTarget() {
-  if (!employees.value.length && !channels.value.length) return;
-  const type = routeType();
-  if (type) filter.value = type;
-  const key = routeTargetKey() || (type ? targets.value.find((item) => item.kind === type)?.key ?? "" : "");
+  const key = routeTargetKey();
   if (!key || key === selectedKey.value) return;
   await selectTarget(key, { fromRoute: true });
 }
-
-
-
-
-
-
 
 function onChatHeadCommand(command: string) {
   if (command === "group-settings" && activeTarget.value?.kind === "group") {
@@ -561,21 +533,7 @@ async function saveGroup() {
     groupDialogOpen.value = false;
     channels.value = await listChannels();
     const key = `group:${saved.id}`;
-    const target = targets.value.find((item) => item.key === key);
-    const existing = sessions[key];
-    if (existing && target?.channel) {
-      existing.target = target;
-      if (existing.adapter instanceof GroupChatAdapter) {
-        existing.adapter.setChannel(target.channel, employees.value);
-        ensureRuntime(existing).bind(existing.adapter);
-      } else {
-        ensureRuntime(existing).bind(new GroupChatAdapter(target.channel, employees.value));
-      }
-      existing.error = "";
-      void loadTasks(existing);
-    } else {
-      await selectTarget(key);
-    }
+    await selectTarget(key);
     ElMessage.success(wasEditing ? "群组已保存" : "群组已创建");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "保存失败");
@@ -584,10 +542,9 @@ async function saveGroup() {
   }
 }
 
-watch(() => [route.query.employee, route.query.group, route.query.type], () => { void applyRouteTarget(); });
-watch(() => activeState.value?.tab, (tab) => {
-  if (tab === "tasks" && activeState.value) void loadTasks(activeState.value);
-});
+watch(() => [route.query.employee, route.query.group], () => { void applyRouteTarget(); });
+watch([asideOpen, tab, bindingId], () => { void loadTasks(); });
+watch(asideOpen, open => { if (open) void loadAsideReferences(); });
 
 async function refreshGroups() {
   channels.value = await listChannels();
@@ -615,7 +572,8 @@ async function joinGroup() {
     joinDialogOpen.value = false;
     await refreshGroups();
     await selectTarget(`group:${result.id}`);
-    await router.replace({ path: "/chat", query: { type: "group", group: result.id } });
+    filter.value = "group";
+    await router.replace({ path: "/chat", query: { group: result.id } });
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : "邀请无效"); }
 }
 function setRole(uid: string, role: string) { void act(`${activeTarget.value!.id}/humans/${uid}`, "PATCH", { role }); }
@@ -625,42 +583,35 @@ async function leaveGroup() {
   await act(`${activeTarget.value!.id}/leave`);
   await loadDirectory();
 }
-function onNativeGroupMembers() { void refreshGroups().catch(() => undefined); }
-window.addEventListener("nexus-chat-members", onNativeGroupMembers);
-function onGroupMembers(event: MessageEvent) {
-  if (event.origin === location.origin && event.data?.type === "nexus-group-members") void refreshGroups();
+let asideRequested = false;
+async function loadAsideReferences() {
+  if (asideRequested) return;
+  asideRequested = true;
+  const [skills, mcps, knowledge, tools, workerList] = await Promise.all([
+    getSkills().catch(() => emptyCatalog()),
+    getMcps().catch(() => emptyCatalog()),
+    getKnowledge().catch(() => emptyCatalog()),
+    getTools().catch(() => emptyCatalog()),
+    listWorkers().catch(() => []),
+  ]);
+  if (disposed) return;
+  catalogs.value = { skills, mcps, knowledge, tools };
+  workers.value = workerList;
 }
-window.addEventListener("message", onGroupMembers);
 
 async function loadDirectory() {
   directoryLoading.value = true;
   directoryError.value = "";
   try {
-    const [skills, mcps, knowledge, tools, employeeList, channelList, workerList] = await Promise.all([
-      getSkills().catch(() => emptyCatalog()),
-      getMcps().catch(() => emptyCatalog()),
-      getKnowledge().catch(() => emptyCatalog()),
-      getTools().catch(() => emptyCatalog()),
-      listEmployees(),
-      listChannels(),
-      listWorkers().catch(() => []),
-    ]);
+    const [employeeList, channelList] = await Promise.all([listEmployees(), listChannels()]);
     if (disposed) return;
-    catalogs.value = { skills, mcps, knowledge, tools };
     employees.value = employeeList;
     channels.value = channelList;
-    workers.value = workerList;
-    const type = routeType();
-    if (type) filter.value = type;
     const routeKey = routeTargetKey();
-    const stored = localStorage.getItem("nexus_chat_last") ?? "";
+    const stored = localStorage.getItem(`nexus_chat_last:${currentUid()}`) ?? "";
     const storedTarget = stored && targets.value.some((item) => item.key === stored) ? stored : "";
-    const initial = routeKey
-      || (type ? targets.value.find((item) => item.kind === type)?.key ?? "" : "")
-      || storedTarget
-      || targets.value[0]?.key
-      || "";
-    if (initial) await selectTarget(initial, { fromRoute: Boolean(routeKey || type) });
+    const initial = routeKey || storedTarget || targets.value[0]?.key;
+    if (initial) await selectTarget(initial, { fromRoute: Boolean(routeKey) });
   } catch (error) {
     if (!disposed) directoryError.value = shortText(error, "会话列表加载失败");
   } finally {
@@ -669,165 +620,282 @@ async function loadDirectory() {
 }
 
 onMounted(async () => {
+  void loadConversationBundle().catch(() => undefined);
   if (typeof route.query.invite === "string") { joinToken.value = route.query.invite; joinDialogOpen.value = true; }
   await loadDirectory();
   if (disposed) return;
   taskTimer = window.setInterval(() => {
-    const state = activeState.value;
-    if (state?.tab === "tasks") void loadTasks(state);
+    void loadTasks();
     if (activeTarget.value?.kind === "group") void refreshGroups().catch(() => undefined);
   }, 8000);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("message", onGroupMembers);
-  window.removeEventListener("nexus-chat-members", onNativeGroupMembers);
   disposed = true;
-  selectionGeneration += 1;
-  for (const state of Object.values(sessions)) {
-    state.taskGeneration += 1;
-    runtimes.get(state.key)?.dispose();
-  }
-  runtimes.clear();
-  preparePromises.clear();
+  ++selectionGeneration;
+  ++taskGeneration;
   window.clearInterval(taskTimer);
 });
 </script>
 
 <style scoped>
-.member-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.member { flex-wrap:nowrap; }
-.member-identity { flex:1; min-width:0; overflow-wrap:anywhere; display:grid; gap:2px; }
-.member-name { font-size: 12px; font-weight: 600; line-height: 1.3; }
-.member-role { font-size: var(--astra-font-helper); line-height: 1.35; }
-.member-more,
-.chat-head-more {
+.chat-page {
+  --chat-bar-height: 60px;
+  --chat-rail: #f6f7f5;
+  --chat-canvas: #fff;
+  --chat-wash: #f0f3ef;
+  --chat-hover: #e9ede8;
+  --chat-selected: #e3ebe5;
+  --chat-ink: #1e2924;
+  --chat-text: #435149;
+  --chat-muted: #606d65;
+  --chat-line: #e1e6e1;
+  --chat-accent: var(--astra-primary-bright);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--astra-border);
+  border-radius: 14px;
+  background: var(--chat-canvas);
+  color: var(--chat-ink);
+}
+.workspace {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 268px minmax(0, 1fr) 300px;
+  min-height: 0;
+}
+.workspace--focus { grid-template-columns: 268px minmax(0, 1fr); }
+.left-rail {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  border-inline-end: 1px solid var(--chat-line);
+  background: var(--chat-rail);
+}
+.chat-directory-head {
+  min-height: var(--chat-bar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 0 20px;
+}
+.chat-directory-head h1 {
+  font-size: 17px;
+  font-weight: 650;
+  margin: 0;
+}
+.chat-icon-button,
+.chat-profile-toggle,
+.member-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
-  width: 28px;
-  height: 28px;
-  padding: 0;
+  height: 36px;
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--astra-text-secondary);
-  font-size: 16px;
-  line-height: 1;
-  letter-spacing: 0.5px;
+  color: var(--chat-text);
   cursor: pointer;
 }
-.member-more:hover,
-.chat-head-more:hover { background: var(--astra-bg-elevated); color: var(--astra-primary-bright); }
-.chat-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.chat-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.chat-search-row :deep(.el-input) { flex: 1; }
-.chat-join-link {
-  display: inline-block;
-  margin: 0 0 12px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--astra-text-muted);
-  font-size: var(--astra-font-helper);
-  line-height: 1.4;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.chat-icon-button, .member-more { width: 36px; padding: 0; }
+.chat-directory-head .chat-icon-button { background: var(--chat-hover); color: var(--chat-ink); }
+.chat-icon-button:hover, .chat-profile-toggle:hover, .member-more:hover { background: var(--chat-wash); color: var(--chat-ink); }
+.chat-directory-head .chat-icon-button:hover { background: var(--chat-selected); }
+.chat-search { width: auto; margin: 0 16px; }
+.chat-search :deep(.el-input__wrapper) {
+  min-height: 36px;
+  background: var(--chat-canvas);
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--chat-line) inset;
 }
-.chat-join-link:hover { color: var(--astra-primary-bright); }
+.chat-search :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1px var(--chat-accent) inset; }
+.chat-search :deep(.el-input__prefix) { color: var(--chat-muted); }
 .chat-filter-seg {
   display: flex;
-  align-items: stretch;
-  margin-bottom: 8px;
-  padding: 2px;
-  border: 1px solid var(--astra-border);
-  border-radius: 8px;
-  background: var(--astra-bg-base);
-  gap: 0;
+  gap: 4px;
+  margin: 14px 16px 6px;
+  border-bottom: 1px solid var(--chat-line);
 }
 .chat-filter-seg__item {
-  flex: 1;
+  min-height: 36px;
+  padding: 0 10px;
   border: 0;
+  border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--astra-text-secondary);
-  border-radius: 6px;
-  padding: 8px;
-  font-size: var(--astra-font-helper);
-  line-height: 1.3;
+  color: var(--chat-muted);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.chat-filter-seg__item:hover { color: var(--chat-ink); }
+.chat-filter-seg__item.is-active {
+  color: var(--chat-accent);
+  border-bottom-color: var(--chat-accent);
+  font-weight: 600;
+}
+.chat-target-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 8px;
+}
+.chat-list-note { margin: 8px; color: var(--chat-muted); font-size: 13px; }
+.chat-target {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  margin-bottom: 4px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--chat-ink);
+  text-align: left;
   cursor: pointer;
 }
-.chat-filter-seg__item:hover { background: var(--astra-bg-elevated); }
-.chat-filter-seg__item.is-active {
-  background: var(--astra-bg-panel);
-  color: var(--astra-primary-bright);
-  font-weight: 600;
+.chat-target:hover { background: var(--chat-hover); }
+.chat-target[aria-current] { background: var(--chat-selected); }
+.chat-target:focus-visible { outline-offset: -2px; }
+.chat-target__meta {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+  line-height: 1.45;
+}
+.chat-target__meta b, .chat-target__meta small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-target__meta b { font-size: 14px; font-weight: 600; }
+.chat-target__meta small { font-size: 12px; color: var(--chat-muted); }
+.chat-directory-footer { padding: 8px 16px 12px; border-top: 1px solid var(--chat-line); }
+.chat-join-link {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+  align-items: center;
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0 8px;
+  color: var(--chat-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.chat-join-link:hover { background: var(--chat-hover); }
+.chat-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--chat-hover);
+  color: var(--chat-text);
+}
+.chat-avatar--head { width: 40px; height: 40px; background: var(--chat-wash); }
+.chat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.chat-head {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 12px;
+  min-height: var(--chat-bar-height);
+  padding: 8px clamp(20px, 2.2vw, 32px);
+  border-bottom: 1px solid var(--chat-line);
+}
+.chat-head__copy { flex: 1; min-width: 0; }
+.chat-head h2 {
+  margin: 0;
+  color: var(--chat-ink);
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-head__desc {
+  margin: 2px 0 0;
+  color: var(--chat-muted);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-head__actions { display: flex; flex: none; gap: 6px; align-items: center; }
+.chat-profile-toggle { gap: 8px; padding: 0 10px; font-size: 13px; }
+.chat-profile-toggle[aria-expanded="true"] { background: var(--chat-wash); color: var(--chat-accent); }
+.chat-start {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  color: var(--chat-muted);
+}
+.chat-aside {
+  min-height: 0;
+  overflow: auto;
+  border-inline-start: 1px solid var(--chat-line);
+  background: var(--chat-canvas);
+}
+.right-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  min-height: var(--chat-bar-height);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--chat-line);
 }
 .chat-aside-tab {
   border: 0;
-  background: transparent;
-  color: var(--astra-text-secondary);
-  padding: 8px 2px 10px;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.2;
-  cursor: pointer;
   border-bottom: 2px solid transparent;
-  border-radius: 0;
+  background: transparent;
+  color: var(--chat-text);
+  min-height: 36px;
+  padding: 0 2px;
+  font-size: 13px;
+  cursor: pointer;
 }
-.chat-aside-tab.is-active {
-  color: var(--astra-primary-bright);
-  font-weight: 600;
-  border-bottom-color: var(--astra-primary-bright);
-}
-.chat-counts { margin: 0 0 8px 2px; font-size: var(--astra-font-helper); }
-.chat-target { width: 100%; border: 0; background: transparent; text-align: left; }
-.chat-target__meta { display: grid; gap: 2px; min-width: 0; flex: 1; }
-.chat-target__meta b, .chat-target__meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-head__actions { display: flex; flex: none; flex-wrap: wrap; gap: 8px; align-items: center; }
-.chat-head__copy h2 {
-  margin: 0 0 4px;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.3;
-}
-.chat-head__desc {
-  margin: 0;
-  font-size: var(--astra-font-helper);
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-}
-.chat-target__meta small {
-  font-size: var(--astra-font-helper);
-  line-height: 1.35;
-}
-.unread-badge {
-  flex: none;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--astra-primary);
-  color: #fff;
-  font-size: 10px;
-  line-height: 18px;
-  text-align: center;
-}
-.panel.chat { display: flex; flex-direction: column; min-height: 0; }
+.chat-aside-tab.is-active { color: var(--chat-accent); border-bottom-color: var(--chat-accent); font-weight: 600; }
+.chat-aside .section-label { color: var(--chat-ink); font-size: 13px; font-weight: 600; }
+.chat-aside .detail-excerpt { color: var(--chat-text); font-size: 13px; line-height: 1.65; }
+.member-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 12px; }
+.member { flex-wrap: nowrap; }
+.member-identity { flex: 1; min-width: 0; overflow-wrap: anywhere; display: grid; gap: 2px; }
+.member-name { font-size: 13px; font-weight: 600; }
+.member-role { font-size: 12px; }
 .chat-mobile-only, .chat-mobile-mask { display: none; }
 @media (max-width: 1000px) {
-  .chat-page .workspace, .chat-page .workspace.workspace--focus { position: relative; grid-template-columns: minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
-  .chat-page .left-rail { display: none; }
-  .chat-mobile-only { display: inline-flex; align-items: center; border: 1px solid var(--astra-border); background: #fff; color: var(--astra-text-primary); border-radius: 8px; padding: 7px 9px; cursor: pointer; }
-  .chat-mobile-close { margin: 10px 0; }
-  .chat-page .left-rail.is-mobile-open, .chat-page .aside { display: block; position: absolute; z-index: 20; top: 0; bottom: 0; width: min(320px, 92%); overflow: auto; box-shadow: 0 0 30px #20383022; }
-  .chat-page .left-rail.is-mobile-open { left: 0; }
-  .chat-page .aside { right: 0; padding: 0 12px; }
-  .chat-mobile-mask { display: block; position: absolute; z-index: 19; inset: 0; border: 0; background: #20383033; }
-  .chat-page .chat-head { gap: 7px; padding: 8px 10px; }
-  .chat-head__copy { flex: 1; }
-  .chat-head__desc { -webkit-line-clamp: 1; }
+  .chat-page { border-radius: 0; }
+  .workspace, .workspace--focus { position: relative; grid-template-columns: minmax(0, 1fr); }
+  .left-rail { display: none; }
+  .chat-mobile-only { display: inline-flex; align-items: center; border: 1px solid var(--chat-line); background: var(--chat-canvas); color: var(--chat-ink); border-radius: 8px; padding: 7px 9px; cursor: pointer; }
+  .chat-mobile-close { align-self: start; margin: 12px 16px 0; }
+  .left-rail.is-mobile-open, .chat-aside { display: flex; flex-direction: column; position: absolute; z-index: 20; top: 0; bottom: 0; width: min(320px, 92%); box-shadow: 0 0 24px #1e29241a; }
+  .left-rail.is-mobile-open { left: 0; }
+  .chat-aside { right: 0; }
+  .chat-mobile-mask { display: block; position: absolute; z-index: 19; inset: 0; border: 0; background: #1e292433; }
+  .chat-head { gap: 8px; padding-inline: 12px; }
 }
 </style>

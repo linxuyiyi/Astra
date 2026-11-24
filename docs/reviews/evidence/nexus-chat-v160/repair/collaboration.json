@@ -1,0 +1,23 @@
+{
+  "channel_id": "ch_5812c7bffa7e",
+  "human_realtime": true,
+  "message_alignment": true,
+  "concurrent_order": true,
+  "employee_discussion": [
+    {
+      "name": "验收员工乙",
+      "text": "真实 AgentScope 串流验收。"
+    },
+    {
+      "name": "验收员工甲",
+      "text": "真实 AgentScope 串流验收。"
+    }
+  ],
+  "leave_revoked": true,
+  "page_errors": [],
+  "worker_events": [
+    "验收员工乙",
+    "验收员工甲"
+  ],
+  "discussion_state": "completed"
+}

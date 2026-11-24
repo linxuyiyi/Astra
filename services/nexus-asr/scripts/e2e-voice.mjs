@@ -20,7 +20,7 @@
 const playwrightPath = process.env.PLAYWRIGHT_PATH
   || new URL('../../../frontend/node_modules/playwright/index.mjs', import.meta.url).href;
 const { chromium } = await import(playwrightPath);
-import { ensureBrowserLogin } from './browser-auth.mjs';
+import { prepareChatIdentity, messageText } from './browser-auth.mjs';
 let apiCookie = '';
 
 const BASE = process.env.NEXUS_BASE || 'http://127.0.0.1:18120';
@@ -36,8 +36,8 @@ if (MODE === 'private' && !EMP) throw new Error('NEXUS_EMPLOYEE_ID is required f
 if (MODE === 'group' && !CHANNEL) throw new Error('NEXUS_CHANNEL_ID is required for MODE=group');
 
 const CHAT_URL = MODE === 'group'
-  ? `${BASE}/chat?type=group&group=${encodeURIComponent(CHANNEL)}`
-  : `${BASE}/chat?type=contact&employee=${encodeURIComponent(EMP)}`;
+  ? `${BASE}/chat?group=${encodeURIComponent(CHANNEL)}`
+  : `${BASE}/chat?employee=${encodeURIComponent(EMP)}`;
 
 async function api(path, init = {}) {
   const response = await fetch(`${BASE}${path}`, {
@@ -48,28 +48,31 @@ async function api(path, init = {}) {
   return response.json();
 }
 
-async function latestConversation() {
-  const payload = await api(`/api/v1/employees/${EMP}/conversations`);
-  const items = payload.items || [];
-  items.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-  return items[0]?.id;
+async function loadConversationId() {
+  const binding = await api(`/api/v1/employees/${encodeURIComponent(EMP)}/conversations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  return binding.id;
 }
 
-async function waitReply(conversationId, beforeMessageId) {
+async function waitReply(conversationId, finalText) {
   const path = MODE === 'group'
     ? `/api/v1/channels/${CHANNEL}/messages`
-    : `/api/v1/conversations/${conversationId}`;
-  const deadline = Date.now() + 90000;
-  while (Date.now() < deadline) {
+    : `/api/v1/conversations/${conversationId}/messages`;
+  const latest = Date.now() + 90000;
+  while (Date.now() < latest) {
     const payload = await api(path);
-    const messages = payload.messages || payload.items || [];
-    const start = beforeMessageId ? messages.findIndex((item) => item.id === beforeMessageId) : -1;
-    const reply = messages.slice(start + 1).find((item) => {
-      const fromUser = item.sender === 'user' || item.sender_type === 'human';
-      return !fromUser && item.text && !item.text.startsWith('<');
-    });
+    const rows = payload.items ?? payload.messages.map(message => ({
+      sender_type: message.role === 'user' ? 'human' : message.role === 'assistant' ? 'employee' : 'system',
+      sender_name: message.name,
+      text: messageText(message),
+    }));
+    const sent = rows.findLastIndex(row => row.sender_type === 'human' && row.text === finalText);
+    const reply = sent >= 0 && rows.slice(sent + 1).find(row => row.sender_type === 'employee' && row.text);
     if (reply) return reply;
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
   throw new Error('timed out waiting for the AgentScope reply');
 }
@@ -88,10 +91,8 @@ try {
     permissions: ['microphone'],
     viewport: { width: 1440, height: 960 },
   });
-  const auth = await ensureBrowserLogin(context, { base: BASE });
-  apiCookie = auth.cookie;
-  await context.addCookies([{ name: 'nexus_uid', value: UID, domain: '127.0.0.1', path: '/' }]);
-  await context.addInitScript((uid) => localStorage.setItem('nexus_owner_id', uid), UID);
+  apiCookie = await prepareChatIdentity(context, BASE, UID);
+
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
@@ -102,10 +103,10 @@ try {
   });
 
   await page.goto(CHAT_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  const frame = page.frameLocator('iframe.chat-island');
+  const frame = page;
   const mic = frame.getByRole('button', { name: '语音输入（转文字）' });
   await mic.waitFor({ state: 'visible', timeout: 60000 });
-  const textarea = frame.locator('textarea');
+  const textarea = frame.getByTestId('compose-input');
   await textarea.waitFor({ state: 'visible', timeout: 30000 });
   const bodyBefore = await frame.locator('body').innerText();
 
@@ -136,14 +137,10 @@ try {
   const finalText = FINAL_TEXT || transcript;
   await textarea.fill(finalText);
   const sendAt = Date.now();
-  await frame.getByRole('button', { name: '发送' }).click();
+  await frame.getByRole('button', { name: '发送消息' }).click();
   await page.waitForTimeout(1200);
-  const conversationId = MODE === 'group' ? null : await latestConversation();
-  const messages = MODE === 'group'
-    ? (await api(`/api/v1/channels/${CHANNEL}/messages`)).messages
-    : (await api(`/api/v1/conversations/${conversationId}`)).messages;
-  const userMessage = [...messages].reverse().find((item) => item.sender === 'user' && item.text === finalText);
-  const reply = await waitReply(conversationId, userMessage?.id);
+  const conversationId = MODE === 'group' ? null : await loadConversationId();
+  const reply = await waitReply(conversationId, finalText);
 
   const compact = (value) => value.replace(/[*#`>_[\]()]/g, '').replace(/\s+/g, '');
   const snippet = compact(reply.text).slice(0, 10);
@@ -169,7 +166,7 @@ try {
     stop_to_transcript_ms: transcriptAt - stopAt,
     send_to_reply_ms: uiReplyAt - sendAt,
     auto_sent: false,
-    reply_speaker: reply.speaker,
+    reply_speaker: reply.sender_name,
     reply: reply.text.slice(0, 300),
     screenshot: SCREENSHOT,
     transcript_screenshot: transcriptShot,

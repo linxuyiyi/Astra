@@ -317,14 +317,14 @@ def test_real_git_upgrade_is_fast_forward_only_and_uses_an_immutable_release(tmp
     git("init", "--bare", str(remote))
     git("init", str(checkout))
     # 公司 Git 2.19.1 不支持 git init --initial-branch（需要 Git 2.28+）。
-    git("checkout", "-q", "-b", "v1.5.0", cwd=checkout)
+    git("checkout", "-q", "-b", "v1.6.0", cwd=checkout)
     git("config", "user.email", "deploy-test@example.invalid", cwd=checkout)
     git("config", "user.name", "Deployment Test", cwd=checkout)
     (checkout / "release.txt").write_text("first")
     git("add", ".", cwd=checkout)
     git("commit", "-m", "first", cwd=checkout)
     git("remote", "add", "origin", str(remote), cwd=checkout)
-    git("push", "origin", "v1.5.0", cwd=checkout)
+    git("push", "origin", "v1.6.0", cwd=checkout)
     args = SimpleNamespace(
         root=checkout, state=tmp_path / "state", action="deploy", env_file=None, sources=None
     )
@@ -333,12 +333,12 @@ def test_real_git_upgrade_is_fast_forward_only_and_uses_an_immutable_release(tmp
     first_release = controller.release_root
     assert (first_release / "release.txt").read_text() == "first"
     author = tmp_path / "author"
-    git("clone", "-b", "v1.5.0", str(remote), str(author))
+    git("clone", "-b", "v1.6.0", str(remote), str(author))
     git("config", "user.email", "deploy-test@example.invalid", cwd=author)
     git("config", "user.name", "Deployment Test", cwd=author)
     (author / "release.txt").write_text("second")
     git("commit", "-am", "second", cwd=author)
-    git("push", "origin", "v1.5.0", cwd=author)
+    git("push", "origin", "v1.6.0", cwd=author)
 
     def restart(_binary, command):
         assert command[1] == str(checkout / "ops/deploy/deploy.py")

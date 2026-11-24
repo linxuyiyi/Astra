@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const playwrightPath = process.env.PLAYWRIGHT_PATH
   || new URL('../../../frontend/node_modules/playwright/index.mjs', import.meta.url).href;
 const { chromium } = await import(playwrightPath);
-import { ensureBrowserLogin } from './browser-auth.mjs';
+import { prepareChatIdentity } from './browser-auth.mjs';
 let apiCookie = '';
 
 const BASE = process.env.NEXUS_BASE || 'http://127.0.0.1:18120';
@@ -39,10 +39,8 @@ function launch(fakeUi = true) {
 
 async function openChat(browser, employee, { permissions = ['microphone'] } = {}) {
   const context = await browser.newContext({ permissions, viewport: { width: 1440, height: 960 } });
-  const auth = await ensureBrowserLogin(context, { base: BASE });
-  apiCookie = auth.cookie;
-  await context.addCookies([{ name: 'nexus_uid', value: UID, domain: '127.0.0.1', path: '/' }]);
-  await context.addInitScript((uid) => localStorage.setItem('nexus_owner_id', uid), UID);
+  apiCookie = await prepareChatIdentity(context, BASE, UID);
+
   const page = await context.newPage();
   const errors = [];
   const requests = [];
@@ -50,10 +48,10 @@ async function openChat(browser, employee, { permissions = ['microphone'] } = {}
   page.on('request', (request) => {
     if (request.url().includes('/api/asr/transcribe')) requests.push(request.url());
   });
-  await page.goto(`${BASE}/chat?type=contact&employee=${employee}`, {
+  await page.goto(`${BASE}/chat?employee=${employee}`, {
     waitUntil: 'domcontentloaded', timeout: 60000,
   });
-  const frame = page.frameLocator('iframe.chat-island');
+  const frame = page;
   await frame.getByRole('button', { name: '语音输入（转文字）' })
     .waitFor({ state: 'visible', timeout: 60000 });
   return { context, page, frame, errors, requests };
@@ -87,7 +85,7 @@ async function probeAsrNode() {
     result.rapid_click = {
       requests: requests.length,
       transcribing: await frame.getByText('正在识别…').isVisible().catch(() => false),
-      error: await frame.locator('.text-destructive').first().innerText().catch(() => ''),
+      error: await frame.getByTestId('asr-status').filter({has:frame.getByRole('button',{name:'重试'})}).innerText().catch(() => ''),
       mic_back: await frame.getByRole('button', { name: '语音输入（转文字）' }).isVisible().catch(() => false),
       page_errors: errors,
     };
@@ -102,7 +100,7 @@ async function probeAsrNode() {
   const browser = await launch();
   try {
     const { context, page, frame, errors } = await openChat(browser, EMP_A);
-    const textarea = frame.locator('textarea');
+    const textarea = frame.getByTestId('compose-input');
     await textarea.fill('已有草稿：');
     await frame.getByRole('button', { name: '语音输入（转文字）' }).click();
     await page.waitForTimeout(3800);
@@ -135,11 +133,11 @@ async function probeAsrNode() {
     await first.page.waitForTimeout(2600);
     await first.frame.getByRole('button', { name: '停止录音' }).click();
     await first.page.waitForTimeout(100);
-    await first.page.goto(`${BASE}/chat?type=contact&employee=${EMP_B}`, {
+    await first.page.goto(`${BASE}/chat?employee=${EMP_B}`, {
       waitUntil: 'domcontentloaded', timeout: 60000,
     });
-    const secondFrame = first.page.frameLocator('iframe.chat-island');
-    const textarea = secondFrame.locator('textarea');
+    const secondFrame = first.page;
+    const textarea = secondFrame.getByTestId('compose-input');
     await textarea.waitFor({ state: 'visible', timeout: 60000 });
     await first.page.waitForTimeout(8000);
     const value = await textarea.inputValue();
@@ -163,19 +161,17 @@ async function probeAsrNode() {
   const browser = await launch(false);
   try {
     const context = await browser.newContext({ permissions: [], viewport: { width: 1440, height: 960 } });
-    await context.addCookies([{ name: 'nexus_uid', value: UID, domain: '127.0.0.1', path: '/' }]);
-    await context.addInitScript((uid) => localStorage.setItem('nexus_owner_id', uid), UID);
-    const auth = await ensureBrowserLogin(context, { base: BASE });
-    apiCookie = auth.cookie;
+
+    apiCookie = await prepareChatIdentity(context, BASE, UID);
     const page = await context.newPage();
     const client = await context.newCDPSession(page);
     await client.send('Browser.setPermission', {
       permission: { name: 'microphone' }, setting: 'denied', origin: BASE,
     });
-    await page.goto(`${BASE}/chat?type=contact&employee=${EMP_A}`, {
+    await page.goto(`${BASE}/chat?employee=${EMP_A}`, {
       waitUntil: 'domcontentloaded', timeout: 60000,
     });
-    const frame = page.frameLocator('iframe.chat-island');
+    const frame = page;
     await frame.getByRole('button', { name: '语音输入（转文字）' })
       .waitFor({ state: 'visible', timeout: 60000 });
     await page.waitForTimeout(1000);
@@ -195,7 +191,7 @@ async function probeAsrNode() {
   const browser = await launch();
   try {
     const context = await browser.newContext({ permissions: [], viewport: { width: 1440, height: 960 } });
-    await context.addCookies([{ name: 'nexus_uid', value: UID, domain: '127.0.0.1', path: '/' }]);
+
     await context.addInitScript(() => {
       localStorage.setItem('nexus_owner_id', 'local-qa');
       Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
@@ -203,17 +199,16 @@ async function probeAsrNode() {
         value: () => Promise.reject(new DOMException('Permission denied', 'NotAllowedError')),
       });
     });
-    const auth = await ensureBrowserLogin(context, { base: BASE });
-    apiCookie = auth.cookie;
+    apiCookie = await prepareChatIdentity(context, BASE, UID);
     const page = await context.newPage();
     const requests = [];
     page.on('request', (request) => {
       if (request.url().includes('/api/asr/transcribe')) requests.push(request.url());
     });
-    await page.goto(`${BASE}/chat?type=contact&employee=${EMP_A}`, {
+    await page.goto(`${BASE}/chat?employee=${EMP_A}`, {
       waitUntil: 'domcontentloaded', timeout: 60000,
     });
-    const frame = page.frameLocator('iframe.chat-island');
+    const frame = page;
     await frame.getByRole('button', { name: '语音输入（转文字）' })
       .waitFor({ state: 'visible', timeout: 60000 });
     await frame.getByRole('button', { name: '语音输入（转文字）' }).click();
@@ -235,7 +230,7 @@ async function probeAsrNode() {
   const browser = await launch();
   const { context, page, frame, errors } = await openChat(browser, EMP_A);
   try {
-    const textarea = frame.locator('textarea');
+    const textarea = frame.getByTestId('compose-input');
     await textarea.fill('原有草稿：');
     execSync('./nexus-asr.sh stop', { cwd: ASR_DIR, stdio: 'ignore' });
     await frame.getByRole('button', { name: '语音输入（转文字）' }).click();
@@ -244,14 +239,14 @@ async function probeAsrNode() {
     let errorText = '';
     const errorDeadline = Date.now() + 60000;
     while (Date.now() < errorDeadline) {
-      errorText = await frame.locator('.text-destructive').first().innerText().catch(() => '');
+      errorText = await frame.getByTestId('asr-status').filter({has:frame.getByRole('button',{name:'重试'})}).innerText().catch(() => '');
       if (errorText) break;
       await page.waitForTimeout(300);
     }
     const draftAfterFailure = await textarea.inputValue();
     execSync('./nexus-asr.sh start', { cwd: ASR_DIR, stdio: 'ignore' });
     await probeAsrNode();
-    await frame.getByRole('button', { name: '重试' }).click();
+    await frame.getByTestId('asr-status').getByRole('button', { name: '重试' }).click();
     let value = '';
     const retryDeadline = Date.now() + 60000;
     while (Date.now() < retryDeadline) {

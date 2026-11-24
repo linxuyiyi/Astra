@@ -156,7 +156,7 @@ def test_private_send_mounts_skills_and_rebind_reuses_the_ready_session(tmp_path
         sent = test_client.post(
             f"/api/v1/conversations/{conversation['id']}/messages",
             headers=headers,
-            json={"client_id": "test-send-159", "text": "看一下失败日志"},
+            json={"client_id": "test-send-159", "content": [{"type": "text", "text": "看一下失败日志"}]},
         )
         assert sent.status_code == 200, sent.text
         session_id = sent.json()["agentscope"]["session_id"]
@@ -190,7 +190,10 @@ def test_group_session_installs_employee_skills(tmp_path, monkeypatch):
         fake.from_library.clear()
         sent = test_client.post(
             f"/api/v1/channels/{channel['id']}/messages",
-            json={"text": "@星河 看一下失败日志", "client_id": "skill-test-0001"},
+            json={
+                "content": [{"type": "text", "text": "@星河 看一下失败日志"}],
+                "client_id": "skill-test-0001",
+            },
         )
         assert sent.status_code == 200, sent.text
         import time
@@ -198,7 +201,8 @@ def test_group_session_installs_employee_skills(tmp_path, monkeypatch):
         deadline = time.monotonic() + 3
         session_id = None
         while not session_id and time.monotonic() < deadline:
-            members = test_client.get(f"/api/v1/channels/{channel['id']}/members").json()["members"]
+            page = test_client.get(f"/api/v1/channels/{channel['id']}/messages").json()
+            members = page["channel"]["members"]
             session_id = next(
                 (m["agentscope_session_id"] for m in members if m["member_type"] == "employee"), None
             )

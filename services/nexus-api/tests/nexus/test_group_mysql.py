@@ -69,7 +69,7 @@ def test_one_use_invitation_cannot_join_two_humans():
         with ThreadPoolExecutor(max_workers=2) as pool:
             codes = list(pool.map(join, others))
         assert sorted(codes) == [200, 410]
-        assert len(owner.get(f"/api/v1/channels/{group}/members").json()["members"]) == 2
+        assert len(owner.get(f"/api/v1/channels/{group}/messages").json()["channel"]["members"]) == 2
 
 
 def test_group_event_cursor_follows_commit_order():
@@ -122,14 +122,11 @@ def test_group_history_and_pagination_with_event_cursor():
     with TestClient(create_app()) as owner:
         account(owner, "mysql-owner")
         cid = owner.post("/api/v1/channels", json={"name": "MySQL历史"}).json()["id"]
-        paths = [f"/api/v1/channels/{cid}/{suffix}" for suffix in (
-            "messages", "timeline", "timeline/native",
-        )]
-        for path in paths:
-            response = owner.get(path)
-            assert response.status_code == 200
-            assert all(item["sender_type"] == "system" for item in response.json()["items"])
-            assert isinstance(response.json()["event_cursor"], int)
+        path = f"/api/v1/channels/{cid}/messages"
+        response = owner.get(path)
+        assert response.status_code == 200
+        assert all(item["sender_type"] == "system" for item in response.json()["items"])
+        assert isinstance(response.json()["event_cursor"], int)
         initial_cursor = response.json()["event_cursor"]
         initial_items = response.json()["items"]
         with connect() as db:
@@ -137,16 +134,15 @@ def test_group_history_and_pagination_with_event_cursor():
             append_message(db, cid, "human", "first", "甲", "第一条")
             append_message(db, cid, "human", "second", "乙", "第二条")
             db.commit()
-        for path in paths:
-            latest = owner.get(path, params={"limit": 1}).json()
-            assert [item["text"] for item in latest["items"]] == ["第二条"]
-            assert latest["event_cursor"] > initial_cursor
-            earlier = owner.get(path, params={"limit": 1, "before": latest["before"]}).json()
-            assert [item["text"] for item in earlier["items"]] == ["第一条"]
-            assert earlier["event_cursor"] == latest["event_cursor"]
-            original = owner.get(path, params={"before": earlier["before"]}).json()
-            assert original["items"] == initial_items
-            assert original["before"] == 0
+        latest = owner.get(path, params={"limit": 1}).json()
+        assert [item["text"] for item in latest["items"]] == ["第二条"]
+        assert latest["event_cursor"] > initial_cursor
+        earlier = owner.get(path, params={"limit": 1, "before": latest["before"]}).json()
+        assert [item["text"] for item in earlier["items"]] == ["第一条"]
+        assert earlier["event_cursor"] == latest["event_cursor"]
+        original = owner.get(path, params={"before": earlier["before"]}).json()
+        assert original["items"] == initial_items
+        assert original["before"] == 0
 
 
 def test_revoked_member_cleanup_retries_without_holding_channel_lock(monkeypatch):

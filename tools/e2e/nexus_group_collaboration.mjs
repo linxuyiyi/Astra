@@ -17,8 +17,22 @@ async function enterUid(page, uid) {
   await page.getByRole('button', { name: '进入', exact: true }).click();
   await page.getByRole('button', { name: '新建群组', exact: true }).waitFor({ timeout: 20000 });
 }
-async function frame(page) { const f = page.frameLocator('iframe[title="Nexus 对话"]'); await f.locator('textarea').waitFor(); return f; }
-async function send(page, text) { const f = await frame(page); await f.locator('textarea').fill(text); await f.getByRole('button', { name: '发送', exact: true }).click(); await f.getByText(text, { exact: true }).waitFor(); }
+async function conversation(page) {
+  const panel = page.locator('.nc-conversation');
+  await panel.getByRole('textbox', { name: '消息输入' }).waitFor();
+  return panel;
+}
+async function showMembers(page) {
+  const toggle = page.getByRole('button', { name: '查看资料', exact: true });
+  if (await toggle.count()) await toggle.click();
+  await page.getByRole('tab', { name: '成员', exact: true }).click();
+}
+async function send(page, text) {
+  const panel = await conversation(page);
+  await panel.getByRole('textbox', { name: '消息输入' }).fill(text);
+  await panel.getByRole('button', { name: '发送消息', exact: true }).click();
+  await panel.getByTestId('chat-messages').getByText(text, { exact: true }).waitFor();
+}
 async function history(page, cid) { return (await page.request.get(`${base}/api/v1/channels/${cid}/messages`)).json(); }
 async function waitGroup(page, previous) {
   const handle = await page.waitForFunction(prev => {
@@ -48,10 +62,10 @@ try {
   await dialog.locator('.el-checkbox').first().waitFor({ timeout: 20000 });
   await dialog.getByRole('button', { name: '创建群组', exact: true }).click();
   await dialog.waitFor({ state: 'hidden', timeout: 20000 });
-  await frame(owner);
+  await conversation(owner);
   // 创建后路由可能仍指向旧群组；必须等待新的 group 查询参数，不能立即读取 URL。
   const cid = await waitGroup(owner, before); report.channel_id = cid;
-  await owner.getByRole('button', { name: '成员', exact: true }).click();
+  await showMembers(owner);
   await owner.getByRole('button', { name: '邀请人类成员', exact: true }).click();
   const invite = await waitInvite(owner);
   await owner.keyboard.press('Escape');
@@ -67,31 +81,33 @@ try {
     { timeout: 20000 },
   );
   assert.equal(await joinedHandle.jsonValue(), true);
-  await frame(other);
+  await conversation(other);
   await send(owner, '我已经整理好会议记录');
-  await (await frame(other)).getByText('我已经整理好会议记录', { exact: true }).waitFor();
+  await (await conversation(other)).getByText('我已经整理好会议记录', { exact: true }).waitFor();
   await send(other, '收到，我会补充结论');
-  await (await frame(owner)).getByText('收到，我会补充结论', { exact: true }).waitFor();
+  await (await conversation(owner)).getByText('收到，我会补充结论', { exact: true }).waitFor();
   const discussion = (await history(owner, cid)).channel.discussion;
   assert.equal(discussion, null, JSON.stringify(discussion)); report.human_realtime = true;
   for (const page of [owner, other]) {
-    const f = await frame(page);
-    assert.equal(await f.locator('.group-message[data-self=true]').count(), 1);
-    assert.equal(await f.locator('.group-message[data-self=false]').count(), 1);
-    const rows = await f.locator('.group-message').evaluateAll(items => items.map(row => ({ self: row.dataset.self,
-      direction: getComputedStyle(row).flexDirection, label: getComputedStyle(row.querySelector('.group-message-label')).justifyContent,
-      bubble: getComputedStyle(row.querySelector('[data-slot=message]')).flexDirection })));
-    assert(rows.every(r => r.self === 'true' ? r.direction === 'row-reverse' && r.label === 'flex-end' : r.direction === 'row' && r.bubble === 'row'));
-    assert(await f.locator('body').evaluate(b => b.scrollWidth <= b.clientWidth + 1));
+    const f = await conversation(page);
+    const mine = f.locator('[data-kind="self"] .nc-message-content');
+    const theirs = f.locator('[data-kind="speaker"] .nc-message-content');
+    assert.equal(await mine.count(), 1);
+    assert.equal(await theirs.count(), 1);
+    const [selfBox, peerBox] = await Promise.all([mine.boundingBox(), theirs.boundingBox()]);
+    assert(selfBox && peerBox && selfBox.x > peerBox.x);
+    assert(await f.evaluate(el => el.scrollWidth <= el.clientWidth + 1));
   }
   report.message_alignment = true;
   await Promise.all([send(owner, '并发记录甲'), send(other, '并发记录乙')]);
-  for (const page of [owner, other]) for (const text of ['并发记录甲', '并发记录乙']) await (await frame(page)).getByText(text, { exact: true }).waitFor();
+  for (const page of [owner, other]) for (const text of ['并发记录甲', '并发记录乙']) await (await conversation(page)).getByText(text, { exact: true }).waitFor();
   const ids = await Promise.all([owner, other].map(async p => (await history(p, cid)).items.map(x => x.id)));
   assert.deepEqual(ids[0], ids[1]); assert.equal(new Set(ids[0]).size, ids[0].length); report.concurrent_order = true;
   await owner.screenshot({ path: `${evidence}/owner.png`, fullPage: true });
   await other.screenshot({ path: `${evidence}/colleague.png`, fullPage: true });
-  await send(owner, '@小牛码 @小掌柜 你们相互介绍下。');
+  const colleagues = (await history(owner, cid)).channel.members.filter(m => m.member_type === 'employee').slice(0, 2);
+  assert.equal(colleagues.length, 2, '协作验收需要至少两位启用的数字员工');
+  await send(owner, colleagues.map(m => '@' + m.name).join(' ') + ' 你们相互介绍下。');
   // 用 Node 侧轮询持久历史，避免页面上下文到点后仍读到刚入队的一帧。
   const deadline = Date.now() + 150000;
   let done = await history(owner, cid);
@@ -106,7 +122,7 @@ try {
   assert(replies.length >= 2 && replies.length <= 6); assert.equal(new Set(replies.map(x => x.sender_id)).size, 2);
   report.employee_discussion = replies.map(x => ({ name: x.sender_name, text: x.text }));
   await owner.screenshot({ path: `${evidence}/discussion.png`, fullPage: true });
-  await other.getByRole('button', { name: '成员', exact: true }).click();
+  await showMembers(other);
   await other.getByRole('button', { name: '退出群组', exact: true }).click();
   // 退出是异步请求，轮询到服务端撤权完成再断言。
   let revoked = 200;

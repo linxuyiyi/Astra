@@ -176,12 +176,12 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
         opened = test_client.post(
             f"/api/v1/conversations/{first['id']}/messages",
             headers={"X-Verified-UID": "u1"},
-            json={"client_id": "test-send-179", "text": "只属于甲"},
+            json={"client_id": "test-send-179", "content": [{"type": "text", "text": "只属于甲"}]},
         )
         test_client.post(
             f"/api/v1/conversations/{second['id']}/messages",
             headers={"X-Verified-UID": "u2"},
-            json={"client_id": "test-send-184", "text": "只属于乙"},
+            json={"client_id": "test-send-184", "content": [{"type": "text", "text": "只属于乙"}]},
         )
         private = [item for item in session_bodies if item.get("workspace_id")]
         assert len(private) == 2
@@ -190,7 +190,7 @@ def test_private_workspaces_stay_apart_and_rebind_keeps_the_workspace(tmp_path, 
         again = test_client.post(
             f"/api/v1/conversations/{first['id']}/messages",
             headers={"X-Verified-UID": "u1"},
-            json={"client_id": "test-send-193", "text": "还是甲"},
+            json={"client_id": "test-send-193", "content": [{"type": "text", "text": "还是甲"}]},
         )
         assert again.json()["agentscope"]["session_id"] == opened.json()["agentscope"]["session_id"]
         session_id = opened.json()["agentscope"]["session_id"]

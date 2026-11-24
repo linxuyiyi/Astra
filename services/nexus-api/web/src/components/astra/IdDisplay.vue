@@ -65,7 +65,7 @@ async function copy() {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.id-display--link .id-display__value { color: var(--astra-primary-bright); cursor: pointer; }
+.id-display--link .id-display__value { color: var(--astra-accent-text); cursor: pointer; }
 .id-display--link:hover .id-display__value { text-decoration: underline; }
 .id-display__copy {
   display: grid;
@@ -80,6 +80,6 @@ async function copy() {
   background: transparent;
   cursor: pointer;
 }
-.id-display__copy:hover { color: var(--astra-primary-bright); background: var(--astra-primary-soft); }
+.id-display__copy:hover { color: var(--astra-text-primary); background: var(--astra-bg-elevated); }
 .id-display[data-size='large'] .id-display__value { max-width: 260px; font-size: var(--astra-font-control); }
 </style>

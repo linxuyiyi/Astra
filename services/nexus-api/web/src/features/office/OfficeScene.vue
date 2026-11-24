@@ -231,7 +231,7 @@ function drawBackdrop() {
     const image = images.get(key);
     if (image?.complete && image.naturalWidth) g.drawImage(image, x, y, iw, ih);
   };
-  rect(0, 0, w, h, "#e9ddc5");
+  rect(0, 0, w, h, "#eceef2");
   const scale = w / 1480;
   g.save();
   g.scale(scale, scale);
@@ -243,14 +243,14 @@ function drawBackdrop() {
         y + 1,
         110,
         38,
-        ["#e8d9bd", "#ecdfc8", "#e5d5b7", "#eddfc4", "#e9dcc2"][
+        ["#eaedf1", "#eef0f4", "#e7eaef", "#eff1f5", "#ebedf2"][
           (row * 13 + ((x + 112) / 112) * 7) % 5
         ]!,
       );
-      rect(xx, y + 1, 109, 1, "#f9edda");
-      rect(xx + 109, y + 2, 1, 35, "#cebda5");
-      rect(xx + 9, y + 13, 72, 1, "#d9c7aa66");
-      rect(xx + 20, y + 27, 54, 1, "#f3e8d1");
+      rect(xx, y + 1, 109, 1, "#f8f9fb");
+      rect(xx + 109, y + 2, 1, 35, "#d8dce3");
+      rect(xx + 9, y + 13, 72, 1, "#cfd4dd66");
+      rect(xx + 20, y + 27, 54, 1, "#f4f6f9");
     }
   }
   const floorY = camera.value.wallHeight / scale;
@@ -272,57 +272,57 @@ function drawBackdrop() {
   // 固定墙面不跟随工位聚焦，完整品牌和计划看板始终可见。
   g.save();
   g.scale(w / 1480, camera.value.wallHeight / 196);
-  rect(0, 0, 1480, 196, "#bcd2bc");
-  rect(0, 0, 1480, 11, "#6a987d");
-  rect(0, 12, 1480, 3, "#91b69b");
-  rect(0, 181, 1480, 8, "#769f83");
-  rect(0, 190, 1480, 6, "#d6e5cb");
+  rect(0, 0, 1480, 196, "#f4f5f7");
+  rect(0, 0, 1480, 8, "#18181b");
+  rect(0, 8, 1480, 3, "#d4d4d8");
+  rect(0, 182, 1480, 7, "#c7cbd3");
+  rect(0, 190, 1480, 6, "#e4e6ec");
   for (let x = 0; x < 1480; x += 72) {
-    rect(x + 1, 17, 2, 162, "#9bb9a0a0");
-    rect(x + 6, 18, 1, 158, "#e0e9d8aa");
+    rect(x + 1, 14, 2, 166, "#e2e5ec99");
+    rect(x + 6, 15, 1, 162, "#ffffffaa");
   }
-  rect(37, 25, 364, 140, "#82a48b");
-  rect(43, 22, 354, 137, "#eeeadd");
-  rect(50, 26, 341, 127, "#faf8ee");
-  rect(62, 41, 5, 99, "#a3c8ad");
-  rect(372, 41, 4, 99, "#d2dfcf");
-  rect(86, 60, 18, 18, "#3d8566");
-  rect(102, 49, 13, 15, "#6aac89");
-  rect(79, 75, 16, 11, "#9fc7a5");
-  text(128, 89, "NEXUS", "#2e604a", 43, 900);
-  text(130, 117, "数字办公室", "#466e58", 17, 800);
-  text(130, 137, "DIGITAL WORKSPACE", "#829984", 10);
-  rect(433, 19, 658, 153, "#709581");
-  rect(439, 15, 649, 153, "#cfdcc9");
-  rect(446, 22, 636, 138, "#fff8e9");
-  rect(446, 22, 636, 27, "#e9f1df");
-  rect(454, 28, 10, 11, "#6fa782");
-  text(470, 39, "工作计划  /  WORK BOARD", "#3c6650", 13, 800);
+  rect(37, 25, 364, 140, "#d4d8e0");
+  rect(43, 22, 354, 137, "#e4e4e7");
+  rect(50, 26, 341, 127, "#ffffff");
+  rect(62, 41, 5, 99, "#18181b");
+  rect(372, 41, 4, 99, "#e4e4e7");
+  rect(86, 60, 18, 18, "#18181b");
+  rect(102, 49, 13, 15, "#2563eb");
+  rect(79, 75, 16, 11, "#d4d4d8");
+  text(128, 89, "NEXUS", "#09090b", 43, 900);
+  text(130, 117, "数字办公室", "#3f3f46", 17, 700);
+  text(130, 137, "DIGITAL WORKSPACE", "#71717a", 10);
+  rect(433, 19, 658, 153, "#d4d8e0");
+  rect(439, 15, 649, 153, "#e4e4e7");
+  rect(446, 22, 636, 138, "#ffffff");
+  rect(446, 22, 636, 27, "#f4f4f6");
+  rect(454, 28, 10, 11, "#18181b");
+  text(470, 39, "工作计划  /  WORK BOARD", "#09090b", 13, 700);
   for (let i = 0; i < 2; i++) {
     const x = 1120 + i * 153;
-    rect(x, 25, 136, 133, "#648e7d");
-    rect(x + 5, 30, 126, 121, "#d4e9d7");
-    rect(x + 5, 32, 126, 53, "#e6f2de");
-    rect(x + 5, 87, 126, 62, "#b7d8c6");
+    rect(x, 25, 136, 133, "#3f3f46");
+    rect(x + 5, 30, 126, 121, "#dbeafe");
+    rect(x + 5, 32, 126, 53, "#eff6ff");
+    rect(x + 5, 87, 126, 62, "#c7ddf7");
     for (let k = 0; k < 6; k++) {
       const ht = 19 + ((k * 9 + i * 6) % 33);
-      rect(x + 9 + k * 19, 148 - ht, 15, ht, k % 2 ? "#94b4a8" : "#a7cabc");
+      rect(x + 9 + k * 19, 148 - ht, 15, ht, k % 2 ? "#94a3b8" : "#cbd5e1");
     }
-    rect(x + 67, 30, 4, 119, "#88ada0");
-    rect(x + 5, 87, 126, 3, "#89b3a4");
+    rect(x + 67, 30, 4, 119, "#52525b");
+    rect(x + 5, 87, 126, 3, "#52525b");
   }
   g.restore();
   if (w < 760) {
-    rect(0, 0, w, camera.value.wallHeight, "#bcd2bc");
-    rect(0, 0, w, 7, "#6a987d");
-    rect(0, camera.value.wallHeight - 6, w, 6, "#769f83");
-    text(18, 36, "NEXUS", "#2e604a", 22, 900);
-    text(18, 53, "数字办公室", "#466e58", 10, 800);
-    text(w - 72, 37, "工作计划", "#55755b", 10);
+    rect(0, 0, w, camera.value.wallHeight, "#f4f5f7");
+    rect(0, 0, w, 6, "#18181b");
+    rect(0, camera.value.wallHeight - 6, w, 6, "#c7cbd3");
+    text(18, 36, "NEXUS", "#09090b", 22, 900);
+    text(18, 53, "数字办公室", "#3f3f46", 10, 700);
+    text(w - 72, 37, "工作计划", "#52525b", 10);
   }
   const edge = Math.max(9, (w / 1480) * 19);
-  rect(0, camera.value.wallHeight, edge, h, "#89aa93");
-  rect(w - edge, camera.value.wallHeight, edge, h, "#80a28a");
+  rect(0, camera.value.wallHeight, edge, h, "#d8dce3");
+  rect(w - edge, camera.value.wallHeight, edge, h, "#cfd4dd");
 }
 onMounted(() => {
   for (const key of [
@@ -359,7 +359,7 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: #e9ddc5;
+  background: #eceef2;
   isolation: isolate;
 }
 .backdrop {
@@ -383,7 +383,7 @@ onBeforeUnmount(() => {
   position: absolute;
   width: 0;
   height: 0;
-  --state: #6b967b;
+  --state: var(--astra-success, #15803d);
 }
 .station::before {
   content: "";
@@ -392,11 +392,11 @@ onBeforeUnmount(() => {
   top: -106px;
   width: 336px;
   height: 284px;
-  background: #d8e2cf;
-  border: 7px solid #c3d3bb;
+  background: #e2e5eb;
+  border: 7px solid #cfd4dd;
   box-shadow:
-    inset 0 0 0 3px #eaf1dd,
-    0 5px 0 #b9cbb780;
+    inset 0 0 0 3px #f4f5f8,
+    0 5px 0 rgba(15, 23, 42, 0.12);
 }
 .station img {
   position: absolute;
@@ -447,15 +447,15 @@ onBeforeUnmount(() => {
   background: transparent;
   border: 0;
   cursor: pointer;
-  color: #365d47;
-  border-radius: 2px;
+  color: var(--astra-text-primary);
+  border-radius: 4px;
 }
 .station-hit:hover,
 .station-hit:focus-visible,
 .selected .station-hit {
-  outline: calc(2px * var(--label-scale)) solid #3b8567;
+  outline: calc(2px * var(--label-scale)) solid var(--astra-primary);
   outline-offset: 9px;
-  background: #ffffff0d;
+  background: rgba(255, 255, 255, 0.14);
 }
 .nameplate {
   position: absolute;
@@ -463,10 +463,11 @@ onBeforeUnmount(() => {
   left: 50%;
   transform: translateX(-50%) scale(var(--label-scale));
   transform-origin: top center;
-  padding: 5px 9px;
-  background: #fffdf0f2;
-  border: 1px solid #aec4ad;
-  box-shadow: 0 3px 0 #91aa8d70;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #d4d4d8;
+  border-radius: 7px;
+  box-shadow: 0 3px 0 rgba(9, 9, 11, 0.08);
   white-space: nowrap;
   max-width: calc(280px * var(--scene-scale));
 }
@@ -476,32 +477,34 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
+  color: var(--astra-text-primary);
 }
 .nameplate small {
   display: block;
   margin-top: 3px;
   font-size: 9px;
-  color: #59725f;
+  color: var(--astra-text-muted);
 }
 .nameplate i {
   display: inline-block;
   width: 6px;
   height: 6px;
+  border-radius: 50%;
   margin-right: 6px;
   background: var(--state);
 }
 .attention {
-  --state: #b56445;
+  --state: var(--astra-warning);
 }
 .completed.working .nameplate,
 .completed.idle .nameplate {
-  background: #f1f8e8;
-  border-color: #65a279;
+  background: #f0fdf4;
+  border-color: var(--astra-success);
 }
 .unknown,
 .offline {
-  --state: #89958b;
+  --state: var(--astra-neutral);
 }
 .offline .robot {
   filter: grayscale(0.7);
@@ -514,19 +517,20 @@ onBeforeUnmount(() => {
   transform-origin: bottom left;
   padding: 7px 10px;
   font-size: 12px;
-  color: #9b4436;
-  background: #fff0e7;
-  border-left: 5px solid #c96e58;
-  box-shadow: 2px 3px 0 #8b4b3d66;
+  color: var(--astra-danger);
+  background: #fef2f2;
+  border-left: 4px solid var(--astra-danger);
+  border-radius: 0 6px 6px 0;
+  box-shadow: 2px 3px 0 rgba(9, 9, 11, 0.10);
   white-space: nowrap;
 }
 .multiple-rows .speech {
   display: none;
 }
 .speech.success {
-  color: #347254;
-  background: #edf7df;
-  border-color: #6fa782;
+  color: var(--astra-success);
+  background: #f0fdf4;
+  border-color: var(--astra-success);
 }
 .wall-board {
   position: absolute;
@@ -544,39 +548,42 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   padding: 7px 8px;
-  background: #f6f5ea;
+  background: var(--astra-bg-subtle);
   text-decoration: none;
-  color: #506b58;
-  border-left: 3px solid #6caa89;
+  color: var(--astra-text-secondary);
+  border-left: 3px solid var(--astra-info);
+  border-radius: 0 4px 4px 0;
   pointer-events: auto;
+  transition: background-color 0.15s ease;
 }
 .board-column:hover {
-  background: #fffdf6;
+  background: var(--astra-bg-panel);
 }
 .board-column span {
   font-size: clamp(9px, 1vw, 12px);
   display: flex;
   justify-content: space-between;
   gap: 6px;
-  font-weight: 800;
+  font-weight: 700;
 }
 .board-column b {
-  color: #4d8d68;
+  color: var(--astra-text-primary);
 }
 .board-column small {
   display: block;
   margin-top: 9px;
   font-size: clamp(8px, 0.8vw, 11px);
   line-height: 1.6;
+  color: var(--astra-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .board-column.queue {
-  border-color: #d7a06a;
+  border-color: var(--astra-warning);
 }
 .board-column.attention {
-  border-color: #bd7a63;
+  border-color: var(--astra-danger);
 }
 .reduce-motion .stations {
   transition: none;

@@ -5,80 +5,131 @@
     aria-label="员工工作台"
   >
     <header class="panel-header">
-      <div class="eyebrow">DIGITAL EMPLOYEE / 数字员工</div>
       <button
         class="close-button"
         type="button"
         aria-label="关闭员工工作台"
         @click="$emit('close')"
       >
-        <X :size="19" />
+        <X :size="16" :stroke-width="1.8" />
       </button>
+
       <div class="employee-heading">
-        <EmployeeAvatar :avatar="employee.avatar" :size="68" />
+        <EmployeeAvatar :avatar="employee.avatar" :size="52" :disabled="!employee.enabled" />
         <div class="employee-title">
-          <h1 id="office-employee-name">{{ employee.name }}</h1>
-          <p>{{ employee.domain || "数字员工" }}</p>
-          <span class="status-pill" :data-state="state"
-            ><i />{{ STATE_TEXT[state] }}</span
-          >
+          <div class="employee-title__row">
+            <h1 id="office-employee-name">{{ employee.name }}</h1>
+            <span class="status-pill" :data-state="state">
+              <i aria-hidden="true" />{{ STATE_TEXT[state] }}
+            </span>
+          </div>
+          <div class="employee-meta">
+            <span>{{ employee.domain || "数字员工" }}</span>
+            <template v-if="data && data.employee.counts.completedToday > 0">
+              <span class="employee-meta__sep" aria-hidden="true">·</span>
+              <span>今日完成 {{ data.employee.counts.completedToday }}</span>
+            </template>
+          </div>
         </div>
       </div>
+
+      <div v-if="employee.description?.trim()" class="employee-bio">
+        <button
+          type="button"
+          class="employee-bio__toggle"
+          :aria-expanded="bioExpanded"
+          @click="bioExpanded = !bioExpanded"
+        >
+          <span class="employee-bio__preview">{{ bioSummary }}</span>
+          <ChevronDown class="employee-bio__chevron" :class="{ 'is-open': bioExpanded }" :size="13" />
+        </button>
+        <div v-if="bioExpanded" class="employee-bio__body">
+          <MarkdownView :content="employee.description" compact />
+        </div>
+      </div>
+
       <div class="employee-actions">
-        <RouterLink :to="{ path: '/chat', query: { employee: employee.id } }"
-          ><MessageSquare :size="14" /> 员工对话</RouterLink
+        <RouterLink
+          class="employee-action employee-action--primary"
+          :to="{ path: '/chat', query: { employee: employee.id } }"
         >
-        <RouterLink :to="{ path: '/tasks', query: { owner: employee.id } }"
-          ><ListTodo :size="14" /> 全部任务</RouterLink
+          <MessageSquare :size="14" :stroke-width="1.8" />
+          <span>发起对话</span>
+        </RouterLink>
+        <RouterLink
+          class="employee-action"
+          :to="{ path: '/tasks', query: { owner: employee.id } }"
         >
+          <ListTodo :size="14" :stroke-width="1.8" />
+          <span>全部任务</span>
+        </RouterLink>
       </div>
     </header>
+
     <div class="panel-content" :aria-busy="loading">
-      <div v-if="error" class="inline-error" role="alert">
-        <AlertCircle :size="17" /><span
-          >{{ error }}<small v-if="data">当前保留上次确认数据</small></span
-        ><button type="button" @click="$emit('refresh')">重试</button>
+      <div v-if="error" class="inline-alert inline-alert--danger" role="alert">
+        <AlertCircle :size="15" />
+        <span>
+          {{ error }}
+          <small v-if="data">当前显示上次确认状态</small>
+        </span>
+        <button type="button" @click="$emit('refresh')">重试</button>
       </div>
+
       <div
         v-if="data?.degradedSources.length"
-        class="inline-error"
+        class="inline-alert inline-alert--warning"
         role="status"
       >
-        部分来源暂不可用：{{ data.degradedSources.join("、") }}
+        <AlertCircle :size="15" />
+        <span>部分状态待确认：{{ data.degradedSources.join("、") }}</span>
       </div>
-      <p v-if="loading && !data" class="panel-empty" role="status">
-        正在读取员工工作状态…
-      </p>
+
+      <div v-if="loading && !data" class="panel-loading" role="status">
+        <Loader2 class="wb-spinner" :size="16" />
+        <span>读取员工状态…</span>
+      </div>
+
       <template v-if="data">
+        <!-- 核心指标 -->
         <div class="overview">
-          <div>
-            <strong>{{ data.employee.counts.running }}</strong
-            ><span>执行中</span>
+          <div class="metric-card">
+            <span class="metric-card__label">执行中</span>
+            <strong
+              class="metric-card__value"
+              :class="{ 'is-info': data.employee.counts.running > 0 }"
+            >{{ data.employee.counts.running }}</strong>
           </div>
-          <button type="button" @click="jumpInbox">
-            <strong>{{ data.employee.counts.queued }}</strong
-            ><span>待分发 <ArrowUpRight :size="10" /></span></button
-          ><button
+
+          <button type="button" class="metric-card metric-card--interactive" @click="jumpInbox">
+            <span class="metric-card__label">
+              待分发
+              <ArrowUpRight :size="11" aria-hidden="true" />
+            </span>
+            <strong class="metric-card__value">{{ data.employee.counts.queued }}</strong>
+          </button>
+
+          <button
             type="button"
-            :class="{
-              warning:
-                data.employee.counts.waiting > 0,
-            }"
+            class="metric-card metric-card--interactive"
+            :class="{ 'is-warning': data.employee.counts.waiting > 0 }"
             @click="jumpInbox"
           >
-            <strong>{{
-              data.employee.counts.waiting
-            }}</strong
-            ><span>待关注 <ArrowUpRight :size="10" /></span>
+            <span class="metric-card__label">
+              待关注
+              <ArrowUpRight :size="11" aria-hidden="true" />
+            </span>
+            <strong class="metric-card__value">{{ data.employee.counts.waiting }}</strong>
           </button>
         </div>
-        <section aria-labelledby="office-workers-heading">
-          <div class="section-eyebrow">EXECUTION / 执行资源</div>
+
+        <!-- 执行资源 -->
+        <section class="wb-section" aria-labelledby="office-workers-heading">
           <div class="section-heading">
-            <h2 id="office-workers-heading">Agent Worker</h2>
-            <span>{{ data.workerTotal }} 个关联资源</span>
+            <h2 id="office-workers-heading">执行资源</h2>
+            <span class="section-count">{{ data.workerTotal }}</span>
           </div>
-          <p class="section-caption">按需调度的共享资源 · 人工与异常优先</p>
+
           <ul v-if="data.workers.length" class="worker-list">
             <li
               v-for="worker in data.workers"
@@ -88,52 +139,45 @@
             >
               <details>
                 <summary>
-                  <span class="worker-icon"><Monitor :size="17" /></span
-                  ><b>{{ worker.name }}</b
-                  ><span class="worker-state">{{ workerLabel(worker) }}</span
-                  ><ChevronDown class="chevron" :size="14" />
+                  <span class="worker-icon"><Monitor :size="14" :stroke-width="1.7" /></span>
+                  <b class="worker-name">{{ worker.name }}</b>
+                  <span class="worker-state" :data-state="workerState(worker)">
+                    <i aria-hidden="true" />{{ workerLabel(worker) }}
+                  </span>
+                  <ChevronDown class="chevron" :size="14" />
                 </summary>
                 <div class="worker-details">
                   <dl>
                     <div>
                       <dt>关联方式</dt>
-                      <dd>
-                        {{
-                          worker.association === "task"
-                            ? "当前任务执行关联"
-                            : "当前调度配置可用资源"
-                        }}
-                      </dd>
+                      <dd>{{ worker.association === "task" ? "任务执行" : "调度可用" }}</dd>
                     </div>
                     <div>
                       <dt>运行环境</dt>
-                      <dd>{{ worker.environmentName || "尚未配置" }}</dd>
+                      <dd>{{ worker.environmentName || "未配置" }}</dd>
                     </div>
                     <div>
                       <dt>健康 / 占用</dt>
-                      <dd>
-                        {{ HEALTH_TEXT[worker.health] }} /
-                        {{ OCCUPANCY_TEXT[worker.occupancy] }}
-                      </dd>
+                      <dd>{{ HEALTH_TEXT[worker.health] }} · {{ OCCUPANCY_TEXT[worker.occupancy] }}</dd>
                     </div>
                   </dl>
-                  <RouterLink :to="`/settings/workers/${worker.id}`"
-                    >查看 Worker 详情 <ArrowUpRight :size="13"
-                  /></RouterLink>
+                  <RouterLink class="worker-detail-link" :to="`/settings/workers/${worker.id}`">
+                    查看 Worker 详情 <ArrowUpRight :size="12" />
+                  </RouterLink>
                 </div>
               </details>
+
               <div v-if="worker.tasks.length" class="worker-current">
                 <RouterLink
                   v-for="task in worker.tasks"
                   :key="task.id"
                   :to="`/tasks/${task.id}`"
                   class="work-task"
-                  ><span>{{ task.title }}</span
-                  ><ArrowUpRight :size="13" /><small
-                    :class="{ issue: needsAttention(task) }"
-                    >{{ taskReason(task) }}</small
-                  ></RouterLink
                 >
+                  <span class="work-task__title">{{ task.title }}</span>
+                  <ArrowUpRight class="work-task__arrow" :size="12" />
+                  <small :class="{ issue: needsAttention(task) }">{{ taskReason(task) }}</small>
+                </RouterLink>
                 <RouterLink
                   v-if="
                     worker.employeeTaskCounts.RUNNING +
@@ -145,40 +189,37 @@
                     path: '/tasks',
                     query: { owner: employee.id, employee: worker.id },
                   }"
-                  >查看其余关联任务</RouterLink
-                >
+                >查看其余关联任务 →</RouterLink>
               </div>
+
               <p v-else class="worker-idle">
-                {{
-                  worker.health === "online"
-                    ? "等待新的任务调度"
-                    : healthReason(worker)
-                }}
+                {{ worker.health === "online" ? "空闲，等待任务调度" : healthReason(worker) }}
               </p>
+
               <div
                 v-if="worker.health !== 'online' && worker.tasks.length"
                 class="worker-warning"
               >
-                <AlertCircle :size="13" />{{ healthReason(worker) }}
+                <AlertCircle :size="13" />
+                <span>{{ healthReason(worker) }}</span>
               </div>
+
               <div
-                v-if="
-                  worker.occupancy === 'waiting' &&
-                  !worker.employeeTaskCounts.WAITING
-                "
+                v-if="worker.occupancy === 'waiting' && !worker.employeeTaskCounts.WAITING"
                 class="worker-warning"
               >
-                <AlertCircle :size="13" />共享 Worker
-                有其他待人工事项，可展开查看资源详情。
+                <AlertCircle :size="13" />
+                <span>共享 Worker 有其他待人工事项</span>
               </div>
             </li>
           </ul>
+
           <div v-else class="panel-empty">
-            <Monitor :size="24" />
+            <Monitor :size="18" :stroke-width="1.6" />
             <p>暂无关联的执行资源</p>
-            <small>任务分发后，实际执行的共享 Worker 会出现在这里。</small
-            ><RouterLink to="/settings/workers">查看共享 Worker</RouterLink>
+            <RouterLink to="/settings/workers">查看共享 Worker</RouterLink>
           </div>
+
           <el-pagination
             v-if="data.workerTotal > data.pageSize"
             small
@@ -191,35 +232,45 @@
             @current-change="$emit('worker-page', $event)"
           />
         </section>
+
+        <!-- 待处理工作 -->
         <section
           ref="inbox"
-          class="inbox-section"
+          class="wb-section inbox-section"
           aria-labelledby="office-inbox-heading"
         >
-          <div class="section-eyebrow">INBOX / 未处理工作</div>
           <div class="section-heading">
-            <h2 id="office-inbox-heading">等待处理</h2>
-            <span>{{ data.issueTotal }} 项</span>
+            <h2 id="office-inbox-heading">待处理</h2>
+            <span class="section-count">{{ data.issueTotal }}</span>
           </div>
+
           <ul v-if="data.issues.length" class="issue-list">
             <li
               v-for="task in data.issues"
               :key="task.id"
               :class="{ urgent: needsAttention(task) }"
             >
-              <RouterLink :to="`/tasks/${task.id}`"
-                ><div>
-                  <strong>{{ task.title }}</strong
-                  ><span>{{ STATUS_TEXT[task.status] }}</span>
+              <RouterLink :to="`/tasks/${task.id}`">
+                <div class="issue-card__top">
+                  <span
+                    class="issue-status"
+                    :data-tone="needsAttention(task) ? 'warning' : 'neutral'"
+                  >
+                    <i aria-hidden="true" />{{ STATUS_TEXT[task.status] }}
+                  </span>
+                  <ArrowUpRight class="issue-card__arrow" :size="13" aria-hidden="true" />
                 </div>
+                <strong>{{ task.title }}</strong>
                 <p>{{ taskReason(task) }}</p>
-                <small>打开任务处理 <ArrowUpRight :size="12" /></small
-              ></RouterLink>
+              </RouterLink>
             </li>
           </ul>
+
           <div v-else class="inbox-clear">
-            <CircleCheck :size="18" /> 当前没有待处理事项
+            <CircleCheck :size="15" :stroke-width="1.8" />
+            <span>当前无待处理事项</span>
           </div>
+
           <el-pagination
             v-if="data.issueTotal > data.pageSize"
             small
@@ -234,32 +285,36 @@
         </section>
       </template>
     </div>
+
     <footer class="panel-footer">
-      <span
-        ><i :class="{ stale: !!error }" />{{
-          data ? `最近确认 ${formatTime(data.generatedAt)}` : "等待工作状态"
-        }}</span
-      ><button
+      <span class="panel-footer__time">
+        <i :class="{ stale: !!error }" aria-hidden="true" />
+        {{ data ? `更新于 ${formatTime(data.generatedAt)}` : "同步中…" }}
+      </span>
+      <button
         type="button"
         :disabled="loading"
         aria-label="刷新员工工作台"
         @click="$emit('refresh')"
       >
-        <RefreshCw :size="13" />
+        <RefreshCw :size="13" :class="{ 'wb-spinner': loading }" />
       </button>
     </footer>
   </aside>
 </template>
+
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
 import EmployeeAvatar from "../../components/EmployeeAvatar.vue";
+import MarkdownView from "@/components/astra/MarkdownView.vue";
 import {
   AlertCircle,
   ArrowUpRight,
   ChevronDown,
   CircleCheck,
   ListTodo,
+  Loader2,
   MessageSquare,
   Monitor,
   RefreshCw,
@@ -276,41 +331,55 @@ import {
   type EmployeeOffice,
   type OfficeWorker,
 } from "./model";
+
 const props = defineProps<{
   employee: NebulaEmployee;
   data: EmployeeOffice | null;
   loading: boolean;
   error: string;
 }>();
+
 defineEmits<{
   close: [];
   refresh: [];
   "worker-page": [page: number];
   "issue-page": [page: number];
 }>();
+
 const inbox = ref<HTMLElement>();
+const bioExpanded = ref(false);
+
+const bioSummary = computed(() => {
+  const raw = (props.employee.description || "").replace(/[#>*`_\-\n]+/g, " ").replace(/\s+/g, " ").trim();
+  return raw || "查看职责说明";
+});
+
 function jumpInbox() {
-  inbox.value?.scrollIntoView({ block: "start" });
+  inbox.value?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
+
 const state = computed(() =>
   employeeState(
     props.data?.employee ?? props.employee,
     !props.data || !!props.error,
   ),
 );
+
 function workerLabel(worker: OfficeWorker) {
   if (worker.health !== "online") return HEALTH_TEXT[worker.health];
-  if (worker.employeeTaskCounts.WAITING) return "等待人工处理";
-  if (worker.tasks.some(needsAttention)) return "执行需关注";
+  if (worker.employeeTaskCounts.WAITING) return "等待人工";
+  if (worker.tasks.some(needsAttention)) return "需关注";
   return OCCUPANCY_TEXT[worker.occupancy];
 }
+
 function healthReason(worker: OfficeWorker) {
   return worker.health === "offline"
-    ? "Worker 已离线，请检查执行环境与连接"
+    ? "Worker 已离线，请检查连接"
     : worker.health === "error"
-      ? "执行环境异常，请打开 Worker 详情检查"
-      : "Worker 健康状态未确认，请检查运行环境";
+      ? "运行环境异常，请检查 Worker 详情"
+      : "健康状态待确认";
 }
+
 function formatTime(value: string) {
   return new Date(value).toLocaleTimeString("zh-CN", {
     hour: "2-digit",
@@ -319,6 +388,7 @@ function formatTime(value: string) {
   });
 }
 </script>
+
 <style scoped>
 .employee-workbench {
   position: absolute;
@@ -329,179 +399,401 @@ function formatTime(value: string) {
   display: flex;
   flex-direction: column;
   z-index: 8;
-  background: #fcfcf3;
-  border: 1px solid #9db9a3;
-  box-shadow: var(--astra-shadow-panel);
-  border-radius: 12px;
+  background: var(--astra-bg-panel);
+  border: 1px solid var(--astra-border);
+  box-shadow: var(--astra-shadow-float);
+  border-radius: 14px;
   overflow: hidden;
-  color: #355c46;
+  color: var(--astra-text-primary);
 }
+
+/* ── 工卡头部 ─────────────────────────────────────────────────── */
 .panel-header {
-  padding: 23px 24px 17px;
-  background: #f2f5e9;
-  border-bottom: 1px solid #dce4d3;
+  padding: 16px 18px 14px;
+  background: var(--astra-bg-subtle);
+  border-bottom: 1px solid var(--astra-border);
   position: relative;
 }
-.eyebrow,
-.section-eyebrow {
-  color: #7b937d;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 1.5px;
-}
-.eyebrow {
-  padding-right: 28px;
-}
+
 .close-button {
   position: absolute;
-  right: 15px;
-  top: 15px;
-  border: 1px solid #d5e0cc;
-  background: #fbfcf4;
-  color: #60816a;
-  padding: 6px;
-  border-radius: 6px;
-  display: flex;
+  right: 12px;
+  top: 12px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--astra-text-muted);
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
 }
+
+.close-button:hover {
+  background: var(--astra-bg-elevated);
+  border-color: var(--astra-border);
+  color: var(--astra-text-primary);
+}
+
 .employee-heading {
   display: flex;
   align-items: center;
-  gap: 15px;
-  margin-top: 20px;
+  gap: 12px;
+  padding-right: 28px;
 }
+
 .employee-title {
   min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
+
+.employee-title__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
 .employee-title h1 {
-  font-size: 23px;
-  line-height: 1.3;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.25;
   margin: 0;
+  color: var(--astra-text-primary);
   overflow-wrap: anywhere;
 }
-.employee-title p {
+
+.employee-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
   font-size: 12px;
-  color: #73816b;
-  margin: 5px 0 9px;
+  color: var(--astra-text-muted);
 }
+
+.employee-meta__sep {
+  opacity: 0.6;
+}
+
 .status-pill {
-  font-size: 10px;
-  font-weight: 600;
-  background: #e2eddb;
-  padding: 4px 8px;
-  color: #4e7b57;
-  border-radius: 4px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: nowrap;
+  color: var(--astra-neutral-text);
+  background: var(--astra-neutral-soft);
 }
+
 .status-pill i {
   width: 5px;
   height: 5px;
+  border-radius: 50%;
   background: currentColor;
 }
-.status-pill[data-state="attention"] {
-  color: #ad6246;
-  background: #f7e9d9;
+
+.status-pill[data-state="working"] {
+  color: var(--astra-info);
+  background: var(--astra-info-soft);
 }
+
+.status-pill[data-state="attention"] {
+  color: var(--astra-warning);
+  background: var(--astra-warning-soft);
+}
+
+.status-pill[data-state="idle"],
 .status-pill[data-state="unknown"],
 .status-pill[data-state="offline"] {
-  color: #757d73;
-  background: #e8eae3;
+  color: var(--astra-neutral-text);
+  background: var(--astra-neutral-soft);
 }
-.employee-actions {
+
+/* 可展开的员工职责简介 */
+.employee-bio {
+  margin-top: 10px;
+  border: 1px solid var(--astra-border-subtle);
+  border-radius: 8px;
+  background: var(--astra-bg-panel);
+  overflow: hidden;
+}
+
+.employee-bio__toggle {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin-top: 18px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--astra-text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
 }
-.employee-actions a {
+
+.employee-bio__toggle:hover {
+  background: var(--astra-bg-subtle);
+}
+
+.employee-bio__preview {
   flex: 1;
-  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employee-bio__chevron {
+  flex: none;
+  color: var(--astra-text-muted);
+  transition: transform 0.16s ease;
+}
+
+.employee-bio__chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.employee-bio__body {
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--astra-border-subtle);
+}
+
+.employee-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.employee-action {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 10px;
-  background: #fdfef6;
-  border: 1px solid #cad9c4;
-  color: #52745a;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--astra-border);
+  background: var(--astra-bg-panel);
+  color: var(--astra-text-primary);
   text-decoration: none;
-  border-radius: 6px;
-  font-size: 11px;
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
 }
-.employee-actions a:first-child {
-  background: #49765b;
-  border-color: #49765b;
-  color: #fffef3;
+
+.employee-action:hover {
+  background: var(--astra-bg-base);
+  border-color: var(--astra-border-hover);
 }
+
+.employee-action--primary {
+  background: var(--astra-primary);
+  border-color: var(--astra-primary);
+  color: #ffffff;
+}
+
+.employee-action--primary:hover {
+  background: var(--astra-primary-bright);
+  border-color: var(--astra-primary-bright);
+}
+
+/* ── 主体内容区 ───────────────────────────────────────────────── */
 .panel-content {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-  scrollbar-width: thin;
-  scrollbar-color: #c5d2bd transparent;
-  padding: 18px 22px 24px;
+  padding: 14px 18px 18px;
 }
-.overview {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 25px;
-}
-.overview > div,
-.overview > button {
+
+.inline-alert {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 12px 10px;
-  background: #eff3e7;
-  border: 1px solid #e0e7d8;
-  border-radius: 6px;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 11px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
 }
-.overview > button {
-  text-align: left;
-  font-family: inherit;
+
+.inline-alert svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.inline-alert > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.inline-alert small {
+  display: block;
+  opacity: 0.82;
+}
+
+.inline-alert--danger {
+  background: var(--astra-danger-soft);
+  border: 1px solid color-mix(in srgb, var(--astra-danger) 24%, transparent);
+  color: var(--astra-danger);
+}
+
+.inline-alert--danger button {
+  border: 0;
+  background: rgba(220, 38, 38, 0.14);
   color: inherit;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 500;
   cursor: pointer;
 }
-.overview > button:hover {
-  border-color: #a9be9c;
+
+.inline-alert--warning {
+  background: var(--astra-warning-soft);
+  border: 1px solid color-mix(in srgb, var(--astra-warning) 24%, transparent);
+  color: var(--astra-warning);
 }
-.overview span svg {
-  vertical-align: middle;
+
+.panel-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 36px 12px;
+  color: var(--astra-text-muted);
+  font-size: 12.5px;
 }
-.overview strong {
-  font-size: 23px;
+
+.wb-spinner {
+  animation: wb-spin 0.9s linear infinite;
+}
+
+@keyframes wb-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 指标卡片 */
+.overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 11px;
+  border: 1px solid var(--astra-border);
+  border-radius: 9px;
+  background: var(--astra-bg-subtle);
+  text-align: left;
+  font-family: inherit;
+}
+
+.metric-card--interactive {
+  cursor: pointer;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.metric-card--interactive:hover {
+  border-color: var(--astra-border-hover);
+  background: var(--astra-bg-panel);
+}
+
+.metric-card__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--astra-text-muted);
+}
+
+.metric-card__value {
+  font-size: 20px;
+  font-weight: 650;
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--astra-text-primary);
 }
-.overview span {
-  font-size: 10px;
-  color: #778773;
+
+.metric-card__value.is-info {
+  color: var(--astra-info);
 }
-.overview .warning {
-  background: #fbefdf;
-  border-color: #eadcc6;
-  color: #b06b44;
+
+.metric-card.is-warning {
+  background: var(--astra-warning-soft);
+  border-color: color-mix(in srgb, var(--astra-warning) 30%, transparent);
 }
+
+.metric-card.is-warning .metric-card__label,
+.metric-card.is-warning .metric-card__value {
+  color: var(--astra-warning);
+}
+
+/* 分区标题 */
+.wb-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inbox-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--astra-border-subtle);
+}
+
 .section-heading {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  margin-top: 7px;
+  justify-content: space-between;
+  gap: 8px;
 }
+
 .section-heading h2 {
-  font-size: 19px;
   margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--astra-text-secondary);
 }
-.section-heading > span {
-  font-size: 10px;
-  color: #83917c;
+
+.section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 19px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--astra-bg-elevated);
+  color: var(--astra-text-secondary);
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  font-weight: 500;
 }
-.section-caption {
-  font-size: 10px;
-  color: #82907b;
-  margin: 8px 0 15px;
-}
+
+/* Worker 列表 */
 .worker-list,
 .issue-list {
   list-style: none;
@@ -509,321 +801,442 @@ function formatTime(value: string) {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
+
 .worker-row {
-  border: 1px solid #d9e2ce;
-  border-radius: 7px;
-  background: #fffef7;
+  border: 1px solid var(--astra-border);
+  border-radius: 10px;
+  background: var(--astra-bg-panel);
   overflow: hidden;
-  border-left: 3px solid #9db89b;
 }
+
 .worker-row[data-state="attention"] {
-  border-color: #e6d2b9;
-  border-left-color: #ba7954;
-  background: #fffaf0;
+  border-color: color-mix(in srgb, var(--astra-warning) 32%, var(--astra-border));
 }
-.worker-row[data-state="working"] {
-  border-left-color: #6d9c77;
-}
+
 .worker-row summary {
   list-style: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 12px 9px;
+  padding: 10px 11px;
+  transition: background-color 0.14s ease;
 }
+
+.worker-row summary:hover {
+  background: var(--astra-bg-subtle);
+}
+
 .worker-row summary::-webkit-details-marker {
   display: none;
 }
+
 .worker-icon {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 29px;
-  height: 28px;
-  background: #edf1e3;
-  border: 1px solid #d8e1cd;
-  border-radius: 5px;
-  color: #709176;
-  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  background: var(--astra-bg-subtle);
+  border: 1px solid var(--astra-border);
+  border-radius: 7px;
+  color: var(--astra-text-secondary);
+  flex: none;
 }
-.worker-row summary b {
-  font-size: 12px;
+
+.worker-name {
+  font-size: 13px;
+  font-weight: 600;
   min-width: 0;
-  overflow-wrap: anywhere;
   flex: 1;
-}
-.worker-state {
-  font-size: 9px;
-  color: #64846a;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 4px 6px;
-  background: #edf2e4;
-  border-radius: 4px;
+  color: var(--astra-text-primary);
 }
-.worker-row[data-state="attention"] .worker-state {
-  background: #f7e8d4;
-  color: #a66c46;
+
+.worker-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--astra-neutral-soft);
+  color: var(--astra-neutral-text);
 }
+
+.worker-state i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.worker-state[data-state="working"] {
+  background: var(--astra-info-soft);
+  color: var(--astra-info);
+}
+
+.worker-state[data-state="attention"] {
+  background: var(--astra-warning-soft);
+  color: var(--astra-warning);
+}
+
 .chevron {
-  color: #91a188;
-  flex-shrink: 0;
+  color: var(--astra-text-muted);
+  flex: none;
+  transition: transform 0.16s ease;
 }
+
 .worker-row details[open] .chevron {
   transform: rotate(180deg);
 }
+
 .worker-details {
-  margin: 0 12px 10px;
-  padding: 9px 0;
-  border-bottom: 1px dashed #dce3d2;
+  margin: 0 11px 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--astra-bg-subtle);
+  border: 1px solid var(--astra-border-subtle);
 }
+
 .worker-details dl {
   margin: 0;
+  display: grid;
+  gap: 4px;
 }
+
 .worker-details dl > div {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 10px;
-  line-height: 1.7;
-  margin: 4px 0;
+  font-size: 11.5px;
+  line-height: 1.55;
 }
+
 .worker-details dt {
-  color: #83927c;
-  flex-shrink: 0;
+  color: var(--astra-text-muted);
+  flex: none;
 }
+
 .worker-details dd {
   margin: 0;
   text-align: right;
+  color: var(--astra-text-primary);
   overflow-wrap: anywhere;
 }
-.worker-details a {
+
+.worker-detail-link {
   display: inline-flex;
   align-items: center;
-  font-size: 10px;
-  color: #3f7b58;
+  gap: 3px;
   margin-top: 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--astra-accent-text);
+  text-decoration: none;
 }
+
+.worker-detail-link:hover {
+  text-decoration: underline;
+}
+
 .worker-current {
-  padding: 0 12px 11px 49px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 11px 10px 45px;
 }
+
 .work-task {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 5px;
+  gap: 3px 6px;
   text-decoration: none;
-  color: #59725b;
-  font-size: 11px;
-  padding: 5px 0;
+  color: var(--astra-text-primary);
+  font-size: 12.5px;
+  padding: 5px 7px;
+  margin: 0 -7px;
+  border-radius: 7px;
+  transition: background-color 0.14s ease, color 0.14s ease;
 }
-.work-task > span {
+
+.work-task:hover {
+  background: var(--astra-bg-subtle);
+  color: var(--astra-accent-text);
+}
+
+.work-task__title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
+
+.work-task__arrow {
+  color: var(--astra-text-muted);
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+
+.work-task:hover .work-task__arrow {
+  opacity: 1;
+}
+
 .work-task small {
-  grid-column: 1/-1;
-  font-size: 10px;
-  line-height: 1.6;
-  color: #89927f;
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--astra-text-muted);
   overflow-wrap: anywhere;
 }
+
 .work-task small.issue {
-  background: #f9ead7;
-  color: #a76742;
-  padding: 5px 8px;
-  border-radius: 3px;
-}
-.more-tasks {
-  font-size: 10px;
-  color: #548267;
-}
-.worker-idle {
-  font-size: 10px;
-  line-height: 1.7;
-  color: #89927e;
-  margin: 0;
-  padding: 0 13px 12px 49px;
-}
-.worker-warning {
-  display: flex;
-  gap: 5px;
-  align-items: flex-start;
-  margin: 0 12px 10px;
-  padding: 7px;
-  font-size: 10px;
-  background: #f8e7d3;
-  color: #a26944;
-  line-height: 1.6;
-}
-.worker-warning svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.inbox-section {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid #e1e6d7;
-}
-.issue-list {
-  margin-top: 15px;
-}
-.issue-list li {
-  background: #f1f4e8;
-  border: 1px solid #dfe6d3;
+  background: var(--astra-warning-soft);
+  color: var(--astra-warning);
+  padding: 4px 7px;
   border-radius: 6px;
 }
-.issue-list li.urgent {
-  background: #faf0e2;
-  border-color: #ead8c0;
-}
-.issue-list a {
-  display: block;
-  padding: 12px;
+
+.more-tasks {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--astra-accent-text);
   text-decoration: none;
-  color: #536d52;
+  margin-top: 2px;
 }
-.issue-list a > div {
+
+.more-tasks:hover {
+  text-decoration: underline;
+}
+
+.worker-idle {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--astra-text-muted);
+  margin: 0;
+  padding: 0 11px 10px 45px;
+}
+
+.worker-warning {
   display: flex;
+  gap: 6px;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 9px;
+  margin: 0 11px 10px;
+  padding: 7px 9px;
+  font-size: 11.5px;
+  border-radius: 7px;
+  background: var(--astra-warning-soft);
+  color: var(--astra-warning);
+  line-height: 1.5;
 }
-.issue-list strong {
-  font-size: 12px;
-  overflow-wrap: anywhere;
+
+.worker-warning svg {
+  flex: none;
+  margin-top: 2px;
 }
-.issue-list a > div span {
-  font-size: 9px;
-  flex-shrink: 0;
-  color: #9c805e;
+
+/* 待处理列表 */
+.issue-list li {
+  background: var(--astra-bg-panel);
+  border: 1px solid var(--astra-border);
+  border-radius: 9px;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
 }
-.issue-list p {
-  font-size: 10px;
-  color: #8b816b;
-  line-height: 1.7;
-  margin: 7px 0;
+
+.issue-list li:hover {
+  border-color: var(--astra-border-hover);
+  background: var(--astra-bg-subtle);
 }
-.issue-list small {
-  font-size: 10px;
+
+.issue-list li.urgent {
+  border-color: color-mix(in srgb, var(--astra-warning) 30%, var(--astra-border));
+}
+
+.issue-list a {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 11px;
+  text-decoration: none;
+  color: var(--astra-text-primary);
+}
+
+.issue-card__top {
   display: flex;
   align-items: center;
-  gap: 3px;
-  color: #738d68;
+  justify-content: space-between;
+  gap: 8px;
 }
+
+.issue-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--astra-neutral-soft);
+  color: var(--astra-neutral-text);
+}
+
+.issue-status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.issue-status[data-tone="warning"] {
+  background: var(--astra-warning-soft);
+  color: var(--astra-warning);
+}
+
+.issue-card__arrow {
+  color: var(--astra-text-muted);
+  opacity: 0;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.issue-list li:hover .issue-card__arrow {
+  opacity: 1;
+  color: var(--astra-text-primary);
+  transform: translate(1px, -1px);
+}
+
+.issue-list strong {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.issue-list p {
+  font-size: 12px;
+  color: var(--astra-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
 .inbox-clear {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 15px;
-  font-size: 11px;
-  color: #819176;
-  background: #eef3e6;
-  padding: 15px;
-  border-radius: 6px;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--astra-text-muted);
+  background: var(--astra-bg-subtle);
+  border: 1px solid var(--astra-border-subtle);
+  padding: 12px 13px;
+  border-radius: 9px;
 }
+
+.inbox-clear svg {
+  color: var(--astra-success);
+  flex: none;
+}
+
 .panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   text-align: center;
   font-size: 12px;
-  color: #819179;
-  line-height: 1.8;
-  padding: 25px 12px;
-  background: #f1f4e9;
-  border-radius: 7px;
-  margin: 15px 0;
+  color: var(--astra-text-muted);
+  padding: 20px 12px;
+  background: var(--astra-bg-subtle);
+  border: 1px dashed var(--astra-border);
+  border-radius: 10px;
 }
-.panel-empty > svg {
-  color: #94ab8f;
-}
+
 .panel-empty p {
-  margin: 7px 0;
+  margin: 0;
 }
-.panel-empty small {
-  display: block;
-  font-size: 10px;
-}
+
 .panel-empty a {
-  display: inline-block;
-  color: #4b7a58;
-  margin-top: 10px;
-  font-size: 11px;
+  color: var(--astra-accent-text);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
 }
-.inline-error {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #faebda;
-  border: 1px solid #e9d2b7;
-  border-radius: 6px;
-  padding: 10px;
-  margin-bottom: 14px;
-  font-size: 11px;
-  color: #aa6842;
-  line-height: 1.6;
+
+.panel-empty a:hover {
+  text-decoration: underline;
 }
-.inline-error > span {
-  flex: 1;
-}
-.inline-error small {
-  display: block;
-}
-.inline-error button {
-  border: 0;
-  background: #edd8bd;
-  padding: 5px 8px;
-  color: #845430;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.inline-error > svg {
-  flex-shrink: 0;
-}
+
+/* 底栏 */
 .panel-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 22px;
-  border-top: 1px solid #e0e7d6;
-  background: #f4f6ec;
-  color: #8a977f;
-  font-size: 9px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--astra-border);
+  background: var(--astra-bg-subtle);
+  color: var(--astra-text-muted);
+  font-size: 11.5px;
 }
+
+.panel-footer__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--astra-font-mono);
+}
+
 .panel-footer i {
   display: inline-block;
-  width: 5px;
-  height: 5px;
-  background: #6d9973;
-  margin-right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--astra-success);
 }
+
 .panel-footer i.stale {
-  background: #c98c51;
+  background: var(--astra-warning);
 }
+
 .panel-footer button {
   border: 0;
-  display: flex;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
   background: transparent;
-  color: #7f9374;
+  color: var(--astra-text-muted);
   cursor: pointer;
-  padding: 3px;
+  border-radius: 6px;
+  transition: background-color 0.14s ease, color 0.14s ease;
 }
+
+.panel-footer button:hover {
+  background: var(--astra-bg-elevated);
+  color: var(--astra-text-primary);
+}
+
 .panel-footer button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
+  cursor: default;
 }
+
 .el-pagination {
-  margin-top: 12px;
+  margin-top: 4px;
   justify-content: center;
 }
-a:hover {
-  filter: brightness(0.96);
-}
+
 button:focus-visible,
 a:focus-visible,
 summary:focus-visible {
-  outline: 2px solid #50805c;
-  outline-offset: 3px;
+  outline: 2px solid var(--astra-primary);
+  outline-offset: 2px;
 }
+
 @media (max-width: 759px) {
   .employee-workbench {
     top: 44%;
@@ -831,35 +1244,16 @@ summary:focus-visible {
     right: 10px;
     bottom: 65px;
     width: auto;
-    border-radius: 12px 12px 7px 7px;
+    border-radius: 12px 12px 8px 8px;
   }
   .panel-header {
-    padding: 14px 18px 12px;
-  }
-  .employee-heading {
-    margin-top: 10px;
-    gap: 10px;
-  }
-  .employee-title h1 {
-    font-size: 19px;
-  }
-  .employee-title p {
-    margin: 3px 0 5px;
-  }
-  .employee-actions {
-    margin-top: 12px;
+    padding: 13px 15px 12px;
   }
   .panel-content {
-    padding: 14px 18px;
-  }
-  .overview {
-    margin-bottom: 18px;
-  }
-  .eyebrow {
-    font-size: 8px;
+    padding: 12px 15px;
   }
   .panel-footer {
-    padding: 9px 18px;
+    padding: 8px 15px;
   }
 }
 </style>

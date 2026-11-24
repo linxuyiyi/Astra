@@ -19,25 +19,34 @@
     </form>
     <div class="astra-table-panel astra-table-panel--clickable">
       <el-table v-loading="loading" :data="workers" row-key="id" height="100%" aria-label="Worker 列表" @row-click="openWorker">
-        <el-table-column prop="name" label="Worker" min-width="150" show-overflow-tooltip />
-        <el-table-column label="运行状态" width="104">
+        <el-table-column prop="name" label="Worker" min-width="180" show-overflow-tooltip />
+        <el-table-column label="运行状态" width="88">
           <template #default="{ row }"><SemanticTag :tone="semanticTone(statusTone(row.status))" :label="statusLabel(row.status)" /></template>
         </el-table-column>
-        <el-table-column label="连接" width="90">
-          <template #default="{ row }">{{ row.online === null ? '未知' : row.online ? '在线' : '离线' }}</template>
+        <el-table-column label="连接" width="76">
+          <template #default="{ row }">
+            <span class="worker-conn">
+              <i class="worker-conn__dot" :class="row.online === true ? 'is-on' : row.online === false ? 'is-off' : ''" aria-hidden="true" />
+              {{ row.online === null ? '未知' : row.online ? '在线' : '离线' }}
+            </span>
+          </template>
         </el-table-column>
-        <el-table-column label="任务调度" width="108">
-          <template #default="{ row }"><span>{{ row.enabled ? '已启用' : '已停用' }}</span></template>
+        <el-table-column label="任务调度" width="88">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.enabled ? 'success' : 'info'" :class="{ 'astra-tag--neutral': !row.enabled }">
+              {{ row.enabled ? '已启用' : '已停用' }}
+            </el-tag>
+          </template>
         </el-table-column>
-        <el-table-column label="占用任务" min-width="200">
+        <el-table-column label="占用任务" min-width="150">
           <template #default="{ row }"><WorkerOccupiedTasks :tasks="row.occupied_tasks" /></template>
         </el-table-column>
-        <el-table-column prop="host" label="主机" min-width="144" show-overflow-tooltip />
-        <el-table-column prop="workspace_root" label="工作区" min-width="180" show-overflow-tooltip />
-        <el-table-column label="最后检查" width="168">
-          <template #default="{ row }">{{ formatTime(row.last_checked_at) }}</template>
+        <el-table-column prop="host" label="主机" min-width="124" show-overflow-tooltip />
+        <el-table-column prop="workspace_root" label="工作区" min-width="150" show-overflow-tooltip />
+        <el-table-column label="最后检查" width="128">
+          <template #default="{ row }"><span class="worker-time">{{ formatTime(row.last_checked_at) }}</span></template>
         </el-table-column>
-        <el-table-column label="操作" width="96" align="right" fixed="right">
+        <el-table-column label="操作" width="72" align="right" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" :aria-label="`查看 ${row.name}`" @click.stop="openWorker(row)">查看</el-button>
           </template>
@@ -49,9 +58,9 @@
       <span v-if="lastUpdated" class="last-updated">上次更新 {{ lastUpdated }}</span>
       <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50]" :total="total" layout="total, sizes, prev, pager, next" aria-label="Worker 分页" />
     </div>
-    <el-dialog v-model="creating" title="创建 Worker" width="760px" destroy-on-close>
+    <el-drawer v-model="creating" title="新增 Worker" size="min(680px, 100%)" :close-on-click-modal="false" destroy-on-close>
       <WorkerConfig @saved="configurationSaved" />
-    </el-dialog>
+    </el-drawer>
   </section>
 </template>
 
@@ -139,4 +148,9 @@ onUnmounted(() => request?.abort())
 
 <style scoped>
 .last-updated { margin-right: auto; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
+.worker-conn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--astra-text-secondary); }
+.worker-conn__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--astra-neutral); }
+.worker-conn__dot.is-on { background: var(--astra-success); }
+.worker-conn__dot.is-off { background: var(--astra-danger); }
+.worker-time { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--astra-text-secondary); }
 </style>

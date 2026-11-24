@@ -1,4 +1,4 @@
-// API 中转文案与格式化：只做展示映射，指标数值全部直接取自后端契约。
+// API 网关文案与格式化：只做展示映射，指标数值全部直接取自后端契约。
 
 const fallback = (value: string) => (value ? value : '—')
 
@@ -18,13 +18,60 @@ export const healthStateLabel = (value: string) =>
   }[value] ?? fallback(value))
 
 export const quotaPolicyLabel = (value: string) =>
-  ({ STOP: '停止新请求', ALERT: '仅告警', RECORD: '仅记录' }[value] ?? fallback(value))
+  ({ STOP: '超额停止', ALERT: '仅告警', RECORD: '仅记录' }[value] ?? fallback(value))
 
 export const probeTypeLabel = (value: string) =>
-  ({ NETWORK: '网络', SERVICE: '服务', MODEL: '模型', STREAM: 'SSE 流式', EMBEDDING: '向量嵌入', ASR: '语音识别' }[value] ?? fallback(value))
+  ({ NETWORK: '网络连通', SERVICE: '健康路径', MODEL: '对话调用', STREAM: '流式响应', EMBEDDING: '向量嵌入', ASR: '语音识别' }[value] ?? fallback(value))
+
+export const probeStrategyLabel = (value: string) =>
+  ({
+    SSE: '对话流式',
+    NON_STREAM: '对话非流式',
+    EMBEDDING: '向量嵌入',
+    ASR: '语音识别',
+    SCOPED: '自定义诊断',
+  }[value] ?? fallback(value))
 
 export const authTypeLabel = (value: string) =>
   ({ BEARER: 'Bearer Token', HEADER: '自定义 Header', NONE: '无认证' }[value] ?? fallback(value))
+
+export const auditActionLabel = (value: string) =>
+  ({
+    'node.create': '创建节点',
+    'node.update': '更新节点',
+    'node.delete': '删除节点',
+    'node.drain': '安全下线节点',
+    'node.activate': '恢复节点调度',
+    'node.probe': '执行节点探测',
+    'pool.create': '创建资源池',
+    'pool.update': '更新资源池',
+    'pool.delete': '删除资源池',
+    'route.create': '创建模型路由',
+    'route.update': '更新模型路由',
+    'route.delete': '删除模型路由',
+    'key.create': '创建 API Key',
+    'key.update': '更新 API Key',
+    'key.revoke': '吊销 API Key',
+    'key.delete': '删除 API Key',
+    'speech_input.update': '更新语音输入路由',
+  }[value] ?? fallback(value))
+
+export const auditResourceTypeLabel = (value: string) =>
+  ({
+    node: '上游节点',
+    pool: '资源池',
+    route: '模型路由',
+    key: 'API Key',
+    speech_input: '语音输入',
+  }[value] ?? fallback(value))
+
+export const auditResultLabel = (value: string) => {
+  const upper = value.toUpperCase()
+  if (upper === 'SUCCESS' || upper === 'OK') return '成功'
+  if (upper === 'FAILED' || upper === 'ERROR') return '失败'
+  if (upper === 'DENIED') return '已拒绝'
+  return fallback(value)
+}
 
 export type GatewayAuthenticationResult = 'PASS' | 'FAIL' | null
 
@@ -41,7 +88,7 @@ export function authenticationResult(
 }
 
 export const authenticationLabel = (value: GatewayAuthenticationResult) =>
-  value === 'PASS' ? '认证 PASS' : value === 'FAIL' ? '认证 FAIL' : '认证未验证'
+  value === 'PASS' ? '认证通过' : value === 'FAIL' ? '认证失败' : '认证未验证'
 
 export function authenticationTone(value: GatewayAuthenticationResult): GatewayTone {
   if (value === 'PASS') return 'success'
@@ -69,6 +116,12 @@ export function schedulingTone(value: string): GatewayTone {
 const parseApiTime = (value: string) =>
   new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(value) ? value : `${value}Z`)
 
+export function isExpired(value: string | null | undefined): boolean {
+  if (!value) return false
+  const ts = parseApiTime(value).getTime()
+  return Number.isFinite(ts) && ts < Date.now()
+}
+
 export function formatDateTime(value: string | null | undefined): string {
   if (!value) return '—'
   return parseApiTime(value).toLocaleString('zh-CN', {
@@ -77,6 +130,18 @@ export function formatDateTime(value: string | null | undefined): string {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
+    hour12: false,
+  })
+}
+
+export function formatShortDate(value: string | null | undefined): string {
+  if (!value) return '长期有效'
+  return parseApiTime(value).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
     hour12: false,
   })
 }
@@ -92,6 +157,17 @@ export function formatRelativeTime(value: string | null | undefined): string {
 
 export function formatSeconds(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
+  if (value >= 86_400) {
+    const days = Math.floor(value / 86_400)
+    const hours = Math.floor((value % 86_400) / 3600)
+    return `${days} 天 ${hours} 小时`
+  }
+  if (value >= 3600) {
+    const hours = Math.floor(value / 3600)
+    const mins = Math.floor((value % 3600) / 60)
+    return `${hours} 小时 ${mins} 分`
+  }
+  if (value >= 60) return `${Math.floor(value / 60)} 分 ${Math.floor(value % 60)} 秒`
   return `${value.toFixed(value >= 10 ? 0 : 1)} 秒`
 }
 
@@ -122,8 +198,8 @@ export function parseNumberList(value: string): string[] {
     .filter(Boolean)
 }
 
-export function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
+export function errorMessage(error: unknown, fallbackText: string): string {
+  return error instanceof Error ? error.message : fallbackText
 }
 
 const ERROR_CAUSE: Record<string, string> = {
@@ -160,11 +236,11 @@ export function errorCause(code: string | null | undefined): string {
 }
 
 export function serveSentence(node: { health_state: string; scheduling_state: string; config_state: string }): string {
-  if (node.config_state !== 'ENABLED') return '不能接请求：配置已禁用'
-  if (node.scheduling_state === 'DRAINING') return '正在下线，不再接新请求'
-  if (node.scheduling_state === 'BLOCKED') return '不能接请求：调度已阻止'
-  if (node.health_state === 'UNHEALTHY' || node.health_state === 'DEGRADED') return `不能稳定接请求：${healthStateLabel(node.health_state)}`
-  if (node.health_state === 'UNKNOWN' || node.health_state === 'CHECKING') return '还不能确认：探测未完成'
-  if (node.scheduling_state !== 'ACTIVE') return '不能接请求：当前不在调度'
-  return '可以接请求'
+  if (node.config_state !== 'ENABLED') return '已禁用，不参与流量调度'
+  if (node.scheduling_state === 'DRAINING') return '安全下线中，不再接收新请求'
+  if (node.scheduling_state === 'BLOCKED') return '调度已阻止，不参与转发'
+  if (node.health_state === 'UNHEALTHY' || node.health_state === 'DEGRADED') return `健康状态${healthStateLabel(node.health_state)}，服务不稳定`
+  if (node.health_state === 'UNKNOWN' || node.health_state === 'CHECKING') return '尚未完成探测，暂未进入调度'
+  if (node.scheduling_state !== 'ACTIVE') return '当前未处于调度状态'
+  return '状态正常，可正常转发请求'
 }

@@ -4,15 +4,17 @@
       <ElAside class="admin-sidebar">
         <div class="admin-sidebar__title">配置中心</div>
         <ElMenu class="admin-menu" mode="vertical" :default-active="activeMenu" router>
-          <ElMenuItem
-            v-for="item in menuItems"
-            :key="item.path"
-            :index="item.path"
-            :data-testid="`settings-menu-${item.id}`"
-          >
-            <component :is="item.icon" :size="16" aria-hidden="true" />
-            <span>{{ item.label }}</span>
-          </ElMenuItem>
+          <ElMenuItemGroup v-for="group in menuGroups" :key="group.id" :title="group.label">
+            <ElMenuItem
+              v-for="item in group.items"
+              :key="item.path"
+              :index="item.path"
+              :data-testid="`settings-menu-${item.id}`"
+            >
+              <component :is="item.icon" :size="15" aria-hidden="true" />
+              <span>{{ item.label }}</span>
+            </ElMenuItem>
+          </ElMenuItemGroup>
         </ElMenu>
       </ElAside>
       <ElMain class="admin-workspace__content">
@@ -31,21 +33,40 @@
 </template>
 
 <script setup lang="ts">
-import { Bot, Boxes, Plug, ScrollText, Wrench, Tags, Users } from "lucide-vue-next";
+import { Bot, Boxes, Plug, ScrollText, Tags, Users, Wrench } from "lucide-vue-next";
 import { computed } from "vue";
 import { RouterView, useRoute } from "vue-router";
-import { ElAside, ElCard, ElContainer, ElMain, ElMenu, ElMenuItem } from "element-plus";
+import { ElAside, ElCard, ElContainer, ElMain, ElMenu, ElMenuItem, ElMenuItemGroup } from "element-plus";
 
 const route = useRoute();
-const menuItems = [
-  { id: "employees", label: "数字员工管理", path: "/settings/employees", icon: Users },
-  { id: "workers", label: "Agent Worker", path: "/settings/workers", icon: Bot },
-  { id: "skills", label: "技能管理", path: "/settings/skills", icon: Wrench },
-  { id: "mcps", label: "MCP 管理", path: "/settings/mcps", icon: Plug },
-  { id: "categories", label: "任务分类", path: "/settings/categories", icon: Tags },
-  { id: "platform-prompt", label: "平台提示词", path: "/settings/platform-prompt", icon: ScrollText },
-  { id: "agentscope", label: "AgentScope", path: "/settings/agentscope", icon: Boxes },
+const menuGroups = [
+  {
+    id: "organization",
+    label: "组织与算力",
+    items: [
+      { id: "employees", label: "数字员工管理", path: "/settings/employees", icon: Users },
+      { id: "workers", label: "Agent Worker", path: "/settings/workers", icon: Bot },
+    ],
+  },
+  {
+    id: "capabilities",
+    label: "能力与规则",
+    items: [
+      { id: "skills", label: "技能管理", path: "/settings/skills", icon: Wrench },
+      { id: "mcps", label: "MCP 管理", path: "/settings/mcps", icon: Plug },
+      { id: "categories", label: "任务分类", path: "/settings/categories", icon: Tags },
+      { id: "platform-prompt", label: "平台提示词", path: "/settings/platform-prompt", icon: ScrollText },
+    ],
+  },
+  {
+    id: "engine",
+    label: "运行引擎",
+    items: [
+      { id: "agentscope", label: "AgentScope", path: "/settings/agentscope", icon: Boxes },
+    ],
+  },
 ];
+const menuItems = menuGroups.flatMap((group) => group.items);
 const activeMenu = computed(() => {
   const match = menuItems.find((item) => route.path === item.path || route.path.startsWith(`${item.path}/`));
   return match ? match.path : "/settings/employees";

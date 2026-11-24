@@ -5,76 +5,107 @@
     data-testid="knowledge-editor-drawer"
     :model-value="true"
     :title="editing ? '编辑知识' : '新建知识'"
-    size="min(720px, 100%)"
+    size="min(960px, 100%)"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :before-close="requestClose"
   >
     <ElForm
       ref="formRef"
-      class="knowledge-editor-form"
+      class="ke-form"
       :model="form"
       :rules="rules"
       label-position="top"
       scroll-to-error
     >
-      <ElText class="editor-hint" type="info">{{ editorHint }}</ElText>
-
-      <ElFormItem label="知识标题" prop="title">
-        <ElInput v-model.trim="form.title" maxlength="240" show-word-limit placeholder="例如：支付超时排查" />
+      <ElFormItem label="标题" prop="title">
+        <ElInput v-model.trim="form.title" maxlength="240" show-word-limit placeholder="输入知识标题，例如：接口超时排查手册" />
       </ElFormItem>
 
-      <ElFormItem label="所属目录" prop="space_id">
-        <ElSelect v-model="form.space_id" placeholder="请选择">
-          <ElOption v-for="dir in directories" :key="dir.id" :value="dir.id" :label="dir.name" />
-        </ElSelect>
-      </ElFormItem>
+      <div class="ke-row">
+        <ElFormItem label="所属目录" prop="space_id">
+          <ElSelect v-model="form.space_id" placeholder="选择目录" style="width: 100%">
+            <ElOption v-for="dir in directories" :key="dir.id" :value="dir.id" :label="dir.name" />
+          </ElSelect>
+        </ElFormItem>
+        <ElFormItem label="知识类型" prop="type">
+          <ElSelect v-model="form.type" style="width: 100%">
+            <ElOption v-for="item in types" :key="item.value" :value="item.value" :label="item.label" />
+          </ElSelect>
+        </ElFormItem>
+        <ElFormItem label="验证状态" prop="verification_status">
+          <ElSelect v-model="form.verification_status" style="width: 100%">
+            <ElOption value="unverified" label="未验证" />
+            <ElOption value="verified" label="已验证" />
+            <ElOption value="failed" label="验证失败" />
+          </ElSelect>
+        </ElFormItem>
+      </div>
 
-      <ElFormItem label="知识类型" prop="type">
-        <ElSelect v-model="form.type">
-          <ElOption v-for="item in types" :key="item.value" :value="item.value" :label="item.label" />
-        </ElSelect>
-      </ElFormItem>
-
-      <ElCollapse v-model="secondaryOpen" class="knowledge-metadata-collapse" style="margin-bottom: 18px;">
-        <ElCollapseItem title="摘要、标签与验证状态（可选元数据）" name="meta">
-          <ElFormItem label="验证状态" prop="verification_status">
-            <ElSelect v-model="form.verification_status">
-              <ElOption value="unverified" label="未验证" />
-              <ElOption value="verified" label="已验证" />
-              <ElOption value="failed" label="验证失败" />
-            </ElSelect>
-          </ElFormItem>
-
-          <ElFormItem label="标签" prop="tags">
-            <ElInput v-model="form.tags" placeholder="用逗号分隔" />
-          </ElFormItem>
-
-          <ElFormItem label="摘要" prop="summary">
-            <ElInput v-model.trim="form.summary" type="textarea" :rows="2" maxlength="4000" show-word-limit placeholder="摘要" />
-          </ElFormItem>
+      <ElCollapse v-model="secondaryOpen" class="ke-collapse">
+        <ElCollapseItem title="摘要与标签（可选）" name="meta">
+          <div class="ke-meta-grid">
+            <ElFormItem label="标签" prop="tags">
+              <ElSelect
+                v-model="form.tags"
+                multiple
+                filterable
+                allow-create
+                default-first-option
+                clearable
+                placeholder="输入标签后回车添加"
+                style="width: 100%"
+              />
+            </ElFormItem>
+            <ElFormItem label="摘要" prop="summary">
+              <ElInput v-model.trim="form.summary" type="textarea" :rows="2" maxlength="4000" placeholder="可选，简要概括文档核心结论" />
+            </ElFormItem>
+          </div>
         </ElCollapseItem>
       </ElCollapse>
 
-      <ElFormItem label="Markdown 正文" prop="content_md">
-        <div class="markdown-editor">
-          <div class="markdown-editor__toolbar">
-            <ElRadioGroup v-model="markdownMode">
+      <ElFormItem label="正文（Markdown）" prop="content_md">
+        <div class="ke-md">
+          <div class="ke-md__bar">
+            <div class="ke-md__snippets">
+              <button type="button" class="ke-md__btn" title="插入二级标题" @click="insertSnippet('\n## 章节标题\n')">H2</button>
+              <button type="button" class="ke-md__btn" title="插入粗体" @click="insertSnippet('**重点内容**')"><b>B</b></button>
+              <button type="button" class="ke-md__btn" title="插入列表" @click="insertSnippet('\n- 要点 1\n- 要点 2\n')">列表</button>
+              <button type="button" class="ke-md__btn" title="插入代码块" @click="insertSnippet('\n```bash\n# 命令或代码示例\n```\n')">代码</button>
+              <button type="button" class="ke-md__btn" title="插入表格" @click="insertSnippet('\n| 列 1 | 列 2 |\n| --- | --- |\n| 值 1 | 值 2 |\n')">表格</button>
+              <span class="ke-md__sep" aria-hidden="true" />
+              <ElButton size="small" text :icon="Upload" @click="pickMarkdown">导入 .md</ElButton>
+              <input ref="fileInput" class="ke-md__file" type="file" accept=".md,text/markdown,text/plain" @change="readMarkdown" />
+            </div>
+            <ElRadioGroup v-model="markdownMode" size="small" aria-label="编辑视图">
               <ElRadioButton value="edit">编辑</ElRadioButton>
+              <ElRadioButton value="split">分屏</ElRadioButton>
               <ElRadioButton value="preview">预览</ElRadioButton>
             </ElRadioGroup>
-            <ElButton :icon="Upload" plain @click="pickMarkdown">导入 .md</ElButton>
-            <input ref="fileInput" class="markdown-editor__file" type="file" accept=".md,text/markdown,text/plain" @change="readMarkdown" />
           </div>
-          <ElInput v-if="markdownMode === 'edit'" v-model="form.content_md" class="markdown-editor__input" type="textarea" :rows="10" resize="vertical" aria-label="Markdown 正文编辑区" placeholder="## 问题现象&#10;&#10;说明知识内容……" />
-          <div v-else class="markdown-editor__preview markdown-body" v-html="safeMarkdown" />
+
+          <div class="ke-md__panes" :class="`is-${markdownMode}`">
+            <ElInput
+              v-if="markdownMode !== 'preview'"
+              v-model="form.content_md"
+              class="ke-md__input"
+              type="textarea"
+              :rows="16"
+              resize="none"
+              aria-label="Markdown 正文编辑区"
+              placeholder="支持标准 Markdown 语法（标题、列表、表格、代码块）……"
+            />
+            <div v-if="markdownMode !== 'edit'" class="ke-md__preview">
+              <MarkdownView :content="form.content_md" compact empty-text="在左侧输入 Markdown 内容后，此处实时预览排版效果" />
+            </div>
+          </div>
         </div>
       </ElFormItem>
 
       <ElAlert
         v-if="error"
         data-testid="knowledge-editor-error"
-        class="editor-error"
+        class="ke-error"
         type="error"
         show-icon
         :closable="false"
@@ -83,38 +114,61 @@
     </ElForm>
 
     <template #footer>
-      <ElSpace :size="8">
-        <ElTag v-if="dirty" type="warning" effect="light">有未保存修改</ElTag>
-        <ElButton :disabled="saving" @click="requestClose">取消</ElButton>
-        <ElButton type="primary" :loading="saving" data-testid="knowledge-editor-submit" @click="submit">{{ isEdit ? '保存修改' : '保存草稿' }}</ElButton>
-      </ElSpace>
+      <div class="ke-footer">
+        <span class="ke-footer__note">
+          {{ isEdit ? (editing?.status === 'published' ? '保存后自动重新同步到检索库' : '') : '新建知识默认保存为草稿' }}
+        </span>
+        <ElSpace :size="8">
+          <ElTag v-if="dirty" size="small" type="warning" effect="light">有未保存修改</ElTag>
+          <ElButton :disabled="saving" @click="requestClose">取消</ElButton>
+          <ElButton type="primary" :loading="saving" data-testid="knowledge-editor-submit" @click="submit">
+            {{ isEdit ? '保存修改' : '保存草稿' }}
+          </ElButton>
+        </ElSpace>
+      </div>
     </template>
   </ElDrawer>
 </template>
 
 <script setup lang="ts">
 import { onBeforeRouteLeave } from 'vue-router'
-import DOMPurify from 'dompurify'
-import { marked } from 'marked'
 import { Upload } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElCollapse, ElCollapseItem, ElDrawer, ElForm, ElFormItem, ElInput, ElOption, ElRadioGroup, ElRadioButton, ElSelect, ElSpace, ElTag, ElText } from 'element-plus'
+import {
+  ElAlert,
+  ElButton,
+  ElCollapse,
+  ElCollapseItem,
+  ElDrawer,
+  ElForm,
+  ElFormItem,
+  ElInput,
+  ElOption,
+  ElRadioButton,
+  ElRadioGroup,
+  ElSelect,
+  ElSpace,
+  ElTag,
+} from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import MarkdownView from '@/components/astra/MarkdownView.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import type { KnowledgeDetail } from '@/api/types'
 
-const secondaryOpen = ref<string[]>([])
-
-const props = defineProps<{ open: boolean; directories: Array<{ id: string; name: string; level: number }>; saving: boolean; error: string; editing?: KnowledgeDetail | null; initialContent?: string; initialTitle?: string; initialSpaceId?: string }>()
+const props = defineProps<{
+  open: boolean
+  directories: Array<{ id: string; name: string; level: number }>
+  saving: boolean
+  error: string
+  editing?: KnowledgeDetail | null
+  initialContent?: string
+  initialTitle?: string
+  initialSpaceId?: string
+}>()
 const emit = defineEmits<{ close: []; save: [payload: Record<string, unknown>] }>()
 
+const secondaryOpen = ref<string[]>([])
 const isEdit = computed(() => Boolean(props.editing))
-const editorHint = computed(() => {
-  if (!props.editing) return '知识先保存为草稿，经审核发布后才对数字员工可见。'
-  return props.editing.status === 'published'
-    ? '这条知识已发布，保存后将进入同步准备；同步完成前数字员工看到的仍是已同步版本。'
-    : '保存后修改立即生效，审核状态保持不变。'
-})
 
 const types = [
   { value: 'document', label: '文档' },
@@ -128,8 +182,16 @@ const types = [
 
 const formRef = ref<FormInstance | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
-const markdownMode = ref<'edit' | 'preview'>('edit')
-const form = reactive({ space_id: '', title: '', type: 'document', verification_status: 'unverified', tags: '', summary: '', content_md: '' })
+const markdownMode = ref<'edit' | 'split' | 'preview'>('split')
+const form = reactive({
+  space_id: '',
+  title: '',
+  type: 'document',
+  verification_status: 'unverified',
+  tags: [] as string[],
+  summary: '',
+  content_md: '',
+})
 const snapshot = ref('')
 const dirty = computed(() => JSON.stringify(form) !== snapshot.value)
 
@@ -138,9 +200,6 @@ const rules: FormRules = {
   space_id: [{ required: true, message: '请选择所属目录', trigger: 'change' }],
   content_md: [{ required: true, message: '请输入 Markdown 正文', trigger: 'blur' }],
 }
-
-marked.setOptions({ gfm: true, breaks: true })
-const safeMarkdown = computed(() => DOMPurify.sanitize(marked.parse(form.content_md || '', { async: false }) as string, { USE_PROFILES: { html: true } }))
 
 watch(() => props.open, (open) => {
   if (!open) return
@@ -151,25 +210,31 @@ watch(() => props.open, (open) => {
       title: editing.title ?? '',
       type: editing.type ?? 'document',
       verification_status: editing.verification_status ?? 'unverified',
-      tags: (editing.tags ?? []).join(', '),
+      tags: [...(editing.tags ?? [])],
       summary: editing.summary ?? '',
       content_md: editing.content_md ?? '',
     })
+    secondaryOpen.value = editing.summary || (editing.tags?.length ?? 0) > 0 ? ['meta'] : []
   } else {
     Object.assign(form, {
       space_id: props.initialSpaceId || props.directories[0]?.id || '',
       title: props.initialTitle ?? '',
       type: 'document',
       verification_status: 'unverified',
-      tags: '',
+      tags: [],
       summary: '',
       content_md: props.initialContent ?? '',
     })
+    secondaryOpen.value = []
   }
-  markdownMode.value = 'edit'
+  markdownMode.value = window.innerWidth >= 820 ? 'split' : 'edit'
   snapshot.value = JSON.stringify(form)
   formRef.value?.clearValidate()
 }, { immediate: true })
+
+function insertSnippet(snippet: string) {
+  form.content_md = `${form.content_md}${snippet}`
+}
 
 async function requestClose() {
   if (!props.open) return true
@@ -191,7 +256,10 @@ async function submit() {
   if (props.saving) return
   const valid = formRef.value ? await formRef.value.validate().catch(() => false) : false
   if (!valid) return
-  emit('save', { ...form, tags: form.tags.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) })
+  emit('save', {
+    ...form,
+    tags: [...new Set(form.tags.map((tag) => tag.trim()).filter(Boolean))],
+  })
 }
 
 function pickMarkdown() {
@@ -210,30 +278,54 @@ async function readMarkdown(event: Event) {
 </script>
 
 <style scoped>
-.knowledge-editor-form { display: grid; gap: 2px; }
-.editor-hint { margin-bottom: 6px; }
-.markdown-editor { display: grid; gap: 8px; width: 100%; }
-.markdown-editor__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.markdown-editor__file { display: none; }
-.markdown-editor__input :deep(.el-textarea__inner) { min-height: 320px; font-family: var(--astra-font-family); font-size: var(--astra-font-body); line-height: 1.55; }
-.markdown-editor__preview { min-height: 320px; max-height: 46vh; overflow: auto; padding: 12px 14px; color: var(--astra-text-secondary); border: 1px solid var(--astra-border); border-radius: 8px; background: #fbfdfc; font-size: var(--astra-font-body); line-height: 1.6; }
-.editor-error { margin-top: 4px; }
-.markdown-editor__preview :deep(h1), .markdown-editor__preview :deep(h2), .markdown-editor__preview :deep(h3) { margin: 12px 0 8px; color: var(--astra-text-primary); line-height: 1.35; }
-.markdown-editor__preview :deep(h1) { font-size: var(--astra-font-title); }
-.markdown-editor__preview :deep(h2) { font-size: var(--astra-font-section); }
-.markdown-editor__preview :deep(h3) { font-size: var(--astra-font-label); }
-.markdown-editor__preview :deep(p) { margin: 8px 0; }
-.markdown-editor__preview :deep(ul), .markdown-editor__preview :deep(ol) { padding-left: 22px; margin: 8px 0; }
-.markdown-editor__preview :deep(blockquote) { margin: 10px 0; padding: 8px 12px; color: var(--astra-text-secondary); border-left: 3px solid var(--astra-primary); background: var(--astra-primary-soft); }
-.markdown-editor__preview :deep(code) { padding: 2px 5px; color: #b45140; border-radius: 5px; background: #f4efec; font-family: var(--astra-font-family); font-size: .9em; }
-.markdown-editor__preview :deep(pre) { overflow: auto; padding: 12px; border: 1px solid var(--astra-border); border-radius: 8px; background: #15231f; }
-.markdown-editor__preview :deep(pre code) { padding: 0; color: #dcebe5; background: transparent; }
-.markdown-editor__preview :deep(table) { display: block; max-width: 100%; overflow: auto; border-collapse: collapse; }
-.markdown-editor__preview :deep(th), .markdown-editor__preview :deep(td) { padding: 7px 10px; border: 1px solid var(--astra-border); }
-.markdown-editor__preview :deep(th) { background: #f3f8f5; }
-.markdown-editor__preview :deep(a) { color: var(--astra-primary-bright); text-decoration: underline; }
+.ke-form { display: grid; gap: 2px; }
+.ke-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; }
+.ke-collapse { margin-bottom: 14px; }
+.ke-meta-grid { display: grid; gap: 4px; }
+
+.ke-md { display: grid; gap: 0; width: 100%; border: 1px solid var(--astra-border); border-radius: 10px; overflow: hidden; background: var(--astra-bg-panel); }
+.ke-md__bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--astra-border);
+  background: var(--astra-bg-subtle);
+}
+.ke-md__snippets { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.ke-md__btn {
+  height: 26px; padding: 0 8px;
+  border: 1px solid transparent; border-radius: 6px; background: transparent;
+  color: var(--astra-text-secondary); font-size: 12px; cursor: pointer;
+}
+.ke-md__btn:hover { background: var(--astra-bg-panel); border-color: var(--astra-border); color: var(--astra-text-primary); }
+.ke-md__sep { width: 1px; height: 14px; background: var(--astra-border); margin: 0 4px; }
+.ke-md__file { display: none; }
+
+.ke-md__panes { display: grid; min-height: 390px; max-height: 52vh; }
+.ke-md__panes.is-split { grid-template-columns: 1fr 1fr; }
+.ke-md__input { height: 100%; }
+.ke-md__input :deep(.el-textarea__inner) {
+  height: 100% !important; min-height: 390px; max-height: 52vh;
+  border: 0; border-radius: 0; box-shadow: none !important;
+  padding: 12px 14px;
+  font-family: var(--astra-font-mono); font-size: 13px; line-height: 1.65;
+}
+.ke-md__preview {
+  height: 100%; min-height: 390px; max-height: 52vh;
+  overflow-y: auto; padding: 14px 16px;
+  background: var(--astra-bg-panel);
+}
+.ke-md__panes.is-split .ke-md__preview { border-left: 1px solid var(--astra-border); background: var(--astra-bg-subtle); }
+
+.ke-error { margin-top: 4px; }
+.ke-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
+.ke-footer__note { color: var(--astra-text-muted); font-size: 12px; }
+
+@media (max-width: 760px) {
+  .ke-row { grid-template-columns: 1fr; }
+  .ke-md__panes.is-split { grid-template-columns: 1fr; }
+}
 </style>
 
 <style>
-.knowledge-editor-drawer .el-drawer__footer { display: flex; align-items: center; justify-content: flex-end; }
+.knowledge-editor-drawer .el-drawer__footer { display: flex; align-items: center; }
 </style>

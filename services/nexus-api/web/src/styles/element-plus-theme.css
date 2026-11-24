@@ -1,26 +1,98 @@
-/* Element Plus 全局尺寸主题层：全站唯一一处覆盖，import 在 element-plus/dist/index.css 之后。
+/* Element Plus 全局尺寸与视觉主题层：全站唯一一处覆盖，import 在 element-plus/dist/index.css 之后。
    App.vue 用 <ElConfigProvider size="small"> 把所有控件放进 small 档，
    而 Element Plus 2.14 把 small 档的尺寸编译进了组件样式
    （$common-component-size.small=24px、$input-font-size.small=12px、$tag-height.small=20px…），
    只改 --el-component-size-small 只能影响真正读 CSS 变量的 ElInput / ElInputNumber / ElDateEditor。
    下面把 Astra 用到的、仍写死 small 的规则统一回 --astra-control-height (32px) 基准，
-   取值与 Element Plus 自己的 default 档一致；业务页面不再各自压控件内部高度。 */
+   并统一 Codex × Claude 的克制表面、边框、炭墨按钮与赤陶链接质感；业务页面不再各自覆盖。 */
 
 /* 输入框：高度读 --el-component-size-small 已经跟着 32px 走了，
    但 small 档的字号和左右内边距仍是 24px 档的字面量。 */
 .el-input--small { font-size: var(--el-font-size-base); }
 
-.el-input--small .el-input__wrapper { padding: 1px 11px; }
+.el-input--small .el-input__wrapper {
+  padding: 1px 11px;
+  transition: box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--astra-primary) inset, 0 0 0 3px var(--astra-primary-glow);
+}
+
+.el-textarea__inner {
+  transition: box-shadow 0.15s ease;
+}
+
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--astra-primary) inset, 0 0 0 3px var(--astra-primary-glow);
+}
 
 /* 按钮：small 档把高度写进 --el-button-size 并写死 12px 字号。 */
+.el-button {
+  font-weight: 500;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
 .el-button--small {
   --el-button-size: var(--astra-control-height);
-  padding: 0 15px;
+  padding: 0 14px;
   font-size: var(--el-font-size-base);
   border-radius: var(--el-border-radius-base);
 }
 
 .el-button--small [class*='el-icon'] + span { margin-left: 6px; }
+
+/* 默认次按钮：纯净纸白 + 极细冷灰边，hover 浅冷灰 */
+.el-button--default:not(.is-link, .is-text, .is-disabled) {
+  --el-button-bg-color: var(--astra-bg-panel);
+  --el-button-border-color: var(--astra-border);
+  --el-button-text-color: var(--astra-text-primary);
+  --el-button-hover-bg-color: var(--astra-bg-base);
+  --el-button-hover-border-color: var(--astra-border-hover);
+  --el-button-hover-text-color: var(--astra-text-primary);
+  --el-button-active-bg-color: var(--astra-bg-elevated);
+  --el-button-active-border-color: var(--astra-border-hover);
+  box-shadow: 0 1px 1px rgba(9, 9, 11, 0.03);
+}
+
+/* 实心主按钮：Codex 风格深炭黑，沉稳锐利 */
+.el-button--primary:not(.is-link, .is-text, .is-plain, .is-disabled) {
+  --el-button-bg-color: var(--astra-primary);
+  --el-button-border-color: var(--astra-primary);
+  --el-button-text-color: #ffffff;
+  --el-button-hover-bg-color: var(--astra-primary-bright);
+  --el-button-hover-border-color: var(--astra-primary-bright);
+  --el-button-active-bg-color: var(--astra-primary-active);
+  --el-button-active-border-color: var(--astra-primary-active);
+  box-shadow: 0 1px 2px rgba(9, 9, 11, 0.12);
+}
+
+/* 链接/文字型主按钮：克制冷调工程蓝，确保表格行内操作与正文炭黑清晰区分 */
+.el-button--primary.is-link,
+.el-button--primary.is-text {
+  --el-button-text-color: var(--astra-accent-text);
+  --el-button-hover-link-text-color: var(--astra-accent-hover);
+  --el-button-hover-text-color: var(--astra-accent-hover);
+  --el-button-hover-bg-color: var(--astra-accent-soft);
+  --el-button-active-color: var(--astra-accent-hover);
+}
+
+/* 朴素主按钮：克制冷白底 + 深炭字 */
+.el-button--primary.is-plain:not(.is-disabled) {
+  --el-button-bg-color: var(--astra-bg-subtle);
+  --el-button-border-color: var(--astra-primary-border);
+  --el-button-text-color: var(--astra-text-primary);
+  --el-button-hover-bg-color: var(--astra-primary);
+  --el-button-hover-border-color: var(--astra-primary);
+  --el-button-hover-text-color: #ffffff;
+}
+
+/* 主色链接：与文字型主按钮统一走冷调工程蓝 */
+.el-link.el-link--primary {
+  --el-link-text-color: var(--astra-accent-text);
+  --el-link-hover-text-color: var(--astra-accent-hover);
+}
 
 /* 选择器：small 档的 min-height / padding / 字号 / 行高全是字面量。 */
 .el-select--small .el-select__wrapper {
@@ -28,9 +100,15 @@
   padding: 4px 12px;
   font-size: var(--el-font-size-base);
   line-height: 24px;
+  transition: box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .el-select--small .el-select__input { height: 24px; }
+
+.el-select-dropdown__item.is-selected {
+  color: var(--astra-text-primary);
+  font-weight: 600;
+}
 
 /* 数字输入框：small 档的宽度 / 行高 / 步进按钮尺寸 / 内边距都是 24px 档的字面量。 */
 .el-input-number--small { width: 150px; line-height: 30px; }
@@ -56,11 +134,21 @@
   --el-form-label-font-size: var(--font-size);
 }
 
-.el-form-item--small .el-form-item__label { height: var(--astra-control-height); line-height: var(--astra-control-height); }
+.el-form-item--small .el-form-item__label {
+  height: var(--astra-control-height);
+  line-height: var(--astra-control-height);
+  color: var(--astra-text-secondary);
+  font-weight: 500;
+}
 
 .el-form-item--small .el-form-item__content { line-height: var(--astra-control-height); }
 
 /* 开关 / 勾选 / 单选：small 档整体高度锁 24px、字号 12px。 */
+.el-switch {
+  --el-switch-off-color: #d4d4d8;
+  --el-switch-on-color: var(--astra-primary);
+}
+
 .el-switch--small { height: var(--astra-control-height); font-size: var(--el-font-size-base); line-height: 24px; }
 
 .el-switch--small .el-switch__label,
@@ -104,15 +192,26 @@
   --el-pagination-font-size-small: var(--el-font-size-base);
 }
 
+.el-pagination.is-background .el-pager li,
+.el-pagination.is-background .btn-prev,
+.el-pagination.is-background .btn-next {
+  border-radius: 6px;
+}
+
 /* 标签：small 档 20px，压在 32px 控件旁边偏小；字号变量默认 12px 也不到 base 档。 */
+.el-tag {
+  border-radius: 6px;
+  font-weight: 500;
+}
+
 .el-tag--small {
   --el-icon-size: 14px;
-  --el-tag-font-size: var(--el-font-size-base);
+  --el-tag-font-size: var(--astra-font-control);
   height: 24px;
   padding: 0 9px;
 }
 
-/* 中性语义标签：info 在主题里是蓝色，这里单独提供真正的灰色，
+/* 中性语义标签：info 在主题里是蓝色，这里单独提供纯净暖灰色，
    供 Worker 列表、详情、维护记录与日志共用（见 features/workers/semantic.ts）。 */
 .el-tag.astra-tag--neutral {
   --el-tag-text-color: var(--astra-neutral-text);
@@ -122,27 +221,68 @@
 
 /* 描述列表：small 档单元格字号 12px。 */
 .el-descriptions--small .el-descriptions__body .el-descriptions__table .el-descriptions__cell { font-size: var(--el-font-size-base); }
+.el-descriptions__label.el-descriptions__cell.is-bordered-label {
+  background: var(--astra-bg-subtle);
+  color: var(--astra-text-secondary);
+}
 
-/* 列表的表头、悬停与当前行各用一档表面色。 */
+/* 列表的表头、悬停与当前行各用一档温和中性表面色。 */
 .el-table {
-  --el-table-header-bg-color: var(--astra-bg-base);
+  --el-table-header-bg-color: var(--astra-bg-subtle);
   --el-table-header-text-color: var(--astra-text-secondary);
   --el-table-row-hover-bg-color: var(--astra-bg-base);
-  --el-table-current-row-bg-color: var(--astra-primary-soft);
+  --el-table-current-row-bg-color: var(--astra-accent-soft);
+  --el-table-border-color: var(--astra-border-subtle);
 }
 .el-table--small { font-size: var(--el-font-size-base); }
-.el-table--small .el-table__cell { padding: 8px 0; }
+.el-table--small .el-table__cell { padding: 9px 0; }
 .el-table th.el-table__cell { font-weight: 600; }
 .el-table :is(a, button):focus-visible { outline-offset: -2px; }
 
-.el-button--primary:not(.is-link, .is-text, .is-plain, .is-disabled) {
-  --el-button-hover-bg-color: var(--astra-primary-bright);
-  --el-button-hover-border-color: var(--astra-primary-bright);
+/* 卡片、弹窗、抽屉与浮层质感 */
+.el-card {
+  --el-card-border-color: var(--astra-border);
+  --el-card-border-radius: 12px;
+  box-shadow: var(--astra-shadow-panel);
+}
+
+.el-dialog {
+  --el-dialog-border-radius: 14px;
+  border: 1px solid var(--astra-border);
+  box-shadow: var(--astra-shadow-float);
+}
+
+.el-drawer {
+  border-left: 1px solid var(--astra-border);
+  box-shadow: var(--astra-shadow-float);
+}
+
+.el-popper.is-light {
+  border-color: var(--astra-border);
+  box-shadow: var(--astra-shadow-float);
+}
+
+.el-alert {
+  border-radius: 10px;
+}
+
+.el-tabs__item.is-active {
+  color: var(--astra-text-primary);
+  font-weight: 600;
+}
+
+.el-tabs__active-bar {
+  background-color: var(--astra-primary);
 }
 
 /* 文本：small 档字号取 --el-font-size-extra-small，现在与 --el-font-size-small 同为
-   13px，落在表格正文的 14px 之下。跟表格一样统一回 base 档，页面不再逐个传 size。 */
+   13px，落在表格正文的 14px 之下。跟表格一样统一回 base 档，页面不再逐个传 size。
+   ElText type="info" 在 Element Plus 中代表次级中性说明文字，不能跟着 info 蓝变亮蓝。 */
 .el-text--small { font-size: var(--el-font-size-base); }
+.el-text.el-text--info {
+  --el-text-color: var(--astra-text-muted);
+  color: var(--astra-text-muted);
+}
 
 /* 按钮组统一走 ElSpace 的 gap，主题里的相邻按钮外边距会让间距翻倍，这里只清掉重复的那一份。 */
 .el-space .el-button + .el-button { margin-left: 0; }

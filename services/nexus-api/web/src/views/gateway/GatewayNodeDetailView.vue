@@ -29,18 +29,19 @@
           <RouterLink class="gateway-node-back" to="/gateway/nodes"><ArrowLeft :size="14" />节点列表</RouterLink>
           <div class="gateway-node-identity__title">
             <h2>{{ node.name }}</h2>
+            <ElTag size="small" type="info" class="astra-tag--neutral">{{ probeStrategyLabel(node.probe_strategy) }}</ElTag>
             <span class="gateway-node-mono">{{ node.id }}</span>
           </div>
           <p class="gateway-node-identity__url">{{ node.base_url }}</p>
         </div>
         <ElSpace class="gateway-node-actions" :size="8">
+          <ElButton :icon="Activity" :loading="working" data-testid="gateway-node-probe" @click="probe">探测</ElButton>
           <ElButton type="primary" :icon="Pencil" data-testid="gateway-node-edit" @click="openEditor">编辑</ElButton>
           <ElDropdown trigger="click" :disabled="working" @command="onNodeCommand">
-            <ElButton :loading="working || loading">更多</ElButton>
+            <ElButton :loading="loading">更多</ElButton>
             <template #dropdown>
               <ElDropdownMenu>
                 <ElDropdownItem command="refresh" data-testid="gateway-node-refresh">刷新</ElDropdownItem>
-                <ElDropdownItem command="probe" data-testid="gateway-node-probe">探测</ElDropdownItem>
                 <ElDropdownItem v-if="node.scheduling_state === 'ACTIVE'" command="drain" data-testid="gateway-node-drain">安全下线</ElDropdownItem>
                 <ElDropdownItem v-else command="restore" data-testid="gateway-node-restore">恢复调度</ElDropdownItem>
                 <ElDropdownItem command="toggle" data-testid="gateway-node-toggle">{{ node.config_state === 'ENABLED' ? '禁用' : '启用' }}</ElDropdownItem>
@@ -89,14 +90,20 @@
             </div>
           </template>
           <ElDescriptions :column="2">
-            <ElDescriptionsItem label="上游地址">{{ node.base_url }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="上游地址"><span class="gateway-node-mono">{{ node.base_url }}</span></ElDescriptionsItem>
+            <ElDescriptionsItem label="节点类型">{{ probeStrategyLabel(node.probe_strategy) }}</ElDescriptionsItem>
             <ElDescriptionsItem label="资源池">{{ poolName(node.pool_id) }}</ElDescriptionsItem>
-            <ElDescriptionsItem label="认证方式">{{ authTypeLabel(node.auth_type) }} · {{ node.auth_header }}</ElDescriptionsItem>
-            <ElDescriptionsItem label="凭据">{{ node.has_api_key ? '已配置（不回显）' : '未配置' }}</ElDescriptionsItem>
-            <ElDescriptionsItem label="健康路径">{{ node.health_path || '继承默认' }}</ElDescriptionsItem>
-            <ElDescriptionsItem label="支持模型">{{ node.models.length ? node.models.join('、') : '未配置' }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="认证方式">{{ authSummary(node) }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="凭据">{{ node.auth_type === 'NONE' ? '无需凭据' : node.has_api_key ? '已配置（不回显）' : '未配置' }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="健康路径"><span class="gateway-node-mono">{{ node.health_path || '继承默认' }}</span></ElDescriptionsItem>
             <ElDescriptionsItem label="最近探测">{{ formatDateTime(node.last_checked_at) }}</ElDescriptionsItem>
-            <ElDescriptionsItem label="探测间隔">{{ node.probe_interval_seconds ?? '继承默认' }} 秒</ElDescriptionsItem>
+            <ElDescriptionsItem label="探测间隔">{{ probeIntervalText(node.probe_interval_seconds) }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="支持模型" :span="2">
+              <div v-if="node.models.length" class="gateway-node-models">
+                <span v-for="model in node.models" :key="model" class="gateway-node-model-chip">{{ model }}</span>
+              </div>
+              <span v-else class="gateway-node-muted">未配置</span>
+            </ElDescriptionsItem>
           </ElDescriptions>
         </ElCard>
 
@@ -104,10 +111,24 @@
           <template #header>
             <div class="gateway-node-card-head">
               <div><h4>最近一次探测</h4></div>
-              <ElTag :type="tagType(authenticationTone(probeAuthentication))">{{ authenticationLabel(probeAuthentication) }}</ElTag>
+              <ElTag
+                :type="tagType(authenticationTone(probeAuthentication))"
+                :class="{ 'astra-tag--neutral': authenticationTone(probeAuthentication) === 'neutral' }"
+              >{{ authenticationLabel(probeAuthentication) }}</ElTag>
             </div>
           </template>
-          <p v-if="latestProbe" data-testid="gateway-node-probe-table">{{ probeTypeLabel(latestProbe.probe_type) }} · {{ latestProbe.success ? '通过' : '失败' }} · {{ latestProbe.latency_ms }} ms · {{ formatRelativeTime(latestProbe.created_at) }}</p>
+          <ElDescriptions v-if="latestProbe" :column="2" data-testid="gateway-node-probe-table">
+            <ElDescriptionsItem label="探测类型">{{ probeTypeLabel(latestProbe.probe_type) }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="探测结果">
+              <ElTag size="small" :type="latestProbe.success ? 'success' : 'danger'">{{ latestProbe.success ? '通过' : '失败' }}</ElTag>
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="耗时"><span class="gateway-node-num">{{ latestProbe.latency_ms }} ms</span></ElDescriptionsItem>
+            <ElDescriptionsItem label="状态码"><span class="gateway-node-num">{{ latestProbe.status_code ?? '—' }}</span></ElDescriptionsItem>
+            <ElDescriptionsItem label="探测时间" :span="2">{{ formatDateTime(latestProbe.created_at) }}（{{ formatRelativeTime(latestProbe.created_at) }}）</ElDescriptionsItem>
+            <ElDescriptionsItem v-if="latestProbe.error" label="错误信息" :span="2">
+              <span class="gateway-node-err">{{ latestProbe.error }}</span>
+            </ElDescriptionsItem>
+          </ElDescriptions>
           <ElEmpty v-else :image-size="56" description="还没有探测记录。" />
         </ElCard>
       </div>
@@ -223,10 +244,16 @@
             <ElDescriptionsItem label="最大并发">{{ node.max_concurrency || '不限' }}</ElDescriptionsItem>
             <ElDescriptionsItem label="有效权重">{{ node.weight }}</ElDescriptionsItem>
             <ElDescriptionsItem label="调度状态">
-              <ElTag :type="tagType(schedulingTone(node.scheduling_state))">{{ schedulingStateLabel(node.scheduling_state) }}</ElTag>
+              <ElTag
+                :type="tagType(schedulingTone(node.scheduling_state))"
+                :class="{ 'astra-tag--neutral': schedulingTone(node.scheduling_state) === 'neutral' }"
+              >{{ schedulingStateLabel(node.scheduling_state) }}</ElTag>
             </ElDescriptionsItem>
             <ElDescriptionsItem label="配置状态">
-              <ElTag :type="node.config_state === 'ENABLED' ? 'success' : 'info'">{{ configStateLabel(node.config_state) }}</ElTag>
+              <ElTag
+                :type="node.config_state === 'ENABLED' ? 'success' : 'info'"
+                :class="{ 'astra-tag--neutral': node.config_state !== 'ENABLED' }"
+              >{{ configStateLabel(node.config_state) }}</ElTag>
             </ElDescriptionsItem>
           </ElDescriptions>
         </ElCard>
@@ -261,7 +288,10 @@
           </template>
           <ElDescriptions :column="1">
             <ElDescriptionsItem label="健康态">
-              <ElTag :type="tagType(healthTone(node.health_state))">{{ healthStateLabel(node.health_state) }}</ElTag>
+              <ElTag
+                :type="tagType(healthTone(node.health_state))"
+                :class="{ 'astra-tag--neutral': healthTone(node.health_state) === 'neutral' }"
+              >{{ healthStateLabel(node.health_state) }}</ElTag>
             </ElDescriptionsItem>
             <ElDescriptionsItem label="连续成功">{{ node.success_streak }}</ElDescriptionsItem>
             <ElDescriptionsItem label="连续失败">{{ node.failure_streak }}</ElDescriptionsItem>
@@ -312,7 +342,7 @@
             <template #default="{ row }">
               <ElTag v-if="row.outcome === 'lost'" type="warning">结果未知</ElTag>
               <ElTag v-else-if="!row.finished_at && row.gateway_instance_id" type="info">进行中</ElTag>
-              <ElTag v-else-if="!row.finished_at" type="info">历史未完成</ElTag>
+              <ElTag v-else-if="!row.finished_at" type="info" class="astra-tag--neutral">历史未完成</ElTag>
               <ElTag v-else-if="row.error_code" type="danger" :title="row.error_code">{{ errorCause(row.error_code) }}</ElTag>
               <ElTag v-else :type="row.status_code && row.status_code < 400 ? 'success' : 'warning'">{{ row.status_code ?? '—' }}</ElTag>
             </template>
@@ -369,15 +399,15 @@
         </template>
         <ElDescriptions :column="2">
           <ElDescriptionsItem label="名称">{{ node.name }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="节点类型">{{ probeStrategyLabel(node.probe_strategy) }}</ElDescriptionsItem>
           <ElDescriptionsItem label="资源池">{{ poolName(node.pool_id) }}</ElDescriptionsItem>
-          <ElDescriptionsItem label="Base URL">{{ node.base_url }}</ElDescriptionsItem>
-          <ElDescriptionsItem label="认证">{{ authTypeLabel(node.auth_type) }} · {{ node.auth_header }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="上游地址"><span class="gateway-node-mono">{{ node.base_url }}</span></ElDescriptionsItem>
+          <ElDescriptionsItem label="认证">{{ authSummary(node) }}</ElDescriptionsItem>
           <ElDescriptionsItem label="连接 / 请求超时">
-            {{ node.connect_timeout_seconds ?? '默认' }} / {{ node.request_timeout_seconds ?? '默认' }} 秒
+            {{ timeoutText(node.connect_timeout_seconds) }} / {{ timeoutText(node.request_timeout_seconds) }}
           </ElDescriptionsItem>
-          <ElDescriptionsItem label="健康路径">{{ node.health_path || '继承默认' }}</ElDescriptionsItem>
-          <ElDescriptionsItem label="探测间隔">{{ node.probe_interval_seconds ?? '继承默认' }} 秒</ElDescriptionsItem>
-          <ElDescriptionsItem label="支持模型">{{ node.models.length ? node.models.join('、') : '未配置' }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="健康路径"><span class="gateway-node-mono">{{ node.health_path || '继承默认' }}</span></ElDescriptionsItem>
+          <ElDescriptionsItem label="探测间隔">{{ probeIntervalText(node.probe_interval_seconds) }}</ElDescriptionsItem>
           <ElDescriptionsItem label="权重 / 并发">{{ node.weight }} / {{ node.max_concurrency || '不限' }}</ElDescriptionsItem>
           <ElDescriptionsItem label="额度">
             {{ node.hourly_token_limit ?? '不限' }} / {{ node.daily_token_limit ?? '不限' }}（{{ quotaPolicyLabel(node.quota_policy) }}）
@@ -385,6 +415,12 @@
           <ElDescriptionsItem label="排序">{{ node.sort_order }}</ElDescriptionsItem>
           <ElDescriptionsItem label="创建 / 更新">
             {{ formatDateTime(node.created_at) }} / {{ formatDateTime(node.updated_at) }}
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="支持模型" :span="2">
+            <div v-if="node.models.length" class="gateway-node-models">
+              <span v-for="model in node.models" :key="model" class="gateway-node-model-chip">{{ model }}</span>
+            </div>
+            <span v-else class="gateway-node-muted">未配置</span>
           </ElDescriptionsItem>
         </ElDescriptions>
       </ElCard>
@@ -397,7 +433,7 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowLeft, Pencil, RefreshCw } from 'lucide-vue-next'
+import { Activity, ArrowLeft, Pencil, RefreshCw } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
@@ -449,6 +485,7 @@ import {
   formatRelativeTime,
   healthStateLabel,
   healthTone,
+  probeStrategyLabel,
   probeTypeLabel,
   quotaPolicyLabel,
   schedulingStateLabel,
@@ -584,8 +621,22 @@ function tagType(tone: GatewayTone): 'success' | 'warning' | 'danger' | 'info' {
 }
 
 function tokenText(row: GatewayRequestLog): string {
-  if (!row.usage_known) return 'unknown'
+  if (!row.usage_known) return '—'
   return `${row.input_tokens ?? 0} / ${row.output_tokens ?? 0} / ${row.total_tokens ?? 0}`
+}
+
+function authSummary(target: GatewayNode): string {
+  if (target.auth_type === 'NONE') return '无认证'
+  if (target.auth_type === 'HEADER') return `${authTypeLabel(target.auth_type)}（${target.auth_header}）`
+  return authTypeLabel(target.auth_type)
+}
+
+function probeIntervalText(seconds: number | null): string {
+  return seconds ? `${seconds} 秒` : '继承默认'
+}
+
+function timeoutText(seconds: number | null): string {
+  return seconds ? `${seconds} 秒` : '默认'
 }
 
 function latencyText(value: number | null): string {
@@ -762,9 +813,22 @@ onMounted(() => {
 .gateway-node-identity__main { display: grid; gap: 4px; min-width: 0; }
 .gateway-node-identity__title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
 .gateway-node-identity__title h2 { margin: 0; color: var(--astra-text-primary); font-size: 18px; line-height: 26px; }
-.gateway-node-identity__url { margin: 0; color: var(--astra-text-secondary); font-family: var(--astra-font-family); font-size: 12px; overflow-wrap: anywhere; }
+.gateway-node-identity__url { margin: 0; color: var(--astra-text-secondary); font-family: var(--astra-font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.gateway-node-models { display: flex; flex-wrap: wrap; gap: 6px; }
+.gateway-node-model-chip {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--astra-border);
+  border-radius: 6px;
+  background: var(--astra-bg-subtle);
+  color: var(--astra-text-secondary);
+  font-family: var(--astra-font-mono);
+  font-size: 12px;
+  line-height: 18px;
+}
+.gateway-node-muted { color: var(--astra-text-muted); }
 .gateway-node-back { display: inline-flex; align-items: center; gap: 4px; width: fit-content; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
-.gateway-node-back:hover { color: var(--astra-primary-bright); }
+.gateway-node-back:hover { color: var(--astra-text-primary); }
 .gateway-node-actions { flex: none; }
 
 /* ── 服务状态 ─────────────────────────────────────────────────────── */
@@ -797,7 +861,7 @@ onMounted(() => {
 .gateway-node-metrics :deep(.el-statistic__head) { color: var(--astra-text-muted); font-size: var(--astra-font-control); }
 .gateway-node-metrics :deep(.el-statistic__content) { color: var(--astra-text-primary); font-size: var(--astra-font-subtitle); font-weight: var(--astra-weight-bold); }
 .gateway-node-metric-hint { margin: 4px 0 0; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
-.gateway-node-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.gateway-node-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
 .gateway-node-grid--full { grid-template-columns: 1fr; }
 .gateway-node-card-head { display: flex; align-items: flex-start; gap: 12px; }
 .gateway-node-card-head > div { margin-right: auto; }
@@ -811,8 +875,8 @@ onMounted(() => {
 .gateway-node-peak { display: flex; gap: 16px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--astra-border); color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .gateway-node-peak b { color: var(--astra-text-primary); font-variant-numeric: tabular-nums; }
 .gateway-node-peak--bad { color: var(--astra-danger); }
-.gateway-node-snapshot { max-height: 220px; margin: 10px 0 0; padding: 10px; overflow: auto; color: var(--astra-text-secondary); border: 1px solid var(--astra-border); border-radius: 8px; background: var(--astra-bg-base); font: var(--astra-font-helper)/1.5 var(--astra-font-family); white-space: pre-wrap; }
-.gateway-node-mono { font-family: var(--astra-font-family); font-size: var(--astra-font-helper); color: var(--astra-text-muted); }
+.gateway-node-snapshot { max-height: 220px; margin: 10px 0 0; padding: 10px; overflow: auto; color: var(--astra-text-secondary); border: 1px solid var(--astra-border); border-radius: 8px; background: var(--astra-bg-base); font: 12px/1.5 var(--astra-font-mono); white-space: pre-wrap; }
+.gateway-node-mono { font-family: var(--astra-font-mono); font-size: 12px; color: var(--astra-text-muted); }
 .gateway-node-num { white-space: nowrap; font-size: var(--astra-font-helper); font-variant-numeric: tabular-nums; }
 .gateway-node-err { color: var(--astra-danger); font-size: var(--astra-font-helper); }
 .gateway-node-cell { display: grid; min-width: 0; }

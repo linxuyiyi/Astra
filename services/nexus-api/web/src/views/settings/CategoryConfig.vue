@@ -22,7 +22,7 @@
           class="admin-page__keyword"
           data-testid="category-filter-keyword"
           aria-label="搜索任务分类"
-          placeholder="搜索分类名称 / 描述"
+          placeholder="搜索分类名称或描述"
           clearable
           @keydown.enter.prevent="applyKeyword"
           @clear="applyKeyword"
@@ -41,40 +41,50 @@
       element-loading-text="正在加载任务分类"
       data-testid="category-table"
     >
-      <ElTableColumn label="分类名称" prop="name" min-width="150" show-overflow-tooltip />
-      <ElTableColumn label="描述" min-width="200" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.description || '—' }}</template>
-      </ElTableColumn>
-      <ElTableColumn label="排序" width="84">
-        <template #default="{ row }"><span class="category-num">{{ row.sort_order }}</span></template>
-      </ElTableColumn>
-      <ElTableColumn label="启用" width="96">
+      <ElTableColumn label="分类名称" min-width="200">
         <template #default="{ row }">
-          <ElTag :type="row.enabled ? 'success' : 'info'" :effect="row.enabled ? 'light' : 'plain'">{{ row.enabled ? '已启用' : '已停用' }}</ElTag>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="提示词" min-width="220" show-overflow-tooltip>
-        <template #default="{ row }">{{ promptSummary(row as TaskCategory) }}</template>
-      </ElTableColumn>
-      <ElTableColumn label="操作" width="150" align="center" fixed="right">
-        <template #default="{ row }">
-          <div class="admin-actions">
-            <ElButton link type="primary" @click="beginEdit(row as TaskCategory)">编辑</ElButton>
-            <ElButton
-              link
-              :type="row.enabled ? 'warning' : 'primary'"
-              :disabled="busyId === row.id"
-              @click="toggleEnabled(row as TaskCategory)"
-            >{{ row.enabled ? '停用' : '启用' }}</ElButton>
+          <div class="cat-cell">
+            <strong>{{ row.name }}</strong>
+            <small v-if="row.description" :title="row.description">{{ row.description }}</small>
           </div>
         </template>
       </ElTableColumn>
+      <ElTableColumn label="Prompt 配置" width="180">
+        <template #default="{ row }">
+          <div class="prompt-pills">
+            <span class="prompt-pill" :class="{ 'is-ready': Boolean(row.task_prompt?.trim()) }">
+              任务 {{ row.task_prompt?.trim() ? '✓' : '—' }}
+            </span>
+            <span class="prompt-pill" :class="{ 'is-ready': Boolean(row.question_prompt?.trim()) }">
+              问题 {{ row.question_prompt?.trim() ? '✓' : '—' }}
+            </span>
+          </div>
+        </template>
+      </ElTableColumn>
+      <ElTableColumn label="排序" width="84" align="center">
+        <template #default="{ row }"><span class="category-num">{{ row.sort_order }}</span></template>
+      </ElTableColumn>
+      <ElTableColumn label="启用" width="84" align="center">
+        <template #default="{ row }">
+          <ElSwitch
+            size="small"
+            :model-value="row.enabled"
+            :disabled="busyId === row.id"
+            :aria-label="`${row.name} 启用状态`"
+            @change="toggleEnabled(row as TaskCategory)"
+          />
+        </template>
+      </ElTableColumn>
+      <ElTableColumn label="操作" width="96" align="center" fixed="right">
+        <template #default="{ row }">
+          <ElButton link type="primary" @click="beginEdit(row as TaskCategory)">编辑</ElButton>
+        </template>
+      </ElTableColumn>
       <template #empty>
-        <ElEmpty v-if="error && !categories.length" :image-size="72" description="任务分类加载失败">
-          <ElText type="info">{{ error }}</ElText>
+        <ElEmpty v-if="error && !categories.length" :image-size="64" description="任务分类加载失败">
           <ElButton :icon="RefreshCw" data-testid="category-empty-retry" @click="load">重新加载</ElButton>
         </ElEmpty>
-        <ElEmpty v-else-if="!loading" :image-size="72" :description="categories.length ? '没有匹配的任务分类' : '暂无任务分类'" />
+        <ElEmpty v-else-if="!loading" :image-size="64" :description="categories.length ? '没有匹配的任务分类' : '暂无任务分类'" />
       </template>
     </ElTable>
 
@@ -115,10 +125,9 @@ import {
   ElOption,
   ElPagination,
   ElSelect,
+  ElSwitch,
   ElTable,
   ElTableColumn,
-  ElTag,
-  ElText,
   vLoading,
 } from 'element-plus'
 import { api } from '@/api/client'
@@ -154,7 +163,6 @@ const filtered = computed(() => categories.value.filter((item) => {
 }))
 const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)))
 const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
-// 新分类默认排在现有分类之后，与旧的行内新增保持同一套排序语义。
 const defaultSortOrder = computed(() => Math.max(0, ...categories.value.map((item) => item.sort_order ?? 0)) + 10)
 
 async function load() {
@@ -180,15 +188,6 @@ function beginCreate() {
   drawerOpen.value = true
 }
 
-function promptSummary(row: TaskCategory) {
-  const task = Boolean(row.task_prompt?.trim())
-  const question = Boolean(row.question_prompt?.trim())
-  if (task && question) return '任务和问题提示词都已配置'
-  if (task) return '已有任务提示词，还缺问题提示词'
-  if (question) return '已有问题提示词，还缺任务提示词'
-  return '未配置提示词'
-}
-
 function beginEdit(row: TaskCategory) {
   editing.value = row
   saveError.value = ''
@@ -210,7 +209,6 @@ async function submitCategory(payload: TaskCategoryWrite) {
     if (target) await api.updateCategory(target.id, payload)
     else await api.createCategory(payload)
     await load()
-    // 分类在任务、员工与自动分配里被引用，保存后同步刷新平台缓存。
     await store.refresh()
     notify(isEdit ? '任务分类已更新' : '任务分类已创建')
     closeDrawer()
@@ -221,23 +219,19 @@ async function submitCategory(payload: TaskCategoryWrite) {
   }
 }
 
-// 抽屉内未保存的内容在离开配置中心时同样需要确认，避免整页导航绕过抽屉的关闭确认。
-// 判定复用抽屉自身的 dirty，而不是「抽屉是否打开」：没改过就不打扰用户。
 onBeforeRouteLeave(async () => {
   if (!drawerOpen.value) return true
   if (saving.value) return false
   if (!drawerRef.value?.getDirty()) return true
-  const confirmed = await confirmDialog({
+  return confirmDialog({
     title: '放弃未保存的分类修改？',
     message: '离开配置中心后未保存的分类修改将丢失。',
     confirmLabel: '放弃并离开',
     cancelLabel: '继续编辑',
     danger: true,
   })
-  return confirmed
 })
 
-// 启停是列表级即时操作：只改 enabled 并立即落库，其余字段按服务端返回值原样带回。
 async function toggleEnabled(row: TaskCategory) {
   if (busyId.value) return
   busyId.value = row.id
@@ -251,7 +245,6 @@ async function toggleEnabled(row: TaskCategory) {
       question_prompt: row.question_prompt,
     })
     await load()
-    // 分类在任务、员工与自动分配里被引用，启停后同步刷新平台缓存。
     await store.refresh()
     notify(row.enabled ? '分类已停用' : '分类已启用')
   } catch (reason) {
@@ -261,7 +254,6 @@ async function toggleEnabled(row: TaskCategory) {
   }
 }
 
-// 分类已整表加载，翻页只切当前页；每页条数变化回到第 1 页。
 watch(pageSize, () => { page.value = 1 })
 watch(totalPages, (value) => { page.value = Math.min(page.value, value) })
 watch([status, keyword], () => { page.value = 1 })
@@ -270,7 +262,20 @@ onMounted(load)
 </script>
 
 <style scoped>
-/* 页面骨架、标题栏操作、查询工具栏、表格与分页统一走 styles/page-layout.css，
-   这里只保留表格单元格内部的排版。 */
-.category-num { font-size: var(--astra-font-helper); font-variant-numeric: tabular-nums; }
+.cat-cell { display: grid; gap: 2px; min-width: 0; }
+.cat-cell strong { color: var(--astra-text-primary); font-size: 13.5px; font-weight: 600; }
+.cat-cell small { color: var(--astra-text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prompt-pills { display: flex; align-items: center; gap: 6px; }
+.prompt-pill {
+  padding: 1px 7px; border-radius: 5px;
+  border: 1px solid var(--astra-border); background: var(--astra-bg-subtle);
+  color: var(--astra-text-muted); font-size: 12px; line-height: 18px;
+}
+.prompt-pill.is-ready {
+  border-color: color-mix(in srgb, var(--astra-success) 30%, transparent);
+  background: var(--astra-success-soft);
+  color: var(--astra-success);
+  font-weight: 500;
+}
+.category-num { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--astra-text-secondary); }
 </style>

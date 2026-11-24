@@ -11,7 +11,7 @@
               :index="item.path"
               :data-testid="`gateway-menu-${item.id}`"
             >
-              <component :is="item.icon" :size="16" aria-hidden="true" />
+              <component :is="item.icon" :size="15" aria-hidden="true" />
               <span>{{ item.label }}</span>
             </ElMenuItem>
           </ElMenuItemGroup>

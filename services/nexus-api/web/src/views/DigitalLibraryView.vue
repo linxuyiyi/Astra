@@ -125,13 +125,23 @@
       width="min(460px,100%)"
       @close="publishDialog = null"
     >
-      <form id="knowledge-publish-form" @submit.prevent="submitBatchPublish">
-        <label>目标目录<select v-model="publishSpaceId" required><option value="" disabled>选择目录</option><option v-for="item in directoryOptions" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-        <label>验证状态<select v-model="publishVerification"><option value="unverified">未验证</option><option value="verified">已验证</option><option value="failed">验证失败</option></select></label>
-      </form>
+      <ElForm id="knowledge-publish-form" label-position="top" @submit.prevent="submitBatchPublish">
+        <ElFormItem label="目标目录" required>
+          <ElSelect v-model="publishSpaceId" placeholder="选择目录" style="width: 100%">
+            <ElOption v-for="item in directoryOptions" :key="item.id" :value="item.id" :label="item.name" />
+          </ElSelect>
+        </ElFormItem>
+        <ElFormItem label="验证状态">
+          <ElSelect v-model="publishVerification" style="width: 100%">
+            <ElOption value="unverified" label="未验证" />
+            <ElOption value="verified" label="已验证" />
+            <ElOption value="failed" label="验证失败" />
+          </ElSelect>
+        </ElFormItem>
+      </ElForm>
       <template #footer>
         <ElButton :disabled="working" @click="publishDialog = null">取消</ElButton>
-        <ElButton native-type="submit" form="knowledge-publish-form" type="primary" :loading="working" :disabled="!publishSpaceId">发布</ElButton>
+        <ElButton type="primary" :loading="working" :disabled="!publishSpaceId" @click="submitBatchPublish">发布</ElButton>
       </template>
     </AstraDialog>
 
@@ -161,7 +171,7 @@
 import { Plus, RefreshCw, Upload } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElAlert, ElAside, ElButton, ElCard, ElContainer, ElEmpty, ElMain } from 'element-plus'
+import { ElAlert, ElAside, ElButton, ElCard, ElContainer, ElForm, ElFormItem, ElMain, ElOption, ElSelect } from 'element-plus'
 import { api } from '@/api/client'
 import type { KnowledgeDetail, KnowledgeListItem, KnowledgePage, KnowledgeSpace, KnowledgeUsageRecord, LibraryPermissions, LibraryStats as LibraryStatsData, LibraryServiceStatus, RelatedTask } from '@/api/types'
 import AstraDialog from '@/components/astra/AstraDialog.vue'
@@ -502,8 +512,8 @@ function normalizeSpaces(nodes: KnowledgeSpace[]): KnowledgeSpace[] {
    本页只保留「左目录树 + 右知识表格」的双栏骨架与页面独有的排版。 */
 .hidden-input{display:none}
 .digital-library-card :deep(> .el-card__body){display:flex;flex-direction:column;gap:8px;overflow:hidden}
-.library-status-bar{display:flex;align-items:center;justify-content:space-between;height:36px;min-height:36px;max-height:40px;padding:0 12px;border:1px solid #fde2b3;border-radius:8px;background:#fdf6ec;color:#a36200;font-size:var(--astra-font-helper);flex:none;box-sizing:border-box}
-.library-status-bar__text{font-weight:500;color:#a36200}
+.library-status-bar{display:flex;align-items:center;justify-content:space-between;height:36px;min-height:36px;max-height:40px;padding:0 12px;border:1px solid color-mix(in srgb,var(--astra-warning) 30%,transparent);border-radius:8px;background:var(--astra-warning-soft);color:var(--astra-warning);font-size:var(--astra-font-helper);flex:none;box-sizing:border-box}
+.library-status-bar__text{font-weight:500;color:var(--astra-warning)}
 .library-status-bar :deep(.el-button){padding:0 8px;height:28px;font-size:12px}
 .library-service-alert{flex:none}
 .library-body{--el-main-padding:0;display:flex;flex-direction:column;gap:8px;min-width:0;flex:1 1 auto;min-height:0;overflow:hidden}

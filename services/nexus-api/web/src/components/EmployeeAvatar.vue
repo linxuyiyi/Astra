@@ -42,9 +42,9 @@ const appearance = computed(() => employeeAppearance(props.avatar));
   justify-content: center;
   overflow: hidden;
   vertical-align: middle;
-  background: #e7eee0;
-  border: 1px solid #d0ddc7;
-  border-radius: 7px;
+  background: var(--astra-bg-elevated);
+  border: 1px solid var(--astra-border);
+  border-radius: 8px;
   box-sizing: border-box;
 }
 .employee-avatar img {
@@ -58,7 +58,7 @@ const appearance = computed(() => employeeAppearance(props.avatar));
 }
 .avatar-unconfigured {
   font-size: 9px;
-  color: #84917b;
+  color: var(--astra-text-muted);
   line-height: 1.4;
   text-align: center;
 }

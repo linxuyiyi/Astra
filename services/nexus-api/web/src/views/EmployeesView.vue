@@ -5,10 +5,9 @@
       <ElButton type="primary" :icon="Plus" data-testid="employees-create" @click="openCreate">新建数字员工</ElButton>
     </SettingsHeaderActions>
 
-
-      <ElAlert v-if="loadError" type="error" show-icon :closable="false" :title="loadError" data-testid="employees-error">
-        <ElButton type="primary" data-testid="employees-retry" @click="reload">重试</ElButton>
-      </ElAlert>
+    <ElAlert v-if="loadError" type="error" show-icon :closable="false" :title="loadError" data-testid="employees-error">
+      <ElButton type="primary" data-testid="employees-retry" @click="reload">重试</ElButton>
+    </ElAlert>
 
     <div class="admin-page__toolbar" role="search" aria-label="数字员工筛选">
       <div class="admin-page__filters">
@@ -49,71 +48,64 @@
       <ElTableColumn label="数字员工" min-width="190">
         <template #default="{ row }">
           <div class="person-cell">
-            <EmployeeAvatar :avatar="row.avatar" :size="38" :disabled="!row.enabled" />
-            <span class="person-name">
-              <b>{{ row.name }}</b>
-              <small class="person-id">{{ row.id }}</small>
-            </span>
+            <EmployeeAvatar :avatar="row.avatar" :size="36" :disabled="!row.enabled" />
+            <div class="person-name">
+              <button type="button" class="person-link" :title="row.id" @click="openView(row as Employee)">{{ row.name }}</button>
+              <small class="person-domain">{{ row.domain }}</small>
+            </div>
           </div>
         </template>
       </ElTableColumn>
 
-      <ElTableColumn label="职责领域" min-width="150">
+      <ElTableColumn label="职责说明" min-width="210" show-overflow-tooltip>
         <template #default="{ row }">
-          <b>{{ row.domain }}</b>
+          <span class="desc-text">{{ row.description || '—' }}</span>
         </template>
       </ElTableColumn>
 
-      <ElTableColumn label="技能" min-width="160">
+      <ElTableColumn label="模型路由" width="150" show-overflow-tooltip>
         <template #default="{ row }">
-          <div class="chips">
-            <ElTag v-for="skill in row.skills" :key="skill" size="small" type="success" class="mini-chip">
-              {{ resourceLabel(catalogs.skills, skill) }}
-            </ElTag>
-            <span v-if="!row.skills.length" class="muted">未配置</span>
+          <span v-if="routeModelName(row.model_route_id)" class="route-chip">{{ routeModelName(row.model_route_id) }}</span>
+          <span v-else class="muted">未绑定</span>
+        </template>
+      </ElTableColumn>
+
+      <ElTableColumn label="能力配置" min-width="190">
+        <template #default="{ row }">
+          <div v-if="hasAnyCapability(row as Employee)" class="cap-summary">
+            <ElTooltip v-if="row.skills.length" placement="top" :content="`技能：${row.skills.map((s: string) => resourceLabel(catalogs.skills, s)).join('、')}`">
+              <span class="cap-pill">技能 <b>{{ row.skills.length }}</b></span>
+            </ElTooltip>
+            <ElTooltip v-if="row.mcps.length" placement="top" :content="`MCP：${row.mcps.map((m: string) => resourceLabel(catalogs.mcps, m)).join('、')}`">
+              <span class="cap-pill">MCP <b>{{ row.mcps.length }}</b></span>
+            </ElTooltip>
+            <ElTooltip v-if="row.tools.length" placement="top" :content="`工具：${row.tools.map((t: string) => toolLabel(t)).join('、')}`">
+              <span class="cap-pill">工具 <b>{{ row.tools.length }}</b></span>
+            </ElTooltip>
+            <ElTooltip v-if="row.knowledge.length" placement="top" :content="`知识库：${row.knowledge.map((k: string) => resourceLabel(catalogs.knowledge, k)).join('、')}`">
+              <span class="cap-pill">知识 <b>{{ row.knowledge.length }}</b></span>
+            </ElTooltip>
           </div>
+          <span v-else class="muted">未配置</span>
         </template>
       </ElTableColumn>
 
-      <ElTableColumn label="MCP" min-width="170">
-        <template #default="{ row }">
-          <div class="chips">
-            <ElTag v-for="mcp in row.mcps" :key="mcp" size="small" type="warning" class="mini-chip">
-              {{ resourceLabel(catalogs.mcps, mcp) }}
-            </ElTag>
-            <span v-if="!row.mcps.length" class="muted">未配置</span>
-          </div>
-        </template>
-      </ElTableColumn>
-
-      <ElTableColumn label="工具" min-width="220">
-        <template #default="{ row }">
-          <div class="chips">
-            <ElTag
-              v-for="tool in row.tools"
-              :key="tool"
-              size="small"
-              :type="isMcpTool(tool) ? 'warning' : 'info'"
-              class="mini-chip"
-            >
-              {{ toolLabel(tool) }}
-            </ElTag>
-            <span v-if="!row.tools.length" class="muted">未配置</span>
-          </div>
-        </template>
-      </ElTableColumn>
-
-      <ElTableColumn label="同步" width="110" align="center">
+      <ElTableColumn label="同步" width="96" align="center">
         <template #default="{ row }">
           <ElTooltip :content="syncDetail(row as Employee)" placement="top">
-            <ElTag size="small" :type="syncTagType(row as Employee)">{{ syncLabel(row as Employee) }}</ElTag>
+            <ElTag
+              size="small"
+              :type="syncTagType(row as Employee)"
+              :class="{ 'astra-tag--neutral': syncTagType(row as Employee) === 'info' }"
+            >{{ syncLabel(row as Employee) }}</ElTag>
           </ElTooltip>
         </template>
       </ElTableColumn>
 
-      <ElTableColumn label="状态" width="100" align="center">
+      <ElTableColumn label="启用" width="76" align="center">
         <template #default="{ row }">
           <ElSwitch
+            size="small"
             :model-value="(row as Employee).enabled"
             :aria-label="`${(row as Employee).name} 启用`"
             @change="toggle(row as Employee, Boolean($event))"
@@ -121,13 +113,20 @@
         </template>
       </ElTableColumn>
 
-      <ElTableColumn label="操作" width="228" align="center" fixed="right">
+      <ElTableColumn label="操作" width="176" align="center" fixed="right">
         <template #default="{ row }">
           <div class="admin-actions">
-            <ElButton link type="primary" @click="openView(row as Employee)">查看</ElButton>
             <ElButton link type="primary" @click="goChat((row as Employee).id)">对话</ElButton>
+            <ElButton link type="primary" @click="openView(row as Employee)">档案</ElButton>
             <ElButton link type="primary" @click="openEdit(row as Employee)">编辑</ElButton>
-            <ElButton link type="danger" @click="askDelete(row as Employee)">删除</ElButton>
+            <ElDropdown trigger="click" @command="(cmd) => cmd === 'delete' && askDelete(row as Employee)">
+              <ElButton link type="primary">更多</ElButton>
+              <template #dropdown>
+                <ElDropdownMenu>
+                  <ElDropdownItem command="delete" class="danger-item">删除员工</ElDropdownItem>
+                </ElDropdownMenu>
+              </template>
+            </ElDropdown>
           </div>
         </template>
       </ElTableColumn>
@@ -149,95 +148,94 @@
       />
     </div>
 
-    <!-- 查看详情 Drawer -->
-    <ElDrawer v-model="viewDrawerOpen" title="员工档案详情" size="520px" :close-on-click-modal="true">
+    <!-- 查看档案详情 Drawer（工作指令 Markdown 渲染） -->
+    <ElDrawer v-model="viewDrawerOpen" title="数字员工档案" size="min(740px, 100%)" :close-on-click-modal="true">
       <div v-if="viewing" class="view-profile">
         <div class="view-hero">
-          <EmployeeAvatar :avatar="viewing.avatar" :size="64" :disabled="!viewing.enabled" />
+          <EmployeeAvatar :avatar="viewing.avatar" :size="58" :disabled="!viewing.enabled" />
           <div class="view-hero-text">
-            <h3>{{ viewing.name }}</h3>
-            <p class="muted">{{ viewing.domain }}</p>
-            <ElTag size="small" :type="viewing.enabled ? 'success' : 'info'">
-              {{ viewing.enabled ? "已启用" : "已禁用" }}
-            </ElTag>
+            <div class="view-hero-title">
+              <h3>{{ viewing.name }}</h3>
+              <ElTag
+                size="small"
+                :type="viewing.enabled ? 'success' : 'info'"
+                :class="{ 'astra-tag--neutral': !viewing.enabled }"
+              >{{ viewing.enabled ? "已启用" : "已禁用" }}</ElTag>
+              <ElTooltip :content="syncDetail(viewing)" placement="top">
+                <ElTag
+                  size="small"
+                  :type="syncTagType(viewing)"
+                  :class="{ 'astra-tag--neutral': syncTagType(viewing) === 'info' }"
+                >{{ syncLabel(viewing) }}</ElTag>
+              </ElTooltip>
+            </div>
+            <p class="view-hero-domain">{{ viewing.domain }}</p>
+            <div class="view-hero-meta">
+              <span>模型路由：<b class="mono-inline">{{ routeModelName(viewing.model_route_id) || '未绑定' }}</b></span>
+              <span v-if="viewing.agentscope_agent_id">Agent：<code class="mono-inline">{{ viewing.agentscope_agent_id }}</code></span>
+            </div>
           </div>
         </div>
 
-        <div class="view-section">
-          <div class="view-label">职责说明</div>
-          <p class="view-desc">{{ viewing.description }}</p>
+        <div class="view-card">
+          <div class="view-card__head">职责说明</div>
+          <p class="view-desc">{{ viewing.description || '—' }}</p>
         </div>
 
-        <div class="view-section">
-          <div class="view-label">工作指令</div>
-          <pre class="view-instructions">{{ viewing.instructions }}</pre>
-        </div>
-
-        <div class="view-section">
-          <div class="view-label">已配置技能</div>
-          <div class="chips">
-            <ElTag v-for="skill in viewing.skills" :key="skill" size="small" type="success">
-              {{ resourceLabel(catalogs.skills, skill) }}
-            </ElTag>
-            <span v-if="!viewing.skills.length" class="muted">暂无</span>
+        <div class="view-card">
+          <div class="view-card__head">工作指令</div>
+          <div class="view-card__body">
+            <MarkdownView
+              :content="viewing.instructions || ''"
+              compact
+              allow-source-toggle
+              allow-copy
+              empty-text="尚未配置工作指令"
+            />
           </div>
         </div>
 
-        <div class="view-section">
-          <div class="view-label">已绑定 MCP</div>
-          <div class="chips">
-            <ElTag v-for="mcp in viewing.mcps" :key="mcp" size="small" type="warning">
-              {{ resourceLabel(catalogs.mcps, mcp) }}
-            </ElTag>
-            <span v-if="!viewing.mcps.length" class="muted">暂无</span>
+        <div class="view-cap-grid">
+          <div class="view-cap-box">
+            <div class="view-cap-box__title">技能（{{ viewing.skills.length }}）</div>
+            <div v-if="viewing.skills.length" class="chips">
+              <span v-for="skill in viewing.skills" :key="skill" class="neutral-chip">{{ resourceLabel(catalogs.skills, skill) }}</span>
+            </div>
+            <span v-else class="muted">未配置</span>
           </div>
-        </div>
-
-        <div class="view-section">
-          <div class="view-label">同步状态</div>
-          <ElTag size="small" :type="syncTagType(viewing)">{{ syncLabel(viewing) }}</ElTag>
-          <span class="muted">{{ syncDetail(viewing) }}</span>
-        </div>
-
-        <div class="view-section">
-          <div class="view-label">已授权工具</div>
-          <div class="chips">
-            <ElTag
-              v-for="tool in viewing.tools"
-              :key="tool"
-              size="small"
-              :type="isMcpTool(tool) ? 'warning' : 'info'"
-            >
-              {{ toolLabel(tool) }}
-            </ElTag>
-            <span v-if="!viewing.tools.length" class="muted">暂无</span>
+          <div class="view-cap-box">
+            <div class="view-cap-box__title">MCP（{{ viewing.mcps.length }}）</div>
+            <div v-if="viewing.mcps.length" class="chips">
+              <span v-for="mcp in viewing.mcps" :key="mcp" class="neutral-chip">{{ resourceLabel(catalogs.mcps, mcp) }}</span>
+            </div>
+            <span v-else class="muted">未配置</span>
           </div>
-        </div>
-
-        <div class="view-section">
-          <div class="view-label">知识资源</div>
-          <div class="chips">
-            <ElTag v-for="item in viewing.knowledge" :key="item" size="small" type="info">
-              {{ resourceLabel(catalogs.knowledge, item) }}
-            </ElTag>
-            <span v-if="!viewing.knowledge.length" class="muted">暂无</span>
+          <div class="view-cap-box">
+            <div class="view-cap-box__title">工具（{{ viewing.tools.length }}）</div>
+            <div v-if="viewing.tools.length" class="chips">
+              <span v-for="tool in viewing.tools" :key="tool" class="neutral-chip">{{ toolLabel(tool) }}</span>
+            </div>
+            <span v-else class="muted">未配置</span>
           </div>
-        </div>
-
-        <div class="view-section">
-          <div class="view-label">Agent 标识</div>
-          <div class="mono-box">{{ viewing.agentscope_agent_id || "尚未创建" }}</div>
+          <div class="view-cap-box">
+            <div class="view-cap-box__title">知识库（{{ viewing.knowledge.length }}）</div>
+            <div v-if="viewing.knowledge.length" class="chips">
+              <span v-for="item in viewing.knowledge" :key="item" class="neutral-chip">{{ resourceLabel(catalogs.knowledge, item) }}</span>
+            </div>
+            <span v-else class="muted">未配置</span>
+          </div>
         </div>
       </div>
       <template #footer>
         <div class="view-footer">
+          <ElButton v-if="viewing" @click="goChat(viewing.id)">发起对话</ElButton>
+          <span class="view-footer__spacer" />
           <ElButton @click="viewDrawerOpen = false">关闭</ElButton>
           <ElButton type="primary" @click="editFromView">编辑员工</ElButton>
         </div>
       </template>
     </ElDrawer>
 
-    <!-- 编辑/创建 Drawer -->
     <EmployeeDrawer
       :open="drawerOpen"
       :saving="saving"
@@ -251,7 +249,7 @@
       @reload-catalogs="reloadCatalogs"
     />
 
-    <ElDialog v-model="deleteOpen" title="删除数字员工" width="460px">
+    <ElDialog v-model="deleteOpen" title="删除数字员工" width="440px">
       <p>确定删除 <b>{{ deleting?.name }}</b> 吗？删除后将不再显示该员工。</p>
       <template #footer>
         <ElButton @click="deleteOpen = false">取消</ElButton>
@@ -270,6 +268,9 @@ import {
   ElButton,
   ElDialog,
   ElDrawer,
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
   ElEmpty,
   ElInput,
   ElMessage,
@@ -280,14 +281,17 @@ import {
   ElTable,
   ElTableColumn,
   ElTag,
+  ElTooltip,
+  vLoading,
 } from "element-plus";
 import EmployeeDrawer from "../components/EmployeeDrawer.vue";
 import EmployeeAvatar from "../components/EmployeeAvatar.vue";
+import MarkdownView from "@/components/astra/MarkdownView.vue";
 import SettingsHeaderActions from "./settings/SettingsHeaderActions.vue";
 import { deleteEmployee, getKnowledge, getMcps, getSkills, getTools, listEmployees, saveEmployee } from "../api";
 import { gatewayApi, type GatewayRoute } from "../api/gateway";
 import type { Employee, ResourceCatalog } from "../types";
-import { formatToolLabel, isMcpTool } from "../utils/tools";
+import { formatToolLabel } from "../utils/tools";
 
 const router = useRouter();
 const employees = ref<Employee[]>([]);
@@ -333,14 +337,8 @@ const paged = computed(() =>
   filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value),
 );
 
-watch([query, statusFilter], () => {
-  page.value = 1;
-});
-
-watch(pageSize, () => {
-  page.value = 1;
-});
-
+watch([query, statusFilter], () => { page.value = 1; });
+watch(pageSize, () => { page.value = 1; });
 watch(filtered, (list) => {
   const maxPage = Math.max(1, Math.ceil(list.length / pageSize.value));
   if (page.value > maxPage) page.value = maxPage;
@@ -355,6 +353,15 @@ function resourceLabel(catalog: ResourceCatalog, id: string) {
   return catalog.items.find((item) => item.id === id)?.name ?? id;
 }
 
+function routeModelName(routeId?: string) {
+  if (!routeId) return "";
+  return routes.value.find((item) => item.id === routeId)?.model ?? routeId;
+}
+
+function hasAnyCapability(emp: Employee) {
+  return Boolean(emp.skills.length || emp.mcps.length || emp.tools.length || emp.knowledge.length);
+}
+
 function toolLabel(id: string) {
   const item = catalogs.value.tools.items.find((t) => t.id === id);
   return formatToolLabel(id, item?.name);
@@ -363,7 +370,7 @@ function toolLabel(id: string) {
 function syncLabel(employee: Employee) {
   const status = employee.capability?.runtime_status;
   if (status === "applied") return "已同步";
-  if (status === "error") return "同步异常";
+  if (status === "error") return "异常";
   return "待核对";
 }
 
@@ -377,7 +384,6 @@ function syncDetail(employee: Employee) {
 }
 
 async function reload() {
-
   loading.value = true;
   loadError.value = "";
   try {
@@ -479,10 +485,9 @@ async function reloadCatalogs() {
 }
 
 onMounted(async () => {
-
   await reloadCatalogs();
   try {
-    routes.value = (await gatewayApi.routes()).filter((item) => item.enabled && item.model_type === 'CHAT');
+    routes.value = (await gatewayApi.routes()).filter((item) => item.enabled && item.model_type === "CHAT");
   } catch (error) {
     routeError.value = error instanceof Error ? error.message : "无法读取模型路由";
   }
@@ -491,23 +496,75 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* 页面骨架、查询工具栏、表格与分页统一走 styles/page-layout.css，
-   这里只保留表格单元格与详情抽屉内部的排版。 */
-.person-cell { display: flex; align-items: center; gap: 10px; }
-.person-name { display: flex; flex-direction: column; gap: 2px; }
-.person-id { color: var(--astra-text-muted); font-size: 11px; }
-.chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.mini-chip { font-size: 11px; }
-.muted { color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
+.person-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.person-name { display: grid; gap: 1px; min-width: 0; }
+.person-link {
+  padding: 0; border: 0; background: transparent; cursor: pointer;
+  color: var(--astra-text-primary); font-size: 13.5px; font-weight: 600;
+  text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.person-link:hover { color: var(--astra-accent-text); text-decoration: underline; }
+.person-domain { color: var(--astra-text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.desc-text { color: var(--astra-text-secondary); font-size: 13px; }
+.route-chip {
+  display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 1px 7px; border: 1px solid var(--astra-border); border-radius: 5px;
+  background: var(--astra-bg-subtle); color: var(--astra-text-secondary);
+  font-family: var(--astra-font-mono); font-size: 12px; line-height: 18px;
+}
+.cap-summary { display: flex; flex-wrap: wrap; gap: 5px; }
+.cap-pill {
+  padding: 1px 7px; border: 1px solid var(--astra-border); border-radius: 5px;
+  background: var(--astra-bg-subtle); color: var(--astra-text-muted);
+  font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; cursor: default;
+}
+.cap-pill b { color: var(--astra-text-primary); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.neutral-chip {
+  padding: 2px 8px; border: 1px solid var(--astra-border); border-radius: 6px;
+  background: var(--astra-bg-panel); color: var(--astra-text-secondary);
+  font-size: 12px; line-height: 18px;
+}
+.muted { color: var(--astra-text-muted); font-size: 12.5px; }
+.danger-item { color: var(--astra-danger); }
 
-.view-profile { display: flex; flex-direction: column; gap: 16px; padding: 4px 8px; }
-.view-hero { display: flex; align-items: center; gap: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--astra-border); }
-.view-hero-text h3 { margin: 0 0 4px; color: var(--astra-text-primary); font-size: 18px; }
-.view-hero-text p { margin: 0 0 6px; }
-.view-section { display: flex; flex-direction: column; gap: 6px; }
-.view-label { font-size: 12px; font-weight: var(--astra-weight-bold); color: var(--astra-text-secondary); }
-.view-desc { margin: 0; color: var(--astra-text-primary); line-height: 1.5; font-size: var(--astra-font-helper); white-space: pre-wrap; word-break: break-word; }
-.view-instructions { margin: 0; padding: 10px 12px; background: var(--astra-bg-elevated); border-radius: 8px; font-family: inherit; font-size: 12px; line-height: 1.6; white-space: pre-wrap; color: var(--astra-text-primary); }
-.mono-box { font-family: var(--astra-font-mono, monospace); font-size: 12px; color: var(--astra-text-muted); background: var(--astra-bg-elevated); padding: 6px 10px; border-radius: 6px; }
-.view-footer { display: flex; justify-content: flex-end; gap: 8px; }
+/* 详情档案 */
+.view-profile { display: flex; flex-direction: column; gap: 14px; }
+.view-hero {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--astra-border); border-radius: 10px; background: var(--astra-bg-subtle);
+}
+.view-hero-text { display: grid; gap: 4px; min-width: 0; }
+.view-hero-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.view-hero-title h3 { margin: 0; color: var(--astra-text-primary); font-size: 17px; font-weight: 600; }
+.view-hero-domain { margin: 0; color: var(--astra-text-secondary); font-size: 13px; }
+.view-hero-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--astra-text-muted); font-size: 12px; }
+.mono-inline { font-family: var(--astra-font-mono); color: var(--astra-text-secondary); font-weight: 500; }
+
+.view-card { border: 1px solid var(--astra-border); border-radius: 10px; background: var(--astra-bg-panel); overflow: hidden; }
+.view-card__head {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--astra-border-subtle);
+  background: var(--astra-bg-subtle);
+  color: var(--astra-text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.view-card__body { padding: 12px 14px; }
+.view-desc { margin: 0; padding: 12px 14px; color: var(--astra-text-primary); font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+
+.view-cap-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.view-cap-box {
+  display: grid; gap: 8px; align-content: start;
+  padding: 12px 14px;
+  border: 1px solid var(--astra-border); border-radius: 10px; background: var(--astra-bg-subtle);
+}
+.view-cap-box__title { color: var(--astra-text-secondary); font-size: 12px; font-weight: 600; }
+.view-footer { display: flex; align-items: center; gap: 8px; width: 100%; }
+.view-footer__spacer { flex: 1; }
+
+@media (max-width: 640px) {
+  .view-cap-grid { grid-template-columns: 1fr; }
+}
 </style>

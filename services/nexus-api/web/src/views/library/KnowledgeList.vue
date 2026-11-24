@@ -54,7 +54,7 @@
           class="admin-page__keyword"
           data-testid="knowledge-filter-keyword"
           aria-label="搜索当前空间"
-          placeholder="搜索当前空间"
+          placeholder="搜索标题或正文"
           clearable
           @keydown.enter.prevent="runSearch"
           @clear="runSearch"
@@ -68,11 +68,11 @@
     <div v-if="selectedRows.length" class="knowledge-list__batch" aria-label="批量操作">
       <ElText>已选 {{ selectedRows.length }} 条</ElText>
       <ElSpace :size="8">
-        <ElButton v-if="canManage" @click="emitBatch('move')">移动</ElButton>
-        <ElButton v-if="canManage" @click="emitBatch('archive')">归档</ElButton>
-        <ElButton v-if="canReview" @click="emitBatch('publish')">发布</ElButton>
-        <ElButton v-if="canManage" type="danger" @click="emitBatch('delete')">删除</ElButton>
-        <ElButton text @click="clearSelection">取消选择</ElButton>
+        <ElButton v-if="canManage" size="small" @click="emitBatch('move')">移动</ElButton>
+        <ElButton v-if="canManage" size="small" @click="emitBatch('archive')">归档</ElButton>
+        <ElButton v-if="canReview" size="small" @click="emitBatch('publish')">发布</ElButton>
+        <ElButton v-if="canManage" size="small" type="danger" plain @click="emitBatch('delete')">删除</ElButton>
+        <ElButton size="small" text @click="clearSelection">取消选择</ElButton>
       </ElSpace>
     </div>
 
@@ -87,28 +87,51 @@
         @row-click="onRowClick"
         @selection-change="onSelectionChange"
       >
-        <ElTableColumn v-if="canManage || canReview" type="selection" width="46" :reserve-selection="true" />
-        <ElTableColumn label="标题" min-width="280">
+        <ElTableColumn v-if="canManage || canReview" type="selection" width="44" :reserve-selection="true" />
+        <ElTableColumn label="知识文档" min-width="300">
           <template #default="{ row }">
             <div class="knowledge-cell">
               <strong :title="row.title">{{ row.title }}</strong>
-              <ElText type="info">{{ metaText(row) }}</ElText>
+              <div class="knowledge-cell__meta">
+                <span class="knowledge-type-pill">{{ typeLabel(row.type) }}</span>
+                <span class="knowledge-space-text">{{ row.space_name ?? '未归类' }}</span>
+                <span v-for="tag in (row.tags ?? []).slice(0, 2)" :key="tag" class="knowledge-tag-pill">#{{ tag }}</span>
+              </div>
             </div>
           </template>
         </ElTableColumn>
-        <ElTableColumn label="审核" width="120">
-          <template #default="{ row }"><ElTag :type="statusTag(row.status)">{{ statusLabel(row.status) }}</ElTag></template>
+        <ElTableColumn label="状态" width="158">
+          <template #default="{ row }">
+            <div class="knowledge-states">
+              <ElTag
+                size="small"
+                :type="statusTag(row.status)"
+                :class="{ 'astra-tag--neutral': statusTag(row.status) === 'info' }"
+              >{{ statusLabel(row.status) }}</ElTag>
+              <ElTag
+                size="small"
+                :type="verificationTag(row.verification_status)"
+                :class="{ 'astra-tag--neutral': verificationTag(row.verification_status) === 'info' }"
+                effect="plain"
+              >{{ verificationLabel(row.verification_status) }}</ElTag>
+            </div>
+          </template>
         </ElTableColumn>
-        <ElTableColumn label="验证" width="110">
-          <template #default="{ row }"><ElTag :type="verificationTag(row.verification_status)" effect="plain">{{ verificationLabel(row.verification_status) }}</ElTag></template>
+        <ElTableColumn label="引用 / 更新" width="144" align="right">
+          <template #default="{ row }">
+            <div class="knowledge-time-cell">
+              <span class="knowledge-num">{{ formatDate(row.updated_at) }}</span>
+              <span class="knowledge-ref">引用 {{ row.reference_count ?? 0 }} 次</span>
+            </div>
+          </template>
         </ElTableColumn>
-        <ElTableColumn label="操作" width="176" align="center" fixed="right">
+        <ElTableColumn label="操作" width="152" align="center" fixed="right">
           <template #default="{ row }">
             <div class="admin-actions">
               <ElButton link type="primary" @click.stop="openRow(row)">查看</ElButton>
               <ElButton v-if="canManage" link type="primary" @click.stop="editRow(row)">编辑</ElButton>
               <ElDropdown v-if="rowMenu(row).length" trigger="click" @command="(command: string) => onRowCommand(row, command)">
-                <ElButton link type="primary">更多</ElButton>
+                <ElButton link type="primary" @click.stop>更多</ElButton>
                 <template #dropdown>
                   <ElDropdownMenu>
                     <ElDropdownItem v-for="item in rowMenu(row)" :key="item.command" :command="item.command" :disabled="item.disabled">
@@ -121,7 +144,7 @@
           </template>
         </ElTableColumn>
         <template #empty>
-          <ElEmpty v-if="!loading" :image-size="72" :description="hasFilters ? '没有匹配的知识' : '这里还没有知识'">
+          <ElEmpty v-if="!loading" :image-size="64" :description="hasFilters ? '没有匹配的知识' : '当前目录暂无知识'">
             <div class="empty-actions">
               <ElButton v-if="!hasFilters && canManage" type="primary" :icon="Plus" @click="emit('create')">新建知识</ElButton>
               <ElButton v-else-if="hasFilters" @click="emit('clear-filter')">清除筛选</ElButton>
@@ -131,7 +154,6 @@
       </ElTable>
     </div>
 
-    <!-- 分页右对齐，总数由 el-pagination 的 total 展示，避免与目录路径行重复。 -->
     <div class="admin-page__footer">
       <ElPagination
         :current-page="page.page"
@@ -156,8 +178,6 @@ import type { TableInstance } from 'element-plus'
 import type { KnowledgeListItem, KnowledgePage, KnowledgeStatus, VerificationStatus } from '@/api/types'
 import type { RowMenuItem } from '@/components/astra/RowMenu.vue'
 
-// 只保留最常用的查询条件：类型、状态、排序与关键词。
-// 来源与标签筛选随「更多筛选」一并取消，filters 里也不再保留这两个维度。
 interface ListFilters { type: string; status: string; sort: string }
 const props = defineProps<{
   page: KnowledgePage
@@ -186,12 +206,17 @@ const emit = defineEmits<{
 }>()
 
 const types = [
-  { value: 'document', label: '文档' }, { value: 'rule', label: '规范' }, { value: 'guide', label: '指南' },
-  { value: 'experience', label: '经验' }, { value: 'faq', label: 'FAQ' }, { value: 'tool', label: '工具' }, { value: 'example', label: '示例' },
+  { value: 'document', label: '文档' },
+  { value: 'rule', label: '规范' },
+  { value: 'guide', label: '指南' },
+  { value: 'experience', label: '经验' },
+  { value: 'faq', label: 'FAQ' },
+  { value: 'tool', label: '工具' },
+  { value: 'example', label: '示例' },
 ]
 const statusMeta: Record<KnowledgeStatus, { label: string; tag: 'success' | 'warning' | 'info' | 'danger' }> = {
   published: { label: '已发布', tag: 'success' },
-  candidate: { label: '待人工审核', tag: 'warning' },
+  candidate: { label: '待审核', tag: 'warning' },
   draft: { label: '草稿', tag: 'info' },
   archived: { label: '已归档', tag: 'info' },
   rejected: { label: '已驳回', tag: 'danger' },
@@ -210,7 +235,7 @@ type Row = Record<string, any>
 
 const statusOptions = computed(() => [
   { value: 'published', label: '已发布' },
-  ...(props.canReview ? [{ value: 'candidate', label: '待审核经验' }] : []),
+  ...(props.canReview ? [{ value: 'candidate', label: '待审核' }] : []),
   ...(props.canManage || props.canReview ? [{ value: 'draft', label: '草稿' }] : []),
   ...(props.canManage ? [{ value: 'archived', label: '已归档' }] : []),
   ...(props.canReview ? [{ value: 'rejected', label: '已驳回' }] : []),
@@ -227,13 +252,17 @@ function onRowClick(row: Row, column: unknown) {
 }
 function onSelectionChange(rows: Row[]) { selectedRows.value = rows as KnowledgeListItem[] }
 function clearSelection() { tableRef.value?.clearSelection() }
-function emitBatch(action: 'move' | 'archive' | 'publish' | 'delete') { const ids = selectedRows.value.map((item) => item.id); clearSelection(); emit('batch', ids, action) }
+function emitBatch(action: 'move' | 'archive' | 'publish' | 'delete') {
+  const ids = selectedRows.value.map((item) => item.id)
+  clearSelection()
+  emit('batch', ids, action)
+}
 function openRow(row: Row) { emit('open', row.id) }
 function editRow(row: Row) { emit('edit', row as KnowledgeListItem) }
 function moveRow(row: Row) { emit('move', row as KnowledgeListItem) }
 function rowMenu(row: Row): RowMenuItem[] {
   const items: RowMenuItem[] = []
-  if (props.canManage) items.push({ command: 'move', label: '移动' })
+  if (props.canManage) items.push({ command: 'move', label: '移动目录' })
   if (props.canReview && (row.status === 'candidate' || row.status === 'draft')) items.push({ command: 'publish', label: '审核发布' })
   if (props.canManage && row.status !== 'archived') items.push({ command: 'archive', label: '归档' })
   if (props.canManage) items.push({ command: 'delete', label: '删除' })
@@ -254,22 +283,33 @@ const statusTag = (value: KnowledgeStatus) => (statusMeta[value] ?? statusMeta.d
 const statusLabel = (value: KnowledgeStatus) => (statusMeta[value] ?? { label: value, tag: 'info' as const }).label
 const verificationTag = (value: VerificationStatus) => (verificationMeta[value] ?? verificationMeta.unverified).tag
 const verificationLabel = (value: VerificationStatus) => (verificationMeta[value] ?? { label: value, tag: 'info' as const }).label
-const metaText = (row: Row) => [row.id, typeLabel(row.type), row.space_name ?? '未归类', formatDate(row.updated_at)].filter(Boolean).join(' · ')
 const formatDate = (value: string) => new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))
 </script>
 
 <style scoped>
-/* 筛选面板、行操作与表格外壳统一走 styles/page-layout.css，
-   这里只保留「目录路径行、批量操作条、单元格排版」这些本页独有的部分。 */
-.knowledge-list{display:flex;flex-direction:column;gap:8px;min-width:0;height:100%;padding:10px 12px;background:var(--astra-bg-panel);box-sizing:border-box}
-/* 目录路径行只做上下文提示，不再重复展示列表总数 —— 总数只在分页左侧出现一次。 */
-.knowledge-list__header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:30px;height:30px;padding:0 2px 1px}
-.knowledge-table-wrap{flex:1 1 auto;min-height:0}
-.knowledge-list h3{overflow:hidden;margin:0;color:var(--astra-text-primary);font-size:var(--astra-font-label);text-overflow:ellipsis;white-space:nowrap}
-.knowledge-list__batch{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 12px;border:1px solid var(--astra-border);border-radius:10px;background:var(--astra-primary-soft)}
-.knowledge-table{--el-table-border-color:var(--astra-border)}
-.knowledge-table .el-table__row{cursor:pointer}
-.knowledge-cell{display:grid;min-width:0;gap:2px}
-.knowledge-cell strong{display:-webkit-box;overflow:hidden;color:var(--astra-text-primary);font-size:var(--astra-font-label);line-height:1.45;white-space:normal;-webkit-box-orient:vertical;-webkit-line-clamp:2}
-.empty-actions{display:flex;justify-content:center;gap:8px}
+.knowledge-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; height: 100%; padding: 10px 14px; background: var(--astra-bg-panel); box-sizing: border-box; }
+.knowledge-list__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; height: 30px; padding: 0 2px; }
+.knowledge-table-wrap { flex: 1 1 auto; min-height: 0; }
+.knowledge-list h3 { overflow: hidden; margin: 0; color: var(--astra-text-primary); font-size: var(--astra-font-label); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.knowledge-list__batch { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 12px; border: 1px solid var(--astra-border); border-radius: 8px; background: var(--astra-bg-subtle); }
+.knowledge-table :deep(.el-table__row) { cursor: pointer; }
+.knowledge-cell { display: grid; min-width: 0; gap: 4px; }
+.knowledge-cell strong {
+  display: -webkit-box; overflow: hidden;
+  color: var(--astra-text-primary); font-size: var(--astra-font-label); font-weight: 600; line-height: 1.4;
+  white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 1;
+}
+.knowledge-cell__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--astra-text-muted); }
+.knowledge-type-pill {
+  padding: 0 6px; border-radius: 4px;
+  border: 1px solid var(--astra-border); background: var(--astra-bg-subtle);
+  color: var(--astra-text-secondary); font-size: 11px; line-height: 18px;
+}
+.knowledge-space-text { color: var(--astra-text-muted); font-size: 12px; }
+.knowledge-tag-pill { color: var(--astra-text-muted); font-size: 11.5px; }
+.knowledge-states { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; }
+.knowledge-time-cell { display: grid; gap: 2px; justify-items: end; }
+.knowledge-num { color: var(--astra-text-secondary); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.knowledge-ref { color: var(--astra-text-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.empty-actions { display: flex; justify-content: center; gap: 8px; }
 </style>

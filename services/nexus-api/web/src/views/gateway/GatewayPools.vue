@@ -46,21 +46,62 @@
       element-loading-text="正在加载资源池"
       data-testid="gateway-pool-table"
     >
-      <ElTableColumn label="名称" min-width="200">
+      <ElTableColumn label="名称" min-width="190">
         <template #default="{ row }">
           <div class="pool-cell">
             <strong>{{ row.name }}</strong>
-            <span class="pool-cell__desc" :title="row.description">{{ row.description || '—' }}</span>
+            <span v-if="row.description" class="pool-cell__desc" :title="row.description">{{ row.description }}</span>
           </div>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="排序" prop="sort_order" width="90" align="center" />
-      <ElTableColumn label="状态" width="100" align="center">
+      <ElTableColumn label="上游节点" width="150">
         <template #default="{ row }">
-          <ElTag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '禁用' }}</ElTag>
+          <RouterLink
+            class="pool-node-link"
+            :to="{ path: '/gateway/nodes', query: { pool: row.id } }"
+          >
+            <template v-if="poolStats(row.id).total > 0">
+              <b :class="{ 'pool-node-link__ok': poolStats(row.id).healthy > 0 }">{{ poolStats(row.id).healthy }}</b>
+              <span> / {{ poolStats(row.id).total }} 节点健康</span>
+            </template>
+            <span v-else class="pool-node-link__empty">0 节点</span>
+          </RouterLink>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="操作" width="140" align="center" fixed="right">
+      <ElTableColumn label="可用模型" min-width="230">
+        <template #default="{ row }">
+          <div v-if="poolStats(row.id).models.length" class="pool-models">
+            <span
+              v-for="model in poolStats(row.id).models.slice(0, 3)"
+              :key="model"
+              class="pool-model-chip"
+              :title="model"
+            >{{ model }}</span>
+            <ElTooltip
+              v-if="poolStats(row.id).models.length > 3"
+              placement="top"
+              :content="poolStats(row.id).models.slice(3).join('、')"
+            >
+              <span class="pool-model-more">+{{ poolStats(row.id).models.length - 3 }}</span>
+            </ElTooltip>
+          </div>
+          <span v-else class="pool-muted">—</span>
+        </template>
+      </ElTableColumn>
+      <ElTableColumn label="状态" width="96" align="center">
+        <template #default="{ row }">
+          <ElTag
+            :type="row.enabled ? 'success' : 'info'"
+            :class="{ 'astra-tag--neutral': !row.enabled }"
+          >{{ row.enabled ? '启用' : '禁用' }}</ElTag>
+        </template>
+      </ElTableColumn>
+      <ElTableColumn label="排序" width="76" align="center">
+        <template #default="{ row }">
+          <span class="pool-num">{{ row.sort_order }}</span>
+        </template>
+      </ElTableColumn>
+      <ElTableColumn label="操作" width="130" align="center" fixed="right">
         <template #default="{ row }">
           <div class="admin-actions">
             <ElButton link type="primary" :disabled="busy" @click="openPoolEdit(row as GatewayPool)">编辑</ElButton>
@@ -85,19 +126,20 @@
       />
     </div>
 
-    <ElCard shadow="never" data-testid="gateway-model-distribution">
-      <template #header>
-        <h4 class="gateway-model-dist__title">声明模型分布</h4>
-      </template>
+    <section class="pool-dist-card" data-testid="gateway-model-distribution">
+      <div class="pool-dist-card__head">
+        <h4>声明模型分布</h4>
+        <span>各模型关联的上游节点数</span>
+      </div>
       <ul v-if="modelRows.length" class="gateway-model-dist">
         <li v-for="item in modelRows" :key="item.label">
-          <span :title="item.label">{{ item.label }}</span>
-          <div><i :style="{ width: `${item.width}%` }" /></div>
-          <b>{{ item.value }}</b>
+          <span class="gateway-model-dist__name" :title="item.label">{{ item.label }}</span>
+          <div class="gateway-model-dist__bar"><i :style="{ width: `${item.width}%` }" /></div>
+          <b>{{ item.value }} 节点</b>
         </li>
       </ul>
-      <ElEmpty v-else :image-size="52" description="暂无节点配置支持模型" />
-    </ElCard>
+      <p v-else class="pool-dist-card__empty">暂无节点声明支持模型，在「上游节点」配置后会自动统计。</p>
+    </section>
 
     <ElDrawer
       v-if="poolDrawerOpen"
@@ -111,17 +153,19 @@
     >
       <ElForm ref="poolFormRef" :model="poolForm" :rules="poolRules" label-position="top" scroll-to-error :disabled="saving">
         <ElFormItem label="名称" prop="name">
-          <ElInput v-model="poolForm.name" placeholder="例如 默认资源池" />
+          <ElInput v-model="poolForm.name" placeholder="例如：对话主力池" />
         </ElFormItem>
         <ElFormItem label="描述" prop="description">
-          <ElInput v-model="poolForm.description" type="textarea" :rows="2" />
+          <ElInput v-model="poolForm.description" type="textarea" :rows="2" placeholder="可选，说明该资源池的用途" />
         </ElFormItem>
-        <ElFormItem label="排序" prop="sort_order">
-          <ElInput v-model="poolForm.sort_order" type="number" />
-        </ElFormItem>
-        <ElFormItem label="启用" prop="enabled">
-          <ElSwitch v-model="poolForm.enabled" data-testid="gateway-pool-enabled" />
-        </ElFormItem>
+        <div class="pool-form-row">
+          <ElFormItem label="排序" prop="sort_order">
+            <ElInput v-model="poolForm.sort_order" type="number" />
+          </ElFormItem>
+          <ElFormItem label="启用状态" prop="enabled">
+            <ElSwitch v-model="poolForm.enabled" data-testid="gateway-pool-enabled" />
+          </ElFormItem>
+        </div>
         <ElAlert v-if="poolError" type="error" show-icon :closable="false" :title="poolError" data-testid="gateway-pool-error" />
       </ElForm>
       <template #footer>
@@ -137,13 +181,12 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, RouterLink } from 'vue-router'
 import { Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   ElAlert,
   ElButton,
-  ElCard,
   ElDrawer,
   ElEmpty,
   ElForm,
@@ -156,6 +199,7 @@ import {
   ElTable,
   ElTableColumn,
   ElTag,
+  ElTooltip,
   vLoading,
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -184,6 +228,40 @@ const poolForm = reactive({ id: '', name: '', description: '', sort_order: '0', 
 const pageSize = ref(20)
 const poolFilters = reactive({ keyword: '', enabled: '' })
 const poolPage = ref(1)
+
+interface PoolSummary {
+  total: number
+  healthy: number
+  models: string[]
+}
+
+const EMPTY_SUMMARY: PoolSummary = { total: 0, healthy: 0, models: [] }
+
+const poolStatsMap = computed(() => {
+  const map = new Map<string, { total: number; healthy: number; modelSet: Set<string> }>()
+  for (const node of nodes.value) {
+    if (!node.pool_id) continue
+    let entry = map.get(node.pool_id)
+    if (!entry) {
+      entry = { total: 0, healthy: 0, modelSet: new Set<string>() }
+      map.set(node.pool_id, entry)
+    }
+    entry.total += 1
+    if (node.config_state === 'ENABLED' && node.scheduling_state === 'ACTIVE' && node.health_state === 'HEALTHY') {
+      entry.healthy += 1
+    }
+    for (const model of node.models ?? []) entry.modelSet.add(model)
+  }
+  const result = new Map<string, PoolSummary>()
+  for (const [id, entry] of map.entries()) {
+    result.set(id, { total: entry.total, healthy: entry.healthy, models: [...entry.modelSet].sort() })
+  }
+  return result
+})
+
+function poolStats(poolId: string): PoolSummary {
+  return poolStatsMap.value.get(poolId) ?? EMPTY_SUMMARY
+}
 
 function matchesEnabled(enabled: boolean, filter: string): boolean {
   if (!filter) return true
@@ -274,7 +352,6 @@ function openPoolEdit(pool: GatewayPool) {
     id: pool.id,
     name: pool.name,
     description: pool.description,
-
     sort_order: String(pool.sort_order),
     enabled: pool.enabled,
   })
@@ -348,13 +425,79 @@ onMounted(load)
 .pool-cell { display: grid; gap: 2px; min-width: 0; }
 .pool-cell strong { overflow: hidden; color: var(--astra-text-primary); font-size: var(--astra-font-label); text-overflow: ellipsis; white-space: nowrap; }
 .pool-cell__desc { overflow: hidden; color: var(--astra-text-muted); font-size: var(--astra-font-helper); text-overflow: ellipsis; white-space: nowrap; }
-.gateway-model-dist__title { margin: 0; color: var(--astra-text-primary); }
-.gateway-model-dist { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.gateway-model-dist li { display: grid; grid-template-columns: minmax(80px, 180px) minmax(60px, 1fr) 32px; align-items: center; gap: 8px; }
-.gateway-model-dist span { overflow: hidden; color: var(--astra-text-secondary); text-overflow: ellipsis; white-space: nowrap; }
-.gateway-model-dist div { height: 8px; overflow: hidden; border-radius: 4px; background: var(--astra-bg-elevated); }
-.gateway-model-dist i { display: block; height: 100%; border-radius: 4px; background: var(--astra-primary); }
-.gateway-model-dist b { color: var(--astra-text-primary); text-align: right; }
+
+.pool-node-link {
+  display: inline-flex; align-items: baseline; gap: 2px;
+  color: var(--astra-text-secondary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+.pool-node-link:hover { color: var(--astra-accent-text); text-decoration: underline; }
+.pool-node-link b { color: var(--astra-text-primary); font-weight: 600; }
+.pool-node-link__ok { color: var(--astra-success); }
+.pool-node-link__empty { color: var(--astra-text-muted); }
+
+.pool-models { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.pool-model-chip {
+  display: inline-flex; align-items: center;
+  max-width: 210px;
+  padding: 1px 7px;
+  overflow: hidden;
+  border: 1px solid var(--astra-border);
+  border-radius: 5px;
+  background: var(--astra-bg-subtle);
+  color: var(--astra-text-secondary);
+  font-family: var(--astra-font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pool-model-more {
+  display: inline-flex; align-items: center;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--astra-bg-elevated);
+  color: var(--astra-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: default;
+}
+.pool-muted { color: var(--astra-text-muted); }
+.pool-num { font-variant-numeric: tabular-nums; color: var(--astra-text-secondary); font-size: 13px; }
+
+.pool-dist-card {
+  display: grid; gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--astra-border);
+  border-radius: 10px;
+  background: var(--astra-bg-panel);
+}
+.pool-dist-card__head { display: flex; align-items: baseline; gap: 10px; }
+.pool-dist-card__head h4 { margin: 0; color: var(--astra-text-primary); font-size: 14px; font-weight: 600; }
+.pool-dist-card__head span { color: var(--astra-text-muted); font-size: 12px; }
+.pool-dist-card__empty { margin: 0; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
+
+.gateway-model-dist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 28px; margin: 0; padding: 0; list-style: none; }
+.gateway-model-dist li { display: grid; grid-template-columns: minmax(100px, 180px) minmax(60px, 1fr) 56px; align-items: center; gap: 10px; }
+.gateway-model-dist__name {
+  overflow: hidden;
+  color: var(--astra-text-secondary);
+  font-family: var(--astra-font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gateway-model-dist__bar { height: 6px; overflow: hidden; border-radius: 999px; background: var(--astra-bg-elevated); }
+.gateway-model-dist__bar i { display: block; height: 100%; border-radius: 999px; background: #52525b; }
+.gateway-model-dist b { color: var(--astra-text-secondary); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
+
+@media (max-width: 960px) {
+  .gateway-model-dist { grid-template-columns: 1fr; }
+}
+
+.pool-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .gateway-drawer__footer { display: flex; align-items: center; gap: 8px; }
 .gateway-drawer__spacer { flex: 1; }
 </style>

@@ -1,13 +1,18 @@
 <template>
-  <section ref="root" class="gateway-overview" data-testid="gateway-overview">
+  <section ref="root" class="ov-page" data-testid="gateway-overview">
     <GatewayHeaderActions>
-      <span class="gateway-overview__window-label">统计窗口</span>
-      <ElSelect v-model="statsWindow" class="gateway-overview__window" aria-label="统计窗口" data-testid="gateway-stats-window">
-        <ElOption value="hour" label="本小时" />
-        <ElOption value="today" label="今日" />
-        <ElOption value="7d" label="近 7 天" />
-        <ElOption value="30d" label="近 30 天" />
-      </ElSelect>
+      <ElRadioGroup
+        v-model="statsWindow"
+        size="small"
+        class="ov-window-group"
+        aria-label="统计窗口"
+        data-testid="gateway-stats-window"
+      >
+        <ElRadioButton value="hour">1 小时</ElRadioButton>
+        <ElRadioButton value="today">今日</ElRadioButton>
+        <ElRadioButton value="7d">近 7 天</ElRadioButton>
+        <ElRadioButton value="30d">近 30 天</ElRadioButton>
+      </ElRadioGroup>
       <ElButton :loading="loading" :icon="RefreshCw" data-testid="gateway-overview-refresh" @click="load(false)">刷新</ElButton>
     </GatewayHeaderActions>
 
@@ -18,136 +23,445 @@
       <ElButton type="primary" @click="load(false)">重试</ElButton>
     </ElAlert>
 
+    <!-- Layer 1: 全局服务态势条 -->
     <section
-      class="gateway-overview__status"
+      class="ov-status"
       :data-status="summary?.status ?? 'unknown'"
       data-testid="gateway-health-bar"
     >
-      <span class="gateway-health-label" data-testid="gateway-health-status"><i class="astra-service-dot" :data-state="summary?.status ?? 'unknown'" aria-hidden="true" />{{ statusLabel }}</span>
-      <div class="gateway-overview__status-copy">
-        <p class="gateway-overview__impact" data-testid="gateway-health-impact">{{ impactText }}</p>
-        <p v-if="reasonText" class="gateway-overview__reasons">{{ reasonText }}</p>
+      <div class="ov-status__left">
+        <span class="gateway-health-label ov-status__badge" data-testid="gateway-health-status">
+          <i class="astra-service-dot" :data-state="summary?.status ?? 'unknown'" aria-hidden="true" />
+          {{ statusLabel }}
+        </span>
+        <div class="ov-status__copy">
+          <p class="ov-status__impact" data-testid="gateway-health-impact">{{ impactText }}</p>
+          <p v-if="showReasons" class="ov-status__reasons">{{ reasonText }}</p>
+        </div>
+        <div v-if="impactPools.length" class="ov-status__chips">
+          <RouterLink
+            v-for="item in impactPools.slice(0, 3)"
+            :key="item.pool_id"
+            class="ov-impact-chip"
+            :to="{ path: '/gateway/nodes', query: { pool: item.pool_id } }"
+            :title="item.text"
+          >
+            <i class="ov-impact-chip__dot" :data-state="item.state" aria-hidden="true" />
+            <span>{{ item.pool_name }}</span>
+          </RouterLink>
+          <span v-if="impactPools.length > 3" class="ov-impact-more">+{{ impactPools.length - 3 }}</span>
+        </div>
       </div>
-      <ElButton type="primary" plain data-testid="gateway-show-abnormal" @click="showAbnormal">查看异常</ElButton>
+
+      <div class="ov-status__right">
+        <button type="button" class="ov-pulse-pill" @click="scrollToInstances">
+          <i class="ov-pulse-dot" :class="onlineInstanceCount > 0 ? 'is-ok' : 'is-off'" aria-hidden="true" />
+          <span>数据面</span>
+          <b>{{ onlineInstanceCount }}/{{ instances.length }}</b>
+        </button>
+        <button type="button" class="ov-pulse-pill" @click="scrollToNodes('all')">
+          <i class="ov-pulse-dot" :class="healthyRows.length > 0 ? 'is-ok' : rows.length > 0 ? 'is-warn' : 'is-off'" aria-hidden="true" />
+          <span>健康节点</span>
+          <b>{{ healthyRows.length }}/{{ rows.length }}</b>
+        </button>
+        <ElButton
+          v-if="abnormalRows.length > 0"
+          size="small"
+          plain
+          data-testid="gateway-show-abnormal"
+          @click="showAbnormal"
+        >查看异常（{{ abnormalRows.length }}）</ElButton>
+        <ElButton
+          v-else-if="rows.length === 0"
+          size="small"
+          type="primary"
+          plain
+          @click="router.push('/gateway/nodes')"
+        >配置上游节点</ElButton>
+      </div>
     </section>
 
-    <section class="gateway-overview__metrics" aria-label="核心指标">
-      <ElCard
-        v-for="metric in primaryCards"
-        :key="metric.id"
-        shadow="never"
-        class="gateway-overview__metric"
-        :class="{ 'gateway-overview__metric--empty': metric.empty }"
-        :title="metric.hint || undefined"
-        :data-testid="`gateway-metric-${metric.id}`"
-      >
-        <p class="gateway-overview__metric-label" :title="metric.label">{{ metric.label }}</p>
-        <p class="gateway-overview__metric-value">{{ metric.value }}<small v-if="metric.unit && !metric.empty"> {{ metric.unit }}</small></p>
-        <p class="gateway-overview__metric-window">{{ metric.window }}</p>
-      </ElCard>
+    <!-- Layer 2: 四大支柱 KPI 卡片（请求量 / 成功率 / Token 消耗 / 延迟性能） -->
+    <section class="ov-kpis" aria-label="核心运行指标">
+      <article class="ov-kpi" data-testid="gateway-metric-requests">
+        <header class="ov-kpi__head">
+          <span class="ov-kpi__label">总请求量</span>
+          <span class="ov-kpi__tag">{{ currentWindowLabel }}</span>
+        </header>
+        <div class="ov-kpi__value" :class="{ 'is-muted': kpiUnavailable }">
+          {{ kpiRequests.main }}
+          <small v-if="kpiRequests.unit">{{ kpiRequests.unit }}</small>
+        </div>
+        <footer class="ov-kpi__foot">
+          <span>{{ kpiRequests.sub }}</span>
+        </footer>
+      </article>
+
+      <article class="ov-kpi" data-testid="gateway-metric-failure">
+        <header class="ov-kpi__head">
+          <span class="ov-kpi__label">请求成功率</span>
+          <span class="ov-kpi__tag">{{ currentWindowLabel }}</span>
+        </header>
+        <div class="ov-kpi__value" :class="{ 'is-muted': kpiSuccess.muted, 'is-bad': kpiSuccess.bad }">
+          {{ kpiSuccess.main }}
+        </div>
+        <footer class="ov-kpi__foot">
+          <span>
+            成功 <b>{{ kpiSuccess.okText }}</b> · 失败
+            <b :class="{ 'is-danger': kpiSuccess.errors > 0 }">{{ kpiSuccess.errText }}</b>
+          </span>
+          <div class="ov-ratio-bar" aria-hidden="true">
+            <i class="ov-ratio-bar__ok" :style="{ width: `${kpiSuccess.okPct}%` }" />
+            <i class="ov-ratio-bar__err" :style="{ width: `${kpiSuccess.errPct}%` }" />
+          </div>
+        </footer>
+      </article>
+
+      <article class="ov-kpi" data-testid="gateway-metric-tokens">
+        <header class="ov-kpi__head">
+          <span class="ov-kpi__label">Token 消耗</span>
+          <span class="ov-kpi__tag">{{ currentWindowLabel }}</span>
+        </header>
+        <div class="ov-kpi__value" :class="{ 'is-muted': kpiUnavailable }">
+          {{ kpiTokens.main }}
+        </div>
+        <footer class="ov-kpi__foot">
+          <span>输入 <b>{{ kpiTokens.inText }}</b> · 输出 <b>{{ kpiTokens.outText }}</b></span>
+          <div class="ov-ratio-bar" aria-hidden="true">
+            <i class="ov-ratio-bar__in" :style="{ width: `${kpiTokens.inPct}%` }" />
+            <i class="ov-ratio-bar__out" :style="{ width: `${kpiTokens.outPct}%` }" />
+          </div>
+        </footer>
+      </article>
+
+      <article class="ov-kpi" data-testid="gateway-metric-ttft">
+        <header class="ov-kpi__head">
+          <span class="ov-kpi__label">{{ kpiLatency.label }}</span>
+          <span class="ov-kpi__tag">{{ currentWindowLabel }} P95</span>
+        </header>
+        <div class="ov-kpi__value" :class="{ 'is-muted': kpiLatency.muted }">
+          {{ kpiLatency.main }}
+          <small v-if="kpiLatency.unit">{{ kpiLatency.unit }}</small>
+        </div>
+        <footer class="ov-kpi__foot">
+          <span>输出 <b>{{ kpiLatency.tpsText }}</b> · 总耗时 P95 <b>{{ kpiLatency.durText }}</b></span>
+        </footer>
+      </article>
     </section>
 
-    <div class="gateway-overview__split">
-      <ElCard ref="nodesCard" shadow="never" class="gateway-overview__nodes-card" data-testid="gateway-overview-nodes">
+    <!-- Layer 3: 首屏核心双栏（多维趋势图 + 延迟剖析与稳定性） -->
+    <div class="ov-main-grid">
+      <ElCard shadow="never" class="ov-card ov-trend-card" data-testid="gateway-overview-trend">
         <template #header>
-          <div class="gateway-overview__card-header">
-            <div class="gateway-overview__card-title">
-              <h4>节点与资源池</h4>
+          <div class="ov-card__head">
+            <div class="ov-card__title">
+              <h4>流量与性能趋势</h4>
+              <p class="ov-card__sub">{{ chartHeadline }}</p>
             </div>
-            <ElCheckbox v-model="abnormalOnly" data-testid="gateway-abnormal-only">只看异常</ElCheckbox>
+            <div class="ov-trend-tools">
+              <ElRadioGroup v-model="chartTab" size="small" aria-label="趋势视角" data-testid="gateway-trend-tab">
+                <ElRadioButton value="calls">请求量</ElRadioButton>
+                <ElRadioButton value="tokens">Token</ElRadioButton>
+                <ElRadioButton value="ttft">TTFT</ElRadioButton>
+                <ElRadioButton value="tps">速度</ElRadioButton>
+              </ElRadioGroup>
+              <ElSelect v-model="groupBy" size="small" class="ov-select-sm" aria-label="趋势分组">
+                <ElOption value="none" label="全部维度" />
+                <ElOption value="model" label="按模型" />
+                <ElOption value="node" label="按节点" />
+              </ElSelect>
+              <ElSelect
+                v-if="seriesOptions.length > 1"
+                v-model="seriesKey"
+                size="small"
+                class="ov-select-md"
+                aria-label="趋势序列"
+              >
+                <ElOption v-for="item in seriesOptions" :key="item.key" :value="item.key" :label="item.label" />
+              </ElSelect>
+            </div>
           </div>
         </template>
-        <ElAlert v-if="nodesError" type="warning" show-icon :closable="false" :title="nodesError" />
-        <ElTable v-if="!nodesError" :data="visibleRows" row-key="node_id" max-height="316" :empty-text="tableEmpty">
-          <ElTableColumn label="节点" min-width="160">
+
+        <ElAlert
+          v-if="trendError"
+          type="warning"
+          show-icon
+          :closable="false"
+          :title="trendError"
+          data-testid="gateway-trend-error"
+        />
+
+        <template v-if="hasActiveChartData">
+          <GatewayTrendChart
+            v-if="chartTab === 'calls'"
+            mode="calls"
+            :call-points="callPoints"
+            tall
+          />
+          <GatewayTrendChart
+            v-else-if="chartTab === 'tokens' && groupBy === 'none' && useSplitTokenBuckets"
+            mode="tokens"
+            :buckets="tokenBuckets"
+            tall
+          />
+          <GatewayTrendChart
+            v-else-if="chartTab === 'tokens'"
+            mode="total-tokens"
+            value-name="总 Token"
+            :points="tokenSeriesPoints"
+            tall
+          />
+          <GatewayTrendChart
+            v-else-if="chartTab === 'ttft'"
+            mode="value"
+            value-name="TTFT P95"
+            unit="ms"
+            :points="ttftSeriesPoints"
+            tall
+          />
+          <GatewayTrendChart
+            v-else
+            mode="value"
+            value-name="输出速度 P95"
+            unit=" tok/s"
+            :points="tpsSeriesPoints"
+            tall
+          />
+        </template>
+        <div v-else-if="!trendError" class="ov-chart-empty">
+          <div class="ov-chart-empty__grid" aria-hidden="true">
+            <span /><span /><span /><span />
+          </div>
+          <div class="ov-chart-empty__body">
+            <p class="ov-chart-empty__title">{{ chartEmptyText }}</p>
+            <RouterLink class="ov-link" to="/gateway/keys">查看 /v1 接入地址与 API Key →</RouterLink>
+          </div>
+        </div>
+      </ElCard>
+
+      <ElCard shadow="never" class="ov-card ov-profile-card" data-testid="gateway-overview-details">
+        <template #header>
+          <div class="ov-card__head">
+            <div class="ov-card__title">
+              <h4>延迟剖析与稳定性</h4>
+              <p class="ov-card__sub">分阶段耗时与近 5 分钟健康信号</p>
+            </div>
+            <ElRadioGroup v-model="latencyStatMode" size="small" aria-label="延迟分位">
+              <ElRadioButton value="avg">平均</ElRadioButton>
+              <ElRadioButton value="p50">P50</ElRadioButton>
+              <ElRadioButton value="p95">P95</ElRadioButton>
+            </ElRadioGroup>
+          </div>
+        </template>
+
+        <div class="ov-latency-list">
+          <div v-for="stage in latencyStages" :key="stage.id" class="ov-latency-row">
+            <div class="ov-latency-row__top">
+              <span class="ov-latency-row__label">{{ stage.label }}</span>
+              <b class="ov-latency-row__val" :class="{ 'is-muted': stage.value === null }">
+                {{ stage.value === null ? '—' : formatLatency(stage.value) }}
+              </b>
+            </div>
+            <div class="ov-latency-row__track">
+              <i
+                class="ov-latency-row__fill"
+                :class="stage.tone"
+                :style="{ width: `${stage.pct}%` }"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="ov-divider" />
+
+        <div class="ov-stability">
+          <div class="ov-stability__head">
+            <span>近 5 分钟稳定性</span>
+            <span class="ov-stability__cap">峰值并发 {{ peakConcurrencyText }}</span>
+          </div>
+          <div class="ov-stability__grid">
+            <div v-for="item in stabilityItems" :key="item.id" class="ov-stability__cell">
+              <span class="ov-stability__label">{{ item.label }}</span>
+              <strong class="ov-stability__val" :class="item.warn ? 'is-warn' : ''">{{ item.value }}</strong>
+            </div>
+          </div>
+        </div>
+      </ElCard>
+    </div>
+
+    <!-- Layer 4A: 上游节点运行矩阵 -->
+    <ElCard ref="nodesCard" shadow="never" class="ov-card ov-nodes-card" data-testid="gateway-overview-nodes">
+      <template #header>
+        <div class="ov-card__head">
+          <div class="ov-card__title">
+            <h4>上游节点运行态</h4>
+            <p class="ov-card__sub">按健康状态、并发水位与窗口性能指标排序</p>
+          </div>
+          <div class="ov-card__tools">
+            <ElRadioGroup v-model="nodeFilter" size="small" aria-label="节点筛选" data-testid="gateway-abnormal-only">
+              <ElRadioButton value="all">全部（{{ rows.length }}）</ElRadioButton>
+              <ElRadioButton value="abnormal">异常（{{ abnormalRows.length }}）</ElRadioButton>
+              <ElRadioButton value="healthy">健康（{{ healthyRows.length }}）</ElRadioButton>
+            </ElRadioGroup>
+            <RouterLink class="ov-link" to="/gateway/nodes">管理节点 →</RouterLink>
+          </div>
+        </div>
+      </template>
+
+      <ElAlert v-if="nodesError" type="warning" show-icon :closable="false" :title="nodesError" />
+      <ElTable
+        v-else
+        :data="visibleRows"
+        row-key="node_id"
+        max-height="340"
+        :empty-text="tableEmpty"
+      >
+        <ElTableColumn label="节点 / 资源池" min-width="190">
+          <template #default="{ row }">
+            <div class="ov-node-cell">
+              <RouterLink class="ov-node-link" :to="`/gateway/nodes/${row.node_id}`">{{ row.name }}</RouterLink>
+              <span class="ov-node-pool">{{ row.pool_name ?? '未分配' }}</span>
+            </div>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="运行状态" width="166">
+          <template #default="{ row }">
+            <div class="ov-state-tags">
+              <ElTag
+                size="small"
+                :type="healthTag(row.health)"
+                :class="{ 'astra-tag--neutral': row.health === 'unknown' }"
+              >{{ row.health_label }}</ElTag>
+              <ElTag
+                size="small"
+                :type="schedulingTag(row.scheduling)"
+                :class="{ 'astra-tag--neutral': row.scheduling === 'disabled' }"
+              >{{ row.scheduling_label }}</ElTag>
+            </div>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="负载水位" min-width="168">
+          <template #default="{ row }">
+            <div class="ov-load-cell">
+              <div class="ov-load-bar">
+                <i
+                  :style="{ width: `${occupancyPercent(row as GatewayNodeMetric)}%` }"
+                  :class="occupancyTone(row as GatewayNodeMetric)"
+                />
+              </div>
+              <span class="ov-num">{{ loadCompactText(row as GatewayNodeMetric) }}</span>
+            </div>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="QPS" width="88" align="right">
+          <template #default="{ row }">
+            <span class="ov-num">{{ row.qps != null ? row.qps.toFixed(2) : '—' }}</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="TTFT P95" width="104" align="right">
+          <template #default="{ row }">
+            <span class="ov-num">{{ row.ttft_p95_ms != null ? formatLatency(row.ttft_p95_ms) : '—' }}</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="错误率" width="104" align="right">
+          <template #default="{ row }">
+            <span
+              class="ov-num"
+              :class="{ 'is-danger': row.error_rate != null && row.error_rate >= 0.05 }"
+              :title="row.error_samples ? `样本数 ${row.error_samples}` : undefined"
+            >{{ row.error_rate != null ? percentText(row.error_rate) : '—' }}</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="操作" width="76" align="center" fixed="right">
+          <template #default="{ row }">
+            <ElButton link type="primary" @click="openNodeLogs(row as GatewayNodeMetric)">日志</ElButton>
+          </template>
+        </ElTableColumn>
+      </ElTable>
+    </ElCard>
+
+    <!-- Layer 4B: 基础设施与最近动态双栏 -->
+    <div class="ov-bottom-grid">
+      <ElCard ref="instancesCard" shadow="never" class="ov-card ov-instances-card" data-testid="gateway-overview-instances">
+        <template #header>
+          <div class="ov-card__head">
+            <div class="ov-card__title">
+              <h4>Gateway 数据面实例</h4>
+              <p class="ov-card__sub">转发进程心跳、吞吐与系统资源</p>
+            </div>
+            <span v-if="instances.length" class="ov-count-pill">
+              在线 {{ onlineInstanceCount }} / {{ instances.length }}
+            </span>
+          </div>
+        </template>
+        <ElAlert v-if="instancesError" type="warning" show-icon :closable="false" :title="instancesError" />
+        <ElTable v-else-if="instances.length" :data="instances" row-key="instance_id" size="small">
+          <ElTableColumn label="实例 / 版本" min-width="200">
             <template #default="{ row }">
-              <RouterLink class="gateway-overview__node" :to="`/gateway/nodes/${row.node_id}`">{{ row.name }}</RouterLink>
-              <span class="gateway-overview__sub">{{ row.pool_name ?? '未分配' }}</span>
+              <div class="ov-inst-cell">
+                <span class="ov-mono ov-inst-id" :title="row.instance_id">{{ row.instance_id }}</span>
+                <span class="ov-inst-meta">v{{ row.app_version ?? '—' }} · 运行 {{ formatSeconds(row.uptime_seconds) }}</span>
+              </div>
             </template>
           </ElTableColumn>
-          <ElTableColumn label="结论" min-width="96">
-            <template #default="{ row }">{{ row.abnormal ? '需要处理' : '可以服务' }}</template>
-          </ElTableColumn>
-          <ElTableColumn label="健康" width="88" align="center">
-            <template #default="{ row }"><ElTag :type="healthTag(row.health)">{{ row.health_label }}</ElTag></template>
-          </ElTableColumn>
-          <ElTableColumn label="调度" width="96" align="center">
-            <template #default="{ row }"><ElTag :type="schedulingTag(row.scheduling)">{{ row.scheduling_label }}</ElTag></template>
-          </ElTableColumn>
-          <ElTableColumn label="当前并发" min-width="130">
-            <template #default="{ row }">{{ loadText(row as GatewayNodeMetric) }}</template>
-          </ElTableColumn>
-          <ElTableColumn label="日志" width="64" align="center">
+          <ElTableColumn label="状态 / 心跳" width="128">
             <template #default="{ row }">
-              <ElButton link type="primary" @click="openNodeLogs(row as GatewayNodeMetric)">查看</ElButton>
+              <div class="ov-inst-status">
+                <ElTag
+                  size="small"
+                  :type="row.status === 'ACTIVE' ? 'success' : 'info'"
+                  :class="{ 'astra-tag--neutral': row.status !== 'ACTIVE' }"
+                >{{ row.status === 'ACTIVE' ? '在线' : '超时' }}</ElTag>
+                <span class="ov-num">{{ formatRelativeTime(row.updated_at) }}</span>
+              </div>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="并发 / 请求" width="104" align="right">
+            <template #default="{ row }">
+              <span class="ov-num">{{ row.active ?? '—' }} / {{ row.requests ?? '—' }}</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="CPU / 内存" width="126" align="right">
+            <template #default="{ row }">
+              <span class="ov-num">{{ row.cpu_percent != null ? `${row.cpu_percent.toFixed(1)}%` : '—' }} / {{ formatBytes(row.memory_bytes) }}</span>
             </template>
           </ElTableColumn>
         </ElTable>
+        <p v-else class="ov-muted-empty">暂无 Gateway 数据面实例上报心跳</p>
       </ElCard>
 
-      <ElCard shadow="never" class="gateway-overview__events" data-testid="gateway-overview-events">
+      <ElCard shadow="never" class="ov-card ov-events-card" data-testid="gateway-overview-events">
         <template #header>
-          <div class="gateway-overview__card-header">
-            <div class="gateway-overview__card-title">
-              <h4>最近事件</h4>
+          <div class="ov-card__head">
+            <div class="ov-card__title">
+              <h4>最近动态</h4>
+              <p class="ov-card__sub">节点探测告警与配置变更</p>
             </div>
-            <span v-if="events.length" class="gateway-overview__event-count">{{ events.length }} 条</span>
+            <ElRadioGroup v-model="eventFilter" size="small" aria-label="动态类型">
+              <ElRadioButton value="all">全部</ElRadioButton>
+              <ElRadioButton value="runtime">运行</ElRadioButton>
+              <ElRadioButton value="config">配置</ElRadioButton>
+            </ElRadioGroup>
           </div>
         </template>
         <ElAlert v-if="eventsError" type="warning" show-icon :closable="false" :title="eventsError" />
-        <ul v-if="events.length" class="gateway-overview__event-list">
-          <li v-for="event in events" :key="event.id">
+        <ul v-else-if="filteredEvents.length" class="ov-event-list">
+          <li v-for="event in filteredEvents" :key="event.id">
             <button type="button" @click="openEventLogs(event)">
-              <ElTag size="small" :type="event.source === 'config' ? 'info' : 'warning'">{{ event.source === 'config' ? '配置' : '运行' }}</ElTag>
-              <span class="gateway-overview__event-summary" :title="event.summary">{{ event.summary }}</span>
+              <ElTag
+                size="small"
+                :type="event.source === 'config' ? 'info' : 'warning'"
+                :class="{ 'astra-tag--neutral': event.source === 'config' }"
+              >{{ event.source === 'config' ? '配置' : '运行' }}</ElTag>
+              <span class="ov-event-summary" :title="event.summary">{{ formatEventSummary(event) }}</span>
               <time>{{ formatDateTime(event.created_at) }}</time>
             </button>
           </li>
         </ul>
-        <ElEmpty v-else-if="!eventsError" :image-size="52" description="暂无事件" />
+        <p v-else class="ov-muted-empty">{{ eventFilter === 'all' ? '暂无运行或配置动态' : '当前分类下暂无记录' }}</p>
       </ElCard>
     </div>
-
-    <ElCard shadow="never" class="gateway-overview__trend" data-testid="gateway-overview-trend">
-      <template #header>
-        <div class="gateway-overview__card-header">
-          <div class="gateway-overview__card-title">
-            <h4>调用趋势</h4>
-            <p class="gateway-overview__card-sub">{{ trendHeadline }}</p>
-          </div>
-          <div class="gateway-overview__trend-tools">
-            <ElSelect v-model="groupBy" class="gateway-overview__group" aria-label="趋势分组">
-              <ElOption value="none" label="全部" />
-              <ElOption value="model" label="按模型" />
-              <ElOption value="node" label="按节点" />
-            </ElSelect>
-            <ElSelect v-if="seriesOptions.length > 1" v-model="seriesKey" class="gateway-overview__group" aria-label="趋势序列">
-              <ElOption v-for="item in seriesOptions" :key="item.key" :value="item.key" :label="item.label" />
-            </ElSelect>
-          </div>
-        </div>
-      </template>
-      <ElAlert
-        v-if="trendError"
-        type="warning"
-        show-icon
-        :closable="false"
-        :title="trendError"
-        data-testid="gateway-trend-error"
-      />
-      <GatewayTrendChart v-if="trendPoints.length" mode="calls" :call-points="trendPoints" tall />
-      <ElEmpty v-else-if="!trendError" :image-size="52" description="暂无数据" />
-    </ElCard>
-    <details class="gateway-overview__details" data-testid="gateway-overview-details">
-      <summary>辅助指标</summary>
-      <div class="gateway-overview__detail-grid">
-        <div v-for="item in detailItems" :key="item.id" class="gateway-overview__detail">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-          <small>{{ item.hint }}</small>
-        </div>
-      </div>
-    </details>
   </section>
 </template>
 
@@ -159,9 +473,9 @@ import {
   ElAlert,
   ElButton,
   ElCard,
-  ElCheckbox,
-  ElEmpty,
   ElOption,
+  ElRadioButton,
+  ElRadioGroup,
   ElSelect,
   ElTable,
   ElTableColumn,
@@ -171,24 +485,38 @@ import {
   gatewayApi,
   GatewayApiError,
   type GatewayHealthSummary,
+  type GatewayInstance,
   type GatewayNodeMetric,
   type GatewayOpsEvent,
   type GatewayScopeStats,
   type GatewayStatsWindow,
   type GatewayTrend,
 } from '@/api/gateway'
-import { errorMessage, formatDateTime } from '@/utils/gateway'
+import { formatTokens } from '@/utils/format'
+import {
+  auditActionLabel,
+  auditResourceTypeLabel,
+  errorMessage,
+  formatBytes,
+  formatDateTime,
+  formatRelativeTime,
+  formatSeconds,
+} from '@/utils/gateway'
 import GatewayHeaderActions from '@/views/gateway/GatewayHeaderActions.vue'
 import GatewayTrendChart from '@/views/gateway/GatewayTrendChart.vue'
 
 const router = useRouter()
 const root = ref<HTMLElement | null>(null)
 const nodesCard = ref<{ $el?: HTMLElement } | null>(null)
+const instancesCard = ref<{ $el?: HTMLElement } | null>(null)
+
 const summary = ref<GatewayHealthSummary | null>(null)
 const stats = ref<GatewayScopeStats | null>(null)
 const rows = ref<GatewayNodeMetric[]>([])
 const events = ref<GatewayOpsEvent[]>([])
+const instances = ref<GatewayInstance[]>([])
 const trend = ref<GatewayTrend | null>(null)
+
 const error = ref('')
 const healthError = ref('')
 const healthPermission = ref(false)
@@ -197,190 +525,331 @@ const statsPermission = ref(false)
 const statsLoading = ref(false)
 const nodesError = ref('')
 const eventsError = ref('')
+const instancesError = ref('')
 const trendError = ref('')
 const loading = ref(false)
-const abnormalOnly = ref(false)
+
 const statsWindow = ref<GatewayStatsWindow>('today')
+const chartTab = ref<'calls' | 'tokens' | 'ttft' | 'tps'>('calls')
+const latencyStatMode = ref<'avg' | 'p50' | 'p95'>('p95')
 const groupBy = ref<'none' | 'model' | 'node'>('none')
 const seriesKey = ref('all')
+const nodeFilter = ref<'all' | 'abnormal' | 'healthy'>('all')
+const eventFilter = ref<'all' | 'runtime' | 'config'>('all')
+
 let timer = 0
 
 const WINDOW_LABEL: Record<GatewayStatsWindow, string> = {
-  hour: '本小时',
+  hour: '近 1 小时',
   today: '今日',
   '7d': '近 7 天',
   '30d': '近 30 天',
 }
 
+const currentWindowLabel = computed(() => WINDOW_LABEL[statsWindow.value])
 const statusLabel = computed(() => {
   const status = summary.value?.status
-  if (status === 'normal') return '正常'
-  if (status === 'degraded') return '降级'
+  if (status === 'normal') return '服务正常'
+  if (status === 'degraded') return '服务降级'
   if (status === 'down') return '不可用'
-  return '未知'
+  return '状态未知'
 })
-const impactText = computed(() => summary.value?.impact_summary || '暂无影响范围')
+const impactText = computed(() => summary.value?.impact_summary || '所有已启用路由状态正常')
 const reasonText = computed(() => (summary.value?.reasons ?? []).join('；'))
+const showReasons = computed(() => Boolean(reasonText.value) && reasonText.value !== impactText.value)
+
+const impactPools = computed(() => {
+  const seen = new Map<string, { pool_id: string; pool_name: string; state: string; text: string }>()
+  for (const item of summary.value?.impact ?? []) {
+    if (!seen.has(item.pool_id)) {
+      seen.set(item.pool_id, {
+        pool_id: item.pool_id,
+        pool_name: item.pool_name,
+        state: item.state,
+        text: item.text,
+      })
+    }
+  }
+  return [...seen.values()]
+})
+
+const onlineInstanceCount = computed(() => instances.value.filter((item) => item.status === 'ACTIVE').length)
 const healthyRows = computed(() => rows.value.filter((row) => !row.abnormal))
 const abnormalRows = computed(() => rows.value.filter((row) => row.abnormal))
-const visibleRows = computed(() => abnormalOnly.value
-  ? abnormalRows.value
-  : [...abnormalRows.value, ...healthyRows.value])
+const visibleRows = computed(() => {
+  if (nodeFilter.value === 'abnormal') return abnormalRows.value
+  if (nodeFilter.value === 'healthy') return healthyRows.value
+  return [...abnormalRows.value, ...healthyRows.value]
+})
 const tableEmpty = computed(() => {
-  if (!rows.value.length) return '暂无节点'
-  if (abnormalOnly.value) return '没有异常节点'
+  if (!rows.value.length) return '暂未配置上游节点'
+  if (nodeFilter.value === 'abnormal') return '当前没有异常节点'
+  if (nodeFilter.value === 'healthy') return '当前没有健康可用节点'
   return '暂无节点'
 })
+
+const filteredEvents = computed(() => {
+  if (eventFilter.value === 'all') return events.value
+  return events.value.filter((item) => item.source === eventFilter.value)
+})
+
+// ── 四大支柱 KPI ──────────────────────────────────────────────────────
+const kpiUnavailable = computed(() => Boolean(statsPermission.value || statsError.value) || (!stats.value && statsLoading.value))
+const kpiFallback = computed(() => (
+  statsPermission.value ? '无权限' : statsError.value ? '加载失败' : statsLoading.value ? '…' : '—'
+))
+
+const kpiRequests = computed(() => {
+  const current = stats.value
+  if (!current) {
+    return { main: kpiFallback.value, unit: '', sub: '等待统计数据' }
+  }
+  const peakPart = current.peak_concurrency > 0 ? ` · 峰值 ${current.peak_concurrency}` : ''
+  return {
+    main: numberText(current.requests),
+    unit: '次',
+    sub: `平均 ${current.qps.toFixed(2)} req/s · 并发 ${current.active}${peakPart}`,
+  }
+})
+
+const kpiSuccess = computed(() => {
+  const current = stats.value
+  if (!current) {
+    return { main: kpiFallback.value, muted: true, bad: false, okText: '—', errText: '—', errors: 0, okPct: 0, errPct: 0 }
+  }
+  const terminal = current.success + current.errors
+  if (terminal <= 0) {
+    return { main: '—', muted: true, bad: false, okText: '0', errText: '0', errors: 0, okPct: 0, errPct: 0 }
+  }
+  const rate = current.success / terminal
+  const okPct = Math.round(rate * 1000) / 10
+  const errPct = Math.max(0, Math.round((100 - okPct) * 10) / 10)
+  return {
+    main: `${(rate * 100).toFixed(rate >= 0.9995 ? 0 : 1)}%`,
+    muted: false,
+    bad: rate < 0.95,
+    okText: numberText(current.success),
+    errText: numberText(current.errors),
+    errors: current.errors,
+    okPct,
+    errPct,
+  }
+})
+
+const kpiTokens = computed(() => {
+  const current = stats.value
+  if (!current) {
+    return { main: kpiFallback.value, inText: '—', outText: '—', inPct: 0, outPct: 0 }
+  }
+  const sum = current.input_tokens + current.output_tokens
+  const inPct = sum > 0 ? Math.round((current.input_tokens / sum) * 100) : 0
+  const outPct = sum > 0 ? Math.max(0, 100 - inPct) : 0
+  return {
+    main: formatTokens(current.total_tokens),
+    inText: formatTokens(current.input_tokens),
+    outText: formatTokens(current.output_tokens),
+    inPct,
+    outPct,
+  }
+})
+
+const kpiLatency = computed(() => {
+  const current = stats.value
+  if (!current) {
+    return { label: '首 Token 延迟', main: kpiFallback.value, unit: '', muted: true, tpsText: '—', durText: '—' }
+  }
+  const ttft = current.ttft_ms.p95
+  const dur = current.duration_ms.p95
+  const tps = current.output_tps.avg
+  const primaryVal = ttft ?? dur
+  const label = ttft !== null ? '首 Token 延迟' : dur !== null ? '请求耗时' : '首 Token 延迟'
+  if (primaryVal === null) {
+    return {
+      label,
+      main: '—',
+      unit: '',
+      muted: true,
+      tpsText: tps !== null ? `${tps.toFixed(1)} tok/s` : '—',
+      durText: '—',
+    }
+  }
+  const formatted = primaryVal >= 1000
+    ? { val: (primaryVal / 1000).toFixed(2), unit: 's' }
+    : { val: String(Math.round(primaryVal)), unit: 'ms' }
+  return {
+    label,
+    main: formatted.val,
+    unit: formatted.unit,
+    muted: false,
+    tpsText: tps !== null ? `${tps.toFixed(1)} tok/s` : '—',
+    durText: dur !== null ? formatLatency(dur) : '—',
+  }
+})
+
+// ── 趋势图数据 ────────────────────────────────────────────────────────
 const seriesOptions = computed(() => trend.value?.series ?? [])
 const activeSeries = computed(() => seriesOptions.value.find((item) => item.key === seriesKey.value) ?? seriesOptions.value[0])
-const trendPoints = computed(() => {
-  const points = activeSeries.value?.points ?? []
-  return points.some((point) => point.requests > 0 || point.errors > 0) ? points : []
-})
-const trendHeadline = computed(() => {
-  const points = trendPoints.value
-  if (!points.length) return '暂无数据'
-  const requests = points.reduce((sum, point) => sum + point.requests, 0)
-  const errors = points.reduce((sum, point) => sum + point.errors, 0)
-  return `窗口内 ${numberText(requests)} 次请求 · 失败 ${numberText(errors)} 次`
+const rawTrendPoints = computed(() => activeSeries.value?.points ?? [])
+
+const callPoints = computed(() => rawTrendPoints.value.map((p) => ({
+  bucket_start: p.bucket_start,
+  requests: p.requests,
+  errors: p.errors,
+})))
+
+const tokenBuckets = computed(() => {
+  const list = stats.value?.trend ?? []
+  return list.some((b) => b.total_tokens > 0 || b.input_tokens > 0 || b.output_tokens > 0) ? list : []
 })
 
-const primaryCards = computed(() => {
+const tokenSeriesPoints = computed(() => rawTrendPoints.value.map((p) => ({
+  bucket_start: p.bucket_start,
+  value: p.total_tokens,
+})))
+
+const useSplitTokenBuckets = computed(() => {
+  if (!tokenBuckets.value.length) return false
+  if (tokenBuckets.value.length >= 2) return true
+  const trendActiveCount = tokenSeriesPoints.value.filter((p) => (p.value ?? 0) > 0).length
+  return trendActiveCount <= 1
+})
+
+const ttftSeriesPoints = computed(() => rawTrendPoints.value.map((p) => ({
+  bucket_start: p.bucket_start,
+  value: p.ttft_p95_ms !== null ? Math.round(p.ttft_p95_ms) : null,
+})))
+
+const tpsSeriesPoints = computed(() => rawTrendPoints.value.map((p) => ({
+  bucket_start: p.bucket_start,
+  value: p.output_tps_p95 !== null ? Number(p.output_tps_p95.toFixed(1)) : null,
+})))
+
+const hasActiveChartData = computed(() => {
+  if (chartTab.value === 'calls') {
+    return callPoints.value.some((p) => p.requests > 0 || p.errors > 0)
+  }
+  if (chartTab.value === 'tokens') {
+    if (groupBy.value === 'none' && tokenBuckets.value.length) return true
+    return tokenSeriesPoints.value.some((p) => (p.value ?? 0) > 0)
+  }
+  if (chartTab.value === 'ttft') {
+    return ttftSeriesPoints.value.some((p) => p.value !== null)
+  }
+  return tpsSeriesPoints.value.some((p) => p.value !== null)
+})
+
+const chartHeadline = computed(() => {
+  if (chartTab.value === 'calls') {
+    const req = callPoints.value.reduce((s, p) => s + p.requests, 0)
+    const err = callPoints.value.reduce((s, p) => s + p.errors, 0)
+    return req > 0 ? `${currentWindowLabel.value}共 ${numberText(req)} 次请求 · 失败 ${numberText(err)} 次` : `${currentWindowLabel.value}暂无请求流量`
+  }
+  if (chartTab.value === 'tokens') {
+    const total = groupBy.value === 'none'
+      ? (stats.value?.total_tokens ?? 0)
+      : tokenSeriesPoints.value.reduce((s, p) => s + (p.value ?? 0), 0)
+    return total > 0 ? `${currentWindowLabel.value}累计 ${formatTokens(total)} Token` : `${currentWindowLabel.value}暂无 Token 用量记录`
+  }
+  if (chartTab.value === 'ttft') {
+    const p95 = trend.value?.ttft_p95_ms ?? stats.value?.ttft_ms.p95 ?? null
+    return p95 !== null ? `窗口整体首 Token 延迟 P95：${formatLatency(p95)}` : `${currentWindowLabel.value}暂无首 Token 延迟采样`
+  }
+  const tps = trend.value?.output_tps_p95 ?? stats.value?.output_tps.p95 ?? null
+  return tps !== null ? `窗口整体输出速度 P95：${tps.toFixed(1)} tok/s` : `${currentWindowLabel.value}暂无流式输出速度采样`
+})
+
+const chartEmptyText = computed(() => {
+  if (chartTab.value === 'calls') return `${currentWindowLabel.value}暂无调用流量`
+  if (chartTab.value === 'tokens') return `${currentWindowLabel.value}暂无 Token 统计数据`
+  if (chartTab.value === 'ttft') return `${currentWindowLabel.value}暂无流式 TTFT 采样`
+  return `${currentWindowLabel.value}暂无输出速度采样`
+})
+
+// ── 延迟剖析与稳定性 ──────────────────────────────────────────────────
+const latencyStages = computed(() => {
   const current = stats.value
-  const windowLabel = WINDOW_LABEL[statsWindow.value]
-  const statsFailure = statsPermission.value ? '无权限' : statsError.value ? '加载失败' : ''
-  const statsPending = !current && statsLoading.value
-  const unavailable = (value: string) => statsFailure || (statsPending ? '加载中' : value)
-  const terminal = current ? current.success + current.errors : 0
-  const failureRate = current && terminal > 0 ? current.errors / terminal : null
-  const p95 = current?.ttft_ms.p95
-  return [
-    {
-      id: 'requests',
-      label: '请求数',
-      value: unavailable(current ? numberText(current.requests) : '暂无数据'),
-      unit: statsFailure || current == null ? '' : '条',
-      window: windowLabel,
-      hint: statsFailure
-        ? (statsPermission.value ? '当前账号无权查看统计' : '统计接口加载失败')
-        : statsPending
-          ? '正在读取统计窗口'
-          : '',
-      empty: Boolean(statsFailure) || current == null,
-    },
-    {
-      id: 'failure',
-      label: '请求失败率',
-      value: unavailable(failureRate == null ? '无终态样本' : percentText(failureRate)),
-      unit: '',
-      window: windowLabel,
-      hint: statsFailure
-        ? (statsPermission.value ? '当前账号无权查看统计' : '统计接口加载失败')
-        : statsPending
-          ? '正在读取统计窗口'
-          : terminal
-            ? `失败 ${numberText(current?.errors ?? 0)} / 终态 ${numberText(terminal)}`
-            : `${windowLabel}内没有已确认结束的请求`,
-      empty: Boolean(statsFailure) || failureRate == null,
-    },
-    {
-      id: 'qps',
-      label: '平均 QPS',
-      value: unavailable(current ? current.qps.toFixed(2) : '暂无数据'),
-      unit: statsFailure || current == null ? '' : 'req/s',
-      window: `${windowLabel}平均`,
-      hint: statsFailure
-        ? (statsPermission.value ? '当前账号无权查看统计' : '统计接口加载失败')
-        : statsPending
-          ? '正在读取统计窗口'
-          : '',
-      empty: Boolean(statsFailure) || current == null,
-    },
-    {
-      id: 'ttft',
-      label: '首 Token 延迟 P95（TTFT）',
-      value: unavailable(p95 == null ? '无采样' : `${Math.round(p95)} ms`),
-      unit: '',
-      window: `${windowLabel} P95`,
-      hint: statsFailure
-        ? (statsPermission.value ? '当前账号无权查看统计' : '统计接口加载失败')
-        : statsPending
-          ? '正在读取统计窗口'
-          : p95 == null ? '无采样' : '',
-      empty: Boolean(statsFailure) || p95 == null,
-    },
-    {
-      id: 'output-tps',
-      label: '输出速度',
-      value: unavailable(current?.output_tps.avg == null ? '无采样' : current.output_tps.avg.toFixed(1)),
-      unit: statsFailure || current?.output_tps.avg == null ? '' : 'Token/s',
-      window: `${windowLabel}平均`,
-      hint: statsFailure
-        ? (statsPermission.value ? '当前账号无权查看统计' : '统计接口加载失败')
-        : statsPending
-          ? '正在读取统计窗口'
-          : '',
-      empty: Boolean(statsFailure) || current?.output_tps.avg == null,
-    },
-    {
-      id: 'active',
-      label: '当前并发',
-      value: unavailable(current ? numberText(current.active) : '暂无数据'),
-      unit: '',
-      window: '实时',
-      hint: statsFailure
-        ? (statsPermission.value ? '当前账号无权查看统计' : '统计接口加载失败')
-        : '',
-      empty: Boolean(statsFailure) || current == null,
-    },
+  const key = latencyStatMode.value
+  const raw = [
+    { id: 'connect', label: '建立连接 (Connect)', value: current?.connect_ms[key] ?? null, tone: 'tone-1' },
+    { id: 'ttfb', label: '首字节响应 (TTFB)', value: current?.ttfb_ms[key] ?? null, tone: 'tone-2' },
+    { id: 'ttft', label: '首 Token 生成 (TTFT)', value: current?.ttft_ms[key] ?? null, tone: 'tone-3' },
+    { id: 'duration', label: '请求总耗时 (Total)', value: current?.duration_ms[key] ?? null, tone: 'tone-4' },
   ]
+  const maxLog = Math.max(1, ...raw.map((r) => (r.value !== null && r.value > 0 ? Math.log1p(r.value) : 0)))
+  return raw.map((item) => ({
+    ...item,
+    pct: item.value !== null && item.value > 0 ? Math.max(8, Math.round((Math.log1p(item.value) / maxLog) * 100)) : 0,
+  }))
 })
 
-const detailItems = computed(() => {
+const peakConcurrencyText = computed(() => {
+  const peak = summary.value?.metrics.peak_concurrency ?? stats.value?.peak_concurrency
+  return peak == null ? '—' : numberText(peak)
+})
+
+const stabilityItems = computed(() => {
   const health = summary.value?.metrics
-  const current = stats.value
-  const windowLabel = WINDOW_LABEL[statsWindow.value]
-  const healthUnavailable = healthPermission.value ? '无权限' : healthError.value ? '加载失败' : ''
-  const statsUnavailable = statsPermission.value ? '无权限' : statsError.value ? '加载失败' : ''
+  const unavailable = healthPermission.value ? '无权限' : healthError.value ? '失败' : ''
+  const cap = !health || health.active == null
+    ? '—'
+    : `${numberText(health.active)} / ${health.capacity_limit == null ? '不限' : numberText(health.capacity_limit)}`
+  const queueSuffix = health?.queue ? `（排队 ${health.queue}）` : ''
   return [
-    { id: 'retry', label: '重试率', value: healthUnavailable || percentOrEmpty(health?.retry_rate), hint: '近 5 分钟' },
-    { id: '429', label: '上游限流（429）', value: healthUnavailable || percentOrEmpty(health?.upstream_429_rate), hint: '近 5 分钟' },
-    { id: 'stream', label: '流式中断率', value: healthUnavailable || percentOrEmpty(health?.stream_interrupt_rate), hint: '近 5 分钟' },
-    { id: 'tokens', label: 'Token 吞吐量', value: healthUnavailable || throughputOrEmpty(health?.token_throughput), hint: '近 5 分钟' },
-    { id: 'unknown', label: 'Token 用量缺失率', value: healthUnavailable || percentOrEmpty(health?.unknown_usage_share), hint: '近 5 分钟' },
-    { id: 'connect', label: '连接耗时（平均）', value: statsUnavailable || msOrEmpty(current?.connect_ms.avg), hint: `${windowLabel}平均` },
-    { id: 'ttfb', label: 'TTFB（平均）', value: statsUnavailable || msOrEmpty(current?.ttfb_ms.avg), hint: `${windowLabel}平均` },
-    { id: 'capacity', label: '并发容量', value: healthUnavailable || capacityText(health), hint: '实时' },
-    { id: 'peak', label: '5 分钟峰值并发', value: healthUnavailable || (health?.peak_concurrency == null ? '暂无数据' : numberText(health.peak_concurrency)), hint: '近 5 分钟' },
-    { id: 'queue', label: '排队', value: healthUnavailable || (health?.queue == null ? '无队列' : numberText(health.queue)), hint: '实时' },
+    {
+      id: 'retry',
+      label: '重试率',
+      value: unavailable || percentOrDash(health?.retry_rate),
+      warn: Boolean(health?.retry_rate && health.retry_rate >= 0.05),
+    },
+    {
+      id: '429',
+      label: '上游 429 限流',
+      value: unavailable || percentOrDash(health?.upstream_429_rate),
+      warn: Boolean(health?.upstream_429_rate && health.upstream_429_rate > 0),
+    },
+    {
+      id: 'stream',
+      label: '流式中断率',
+      value: unavailable || percentOrDash(health?.stream_interrupt_rate),
+      warn: Boolean(health?.stream_interrupt_rate && health.stream_interrupt_rate >= 0.02),
+    },
+    {
+      id: 'capacity',
+      label: '实时并发容量',
+      value: unavailable || `${cap}${queueSuffix}`,
+      warn: Boolean(health?.capacity_occupancy && health.capacity_occupancy >= 0.8),
+    },
   ]
 })
 
-function capacityText(health: GatewayHealthSummary['metrics'] | undefined): string {
-  if (!health || health.active == null) return '采集失败'
-  return `${numberText(health.active)} / ${health.capacity_limit == null ? '不限' : numberText(health.capacity_limit)}`
-}
-
+// ── 工具函数 ──────────────────────────────────────────────────────────
 function numberText(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value)
 }
 function percentText(value: number): string {
-  return `${(value * 100).toFixed(2)}%`
+  return `${(value * 100).toFixed(value >= 0.1 ? 1 : 2)}%`
 }
-function percentOrEmpty(value: number | null | undefined): string {
-  return value == null ? '暂无数据' : percentText(value)
+function percentOrDash(value: number | null | undefined): string {
+  return value == null ? '—' : percentText(value)
 }
-function msOrEmpty(value: number | null | undefined): string {
-  return value == null ? '暂无数据' : `${Math.round(value)} ms`
+function formatLatency(ms: number): string {
+  if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`
+  return `${Math.round(ms)} ms`
 }
-function throughputOrEmpty(value: number | null | undefined): string {
-  return value == null ? '暂无数据' : `${value.toFixed(2)} token/s`
+function occupancyPercent(row: GatewayNodeMetric): number {
+  if (row.occupancy === null) return 0
+  return Math.min(100, Math.max(0, Math.round(row.occupancy * 100)))
 }
-function loadText(row: GatewayNodeMetric): string {
+function occupancyTone(row: GatewayNodeMetric): string {
+  if (row.occupancy === null) return ''
+  if (row.occupancy >= 0.85) return 'is-danger'
+  if (row.occupancy >= 0.65) return 'is-warn'
+  return ''
+}
+function loadCompactText(row: GatewayNodeMetric): string {
   if (row.active === null) return '采集失败'
-  const share = row.occupancy === null ? '不限' : percentText(row.occupancy)
-  const queue = row.queue === null ? '无队列' : `排队 ${row.queue}`
-  return `${share} · ${row.active}${row.capacity_limit ? `/${row.capacity_limit}` : ''} · ${queue}`
+  const cap = row.capacity_limit ? `${row.active}/${row.capacity_limit}` : `${row.active}/不限`
+  return row.queue ? `${cap} · 排队 ${row.queue}` : cap
 }
 function healthTag(value: string): 'success' | 'danger' | 'info' {
   if (value === 'healthy') return 'success'
@@ -393,19 +862,44 @@ function schedulingTag(value: string): 'success' | 'danger' | 'warning' | 'info'
   if (value === 'limited' || value === 'half_open') return 'warning'
   return 'info'
 }
-async function showAbnormal() {
-  abnormalOnly.value = true
+
+async function scrollToNodes(filter: 'all' | 'abnormal' | 'healthy') {
+  nodeFilter.value = filter
   await nextTick()
-  nodesCard.value?.$el?.scrollIntoView({ block: 'start' })
+  nodesCard.value?.$el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
+async function showAbnormal() {
+  await scrollToNodes('abnormal')
+}
+async function scrollToInstances() {
+  await nextTick()
+  instancesCard.value?.$el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 function openNodeLogs(row: GatewayNodeMetric) {
   const end = new Date()
-  const start = new Date(end.getTime() - 5 * 60 * 1000)
+  const start = new Date(end.getTime() - 15 * 60 * 1000)
   void router.push({
     path: '/gateway/logs',
     query: { node_id: row.node_id, from: start.toISOString(), to: end.toISOString() },
   })
 }
+
+function formatEventSummary(event: GatewayOpsEvent): string {
+  if (event.source !== 'config') return event.summary
+  const parts = event.summary.split(' · ')
+  if (parts.length < 2) return event.summary
+  const action = auditActionLabel(parts[0].trim())
+  const rest = parts.slice(1).join(' · ').trim()
+  const [resType, ...idParts] = rest.split(/\s+/)
+  const id = idParts.join(' ')
+  const resLabel = auditResourceTypeLabel(resType)
+  if (action !== parts[0].trim()) {
+    return id ? `${action} · ${id}` : `${action} · ${resLabel}`
+  }
+  return event.summary
+}
+
 function openEventLogs(event: GatewayOpsEvent) {
   const at = new Date(event.created_at).getTime()
   const start = new Date(at - 5 * 60 * 1000)
@@ -468,7 +962,6 @@ function unavailableHealth(reason: string): GatewayHealthSummary {
 function isAbort(reason: unknown): boolean {
   return reason instanceof Error && reason.name === 'AbortError'
 }
-
 function permissionDenied(reason: unknown): boolean {
   return reason instanceof GatewayApiError && (reason.status === 401 || reason.status === 403)
 }
@@ -501,12 +994,12 @@ async function load(silent: boolean) {
       error.value = healthError.value
     }
     if (stale()) return
-    statsLoading.value = true
-    const [nodeRows, eventRows, trendValue, statsValue] = await Promise.allSettled([
+    const [nodeRows, eventRows, trendValue, statsValue, instanceRows] = await Promise.allSettled([
       gatewayApi.nodeMetrics(signal),
       gatewayApi.opsEvents(40, signal),
       gatewayApi.trends(statsWindow.value, groupBy.value, signal),
       gatewayApi.stats('overview', statsWindow.value),
+      gatewayApi.instances(),
     ])
     if (stale()) return
     if (nodeRows.status === 'fulfilled') {
@@ -537,6 +1030,12 @@ async function load(silent: boolean) {
       statsPermission.value = permissionDenied(statsValue.reason)
       statsError.value = errorMessage(statsValue.reason, '统计指标加载失败')
     }
+    if (instanceRows.status === 'fulfilled') {
+      instances.value = instanceRows.value
+      instancesError.value = ''
+    } else if (!isAbort(instanceRows.reason)) {
+      instancesError.value = errorMessage(instanceRows.reason, 'Gateway 实例加载失败')
+    }
     statsLoading.value = false
   } finally {
     if (seq === loadSeq) {
@@ -554,6 +1053,7 @@ watch(statsWindow, () => {
   void load(false)
 })
 watch(groupBy, () => { void load(true) })
+
 onMounted(() => {
   void load(false)
   timer = window.setInterval(() => { void load(true) }, 30_000)
@@ -566,118 +1066,242 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* 运行总览：状态 → 核心指标 → 节点与事件 → 调用趋势 → 辅助指标。
-   卡片之间统一 16px 间距，卡片标题区统一「标题 + 一句范围说明」两行结构。 */
-.gateway-overview { display: flex; flex-direction: column; gap: 16px; padding-bottom: 8px; }
-.gateway-overview__window { width: 112px; }
-.gateway-overview__window-label { color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
+.ov-page { display: flex; flex-direction: column; gap: 14px; padding-bottom: 12px; }
+.ov-window-group { flex: none; }
 
-/* ── 服务状态 ─────────────────────────────────────────────────────── */
-.gateway-overview__status {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 16px;
+/* ── Layer 1: 服务态势条 ─────────────────────────────────────────── */
+.ov-status {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px;
+  padding: 11px 16px;
   border: 1px solid var(--astra-border);
-  border-radius: 8px;
-  background: var(--astra-bg-base);
+  border-left: 3px solid var(--astra-neutral);
+  border-radius: 10px;
+  background: var(--astra-bg-panel);
 }
+.ov-status[data-status='normal'] { border-left-color: var(--astra-success); }
+.ov-status[data-status='degraded'] { border-left-color: var(--astra-warning); }
+.ov-status[data-status='down'] { border-left-color: var(--astra-danger); }
 
-.gateway-overview__status-copy { display: grid; flex: 1 1 auto; gap: 2px; min-width: 0; }
-.gateway-overview__impact { margin: 0; color: var(--astra-text-primary); font-weight: 600; }
-.gateway-overview__reasons { margin: 0; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); }
+.ov-status__left { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; min-width: 0; flex: 1 1 auto; }
+.ov-status__badge { flex: none; font-size: 13px; }
+.ov-status__copy { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.ov-status__impact { margin: 0; color: var(--astra-text-primary); font-size: 13px; font-weight: 600; }
+.ov-status__reasons { margin: 0; color: var(--astra-text-muted); font-size: 12px; }
+.ov-status__chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.ov-impact-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--astra-border);
+  border-radius: 999px;
+  background: var(--astra-bg-subtle);
+  color: var(--astra-text-secondary);
+  font-size: 12px;
+  text-decoration: none;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.ov-impact-chip:hover { border-color: var(--astra-border-hover); color: var(--astra-text-primary); }
+.ov-impact-chip__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--astra-danger); }
+.ov-impact-chip__dot[data-state='degraded'] { background: var(--astra-warning); }
+.ov-impact-more { color: var(--astra-text-muted); font-size: 12px; }
 
-/* ── 核心指标 ─────────────────────────────────────────────────────── */
-.gateway-overview__metrics {
-  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
-  border: 1px solid var(--astra-border); border-radius: 12px;
-  background: var(--astra-bg-panel); overflow: hidden;
+.ov-status__right { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; flex: none; }
+.ov-pulse-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--astra-border);
+  border-radius: 999px;
+  background: var(--astra-bg-subtle);
+  color: var(--astra-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
-.gateway-overview__metric { border-radius: 0; background: transparent; }
-.gateway-overview__metric:not(:first-child) { border-left: 1px solid var(--astra-border); }
-.gateway-overview__metric :deep(.el-card__body) { display: grid; gap: 4px; padding: 16px; }
-.gateway-overview__metric-label {
-  margin: 0; color: var(--astra-text-secondary); font-size: 12px; line-height: 16px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.ov-pulse-pill:hover { border-color: var(--astra-border-hover); background: var(--astra-bg-panel); color: var(--astra-text-primary); }
+.ov-pulse-pill b { color: var(--astra-text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ov-pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--astra-neutral); }
+.ov-pulse-dot.is-ok { background: var(--astra-success); }
+.ov-pulse-dot.is-warn { background: var(--astra-warning); }
+
+/* ── Layer 2: 四大支柱 KPI ───────────────────────────────────────── */
+.ov-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.ov-kpi {
+  display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--astra-border);
+  border-radius: 12px;
+  background: var(--astra-bg-panel);
+  min-width: 0;
 }
-.gateway-overview__metric-value {
-  margin: 0; color: var(--astra-text-primary);
-  font-size: 26px; line-height: 32px; font-weight: var(--astra-weight-bold);
+.ov-kpi__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ov-kpi__label { color: var(--astra-text-secondary); font-size: 12px; font-weight: 500; }
+.ov-kpi__tag {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--astra-bg-subtle);
+  color: var(--astra-text-muted);
+  font-size: 11px;
+}
+.ov-kpi__value {
+  display: flex; align-items: baseline; gap: 4px;
+  color: var(--astra-text-primary);
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.gateway-overview__metric-value small { color: var(--astra-text-secondary); font-size: 12px; font-weight: 400; }
-.gateway-overview__metric-window { margin: 0; color: var(--astra-text-muted); font-size: 11px; }
-.gateway-overview__metric--empty .gateway-overview__metric-value { color: var(--astra-text-muted); font-size: 14px; }
+.ov-kpi__value small { color: var(--astra-text-muted); font-size: 13px; font-weight: 500; letter-spacing: 0; }
+.ov-kpi__value.is-muted { color: var(--astra-text-muted); }
+.ov-kpi__value.is-bad { color: var(--astra-danger); }
+.ov-kpi__foot { display: grid; gap: 6px; color: var(--astra-text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ov-kpi__foot b { color: var(--astra-text-secondary); font-weight: 600; }
+.ov-kpi__foot b.is-danger { color: var(--astra-danger); }
 
-/* ── 趋势与事件 ───────────────────────────────────────────────────── */
-.gateway-overview__split { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); gap: 16px; align-items: stretch; }
-/* 网关壳会去掉内层卡片的边框与左右内边距；总览需要靠卡片分组，这里恢复边框与内边距。 */
-.gateway-overview__split :deep(.el-card),
-.gateway-overview .gateway-overview__trend {
-  border: 1px solid var(--astra-border); border-radius: 12px; background: var(--astra-bg-panel);
+.ov-ratio-bar {
+  display: flex; height: 4px; width: 100%; overflow: hidden;
+  border-radius: 999px; background: var(--astra-bg-elevated);
 }
-.gateway-overview :deep(.el-card) > .el-card__header { padding-left: 16px; padding-right: 16px; }
-.gateway-overview :deep(.el-card) > .el-card__body { padding-left: 16px; padding-right: 16px; }
-.gateway-overview__card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.gateway-overview__card-title { min-width: 0; }
-.gateway-overview__card-title h4 { margin: 0; color: var(--astra-text-primary); font-size: 14px; line-height: 20px; }
-.gateway-overview__card-sub { margin: 2px 0 0; color: var(--astra-text-muted); font-size: 12px; line-height: 18px; }
-.gateway-overview__trend-tools { display: flex; flex: none; flex-wrap: wrap; gap: 8px; }
-.gateway-overview__group { width: 120px; }
-.gateway-overview__trend :deep(.el-card__body) { padding-top: 12px; }
-.gateway-overview__trend :deep(.el-alert) { margin-bottom: 8px; }
+.ov-ratio-bar__ok { background: var(--astra-success); }
+.ov-ratio-bar__err { background: var(--astra-danger); }
+.ov-ratio-bar__in { background: var(--astra-info); }
+.ov-ratio-bar__out { background: #3f3f46; }
 
-.gateway-overview__events :deep(.el-card__body) { padding-top: 4px; }
-.gateway-overview__event-count { flex: none; color: var(--astra-text-muted); font-size: 12px; }
-.gateway-overview__event-list {
-  display: grid; gap: 0; margin: 0; padding: 0; list-style: none;
-  max-height: 316px; overflow-y: auto;
+/* ── 卡片公共框架 ────────────────────────────────────────────────── */
+.ov-page :deep(.ov-card) {
+  border: 1px solid var(--astra-border);
+  border-radius: 12px;
+  background: var(--astra-bg-panel);
 }
-.gateway-overview__event-list li { border-bottom: 1px solid var(--astra-border); }
-.gateway-overview__event-list li:last-child { border-bottom: none; }
-.gateway-overview__event-list button {
+.ov-page :deep(.ov-card) > .el-card__header { padding: 13px 16px; border-bottom: 1px solid var(--astra-border-subtle); }
+.ov-page :deep(.ov-card) > .el-card__body { padding: 14px 16px; }
+
+.ov-card__head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; }
+.ov-card__title { min-width: 0; }
+.ov-card__title h4 { margin: 0; color: var(--astra-text-primary); font-size: 14px; font-weight: 600; line-height: 20px; }
+.ov-card__sub { margin: 2px 0 0; color: var(--astra-text-muted); font-size: 12px; line-height: 16px; }
+.ov-card__tools { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.ov-link { color: var(--astra-accent-text); font-size: 12px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+.ov-link:hover { color: var(--astra-accent-hover); text-decoration: underline; }
+.ov-count-pill {
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--astra-bg-subtle); border: 1px solid var(--astra-border);
+  color: var(--astra-text-secondary); font-size: 12px; font-variant-numeric: tabular-nums;
+}
+
+/* ── Layer 3: 趋势图 + 延迟剖析双栏 ─────────────────────────────── */
+.ov-main-grid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(330px, 1fr); gap: 14px; align-items: stretch; }
+.ov-trend-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.ov-select-sm { width: 102px; }
+.ov-select-md { width: 144px; }
+
+.ov-chart-empty {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  height: 248px;
+  border-radius: 8px;
+  background: var(--astra-bg-subtle);
+  border: 1px dashed var(--astra-border);
+  overflow: hidden;
+}
+.ov-chart-empty__grid {
+  position: absolute; inset: 24px 20px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  pointer-events: none;
+}
+.ov-chart-empty__grid span { display: block; height: 1px; border-top: 1px dashed var(--astra-border); opacity: 0.65; }
+.ov-chart-empty__body {
+  position: relative; z-index: 1;
+  display: grid; gap: 6px; justify-items: center; text-align: center;
+  padding: 12px 20px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--astra-border-subtle);
+}
+.ov-chart-empty__title { margin: 0; color: var(--astra-text-secondary); font-size: 13px; font-weight: 500; }
+
+/* 延迟剖析 */
+.ov-latency-list { display: grid; gap: 11px; }
+.ov-latency-row { display: grid; gap: 5px; }
+.ov-latency-row__top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12px; }
+.ov-latency-row__label { color: var(--astra-text-secondary); }
+.ov-latency-row__val { color: var(--astra-text-primary); font-family: var(--astra-font-mono); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ov-latency-row__val.is-muted { color: var(--astra-text-muted); font-weight: 400; }
+.ov-latency-row__track { height: 6px; border-radius: 999px; background: var(--astra-bg-elevated); overflow: hidden; }
+.ov-latency-row__fill { display: block; height: 100%; border-radius: 999px; background: #71717a; transition: width 0.2s ease; }
+.ov-latency-row__fill.tone-1 { background: #a1a1aa; }
+.ov-latency-row__fill.tone-2 { background: #71717a; }
+.ov-latency-row__fill.tone-3 { background: var(--astra-info); }
+.ov-latency-row__fill.tone-4 { background: var(--astra-primary); }
+
+.ov-divider { height: 1px; background: var(--astra-border-subtle); margin: 14px 0 12px; }
+
+.ov-stability { display: grid; gap: 8px; }
+.ov-stability__head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--astra-text-secondary); font-weight: 500; }
+.ov-stability__cap { color: var(--astra-text-muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.ov-stability__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ov-stability__cell {
+  display: grid; gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--astra-border-subtle);
+  border-radius: 8px;
+  background: var(--astra-bg-subtle);
+}
+.ov-stability__label { color: var(--astra-text-muted); font-size: 11px; }
+.ov-stability__val { color: var(--astra-text-primary); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ov-stability__val.is-warn { color: var(--astra-warning); }
+
+/* ── Layer 4A: 节点运行矩阵 ──────────────────────────────────────── */
+.ov-nodes-card { scroll-margin-top: 8px; }
+.ov-nodes-card :deep(.el-card__body) { padding-top: 6px; }
+.ov-node-cell { display: grid; gap: 2px; min-width: 0; }
+.ov-node-link { color: var(--astra-accent-text); font-weight: 600; font-size: 13px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-node-link:hover { color: var(--astra-accent-hover); text-decoration: underline; }
+.ov-node-pool { color: var(--astra-text-muted); font-size: 12px; }
+.ov-state-tags { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; }
+
+.ov-load-cell { display: flex; align-items: center; gap: 8px; }
+.ov-load-bar { width: 52px; height: 6px; flex: none; border-radius: 999px; background: var(--astra-bg-elevated); overflow: hidden; }
+.ov-load-bar i { display: block; height: 100%; border-radius: 999px; background: var(--astra-primary); }
+.ov-load-bar i.is-warn { background: var(--astra-warning); }
+.ov-load-bar i.is-danger { background: var(--astra-danger); }
+
+.ov-num { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--astra-text-secondary); white-space: nowrap; }
+.ov-num.is-danger { color: var(--astra-danger); font-weight: 600; }
+.ov-mono { font-family: var(--astra-font-mono); font-size: 12px; color: var(--astra-text-primary); }
+
+/* ── Layer 4B: 底部双栏（实例 + 最近动态） ───────────────────────── */
+.ov-bottom-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr); gap: 14px; align-items: stretch; }
+.ov-instances-card { scroll-margin-top: 8px; }
+.ov-instances-card :deep(.el-card__body),
+.ov-events-card :deep(.el-card__body) { padding-top: 8px; }
+.ov-inst-cell { display: grid; gap: 2px; min-width: 0; }
+.ov-inst-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-inst-meta { color: var(--astra-text-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.ov-inst-status { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+.ov-event-list {
+  display: grid; margin: 0; padding: 0; list-style: none;
+  max-height: 248px; overflow-y: auto;
+}
+.ov-event-list li { border-bottom: 1px solid var(--astra-border-subtle); }
+.ov-event-list li:last-child { border-bottom: none; }
+.ov-event-list button {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px;
-  width: 100%; padding: 8px;
+  width: 100%; padding: 7px 6px;
   border: 0; border-radius: 6px; background: transparent;
   color: var(--astra-text-primary); text-align: left; cursor: pointer;
 }
-.gateway-overview__event-list button:hover { background: var(--astra-bg-elevated); }
-.gateway-overview__event-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gateway-overview__event-list time { color: var(--astra-text-muted); font-size: 11px; white-space: nowrap; }
+.ov-event-list button:hover { background: var(--astra-bg-subtle); }
+.ov-event-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.ov-event-list time { color: var(--astra-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ov-muted-empty { margin: 14px 0; color: var(--astra-text-muted); font-size: 13px; text-align: center; }
 
-/* ── 节点与资源池 ─────────────────────────────────────────────────── */
-.gateway-overview__nodes-card { scroll-margin-top: 8px; }
-.gateway-overview__nodes-card :deep(.el-card__body) { padding-top: 4px; }
-.gateway-overview__node { color: var(--astra-primary-bright); font-weight: var(--astra-weight-bold); text-decoration: none; }
-.gateway-overview__sub { display: block; color: var(--astra-text-secondary); font-size: var(--astra-font-helper); }
-
-/* ── 辅助指标 ─────────────────────────────────────────────────────── */
-.gateway-overview__details { border: 1px solid var(--astra-border); border-radius: 12px; background: var(--astra-bg-panel); overflow: hidden; }
-.gateway-overview__details summary { display: flex; align-items: center; gap: 8px; padding: 12px 16px; cursor: pointer; color: var(--astra-text-primary); font-size: 14px; font-weight: var(--astra-weight-bold); list-style: none; }
-.gateway-overview__details summary::-webkit-details-marker { display: none; }
-.gateway-overview__details summary::before { content: '▸'; color: var(--astra-text-muted); }
-.gateway-overview__details[open] summary::before { transform: rotate(90deg); }
-.gateway-overview__detail-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 0 16px 16px; }
-.gateway-overview__detail { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--astra-border); border-radius: 8px; background: var(--astra-bg-elevated); }
-.gateway-overview__detail span { color: var(--astra-text-muted); font-size: 11px; }
-.gateway-overview__detail strong { color: var(--astra-text-primary); font-size: 14px; font-variant-numeric: tabular-nums; }
-.gateway-overview__detail small { color: var(--astra-text-muted); font-size: 10px; }
-
-@media (max-width: 1400px) {
-  .gateway-overview__metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .gateway-overview__metric { border-left: 0; border-top: 0; }
-  .gateway-overview__metric:not(:nth-child(3n + 1)) { border-left: 1px solid var(--astra-border); }
-  .gateway-overview__metric:nth-child(n + 4) { border-top: 1px solid var(--astra-border); }
+@media (max-width: 1240px) {
+  .ov-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ov-main-grid, .ov-bottom-grid { grid-template-columns: 1fr; }
 }
-@media (max-width: 1100px) {
-  .gateway-overview__split { grid-template-columns: 1fr; }
-  .gateway-overview__detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 760px) {
-  .gateway-overview__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .gateway-overview__metric { border-left: 0; border-top: 0; }
-  .gateway-overview__metric:not(:nth-child(2n + 1)) { border-left: 1px solid var(--astra-border); }
-  .gateway-overview__metric:nth-child(n + 3) { border-top: 1px solid var(--astra-border); }
-  .gateway-overview__status { align-items: flex-start; flex-wrap: wrap; }
-  .gateway-overview__detail-grid { grid-template-columns: 1fr; }
+@media (max-width: 720px) {
+  .ov-kpis { grid-template-columns: 1fr; }
 }
 </style>

@@ -1,9 +1,22 @@
 <template>
-  <div v-if="error" class="conversation-load-error" role="alert">
-    {{ error }} <el-button size="small" @click="open">重试</el-button>
+  <div class="conversation-shell">
+    <div ref="host" class="conversation-host" />
+
+    <div v-if="loading" class="conversation-overlay" role="status">
+      <div class="conversation-loading">
+        <Loader2 class="conversation-spinner" :size="18" :stroke-width="1.8" />
+        <span>正在连接对话…</span>
+      </div>
+    </div>
+
+    <div v-else-if="error" class="conversation-overlay" role="alert">
+      <div class="conversation-error-card">
+        <AlertCircle class="conversation-error-icon" :size="20" :stroke-width="1.7" />
+        <p class="conversation-error-title">{{ error }}</p>
+        <el-button size="small" @click="open">重新加载</el-button>
+      </div>
+    </div>
   </div>
-  <p v-if="loading" class="conversation-load-error" role="status">正在打开对话…</p>
-  <div ref="host" class="conversation-host" />
 </template>
 
 <script lang="ts">
@@ -55,6 +68,7 @@ export function loadConversationBundle() {
 </script>
 
 <script setup lang="ts">
+import { AlertCircle, Loader2 } from "lucide-vue-next";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import type { ConversationProps } from "../../../../shared/conversation";
 
@@ -83,6 +97,73 @@ onBeforeUnmount(() => { disposed = true; unmount?.(); });
 </script>
 
 <style scoped>
-.conversation-host { display: flex; flex: 1; flex-direction: column; min-block-size: 0; min-inline-size: 0; }
-.conversation-load-error { margin: 20px 24px; color: var(--astra-text-secondary); }
+.conversation-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.conversation-host {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.conversation-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--astra-bg-panel);
+  z-index: 2;
+}
+
+.conversation-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--astra-text-muted);
+  font-size: 13px;
+}
+
+.conversation-spinner {
+  color: var(--astra-text-secondary);
+  animation: conversation-spin 0.9s linear infinite;
+}
+
+.conversation-error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 320px;
+  padding: 20px 24px;
+  border: 1px solid var(--astra-border);
+  border-radius: 12px;
+  background: var(--astra-bg-subtle);
+  text-align: center;
+}
+
+.conversation-error-icon {
+  color: var(--astra-danger);
+}
+
+.conversation-error-title {
+  margin: 0;
+  color: var(--astra-text-primary);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+@keyframes conversation-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 </style>

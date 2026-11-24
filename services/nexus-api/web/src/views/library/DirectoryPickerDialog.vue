@@ -120,7 +120,7 @@ function confirm(): void {
 
 <style>
 .directory-picker-dialog .directory-picker{display:grid;gap:12px}
-.directory-picker-dialog .directory-picker .el-tree{--el-tree-node-content-height:38px;max-height:min(430px,55vh);overflow:auto;padding:5px;border:1px solid var(--astra-border);border-radius:10px;background:#fbfdfc}
+.directory-picker-dialog .directory-picker .el-tree{--el-tree-node-content-height:38px;max-height:min(430px,55vh);overflow:auto;padding:5px;border:1px solid var(--astra-border);border-radius:10px;background:var(--astra-bg-subtle)}
 .directory-picker-dialog .directory-node{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
 .directory-picker-dialog .directory-node__copy{display:grid;min-width:0;flex:1}
 .directory-picker-dialog .directory-node__copy strong,.directory-picker-dialog .directory-node__copy small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

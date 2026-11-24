@@ -42,8 +42,8 @@ defineEmits<{ (e: 'save'): void; (e: 'cancel'): void }>()
   gap: 16px;
   padding: 12px 28px;
   border-top: 1px solid var(--astra-border);
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 -12px 30px rgba(28, 58, 49, 0.1);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -10px 28px rgba(9, 9, 11, 0.08);
   backdrop-filter: blur(12px);
 }
 .sticky-action-bar__status {

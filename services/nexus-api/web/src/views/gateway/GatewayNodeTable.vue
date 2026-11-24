@@ -7,52 +7,81 @@
     row-key="id"
     data-testid="gateway-node-table"
   >
-    <ElTableColumn label="节点名称 / 地址" min-width="200">
+    <ElTableColumn label="节点名称 / 地址" min-width="170">
       <template #default="{ row }">
         <RouterLink class="node-cell" :to="`/gateway/nodes/${row.id}`">
           <strong>{{ row.name }}</strong>
-          <span class="node-cell__url mono">{{ row.base_url }}</span>
+          <span class="node-cell__url mono" :title="row.base_url">{{ row.base_url }}</span>
         </RouterLink>
       </template>
     </ElTableColumn>
-    <ElTableColumn label="所属资源池" width="130">
+    <ElTableColumn label="类型" width="84">
       <template #default="{ row }">
-        <ElTag v-if="row.pool_id" size="small" type="info">{{ poolName(row.pool_id) }}</ElTag>
+        <ElTag size="small" type="info" class="astra-tag--neutral">{{ probeStrategyLabel(row.probe_strategy) }}</ElTag>
+      </template>
+    </ElTableColumn>
+    <ElTableColumn label="资源池" width="96" show-overflow-tooltip>
+      <template #default="{ row }">
+        <span v-if="row.pool_id" class="node-pool-name">{{ poolName(row.pool_id) }}</span>
         <span v-else class="node-cell__empty">未分配</span>
       </template>
     </ElTableColumn>
-    <ElTableColumn label="支持模型" min-width="180">
+    <ElTableColumn label="支持模型" min-width="176">
       <template #default="{ row }">
-        <div class="node-models">
-          <ElTag v-for="model in row.models" :key="model" size="small" effect="plain" class="node-model-tag">
+        <div v-if="row.models.length" class="node-models">
+          <ElTag
+            v-for="model in row.models.slice(0, 3)"
+            :key="model"
+            size="small"
+            type="info"
+            class="astra-tag--neutral node-model-tag mono"
+          >
             {{ model }}
           </ElTag>
-          <span v-if="!row.models.length" class="node-cell__empty">未配置</span>
+          <ElTooltip v-if="row.models.length > 3" placement="top" :content="row.models.join('、')">
+            <ElTag size="small" type="info" class="astra-tag--neutral node-model-more">+{{ row.models.length - 3 }}</ElTag>
+          </ElTooltip>
+        </div>
+        <span v-else class="node-cell__empty">未配置</span>
+      </template>
+    </ElTableColumn>
+    <ElTableColumn label="运行状态" width="152">
+      <template #default="{ row }">
+        <div class="node-states">
+          <ElTag
+            size="small"
+            :type="tagType(healthTone(row.health_state))"
+            :class="{ 'astra-tag--neutral': healthTone(row.health_state) === 'neutral' }"
+          >
+            {{ healthStateLabel(row.health_state) }}
+          </ElTag>
+          <ElTag
+            size="small"
+            :type="tagType(schedulingTone(row.scheduling_state))"
+            :class="{ 'astra-tag--neutral': schedulingTone(row.scheduling_state) === 'neutral' }"
+          >
+            {{ schedulingStateLabel(row.scheduling_state) }}
+          </ElTag>
         </div>
       </template>
     </ElTableColumn>
-    <ElTableColumn label="健康状态" width="95" align="center">
+    <ElTableColumn label="权重 / 并发" width="88" align="center">
       <template #default="{ row }">
-        <ElTag size="small" :type="tagType(healthTone(row.health_state))">
-          {{ healthStateLabel(row.health_state) }}
-        </ElTag>
+        <span class="node-weight">{{ row.weight }} / {{ row.max_concurrency || '不限' }}</span>
       </template>
     </ElTableColumn>
-    <ElTableColumn label="调度状态" width="105" align="center">
+    <ElTableColumn label="启用" width="60" align="center">
       <template #default="{ row }">
-        <ElTag size="small" :type="tagType(schedulingTone(row.scheduling_state))">
-          {{ schedulingStateLabel(row.scheduling_state) }}
-        </ElTag>
+        <ElSwitch
+          size="small"
+          :model-value="row.config_state === 'ENABLED'"
+          :disabled="busyId === row.id"
+          :aria-label="row.config_state === 'ENABLED' ? `禁用 ${row.name}` : `启用 ${row.name}`"
+          @change="$emit('toggle-config', row as GatewayNode)"
+        />
       </template>
     </ElTableColumn>
-    <ElTableColumn label="配置" width="85" align="center">
-      <template #default="{ row }">
-        <ElTag size="small" :type="row.config_state === 'ENABLED' ? 'success' : 'info'">
-          {{ configStateLabel(row.config_state) }}
-        </ElTag>
-      </template>
-    </ElTableColumn>
-    <ElTableColumn label="操作" width="200" align="center" fixed="right">
+    <ElTableColumn label="操作" width="184" align="center" fixed="right">
       <template #default="{ row }">
         <div class="admin-actions">
           <ElButton link type="primary" :disabled="busyId === row.id" @click="$emit('detail', row as GatewayNode)">详情</ElButton>
@@ -65,8 +94,7 @@
                 <ElDropdownItem :command="row.scheduling_state === 'ACTIVE' ? 'drain' : 'restore'">
                   {{ row.scheduling_state === 'ACTIVE' ? '安全下线' : '恢复调度' }}
                 </ElDropdownItem>
-                <ElDropdownItem command="toggle-config">{{ row.config_state === 'ENABLED' ? '禁用' : '启用' }}</ElDropdownItem>
-                <ElDropdownItem command="delete" divided>删除</ElDropdownItem>
+                <ElDropdownItem command="delete" divided>删除节点</ElDropdownItem>
               </ElDropdownMenu>
             </template>
           </ElDropdown>
@@ -81,15 +109,14 @@
 
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
-import { ElButton, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus'
+import { ElButton, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElSwitch, ElTable, ElTableColumn, ElTag, ElTooltip, vLoading } from 'element-plus'
 import type { GatewayNode, GatewayPool } from '@/api/gateway'
 import {
-  configStateLabel,
   healthStateLabel,
   healthTone,
+  probeStrategyLabel,
   schedulingStateLabel,
   schedulingTone,
-  serveSentence,
   type GatewayTone,
 } from '@/utils/gateway'
 
@@ -118,7 +145,6 @@ function poolName(poolId: string | null): string {
 function onNodeCommand(row: GatewayNode, command: string) {
   if (command === 'drain') emit('drain', row)
   else if (command === 'restore') emit('restore', row)
-  else if (command === 'toggle-config') emit('toggle-config', row)
   else if (command === 'delete') emit('delete', row)
 }
 
@@ -132,10 +158,16 @@ function tagType(tone: GatewayTone): 'success' | 'warning' | 'danger' | 'info' {
 
 <style scoped>
 .node-cell { display: grid; gap: 2px; min-width: 0; text-decoration: none; }
-.node-cell strong { color: var(--astra-text-primary); font-size: var(--astra-font-label); }
-.node-cell__url { color: var(--astra-text-muted); font-size: 11px; }
-.node-cell__url.mono { font-family: var(--astra-font-mono, monospace); }
+.node-cell strong { color: var(--astra-text-primary); font-size: var(--astra-font-label); font-weight: 600; }
+.node-cell:hover strong { color: var(--astra-accent-text); }
+.node-cell__url { color: var(--astra-text-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-cell__url.mono { font-family: var(--astra-font-mono); }
 .node-cell__empty { color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
-.node-models { display: flex; flex-wrap: wrap; gap: 4px; }
-.node-model-tag { font-size: 11px; padding: 0 6px; }
+.node-pool-name { color: var(--astra-text-secondary); font-size: var(--astra-font-helper); }
+.node-models { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.node-model-tag { font-size: 11px; padding: 0 6px; height: 22px; line-height: 20px; }
+.node-model-more { font-size: 11px; padding: 0 6px; height: 22px; line-height: 20px; cursor: default; }
+.node-states { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; }
+.gateway-node-table :deep(.admin-actions) { flex-wrap: nowrap; white-space: nowrap; }
+.node-weight { color: var(--astra-text-secondary); font-size: var(--astra-font-helper); font-variant-numeric: tabular-nums; }
 </style>

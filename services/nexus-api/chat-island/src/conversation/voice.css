@@ -4,8 +4,8 @@
 .nx-voice > button:disabled { opacity: .45; cursor: default; }
 .nc-compose-actions .nx-voice .nx-voice-settings { min-width: 24px; opacity: 0; }
 .nx-voice:hover .nx-voice-settings, .nx-voice:focus-within .nx-voice-settings { opacity: 1; }
-.nx-voice-status, .nx-voice-popover { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 4; width: max-content; max-width: 320px; background: white; border: 1px solid var(--astra-border); border-radius: 8px; padding: 10px 12px; color: var(--astra-text-primary); font-size: 13px; box-shadow: 0 3px 14px #18261b16; }
+.nx-voice-status, .nx-voice-popover { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 4; width: max-content; max-width: 320px; background: var(--astra-bg-panel, #ffffff); border: 1px solid var(--astra-border); border-radius: 10px; padding: 10px 12px; color: var(--astra-text-primary); font-size: 13px; box-shadow: var(--astra-shadow-float, 0 10px 28px rgba(9, 9, 11, 0.10)); }
 .nx-voice-popover { z-index: 5; }
 .nx-voice-popover label, .nx-voice-popover small { display: block; margin-bottom: 8px; }
 .nx-voice-popover input { display: block; width: 100%; margin-top: 6px; }
-.nx-voice-status button, .nx-voice-popover button { margin-left: 6px; border: 0; background: transparent; color: var(--astra-primary); cursor: pointer; }
+.nx-voice-status button, .nx-voice-popover button { margin-left: 6px; border: 0; background: transparent; color: var(--astra-accent-text, #1d4ed8); cursor: pointer; }

@@ -5,7 +5,7 @@
     data-testid="category-editor-drawer"
     :model-value="true"
     :title="isEdit ? '编辑任务分类' : '新增任务分类'"
-    size="min(560px, 100%)"
+    size="min(680px, 100%)"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :before-close="requestClose"
@@ -18,46 +18,66 @@
       label-position="top"
       scroll-to-error
     >
-      <ElFormItem label="分类名称" prop="name">
-        <ElInput v-model.trim="form.name" maxlength="120" placeholder="例如：质量防线" data-testid="category-form-name" />
-      </ElFormItem>
+      <div class="cat-pair">
+        <ElFormItem label="分类名称" prop="name">
+          <ElInput v-model.trim="form.name" maxlength="120" placeholder="例如：质量防线" data-testid="category-form-name" />
+        </ElFormItem>
+        <ElFormItem label="排序" prop="sort_order">
+          <ElInputNumber v-model="form.sort_order" style="width: 100%" :min="0" :step="10" :precision="0" controls-position="right" />
+        </ElFormItem>
+      </div>
 
       <ElFormItem label="描述" prop="description">
-        <ElInput v-model.trim="form.description" type="textarea" :rows="2" placeholder="例如：支付与结算" />
+        <ElInput v-model.trim="form.description" type="textarea" :rows="2" placeholder="可选，说明该分类涵盖的业务范围" />
       </ElFormItem>
 
-      <ElFormItem prop="sort_order">
-        <template #label>排序</template>
-        <ElInputNumber v-model="form.sort_order" class="category-editor-form__sort" :min="0" :step="10" :precision="0" controls-position="right" />
-      </ElFormItem>
+      <div class="cat-prompt-box">
+        <div class="cat-prompt-box__bar">
+          <ElRadioGroup v-model="promptTab" size="small" aria-label="Prompt 切换">
+            <ElRadioButton value="task">
+              任务 Prompt{{ form.task_prompt.trim() ? ' · 已填' : '' }}
+            </ElRadioButton>
+            <ElRadioButton value="question">
+              问题 Prompt{{ form.question_prompt.trim() ? ' · 已填' : '' }}
+            </ElRadioButton>
+          </ElRadioGroup>
+          <ElRadioGroup v-model="promptView" size="small" aria-label="编辑视图">
+            <ElRadioButton value="edit">编辑</ElRadioButton>
+            <ElRadioButton value="preview">预览</ElRadioButton>
+          </ElRadioGroup>
+        </div>
 
-      <ElFormItem label="启用" prop="enabled">
-        <ElSwitch v-model="form.enabled" active-text="启用" inactive-text="停用" />
-      </ElFormItem>
-
-      <ElFormItem label="任务 Prompt" prop="task_prompt">
-        <ElInput
-          v-model="form.task_prompt"
-          class="category-editor-form__prompt"
-          type="textarea"
-          :rows="8"
-          resize="vertical"
-          aria-label="任务 Prompt"
-          placeholder="任务 Prompt"
-        />
-      </ElFormItem>
-
-      <ElFormItem label="问题 Prompt" prop="question_prompt">
-        <ElInput
-          v-model="form.question_prompt"
-          class="category-editor-form__prompt"
-          type="textarea"
-          :rows="8"
-          resize="vertical"
-          aria-label="问题 Prompt"
-          placeholder="问题 Prompt"
-        />
-      </ElFormItem>
+        <template v-if="promptTab === 'task'">
+          <ElInput
+            v-if="promptView === 'edit'"
+            v-model="form.task_prompt"
+            class="cat-prompt-input"
+            type="textarea"
+            :rows="12"
+            resize="vertical"
+            aria-label="任务 Prompt"
+            placeholder="为该分类下的需求类任务定义执行约束与输出要求（支持 Markdown）"
+          />
+          <div v-else class="cat-prompt-preview">
+            <MarkdownView :content="form.task_prompt" compact empty-text="未填写任务 Prompt" />
+          </div>
+        </template>
+        <template v-else>
+          <ElInput
+            v-if="promptView === 'edit'"
+            v-model="form.question_prompt"
+            class="cat-prompt-input"
+            type="textarea"
+            :rows="12"
+            resize="vertical"
+            aria-label="问题 Prompt"
+            placeholder="为该分类下的问题排查类任务定义排查路径与规范（支持 Markdown）"
+          />
+          <div v-else class="cat-prompt-preview">
+            <MarkdownView :content="form.question_prompt" compact empty-text="未填写问题 Prompt" />
+          </div>
+        </template>
+      </div>
 
       <ElAlert
         v-if="error"
@@ -72,8 +92,9 @@
 
     <template #footer>
       <div class="category-editor-footer">
+        <ElSwitch v-model="form.enabled" active-text="启用此分类" />
         <ElSpace :size="8">
-          <ElTag v-if="dirty" type="warning" effect="light" data-testid="category-editor-dirty">有未保存修改</ElTag>
+          <ElTag v-if="dirty" size="small" type="warning" effect="light" data-testid="category-editor-dirty">有未保存修改</ElTag>
           <ElButton :disabled="saving" data-testid="category-editor-cancel" @click="requestClose">取消</ElButton>
           <ElButton type="primary" :loading="saving" data-testid="category-editor-submit" @click="submit">保存</ElButton>
         </ElSpace>
@@ -84,8 +105,9 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { ElAlert, ElButton, ElDrawer, ElForm, ElFormItem, ElInput, ElInputNumber, ElSpace, ElSwitch, ElTag } from 'element-plus'
+import { ElAlert, ElButton, ElDrawer, ElForm, ElFormItem, ElInput, ElInputNumber, ElRadioButton, ElRadioGroup, ElSpace, ElSwitch, ElTag } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import MarkdownView from '@/components/astra/MarkdownView.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import type { TaskCategory, TaskCategoryWrite } from '@/api/types'
 
@@ -93,12 +115,11 @@ const props = defineProps<{ open: boolean; category: TaskCategory | null; defaul
 const emit = defineEmits<{ close: []; save: [payload: TaskCategoryWrite] }>()
 
 const formRef = ref<FormInstance | null>(null)
+const promptTab = ref<'task' | 'question'>('task')
+const promptView = ref<'edit' | 'preview'>('edit')
 const form = reactive({ name: '', description: '', sort_order: 0, enabled: true, task_prompt: '', question_prompt: '' })
 const snapshot = ref('')
 const isEdit = computed(() => Boolean(props.category))
-// dirty 的有效范围就是抽屉本身：关闭时没有可丢失的内容（从未打开、已保存或已确认放弃）。
-// snapshot 只在打开时播种，没打开过就一直是初始空串，与 form 的默认值不等 ——
-// 不看 open 就会被判成「有未保存修改」，让路由守卫在没有任何改动时也弹放弃确认。
 const dirty = computed(() => props.open && JSON.stringify(form) !== snapshot.value)
 
 const rules: FormRules = {
@@ -120,13 +141,12 @@ watch(() => props.open, (open) => {
     task_prompt: category?.task_prompt ?? '',
     question_prompt: category?.question_prompt ?? '',
   })
+  promptTab.value = 'task'
+  promptView.value = 'edit'
   snapshot.value = JSON.stringify(form)
   formRef.value?.clearValidate()
 }, { immediate: true })
 
-// 抽屉是分类唯一的编辑入口：遮罩点击与 ESC 不关闭，只走显式取消，且有未保存内容时先二次确认。
-// before-close 不调用 done()，关闭始终由父级把 open 置为 false 驱动。
-// getDirty 供父级的路由离开守卫复用同一套 dirty 判定，避免两处各写一份。
 async function requestClose() {
   if (props.saving) return
   if (dirty.value) {
@@ -153,12 +173,28 @@ defineExpose({ getDirty: () => dirty.value })
 </script>
 
 <style scoped>
-/* footer 槽位内容写在本组件模板里，会带上 scoped 标记；直接用真实元素排版，
-   不用 .el-drawer :deep(.el-drawer__footer) —— 抽屉根节点由 Element Plus 渲染，
-   不带本组件的 data-v，:deep 选择器匹配不到。 */
-.category-editor-footer { display: flex; align-items: center; justify-content: flex-end; }
-.category-editor-form { display: grid; gap: 2px; }
-.category-editor-form__sort { width: 160px; }
-.category-editor-form__prompt :deep(.el-textarea__inner) { line-height: 1.6; }
-.category-editor-form__error { margin-top: 4px; }
+.category-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
+.category-editor-form { display: grid; gap: 4px; }
+.cat-pair { display: grid; grid-template-columns: 1.8fr 1fr; gap: 12px; }
+.cat-prompt-box {
+  display: grid; margin-top: 4px;
+  border: 1px solid var(--astra-border); border-radius: 10px; overflow: hidden;
+  background: var(--astra-bg-panel);
+}
+.cat-prompt-box__bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--astra-border);
+  background: var(--astra-bg-subtle);
+}
+.cat-prompt-input :deep(.el-textarea__inner) {
+  border: 0; border-radius: 0; box-shadow: none !important; padding: 12px 14px;
+  font-family: var(--astra-font-mono); font-size: 12.5px; line-height: 1.65;
+}
+.cat-prompt-preview { min-height: 260px; max-height: 46vh; overflow-y: auto; padding: 14px 16px; }
+.category-editor-form__error { margin-top: 10px; }
+
+@media (max-width: 600px) {
+  .cat-pair { grid-template-columns: 1fr; }
+}
 </style>

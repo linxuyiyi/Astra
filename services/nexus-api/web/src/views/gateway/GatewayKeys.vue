@@ -9,6 +9,16 @@
       <ElButton type="primary" :icon="Plus" data-testid="gateway-keys-create" @click="openCreate">新增 Key</ElButton>
     </GatewayHeaderActions>
 
+    <div class="gateway-endpoint-strip" data-testid="gateway-endpoint-strip">
+      <div class="gateway-endpoint-strip__left">
+        <Link2 :size="15" class="gateway-endpoint-strip__icon" />
+        <span class="gateway-endpoint-strip__label">接入地址</span>
+        <code class="gateway-endpoint-strip__url">{{ endpointUrl }}</code>
+        <span class="gateway-endpoint-strip__hint">OpenAI 兼容接口，使用下方 API Key 鉴权</span>
+      </div>
+      <ElButton size="small" :icon="Copy" @click="copyEndpoint">复制地址</ElButton>
+    </div>
+
     <div class="admin-page__toolbar" role="search" aria-label="Key 筛选" data-testid="gateway-keys-filter">
       <div class="admin-page__filters">
         <ElSelect v-model="filters.status" class="admin-page__select" data-testid="key-filter-status" aria-label="Key 状态筛选" placeholder="状态：全部" clearable>
@@ -40,32 +50,71 @@
       element-loading-text="正在加载 Key"
       data-testid="gateway-keys-table"
     >
-      <ElTableColumn label="名称" min-width="200">
+      <ElTableColumn label="名称 / 前缀" min-width="220">
         <template #default="{ row }">
           <div class="key-cell">
             <strong>{{ row.name }}</strong>
-            <span class="key-cell__id">{{ row.key_prefix }}… · {{ row.allowed_models.length ? row.allowed_models.join('、') : '全部模型' }}</span>
+            <div class="key-cell__meta">
+              <span class="key-prefix-chip">{{ row.key_prefix }}…</span>
+              <span class="key-cell__models" :title="row.allowed_models.length ? row.allowed_models.join('、') : '全部模型'">
+                {{ row.allowed_models.length ? row.allowed_models.join('、') : '全部模型' }}
+              </span>
+            </div>
           </div>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="归属" min-width="120" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.owner_id || '未指定' }}</template>
-      </ElTableColumn>
-      <ElTableColumn label="状态" width="96">
+      <ElTableColumn label="状态" width="92" align="center">
         <template #default="{ row }">
           <ElTag v-if="row.revoked_at" type="danger">已吊销</ElTag>
-          <ElTag v-else :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</ElTag>
+          <ElTag v-else-if="isExpired(row.expires_at)" type="warning">已过期</ElTag>
+          <ElTag
+            v-else
+            :type="row.enabled ? 'success' : 'info'"
+            :class="{ 'astra-tag--neutral': !row.enabled }"
+          >{{ row.enabled ? '启用' : '停用' }}</ElTag>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="额度与并发" min-width="180" show-overflow-tooltip>
-        <template #default="{ row }">并发 {{ row.max_concurrency || '不限' }} · 时/日 {{ tokenLimitText(row.hourly_token_limit) }}/{{ tokenLimitText(row.daily_token_limit) }}</template>
+      <ElTableColumn label="归属" min-width="100" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span :class="{ 'key-muted': !row.owner_id }">{{ row.owner_id || '—' }}</span>
+        </template>
       </ElTableColumn>
-      <ElTableColumn label="操作" width="190" align="center" fixed="right">
+      <ElTableColumn label="并发 / Token 限额" min-width="165" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span class="key-num">并发 {{ row.max_concurrency || '不限' }} · 时/日 {{ tokenLimitText(row.hourly_token_limit) }}/{{ tokenLimitText(row.daily_token_limit) }}</span>
+        </template>
+      </ElTableColumn>
+      <ElTableColumn label="最近使用" width="110">
+        <template #default="{ row }">
+          <span class="key-num" :class="{ 'key-muted': !row.last_used_at }">
+            {{ row.last_used_at ? formatRelativeTime(row.last_used_at) : '未使用' }}
+          </span>
+        </template>
+      </ElTableColumn>
+      <ElTableColumn label="有效期" width="150">
+        <template #default="{ row }">
+          <span
+            class="key-num"
+            :class="{
+              'key-muted': !row.expires_at,
+              'key-expired': isExpired(row.expires_at),
+            }"
+          >{{ formatShortDate(row.expires_at) }}</span>
+        </template>
+      </ElTableColumn>
+      <ElTableColumn label="操作" width="118" align="center" fixed="right">
         <template #default="{ row }">
           <div class="admin-actions">
             <ElButton link type="primary" :disabled="busy" @click="openEdit(row as GatewayKey)">编辑</ElButton>
-            <ElButton link type="warning" :disabled="busy || Boolean(row.revoked_at)" @click="revoke(row as GatewayKey)">吊销</ElButton>
-            <ElButton link type="danger" :disabled="busy" @click="removeKey(row as GatewayKey)">删除</ElButton>
+            <ElDropdown trigger="click" :disabled="busy" @command="(cmd) => onRowCommand(String(cmd), row as GatewayKey)">
+              <ElButton link type="primary" :disabled="busy">更多</ElButton>
+              <template #dropdown>
+                <ElDropdownMenu>
+                  <ElDropdownItem command="revoke" :disabled="Boolean(row.revoked_at)">吊销密钥</ElDropdownItem>
+                  <ElDropdownItem command="delete" divided class="key-danger-item">删除密钥</ElDropdownItem>
+                </ElDropdownMenu>
+              </template>
+            </ElDropdown>
           </div>
         </template>
       </ElTableColumn>
@@ -91,53 +140,69 @@
       class="gateway-drawer"
       data-testid="gateway-key-drawer"
       :model-value="true"
-      :title="form.id ? '编辑 Key' : '新增 Key'"
-      size="min(460px, 100%)"
+      :title="form.id ? '编辑 API Key' : '新增 API Key'"
+      size="min(500px, 100%)"
       :close-on-click-modal="false"
       :before-close="() => requestClose()"
     >
       <ElForm ref="formRef" class="key-form" :model="form" :rules="rules" label-position="top" scroll-to-error :disabled="saving">
-        <ElFormItem label="名称" prop="name">
-          <ElInput v-model="form.name" placeholder="例如 生产应用 Key" />
-        </ElFormItem>
-        <ElFormItem label="归属 ID" prop="owner_id">
-          <ElInput v-model="form.owner_id" placeholder="可选，例如 user-001" />
-        </ElFormItem>
-        <ElFormItem label="允许模型（留空为全部，逗号或换行分隔）" prop="allowed_models">
-          <ElInput v-model="form.allowed_models" type="textarea" :rows="2" placeholder="gpt-4o&#10;claude-3-5-sonnet" />
-        </ElFormItem>
-        <ElFormItem label="最大并发（0 为不限）" prop="max_concurrency">
-          <ElInput v-model="form.max_concurrency" type="number" min="0" />
-        </ElFormItem>
-        <ElFormItem label="每小时 Token 限额" prop="hourly">
-          <ElInput v-model="form.hourly" type="number" min="0" placeholder="不限" />
-        </ElFormItem>
-        <ElFormItem label="每日 Token 限额" prop="daily">
-          <ElInput v-model="form.daily" type="number" min="0" placeholder="不限" />
-        </ElFormItem>
-        <ElFormItem label="有效期至" prop="expires_at">
-          <ElDatePicker
-            v-model="form.expires_at"
-            type="datetime"
-            value-format="YYYY-MM-DDTHH:mm"
-            format="YYYY-MM-DD HH:mm"
-            placeholder="长期有效"
+        <div class="key-form-row">
+          <ElFormItem label="名称" prop="name">
+            <ElInput v-model="form.name" placeholder="例如：生产应用 Key" />
+          </ElFormItem>
+          <ElFormItem label="归属 ID（可选）" prop="owner_id">
+            <ElInput v-model="form.owner_id" placeholder="例如：team-ops" />
+          </ElFormItem>
+        </div>
+        <ElFormItem label="允许访问的模型" prop="allowed_models">
+          <ElSelect
+            v-model="form.allowed_models"
+            multiple
+            filterable
+            allow-create
+            default-first-option
             clearable
-            data-testid="gateway-key-expires"
-          />
+            placeholder="留空表示允许全部模型，可选择或输入模型名"
+            style="width: 100%"
+          >
+            <ElOption v-for="model in routeModelOptions" :key="model" :value="model" :label="model" />
+          </ElSelect>
         </ElFormItem>
-        <ElFormItem v-if="form.id" label="启用" prop="enabled">
-          <ElSwitch v-model="form.enabled" data-testid="gateway-key-enabled" />
-        </ElFormItem>
+        <div class="key-form-row key-form-row--three">
+          <ElFormItem label="最大并发" prop="max_concurrency">
+            <ElInput v-model="form.max_concurrency" type="number" min="0" placeholder="0 为不限" />
+          </ElFormItem>
+          <ElFormItem label="每小时 Token 限额" prop="hourly">
+            <ElInput v-model="form.hourly" type="number" min="0" placeholder="不限" />
+          </ElFormItem>
+          <ElFormItem label="每日 Token 限额" prop="daily">
+            <ElInput v-model="form.daily" type="number" min="0" placeholder="不限" />
+          </ElFormItem>
+        </div>
+        <div class="key-form-row">
+          <ElFormItem label="有效期至" prop="expires_at">
+            <ElDatePicker
+              v-model="form.expires_at"
+              type="datetime"
+              value-format="YYYY-MM-DDTHH:mm"
+              format="YYYY-MM-DD HH:mm"
+              placeholder="长期有效"
+              clearable
+              data-testid="gateway-key-expires"
+            />
+          </ElFormItem>
+          <ElFormItem v-if="form.id" label="启用状态" prop="enabled">
+            <ElSwitch v-model="form.enabled" data-testid="gateway-key-enabled" />
+          </ElFormItem>
+        </div>
         <ElAlert v-if="formError" type="error" show-icon :closable="false" :title="formError" data-testid="gateway-key-error" />
       </ElForm>
       <template #footer>
         <div class="gateway-drawer__footer">
           <ElTag v-if="dirty" type="warning" effect="light" data-testid="gateway-key-dirty">有未保存修改</ElTag>
-          <ElSpace :size="8">
-            <ElButton :disabled="saving" @click="requestClose">取消</ElButton>
-            <ElButton type="primary" :loading="saving" data-testid="gateway-key-save" @click="submit">保存</ElButton>
-          </ElSpace>
+          <span class="gateway-drawer__spacer" />
+          <ElButton :disabled="saving" @click="requestClose">取消</ElButton>
+          <ElButton type="primary" :loading="saving" data-testid="gateway-key-save" @click="submit">保存</ElButton>
         </div>
       </template>
     </ElDrawer>
@@ -147,14 +212,18 @@
       :model-value="true"
       class="gateway-key-plaintext"
       data-testid="gateway-key-plaintext"
-      title="Gateway Key 已创建"
+      title="API Key 已创建"
       width="min(560px, 92%)"
       :close-on-click-modal="false"
       :close-on-press-escape="false"
       @close="closePlaintext"
     >
-      <ElText type="info">请立即复制保存，关闭后无法再次查看原文。</ElText>
-      <ElAlert class="gateway-key-plaintext__warn" type="warning" show-icon :closable="false" title="库中只保存摘要，任何页面与日志都不会再显示该 Key。" />
+      <ElAlert
+        type="warning"
+        show-icon
+        :closable="false"
+        title="请立即复制保存，系统仅保存哈希摘要，关闭弹窗后无法再次查看原文。"
+      />
       <div v-if="createdKey" class="gateway-key-plaintext__row">
         <ElInput
           class="gateway-key-plaintext__value"
@@ -163,6 +232,10 @@
           data-testid="gateway-key-plaintext-value"
         />
         <ElButton :icon="Copy" data-testid="gateway-key-copy" @click="copyCreatedKey">复制</ElButton>
+      </div>
+      <div class="gateway-key-plaintext__endpoint">
+        <span>接入地址</span>
+        <code>{{ endpointUrl }}</code>
       </div>
       <template #footer>
         <ElButton type="primary" data-testid="gateway-key-plaintext-done" @click="closePlaintext">我已保存</ElButton>
@@ -173,7 +246,7 @@
 
 <script setup lang="ts">
 import { onBeforeRouteLeave } from 'vue-router'
-import { Copy, Plus, RefreshCw, Search } from 'lucide-vue-next'
+import { Copy, Link2, Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   ElAlert,
@@ -181,6 +254,9 @@ import {
   ElDatePicker,
   ElDialog,
   ElDrawer,
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
   ElEmpty,
   ElForm,
   ElFormItem,
@@ -188,12 +264,10 @@ import {
   ElOption,
   ElPagination,
   ElSelect,
-  ElSpace,
   ElSwitch,
   ElTable,
   ElTableColumn,
   ElTag,
-  ElText,
   vLoading,
 } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -201,23 +275,39 @@ import {
   gatewayApi,
   type GatewayKey,
   type GatewayKeyCreated,
+  type GatewayRoute,
 } from '@/api/gateway'
 import GatewayHeaderActions from '@/views/gateway/GatewayHeaderActions.vue'
 import { confirmDialog } from '@/composables/useConfirm'
 import { notify } from '@/composables/useToast'
 import {
   errorMessage,
-  parseNumberList,
+  formatRelativeTime,
+  formatShortDate,
+  isExpired,
   tokenLimitText,
 } from '@/utils/gateway'
 
 const keys = ref<GatewayKey[]>([])
+const routes = ref<GatewayRoute[]>([])
 const loading = ref(false)
 const error = ref('')
 const saving = ref(false)
 const revokingId = ref('')
 const deletingId = ref('')
 const busy = computed(() => loading.value || saving.value || Boolean(revokingId.value) || Boolean(deletingId.value))
+
+const endpointUrl = computed(() => {
+  if (typeof window === 'undefined') return '/v1'
+  return `${window.location.origin}/v1`
+})
+
+const routeModelOptions = computed(() => {
+  const set = new Set<string>()
+  for (const route of routes.value) set.add(route.model)
+  for (const model of form.allowed_models) set.add(model)
+  return [...set].sort()
+})
 
 const drawerOpen = ref(false)
 const formRef = ref<FormInstance>()
@@ -228,7 +318,7 @@ const form = reactive({
   id: '',
   name: '',
   owner_id: '',
-  allowed_models: '',
+  allowed_models: [] as string[],
   max_concurrency: '0',
   hourly: '',
   daily: '',
@@ -289,19 +379,31 @@ function expiresIso(value: string): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
+async function copyEndpoint() {
+  try {
+    await navigator.clipboard.writeText(endpointUrl.value)
+    notify('接入地址已复制')
+  } catch {
+    notify('复制失败，请手动选中复制', 'error')
+  }
+}
+
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    keys.value = await gatewayApi.keys()
+    const [keyList, routeList] = await Promise.all([
+      gatewayApi.keys(),
+      gatewayApi.routes().catch(() => [] as GatewayRoute[]),
+    ])
+    keys.value = keyList
+    routes.value = routeList
   } catch (reason) {
     error.value = errorMessage(reason, 'Key 列表加载失败')
   } finally {
     loading.value = false
   }
 }
-
-// ── 抽屉表单：未保存提醒 + 一次性原文 ──────────────────────────────────
 
 function formSnapshot(): string {
   return JSON.stringify(form)
@@ -314,7 +416,17 @@ const rules: FormRules = {
 }
 
 function openCreate() {
-  Object.assign(form, { id: '', name: '', owner_id: '', allowed_models: '', max_concurrency: '0', hourly: '', daily: '', expires_at: '', enabled: true })
+  Object.assign(form, {
+    id: '',
+    name: '',
+    owner_id: '',
+    allowed_models: [],
+    max_concurrency: '0',
+    hourly: '',
+    daily: '',
+    expires_at: '',
+    enabled: true,
+  })
   formError.value = ''
   initialSnapshot.value = formSnapshot()
   drawerOpen.value = true
@@ -325,7 +437,7 @@ function openEdit(key: GatewayKey) {
     id: key.id,
     name: key.name,
     owner_id: key.owner_id ?? '',
-    allowed_models: key.allowed_models.join('\n'),
+    allowed_models: [...key.allowed_models],
     max_concurrency: String(key.max_concurrency),
     hourly: key.hourly_token_limit?.toString() ?? '',
     daily: key.daily_token_limit?.toString() ?? '',
@@ -337,15 +449,21 @@ function openEdit(key: GatewayKey) {
   drawerOpen.value = true
 }
 
+function onRowCommand(command: string, key: GatewayKey) {
+  if (command === 'revoke') void revoke(key)
+  else if (command === 'delete') void removeKey(key)
+}
+
 async function submit() {
   if (!(await formRef.value?.validate().catch(() => false))) return
   saving.value = true
   formError.value = ''
   try {
+    const allowedModels = [...new Set(form.allowed_models.map((item) => item.trim()).filter(Boolean))]
     const body = {
       name: form.name.trim(),
       owner_id: form.owner_id.trim() || null,
-      allowed_models: parseNumberList(form.allowed_models),
+      allowed_models: allowedModels,
       max_concurrency: Number(form.max_concurrency) || 0,
       hourly_token_limit: intOrNull(form.hourly),
       daily_token_limit: intOrNull(form.daily),
@@ -446,16 +564,70 @@ onMounted(load)
 </script>
 
 <style scoped>
-.key-cell { display: grid; gap: 2px; min-width: 0; }
+.gateway-endpoint-strip {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--astra-border);
+  border-radius: 10px;
+  background: var(--astra-bg-subtle);
+}
+.gateway-endpoint-strip__left { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.gateway-endpoint-strip__icon { color: var(--astra-text-secondary); flex: none; }
+.gateway-endpoint-strip__label { color: var(--astra-text-primary); font-size: 13px; font-weight: 600; }
+.gateway-endpoint-strip__url {
+  padding: 2px 8px;
+  border: 1px solid var(--astra-border);
+  border-radius: 6px;
+  background: var(--astra-bg-panel);
+  color: var(--astra-text-primary);
+  font-family: var(--astra-font-mono);
+  font-size: 12px;
+}
+.gateway-endpoint-strip__hint { color: var(--astra-text-muted); font-size: 12px; }
+
+.key-cell { display: grid; gap: 3px; min-width: 0; }
 .key-cell strong { overflow: hidden; color: var(--astra-text-primary); font-size: var(--astra-font-label); text-overflow: ellipsis; white-space: nowrap; }
-.key-cell__id { overflow: hidden; color: var(--astra-text-muted); font-size: var(--astra-font-helper); text-overflow: ellipsis; white-space: nowrap; }
-.key-mono { font-family: var(--astra-font-family); font-size: var(--astra-font-helper); }
+.key-cell__meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.key-prefix-chip {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--astra-border);
+  border-radius: 4px;
+  background: var(--astra-bg-subtle);
+  color: var(--astra-text-secondary);
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  line-height: 18px;
+}
+.key-cell__models { overflow: hidden; color: var(--astra-text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.key-num { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--astra-text-secondary); white-space: nowrap; }
 .key-muted { color: var(--astra-text-muted); }
+.key-expired { color: var(--astra-danger); font-weight: 500; }
+.key-danger-item { color: var(--astra-danger); }
+
 .key-form :deep(.el-form-item) { margin-bottom: 16px; }
 .key-form :deep(.el-date-editor) { width: 100%; }
-.gateway-drawer__footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-.gateway-key-plaintext__warn { margin-top: 10px; }
+.key-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.key-form-row--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.gateway-drawer__footer { display: flex; align-items: center; gap: 8px; }
+.gateway-drawer__spacer { flex: 1; }
 .gateway-key-plaintext__row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .gateway-key-plaintext__value { flex: 1; }
-.gateway-key-plaintext__value :deep(input) { font-family: var(--astra-font-family); font-size: var(--astra-font-helper); }
+.gateway-key-plaintext__value :deep(input) { font-family: var(--astra-font-mono); font-size: 13px; }
+.gateway-key-plaintext__endpoint {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--astra-border);
+  border-radius: 8px;
+  background: var(--astra-bg-subtle);
+  font-size: 12px;
+  color: var(--astra-text-muted);
+}
+.gateway-key-plaintext__endpoint code { color: var(--astra-text-primary); font-family: var(--astra-font-mono); }
+
+@media (max-width: 640px) {
+  .key-form-row, .key-form-row--three { grid-template-columns: 1fr; }
+}
 </style>

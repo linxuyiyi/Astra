@@ -1,4 +1,13 @@
-import { memo, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  memo,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import {
   ActionBarPrimitive,
   MessagePrimitive,
@@ -18,6 +27,7 @@ import remarkGfm from "remark-gfm";
 import {
   ArrowDownToLine,
   ArrowUpRight,
+  BellRing,
   BriefcaseBusiness,
   Check,
   CircleAlert,
@@ -29,11 +39,37 @@ import {
   FileText,
   ListChecks,
   MessageSquareText,
+  Sparkles,
   UsersRound,
   Wrench,
 } from "lucide-react";
+import type {
+  ConversationTaskFeed,
+  ConversationTaskSummary,
+} from "../../../shared/conversation";
 import { employeeAppearance } from "../../../shared/employeeAvatar";
-import type { ConversationToolResult } from "../nexus/conversationMessage";
+import {
+  shortToolName,
+  taskToolLabel,
+  type ConversationTaskCallback,
+  type ConversationTaskRef,
+  type ConversationToolResult,
+} from "../nexus/conversationMessage";
+
+export const TaskFeedContext = createContext<ConversationTaskFeed | undefined>(undefined);
+
+const noopSubscribe = () => () => {};
+const EMPTY_TASK_MAP: Record<string, ConversationTaskSummary> = {};
+const emptySnapshot = () => EMPTY_TASK_MAP;
+
+function useLiveTask(taskId?: string): ConversationTaskSummary | undefined {
+  const feed = useContext(TaskFeedContext);
+  const map = useSyncExternalStore(
+    feed ? feed.subscribe : noopSubscribe,
+    feed ? feed.snapshot : emptySnapshot,
+  );
+  return taskId ? map[taskId] : undefined;
+}
 
 interface FilePart {
   name: string;
@@ -58,11 +94,44 @@ interface MessageMeta {
 const taskLabels: Record<string, string> = {
   PENDING: "待执行",
   RUNNING: "执行中",
-  WAITING: "等待处理",
+  WAITING: "待介入",
   SUCCEEDED: "已完成",
   FAILED: "失败",
   CANCELED: "已取消",
 };
+
+const waitingReasonLabels: Record<string, string> = {
+  question: "执行端提出问题，等待答复",
+  permission: "等待工具或命令执行授权",
+  confirmation: "回合结束，等待确认验收",
+  manual_intervene: "已转人工介入处理",
+  paused: "任务已暂停",
+  session_missing: "远端执行会话丢失，等待恢复",
+  worker_offline: "关联 Worker 当前离线",
+  delivery_uncertain: "指令投递状态待确认",
+  reconcile_timeout: "执行状态对账超时",
+};
+
+function taskTone(status?: string): "info" | "warning" | "success" | "danger" | "neutral" {
+  switch (status) {
+    case "RUNNING":
+      return "info";
+    case "WAITING":
+      return "warning";
+    case "SUCCEEDED":
+      return "success";
+    case "FAILED":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
+function formatWaitingReason(reason?: string | null): string {
+  if (!reason) return "";
+  const key = reason.trim();
+  return waitingReasonLabels[key] || key;
+}
 const toolLabels: Record<string, string> = {
   pending: "准备调用",
   asking: "等待人工确认",
@@ -104,11 +173,18 @@ export function PersonMark({
 
 function CodeHeader({ language, code }: CodeHeaderProps) {
   const [copyStatus, setCopyStatus] = useState("");
+  useEffect(() => {
+    if (!copyStatus) return;
+    const timer = window.setTimeout(() => setCopyStatus(""), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copyStatus]);
+  const copied = copyStatus === "已复制";
   return (
     <div className="nc-code-header">
-      <span>{language || "代码"}</span>
+      <span>{language || "text"}</span>
       <button
         type="button"
+        className={copied ? "is-copied" : undefined}
         aria-label="复制代码"
         title={copyStatus || "复制代码"}
         onClick={async () => {
@@ -120,8 +196,8 @@ function CodeHeader({ language, code }: CodeHeaderProps) {
           }
         }}
       >
-        {copyStatus === "已复制" ? <Check /> : <Copy />}
-        {copyStatus === "无法访问剪贴板" && <small role="status">{copyStatus}</small>}
+        {copied ? <Check /> : <Copy />}
+        <span>{copyStatus || "复制"}</span>
       </button>
     </div>
   );
@@ -189,26 +265,61 @@ const MarkdownPart = memo(function MarkdownPart({
 function taskHref(id: string) {
   return `/tasks/${encodeURIComponent(id)}`;
 }
+
 function TaskLink({
   data,
 }: {
-  data: { taskId: string; status?: string; text?: string };
+  data: ConversationTaskRef;
 }) {
+  const live = useLiveTask(data.taskId);
+  const status = live?.status || data.status;
+  const tone = taskTone(status);
+  const statusText = status ? taskLabels[status] || status : "";
+  const title = live?.title || data.text || data.taskId;
+  const workerName = live?.workerName || data.workerName || "";
+  const isFinished = status === "SUCCEEDED" || status === "CANCELED";
+  const workerOnline = isFinished ? undefined : live?.workerOnline;
+  const detailLine =
+    status === "WAITING"
+      ? formatWaitingReason(live?.waitingReason || data.waitingReason) ||
+        live?.currentProgress ||
+        data.progress ||
+        ""
+      : live?.currentProgress || data.progress || "";
+  const showDetail = Boolean(detailLine && detailLine !== statusText && detailLine !== title);
   return (
-    <a className="nc-task" href={taskHref(data.taskId)}>
-      <span className="nc-result-mark"><BriefcaseBusiness /></span>
-      <span>
-        <strong>{data.text || data.taskId}</strong>
-        <small>
-          {[
-            data.text && data.taskId,
-            data.status && (taskLabels[data.status] || data.status),
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </small>
-      </span>
-      <ArrowUpRight />
+    <a className="nc-task" data-tone={tone} href={taskHref(data.taskId)}>
+      <div className="nc-task-head">
+        <span className="nc-task-icon" aria-hidden>
+          <BriefcaseBusiness />
+        </span>
+        {statusText && (
+          <span className="nc-task-badge" data-tone={tone}>
+            <i className="nc-task-dot" aria-hidden />
+            {statusText}
+          </span>
+        )}
+        <code className="nc-task-id">{data.taskId}</code>
+        <ArrowUpRight className="nc-task-arrow" aria-hidden />
+      </div>
+      <strong className="nc-task-title">{title}</strong>
+      {showDetail && (
+        <p className={`nc-task-detail${status === "WAITING" ? " is-warning" : ""}`}>
+          {detailLine}
+        </p>
+      )}
+      {workerName && (
+        <div className="nc-task-foot">
+          <span className="nc-task-worker">
+            <i
+              className={`nc-worker-dot${workerOnline === true ? " is-on" : workerOnline === false ? " is-off" : ""}`}
+              aria-hidden
+            />
+            {workerName}
+            {workerOnline === false && <em className="nc-worker-off">离线</em>}
+          </span>
+        </div>
+      )}
     </a>
   );
 }
@@ -243,7 +354,7 @@ function ToolPart({
   const messageTaskId = useAuiState((s) => (s.message.metadata.custom as MessageMeta).taskId);
   const state = result?.state ?? callState;
   const [open, setOpen] = useState(false);
-  const shortName = toolName.split("__").at(-1) || toolName;
+  const shortName = shortToolName(toolName);
   const { Icon: OutcomeIcon, tone } = toolOutcome(state);
   const contact =
     shortName === "contact_employee" || shortName === "contact_human";
@@ -255,9 +366,7 @@ function ToolPart({
     : shortName;
   const title = contact
     ? "联系" + (shortName === "contact_employee" ? "同事" : "用户")
-    : shortName === "nexus_task_create"
-      ? "委派任务"
-      : libraryLabel || mcp;
+    : taskToolLabel(toolName) || libraryLabel || mcp;
   const inputSummary = contact
     ? args.employee_name
     : args.title ||
@@ -316,7 +425,6 @@ function ToolPart({
           </div>
         )}
       </details>
-      {result?.task && <TaskLink data={result.task} />}
       {approvalTaskId && <TaskLink data={{ taskId: approvalTaskId, text: "查看关联任务" }} />}
     </div>
   );
@@ -421,9 +529,56 @@ function FilePartView({ data }: DataMessagePartProps<FilePart>) {
     </div>
   );
 }
+function TaskCallbackCard({ callback }: { callback: ConversationTaskCallback }) {
+  const live = useLiveTask(callback.taskId);
+  const status = callback.status || live?.status;
+  const tone = taskTone(status);
+  const statusLabel = status ? taskLabels[status] || callback.statusLabel : callback.statusLabel;
+  const title = live?.title || callback.taskId;
+  const detail =
+    callback.reason ||
+    (status === "WAITING" ? formatWaitingReason(live?.waitingReason) : "") ||
+    (live?.currentProgress && live.currentProgress !== statusLabel ? live.currentProgress : "");
+  return (
+    <div className="nc-task-callback" data-tone={tone} role="note">
+      <div className="nc-task-callback-head">
+        <span className="nc-task-callback-label">
+          <BellRing aria-hidden />
+          任务回调
+        </span>
+        <span className="nc-task-badge" data-tone={tone}>
+          <i className="nc-task-dot" aria-hidden />
+          {statusLabel}
+        </span>
+        <a className="nc-task-callback-link" href={taskHref(callback.taskId)}>
+          <span>{title}</span>
+          <ArrowUpRight aria-hidden />
+        </a>
+      </div>
+      {(detail || live?.workerName) && (
+        <div className="nc-task-callback-sub">
+          {detail && <span>{detail}</span>}
+          {live?.workerName && (
+            <span className="nc-task-worker">
+              <i
+                className={`nc-worker-dot${live.workerOnline === true ? " is-on" : live.workerOnline === false ? " is-off" : ""}`}
+                aria-hidden
+              />
+              {live.workerName}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HintPart({
   data,
-}: DataMessagePartProps<{ source: string; text: string }>) {
+}: DataMessagePartProps<{ source: string; text: string; taskCallback?: ConversationTaskCallback }>) {
+  if (data.taskCallback) {
+    return <TaskCallbackCard callback={data.taskCallback} />;
+  }
   return (
     <details className="nc-note">
       <summary>
@@ -437,9 +592,10 @@ function HintPart({
 }
 function ReasoningPart({ text }: ReasoningMessagePartProps) {
   return (
-    <details className="nc-note">
+    <details className="nc-note nc-reasoning">
       <summary>
-        思考记录
+        <Sparkles className="nc-note-icon" aria-hidden />
+        <span>思考记录</span>
         <ChevronRight />
       </summary>
       <p>{text}</p>
@@ -449,19 +605,48 @@ function ReasoningPart({ text }: ReasoningMessagePartProps) {
 const groupFinishedTools: MessagePrimitive.GroupedParts.Props<"group-tools">["groupBy"] =
   (part) => {
     if (part.type !== "tool-call" || part.isError) return null;
-    const name = part.toolName.split("__").at(-1) ?? "";
-    if (name.startsWith("nexus_task_") || name.startsWith("contact_")) return null;
+    const name = shortToolName(part.toolName);
+    if (name.startsWith("contact_")) return null;
     const state = (part.result as ConversationToolResult | undefined)?.state;
     return state === "success" || state === "finished" ? ["group-tools"] : null;
   };
 
-function FinishedTools({ count, children }: { count: number; children: ReactNode }) {
+function toolFriendlyLabel(toolName: string): string {
+  const short = shortToolName(toolName);
+  const taskLabel = taskToolLabel(toolName);
+  if (taskLabel) return taskLabel;
+  if (short === "library_search") return "搜索资料";
+  if (short === "library_get") return "读取资料";
+  return short;
+}
+
+function FinishedTools({
+  count,
+  indices,
+  children,
+}: {
+  count: number;
+  indices: readonly number[];
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
+  const preview = useAuiState((s) => {
+    const labels: string[] = [];
+    for (const idx of indices) {
+      const part = s.message.parts[idx];
+      if (part?.type === "tool-call") {
+        const label = toolFriendlyLabel(part.toolName);
+        if (!labels.includes(label)) labels.push(label);
+      }
+    }
+    return labels.slice(0, 3).join("、");
+  });
   return (
     <details className="nc-tool-group" onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary>
         <ListChecks aria-hidden />
-        已完成 {count} 项工具操作
+        <span className="nc-tool-name">已完成 {count} 项操作</span>
+        {preview && <span className="nc-tool-summary" title={preview}>{preview}</span>}
         <ChevronRight aria-hidden />
       </summary>
       {open && <div className="nc-tool-group-body">{children}</div>}
@@ -473,7 +658,7 @@ function renderPart({ part, children }: MessagePrimitive.GroupedParts.RenderInfo
   switch (part.type) {
     case "group-tools":
       return part.indices.length > 1
-        ? <FinishedTools count={part.indices.length}>{children}</FinishedTools>
+        ? <FinishedTools count={part.indices.length} indices={part.indices}>{children}</FinishedTools>
         : children;
     case "text":
       return <MarkdownPart {...part} />;
@@ -490,10 +675,36 @@ function renderPart({ part, children }: MessagePrimitive.GroupedParts.RenderInfo
 }
 
 const MessageParts = memo(function MessageParts() {
+  const parts = useAuiState((s) => s.message.parts);
+  const toolTasks = useMemo(() => {
+    const byId = new Map<string, ConversationTaskRef>();
+    for (const part of parts) {
+      if (part.type !== "tool-call") continue;
+      const result = part.result as ConversationToolResult | undefined;
+      if (!result?.task?.taskId) continue;
+      const prev = byId.get(result.task.taskId);
+      byId.set(result.task.taskId, {
+        ...prev,
+        ...result.task,
+        text: result.task.text || prev?.text,
+        workerName: result.task.workerName || prev?.workerName,
+      });
+    }
+    return [...byId.values()];
+  }, [parts]);
   return (
-    <MessagePrimitive.GroupedParts groupBy={groupFinishedTools} indicator="never">
-      {renderPart}
-    </MessagePrimitive.GroupedParts>
+    <>
+      <MessagePrimitive.GroupedParts groupBy={groupFinishedTools} indicator="never">
+        {renderPart}
+      </MessagePrimitive.GroupedParts>
+      {toolTasks.length > 0 && (
+        <div className="nc-task-stack">
+          {toolTasks.map((item) => (
+            <TaskLink key={item.taskId} data={item} />
+          ))}
+        </div>
+      )}
+    </>
   );
 });
 
@@ -502,6 +713,9 @@ export const ConversationMessage = memo(function ConversationMessage() {
   const created = useAuiState((s) => s.message.createdAt);
   const copyable = useAuiState((s) =>
     s.message.parts.some((p) => p.type === "text" && p.text.length > 0),
+  );
+  const hasSystemTask = useAuiState((s) =>
+    s.message.parts.some((p) => p.type === "data" && p.name === "nexus-task"),
   );
   const copied = useAuiState((s) => s.message.isCopied);
   const failure = useAuiState((s) => {
@@ -554,6 +768,7 @@ export const ConversationMessage = memo(function ConversationMessage() {
     <MessagePrimitive.Root
       className="nc-message"
       data-kind={system ? "system" : meta.self ? "self" : "speaker"}
+      data-system-card={(system && hasSystemTask) || undefined}
       data-sender={meta.senderId}
       data-continuation={continuation || undefined}
       data-delivery={delivery ? meta.delivery : undefined}

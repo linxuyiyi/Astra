@@ -90,14 +90,14 @@
             </div>
           </template>
           <ElDescriptions :column="2">
-            <ElDescriptionsItem label="上游地址"><span class="gateway-node-mono">{{ node.base_url }}</span></ElDescriptionsItem>
+            <ElDescriptionsItem label="上游地址" :span="2"><span class="gateway-node-mono">{{ node.base_url }}</span></ElDescriptionsItem>
             <ElDescriptionsItem label="节点类型">{{ probeStrategyLabel(node.probe_strategy) }}</ElDescriptionsItem>
             <ElDescriptionsItem label="资源池">{{ poolName(node.pool_id) }}</ElDescriptionsItem>
             <ElDescriptionsItem label="认证方式">{{ authSummary(node) }}</ElDescriptionsItem>
             <ElDescriptionsItem label="凭据">{{ node.auth_type === 'NONE' ? '无需凭据' : node.has_api_key ? '已配置（不回显）' : '未配置' }}</ElDescriptionsItem>
             <ElDescriptionsItem label="健康路径"><span class="gateway-node-mono">{{ node.health_path || '继承默认' }}</span></ElDescriptionsItem>
-            <ElDescriptionsItem label="最近探测">{{ formatDateTime(node.last_checked_at) }}</ElDescriptionsItem>
             <ElDescriptionsItem label="探测间隔">{{ probeIntervalText(node.probe_interval_seconds) }}</ElDescriptionsItem>
+            <ElDescriptionsItem label="最近探测" :span="2">{{ formatDateTime(node.last_checked_at) }}</ElDescriptionsItem>
             <ElDescriptionsItem label="支持模型" :span="2">
               <div v-if="node.models.length" class="gateway-node-models">
                 <span v-for="model in node.models" :key="model" class="gateway-node-model-chip">{{ model }}</span>
@@ -571,7 +571,7 @@ const metricCards = computed<Array<{ id: string; label: string; value: number | 
     { id: 'success-rate', label: '成功率', value: formatPercent(current?.success_rate), hint: '2xx/3xx 且未被中断' },
     { id: 'active', label: '当前并发', value: current?.active ?? '—', hint: '正在处理的请求数' },
     { id: 'qps', label: 'QPS', value: current ? current.qps.toFixed(2) : '—', hint: '窗口平均每秒请求数' },
-    { id: 'tokens', label: '总 Token', value: current ? formatTokens(current.total_tokens) : '—', hint: '输入 + 输出，未知不估算' },
+    { id: 'ttft-p95', label: '首 Token P95', value: current?.ttft_ms.p95 !== null && current?.ttft_ms.p95 !== undefined ? `${current.ttft_ms.p95.toFixed(0)} ms` : '—', hint: '窗口首字延迟 P95' },
     { id: 'streak', label: '连续成功 / 失败', value: `${node.value?.success_streak ?? 0} / ${node.value?.failure_streak ?? 0}`, hint: '探测连击计数' },
   ]
 })

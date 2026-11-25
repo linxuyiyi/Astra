@@ -343,6 +343,9 @@ export const ConversationComposer = memo(function ConversationComposer({
             }}
           />
           <span className="nc-spacer" />
+          {enabled && !showStop && (
+            <span className="nc-compose-hint" aria-hidden>Enter 发送 · Shift+Enter 换行</span>
+          )}
           {showStop && (
             <ComposerPrimitive.Cancel
               className="nc-stop"

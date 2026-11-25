@@ -1,34 +1,34 @@
 {
-  "_mount-CF3roA-R.js": {
-    "file": "assets/mount-CF3roA-R.js",
+  "_mount-B1HM6qPm.js": {
+    "file": "assets/mount-B1HM6qPm.js",
     "name": "mount",
     "dynamicImports": [
       "node_modules/highlight.js/es/common.js"
     ],
     "css": [
-      "assets/mount-k9w0gjbp.css"
+      "assets/mount-CgMhXw2q.css"
     ]
   },
-  "_mount-k9w0gjbp.css": {
-    "file": "assets/mount-k9w0gjbp.css",
-    "src": "_mount-k9w0gjbp.css"
+  "_mount-CgMhXw2q.css": {
+    "file": "assets/mount-CgMhXw2q.css",
+    "src": "_mount-CgMhXw2q.css"
   },
   "node_modules/highlight.js/es/common.js": {
-    "file": "assets/common-D3e6s-wm.js",
+    "file": "assets/common-saLPHbqF.js",
     "name": "common",
     "src": "node_modules/highlight.js/es/common.js",
     "isDynamicEntry": true,
     "imports": [
-      "_mount-CF3roA-R.js"
+      "_mount-B1HM6qPm.js"
     ]
   },
   "src/mount.tsx": {
-    "file": "assets/mount-Dpif4poy.js",
+    "file": "assets/mount-DtYqKkw6.js",
     "name": "mount",
     "src": "src/mount.tsx",
     "isEntry": true,
     "imports": [
-      "_mount-CF3roA-R.js"
+      "_mount-B1HM6qPm.js"
     ]
   }
 }

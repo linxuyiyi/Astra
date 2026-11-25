@@ -20,8 +20,9 @@ import {
 import type { ConversationProps } from "../../../shared/conversation";
 import { nexusAttachmentAdapter } from "../nexus/attachments";
 import { draftKey } from "../nexus/drafts";
+import { shortToolName, taskToolLabel, type ConversationTaskCallback, type ConversationTaskRef } from "../nexus/conversationMessage";
 import { useConversation } from "../nexus/useConversation";
-import { ConversationMessage, PersonMark } from "./MessageContent";
+import { ConversationMessage, PersonMark, TaskFeedContext } from "./MessageContent";
 import { ConversationComposer } from "./Composer";
 
 const convertMessage = (message: ThreadMessageLike) => message;
@@ -43,16 +44,31 @@ function summary(message: ThreadMessageLike) {
   if (typeof message.content === "string") return firstLine(message.content);
   for (const part of message.content) {
     if (part.type === "text" && part.text.trim()) return firstLine(part.text);
-    if (part.type === "tool-call") return part.toolName;
+  }
+  for (const part of message.content) {
+    if (part.type === "data" && part.name === "nexus-task") {
+      const task = part.data as ConversationTaskRef | undefined;
+      return firstLine(task?.text || (task?.taskId ? `任务 ${task.taskId}` : "任务更新"));
+    }
+    if (part.type === "data" && part.name === "nexus-hint") {
+      const hint = part.data as { taskCallback?: ConversationTaskCallback; text?: string } | undefined;
+      if (hint?.taskCallback) return `任务${hint.taskCallback.statusLabel} · ${hint.taskCallback.taskId}`;
+    }
+  }
+  for (const part of message.content) {
+    if (part.type === "tool-call") {
+      const short = shortToolName(part.toolName);
+      return taskToolLabel(part.toolName) || (short === "contact_employee" ? "联系同事" : short);
+    }
     if (part.type === "data" && part.name === "nexus-file") return "附件";
   }
   return "";
 }
 
 export function Conversation(props: ConversationProps) {
-  const { kind, id, viewerId, title, enabled, onMembersChanged, onActivity } =
+  const { kind, id, viewerId, title, enabled, taskFeed, onMembersChanged, onActivity, onTaskActivity } =
     props;
-  const chat = useConversation(kind, id, onMembersChanged);
+  const chat = useConversation(kind, id, onMembersChanged, onTaskActivity);
   const runtimeRef = useRef<AssistantRuntime | null>(null);
   const inputId = useId();
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -144,8 +160,9 @@ export function Conversation(props: ConversationProps) {
     inputRef.current?.focus({ preventScroll: true });
   };
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <ThreadPrimitive.Root className="nc-conversation" data-empty={empty || undefined}>
+    <TaskFeedContext.Provider value={taskFeed}>
+      <AssistantRuntimeProvider runtime={runtime}>
+        <ThreadPrimitive.Root className="nc-conversation" data-empty={empty || undefined}>
         {canType && <a href={`#${inputId}`} className="nc-skip-input" onClick={(event) => {
           event.preventDefault();
           inputRef.current?.focus({ preventScroll: true });
@@ -260,7 +277,8 @@ export function Conversation(props: ConversationProps) {
             </div>
           </div>
         </ComposerPrimitive.AttachmentDropzone>
-      </ThreadPrimitive.Root>
-    </AssistantRuntimeProvider>
+        </ThreadPrimitive.Root>
+      </AssistantRuntimeProvider>
+    </TaskFeedContext.Provider>
   );
 }

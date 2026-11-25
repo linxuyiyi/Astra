@@ -1,11 +1,14 @@
 import type { AgentEvent } from "@agentscope-ai/agentscope/event";
 import type { Msg } from "@agentscope-ai/agentscope/message";
 import type { ThreadMessageLike } from "@assistant-ui/react";
+import type { ConversationTaskActivity } from "../../../shared/conversation.ts";
 import {
   compareEntries,
+  parseTaskWakeHint,
   projectEntry,
   replyPhase,
   ReplyEvents,
+  shortToolName,
   type ConversationPhase,
   type TimelineEntry,
 } from "./conversationMessage.ts";
@@ -155,6 +158,7 @@ export class ConversationStore {
   private peerTimer?: ReturnType<typeof setTimeout>;
   private reconcileTimer?: ReturnType<typeof setTimeout>;
   onMembersChanged?: () => void;
+  onTaskActivity?: (activity: ConversationTaskActivity) => void;
 
   constructor(kind: Kind, id: string) {
     this.kind = kind;
@@ -446,6 +450,33 @@ export class ConversationStore {
       entry.native.metadata.stream_cursor = Number(cursor);
     }
     if (!seen.apply(entry.native, event)) return;
+    if (event.type === "TOOL_RESULT_END") {
+      const part = entry.native.content.find(
+        (block) => block.type === "tool_result" && block.id === event.tool_call_id,
+      );
+      if (part && part.type === "tool_result") {
+        const short = shortToolName(part.name);
+        if (short.startsWith("nexus_task_")) {
+          this.onTaskActivity?.({ kind: "tool", toolName: short });
+        }
+      }
+    } else if (event.type === "HINT_BLOCK") {
+      const hintSource = "source" in event && typeof event.source === "string" ? event.source : "";
+      const rawHint = "hint" in event ? event.hint : "";
+      const hintText =
+        typeof rawHint === "string"
+          ? rawHint
+          : Array.isArray(rawHint)
+            ? rawHint
+                .filter((item) => item.type === "text")
+                .map((item) => item.text)
+                .join("\n")
+            : "";
+      const parsed = parseTaskWakeHint(hintSource, hintText);
+      if (parsed) {
+        this.onTaskActivity?.({ kind: "callback", taskId: parsed.taskId });
+      }
+    }
     if (event.type === "REPLY_END") {
       this.events.delete(messageId);
       if (this.kind === "private") {
@@ -574,6 +605,10 @@ export class ConversationStore {
           const boundary = Number(this.before);
           if (!boundary || data.item.seq >= boundary || this.entries.has(data.item.message.id))
             this.putGroup(data.item);
+          const taskId = data.item.message.metadata?.task_id;
+          if (data.item.sender_type === "system" && typeof taskId === "string" && taskId) {
+            this.onTaskActivity?.({ kind: "system", taskId });
+          }
           this.markRead(data.item.seq);
         } else if (data.type === "members") {
           this.onMembersChanged?.();

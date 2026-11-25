@@ -114,6 +114,22 @@
             <span class="chat-target__meta">
               <span class="chat-target__row">
                 <b class="chat-target__name">{{ target.name }}</b>
+                <span
+                  v-if="targetTaskSignals[target.key]?.waiting"
+                  class="chat-task-pill chat-task-pill--warning"
+                  :title="`${targetTaskSignals[target.key].waiting} 项任务待介入`"
+                >
+                  <i class="chat-task-pill__dot" aria-hidden="true" />
+                  {{ targetTaskSignals[target.key].waiting }} 待介入
+                </span>
+                <span
+                  v-else-if="targetTaskSignals[target.key]?.running"
+                  class="chat-task-pill chat-task-pill--info"
+                  :title="`${targetTaskSignals[target.key].running} 项任务执行中`"
+                >
+                  <i class="chat-task-pill__dot" aria-hidden="true" />
+                  {{ targetTaskSignals[target.key].running }}
+                </span>
                 <span v-if="target.kind === 'contact' && !target.enabled" class="chat-mini-badge">禁用</span>
                 <span v-else-if="target.kind === 'group'" class="chat-mini-badge">{{ target.channel?.members.length ?? 0 }}人</span>
               </span>
@@ -186,12 +202,31 @@
 
             <button
               type="button"
+              class="chat-profile-toggle chat-tasks-toggle"
+              :class="{
+                'has-waiting': waitingTaskCount > 0,
+                'has-running': waitingTaskCount === 0 && runningTaskCount > 0,
+              }"
+              :aria-expanded="asideOpen && tab === 'tasks'"
+              data-testid="chat-tasks-toggle"
+              @click="toggleTasksAside"
+            >
+              <ListTodo :size="15" :stroke-width="1.75" />
+              <span>任务</span>
+              <span v-if="activeTaskCount > 0" class="chat-head-badge" :data-tone="waitingTaskCount > 0 ? 'warning' : runningTaskCount > 0 ? 'info' : 'neutral'">
+                <i v-if="waitingTaskCount > 0 || runningTaskCount > 0" class="chat-head-badge__dot" aria-hidden="true" />
+                {{ activeTaskCount }}
+              </span>
+            </button>
+
+            <button
+              type="button"
               class="chat-profile-toggle"
-              :aria-expanded="asideOpen"
+              :aria-expanded="asideOpen && tab !== 'tasks'"
               @click="toggleAside"
             >
               <PanelRight :size="16" :stroke-width="1.7" />
-              <span>{{ asideOpen ? '收起资料' : '资料' }}</span>
+              <span>{{ asideOpen && tab !== 'tasks' ? '收起资料' : '资料' }}</span>
             </button>
           </div>
         </header>
@@ -290,7 +325,7 @@
           <div v-if="tab === 'tasks'" class="aside-panel">
             <div v-if="taskError" class="aside-inline-error" role="alert">
               <span>{{ taskError }}</span>
-              <button type="button" @click="loadTasks">重试</button>
+              <button type="button" @click="loadTasks()">重试</button>
             </div>
             <div v-if="tasksLoading && !tasks.length" class="chat-status-inline aside-loading">
               <Loader2 class="chat-spinner" :size="15" />
@@ -300,7 +335,8 @@
               v-else
               :tasks="tasks"
               :names="nameById"
-              hide-responsible
+              :worker-online-by-id="workerOnlineById"
+              :hide-responsible="activeTarget?.kind === 'contact'"
               empty-text="当前会话暂无关联任务"
             />
           </div>
@@ -644,6 +680,7 @@ import {
 import {
   AlertCircle,
   Ellipsis,
+  ListTodo,
   Loader2,
   LogIn,
   MessageSquare,
@@ -659,7 +696,12 @@ import { listTasks, listWorkers, type PlatformTask, type PlatformWorker } from "
 import type { Channel, Employee, ResourceCatalog } from "@/types";
 import ConversationPanel, { loadConversationBundle } from "@/features/chat/ConversationPanel.vue";
 import { shortText } from "@/features/chat/shortText";
-import type { ConversationProps } from "../../../shared/conversation";
+import type {
+  ConversationProps,
+  ConversationTaskActivity,
+  ConversationTaskFeed,
+  ConversationTaskSummary,
+} from "../../../shared/conversation";
 
 interface ChatTarget {
   key: string;
@@ -712,13 +754,77 @@ const bindingLoading = ref(false);
 const bindingError = ref("");
 const tab = ref<"tasks" | "members" | "materials">("materials");
 const tasks = ref<PlatformTask[]>([]);
+const globalTasks = ref<PlatformTask[]>([]);
 const tasksLoading = ref(false);
 const taskError = ref("");
 const asideOpen = ref(false);
+const tasksAutoDismissed = ref(false);
 const instructionsExpanded = ref(false);
 
+function toggleTasksAside() {
+  if (asideOpen.value && tab.value === "tasks") {
+    asideOpen.value = false;
+    tasksAutoDismissed.value = true;
+    return;
+  }
+  tab.value = "tasks";
+  asideOpen.value = true;
+  tasksAutoDismissed.value = false;
+}
+
 function toggleAside() {
-  asideOpen.value = !asideOpen.value;
+  const defaultInfoTab = activeTarget.value?.kind === "group" ? "members" : "materials";
+  if (asideOpen.value && tab.value !== "tasks") {
+    asideOpen.value = false;
+    return;
+  }
+  tab.value = defaultInfoTab;
+  asideOpen.value = true;
+}
+
+const taskFeedListeners = new Set<() => void>();
+let taskFeedSnapshot: Record<string, ConversationTaskSummary> = {};
+const taskFeed: ConversationTaskFeed = {
+  subscribe(listener) {
+    taskFeedListeners.add(listener);
+    return () => {
+      taskFeedListeners.delete(listener);
+    };
+  },
+  snapshot() {
+    return taskFeedSnapshot;
+  },
+};
+
+function publishTaskFeed() {
+  const next: Record<string, ConversationTaskSummary> = {};
+  const workerMap = workerById.value;
+  const mergeList = (list: PlatformTask[]) => {
+    for (const item of list) {
+      const worker = item.agent_worker_id ? workerMap[item.agent_worker_id] : undefined;
+      next[item.id] = {
+        id: item.id,
+        title: item.title,
+        status: item.status,
+        waitingReason: item.waiting_reason,
+        currentProgress: item.current_progress,
+        workerId: item.agent_worker_id,
+        workerName: worker ? workerDisplayName(worker) : item.worker_name || item.agent_worker_id || null,
+        workerOnline:
+          item.worker_online !== undefined && item.worker_online !== null
+            ? item.worker_online
+            : (worker?.online ?? null),
+        startedAt: item.started_at,
+        lastActivityAt: item.last_activity_at,
+        finishedAt: item.finished_at,
+        updatedAt: item.updated_at,
+      };
+    }
+  };
+  mergeList(globalTasks.value);
+  mergeList(tasks.value);
+  taskFeedSnapshot = next;
+  taskFeedListeners.forEach((fn) => fn());
 }
 
 const mobileRailOpen = ref(false);
@@ -824,14 +930,41 @@ const conversation = computed<ConversationProps | undefined>(() => {
     title: target.name,
     avatar: target.avatar,
     enabled: target.enabled,
+    taskFeed,
     onActivity(summary) { summaries[target.key] = summary; },
     onMembersChanged() { void refreshGroups().catch(() => undefined); },
+    onTaskActivity(activity) { void handleTaskActivity(activity); },
   };
 });
 
 const activeTaskCount = computed(() =>
   tasks.value.filter((t) => !["SUCCEEDED", "CANCELED", "FAILED"].includes(t.status)).length,
 );
+const waitingTaskCount = computed(() =>
+  tasks.value.filter((t) => t.status === "WAITING").length,
+);
+const runningTaskCount = computed(() =>
+  tasks.value.filter((t) => t.status === "RUNNING").length,
+);
+
+const targetTaskSignals = computed(() => {
+  const map: Record<string, { waiting: number; running: number; pending: number }> = {};
+  const bump = (key: string, status: string) => {
+    const bucket = (map[key] ??= { waiting: 0, running: 0, pending: 0 });
+    if (status === "WAITING") bucket.waiting += 1;
+    else if (status === "RUNNING") bucket.running += 1;
+    else if (status === "PENDING") bucket.pending += 1;
+  };
+  for (const item of globalTasks.value) {
+    if (["SUCCEEDED", "CANCELED", "FAILED"].includes(item.status)) continue;
+    if (item.source === "group_chat" && item.external_task_id) {
+      bump(`group:${item.external_task_id}`, item.status);
+    } else if (item.origin_employee_id) {
+      bump(`contact:${item.origin_employee_id}`, item.status);
+    }
+  }
+  return map;
+});
 
 const rightTabs = computed<Array<{ value: "tasks" | "members" | "materials"; label: string; count?: number }>>(() => {
   const taskCount = activeTaskCount.value > 0 ? activeTaskCount.value : undefined;
@@ -860,6 +993,18 @@ const employeeCapabilities = computed(() => {
   return groups.filter((g) => g.items.length > 0);
 });
 
+const workerById = computed(() => {
+  const map: Record<string, PlatformWorker> = {};
+  for (const worker of workers.value) map[worker.id] = worker;
+  return map;
+});
+
+const workerOnlineById = computed(() => {
+  const map: Record<string, boolean | null> = {};
+  for (const worker of workers.value) map[worker.id] = worker.online ?? null;
+  return map;
+});
+
 const nameById = computed(() => {
   const names: Record<string, string> = {};
   for (const employee of employees.value) names[employee.id] = employee.name;
@@ -877,22 +1022,51 @@ function toolLabel(id: string) {
   return name === id ? "工作区工具" : name;
 }
 
-async function loadTasks() {
+async function loadTasks(options: { silent?: boolean } = {}) {
   const target = activeTarget.value;
-  if (!target || !bindingId.value || !asideOpen.value || tab.value !== "tasks") return;
+  if (!target || !bindingId.value) return;
   const generation = ++taskGeneration;
   const query: Record<string, string> = { source: target.kind === "contact" ? "private_chat" : "group_chat", external_task_id: bindingId.value };
   if (target.kind === "contact") query.origin_employee_id = target.id;
-  tasksLoading.value = true;
+  if (!options.silent) tasksLoading.value = true;
   try {
     const result = await listTasks(query);
     if (generation !== taskGeneration) return;
     tasks.value = result;
     taskError.value = "";
+    publishTaskFeed();
   } catch (error) {
-    if (generation === taskGeneration) taskError.value = shortText(error, "关联任务加载失败");
+    if (generation === taskGeneration && !options.silent) taskError.value = shortText(error, "关联任务加载失败");
   } finally {
     if (generation === taskGeneration) tasksLoading.value = false;
+  }
+}
+
+async function loadGlobalActiveTasks() {
+  try {
+    const [result, workerList] = await Promise.all([
+      listTasks({ limit: "100" }),
+      workers.value.length ? Promise.resolve(workers.value) : listWorkers().catch(() => []),
+    ]);
+    if (disposed) return;
+    if (!workers.value.length && workerList.length) workers.value = workerList;
+    globalTasks.value = result;
+    publishTaskFeed();
+  } catch {
+    /* 侧栏全局任务角标拉取失败不打断当前对话 */
+  }
+}
+
+async function handleTaskActivity(activity: ConversationTaskActivity) {
+  await Promise.all([loadTasks({ silent: true }), loadGlobalActiveTasks()]);
+  if (
+    activity.toolName === "nexus_task_create" &&
+    !asideOpen.value &&
+    !tasksAutoDismissed.value &&
+    window.innerWidth >= 1180
+  ) {
+    tab.value = "tasks";
+    asideOpen.value = true;
   }
 }
 
@@ -915,9 +1089,11 @@ async function selectTarget(key: string, options: { fromRoute?: boolean; retry?:
   bindingError.value = "";
   bindingLoading.value = true;
   instructionsExpanded.value = false;
+  tasksAutoDismissed.value = false;
   tasks.value = [];
   taskError.value = "";
   tasksLoading.value = false;
+  publishTaskFeed();
   tab.value = target.kind === "group" ? "members" : "materials";
   localStorage.setItem(`nexus_chat_last:${currentUid()}`, key);
   if (!options.fromRoute && routeTargetKey() !== key) updateRoute(target);
@@ -1004,8 +1180,12 @@ async function saveGroup() {
 }
 
 watch(() => [route.query.employee, route.query.group], () => { void applyRouteTarget(); });
-watch([asideOpen, tab, bindingId], () => { void loadTasks(); });
+watch(bindingId, () => { void loadTasks({ silent: !asideOpen.value || tab.value !== "tasks" }); });
+watch([asideOpen, tab], ([open, activeTab]) => {
+  if (open && activeTab === "tasks") void loadTasks();
+});
 watch(asideOpen, open => { if (open) void loadAsideReferences(); });
+watch(workers, () => { publishTaskFeed(); });
 
 async function refreshGroups() {
   channels.value = await listChannels();
@@ -1085,10 +1265,11 @@ async function loadDirectory() {
 onMounted(async () => {
   void loadConversationBundle().catch(() => undefined);
   if (typeof route.query.invite === "string") { joinToken.value = route.query.invite; joinDialogOpen.value = true; }
-  await loadDirectory();
+  await Promise.all([loadDirectory(), loadGlobalActiveTasks()]);
   if (disposed) return;
   taskTimer = window.setInterval(() => {
-    void loadTasks();
+    void loadTasks({ silent: true });
+    void loadGlobalActiveTasks();
     if (activeTarget.value?.kind === "group") void refreshGroups().catch(() => undefined);
   }, 8000);
 });
@@ -1106,7 +1287,9 @@ onBeforeUnmount(() => {
   --chat-bar-height: 56px;
   --chat-rail: var(--astra-bg-sidebar);
   --chat-canvas: var(--astra-bg-panel);
+  --chat-wash: var(--astra-bg-elevated);
   --chat-hover: var(--astra-bg-elevated);
+  --chat-accent: var(--astra-accent);
   --chat-ink: var(--astra-text-primary);
   --chat-text: var(--astra-text-secondary);
   --chat-muted: var(--astra-text-muted);
@@ -1514,6 +1697,77 @@ onBeforeUnmount(() => {
   background: var(--astra-bg-elevated);
   border-color: var(--astra-border);
   color: var(--chat-ink);
+}
+
+.chat-tasks-toggle.has-waiting {
+  border-color: color-mix(in srgb, var(--astra-warning) 35%, var(--astra-border));
+  background: color-mix(in srgb, #fffbeb 55%, transparent);
+  color: var(--astra-warning);
+}
+
+.chat-head-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--astra-bg-elevated);
+  color: var(--astra-text-secondary);
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-head-badge[data-tone="warning"] {
+  background: var(--astra-warning-soft);
+  color: var(--astra-warning);
+}
+
+.chat-head-badge[data-tone="info"] {
+  background: var(--astra-info-soft);
+  color: var(--astra-info);
+}
+
+.chat-head-badge__dot,
+.chat-task-pill__dot {
+  width: 5.5px;
+  height: 5.5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+  animation: chat-task-pulse 1.8s ease-in-out infinite;
+}
+
+.chat-task-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-task-pill--warning {
+  background: var(--astra-warning-soft);
+  color: var(--astra-warning);
+}
+
+.chat-task-pill--info {
+  background: var(--astra-info-soft);
+  color: var(--astra-info);
+}
+
+@keyframes chat-task-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 /* 空态与欢迎引导 */

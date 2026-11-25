@@ -115,7 +115,7 @@
           </div>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="节点" min-width="126" show-overflow-tooltip>
+      <ElTableColumn label="节点" min-width="180" show-overflow-tooltip>
         <template #default="{ row }">{{ nodeName(row.node_id) }}</template>
       </ElTableColumn>
       <ElTableColumn label="结果" min-width="132">

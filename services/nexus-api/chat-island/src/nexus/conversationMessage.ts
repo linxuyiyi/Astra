@@ -21,18 +21,120 @@ export type ConversationPhase = "idle" | "waiting" | "streaming" | "tool" | "app
 type Part = Exclude<ThreadMessageLike["content"], string>[number];
 type ToolPart = Extract<Part, { type: "tool-call" }>;
 
+export interface ConversationTaskRef {
+  taskId: string;
+  status?: string;
+  text?: string;
+  workerName?: string;
+  progress?: string;
+  waitingReason?: string;
+}
+
+export interface ConversationTaskCallback {
+  taskId: string;
+  status?: string;
+  statusLabel: string;
+  eventId?: string;
+  reason?: string;
+  rawText: string;
+}
+
 export interface ConversationToolResult {
   state: string;
   output: string;
   summary?: string;
-  task?: { taskId: string; status?: string; text?: string };
+  task?: ConversationTaskRef;
+}
+
+export const TASK_TOOL_LABELS: Record<string, string> = {
+  nexus_task_create: "委派任务",
+  nexus_task_categories: "查询任务分类",
+  nexus_task_get: "查询任务状态",
+  nexus_task_list: "查看任务列表",
+  nexus_task_update: "更新任务内容",
+  nexus_task_assign: "分配 Worker",
+  nexus_task_start: "启动任务执行",
+  nexus_task_pause: "暂停任务",
+  nexus_task_resume: "恢复任务执行",
+  nexus_task_terminate: "终止任务",
+  nexus_task_retry: "重新执行任务",
+  nexus_task_logs: "查看任务事件",
+  nexus_task_result: "读取执行结果",
+  nexus_task_summary: "查看复盘总结",
+  nexus_task_intervene: "转人工介入",
+  nexus_task_assistance: "读取执行端求助",
+  nexus_task_reply: "回复执行端请求",
+  nexus_task_input: "补充执行指令",
+  nexus_task_confirm: "确认任务完成",
+};
+
+const TASK_STATUS_LABELS: Record<string, string> = {
+  PENDING: "待执行",
+  RUNNING: "执行中",
+  WAITING: "待介入",
+  SUCCEEDED: "已完成",
+  FAILED: "失败",
+  CANCELED: "已取消",
+};
+
+const LABEL_TO_TASK_STATUS: Record<string, string> = {
+  待执行: "PENDING",
+  待领取: "PENDING",
+  执行中: "RUNNING",
+  运行中: "RUNNING",
+  待介入: "WAITING",
+  待处理: "WAITING",
+  等待处理: "WAITING",
+  等待人工处理: "WAITING",
+  等待中: "WAITING",
+  等待: "WAITING",
+  已完成: "SUCCEEDED",
+  成功: "SUCCEEDED",
+  失败: "FAILED",
+  执行失败: "FAILED",
+  已取消: "CANCELED",
+  已终止: "CANCELED",
+};
+
+export function shortToolName(toolName: string): string {
+  return toolName.split("__").at(-1) || toolName;
+}
+
+export function taskToolLabel(toolName: string): string | undefined {
+  return TASK_TOOL_LABELS[shortToolName(toolName)];
+}
+
+export function parseTaskWakeHint(source: string, text: string): ConversationTaskCallback | undefined {
+  if (source.trim().toLowerCase() !== "nexus-task") return undefined;
+  const trimmed = text.trim();
+  const match = trimmed.match(/^任务\s+([^\s，。；（）()]+)\s+状态变为([^\s，。；（）()]+)(?:（事件\s*([^）]+)）)?[。.]?(.*)$/s);
+  if (!match) {
+    const idMatch = trimmed.match(/\b(T-\d{8}-[A-Z0-9]+)\b/i);
+    if (!idMatch) return undefined;
+    return {
+      taskId: idMatch[1],
+      statusLabel: "状态更新",
+      rawText: trimmed,
+    };
+  }
+  const [, taskId, rawLabel, eventId, rest] = match;
+  const status = LABEL_TO_TASK_STATUS[rawLabel];
+  const reasonMatch = rest.match(/原因[：:]\s*([^。\n]+)[。.]?/);
+  return {
+    taskId,
+    status,
+    statusLabel: status ? TASK_STATUS_LABELS[status] : rawLabel,
+    eventId: eventId?.trim() || undefined,
+    reason: reasonMatch?.[1]?.trim() || undefined,
+    rawText: trimmed,
+  };
 }
 
 function toolResult(name: string, state: string, output: string, textItems: string[]): ConversationToolResult {
   const result: ConversationToolResult = { state, output };
   const firstLine = output.trim().split("\n", 1)[0];
   if (firstLine && !/^[{\[]/.test(firstLine)) result.summary = firstLine.slice(0, 160);
-  const shortName = name.split("__").at(-1) || name;
+  const shortName = shortToolName(name);
   const task = shortName.startsWith("nexus_task_");
   const librarySearch = shortName === "library_search";
   const libraryRead = shortName === "library_get";
@@ -61,14 +163,49 @@ function toolResult(name: string, state: string, output: string, textItems: stri
       if (value.status === "scheduled") result.state = "scheduled";
     }
     if (task && value?.ok !== false && state === "success") {
+      if (shortName === "nexus_task_categories" && Array.isArray(value?.categories)) {
+        result.summary = `${value.categories.length} 个可用分类`;
+      } else if (shortName === "nexus_task_list" && Array.isArray(value?.tasks)) {
+        result.summary = `共 ${value.tasks.length} 项任务`;
+      } else if (shortName === "nexus_task_assistance") {
+        const pending = Array.isArray(value?.pending_requests)
+          ? value.pending_requests.length
+          : Array.isArray(value?.requests)
+            ? value.requests.length
+            : 0;
+        result.summary = pending > 0 ? `${pending} 项待处理求助` : "已读取执行上下文";
+      }
       const row = value?.task ?? value;
       const id = row?.task_id ?? row?.id;
       if (typeof id === "string" && id) {
+        const status = typeof row.status === "string" ? row.status : undefined;
+        const title = typeof row.title === "string" ? row.title : undefined;
+        const workerName =
+          typeof row.worker_name === "string" && row.worker_name.trim()
+            ? row.worker_name.trim()
+            : typeof row.agent_worker_id === "string" && row.agent_worker_id.trim()
+              ? row.agent_worker_id.trim()
+              : undefined;
+        const progress =
+          typeof row.current_progress === "string" && row.current_progress.trim()
+            ? row.current_progress.trim()
+            : undefined;
+        const waitingReason =
+          typeof row.waiting_reason === "string" && row.waiting_reason.trim()
+            ? row.waiting_reason.trim()
+            : undefined;
         result.task = {
           taskId: id,
-          status: typeof row.status === "string" ? row.status : undefined,
-          text: typeof row.title === "string" ? row.title : undefined,
+          status,
+          text: title,
+          workerName,
+          progress,
+          waitingReason,
         };
+        if (!result.summary) {
+          const statusText = status ? TASK_STATUS_LABELS[status] || status : "";
+          result.summary = [title || id, statusText].filter(Boolean).join(" · ").slice(0, 160);
+        }
       }
     }
   } catch {
@@ -132,20 +269,24 @@ export function projectEntry({ native, sender, delivery, sequence, awaitingSnaps
       case "data":
         if (!uploaded.length) appendFile(block);
         break;
-      case "hint":
+      case "hint": {
         if (internalHint(block.source || "")) break;
+        const hintSource = block.source || "提示";
+        const hintText =
+          typeof block.hint === "string"
+            ? block.hint
+            : block.hint
+                .filter((item) => item.type === "text")
+                .map((item) => item.text)
+                .join("\n");
+        const taskCallback = parseTaskWakeHint(hintSource, hintText);
         parts.push({
           type: "data",
           name: "nexus-hint",
           data: {
-            source: block.source || "提示",
-            text:
-              typeof block.hint === "string"
-                ? block.hint
-                : block.hint
-                    .filter((item) => item.type === "text")
-                    .map((item) => item.text)
-                    .join("\n"),
+            source: hintSource,
+            text: hintText,
+            ...(taskCallback ? { taskCallback } : {}),
           },
         });
         if (Array.isArray(block.hint))
@@ -153,6 +294,7 @@ export function projectEntry({ native, sender, delivery, sequence, awaitingSnaps
             if (item.type === "data") appendFile(item);
           });
         break;
+      }
       case "tool_call":
       case "tool_result": {
         const index = toolIndex.get(block.id) ?? parts.length;

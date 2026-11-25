@@ -1,7 +1,7 @@
 <!-- 依据 AgentScope v2.0.10 官方 schedule 页的表单、列表与执行详情语义适配。
      来源和有意差异见 docs/architecture/employee-schedules.md。 -->
 <template>
-  <ElCard class="admin-card" data-testid="schedules-page">
+  <ElCard class="admin-card admin-card--fill" data-testid="schedules-page">
     <template #header>
       <div class="admin-card__header">
         <div class="schedule-heading-lead">
@@ -18,7 +18,7 @@
       </div>
     </template>
 
-    <div class="admin-page">
+    <div class="admin-page admin-page--fill">
       <div class="admin-page__toolbar" role="search" aria-label="日程筛选">
         <div class="admin-page__filters">
           <ElSelect
@@ -62,13 +62,16 @@
 
       <ElAlert v-if="error && rows.length" :title="error" type="error" :closable="false" show-icon />
 
-      <ElTable
-        v-loading="loading"
-        :data="rows"
-        row-key="id"
-        element-loading-text="正在加载日程列表"
-        data-testid="schedules-table"
-      >
+      <div class="admin-page__table">
+        <ElTable
+          ref="tableRef"
+          v-loading="loading"
+          :data="rows"
+          row-key="id"
+          height="100%"
+          element-loading-text="正在加载日程列表"
+          data-testid="schedules-table"
+        >
         <ElTableColumn label="日程" min-width="250">
           <template #default="{ row }">
             <div class="schedule-name-cell">
@@ -164,6 +167,7 @@
           </ElEmpty>
         </template>
       </ElTable>
+      </div>
 
       <div class="admin-page__footer">
         <ElPagination
@@ -558,6 +562,7 @@ import {
   ElTag,
   ElText,
 } from 'element-plus';
+import type { TableInstance } from 'element-plus';
 import { Clock, Pencil, Plus, RefreshCw, RotateCcw, Search, User } from 'lucide-vue-next';
 import {
   currentUid,
@@ -617,6 +622,7 @@ const error = ref('');
 const page = ref(1);
 const pageSize = ref(20);
 const total = ref(0);
+const tableRef = ref<TableInstance>();
 const busy = ref('');
 const employeeOptions = ref<{ id: string; name: string }[]>([]);
 const employeeFilter = ref('');
@@ -755,6 +761,7 @@ async function reload() {
     rows.value = result.items;
     total.value = result.total;
     employeeOptions.value = result.employee_options;
+    tableRef.value?.setScrollTop(0);
     if (!rows.value.length && page.value > 1) {
       page.value--;
       await reload();
@@ -1638,6 +1645,8 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .detail-hero__meta {

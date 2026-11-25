@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page" data-testid="category-page">
+  <section class="admin-page admin-page--fill" data-testid="category-page">
     <SettingsHeaderActions>
       <ElButton :icon="RefreshCw" :loading="loading" data-testid="category-refresh" @click="load">刷新</ElButton>
       <ElButton type="primary" :icon="Plus" data-testid="category-create" @click="beginCreate">新增分类</ElButton>
@@ -33,22 +33,25 @@
       </div>
     </div>
 
-    <ElTable
-      v-loading="loading"
-      :data="paged"
-      row-key="id"
-      aria-label="任务分类列表"
-      element-loading-text="正在加载任务分类"
-      data-testid="category-table"
-    >
-      <ElTableColumn label="分类名称" min-width="200">
-        <template #default="{ row }">
-          <div class="cat-cell">
-            <strong>{{ row.name }}</strong>
-            <small v-if="row.description" :title="row.description">{{ row.description }}</small>
-          </div>
-        </template>
-      </ElTableColumn>
+    <div class="admin-page__table">
+      <ElTable
+        ref="tableRef"
+        v-loading="loading"
+        :data="paged"
+        row-key="id"
+        height="100%"
+        aria-label="任务分类列表"
+        element-loading-text="正在加载任务分类"
+        data-testid="category-table"
+      >
+        <ElTableColumn label="分类名称" min-width="200">
+          <template #default="{ row }">
+            <div class="cat-cell">
+              <strong :title="row.name">{{ row.name }}</strong>
+              <small v-if="row.description" :title="row.description">{{ row.description }}</small>
+            </div>
+          </template>
+        </ElTableColumn>
       <ElTableColumn label="Prompt 配置" width="180">
         <template #default="{ row }">
           <div class="prompt-pills">
@@ -87,6 +90,7 @@
         <ElEmpty v-else-if="!loading" :image-size="64" :description="categories.length ? '没有匹配的任务分类' : '暂无任务分类'" />
       </template>
     </ElTable>
+    </div>
 
     <div class="admin-page__footer" data-testid="category-total">
       <ElPagination
@@ -130,6 +134,7 @@ import {
   ElTableColumn,
   vLoading,
 } from 'element-plus'
+import type { TableInstance } from 'element-plus'
 import { api } from '@/api/client'
 import type { TaskCategory, TaskCategoryWrite } from '@/api/types'
 import { confirmDialog } from '@/composables/useConfirm'
@@ -149,6 +154,7 @@ const status = ref('')
 const keywordDraft = ref('')
 const keyword = ref('')
 const page = ref(1)
+const tableRef = ref<TableInstance>()
 const drawerOpen = ref(false)
 const editing = ref<TaskCategory | null>(null)
 const saving = ref(false)
@@ -257,13 +263,21 @@ async function toggleEnabled(row: TaskCategory) {
 watch(pageSize, () => { page.value = 1 })
 watch(totalPages, (value) => { page.value = Math.min(page.value, value) })
 watch([status, keyword], () => { page.value = 1 })
+watch([page, pageSize], () => { tableRef.value?.setScrollTop(0) })
 
 onMounted(load)
 </script>
 
 <style scoped>
 .cat-cell { display: grid; gap: 2px; min-width: 0; }
-.cat-cell strong { color: var(--astra-text-primary); font-size: 13.5px; font-weight: 600; }
+.cat-cell strong {
+  overflow: hidden;
+  color: var(--astra-text-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cat-cell small { color: var(--astra-text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prompt-pills { display: flex; align-items: center; gap: 6px; }
 .prompt-pill {

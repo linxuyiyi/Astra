@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page gateway-audits" data-testid="gateway-audits">
+  <section class="admin-page admin-page--fill gateway-audits" data-testid="gateway-audits">
     <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error">
       <ElButton type="primary" @click="load">重试</ElButton>
     </ElAlert>
@@ -36,12 +36,15 @@
       </div>
     </div>
 
-    <ElTable
-      v-loading="loading"
-      :data="pagedRows"
-      row-key="id"
-      data-testid="gateway-audits-table"
-    >
+    <div class="admin-page__table">
+      <ElTable
+        ref="tableRef"
+        v-loading="loading"
+        :data="pagedRows"
+        row-key="id"
+        height="100%"
+        data-testid="gateway-audits-table"
+      >
       <ElTableColumn type="expand" width="40">
         <template #default="{ row }">
           <div class="audit-diff">
@@ -70,7 +73,7 @@
         <template #default="{ row }">
           <div class="audit-target">
             <ElTag size="small" type="info" class="astra-tag--neutral">{{ auditResourceTypeLabel(row.resource_type) }}</ElTag>
-            <span v-if="targetDisplayName(row as GatewayAuditEvent)" class="audit-target__name">
+            <span v-if="targetDisplayName(row as GatewayAuditEvent)" class="audit-target__name" :title="targetDisplayName(row as GatewayAuditEvent)">
               {{ targetDisplayName(row as GatewayAuditEvent) }}
             </span>
             <span v-if="row.resource_id" class="audit-target__id" :title="row.resource_id">{{ shortId(row.resource_id) }}</span>
@@ -101,6 +104,7 @@
         <ElEmpty v-if="!loading" :image-size="64" :description="emptyText" />
       </template>
     </ElTable>
+    </div>
 
     <div class="admin-page__footer">
       <ElPagination
@@ -121,6 +125,7 @@ import { RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElAlert, ElButton, ElEmpty, ElInput, ElOption, ElPagination, ElSelect, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus'
+import type { TableInstance } from 'element-plus'
 import { gatewayApi, type GatewayAuditEvent } from '@/api/gateway'
 import {
   auditActionLabel,
@@ -148,6 +153,7 @@ const keyword = ref('')
 const resourceType = ref('')
 const page = ref(1)
 const pageSize = ref(20)
+const tableRef = ref<TableInstance>()
 
 function targetDisplayName(row: GatewayAuditEvent): string {
   const after = row.after ?? {}
@@ -211,6 +217,7 @@ const emptyText = computed(() => (
 
 watch([keyword, resourceType], () => { page.value = 1 })
 watch(pageSize, () => { page.value = 1 })
+watch([page, pageSize], () => { tableRef.value?.setScrollTop(0) })
 watch(filteredRows, (list) => {
   const maxPage = Math.max(1, Math.ceil(list.length / pageSize.value))
   if (page.value > maxPage) page.value = maxPage

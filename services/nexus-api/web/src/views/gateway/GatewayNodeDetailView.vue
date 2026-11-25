@@ -60,7 +60,7 @@
           <span>健康 <b>{{ healthStateLabel(node.health_state) }}</b></span>
           <span>调度 <b>{{ schedulingStateLabel(node.scheduling_state) }}</b></span>
           <span>配置 <b>{{ configStateLabel(node.config_state) }}</b></span>
-          <span>资源池 <b>{{ poolName(node.pool_id) }}</b></span>
+          <span>资源池 <b class="gateway-node-pool-fact" :title="poolName(node.pool_id)">{{ poolName(node.pool_id) }}</b></span>
           <span>最近探测 <b>{{ formatRelativeTime(node.last_checked_at) }}</b></span>
         </div>
       </section>
@@ -320,6 +320,7 @@
         </div>
         </template>
         <ElTable
+          ref="logsTableRef"
           v-loading="logsLoading"
           :data="requests.items"
           row-key="id"
@@ -459,6 +460,7 @@ import {
   ElText,
   vLoading,
 } from 'element-plus'
+import type { TableInstance } from 'element-plus'
 import {
   gatewayApi,
   type GatewayHealthCheck,
@@ -555,6 +557,7 @@ const logsLoading = ref(false)
 const working = ref(false)
 const error = ref('')
 const editorOpen = ref(false)
+const logsTableRef = ref<TableInstance>()
 
 // 竞态守卫：切换节点或整页刷新都会推进 generation，只有最新一轮响应可以落地，
 // 否则慢响应会把上一个节点 / 上一个统计窗口的数据写回页面。
@@ -702,6 +705,7 @@ async function loadRequests(target: number = requests.value.page): Promise<void>
     const page = await gatewayApi.requests({ node_id: nodeId.value, page: target, page_size: requests.value.page_size })
     if (current !== generation) return
     requests.value = page
+    logsTableRef.value?.setScrollTop(0)
   } catch (reason) {
     if (current !== generation) return
     notify(errorMessage(reason, '日志加载失败'), 'error')
@@ -812,11 +816,12 @@ onMounted(() => {
 }
 .gateway-node-identity__main { display: grid; gap: 4px; min-width: 0; }
 .gateway-node-identity__title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
-.gateway-node-identity__title h2 { margin: 0; color: var(--astra-text-primary); font-size: 18px; line-height: 26px; }
+.gateway-node-identity__title h2 { margin: 0; color: var(--astra-text-primary); font-size: 18px; line-height: 26px; overflow-wrap: anywhere; word-break: break-word; }
 .gateway-node-identity__url { margin: 0; color: var(--astra-text-secondary); font-family: var(--astra-font-mono); font-size: 12px; overflow-wrap: anywhere; }
-.gateway-node-models { display: flex; flex-wrap: wrap; gap: 6px; }
+.gateway-node-models { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .gateway-node-model-chip {
-  display: inline-flex; align-items: center;
+  display: inline-block;
+  max-width: 100%;
   padding: 2px 8px;
   border: 1px solid var(--astra-border);
   border-radius: 6px;
@@ -825,6 +830,8 @@ onMounted(() => {
   font-family: var(--astra-font-mono);
   font-size: 12px;
   line-height: 18px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
 .gateway-node-muted { color: var(--astra-text-muted); }
 .gateway-node-back { display: inline-flex; align-items: center; gap: 4px; width: fit-content; color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
@@ -840,6 +847,7 @@ onMounted(() => {
 .gateway-node-status__detail { margin: 0; color: var(--astra-text-secondary); }
 .gateway-node-status__facts { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-left: auto; color: var(--astra-text-muted); font-size: 12px; }
 .gateway-node-status__facts b { color: var(--astra-text-primary); font-weight: 600; }
+.gateway-node-pool-fact { display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 
 /* ── 分段导航 ─────────────────────────────────────────────────────── */
 .gateway-node-tabs {
@@ -856,6 +864,8 @@ onMounted(() => {
 .gateway-node-page :deep(.el-card) { border: 1px solid var(--astra-border); border-radius: 12px; background: var(--astra-bg-panel); }
 .gateway-node-page :deep(.el-card) > .el-card__header { padding-left: 16px; padding-right: 16px; }
 .gateway-node-page :deep(.el-card) > .el-card__body { padding-left: 16px; padding-right: 16px; }
+.gateway-node-page :deep(.el-descriptions__table) { table-layout: fixed; width: 100%; }
+.gateway-node-page :deep(.el-descriptions__cell) { overflow-wrap: anywhere; word-break: break-word; }
 .gateway-node-metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
 .gateway-node-metrics--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .gateway-node-metrics :deep(.el-statistic__head) { color: var(--astra-text-muted); font-size: var(--astra-font-control); }
@@ -876,7 +886,7 @@ onMounted(() => {
 .gateway-node-peak b { color: var(--astra-text-primary); font-variant-numeric: tabular-nums; }
 .gateway-node-peak--bad { color: var(--astra-danger); }
 .gateway-node-snapshot { max-height: 220px; margin: 10px 0 0; padding: 10px; overflow: auto; color: var(--astra-text-secondary); border: 1px solid var(--astra-border); border-radius: 8px; background: var(--astra-bg-base); font: 12px/1.5 var(--astra-font-mono); white-space: pre-wrap; }
-.gateway-node-mono { font-family: var(--astra-font-mono); font-size: 12px; color: var(--astra-text-muted); }
+.gateway-node-mono { font-family: var(--astra-font-mono); font-size: 12px; color: var(--astra-text-muted); overflow-wrap: anywhere; }
 .gateway-node-num { white-space: nowrap; font-size: var(--astra-font-helper); font-variant-numeric: tabular-nums; }
 .gateway-node-err { color: var(--astra-danger); font-size: var(--astra-font-helper); }
 .gateway-node-cell { display: grid; min-width: 0; }

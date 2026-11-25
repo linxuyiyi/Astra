@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page" data-testid="skill-resources-page">
+  <section class="admin-page admin-page--fill" data-testid="skill-resources-page">
     <SettingsHeaderActions>
       <ElButton :icon="RefreshCw" :loading="loading" data-testid="skills-refresh" @click="load">刷新</ElButton>
       <ElButton :icon="Upload" data-testid="skills-upload" @click="triggerUpload">上传目录</ElButton>
@@ -35,49 +35,52 @@
       </div>
     </div>
 
-    <ElTable
-      v-loading="loading"
-      :data="paged"
-      row-key="id"
-      aria-label="技能列表"
-      element-loading-text="正在加载技能列表"
-      data-testid="skills-table"
-    >
-      <ElTableColumn label="技能名称" min-width="210">
-        <template #default="{ row }">
-          <div class="name-cell">
-            <div class="name-cell__top">
-              <button type="button" class="name-link" @click="openDetail(row as SkillResource)">{{ row.name }}</button>
-              <span v-if="row.version" class="ver-pill">v{{ row.version }}</span>
+    <div class="admin-page__table">
+      <ElTable
+        ref="tableRef"
+        v-loading="loading"
+        :data="paged"
+        row-key="id"
+        height="100%"
+        aria-label="技能列表"
+        element-loading-text="正在加载技能列表"
+        data-testid="skills-table"
+      >
+        <ElTableColumn label="技能名称" min-width="210">
+          <template #default="{ row }">
+            <div class="name-cell">
+              <div class="name-cell__top">
+                <button type="button" class="name-link" :title="row.name" @click="openDetail(row as SkillResource)">{{ row.name }}</button>
+                <span v-if="row.version" class="ver-pill">v{{ row.version }}</span>
+              </div>
+              <small v-if="row.description" class="name-desc" :title="row.description">{{ row.description }}</small>
             </div>
-            <small v-if="row.description" class="name-desc" :title="row.description">{{ row.description }}</small>
-          </div>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="来源" width="112" align="center">
-        <template #default="{ row }">
-          <ElTag
-            size="small"
-            type="info"
-            class="astra-tag--neutral"
-          >{{ sourceLabel(row.source) }}</ElTag>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="关联员工" min-width="150">
-        <template #default="{ row }">
-          <div v-if="row.employees.length" class="chips">
-            <span v-for="employee in row.employees.slice(0, 2)" :key="employee.id" class="emp-chip">{{ employee.name }}</span>
-            <ElTooltip
-              v-if="row.employees.length > 2"
-              placement="top"
-              :content="row.employees.map((e: { name: string }) => e.name).join('、')"
-            >
-              <span class="emp-more">+{{ row.employees.length - 2 }}</span>
-            </ElTooltip>
-          </div>
-          <span v-else class="muted">未绑定</span>
-        </template>
-      </ElTableColumn>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="来源" width="112" align="center">
+          <template #default="{ row }">
+            <ElTag
+              size="small"
+              type="info"
+              class="astra-tag--neutral"
+            >{{ sourceLabel(row.source) }}</ElTag>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="关联员工" min-width="150">
+          <template #default="{ row }">
+            <div v-if="row.employees.length" class="chips">
+              <span v-for="employee in row.employees.slice(0, 2)" :key="employee.id" class="emp-chip" :title="employee.name">{{ employee.name }}</span>
+              <ElTooltip
+                v-if="row.employees.length > 2"
+                placement="top"
+                :content="row.employees.map((e: { name: string }) => e.name).join('、')"
+              >
+                <span class="emp-more">+{{ row.employees.length - 2 }}</span>
+              </ElTooltip>
+            </div>
+            <span v-else class="muted">未绑定</span>
+          </template>
+        </ElTableColumn>
       <ElTableColumn label="同步状态" width="126">
         <template #default="{ row }">
           <ElTooltip :content="row.sync.detail || syncLabel(row.sync.status)" placement="top">
@@ -135,6 +138,7 @@
         <ElEmpty v-if="!loading" :image-size="64" :description="items.length ? '没有匹配的技能' : '暂无技能资源'" />
       </template>
     </ElTable>
+    </div>
 
     <div class="admin-page__footer">
       <ElPagination
@@ -344,6 +348,7 @@ import {
   ElTooltip,
   vLoading,
 } from "element-plus";
+import type { TableInstance } from "element-plus";
 import {
   createSkillResource,
   deleteSkillResource,
@@ -384,6 +389,7 @@ const sourceFilter = ref("");
 const statusFilter = ref("");
 const page = ref(1);
 const pageSize = ref(20);
+const tableRef = ref<TableInstance>();
 const busyId = ref("");
 
 const directoryInput = ref<HTMLInputElement | null>(null);
@@ -432,6 +438,12 @@ const filtered = computed(() => {
 const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value));
 
 watch([keyword, sourceFilter, statusFilter], () => { page.value = 1; });
+watch(pageSize, () => { page.value = 1; });
+watch(filtered, (list) => {
+  const maxPage = Math.max(1, Math.ceil(list.length / pageSize.value));
+  if (page.value > maxPage) page.value = maxPage;
+});
+watch([page, pageSize], () => { tableRef.value?.setScrollTop(0); });
 
 async function load() {
   loading.value = true;
@@ -696,6 +708,7 @@ onMounted(load);
 }
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .emp-chip {
+  max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 1px 7px; border-radius: 5px;
   border: 1px solid var(--astra-border); background: var(--astra-bg-subtle);
   color: var(--astra-text-secondary); font-size: 12px; line-height: 18px;

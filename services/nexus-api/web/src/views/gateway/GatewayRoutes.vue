@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page" data-testid="gateway-routes">
+  <section class="admin-page admin-page--fill" data-testid="gateway-routes">
     <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error" data-testid="gateway-routes-error">
       <ElButton type="primary" data-testid="gateway-routes-retry" @click="load">重试</ElButton>
     </ElAlert>
@@ -61,61 +61,66 @@
       </div>
     </div>
 
-    <ElTable
-      v-loading="loading"
-      :data="pagedRoutes"
-      row-key="id"
-      element-loading-text="正在加载路由"
-      data-testid="gateway-route-table"
-    >
-      <ElTableColumn label="请求模型" min-width="190">
-        <template #default="{ row }">
-          <div class="route-cell">
-            <strong class="route-cell__model">{{ row.model }}</strong>
-            <span v-if="row.description" class="route-cell__desc" :title="row.description">{{ row.description }}</span>
-          </div>
+    <div class="admin-page__table">
+      <ElTable
+        ref="tableRef"
+        v-loading="loading"
+        :data="pagedRoutes"
+        row-key="id"
+        height="100%"
+        element-loading-text="正在加载路由"
+        data-testid="gateway-route-table"
+      >
+        <ElTableColumn label="请求模型" min-width="190">
+          <template #default="{ row }">
+            <div class="route-cell">
+              <strong class="route-cell__model" :title="row.model">{{ row.model }}</strong>
+              <span v-if="row.description" class="route-cell__desc" :title="row.description">{{ row.description }}</span>
+            </div>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="目标实际模型" min-width="190">
+          <template #default="{ row }">
+            <span v-if="row.target_model && row.target_model !== row.model" class="route-target-chip" :title="row.target_model">
+              <span class="route-target-arrow">→</span>
+              <span class="route-target-text">{{ row.target_model }}</span>
+            </span>
+            <span v-else class="route-same-muted">与请求一致</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="模型类型" width="112" align="center">
+          <template #default="{ row }">
+            <ElTag size="small" type="info" class="astra-tag--neutral">{{ modelTypeLabel(row.model_type) }}</ElTag>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="关联资源池" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            <RouterLink class="route-pool-link" :title="poolName(row.pool_id)" :to="{ path: '/gateway/nodes', query: { pool: row.pool_id } }">
+              {{ poolName(row.pool_id) }}
+            </RouterLink>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="状态" width="96" align="center">
+          <template #default="{ row }">
+            <ElTag
+              :type="row.enabled ? 'success' : 'info'"
+              :class="{ 'astra-tag--neutral': !row.enabled }"
+            >{{ row.enabled ? '启用' : '禁用' }}</ElTag>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="操作" width="130" align="center" fixed="right">
+          <template #default="{ row }">
+            <div class="admin-actions">
+              <ElButton link type="primary" :disabled="busy" @click="openRouteEdit(row as GatewayRoute)">编辑</ElButton>
+              <ElButton link type="danger" :disabled="busy" @click="removeRoute(row as GatewayRoute)">删除</ElButton>
+            </div>
+          </template>
+        </ElTableColumn>
+        <template #empty>
+          <ElEmpty v-if="!loading" :image-size="64" :description="routeEmptyText" />
         </template>
-      </ElTableColumn>
-      <ElTableColumn label="目标实际模型" min-width="190">
-        <template #default="{ row }">
-          <span v-if="row.target_model && row.target_model !== row.model" class="route-target-chip">
-            <span class="route-target-arrow">→</span>{{ row.target_model }}
-          </span>
-          <span v-else class="route-same-muted">与请求一致</span>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="模型类型" width="112" align="center">
-        <template #default="{ row }">
-          <ElTag size="small" type="info" class="astra-tag--neutral">{{ modelTypeLabel(row.model_type) }}</ElTag>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="关联资源池" min-width="140" show-overflow-tooltip>
-        <template #default="{ row }">
-          <RouterLink class="route-pool-link" :to="{ path: '/gateway/nodes', query: { pool: row.pool_id } }">
-            {{ poolName(row.pool_id) }}
-          </RouterLink>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="状态" width="96" align="center">
-        <template #default="{ row }">
-          <ElTag
-            :type="row.enabled ? 'success' : 'info'"
-            :class="{ 'astra-tag--neutral': !row.enabled }"
-          >{{ row.enabled ? '启用' : '禁用' }}</ElTag>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="操作" width="130" align="center" fixed="right">
-        <template #default="{ row }">
-          <div class="admin-actions">
-            <ElButton link type="primary" :disabled="busy" @click="openRouteEdit(row as GatewayRoute)">编辑</ElButton>
-            <ElButton link type="danger" :disabled="busy" @click="removeRoute(row as GatewayRoute)">删除</ElButton>
-          </div>
-        </template>
-      </ElTableColumn>
-      <template #empty>
-        <ElEmpty v-if="!loading" :image-size="64" :description="routeEmptyText" />
-      </template>
-    </ElTable>
+      </ElTable>
+    </div>
 
     <div class="admin-page__footer">
       <ElPagination
@@ -190,7 +195,7 @@
           </ElFormItem>
         </div>
         <ElFormItem label="请求模型名" prop="model">
-          <ElInput v-model="routeForm.model" placeholder="客户端调用的模型名称，例如 gpt-4o 或 GLM-5.2" />
+          <ElInput v-model="routeForm.model" maxlength="200" placeholder="客户端调用的模型名称，例如 gpt-4o 或 GLM-5.2" />
         </ElFormItem>
         <ElFormItem prop="target_model">
           <template #label>目标实际模型（可选）</template>
@@ -250,7 +255,7 @@ import {
   ElTag,
   vLoading,
 } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import {
   gatewayApi,
   type GatewayNode,
@@ -322,6 +327,7 @@ async function saveSpeech() {
 const pageSize = ref(20)
 const routeFilters = reactive({ keyword: '', modelType: '', pool: '', enabled: '' })
 const routePage = ref(1)
+const tableRef = ref<TableInstance>()
 
 function matchesEnabled(enabled: boolean, filter: string): boolean {
   if (!filter) return true
@@ -355,6 +361,7 @@ const routeEmptyText = computed(() => (routeHasFilters.value ? '没有匹配的�
 
 watch(routeFilters, () => { routePage.value = 1 })
 watch(pageSize, () => { routePage.value = 1 })
+watch([routePage, pageSize], () => { tableRef.value?.setScrollTop(0) })
 watch(filteredRoutes, (list) => {
   const maxPage = Math.max(1, Math.ceil(list.length / pageSize.value))
   if (routePage.value > maxPage) routePage.value = maxPage
@@ -538,13 +545,15 @@ onMounted(load)
   color: var(--astra-text-primary);
   font-family: var(--astra-font-mono);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.route-target-arrow { color: var(--astra-text-muted); font-weight: 500; }
+.route-target-arrow { flex: none; color: var(--astra-text-muted); font-weight: 500; }
+.route-target-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .route-same-muted { color: var(--astra-text-muted); font-size: 13px; }
 
-.route-pool-link { color: var(--astra-accent-text); text-decoration: none; font-size: 13px; }
+.route-pool-link {
+  display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;
+  color: var(--astra-accent-text); text-decoration: none; font-size: 13px;
+}
 .route-pool-link:hover { color: var(--astra-accent-hover); text-decoration: underline; }
 
 .speech-strip {

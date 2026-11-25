@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page" data-testid="gateway-pools">
+  <section ref="rootRef" class="admin-page" data-testid="gateway-pools">
     <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error" data-testid="gateway-pools-error">
       <ElButton type="primary" data-testid="gateway-pools-retry" @click="load">重试</ElButton>
     </ElAlert>
@@ -49,7 +49,7 @@
       <ElTableColumn label="名称" min-width="190">
         <template #default="{ row }">
           <div class="pool-cell">
-            <strong>{{ row.name }}</strong>
+            <strong :title="row.name">{{ row.name }}</strong>
             <span v-if="row.description" class="pool-cell__desc" :title="row.description">{{ row.description }}</span>
           </div>
         </template>
@@ -153,7 +153,7 @@
     >
       <ElForm ref="poolFormRef" :model="poolForm" :rules="poolRules" label-position="top" scroll-to-error :disabled="saving">
         <ElFormItem label="名称" prop="name">
-          <ElInput v-model="poolForm.name" placeholder="例如：对话主力池" />
+          <ElInput v-model="poolForm.name" maxlength="160" placeholder="例如：对话主力池" />
         </ElFormItem>
         <ElFormItem label="描述" prop="description">
           <ElInput v-model="poolForm.description" type="textarea" :rows="2" placeholder="可选，说明该资源池的用途" />
@@ -228,6 +228,7 @@ const poolForm = reactive({ id: '', name: '', description: '', sort_order: '0', 
 const pageSize = ref(20)
 const poolFilters = reactive({ keyword: '', enabled: '' })
 const poolPage = ref(1)
+const rootRef = ref<HTMLElement | null>(null)
 
 interface PoolSummary {
   total: number
@@ -298,6 +299,9 @@ const modelRows = computed(() => {
 
 watch(poolFilters, () => { poolPage.value = 1 })
 watch(pageSize, () => { poolPage.value = 1 })
+watch([poolPage, pageSize], () => {
+  rootRef.value?.closest('.el-card__body')?.scrollTo({ top: 0 })
+})
 watch(filteredPools, (list) => {
   const maxPage = Math.max(1, Math.ceil(list.length / pageSize.value))
   if (poolPage.value > maxPage) poolPage.value = maxPage
@@ -438,10 +442,10 @@ onMounted(load)
 .pool-node-link__ok { color: var(--astra-success); }
 .pool-node-link__empty { color: var(--astra-text-muted); }
 
-.pool-models { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.pool-models { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
 .pool-model-chip {
-  display: inline-flex; align-items: center;
-  max-width: 210px;
+  display: inline-block;
+  max-width: 180px;
   padding: 1px 7px;
   overflow: hidden;
   border: 1px solid var(--astra-border);
@@ -453,6 +457,7 @@ onMounted(load)
   line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  vertical-align: middle;
 }
 .pool-model-more {
   display: inline-flex; align-items: center;

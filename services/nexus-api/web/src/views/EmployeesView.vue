@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page" data-testid="employees-page">
+  <section class="admin-page admin-page--fill" data-testid="employees-page">
     <SettingsHeaderActions>
       <ElButton :icon="RefreshCw" :loading="loading" data-testid="employees-refresh" @click="reload">刷新</ElButton>
       <ElButton type="primary" :icon="Plus" data-testid="employees-create" @click="openCreate">新建数字员工</ElButton>
@@ -38,103 +38,107 @@
       </div>
     </div>
 
-    <ElTable
-      v-loading="loading"
-      :data="paged"
-      row-key="id"
-      element-loading-text="正在加载员工列表"
-      data-testid="employees-table"
-    >
-      <ElTableColumn label="数字员工" min-width="190">
-        <template #default="{ row }">
-          <div class="person-cell">
-            <EmployeeAvatar :avatar="row.avatar" :size="36" :disabled="!row.enabled" />
-            <div class="person-name">
-              <button type="button" class="person-link" :title="row.id" @click="openView(row as Employee)">{{ row.name }}</button>
-              <small class="person-domain">{{ row.domain }}</small>
+    <div class="admin-page__table">
+      <ElTable
+        ref="tableRef"
+        v-loading="loading"
+        :data="paged"
+        row-key="id"
+        height="100%"
+        element-loading-text="正在加载员工列表"
+        data-testid="employees-table"
+      >
+        <ElTableColumn label="数字员工" min-width="170">
+          <template #default="{ row }">
+            <div class="person-cell">
+              <EmployeeAvatar :avatar="row.avatar" :size="36" :disabled="!row.enabled" />
+              <div class="person-name">
+                <button type="button" class="person-link" :title="`${row.name} (${row.id})`" @click="openView(row as Employee)">{{ row.name }}</button>
+                <small class="person-domain" :title="row.domain">{{ row.domain }}</small>
+              </div>
             </div>
-          </div>
-        </template>
-      </ElTableColumn>
+          </template>
+        </ElTableColumn>
 
-      <ElTableColumn label="职责说明" min-width="210" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span class="desc-text">{{ row.description || '—' }}</span>
-        </template>
-      </ElTableColumn>
+        <ElTableColumn label="职责说明" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="desc-text">{{ row.description || '—' }}</span>
+          </template>
+        </ElTableColumn>
 
-      <ElTableColumn label="模型路由" width="150" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span v-if="routeModelName(row.model_route_id)" class="route-chip">{{ routeModelName(row.model_route_id) }}</span>
-          <span v-else class="muted">未绑定</span>
-        </template>
-      </ElTableColumn>
+        <ElTableColumn label="模型路由" width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="routeModelName(row.model_route_id)" class="route-chip" :title="routeModelName(row.model_route_id)">{{ routeModelName(row.model_route_id) }}</span>
+            <span v-else class="muted">未绑定</span>
+          </template>
+        </ElTableColumn>
 
-      <ElTableColumn label="能力配置" min-width="190">
-        <template #default="{ row }">
-          <div v-if="hasAnyCapability(row as Employee)" class="cap-summary">
-            <ElTooltip v-if="row.skills.length" placement="top" :content="`技能：${row.skills.map((s: string) => resourceLabel(catalogs.skills, s)).join('、')}`">
-              <span class="cap-pill">技能 <b>{{ row.skills.length }}</b></span>
-            </ElTooltip>
-            <ElTooltip v-if="row.mcps.length" placement="top" :content="`MCP：${row.mcps.map((m: string) => resourceLabel(catalogs.mcps, m)).join('、')}`">
-              <span class="cap-pill">MCP <b>{{ row.mcps.length }}</b></span>
-            </ElTooltip>
-            <ElTooltip v-if="row.tools.length" placement="top" :content="`工具：${row.tools.map((t: string) => toolLabel(t)).join('、')}`">
-              <span class="cap-pill">工具 <b>{{ row.tools.length }}</b></span>
-            </ElTooltip>
-            <ElTooltip v-if="row.knowledge.length" placement="top" :content="`知识库：${row.knowledge.map((k: string) => resourceLabel(catalogs.knowledge, k)).join('、')}`">
-              <span class="cap-pill">知识 <b>{{ row.knowledge.length }}</b></span>
-            </ElTooltip>
-          </div>
-          <span v-else class="muted">未配置</span>
-        </template>
-      </ElTableColumn>
+        <ElTableColumn label="能力配置" min-width="160">
+          <template #default="{ row }">
+            <div v-if="hasAnyCapability(row as Employee)" class="cap-summary">
+              <ElTooltip v-if="row.skills.length" placement="top" :content="`技能：${row.skills.map((s: string) => resourceLabel(catalogs.skills, s)).join('、')}`">
+                <span class="cap-pill">技能 <b>{{ row.skills.length }}</b></span>
+              </ElTooltip>
+              <ElTooltip v-if="row.mcps.length" placement="top" :content="`MCP：${row.mcps.map((m: string) => resourceLabel(catalogs.mcps, m)).join('、')}`">
+                <span class="cap-pill">MCP <b>{{ row.mcps.length }}</b></span>
+              </ElTooltip>
+              <ElTooltip v-if="row.tools.length" placement="top" :content="`工具：${row.tools.map((t: string) => toolLabel(t)).join('、')}`">
+                <span class="cap-pill">工具 <b>{{ row.tools.length }}</b></span>
+              </ElTooltip>
+              <ElTooltip v-if="row.knowledge.length" placement="top" :content="`知识库：${row.knowledge.map((k: string) => resourceLabel(catalogs.knowledge, k)).join('、')}`">
+                <span class="cap-pill">知识 <b>{{ row.knowledge.length }}</b></span>
+              </ElTooltip>
+            </div>
+            <span v-else class="muted">未配置</span>
+          </template>
+        </ElTableColumn>
 
-      <ElTableColumn label="同步" width="96" align="center">
-        <template #default="{ row }">
-          <ElTooltip :content="syncDetail(row as Employee)" placement="top">
-            <ElTag
+        <ElTableColumn label="同步" width="84" align="center">
+          <template #default="{ row }">
+            <ElTooltip :content="syncDetail(row as Employee)" placement="top">
+              <ElTag
+                size="small"
+                :type="syncTagType(row as Employee)"
+                :class="{ 'astra-tag--neutral': syncTagType(row as Employee) === 'info' }"
+              >{{ syncLabel(row as Employee) }}</ElTag>
+            </ElTooltip>
+          </template>
+        </ElTableColumn>
+
+        <ElTableColumn label="启用" width="64" align="center">
+          <template #default="{ row }">
+            <ElSwitch
               size="small"
-              :type="syncTagType(row as Employee)"
-              :class="{ 'astra-tag--neutral': syncTagType(row as Employee) === 'info' }"
-            >{{ syncLabel(row as Employee) }}</ElTag>
-          </ElTooltip>
-        </template>
-      </ElTableColumn>
+              :model-value="(row as Employee).enabled"
+              :aria-label="`${(row as Employee).name} 启用`"
+              @change="toggle(row as Employee, Boolean($event))"
+            />
+          </template>
+        </ElTableColumn>
 
-      <ElTableColumn label="启用" width="76" align="center">
-        <template #default="{ row }">
-          <ElSwitch
-            size="small"
-            :model-value="(row as Employee).enabled"
-            :aria-label="`${(row as Employee).name} 启用`"
-            @change="toggle(row as Employee, Boolean($event))"
-          />
-        </template>
-      </ElTableColumn>
+        <ElTableColumn label="操作" width="170" align="center" fixed="right">
+          <template #default="{ row }">
+            <div class="admin-actions">
+              <ElButton link type="primary" @click="goChat((row as Employee).id)">对话</ElButton>
+              <ElButton link type="primary" @click="openView(row as Employee)">档案</ElButton>
+              <ElButton link type="primary" @click="openEdit(row as Employee)">编辑</ElButton>
+              <ElDropdown trigger="click" @command="(cmd) => cmd === 'delete' && askDelete(row as Employee)">
+                <ElButton link type="primary">更多</ElButton>
+                <template #dropdown>
+                  <ElDropdownMenu>
+                    <ElDropdownItem command="delete" class="danger-item">删除员工</ElDropdownItem>
+                  </ElDropdownMenu>
+                </template>
+              </ElDropdown>
+            </div>
+          </template>
+        </ElTableColumn>
 
-      <ElTableColumn label="操作" width="176" align="center" fixed="right">
-        <template #default="{ row }">
-          <div class="admin-actions">
-            <ElButton link type="primary" @click="goChat((row as Employee).id)">对话</ElButton>
-            <ElButton link type="primary" @click="openView(row as Employee)">档案</ElButton>
-            <ElButton link type="primary" @click="openEdit(row as Employee)">编辑</ElButton>
-            <ElDropdown trigger="click" @command="(cmd) => cmd === 'delete' && askDelete(row as Employee)">
-              <ElButton link type="primary">更多</ElButton>
-              <template #dropdown>
-                <ElDropdownMenu>
-                  <ElDropdownItem command="delete" class="danger-item">删除员工</ElDropdownItem>
-                </ElDropdownMenu>
-              </template>
-            </ElDropdown>
-          </div>
+        <template #empty>
+          <ElEmpty v-if="!loading" :image-size="64" description="暂无匹配员工" />
         </template>
-      </ElTableColumn>
-
-      <template #empty>
-        <ElEmpty v-if="!loading" :image-size="64" description="暂无匹配员工" />
-      </template>
-    </ElTable>
+      </ElTable>
+    </div>
 
     <div class="admin-page__footer">
       <ElPagination
@@ -284,6 +288,7 @@ import {
   ElTooltip,
   vLoading,
 } from "element-plus";
+import type { TableInstance } from "element-plus";
 import EmployeeDrawer from "../components/EmployeeDrawer.vue";
 import EmployeeAvatar from "../components/EmployeeAvatar.vue";
 import MarkdownView from "@/components/astra/MarkdownView.vue";
@@ -299,6 +304,7 @@ const query = ref("");
 const statusFilter = ref("");
 const page = ref(1);
 const pageSize = ref(20);
+const tableRef = ref<TableInstance>();
 const loading = ref(false);
 const loadError = ref("");
 
@@ -339,6 +345,7 @@ const paged = computed(() =>
 
 watch([query, statusFilter], () => { page.value = 1; });
 watch(pageSize, () => { page.value = 1; });
+watch([page, pageSize], () => { tableRef.value?.setScrollTop(0); });
 watch(filtered, (list) => {
   const maxPage = Math.max(1, Math.ceil(list.length / pageSize.value));
   if (page.value > maxPage) page.value = maxPage;
@@ -537,8 +544,8 @@ onMounted(async () => {
 }
 .view-hero-text { display: grid; gap: 4px; min-width: 0; }
 .view-hero-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.view-hero-title h3 { margin: 0; color: var(--astra-text-primary); font-size: 17px; font-weight: 600; }
-.view-hero-domain { margin: 0; color: var(--astra-text-secondary); font-size: 13px; }
+.view-hero-title h3 { margin: 0; color: var(--astra-text-primary); font-size: 17px; font-weight: 600; overflow-wrap: anywhere; word-break: break-word; }
+.view-hero-domain { margin: 0; color: var(--astra-text-secondary); font-size: 13px; overflow-wrap: anywhere; word-break: break-word; }
 .view-hero-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--astra-text-muted); font-size: 12px; }
 .mono-inline { font-family: var(--astra-font-mono); color: var(--astra-text-secondary); font-weight: 500; }
 

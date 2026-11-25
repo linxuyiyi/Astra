@@ -1,21 +1,23 @@
 <template>
   <ElTable
+    ref="tableRef"
     v-loading="loading"
     class="gateway-node-table"
     element-loading-text="正在加载节点"
     :data="nodes"
     row-key="id"
+    height="100%"
     data-testid="gateway-node-table"
   >
-    <ElTableColumn label="节点名称 / 地址" min-width="170">
+    <ElTableColumn label="节点名称 / 地址" min-width="160">
       <template #default="{ row }">
         <RouterLink class="node-cell" :to="`/gateway/nodes/${row.id}`">
-          <strong>{{ row.name }}</strong>
+          <strong :title="row.name">{{ row.name }}</strong>
           <span class="node-cell__url mono" :title="row.base_url">{{ row.base_url }}</span>
         </RouterLink>
       </template>
     </ElTableColumn>
-    <ElTableColumn label="类型" width="84">
+    <ElTableColumn label="类型" width="92">
       <template #default="{ row }">
         <ElTag size="small" type="info" class="astra-tag--neutral">{{ probeStrategyLabel(row.probe_strategy) }}</ElTag>
       </template>
@@ -26,7 +28,7 @@
         <span v-else class="node-cell__empty">未分配</span>
       </template>
     </ElTableColumn>
-    <ElTableColumn label="支持模型" min-width="176">
+    <ElTableColumn label="支持模型" min-width="150">
       <template #default="{ row }">
         <div v-if="row.models.length" class="node-models">
           <ElTag
@@ -35,6 +37,7 @@
             size="small"
             type="info"
             class="astra-tag--neutral node-model-tag mono"
+            :title="model"
           >
             {{ model }}
           </ElTag>
@@ -45,7 +48,7 @@
         <span v-else class="node-cell__empty">未配置</span>
       </template>
     </ElTableColumn>
-    <ElTableColumn label="运行状态" width="152">
+    <ElTableColumn label="运行状态" width="144">
       <template #default="{ row }">
         <div class="node-states">
           <ElTag
@@ -65,12 +68,12 @@
         </div>
       </template>
     </ElTableColumn>
-    <ElTableColumn label="权重 / 并发" width="88" align="center">
+    <ElTableColumn label="权重 / 并发" width="108" align="center">
       <template #default="{ row }">
-        <span class="node-weight">{{ row.weight }} / {{ row.max_concurrency || '不限' }}</span>
+        <span class="node-weight" :title="`${row.weight} / ${row.max_concurrency || '不限'}`">{{ row.weight }} / {{ row.max_concurrency || '不限' }}</span>
       </template>
     </ElTableColumn>
-    <ElTableColumn label="启用" width="60" align="center">
+    <ElTableColumn label="启用" width="58" align="center">
       <template #default="{ row }">
         <ElSwitch
           size="small"
@@ -81,7 +84,7 @@
         />
       </template>
     </ElTableColumn>
-    <ElTableColumn label="操作" width="184" align="center" fixed="right">
+    <ElTableColumn label="操作" width="172" align="center" fixed="right">
       <template #default="{ row }">
         <div class="admin-actions">
           <ElButton link type="primary" :disabled="busyId === row.id" @click="$emit('detail', row as GatewayNode)">详情</ElButton>
@@ -108,8 +111,10 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ElButton, ElDropdown, ElDropdownItem, ElDropdownMenu, ElEmpty, ElSwitch, ElTable, ElTableColumn, ElTag, ElTooltip, vLoading } from 'element-plus'
+import type { TableInstance } from 'element-plus'
 import type { GatewayNode, GatewayPool } from '@/api/gateway'
 import {
   healthStateLabel,
@@ -154,20 +159,33 @@ function tagType(tone: GatewayTone): 'success' | 'warning' | 'danger' | 'info' {
   if (tone === 'danger') return 'danger'
   return 'info'
 }
+
+const tableRef = ref<TableInstance>()
+defineExpose({
+  scrollToTop: () => tableRef.value?.setScrollTop(0),
+})
 </script>
 
 <style scoped>
 .node-cell { display: grid; gap: 2px; min-width: 0; text-decoration: none; }
-.node-cell strong { color: var(--astra-text-primary); font-size: var(--astra-font-label); font-weight: 600; }
+.node-cell strong {
+  overflow: hidden;
+  color: var(--astra-text-primary);
+  font-size: var(--astra-font-label);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .node-cell:hover strong { color: var(--astra-accent-text); }
 .node-cell__url { color: var(--astra-text-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node-cell__url.mono { font-family: var(--astra-font-mono); }
 .node-cell__empty { color: var(--astra-text-muted); font-size: var(--astra-font-helper); }
 .node-pool-name { color: var(--astra-text-secondary); font-size: var(--astra-font-helper); }
-.node-models { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.node-model-tag { font-size: 11px; padding: 0 6px; height: 22px; line-height: 20px; }
+.node-models { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.node-model-tag { max-width: 152px; font-size: 11px; padding: 0 6px; height: 22px; line-height: 20px; }
+.node-model-tag :deep(.el-tag__content) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node-model-more { font-size: 11px; padding: 0 6px; height: 22px; line-height: 20px; cursor: default; }
 .node-states { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; }
 .gateway-node-table :deep(.admin-actions) { flex-wrap: nowrap; white-space: nowrap; }
-.node-weight { color: var(--astra-text-secondary); font-size: var(--astra-font-helper); font-variant-numeric: tabular-nums; }
+.node-weight { color: var(--astra-text-secondary); font-size: var(--astra-font-helper); font-variant-numeric: tabular-nums; white-space: nowrap; }
 </style>

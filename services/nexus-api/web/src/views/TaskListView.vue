@@ -45,6 +45,7 @@
 
     <div class="astra-table-panel astra-table-panel--clickable">
       <el-table
+        ref="tableRef"
         v-loading="loading"
         :data="tasks"
         row-key="id"
@@ -66,7 +67,7 @@
               </div>
               <div class="task-cell__meta">
                 <span class="meta-chip">{{ taskTypeLabel(row.task_type) }}</span>
-                <span v-if="categoryName(row.category_id)" class="meta-chip">
+                <span v-if="categoryName(row.category_id)" class="meta-chip" :title="categoryName(row.category_id)">
                   {{ categoryName(row.category_id) }}
                 </span>
                 <span v-if="row.priority === 'VERY_HIGH' || row.priority === 'HIGH'" class="meta-priority" :data-priority="row.priority">
@@ -157,7 +158,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, type TableInstance } from 'element-plus'
 import { Plus, RefreshCw, Search } from 'lucide-vue-next'
 import AstraPageHeader from '@/components/astra/AstraPageHeader.vue'
 import SemanticTag from '@/components/astra/SemanticTag.vue'
@@ -194,6 +195,7 @@ const keyword = ref('')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const tableRef = ref<TableInstance>()
 const creating = ref(false)
 const editing = ref<Task>()
 
@@ -235,6 +237,9 @@ async function load(background = false) {
     total.value = result.total
     lastUpdated.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
     error.value = ''
+    if (!result.items.length && page.value > 1 && result.total > 0) {
+      page.value = Math.max(1, Math.ceil(result.total / pageSize.value))
+    }
   } catch (reason) {
     if (!controller.signal.aborted) error.value = `刷新失败：${String(reason)}`
   } finally {
@@ -306,7 +311,13 @@ watch(() => route.query.status, (value) => {
   filter.value = String(value || '')
   applyFilters()
 })
-watch([page, pageSize], () => load())
+watch(pageSize, () => {
+  if (page.value !== 1) page.value = 1
+})
+watch([page, pageSize], () => {
+  tableRef.value?.setScrollTop(0)
+  void load()
+})
 onMounted(() => load())
 useVisibleRefresh(() => {
   if (!(creating.value || editing.value || acting.value)) void load(true)
@@ -428,8 +439,7 @@ onUnmounted(() => request?.abort())
 }
 
 .meta-chip {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -442,7 +452,8 @@ onUnmounted(() => request?.abort())
   color: var(--astra-text-secondary);
   font-size: 11.5px;
   font-weight: 500;
-  line-height: 1;
+  line-height: 17px;
+  vertical-align: middle;
 }
 
 .meta-priority {

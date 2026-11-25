@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page" data-testid="gateway-keys">
+  <section class="admin-page admin-page--fill" data-testid="gateway-keys">
     <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error" data-testid="gateway-keys-error">
       <ElButton type="primary" data-testid="gateway-keys-retry" @click="load">重试</ElButton>
     </ElAlert>
@@ -43,85 +43,89 @@
       </div>
     </div>
 
-    <ElTable
-      v-loading="loading"
-      :data="pagedKeys"
-      row-key="id"
-      element-loading-text="正在加载 Key"
-      data-testid="gateway-keys-table"
-    >
-      <ElTableColumn label="名称 / 前缀" min-width="220">
-        <template #default="{ row }">
-          <div class="key-cell">
-            <strong>{{ row.name }}</strong>
-            <div class="key-cell__meta">
-              <span class="key-prefix-chip">{{ row.key_prefix }}…</span>
-              <span class="key-cell__models" :title="row.allowed_models.length ? row.allowed_models.join('、') : '全部模型'">
-                {{ row.allowed_models.length ? row.allowed_models.join('、') : '全部模型' }}
-              </span>
+    <div class="admin-page__table">
+      <ElTable
+        ref="tableRef"
+        v-loading="loading"
+        :data="pagedKeys"
+        row-key="id"
+        height="100%"
+        element-loading-text="正在加载 Key"
+        data-testid="gateway-keys-table"
+      >
+        <ElTableColumn label="名称 / 前缀" min-width="220">
+          <template #default="{ row }">
+            <div class="key-cell">
+              <strong :title="row.name">{{ row.name }}</strong>
+              <div class="key-cell__meta">
+                <span class="key-prefix-chip">{{ row.key_prefix }}…</span>
+                <span class="key-cell__models" :title="row.allowed_models.length ? row.allowed_models.join('、') : '全部模型'">
+                  {{ row.allowed_models.length ? row.allowed_models.join('、') : '全部模型' }}
+                </span>
+              </div>
             </div>
-          </div>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="状态" width="92" align="center">
+          <template #default="{ row }">
+            <ElTag v-if="row.revoked_at" type="danger">已吊销</ElTag>
+            <ElTag v-else-if="isExpired(row.expires_at)" type="warning">已过期</ElTag>
+            <ElTag
+              v-else
+              :type="row.enabled ? 'success' : 'info'"
+              :class="{ 'astra-tag--neutral': !row.enabled }"
+            >{{ row.enabled ? '启用' : '停用' }}</ElTag>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="归属" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span :class="{ 'key-muted': !row.owner_id }">{{ row.owner_id || '—' }}</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="并发 / Token 限额" min-width="165" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="key-num">并发 {{ row.max_concurrency || '不限' }} · 时/日 {{ tokenLimitText(row.hourly_token_limit) }}/{{ tokenLimitText(row.daily_token_limit) }}</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="最近使用" width="110">
+          <template #default="{ row }">
+            <span class="key-num" :class="{ 'key-muted': !row.last_used_at }">
+              {{ row.last_used_at ? formatRelativeTime(row.last_used_at) : '未使用' }}
+            </span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="有效期" width="150">
+          <template #default="{ row }">
+            <span
+              class="key-num"
+              :class="{
+                'key-muted': !row.expires_at,
+                'key-expired': isExpired(row.expires_at),
+              }"
+            >{{ formatShortDate(row.expires_at) }}</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="操作" width="118" align="center" fixed="right">
+          <template #default="{ row }">
+            <div class="admin-actions">
+              <ElButton link type="primary" :disabled="busy" @click="openEdit(row as GatewayKey)">编辑</ElButton>
+              <ElDropdown trigger="click" :disabled="busy" @command="(cmd) => onRowCommand(String(cmd), row as GatewayKey)">
+                <ElButton link type="primary" :disabled="busy">更多</ElButton>
+                <template #dropdown>
+                  <ElDropdownMenu>
+                    <ElDropdownItem command="revoke" :disabled="Boolean(row.revoked_at)">吊销密钥</ElDropdownItem>
+                    <ElDropdownItem command="delete" divided class="key-danger-item">删除密钥</ElDropdownItem>
+                  </ElDropdownMenu>
+                </template>
+              </ElDropdown>
+            </div>
+          </template>
+        </ElTableColumn>
+        <template #empty>
+          <ElEmpty v-if="!loading" :image-size="64" :description="emptyText" />
         </template>
-      </ElTableColumn>
-      <ElTableColumn label="状态" width="92" align="center">
-        <template #default="{ row }">
-          <ElTag v-if="row.revoked_at" type="danger">已吊销</ElTag>
-          <ElTag v-else-if="isExpired(row.expires_at)" type="warning">已过期</ElTag>
-          <ElTag
-            v-else
-            :type="row.enabled ? 'success' : 'info'"
-            :class="{ 'astra-tag--neutral': !row.enabled }"
-          >{{ row.enabled ? '启用' : '停用' }}</ElTag>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="归属" min-width="100" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span :class="{ 'key-muted': !row.owner_id }">{{ row.owner_id || '—' }}</span>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="并发 / Token 限额" min-width="165" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span class="key-num">并发 {{ row.max_concurrency || '不限' }} · 时/日 {{ tokenLimitText(row.hourly_token_limit) }}/{{ tokenLimitText(row.daily_token_limit) }}</span>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="最近使用" width="110">
-        <template #default="{ row }">
-          <span class="key-num" :class="{ 'key-muted': !row.last_used_at }">
-            {{ row.last_used_at ? formatRelativeTime(row.last_used_at) : '未使用' }}
-          </span>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="有效期" width="150">
-        <template #default="{ row }">
-          <span
-            class="key-num"
-            :class="{
-              'key-muted': !row.expires_at,
-              'key-expired': isExpired(row.expires_at),
-            }"
-          >{{ formatShortDate(row.expires_at) }}</span>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="操作" width="118" align="center" fixed="right">
-        <template #default="{ row }">
-          <div class="admin-actions">
-            <ElButton link type="primary" :disabled="busy" @click="openEdit(row as GatewayKey)">编辑</ElButton>
-            <ElDropdown trigger="click" :disabled="busy" @command="(cmd) => onRowCommand(String(cmd), row as GatewayKey)">
-              <ElButton link type="primary" :disabled="busy">更多</ElButton>
-              <template #dropdown>
-                <ElDropdownMenu>
-                  <ElDropdownItem command="revoke" :disabled="Boolean(row.revoked_at)">吊销密钥</ElDropdownItem>
-                  <ElDropdownItem command="delete" divided class="key-danger-item">删除密钥</ElDropdownItem>
-                </ElDropdownMenu>
-              </template>
-            </ElDropdown>
-          </div>
-        </template>
-      </ElTableColumn>
-      <template #empty>
-        <ElEmpty v-if="!loading" :image-size="64" :description="emptyText" />
-      </template>
-    </ElTable>
+      </ElTable>
+    </div>
 
     <div class="admin-page__footer">
       <ElPagination
@@ -148,7 +152,7 @@
       <ElForm ref="formRef" class="key-form" :model="form" :rules="rules" label-position="top" scroll-to-error :disabled="saving">
         <div class="key-form-row">
           <ElFormItem label="名称" prop="name">
-            <ElInput v-model="form.name" placeholder="例如：生产应用 Key" />
+            <ElInput v-model="form.name" maxlength="160" placeholder="例如：生产应用 Key" />
           </ElFormItem>
           <ElFormItem label="归属 ID（可选）" prop="owner_id">
             <ElInput v-model="form.owner_id" placeholder="例如：team-ops" />
@@ -270,7 +274,7 @@ import {
   ElTag,
   vLoading,
 } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import {
   gatewayApi,
   type GatewayKey,
@@ -329,6 +333,7 @@ const form = reactive({
 const pageSize = ref(20)
 const filters = reactive({ keyword: '', status: '' })
 const page = ref(1)
+const tableRef = ref<TableInstance>()
 
 const filteredKeys = computed(() => {
   const keyword = filters.keyword.trim().toLowerCase()
@@ -351,6 +356,7 @@ const emptyText = computed(() => (hasFilters.value
 
 watch(filters, () => { page.value = 1 })
 watch(pageSize, () => { page.value = 1 })
+watch([page, pageSize], () => { tableRef.value?.setScrollTop(0) })
 watch(filteredKeys, (list) => {
   const maxPage = Math.max(1, Math.ceil(list.length / pageSize.value))
   if (page.value > maxPage) page.value = maxPage
@@ -575,13 +581,17 @@ onMounted(load)
 .gateway-endpoint-strip__icon { color: var(--astra-text-secondary); flex: none; }
 .gateway-endpoint-strip__label { color: var(--astra-text-primary); font-size: 13px; font-weight: 600; }
 .gateway-endpoint-strip__url {
+  max-width: 100%;
   padding: 2px 8px;
+  overflow: hidden;
   border: 1px solid var(--astra-border);
   border-radius: 6px;
   background: var(--astra-bg-panel);
   color: var(--astra-text-primary);
   font-family: var(--astra-font-mono);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .gateway-endpoint-strip__hint { color: var(--astra-text-muted); font-size: 12px; }
 

@@ -18,12 +18,12 @@
       </div>
     </form>
     <div class="astra-table-panel astra-table-panel--clickable">
-      <el-table v-loading="loading" :data="workers" row-key="id" height="100%" aria-label="Worker 列表" @row-click="openWorker">
-        <el-table-column prop="name" label="Worker" min-width="180" show-overflow-tooltip />
-        <el-table-column label="运行状态" width="88">
+      <el-table ref="tableRef" v-loading="loading" :data="workers" row-key="id" height="100%" aria-label="Worker 列表" @row-click="openWorker">
+        <el-table-column prop="name" label="Worker" min-width="156" show-overflow-tooltip />
+        <el-table-column label="运行状态" width="84">
           <template #default="{ row }"><SemanticTag :tone="semanticTone(statusTone(row.status))" :label="statusLabel(row.status)" /></template>
         </el-table-column>
-        <el-table-column label="连接" width="76">
+        <el-table-column label="连接" width="72">
           <template #default="{ row }">
             <span class="worker-conn">
               <i class="worker-conn__dot" :class="row.online === true ? 'is-on' : row.online === false ? 'is-off' : ''" aria-hidden="true" />
@@ -31,22 +31,22 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="任务调度" width="88">
+        <el-table-column label="任务调度" width="84">
           <template #default="{ row }">
             <el-tag size="small" :type="row.enabled ? 'success' : 'info'" :class="{ 'astra-tag--neutral': !row.enabled }">
               {{ row.enabled ? '已启用' : '已停用' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="占用任务" min-width="150">
+        <el-table-column label="占用任务" min-width="144">
           <template #default="{ row }"><WorkerOccupiedTasks :tasks="row.occupied_tasks" /></template>
         </el-table-column>
-        <el-table-column prop="host" label="主机" min-width="124" show-overflow-tooltip />
-        <el-table-column prop="workspace_root" label="工作区" min-width="150" show-overflow-tooltip />
-        <el-table-column label="最后检查" width="128">
+        <el-table-column prop="host" label="主机" min-width="116" show-overflow-tooltip />
+        <el-table-column prop="workspace_root" label="工作区" min-width="136" show-overflow-tooltip />
+        <el-table-column label="最后检查" width="120">
           <template #default="{ row }"><span class="worker-time">{{ formatTime(row.last_checked_at) }}</span></template>
         </el-table-column>
-        <el-table-column label="操作" width="72" align="right" fixed="right">
+        <el-table-column label="操作" width="64" align="right" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" :aria-label="`查看 ${row.name}`" @click.stop="openWorker(row)">查看</el-button>
           </template>
@@ -68,6 +68,7 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, RefreshCw, Search } from 'lucide-vue-next'
+import type { TableInstance } from 'element-plus'
 import { api } from '@/api/client'
 import { useVisibleRefresh } from '@/composables/useVisibleRefresh'
 import type { Worker } from '@/api/types'
@@ -90,6 +91,7 @@ const keyword = ref('')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const tableRef = ref<TableInstance>()
 const statuses = ['OFFLINE', 'IDLE', 'WORKING', 'PAUSED']
 let request: AbortController | undefined
 
@@ -116,6 +118,9 @@ async function load(background = false) {
     total.value = result.total
     lastUpdated.value = new Date().toLocaleTimeString('zh-CN')
     error.value = ''
+    if (!result.items.length && page.value > 1 && result.total > 0) {
+      page.value = Math.max(1, Math.ceil(result.total / pageSize.value))
+    }
   } catch (reason) {
     if (!controller.signal.aborted) error.value = `刷新失败：${String(reason)}`
   } finally {
@@ -138,7 +143,13 @@ function resetFilters() {
 function openWorker(row: Worker) {
   void router.push({ name: 'settings-worker-detail', params: { id: row.id } })
 }
-watch([page, pageSize], () => load())
+watch(pageSize, () => {
+  if (page.value !== 1) page.value = 1
+})
+watch([page, pageSize], () => {
+  tableRef.value?.setScrollTop(0)
+  void load()
+})
 onMounted(() => load())
 useVisibleRefresh(() => {
   if (!(creating.value)) void load(true)

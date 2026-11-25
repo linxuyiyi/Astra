@@ -189,6 +189,11 @@
   padding: 16px;
   overflow: auto;
 }
+.content-shell > .el-card__body:has(> .admin-page--fill),
+.content-shell > .el-card__body:has(> .astra-page) {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
 .content-shell .el-card {
   border: 0;
   border-radius: 0;
@@ -239,6 +244,12 @@
   overflow: auto;
 }
 
+.admin-card--fill > .el-card__body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .admin-card__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
 
 .admin-card__title {
@@ -251,12 +262,27 @@
 
 .admin-card__actions { display: flex; flex: none; align-items: center; gap: 8px; }
 
-/* 列表页内容体：卡片 body（配置中心 / 网关的 .content-shell）是 flex 列容器，
-   这里必须 flex: none，否则内容比卡片高时会被压缩到卡片高度 —— 表格被裁掉半行、
-   分页却还在，页面看起来像坏了。子项同样不参与收缩，超出部分交给卡片 body 滚动。 */
+/* 列表页内容体：
+   - 默认 .admin-page 适用于含下方扩展区块的多分区页（如资源池 + 模型分布），自然纵向流式滚动，不浮动遮挡。
+   - .admin-page--fill 适用于单表列表页：工具栏固定顶栏、分页固定底栏，仅 .admin-page__table 内表格纵向滚动，
+     表头天然固定且零顶部/底部透出遮挡。 */
 .admin-page { display: flex; flex: none; flex-direction: column; gap: 16px; }
 
 .admin-page > * { flex: none; }
+
+.admin-page--fill {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.admin-page__table {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
 
 /* 左侧业务筛选、右侧关键词与搜索按钮；窄屏时搜索组整体换行。 */
 .admin-page__toolbar {
@@ -264,11 +290,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  background: var(--admin-page-bg, var(--astra-bg-panel));
-  padding-bottom: 4px;
 }
 
 .admin-page__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
@@ -281,12 +302,9 @@
 
 .admin-page__footer {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  position: sticky;
-  bottom: 0;
-  z-index: 4;
-  background: var(--astra-bg-panel);
-  padding-top: 4px;
+  gap: 12px;
 }
 
 /* 操作列按钮：统一 8px 间距。Element Plus 会给相邻 .el-button 加 12px 左外边距，
@@ -299,6 +317,11 @@
 .astra-page-header__actions .el-button + .el-button { margin-left: 0; }
 
 @media (max-width: 900px) {
+  .content-shell > .el-card__body:has(> .admin-page--fill),
+  .content-shell > .el-card__body:has(> .astra-page),
+  .admin-card--fill > .el-card__body { overflow: auto; }
+  .admin-page--fill { height: auto; min-height: 0; overflow: visible; }
+  .admin-page__table { min-height: 440px; }
   .admin-page__search { margin-left: 0; }
   .admin-page__select { width: 140px; }
   .admin-page__keyword { width: 200px; }

@@ -21,7 +21,7 @@
       <div class="node-section-title">基础与连接</div>
       <div class="node-grid">
         <ElFormItem label="节点名称" prop="name">
-          <ElInput v-model="form.name" placeholder="例如 DeepSeek 主节点" />
+          <ElInput v-model="form.name" maxlength="160" placeholder="例如 DeepSeek 主节点" />
         </ElFormItem>
         <ElFormItem label="节点类型">
           <ElSelect v-model="form.probeStrategy" data-testid="gateway-node-probe-strategy" style="width: 100%" @change="applyProbeStrategy">
@@ -35,7 +35,7 @@
       </div>
 
       <ElFormItem label="上游地址" prop="baseUrl">
-        <ElInput v-model="form.baseUrl" placeholder="https://api.example.com" />
+        <ElInput v-model="form.baseUrl" maxlength="512" placeholder="https://api.example.com" />
         <span class="node-field-hint">填写服务根地址，不包含 /v1</span>
       </ElFormItem>
 
@@ -48,7 +48,7 @@
           </ElSelect>
         </ElFormItem>
         <ElFormItem v-if="form.authType === 'HEADER'" label="Header 名称">
-          <ElInput v-model="form.authHeader" placeholder="例如 x-api-key" />
+          <ElInput v-model="form.authHeader" maxlength="64" placeholder="例如 x-api-key" />
         </ElFormItem>
         <ElFormItem v-else-if="form.authType === 'BEARER'" label="API Key">
           <ElInput
@@ -159,7 +159,7 @@
         <ElCollapseItem title="高级设置：超时与健康检查" name="probe">
           <div class="node-grid">
             <ElFormItem label="健康检查路径">
-              <ElInput v-model="form.healthPath" placeholder="/health" />
+              <ElInput v-model="form.healthPath" maxlength="256" placeholder="/health" />
             </ElFormItem>
             <ElFormItem label="探测间隔（秒）">
               <ElInput v-model="form.probeInterval" type="number" min="10" placeholder="默认" />

@@ -84,6 +84,7 @@
         element-loading-text="正在加载知识"
         :data="page.items"
         row-key="id"
+        height="100%"
         @row-click="onRowClick"
         @selection-change="onSelectionChange"
       >
@@ -94,8 +95,8 @@
               <strong :title="row.title">{{ row.title }}</strong>
               <div class="knowledge-cell__meta">
                 <span class="knowledge-type-pill">{{ typeLabel(row.type) }}</span>
-                <span class="knowledge-space-text">{{ row.space_name ?? '未归类' }}</span>
-                <span v-for="tag in (row.tags ?? []).slice(0, 2)" :key="tag" class="knowledge-tag-pill">#{{ tag }}</span>
+                <span class="knowledge-space-text" :title="row.space_name ?? '未归类'">{{ row.space_name ?? '未归类' }}</span>
+                <span v-for="tag in (row.tags ?? []).slice(0, 2)" :key="tag" class="knowledge-tag-pill" :title="`#${tag}`">#{{ tag }}</span>
               </div>
             </div>
           </template>
@@ -243,6 +244,7 @@ const statusOptions = computed(() => [
 const hasFilters = computed(() => Boolean(props.keyword || props.filters.type || props.filters.status))
 
 watch(() => props.keyword, (value) => { keywordDraft.value = value })
+watch(() => [props.page.page, props.page.page_size], () => { tableRef.value?.setScrollTop(0) })
 
 function runSearch() { emit('search', keywordDraft.value.trim()) }
 function applyFilter(key: keyof ListFilters, value: unknown) { emit('filter', key, String(value ?? '')) }
@@ -287,26 +289,27 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('zh-CN', { month: 
 </script>
 
 <style scoped>
-.knowledge-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; height: 100%; padding: 10px 14px; background: var(--astra-bg-panel); box-sizing: border-box; }
-.knowledge-list__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; height: 30px; padding: 0 2px; }
-.knowledge-table-wrap { flex: 1 1 auto; min-height: 0; }
+.knowledge-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; height: 100%; padding: 10px 14px; background: var(--astra-bg-panel); box-sizing: border-box; overflow: hidden; }
+.knowledge-list__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; height: 30px; padding: 0 2px; flex: none; }
+.knowledge-table-wrap { flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .knowledge-list h3 { overflow: hidden; margin: 0; color: var(--astra-text-primary); font-size: var(--astra-font-label); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.knowledge-list__batch { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 12px; border: 1px solid var(--astra-border); border-radius: 8px; background: var(--astra-bg-subtle); }
+.knowledge-list__batch { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 12px; border: 1px solid var(--astra-border); border-radius: 8px; background: var(--astra-bg-subtle); flex: none; }
 .knowledge-table :deep(.el-table__row) { cursor: pointer; }
 .knowledge-cell { display: grid; min-width: 0; gap: 4px; }
 .knowledge-cell strong {
-  display: -webkit-box; overflow: hidden;
+  display: block; overflow: hidden;
   color: var(--astra-text-primary); font-size: var(--astra-font-label); font-weight: 600; line-height: 1.4;
-  white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 1;
+  text-overflow: ellipsis; white-space: nowrap;
 }
-.knowledge-cell__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--astra-text-muted); }
+.knowledge-cell__meta { display: flex; align-items: center; flex-wrap: nowrap; gap: 6px; min-width: 0; overflow: hidden; font-size: 12px; color: var(--astra-text-muted); }
 .knowledge-type-pill {
+  flex: none;
   padding: 0 6px; border-radius: 4px;
   border: 1px solid var(--astra-border); background: var(--astra-bg-subtle);
   color: var(--astra-text-secondary); font-size: 11px; line-height: 18px;
 }
-.knowledge-space-text { color: var(--astra-text-muted); font-size: 12px; }
-.knowledge-tag-pill { color: var(--astra-text-muted); font-size: 11.5px; }
+.knowledge-space-text { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--astra-text-muted); font-size: 12px; }
+.knowledge-tag-pill { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--astra-text-muted); font-size: 11.5px; }
 .knowledge-states { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; }
 .knowledge-time-cell { display: grid; gap: 2px; justify-items: end; }
 .knowledge-num { color: var(--astra-text-secondary); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }

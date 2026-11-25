@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page" data-testid="mcp-resources-page">
+  <section class="admin-page admin-page--fill" data-testid="mcp-resources-page">
     <SettingsHeaderActions>
       <ElButton :icon="RefreshCw" :loading="loading" data-testid="mcps-refresh" @click="load">刷新</ElButton>
       <ElButton type="primary" :icon="Plus" data-testid="mcps-create" @click="beginCreate">新增 MCP</ElButton>
@@ -25,36 +25,37 @@
       </div>
     </div>
 
-    <ElTable v-loading="loading" :data="paged" row-key="id" aria-label="MCP 列表" element-loading-text="正在加载 MCP 列表" data-testid="mcps-table">
-      <ElTableColumn label="名称 / 说明" min-width="200">
-        <template #default="{ row }">
-          <div class="name-cell">
-            <button type="button" class="name-link" @click="openDetail(row as McpResource)">{{ row.name }}</button>
-            <small v-if="row.description" class="name-desc" :title="row.description">{{ row.description }}</small>
-          </div>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="连接地址" min-width="220" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span v-if="row.url" class="mono">{{ row.url }}</span>
-          <span v-else class="muted">AgentScope 托管</span>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="关联员工" min-width="140">
-        <template #default="{ row }">
-          <div v-if="row.employees.length" class="chips">
-            <span v-for="employee in row.employees.slice(0, 2)" :key="employee.id" class="emp-chip">{{ employee.name }}</span>
-            <ElTooltip
-              v-if="row.employees.length > 2"
-              placement="top"
-              :content="row.employees.map((e: { name: string }) => e.name).join('、')"
-            >
-              <span class="emp-more">+{{ row.employees.length - 2 }}</span>
-            </ElTooltip>
-          </div>
-          <span v-else class="muted">未绑定</span>
-        </template>
-      </ElTableColumn>
+    <div class="admin-page__table">
+      <ElTable ref="tableRef" v-loading="loading" :data="paged" row-key="id" height="100%" aria-label="MCP 列表" element-loading-text="正在加载 MCP 列表" data-testid="mcps-table">
+        <ElTableColumn label="名称 / 说明" min-width="200">
+          <template #default="{ row }">
+            <div class="name-cell">
+              <button type="button" class="name-link" :title="row.name" @click="openDetail(row as McpResource)">{{ row.name }}</button>
+              <small v-if="row.description" class="name-desc" :title="row.description">{{ row.description }}</small>
+            </div>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="连接地址" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.url" class="mono">{{ row.url }}</span>
+            <span v-else class="muted">AgentScope 托管</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="关联员工" min-width="140">
+          <template #default="{ row }">
+            <div v-if="row.employees.length" class="chips">
+              <span v-for="employee in row.employees.slice(0, 2)" :key="employee.id" class="emp-chip" :title="employee.name">{{ employee.name }}</span>
+              <ElTooltip
+                v-if="row.employees.length > 2"
+                placement="top"
+                :content="row.employees.map((e: { name: string }) => e.name).join('、')"
+              >
+                <span class="emp-more">+{{ row.employees.length - 2 }}</span>
+              </ElTooltip>
+            </div>
+            <span v-else class="muted">未绑定</span>
+          </template>
+        </ElTableColumn>
       <ElTableColumn label="同步状态" width="128">
         <template #default="{ row }">
           <ElTooltip :content="combinedSyncTooltip(row as McpResource)" placement="top">
@@ -114,6 +115,7 @@
         <ElEmpty v-if="!loading" :image-size="64" :description="items.length ? '没有匹配的 MCP' : '暂无 MCP 资源'" />
       </template>
     </ElTable>
+    </div>
 
     <div class="admin-page__footer">
       <ElPagination
@@ -325,6 +327,7 @@ import {
   ElTooltip,
   vLoading,
 } from "element-plus";
+import type { TableInstance } from "element-plus";
 import {
   createMcpResource,
   deleteMcpResource,
@@ -349,6 +352,7 @@ const sourceFilter = ref("");
 const statusFilter = ref("");
 const page = ref(1);
 const pageSize = ref(20);
+const tableRef = ref<TableInstance>();
 const busyId = ref("");
 
 const editorOpen = ref(false);
@@ -416,6 +420,12 @@ const filtered = computed(() => {
 const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value));
 
 watch([keyword, sourceFilter, statusFilter], () => { page.value = 1; });
+watch(pageSize, () => { page.value = 1; });
+watch(filtered, (list) => {
+  const maxPage = Math.max(1, Math.ceil(list.length / pageSize.value));
+  if (page.value > maxPage) page.value = maxPage;
+});
+watch([page, pageSize], () => { tableRef.value?.setScrollTop(0); });
 
 async function load() {
   loading.value = true;
@@ -702,6 +712,7 @@ onMounted(load);
 .name-desc { color: var(--astra-text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .emp-chip {
+  max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 1px 7px; border-radius: 5px;
   border: 1px solid var(--astra-border); background: var(--astra-bg-subtle);
   color: var(--astra-text-secondary); font-size: 12px; line-height: 18px;

@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page" data-testid="gateway-nodes">
+  <section class="admin-page admin-page--fill" data-testid="gateway-nodes">
     <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error" data-testid="gateway-nodes-error">
       <ElButton type="primary" data-testid="gateway-nodes-retry" @click="load">重试</ElButton>
     </ElAlert>
@@ -39,20 +39,23 @@
       </div>
     </div>
 
-    <GatewayNodeTable
-      :nodes="pagedNodes"
-      :pools="pools"
-      :busy-id="busyId"
-      :loading="loading"
-      :empty-text="hasFilters ? '没有匹配的上游节点' : '暂无上游节点'"
-      @detail="openDetail"
-      @probe="onProbe"
-      @drain="onDrain"
-      @restore="onRestore"
-      @toggle-config="onToggleConfig"
-      @edit="openEdit"
-      @delete="onDelete"
-    />
+    <div class="admin-page__table">
+      <GatewayNodeTable
+        ref="tableRef"
+        :nodes="pagedNodes"
+        :pools="pools"
+        :busy-id="busyId"
+        :loading="loading"
+        :empty-text="hasFilters ? '没有匹配的上游节点' : '暂无上游节点'"
+        @detail="openDetail"
+        @probe="onProbe"
+        @drain="onDrain"
+        @restore="onRestore"
+        @toggle-config="onToggleConfig"
+        @edit="openEdit"
+        @delete="onDelete"
+      />
+    </div>
 
     <div class="admin-page__footer">
       <ElPagination
@@ -105,6 +108,7 @@ const schedulingOptions = (['ACTIVE', 'DRAINING', 'BLOCKED'] as const)
 const filters = reactive({ keyword: '', health: '', scheduling: '', pool: '' })
 const page = ref(1)
 const pageSize = ref(20)
+const tableRef = ref<InstanceType<typeof GatewayNodeTable> | null>(null)
 
 const filteredNodes = computed(() => {
   const keyword = filters.keyword.trim().toLowerCase()
@@ -134,6 +138,7 @@ watch(filteredNodes, (list) => {
 })
 watch(filters, () => { page.value = 1 })
 watch(pageSize, () => { page.value = 1 })
+watch([page, pageSize], () => { tableRef.value?.scrollToTop() })
 watch(() => route.query.pool, (pool) => {
   if (typeof pool === 'string') filters.pool = pool
 })

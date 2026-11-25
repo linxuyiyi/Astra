@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-page" data-testid="gateway-requests">
+  <section class="admin-page admin-page--fill" data-testid="gateway-requests">
     <ElAlert v-if="error" type="error" show-icon :closable="false" :title="error" data-testid="gateway-requests-error">
       <ElButton type="primary" data-testid="gateway-requests-retry" @click="load">重试</ElButton>
     </ElAlert>
@@ -55,13 +55,16 @@
       </div>
     </div>
 
-    <ElTable
-      v-loading="loading"
-      :data="page.items"
-      row-key="id"
-      element-loading-text="正在加载调用日志"
-      data-testid="gateway-requests-table"
-    >
+    <div class="admin-page__table">
+      <ElTable
+        ref="tableRef"
+        v-loading="loading"
+        :data="page.items"
+        row-key="id"
+        height="100%"
+        element-loading-text="正在加载调用日志"
+        data-testid="gateway-requests-table"
+      >
       <ElTableColumn type="expand" width="40">
         <template #default="{ row }">
           <div class="log-detail-grid">
@@ -102,20 +105,21 @@
       <ElTableColumn label="时间" width="144">
         <template #default="{ row }"><span class="log-num">{{ formatDateTime(row.started_at) }}</span></template>
       </ElTableColumn>
-      <ElTableColumn label="模型" min-width="180">
+      <ElTableColumn label="模型" min-width="164">
         <template #default="{ row }">
           <div class="log-model-cell">
-            <span class="log-model-name">{{ row.model ?? '—' }}</span>
+            <span class="log-model-name" :title="row.model ?? undefined">{{ row.model ?? '—' }}</span>
             <ElTag
               v-if="row.actual_model && row.actual_model !== row.model"
               size="small"
               type="info"
               class="astra-tag--neutral log-routed-tag"
+              :title="row.actual_model"
             >→ {{ row.actual_model }}</ElTag>
           </div>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="节点" min-width="180" show-overflow-tooltip>
+      <ElTableColumn label="节点" min-width="164" show-overflow-tooltip>
         <template #default="{ row }">{{ nodeName(row.node_id) }}</template>
       </ElTableColumn>
       <ElTableColumn label="结果" min-width="132">
@@ -144,6 +148,7 @@
         <ElEmpty v-if="!loading" :image-size="64" :description="emptyText" />
       </template>
     </ElTable>
+    </div>
 
     <div class="admin-page__footer">
       <ElPagination
@@ -180,6 +185,7 @@ import {
   ElTag,
   vLoading,
 } from 'element-plus'
+import type { TableInstance } from 'element-plus'
 import {
   gatewayApi,
   type GatewayKey,
@@ -199,6 +205,7 @@ const models = ref<string[]>([])
 const loading = ref(false)
 const error = ref('')
 const pageSize = ref(20)
+const tableRef = ref<TableInstance>()
 const filters = reactive({
   request_id: '',
   model: '',
@@ -262,6 +269,7 @@ async function loadPage(target = page.value.page) {
   error.value = ''
   try {
     page.value = await gatewayApi.requests(buildQuery(target))
+    tableRef.value?.setScrollTop(0)
   } catch (reason) {
     error.value = errorMessage(reason, '调用日志加载失败')
   } finally {
@@ -348,7 +356,11 @@ onMounted(() => {
 .log-detail-value.mono, .mono { font-family: var(--astra-font-mono); font-size: 12px; }
 .log-detail-item--error .log-detail-value { color: var(--astra-danger); }
 
-.log-model-cell { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.log-model-name { font-family: var(--astra-font-mono); font-size: 12px; font-weight: 500; color: var(--astra-text-primary); }
-.log-routed-tag { font-family: var(--astra-font-mono); font-size: 11px; padding: 0 6px; height: 20px; line-height: 18px; }
+.log-model-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.log-model-name {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--astra-font-mono); font-size: 12px; font-weight: 500; color: var(--astra-text-primary);
+}
+.log-routed-tag { max-width: 100%; font-family: var(--astra-font-mono); font-size: 11px; padding: 0 6px; height: 20px; line-height: 18px; }
+.log-routed-tag :deep(.el-tag__content) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

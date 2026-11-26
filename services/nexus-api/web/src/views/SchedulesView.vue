@@ -1,4 +1,5 @@
-<!-- 依据 AgentScope v2.0.10 官方 schedule 页的表单、列表与执行详情语义适配。
+<!-- 依据 AgentScope v2.0.10 官方 schedule 表单、列表与执行详情语义适配，
+     并扩展月历 / 周历 Cron 规则展开与当日排程侧栏。
      来源和有意差异见 docs/architecture/employee-schedules.md。 -->
 <template>
   <ElCard class="admin-card admin-card--fill" data-testid="schedules-page">
@@ -10,8 +11,51 @@
             <User :size="12" aria-hidden="true" />
             <span>{{ currentUid() }}</span>
           </span>
+          <span v-if="!loading && total > 0" class="total-chip">
+            共 {{ total }} 项
+          </span>
         </div>
-        <div class="admin-card__actions">
+
+        <div class="admin-card__actions schedule-card-actions">
+          <div class="view-switcher" role="tablist" aria-label="日程展示方式" data-testid="schedules-view-switcher">
+            <button
+              type="button"
+              role="tab"
+              class="view-switcher__btn"
+              :class="{ 'is-active': viewMode === 'month' }"
+              :aria-selected="viewMode === 'month'"
+              data-testid="schedules-view-month"
+              @click="switchView('month')"
+            >
+              <CalendarDays :size="14" aria-hidden="true" />
+              <span>月历</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="view-switcher__btn"
+              :class="{ 'is-active': viewMode === 'week' }"
+              :aria-selected="viewMode === 'week'"
+              data-testid="schedules-view-week"
+              @click="switchView('week')"
+            >
+              <CalendarRange :size="14" aria-hidden="true" />
+              <span>周历</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="view-switcher__btn"
+              :class="{ 'is-active': viewMode === 'list' }"
+              :aria-selected="viewMode === 'list'"
+              data-testid="schedules-view-list"
+              @click="switchView('list')"
+            >
+              <List :size="14" aria-hidden="true" />
+              <span>列表</span>
+            </button>
+          </div>
+
           <ElButton :icon="RefreshCw" :loading="loading" data-testid="schedules-refresh" @click="reload">刷新</ElButton>
           <ElButton type="primary" :icon="Plus" data-testid="schedules-create" @click="openCreate">新建日程</ElButton>
         </div>
@@ -19,7 +63,74 @@
     </template>
 
     <div class="admin-page admin-page--fill">
-      <div class="admin-page__toolbar" role="search" aria-label="日程筛选">
+      <!-- ── 日历模式控制栏（月历 / 周历） ─────────────────────────── -->
+      <div v-if="isCalendarView" class="calendar-toolbar" role="search" aria-label="日历导航与筛选">
+        <div class="calendar-nav">
+          <div class="calendar-nav__stepper" role="group" aria-label="切换日期范围">
+            <ElButton
+              class="nav-icon-btn"
+              :aria-label="viewMode === 'month' ? '上个月' : '上一周'"
+              @click="shiftPeriod(-1)"
+            >
+              <ChevronLeft :size="15" aria-hidden="true" />
+            </ElButton>
+            <ElButton data-testid="schedules-cal-today" @click="jumpToday">今天</ElButton>
+            <ElButton
+              class="nav-icon-btn"
+              :aria-label="viewMode === 'month' ? '下个月' : '下一周'"
+              @click="shiftPeriod(1)"
+            >
+              <ChevronRight :size="15" aria-hidden="true" />
+            </ElButton>
+          </div>
+
+          <span class="calendar-nav__title" data-testid="schedules-cal-title">{{ periodTitle }}</span>
+        </div>
+
+        <div class="calendar-filters">
+          <ElSelect
+            v-model="employeeFilter"
+            class="cal-filter-select"
+            clearable
+            filterable
+            placeholder="员工：全部"
+            aria-label="日程员工"
+            @change="applySearch"
+          >
+            <ElOption v-for="employee in employeeOptions" :key="employee.id" :label="employee.name" :value="employee.id">
+              <span class="emp-option">
+                <i class="emp-option__dot" :style="{ background: employeeColor(employee.id) }" aria-hidden="true" />
+                <span>{{ employee.name }}</span>
+              </span>
+            </ElOption>
+          </ElSelect>
+          <ElSelect
+            v-model="statusFilter"
+            class="cal-filter-status"
+            clearable
+            placeholder="状态：全部"
+            aria-label="日程状态"
+            @change="applySearch"
+          >
+            <ElOption label="已启用" value="enabled" />
+            <ElOption label="已暂停" value="paused" />
+          </ElSelect>
+          <ElInput
+            v-model="query"
+            class="cal-filter-keyword"
+            placeholder="搜索名称 / 指令"
+            aria-label="搜索日程"
+            clearable
+            :prefix-icon="Search"
+            @clear="applySearch"
+            @keydown.enter.prevent="applySearch"
+          />
+          <ElButton v-if="hasFilters || query.trim()" :icon="RotateCcw" @click="resetFilters">重置</ElButton>
+        </div>
+      </div>
+
+      <!-- ── 列表模式筛选栏（保留原有布局规范） ────────────────────── -->
+      <div v-else class="admin-page__toolbar" role="search" aria-label="日程筛选">
         <div class="admin-page__filters">
           <ElSelect
             v-model="employeeFilter"
@@ -30,7 +141,12 @@
             aria-label="日程员工"
             @change="applySearch"
           >
-            <ElOption v-for="employee in employeeOptions" :key="employee.id" :label="employee.name" :value="employee.id" />
+            <ElOption v-for="employee in employeeOptions" :key="employee.id" :label="employee.name" :value="employee.id">
+              <span class="emp-option">
+                <i class="emp-option__dot" :style="{ background: employeeColor(employee.id) }" aria-hidden="true" />
+                <span>{{ employee.name }}</span>
+              </span>
+            </ElOption>
           </ElSelect>
           <ElSelect
             v-model="statusFilter"
@@ -60,128 +176,209 @@
         </div>
       </div>
 
-      <ElAlert v-if="error && rows.length" :title="error" type="error" :closable="false" show-icon />
+      <!-- 错误或截断提示 -->
+      <ElAlert v-if="error && activeDataCount > 0" :title="error" type="error" :closable="false" show-icon />
+      <ElAlert
+        v-if="isCalendarView && calendarTruncated"
+        :title="`当前共有 ${total} 条日程，日历模式已展开前 ${CALENDAR_FETCH_LIMIT} 条；建议按员工筛选或切换至列表模式分页浏览。`"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <div v-if="isCalendarView && !loading && !error && hasFilters && calendarRows.length === 0" class="filter-empty-bar">
+        <span>当前筛选条件下暂无匹配日程</span>
+        <ElButton link type="primary" @click="resetFilters">清除筛选</ElButton>
+      </div>
 
-      <div class="admin-page__table">
-        <ElTable
-          ref="tableRef"
-          v-loading="loading"
-          :data="rows"
-          row-key="id"
-          height="100%"
-          element-loading-text="正在加载日程列表"
-          data-testid="schedules-table"
-        >
-        <ElTableColumn label="日程" min-width="250">
-          <template #default="{ row }">
-            <div class="schedule-name-cell">
-              <button
-                type="button"
-                class="schedule-title-btn"
-                :class="{ 'is-paused': !row.data.enabled }"
-                :title="row.data.name"
-                @click="openHistory(row as EmployeeSchedule)"
-              >{{ row.data.name }}</button>
-              <div class="schedule-excerpt" :title="row.data.description">{{ plainExcerpt(row.data.description) }}</div>
-            </div>
-          </template>
-        </ElTableColumn>
-
-        <ElTableColumn label="数字员工" width="144" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span v-if="row.employee_id" class="schedule-emp">{{ row.employee_name }}</span>
-            <ElTag v-else size="small" type="info" class="astra-tag--neutral">{{ row.employee_name }}</ElTag>
-          </template>
-        </ElTableColumn>
-
-        <ElTableColumn label="触发规则" min-width="240">
-          <template #default="{ row }">
-            <div class="schedule-rule">
-              <div class="schedule-rule__human" :class="{ 'is-paused': !row.data.enabled }">
-                <i class="status-dot" :class="row.data.enabled ? 'is-on' : 'is-off'" aria-hidden="true" />
-                <span>{{ describeCron(row.data.cron_expression).label }}</span>
-              </div>
-              <div class="schedule-rule__meta">
-                <code class="cron-chip" :title="row.data.cron_expression">{{ row.data.cron_expression }}</code>
-                <span class="tz-label">{{ row.data.timezone }}</span>
-              </div>
-            </div>
-          </template>
-        </ElTableColumn>
-
-        <ElTableColumn label="上下文" width="112" align="center">
-          <template #default="{ row }">
-            <ElTag size="small" type="info" class="astra-tag--neutral">
-              {{ row.data.stateful ? '连续上下文' : '每次独立' }}
-            </ElTag>
-          </template>
-        </ElTableColumn>
-
-        <ElTableColumn label="创建时间" width="156">
-          <template #default="{ row }">
-            <span class="mono-time" :title="displayTime(row.created_at, true)">{{ displayTime(row.created_at) }}</span>
-          </template>
-        </ElTableColumn>
-
-        <ElTableColumn label="启用" width="80" align="center">
-          <template #default="{ row }">
-            <ElSwitch
-              size="small"
-              :model-value="(row as EmployeeSchedule).data.enabled"
-              :loading="busy === row.id"
-              :disabled="busy === row.id"
-              :aria-label="`${(row as EmployeeSchedule).data.name} 启用状态`"
-              @change="toggle(row as EmployeeSchedule, Boolean($event))"
-            />
-          </template>
-        </ElTableColumn>
-
-        <ElTableColumn label="操作" width="168" align="center" fixed="right">
-          <template #default="{ row }">
-            <div class="schedule-row-actions">
-              <ElButton link type="primary" :disabled="busy === row.id" @click="openHistory(row as EmployeeSchedule)">执行记录</ElButton>
-              <ElButton link type="primary" :disabled="busy === row.id" @click="openEdit(row as EmployeeSchedule)">编辑</ElButton>
-              <ElDropdown trigger="click" :disabled="busy === row.id" @command="cmd => rowCommand(row as EmployeeSchedule, String(cmd))">
-                <ElButton link type="primary" :disabled="busy === row.id" :aria-label="`更多操作 ${(row as EmployeeSchedule).data.name}`">更多</ElButton>
-                <template #dropdown>
-                  <ElDropdownMenu>
-                    <ElDropdownItem command="copy-cron">复制 Cron</ElDropdownItem>
-                    <ElDropdownItem command="delete" divided class="danger-item">删除日程</ElDropdownItem>
-                  </ElDropdownMenu>
-                </template>
-              </ElDropdown>
-            </div>
-          </template>
-        </ElTableColumn>
-
-        <template #empty>
-          <ElEmpty v-if="error" :image-size="72" description="日程数据加载失败">
+      <!-- ── 日历主体区（月历 / 周历 + 右侧当日排程侧栏） ────────────── -->
+      <template v-if="isCalendarView">
+        <div v-if="error && calendarRows.length === 0" class="calendar-error-panel">
+          <ElEmpty :image-size="72" description="日程数据加载失败">
             <div class="empty-stack">
               <ElText type="danger">{{ error }}</ElText>
               <ElButton :icon="RefreshCw" @click="reload">重新加载</ElButton>
             </div>
           </ElEmpty>
-          <ElEmpty v-else-if="!loading" :image-size="72" :description="hasFilters ? '暂无匹配日程' : '暂无日程'">
-            <ElButton v-if="hasFilters" @click="resetFilters">清除筛选</ElButton>
-            <ElButton v-else type="primary" :icon="Plus" @click="openCreate">新建日程</ElButton>
-          </ElEmpty>
-        </template>
-      </ElTable>
-      </div>
+        </div>
 
-      <div class="admin-page__footer">
-        <ElPagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50]"
-          :total="total"
-          layout="total, sizes, prev, pager, next"
-          aria-label="日程列表分页"
-          data-testid="schedules-pagination"
-          @current-change="reload"
-          @size-change="changePageSize"
-        />
-      </div>
+        <div
+          v-else
+          v-loading="loading"
+          element-loading-text="正在加载日程排班"
+          class="calendar-workspace"
+        >
+          <div class="calendar-workspace__main">
+            <ScheduleCalendarMonth
+              v-if="viewMode === 'month'"
+              :cells="monthCells"
+              :day-map="expandedDayMap"
+              :selected-ymd="selectedYmd"
+              :hovered-schedule-id="hoveredScheduleId"
+              @select-date="selectDate"
+              @inspect-date="inspectDate"
+              @open-schedule="openHistory"
+              @create-at="openCreateAt"
+              @hover-schedule="hoveredScheduleId = $event"
+            />
+            <ScheduleCalendarWeek
+              v-else
+              ref="weekCalRef"
+              :days="weekDays"
+              :day-map="expandedDayMap"
+              :selected-ymd="selectedYmd"
+              :hovered-schedule-id="hoveredScheduleId"
+              @select-date="selectDate"
+              @open-schedule="openHistory"
+              @create-at="openCreateAt"
+              @hover-schedule="hoveredScheduleId = $event"
+            />
+          </div>
+
+          <div ref="inspectorWrapRef" class="calendar-workspace__side" :class="{ 'is-pulsed': inspectorPulse }">
+            <ScheduleDayInspector
+              :selected-ymd="selectedYmd"
+              :today-ymd="todayYmd"
+              :items="selectedDayItems"
+              :busy-id="busy"
+              :hovered-schedule-id="hoveredScheduleId"
+              :has-filters="hasFilters"
+              @open-history="openHistory"
+              @edit="openEdit"
+              @toggle="toggle"
+              @copy-cron="copyCron"
+              @delete="remove"
+              @create-at="openCreateAt"
+              @hover-schedule="hoveredScheduleId = $event"
+            />
+          </div>
+        </div>
+      </template>
+
+      <!-- ── 列表模式主体（完整保留 Element Plus 规范与分页） ────────── -->
+      <template v-else>
+        <div class="admin-page__table">
+          <ElTable
+            ref="tableRef"
+            v-loading="loading"
+            :data="rows"
+            row-key="id"
+            height="100%"
+            element-loading-text="正在加载日程列表"
+            data-testid="schedules-table"
+          >
+            <ElTableColumn label="日程" min-width="250">
+              <template #default="{ row }">
+                <div class="schedule-name-cell">
+                  <button
+                    type="button"
+                    class="schedule-title-btn"
+                    :class="{ 'is-paused': !row.data.enabled }"
+                    :title="row.data.name"
+                    @click="openHistory(row as EmployeeSchedule)"
+                  >{{ row.data.name }}</button>
+                  <div class="schedule-excerpt" :title="row.data.description">{{ plainExcerpt(row.data.description) }}</div>
+                </div>
+              </template>
+            </ElTableColumn>
+
+            <ElTableColumn label="数字员工" width="148" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span v-if="row.employee_id" class="schedule-emp">
+                  <i class="emp-option__dot" :style="{ background: employeeColor(row.employee_id) }" aria-hidden="true" />
+                  <span>{{ row.employee_name }}</span>
+                </span>
+                <ElTag v-else size="small" type="info" class="astra-tag--neutral">{{ row.employee_name }}</ElTag>
+              </template>
+            </ElTableColumn>
+
+            <ElTableColumn label="触发规则" min-width="240">
+              <template #default="{ row }">
+                <div class="schedule-rule">
+                  <div class="schedule-rule__human" :class="{ 'is-paused': !row.data.enabled }">
+                    <i class="status-dot" :class="row.data.enabled ? 'is-on' : 'is-off'" aria-hidden="true" />
+                    <span>{{ describeCron(row.data.cron_expression).label }}</span>
+                  </div>
+                  <div class="schedule-rule__meta">
+                    <code class="cron-chip" :title="row.data.cron_expression">{{ row.data.cron_expression }}</code>
+                  </div>
+                </div>
+              </template>
+            </ElTableColumn>
+
+            <ElTableColumn label="上下文" width="112" align="center">
+              <template #default="{ row }">
+                <ElTag size="small" type="info" class="astra-tag--neutral">
+                  {{ row.data.stateful ? '连续上下文' : '每次独立' }}
+                </ElTag>
+              </template>
+            </ElTableColumn>
+
+            <ElTableColumn label="创建时间" width="156">
+              <template #default="{ row }">
+                <span class="mono-time" :title="displayTime(row.created_at, true)">{{ displayTime(row.created_at) }}</span>
+              </template>
+            </ElTableColumn>
+
+            <ElTableColumn label="启用" width="80" align="center">
+              <template #default="{ row }">
+                <ElSwitch
+                  size="small"
+                  :model-value="(row as EmployeeSchedule).data.enabled"
+                  :loading="busy === row.id"
+                  :disabled="busy === row.id"
+                  :aria-label="`${(row as EmployeeSchedule).data.name} 启用状态`"
+                  @change="toggle(row as EmployeeSchedule, Boolean($event))"
+                />
+              </template>
+            </ElTableColumn>
+
+            <ElTableColumn label="操作" width="168" align="center" fixed="right">
+              <template #default="{ row }">
+                <div class="schedule-row-actions">
+                  <ElButton link type="primary" :disabled="busy === row.id" @click="openHistory(row as EmployeeSchedule)">执行记录</ElButton>
+                  <ElButton link type="primary" :disabled="busy === row.id" @click="openEdit(row as EmployeeSchedule)">编辑</ElButton>
+                  <ElDropdown trigger="click" :disabled="busy === row.id" @command="cmd => rowCommand(row as EmployeeSchedule, String(cmd))">
+                    <ElButton link type="primary" :disabled="busy === row.id" :aria-label="`更多操作 ${(row as EmployeeSchedule).data.name}`">更多</ElButton>
+                    <template #dropdown>
+                      <ElDropdownMenu>
+                        <ElDropdownItem command="copy-cron">复制 Cron</ElDropdownItem>
+                        <ElDropdownItem command="delete" divided class="danger-item">删除日程</ElDropdownItem>
+                      </ElDropdownMenu>
+                    </template>
+                  </ElDropdown>
+                </div>
+              </template>
+            </ElTableColumn>
+
+            <template #empty>
+              <ElEmpty v-if="error" :image-size="72" description="日程数据加载失败">
+                <div class="empty-stack">
+                  <ElText type="danger">{{ error }}</ElText>
+                  <ElButton :icon="RefreshCw" @click="reload">重新加载</ElButton>
+                </div>
+              </ElEmpty>
+              <ElEmpty v-else-if="!loading" :image-size="72" :description="hasFilters ? '暂无匹配日程' : '暂无日程'">
+                <ElButton v-if="hasFilters" @click="resetFilters">清除筛选</ElButton>
+                <ElButton v-else type="primary" :icon="Plus" @click="openCreate">新建日程</ElButton>
+              </ElEmpty>
+            </template>
+          </ElTable>
+        </div>
+
+        <div class="admin-page__footer">
+          <ElPagination
+            v-model:current-page="page"
+            v-model:page-size="pageSize"
+            :page-sizes="[10, 20, 50]"
+            :total="total"
+            layout="total, sizes, prev, pager, next"
+            aria-label="日程列表分页"
+            data-testid="schedules-pagination"
+            @current-change="reload"
+            @size-change="changePageSize"
+          />
+        </div>
+      </template>
     </div>
 
     <!-- 新建 / 编辑日程抽屉 -->
@@ -240,70 +437,76 @@
             aria-label="重复方式"
             @update:model-value="selectFrequency(String($event) as FrequencyMode)"
           >
-            <ElRadioButton v-for="option in frequencies" :key="option.value" :value="option.value">
+            <ElRadioButton v-for="option in FREQUENCIES" :key="option.value" :value="option.value">
               {{ option.label }}
             </ElRadioButton>
           </ElRadioGroup>
         </ElFormItem>
 
-        <div class="form-pair">
-          <ElFormItem v-if="frequency === 'daily' || frequency === 'weekdays'" label="执行时间">
-            <ElInput v-model="time" type="time" :disabled="saving" aria-label="执行时间" />
-          </ElFormItem>
+        <ElFormItem v-if="frequency === 'daily' || frequency === 'weekdays'" label="执行时间" class="time-single-item">
+          <ElInput v-model="time" type="time" :disabled="saving" aria-label="执行时间" />
+        </ElFormItem>
 
-          <div v-else-if="frequency === 'weekly'" class="inline-pair">
-            <ElFormItem label="星期">
-              <ElSelect v-model="weekday" aria-label="星期" style="width: 100%">
-                <ElOption v-for="(day, index) in weekdays" :key="day" :label="day" :value="index" />
-              </ElSelect>
-            </ElFormItem>
-            <ElFormItem label="执行时间">
-              <ElInput v-model="time" type="time" :disabled="saving" aria-label="执行时间" />
-            </ElFormItem>
-          </div>
-
-          <div v-else-if="frequency === 'monthly'" class="inline-pair">
-            <ElFormItem label="每月日期">
-              <ElInputNumber
-                v-model="monthDay"
-                :min="1"
-                :max="31"
-                controls-position="right"
-                aria-label="每月日期"
-                style="width: 100%"
-              />
-            </ElFormItem>
-            <ElFormItem label="执行时间">
-              <ElInput v-model="time" type="time" :disabled="saving" aria-label="执行时间" />
-            </ElFormItem>
-          </div>
-
-          <ElFormItem v-else label="Cron 表达式（分 时 日 月 周）" required>
-            <ElInput
-              v-model="form.cron_expression"
-              class="mono-input"
-              maxlength="120"
-              placeholder="例如：0 */2 * * *"
-            />
-          </ElFormItem>
-
-          <ElFormItem label="时区">
-            <ElSelect v-model="form.timezone" filterable allow-create default-first-option style="width: 100%">
-              <ElOption v-for="zone in timezones" :key="zone" :value="zone" :label="zone" />
+        <div v-else-if="frequency === 'weekly'" class="form-pair">
+          <ElFormItem label="星期">
+            <ElSelect v-model="weekday" aria-label="星期" style="width: 100%">
+              <ElOption v-for="(day, index) in WEEKDAYS" :key="day" :label="day" :value="index" />
             </ElSelect>
+          </ElFormItem>
+          <ElFormItem label="执行时间">
+            <ElInput v-model="time" type="time" :disabled="saving" aria-label="执行时间" />
           </ElFormItem>
         </div>
 
+        <div v-else-if="frequency === 'monthly'" class="form-pair">
+          <ElFormItem label="每月日期">
+            <ElInputNumber
+              v-model="monthDay"
+              :min="1"
+              :max="31"
+              controls-position="right"
+              aria-label="每月日期"
+              style="width: 100%"
+            />
+          </ElFormItem>
+          <ElFormItem label="执行时间">
+            <ElInput v-model="time" type="time" :disabled="saving" aria-label="执行时间" />
+          </ElFormItem>
+        </div>
+
+        <ElFormItem v-else label="Cron 表达式（分 时 日 月 周）" required>
+          <ElInput
+            v-model="form.cron_expression"
+            class="mono-input"
+            maxlength="120"
+            placeholder="例如：0 */2 * * *"
+          />
+        </ElFormItem>
+
         <div class="cron-preview" :class="{ 'is-invalid': !effectiveCronMeta.valid }">
-          <div class="cron-preview__lead">
-            <Clock :size="14" class="cron-preview__icon" aria-hidden="true" />
-            <span class="cron-preview__label">
-              {{ effectiveCronMeta.valid ? effectiveCronMeta.label : '表达式无效，请输入 5 位 Cron（分 时 日 月 周）' }}
-            </span>
+          <div class="cron-preview__top">
+            <div class="cron-preview__lead">
+              <Clock :size="14" class="cron-preview__icon" aria-hidden="true" />
+              <span class="cron-preview__label">
+                {{ effectiveCronMeta.valid ? effectiveCronMeta.label : '表达式无效，请输入 5 位 Cron（分 时 日 月 周）' }}
+              </span>
+            </div>
+            <div class="cron-preview__meta">
+              <code class="cron-chip">{{ effectiveCron || '—' }}</code>
+            </div>
           </div>
-          <div class="cron-preview__meta">
-            <code class="cron-chip">{{ effectiveCron || '—' }}</code>
-            <span class="tz-label">{{ form.timezone }}</span>
+
+          <div v-if="effectiveCronMeta.valid && formTriggerExamples.length" class="cron-preview__examples">
+            <span class="cron-preview__examples-label">规则推演示例：</span>
+            <div class="cron-preview__chips">
+              <span
+                v-for="example in formTriggerExamples"
+                :key="`${example.ymd}-${example.time}`"
+                class="trigger-example-chip"
+              >
+                {{ example.dateTimeLabel }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -384,7 +587,6 @@
               触发：<b>{{ describeCron(selected.data.cron_expression).label }}</b>
               <code class="cron-chip">{{ selected.data.cron_expression }}</code>
             </span>
-            <span>时区：<b class="mono-inline">{{ selected.data.timezone }}</b></span>
             <span>创建：<b class="mono-time">{{ displayTime(selected.created_at) }}</b></span>
           </div>
         </div>
@@ -429,7 +631,7 @@
               element-loading-text="正在加载执行记录"
               @row-click="row => showMessages((row as ScheduleSession).id)"
             >
-              <ElTableColumn label="会话创建时间（上海）" min-width="180">
+              <ElTableColumn label="会话创建时间" min-width="180">
                 <template #default="{ row }">
                   <span class="mono-time">{{ displayTime(row.created_at, true) }}</span>
                 </template>
@@ -525,6 +727,17 @@
 
       <template #footer>
         <div class="detail-footer">
+          <ElSwitch
+            v-if="selected"
+            size="small"
+            :model-value="selected.data.enabled"
+            :loading="busy === selected.id"
+            :disabled="busy === selected.id"
+            active-text="已启用"
+            inactive-text="已暂停"
+            aria-label="切换当前日程启用状态"
+            @change="toggle(selected, Boolean($event))"
+          />
           <span class="detail-footer__spacer" />
           <ElButton @click="historyOpen = false">关闭</ElButton>
           <ElButton v-if="selected" type="primary" :icon="Pencil" @click="editFromHistory">编辑日程</ElButton>
@@ -535,7 +748,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import {
   ElAlert,
@@ -563,7 +776,20 @@ import {
   ElText,
 } from 'element-plus';
 import type { TableInstance } from 'element-plus';
-import { Clock, Pencil, Plus, RefreshCw, RotateCcw, Search, User } from 'lucide-vue-next';
+import {
+  CalendarDays,
+  CalendarRange,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  List,
+  Pencil,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  User,
+} from 'lucide-vue-next';
 import {
   currentUid,
   deleteSchedule,
@@ -582,40 +808,59 @@ import MarkdownView from '@/components/astra/MarkdownView.vue';
 import SemanticTag from '@/components/astra/SemanticTag.vue';
 import { confirmDialog } from '@/composables/useConfirm';
 import { useFormGuard } from '@/composables/useFormGuard';
+import ScheduleCalendarMonth from '@/features/schedules/components/ScheduleCalendarMonth.vue';
+import ScheduleCalendarWeek from '@/features/schedules/components/ScheduleCalendarWeek.vue';
+import ScheduleDayInspector from '@/features/schedules/components/ScheduleDayInspector.vue';
+import {
+  addDaysYmd,
+  buildMonthGrid,
+  buildWeekDays,
+  CRON_PRESETS,
+  dayOfWeekForYmd,
+  describeCron,
+  EMPLOYEE_TONES,
+  employeeToneIndex,
+  expandSchedulesForRange,
+  formatYmd,
+  FREQUENCIES,
+  pad2,
+  parseYmd,
+  previewNextTriggers,
+  restoreFrequencyFromCron,
+  todayYmdInTimezone,
+  WEEKDAYS,
+  type FrequencyMode,
+} from '@/features/schedules/cron';
 import type { Employee } from '@/types';
 
-type FrequencyMode = 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'custom';
+type ScheduleViewMode = 'month' | 'week' | 'list';
 
-const CRON_PRESETS = [
-  { label: '每小时', cron: '0 * * * *' },
-  { label: '每 2 小时', cron: '0 */2 * * *' },
-  { label: '每天 09:00', cron: '0 9 * * *' },
-  { label: '工作日 09:00', cron: '0 9 * * 1-5' },
-  { label: '每周一 09:00', cron: '0 9 * * 1' },
-  { label: '每月 1 日 09:00', cron: '0 9 1 * *' },
-] as const;
+const DEFAULT_TIMEZONE = 'Asia/Shanghai';
+const VIEW_STORAGE_KEY = 'nexus_schedules_view_mode';
+const CALENDAR_FETCH_LIMIT = 500;
+const CALENDAR_PAGE_SIZE = 100;
 
-const frequencies: { value: FrequencyMode; label: string }[] = [
-  { value: 'daily', label: '每天' },
-  { value: 'weekdays', label: '工作日' },
-  { value: 'weekly', label: '每周' },
-  { value: 'monthly', label: '每月' },
-  { value: 'custom', label: '自定义 Cron' },
-];
+function readInitialViewMode(): ScheduleViewMode {
+  try {
+    const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (saved === 'month' || saved === 'week' || saved === 'list') return saved;
+  } catch {
+    /* 忽略本地存储受限 */
+  }
+  return 'month';
+}
 
-const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-const shortWeekdays = ['日', '一', '二', '三', '四', '五', '六'];
-const timezones = ['Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Tokyo', 'UTC', 'Europe/London', 'America/New_York', 'America/Los_Angeles'];
+const viewMode = ref<ScheduleViewMode>(readInitialViewMode());
+const isCalendarView = computed(() => viewMode.value !== 'list');
 
-const DOW_ALIASES: Record<string, number> = {
-  SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6,
-};
-const MONTH_ALIASES: Record<string, number> = {
-  JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6,
-  JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12,
-};
+const todayYmd = computed(() => todayYmdInTimezone(DEFAULT_TIMEZONE));
+const anchorYmd = ref<string>(todayYmd.value);
+const selectedYmd = ref<string>(todayYmd.value);
+const hoveredScheduleId = ref('');
 
 const rows = ref<EmployeeSchedule[]>([]);
+const calendarRows = ref<EmployeeSchedule[]>([]);
+const calendarTruncated = ref(false);
 const choices = ref<Employee[]>([]);
 const loading = ref(false);
 const error = ref('');
@@ -623,6 +868,11 @@ const page = ref(1);
 const pageSize = ref(20);
 const total = ref(0);
 const tableRef = ref<TableInstance>();
+const weekCalRef = ref<InstanceType<typeof ScheduleCalendarWeek> | null>(null);
+const inspectorWrapRef = ref<HTMLElement | null>(null);
+const inspectorPulse = ref(false);
+let inspectorPulseTimer = 0;
+let pendingWeekFocusHour: number | null = null;
 const busy = ref('');
 const employeeOptions = ref<{ id: string; name: string }[]>([]);
 const employeeFilter = ref('');
@@ -630,11 +880,157 @@ const statusFilter = ref('');
 const query = ref('');
 const appliedQuery = ref('');
 
+let calendarDataFilterKey = '';
+let listDataFilterKey = '';
+
 const hasFilters = computed(() => Boolean(employeeFilter.value || statusFilter.value || appliedQuery.value));
+const activeDataCount = computed(() => (isCalendarView.value ? calendarRows.value.length : rows.value.length));
+
+function currentFilterKey(): string {
+  return JSON.stringify({
+    employee_id: employeeFilter.value,
+    status: statusFilter.value,
+    q: appliedQuery.value,
+  });
+}
+
+function currentFiltersPayload() {
+  return {
+    employee_id: employeeFilter.value,
+    enabled: statusFilter.value ? statusFilter.value === 'enabled' : undefined,
+    q: appliedQuery.value,
+  };
+}
+
+// ── 日历网格与展开计算 ────────────────────────────────────────────────────
+
+const monthCells = computed(() => {
+  const { year, month } = parseYmd(anchorYmd.value);
+  return buildMonthGrid(year, month, todayYmd.value);
+});
+
+const weekDays = computed(() => buildWeekDays(anchorYmd.value, todayYmd.value));
+
+const visibleRange = computed(() => {
+  if (viewMode.value === 'week') {
+    const days = weekDays.value;
+    return { start: days[0]!.ymd, end: days[days.length - 1]!.ymd };
+  }
+  const cells = monthCells.value;
+  return { start: cells[0]!.ymd, end: cells[cells.length - 1]!.ymd };
+});
+
+const periodTitle = computed(() => {
+  if (viewMode.value === 'month') {
+    const { year, month } = parseYmd(anchorYmd.value);
+    return `${year} 年 ${month} 月`;
+  }
+  const start = parseYmd(weekDays.value[0]!.ymd);
+  const end = parseYmd(weekDays.value[6]!.ymd);
+  if (start.year !== end.year) {
+    return `${start.year}年${start.month}月${start.day}日 – ${end.year}年${end.month}月${end.day}日`;
+  }
+  if (start.month !== end.month) {
+    return `${start.year}年${start.month}月${start.day}日 – ${end.month}月${end.day}日`;
+  }
+  return `${start.year}年${start.month}月${start.day}日 – ${end.day}日`;
+});
+
+const expandedDayMap = computed(() => {
+  if (!isCalendarView.value || !calendarRows.value.length) return new Map();
+  return expandSchedulesForRange(
+    calendarRows.value,
+    visibleRange.value.start,
+    visibleRange.value.end,
+    DEFAULT_TIMEZONE,
+  );
+});
+
+const selectedDayItems = computed(() => expandedDayMap.value.get(selectedYmd.value) ?? []);
+
+function switchView(next: ScheduleViewMode) {
+  if (next === viewMode.value) return;
+  const wasCalendar = isCalendarView.value;
+  viewMode.value = next;
+  hoveredScheduleId.value = '';
+  try {
+    localStorage.setItem(VIEW_STORAGE_KEY, next);
+  } catch {
+    /* 忽略 */
+  }
+  // 从月切周时把锚点对齐当前选中日期，保持上下文连续
+  if (next === 'week' || next === 'month') {
+    anchorYmd.value = selectedYmd.value;
+  }
+  const key = currentFilterKey();
+  if (next === 'list') {
+    if (listDataFilterKey !== key) void reload();
+  } else if (!wasCalendar && calendarDataFilterKey !== key) {
+    void reload();
+  }
+}
+
+function shiftPeriod(delta: number) {
+  if (viewMode.value === 'month') {
+    const { year, month } = parseYmd(anchorYmd.value);
+    const nextDate = new Date(Date.UTC(year, month - 1 + delta, 1));
+    const nextYmd = formatYmd(nextDate.getUTCFullYear(), nextDate.getUTCMonth() + 1, 1);
+    anchorYmd.value = nextYmd;
+    // 若本月包含今天则默认选中今天，否则选中月初 1 号
+    const t = parseYmd(todayYmd.value);
+    selectedYmd.value = t.year === nextDate.getUTCFullYear() && t.month === nextDate.getUTCMonth() + 1
+      ? todayYmd.value
+      : nextYmd;
+  } else {
+    anchorYmd.value = addDaysYmd(anchorYmd.value, delta * 7);
+    selectedYmd.value = addDaysYmd(selectedYmd.value, delta * 7);
+  }
+}
+
+function jumpToday() {
+  anchorYmd.value = todayYmd.value;
+  selectedYmd.value = todayYmd.value;
+}
+
+function selectDate(ymd: string) {
+  selectedYmd.value = ymd;
+  // 点击月历中上下月灰显日期时平滑切换到对应月
+  if (viewMode.value === 'month') {
+    const cur = parseYmd(anchorYmd.value);
+    const clicked = parseYmd(ymd);
+    if (cur.year !== clicked.year || cur.month !== clicked.month) {
+      anchorYmd.value = formatYmd(clicked.year, clicked.month, 1);
+    }
+  }
+}
+
+function inspectDate(ymd: string) {
+  selectDate(ymd);
+  inspectorPulse.value = false;
+  window.clearTimeout(inspectorPulseTimer);
+  void nextTick(() => {
+    inspectorPulse.value = true;
+    inspectorPulseTimer = window.setTimeout(() => {
+      inspectorPulse.value = false;
+    }, 450);
+    if (window.innerWidth <= 900) {
+      inspectorWrapRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+}
+
+function employeeColor(id: string | null | undefined): string {
+  const tone = EMPLOYEE_TONES[employeeToneIndex(id)] ?? EMPLOYEE_TONES[0]!;
+  return tone.accent;
+}
+
+// ── 筛选与数据加载 ────────────────────────────────────────────────────────
 
 function applySearch() {
   appliedQuery.value = query.value.trim();
   page.value = 1;
+  calendarDataFilterKey = '';
+  listDataFilterKey = '';
   void reload();
 }
 
@@ -648,6 +1044,11 @@ function resetFilters() {
 function changePageSize() {
   page.value = 1;
   void reload();
+}
+
+function invalidateCaches() {
+  calendarDataFilterKey = '';
+  listDataFilterKey = '';
 }
 
 const formOpen = ref(false);
@@ -682,6 +1083,16 @@ const effectiveCron = computed(() => {
 });
 
 const effectiveCronMeta = computed(() => describeCron(effectiveCron.value));
+
+const formTriggerExamples = computed(() => {
+  if (!formOpen.value || !effectiveCronMeta.value.valid) return [];
+  return previewNextTriggers(
+    effectiveCron.value,
+    form.timezone || DEFAULT_TIMEZONE,
+    DEFAULT_TIMEZONE,
+    4,
+  );
+});
 
 const formGuard = useFormGuard({
   isOpen: () => formOpen.value,
@@ -744,37 +1155,86 @@ function selectFrequency(next: FrequencyMode) {
 
 function applyPreset(cron: string) {
   form.cron_expression = cron;
-  restoreFrequency(cron);
+  applyRestoredFrequency(cron);
+}
+
+function applyRestoredFrequency(cron: string) {
+  const restored = restoreFrequencyFromCron(cron);
+  frequency.value = restored.frequency;
+  time.value = restored.time;
+  weekday.value = restored.weekday;
+  monthDay.value = restored.monthDay;
 }
 
 async function reload() {
   const generation = ++listGeneration;
+  const savedWeekScroll = viewMode.value === 'week' ? weekCalRef.value?.captureScrollTop() ?? null : null;
   loading.value = true;
   error.value = '';
+  const filters = currentFiltersPayload();
+  const filterKey = currentFilterKey();
+
   try {
-    const result = await listSchedules(page.value, pageSize.value, {
-      employee_id: employeeFilter.value,
-      enabled: statusFilter.value ? statusFilter.value === 'enabled' : undefined,
-      q: appliedQuery.value,
-    });
-    if (generation !== listGeneration) return;
-    rows.value = result.items;
-    total.value = result.total;
-    employeeOptions.value = result.employee_options;
-    tableRef.value?.setScrollTop(0);
-    if (!rows.value.length && page.value > 1) {
-      page.value--;
-      await reload();
+    if (isCalendarView.value) {
+      const first = await listSchedules(1, CALENDAR_PAGE_SIZE, filters);
+      if (generation !== listGeneration) return;
+      const collected = [...first.items];
+      const maxPages = Math.min(Math.ceil(first.total / CALENDAR_PAGE_SIZE), Math.ceil(CALENDAR_FETCH_LIMIT / CALENDAR_PAGE_SIZE));
+      for (let p = 2; p <= maxPages; p++) {
+        const next = await listSchedules(p, CALENDAR_PAGE_SIZE, filters);
+        if (generation !== listGeneration) return;
+        collected.push(...next.items);
+      }
+      calendarRows.value = collected.slice(0, CALENDAR_FETCH_LIMIT);
+      calendarTruncated.value = first.total > CALENDAR_FETCH_LIMIT;
+      total.value = first.total;
+      employeeOptions.value = first.employee_options;
+      calendarDataFilterKey = filterKey;
+      syncSelectedFrom(calendarRows.value);
+      if (viewMode.value === 'week') {
+        const focusHour = pendingWeekFocusHour;
+        pendingWeekFocusHour = null;
+        await nextTick();
+        if (focusHour !== null) {
+          weekCalRef.value?.scrollToHour(focusHour);
+        } else if (savedWeekScroll !== null && savedWeekScroll > 0) {
+          weekCalRef.value?.restoreScrollTop(savedWeekScroll);
+        }
+      }
+    } else {
+      const result = await listSchedules(page.value, pageSize.value, filters);
+      if (generation !== listGeneration) return;
+      rows.value = result.items;
+      total.value = result.total;
+      employeeOptions.value = result.employee_options;
+      listDataFilterKey = filterKey;
+      syncSelectedFrom(rows.value);
+      tableRef.value?.setScrollTop(0);
+      if (!rows.value.length && page.value > 1) {
+        page.value--;
+        await reload();
+      }
     }
   } catch (e) {
     if (generation === listGeneration) {
       error.value = reason(e);
-      rows.value = [];
+      if (isCalendarView.value) {
+        calendarRows.value = [];
+        calendarTruncated.value = false;
+      } else {
+        rows.value = [];
+      }
       total.value = 0;
     }
   } finally {
     if (generation === listGeneration) loading.value = false;
   }
+}
+
+function syncSelectedFrom(items: EmployeeSchedule[]) {
+  if (!selected.value) return;
+  const fresh = items.find(item => item.id === selected.value?.id);
+  if (fresh) selected.value = fresh;
 }
 
 async function loadChoices() {
@@ -783,7 +1243,7 @@ async function loadChoices() {
 
 async function openCreate() {
   editing.value = null;
-  employeeId.value = '';
+  employeeId.value = employeeFilter.value || '';
   Object.assign(form, defaults());
   frequency.value = 'weekdays';
   time.value = '09:00';
@@ -800,30 +1260,26 @@ async function openCreate() {
   }
 }
 
-function restoreFrequency(cron: string) {
-  const parts = cron.trim().split(/\s+/);
-  const [minute, hour, day, month, week] = parts;
-  const valid = parts.length === 5
-    && /^\d+$/.test(minute!)
-    && /^\d+$/.test(hour!)
-    && Number(minute) <= 59
-    && Number(hour) <= 23
-    && month === '*';
-  frequency.value = 'custom';
-  if (!valid) return;
-  const at = `${hour!.padStart(2, '0')}:${minute!.padStart(2, '0')}`;
-  if (day === '*' && week === '*') frequency.value = 'daily';
-  else if (day === '*' && week === '1-5') frequency.value = 'weekdays';
-  else if (day === '*' && /^[0-7]$/.test(week!)) {
-    frequency.value = 'weekly';
-    weekday.value = Number(week) % 7;
-  } else if (week === '*' && /^\d+$/.test(day!) && Number(day) >= 1 && Number(day) <= 31) {
-    frequency.value = 'monthly';
-    monthDay.value = Number(day);
-  } else {
-    return;
+async function openCreateAt(payload: { ymd: string; hour?: number }) {
+  editing.value = null;
+  employeeId.value = employeeFilter.value || '';
+  const dow = dayOfWeekForYmd(payload.ymd);
+  const { day } = parseYmd(payload.ymd);
+  const hourStr = payload.hour !== undefined ? `${pad2(payload.hour)}:00` : '09:00';
+  Object.assign(form, defaults());
+  frequency.value = 'weekly';
+  weekday.value = dow;
+  monthDay.value = day;
+  time.value = hourStr;
+  descMode.value = 'edit';
+  formError.value = '';
+  formOpen.value = true;
+  formGuard.capture();
+  try {
+    await loadChoices();
+  } catch (e) {
+    formError.value = reason(e);
   }
-  time.value = at;
 }
 
 async function openEdit(row: EmployeeSchedule) {
@@ -837,7 +1293,7 @@ async function openEdit(row: EmployeeSchedule) {
     stateful: row.data.stateful,
     enabled: row.data.enabled,
   });
-  restoreFrequency(row.data.cron_expression);
+  applyRestoredFrequency(row.data.cron_expression);
   descMode.value = 'edit';
   formError.value = '';
   formOpen.value = true;
@@ -886,7 +1342,11 @@ async function save() {
       editing.value?.id,
     );
     formOpen.value = false;
+    if (viewMode.value === 'week' && frequency.value !== 'custom' && /^\d{2}:\d{2}$/.test(time.value)) {
+      pendingWeekFocusHour = Number(time.value.split(':')[0]);
+    }
     ElMessage.success(editing.value ? '日程已更新' : '日程已创建');
+    invalidateCaches();
     await reload();
   } catch (e) {
     formError.value = reason(e);
@@ -901,6 +1361,7 @@ async function toggle(row: EmployeeSchedule, nextEnabled: boolean) {
   try {
     await toggleSchedule(row.id, nextEnabled);
     ElMessage.success(nextEnabled ? '日程已启用，约 60 秒内生效' : '日程已暂停，约 60 秒内生效');
+    invalidateCaches();
     await reload();
   } catch (e) {
     ElMessage.error(reason(e));
@@ -928,7 +1389,12 @@ async function remove(row: EmployeeSchedule) {
   busy.value = row.id;
   try {
     await deleteSchedule(row.id);
+    if (selected.value?.id === row.id) {
+      historyOpen.value = false;
+      selected.value = null;
+    }
     ElMessage.success('日程已删除');
+    invalidateCaches();
     await reload();
   } catch (e) {
     ElMessage.error(reason(e));
@@ -1046,194 +1512,6 @@ function shortId(id: string): string {
   return id.length > 14 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
 }
 
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-function parseCronAtom(token: string, minVal: number, maxVal: number, aliases?: Record<string, number>): number | null {
-  const upper = token.toUpperCase();
-  if (aliases && upper in aliases) return aliases[upper]!;
-  if (!/^\d+$/.test(token)) return null;
-  const num = Number(token);
-  return num >= minVal && num <= maxVal ? num : null;
-}
-
-function validateCronField(field: string, minVal: number, maxVal: number, aliases?: Record<string, number>): boolean {
-  if (!field) return false;
-  const segments = field.split(',');
-  for (const seg of segments) {
-    if (!seg) return false;
-    const [base, step, ...extra] = seg.split('/');
-    if (extra.length) return false;
-    if (step !== undefined && !/^[1-9]\d*$/.test(step)) return false;
-    if (base === '*') continue;
-    if (base!.includes('-')) {
-      const [startRaw, endRaw, ...more] = base!.split('-');
-      if (more.length || !startRaw || !endRaw) return false;
-      const start = parseCronAtom(startRaw, minVal, maxVal, aliases);
-      const end = parseCronAtom(endRaw, minVal, maxVal, aliases);
-      if (start === null || end === null || start > end) return false;
-      continue;
-    }
-    if (parseCronAtom(base!, minVal, maxVal, aliases) === null) return false;
-  }
-  return true;
-}
-
-function normalizeDowField(raw: string): string {
-  return raw.toUpperCase().replace(/\b(SUN|MON|TUE|WED|THU|FRI|SAT)\b/g, m => String(DOW_ALIASES[m]!));
-}
-
-function formatDowLabel(dow: string): string | null {
-  const norm = normalizeDowField(dow);
-  if (norm === '*') return null;
-  if (norm === '1-5' || norm === '1,2,3,4,5') return '工作日';
-  if (norm === '0,6' || norm === '6,0' || norm === '6,7' || norm === '6-7') return '周末';
-  if (/^[0-7]$/.test(norm)) return `每周${shortWeekdays[Number(norm) % 7]}`;
-  const rangeMatch = /^([0-7])-([0-7])$/.exec(norm);
-  if (rangeMatch) {
-    const start = Number(rangeMatch[1]) % 7;
-    const end = Number(rangeMatch[2]) % 7;
-    return `每周${shortWeekdays[start]}至周${shortWeekdays[end]}`;
-  }
-  if (/^[0-7](,[0-7])+$/.test(norm)) {
-    const days = [...new Set(norm.split(',').map(d => Number(d) % 7))];
-    if (days.length <= 5) return `每周${days.map(d => shortWeekdays[d]).join('、')}`;
-  }
-  return null;
-}
-
-function formatTimePart(min: string, hour: string): { text: string; isInterval: boolean } | null {
-  const isSingleMin = /^\d+$/.test(min);
-  const isSingleHour = /^\d+$/.test(hour);
-  const minStep = /^\*\/([1-9]\d*)$/.exec(min);
-  const hourStep = /^\*\/([1-9]\d*)$/.exec(hour);
-  const hourRange = /^(\d+)-(\d+)$/.exec(hour);
-  const hourRangeStep = /^(\d+)-(\d+)\/([1-9]\d*)$/.exec(hour);
-
-  if (min === '*' && hour === '*') return { text: '每分钟', isInterval: true };
-
-  if (minStep && hour === '*') {
-    const n = Number(minStep[1]);
-    return { text: n === 1 ? '每分钟' : `每 ${n} 分钟`, isInterval: true };
-  }
-
-  if (minStep && hourRange) {
-    const n = Number(minStep[1]);
-    return {
-      text: `${pad2(Number(hourRange[1]))}:00–${pad2(Number(hourRange[2]))}:59 每 ${n} 分钟`,
-      isInterval: false,
-    };
-  }
-
-  if (isSingleMin && hour === '*') {
-    const m = Number(min);
-    return { text: m === 0 ? '每小时整点' : `每小时第 ${m} 分`, isInterval: true };
-  }
-
-  if (isSingleMin && hourStep) {
-    const m = Number(min);
-    const n = Number(hourStep[1]);
-    if (m === 0) return { text: n === 1 ? '每小时' : `每 ${n} 小时`, isInterval: true };
-    return { text: `每 ${n} 小时（第 ${m} 分）`, isInterval: true };
-  }
-
-  if (isSingleMin && hourRange) {
-    const m = Number(min);
-    const suffix = pad2(m);
-    return {
-      text: `${pad2(Number(hourRange[1]))}:${suffix}–${pad2(Number(hourRange[2]))}:${suffix} 每小时`,
-      isInterval: false,
-    };
-  }
-
-  if (isSingleMin && hourRangeStep) {
-    const m = Number(min);
-    const suffix = pad2(m);
-    return {
-      text: `${pad2(Number(hourRangeStep[1]))}:${suffix}–${pad2(Number(hourRangeStep[2]))}:${suffix} 每 ${Number(hourRangeStep[3])} 小时`,
-      isInterval: false,
-    };
-  }
-
-  if (isSingleMin && isSingleHour) {
-    return { text: `${pad2(Number(hour))}:${pad2(Number(min))}`, isInterval: false };
-  }
-
-  if (isSingleMin && /^\d+(,\d+)+$/.test(hour)) {
-    const hours = hour.split(',').map(Number);
-    if (hours.length <= 4) {
-      const m = pad2(Number(min));
-      return { text: hours.map(h => `${pad2(h)}:${m}`).join('、'), isInterval: false };
-    }
-  }
-
-  if (/^\d+(,\d+)+$/.test(min) && hour === '*') {
-    const mins = min.split(',').map(Number);
-    if (mins.length === 2 && mins[0] === 0 && mins[1] === 30) {
-      return { text: '每 30 分钟', isInterval: true };
-    }
-    if (mins.length <= 4) {
-      return { text: `每小时第 ${mins.join('、')} 分`, isInterval: true };
-    }
-  }
-
-  if (/^\d+(,\d+)+$/.test(min) && isSingleHour) {
-    const mins = min.split(',').map(Number);
-    if (mins.length <= 4) {
-      const h = pad2(Number(hour));
-      return { text: mins.map(m => `${h}:${pad2(m)}`).join('、'), isInterval: false };
-    }
-  }
-
-  return null;
-}
-
-function describeCron(cron: string): { label: string; valid: boolean } {
-  const trimmed = cron.trim();
-  const parts = trimmed.split(/\s+/);
-  if (parts.length !== 5) return { label: '表达式格式无效', valid: false };
-  const [min, hour, dom, month, dow] = parts as [string, string, string, string, string];
-  const valid = validateCronField(min, 0, 59)
-    && validateCronField(hour, 0, 23)
-    && validateCronField(dom, 1, 31)
-    && validateCronField(month, 1, 12, MONTH_ALIASES)
-    && validateCronField(dow, 0, 7, DOW_ALIASES);
-  if (!valid) return { label: '表达式格式无效', valid: false };
-
-  const timePart = formatTimePart(min, hour);
-  if (!timePart) return { label: '自定义周期', valid: true };
-
-  if (dom === '*' && month === '*') {
-    if (dow === '*') {
-      return { label: timePart.isInterval ? timePart.text : `每天 ${timePart.text}`, valid: true };
-    }
-    const dowLabel = formatDowLabel(dow);
-    if (dowLabel) return { label: `${dowLabel} ${timePart.text}`, valid: true };
-  }
-
-  if (month === '*' && dow === '*') {
-    if (/^\d+$/.test(dom)) return { label: `每月 ${Number(dom)} 日 ${timePart.text}`, valid: true };
-    if (/^\d+(,\d+)+$/.test(dom)) {
-      const days = dom.split(',').map(Number);
-      if (days.length <= 4) return { label: `每月 ${days.join('、')} 日 ${timePart.text}`, valid: true };
-    }
-    const domStep = /^\*\/([1-9]\d*)$/.exec(dom);
-    if (domStep) return { label: `每 ${Number(domStep[1])} 天 ${timePart.text}`, valid: true };
-  }
-
-  if (/^\d+$/.test(month) && /^\d+$/.test(dom) && dow === '*') {
-    return { label: `每年 ${Number(month)} 月 ${Number(dom)} 日 ${timePart.text}`, valid: true };
-  }
-
-  const monthStep = /^\*\/([1-9]\d*)$/.exec(month);
-  if (monthStep && /^\d+$/.test(dom) && dow === '*') {
-    return { label: `每 ${Number(monthStep[1])} 个月 ${Number(dom)} 日 ${timePart.text}`, valid: true };
-  }
-
-  return { label: '自定义周期', valid: true };
-}
-
 function displayTime(value: string, withSeconds = false): string {
   if (!value) return '—';
   const utc = /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}Z`;
@@ -1255,6 +1533,10 @@ function displayTime(value: string, withSeconds = false): string {
 onMounted(() => {
   void reload();
 });
+
+onBeforeUnmount(() => {
+  window.clearTimeout(inspectorPulseTimer);
+});
 </script>
 
 <style scoped>
@@ -1262,10 +1544,11 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: 8px 10px;
 }
 
-.owner-chip {
+.owner-chip,
+.total-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1274,11 +1557,183 @@ onMounted(() => {
   border-radius: 6px;
   background: var(--astra-bg-subtle);
   color: var(--astra-text-muted);
-  font-family: var(--astra-font-mono);
   font-size: 12px;
   line-height: 18px;
 }
 
+.owner-chip {
+  font-family: var(--astra-font-mono);
+}
+
+.total-chip {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 顶栏操作区窄屏安全折行 ────────────────────────────────────── */
+.schedule-card-actions {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+/* ── 三态分段视图切换器（月历 / 周历 / 列表） ────────────────── */
+.view-switcher {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--astra-border);
+  border-radius: 8px;
+  background: var(--astra-bg-subtle);
+  gap: 2px;
+}
+
+.view-switcher__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--astra-text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.view-switcher__btn:hover {
+  color: var(--astra-text-primary);
+}
+
+.view-switcher__btn.is-active {
+  background: var(--astra-bg-panel);
+  color: var(--astra-text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(9, 9, 11, 0.08);
+}
+
+/* ── 日历导航与筛选工具栏 ─────────────────────────────────────── */
+.calendar-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.calendar-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.calendar-nav__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.calendar-nav__stepper :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.nav-icon-btn {
+  padding: 0 8px !important;
+}
+
+.calendar-nav__title {
+  color: var(--astra-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.calendar-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.calendar-filters :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.cal-filter-select {
+  width: 146px;
+}
+
+.cal-filter-status {
+  width: 118px;
+}
+
+.cal-filter-keyword {
+  width: 184px;
+}
+
+.emp-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.emp-option__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.filter-empty-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  border: 1px solid var(--astra-border);
+  border-radius: 8px;
+  background: var(--astra-bg-subtle);
+  color: var(--astra-text-secondary);
+  font-size: 12.5px;
+}
+
+/* ── 日历主体工作区（主网格 + 右侧当日排程侧栏） ─────────────── */
+.calendar-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 332px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.calendar-workspace__main,
+.calendar-workspace__side {
+  min-width: 0;
+  min-height: 0;
+  border-radius: 10px;
+  transition: box-shadow 0.25s ease;
+}
+
+.calendar-workspace__side.is-pulsed {
+  box-shadow: 0 0 0 2px var(--astra-primary);
+}
+
+.calendar-error-panel {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--astra-border);
+  border-radius: 10px;
+  background: var(--astra-bg-panel);
+}
+
+/* ── 列表表格单元格样式 ──────────────────────────────────────── */
 .schedule-name-cell {
   display: grid;
   gap: 3px;
@@ -1319,6 +1774,9 @@ onMounted(() => {
 }
 
 .schedule-emp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--astra-text-secondary);
   font-size: 13px;
   font-weight: 500;
@@ -1380,24 +1838,12 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.tz-label {
-  color: var(--astra-text-muted);
-  font-family: var(--astra-font-mono);
-  font-size: 11.5px;
-  white-space: nowrap;
-}
-
 .mono-time {
   color: var(--astra-text-secondary);
   font-family: var(--astra-font-mono);
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-
-.mono-inline {
-  font-family: var(--astra-font-mono);
-  font-weight: 500;
 }
 
 .schedule-row-actions {
@@ -1448,10 +1894,8 @@ onMounted(() => {
   gap: 0 12px;
 }
 
-.inline-pair {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 8px;
+.time-single-item {
+  max-width: 240px;
 }
 
 .preset-row {
@@ -1499,15 +1943,21 @@ onMounted(() => {
 
 .cron-preview {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 12px;
   padding: 9px 12px;
   border: 1px solid var(--astra-border);
   border-radius: 8px;
   background: var(--astra-bg-subtle);
+}
+
+.cron-preview__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
 }
 
 .cron-preview.is-invalid {
@@ -1542,6 +1992,38 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.cron-preview__examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 7px;
+  border-top: 1px solid var(--astra-border-subtle);
+}
+
+.cron-preview__examples-label {
+  color: var(--astra-text-muted);
+  font-size: 11.5px;
+  flex: none;
+}
+
+.cron-preview__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.trigger-example-chip {
+  padding: 1px 6px;
+  border: 1px solid var(--astra-border);
+  border-radius: 5px;
+  background: var(--astra-bg-panel);
+  color: var(--astra-text-secondary);
+  font-family: var(--astra-font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .prompt-box {
@@ -1818,10 +2300,47 @@ onMounted(() => {
   flex: 1;
 }
 
-@media (max-width: 640px) {
-  .form-pair,
-  .inline-pair {
+@media (max-width: 1120px) {
+  .calendar-workspace {
+    grid-template-columns: minmax(0, 1fr) 292px;
+  }
+}
+
+@media (max-width: 900px) {
+  .calendar-filters {
+    margin-left: 0;
+  }
+  .calendar-workspace {
     grid-template-columns: 1fr;
+    overflow: visible;
+  }
+  .calendar-workspace__main {
+    min-height: 500px;
+  }
+  .calendar-workspace__side {
+    min-height: 320px;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-pair {
+    grid-template-columns: 1fr;
+  }
+  .time-single-item {
+    max-width: none;
+  }
+  .cal-filter-select,
+  .cal-filter-status,
+  .cal-filter-keyword {
+    width: 100%;
+  }
+  .admin-page__search {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .admin-page__keyword {
+    flex: 1 1 160px;
+    width: auto;
   }
 }
 </style>

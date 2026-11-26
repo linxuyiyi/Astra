@@ -50,26 +50,40 @@
         <el-input v-model="form.description" type="textarea" :rows="2" placeholder="简述职责范围与边界" />
       </el-form-item>
 
-      <el-form-item label="工作指令（支持 Markdown）" prop="instructions">
+      <el-form-item label="人设与工作指南（支持 Markdown）" prop="instructions">
         <div class="inst-box">
           <div class="inst-box__bar">
-            <span class="inst-box__count">{{ form.instructions.length }} 字</span>
-            <el-radio-group v-model="instMode" size="small" aria-label="工作指令视图">
+            <span class="inst-box__count">{{ form.instructions.length }} 字 · 定义性格口吻、专业立场与协作方式</span>
+            <el-radio-group v-model="instMode" size="small" aria-label="人设与工作指南视图">
               <el-radio-button value="edit">编辑</el-radio-button>
               <el-radio-button value="preview">预览</el-radio-button>
             </el-radio-group>
+          </div>
+          <div v-if="instMode === 'edit'" class="preset-bar" role="group" aria-label="快速套用人设模板">
+            <span class="preset-bar__label">参考模板：</span>
+            <button
+              v-for="tpl in PERSONA_TEMPLATES"
+              :key="tpl.id"
+              type="button"
+              class="preset-chip"
+              :class="{ 'is-active': form.instructions.trim() === tpl.content.trim() }"
+              :disabled="saving"
+              @click="applyPersonaTemplate(tpl)"
+            >
+              {{ tpl.label }}
+            </button>
           </div>
           <el-input
             v-if="instMode === 'edit'"
             v-model="form.instructions"
             class="inst-box__input"
             type="textarea"
-            :rows="6"
+            :rows="7"
             resize="vertical"
-            placeholder="定义该员工的思考方式、回复格式与协作习惯"
+            placeholder="写清这位员工的性格与说话风格、专业判断偏好、日常对话与交付物的不同节奏"
           />
           <div v-else class="inst-box__preview">
-            <MarkdownView :content="form.instructions" compact empty-text="暂无工作指令" />
+            <MarkdownView :content="form.instructions" compact empty-text="暂无人设与工作指南" />
           </div>
         </div>
       </el-form-item>
@@ -208,7 +222,92 @@ const emit = defineEmits<{
 }>();
 
 const avatars = EMPLOYEE_APPEARANCES;
-const defaultInstructions = "收到消息后先判断能否直接回答；信息不足时追问；需要其他员工帮助时联系相应员工。";
+
+interface PersonaTemplate {
+  id: string;
+  label: string;
+  content: string;
+}
+
+const PERSONA_TEMPLATES: readonly PersonaTemplate[] = [
+  {
+    id: "colleague",
+    label: "通用同事",
+    content: [
+      "## 性格与说话方式",
+      "平实、可靠、直奔重点，像同一间办公室里共事的同事。日常讨论用自然的短段落交流，先抛核心判断再顺手问清楚关键前提，不端架子也不说客服套话。",
+      "",
+      "## 专业判断与协作",
+      "- 信息不够时直接开口问清最关键的一两个点，不靠猜也不机械罗列免责声明。",
+      "- 只有对方明确要文档、清单或对比表时，才切换到结构化长文输出。",
+    ].join("\n"),
+  },
+  {
+    id: "architect",
+    label: "后端架构师",
+    content: [
+      "## 性格与说话方式",
+      "沉稳、务实、抓大放小。日常聊方案或排查急事时先稳住节奏，用两三段口语说清最可能的根因与当下最稳的第一步；不炫技、不把测试命令或契约检查清单硬塞进普通聊天。",
+      "",
+      "## 专业偏好",
+      "- 重视边界清晰、可回滚、最小改动；觉得方案有隐患时坦诚直言并给出替代路径。",
+      "- 真正进入代码或接口改动评审时，再明确指出契约影响、数据兼容与回归验证方式。",
+    ].join("\n"),
+  },
+  {
+    id: "designer",
+    label: "体验设计师",
+    content: [
+      "## 性格与说话方式",
+      "敏锐、克制、有审美主见，聊起界面像坐在工位对面一起看稿。先说第一眼体感和信息层级判断，少用设计黑话，随口要截图看实图，不把闲聊写成设计规范论文。",
+      "",
+      "## 专业偏好",
+      "- 相信减法、层级与留白胜过堆装饰和堆颜色；反对没定位病因就盲目大改。",
+      "- 只有出正式评审或改版方案时，才用分点或对照表拆细节。",
+    ].join("\n"),
+  },
+  {
+    id: "qa",
+    label: "测试工程师",
+    content: [
+      "## 性格与说话方式",
+      "冷静、细心但不死板，擅长帮同事提前兜住容易漏测的坑。平时聊天先点出最值钱的 2–3 个风险和边界条件，不一股脑抛十几条测试手册。",
+      "",
+      "## 专业偏好",
+      "- 关注真实用户路径、异常恢复、并发与边界输入；坚持以实际复现证据说话。",
+      "- 需要出正式验收清单或回归用例时，再给出清晰的步骤、预期结果与通过标准。",
+    ].join("\n"),
+  },
+  {
+    id: "ops",
+    label: "运营 / 项目协作",
+    content: [
+      "## 性格与说话方式",
+      "轻快、有条理、推进感强，善于把模糊想法收敛成下一步动作。回复简明直接，先对齐目标、负责人和时间节点，不绕弯子。",
+      "",
+      "## 专业偏好",
+      "- 关注用户真实反馈与业务结果，帮团队从一堆待办里挑出最值得先做的一件事。",
+      "- 汇报材料或周报类请求再切到结构化大纲，日常沟通保持短促高效。",
+    ].join("\n"),
+  },
+];
+
+const defaultInstructions = PERSONA_TEMPLATES[0]!.content;
+
+async function applyPersonaTemplate(tpl: PersonaTemplate) {
+  const current = form.instructions.trim();
+  const isBuiltin = !current || PERSONA_TEMPLATES.some((item) => item.content.trim() === current);
+  if (!isBuiltin) {
+    const ok = await confirmDialog({
+      title: `套用「${tpl.label}」人设模板？`,
+      message: "当前填写的人设与工作指南将被替换为模板内容，替换后可继续微调。",
+      confirmLabel: "套用模板",
+      cancelLabel: "保留当前内容",
+    });
+    if (!ok) return;
+  }
+  form.instructions = tpl.content;
+}
 const form = reactive({
   name: "",
   domain: "",
@@ -356,6 +455,25 @@ async function submit() {
   padding: 6px 10px; border-bottom: 1px solid var(--astra-border); background: var(--astra-bg-subtle);
 }
 .inst-box__count { color: var(--astra-text-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.preset-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 6px 10px; border-bottom: 1px solid var(--astra-border-subtle); background: var(--astra-bg-panel);
+}
+.preset-bar__label { color: var(--astra-text-muted); font-size: 11.5px; flex: none; }
+.preset-chip {
+  height: 22px; padding: 0 9px;
+  border: 1px solid var(--astra-border); border-radius: 999px;
+  background: var(--astra-bg-subtle); color: var(--astra-text-secondary);
+  font-size: 11.5px; font-weight: 500; cursor: pointer;
+  transition: border-color 0.14s ease, background-color 0.14s ease, color 0.14s ease;
+}
+.preset-chip:hover:not(:disabled) {
+  border-color: var(--astra-border-hover); background: var(--astra-bg-elevated); color: var(--astra-text-primary);
+}
+.preset-chip.is-active {
+  border-color: var(--astra-primary); background: var(--astra-primary); color: #ffffff;
+}
+.preset-chip:disabled { opacity: 0.6; cursor: default; }
 .inst-box__input :deep(.el-textarea__inner) {
   border: 0; border-radius: 0; box-shadow: none !important; padding: 10px 12px;
   font-family: var(--astra-font-mono); font-size: 12.5px; line-height: 1.6;

@@ -32,6 +32,18 @@ def test_assembly_order_and_empty():
     assert final.index("规则A") < final.index("你是星河")
 
 
+def test_employee_prompt_only_mentions_contact_employee_when_enabled():
+    without_tool = employee_prompt({**EMPLOYEE, "tools": []})
+    assert "contact_employee" not in without_tool
+
+    with_tool = employee_prompt({**EMPLOYEE, "tools": ["contact_employee"]})
+    assert "contact_employee" in with_tool
+
+    with_id = employee_prompt({**EMPLOYEE, "id": "emp_demo", "tools": []})
+    assert "emp_demo" in with_id
+    assert "日常对话无需提及" in with_id
+
+
 def test_seed_preview_and_save_does_not_update_agents(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXUS_DATA_DIR", str(tmp_path))
     fake = FakeAgentScope()

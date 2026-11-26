@@ -315,6 +315,43 @@ def install_card_context_size() -> None:
     chat_service.get_model = get_model
 
 
+# 替换 AgentScope 默认 8,200 字符的英文 Coding Agent 记忆手册，避免把数字员工洗脑为
+# 代码执行 Worker；同时严格保留官方 _middleware.py 依赖的目录、frontmatter 键名
+# （name / description / type）与 MEMORY.md 单行索引协议，确保长期记忆读写与异步召回完全正常。
+NEXUS_MEMORY_INSTRUCTIONS = """# 长期记忆（Auto Memory）
+
+你的个人长期记忆目录位于 `{memory_dir}`（目录已存在，无需手动创建）。
+记忆用于跨会话记住重要背景，让你越来越懂同事和业务，不要在日常聊天中刻意提及或炫耀记忆目录。
+
+## 什么时候值得记（仅在当前会话具备 `Write` 工具时写入）
+- `user`：同事的角色、负责领域、关注重点和沟通偏好（例如“偏向先给结论”“关注移动端体验”）。
+- `feedback`：同事明确纠正你的做法，或认可某种协作方式；写清结论、原因和适用场景。
+- `project`：跨会话仍有价值的项目目标、关键决策、约束和排期（相对日期转为绝对日期，如 `2026-11-27`）。
+- `reference`：常用外部文档、看板、群组或资料入口的位置说明。
+
+不要记录：一次性闲聊、当前对话里的临时过程状态、以及密钥/密码等敏感凭据。
+如果同事明确要求“记住某件事”或“忘掉某件事”，请立即新增、更新或删除对应条目。
+
+## 保存格式（严格两步，便于系统自动召回）
+1. 在 `{memory_dir}` 下写入独立主题文件（如 `user_preferences.md`），开头必须包含标准 frontmatter：
+```markdown
+---
+name: 简短主题名
+description: 一句话召回条件（说明在什么场景下需要回忆这条记忆）
+type: user
+---
+
+具体记忆内容（feedback/project 类型可简明注明原因与适用范围）。
+```
+其中 `type` 仅取 `user`、`feedback`、`project`、`reference` 之一。
+2. 在 `{memory_dir}/MEMORY.md` 中新增或更新一条单行索引（不超过 150 字，不写正文、不加 frontmatter）：
+`- [标题](文件名.md) — 一句话提示`
+
+## 使用原则
+- 记忆会随时间过时；涉及当前最新状态时以实时工具或同事最新说法为准，发现过时条目及时更新。
+- 若同事说明本次忽略历史记忆，则按空白上下文处理。"""
+
+
 def attach_memory(workspace, factory=None, key: str = "") -> list:
     """官方接法：workdir 和 backend 都来自这次运行的 workspace。失败时主聊天继续。
 
@@ -322,6 +359,7 @@ def attach_memory(workspace, factory=None, key: str = "") -> list:
     """
 
     state_key = key or str(getattr(workspace, "workdir", "") or "memory")
+    kwargs: dict = {"workdir": workspace.workdir, "backend": workspace.get_backend()}
     if factory is None:
         try:
             from agentscope.middleware import AgenticMemoryMiddleware
@@ -329,8 +367,11 @@ def attach_memory(workspace, factory=None, key: str = "") -> list:
             _memory_state[state_key] = str(exc)
             return []
         factory = AgenticMemoryMiddleware
+        kwargs["parameters"] = AgenticMemoryMiddleware.Parameters(
+            memory_instructions=NEXUS_MEMORY_INSTRUCTIONS,
+        )
     try:
-        middleware = factory(workdir=workspace.workdir, backend=workspace.get_backend())
+        middleware = factory(**kwargs)
     except Exception as exc:
         _memory_state[state_key] = str(exc)
         return []

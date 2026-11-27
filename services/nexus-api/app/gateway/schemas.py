@@ -120,6 +120,7 @@ class NodeRead(BaseModel):
 class RouteCreate(BaseModel):
     model: str = Field(min_length=1, max_length=200)
     model_type: Literal["CHAT", "EMBEDDING", "ASR"] = "CHAT"
+    supports_vision: bool = False
     pool_id: str
     target_model: str | None = Field(default=None, max_length=200)
     description: str = ""
@@ -129,6 +130,7 @@ class RouteCreate(BaseModel):
 class RoutePatch(BaseModel):
     model: str | None = Field(default=None, min_length=1, max_length=200)
     model_type: Literal["CHAT", "EMBEDDING", "ASR"] | None = None
+    supports_vision: bool | None = None
     pool_id: str | None = None
     target_model: str | None = Field(default=None, max_length=200)
     description: str | None = None
@@ -141,6 +143,7 @@ class RouteRead(BaseModel):
     id: str
     model: str
     model_type: Literal["CHAT", "EMBEDDING", "ASR"]
+    supports_vision: bool = False
     pool_id: str
     target_model: str | None = None
     description: str
@@ -150,6 +153,10 @@ class RouteRead(BaseModel):
 
 
 class SpeechInputConfig(BaseModel):
+    route_id: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class VisionInputConfig(BaseModel):
     route_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 

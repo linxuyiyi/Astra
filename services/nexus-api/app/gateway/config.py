@@ -17,7 +17,13 @@ from typing import Any
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.gateway.models import GatewayKey, GatewayNode, GatewayPool, GatewayRoute
+from app.gateway.models import (
+    GatewayKey,
+    GatewayNode,
+    GatewayPool,
+    GatewayRoute,
+    GatewayVisionInput,
+)
 from app.gateway.runtime import node_runtime_scope
 
 logger = logging.getLogger(__name__)
@@ -128,6 +134,7 @@ class RouteConfig:
     enabled: bool
     target_model: str | None = None
     model_type: str = "CHAT"
+    supports_vision: bool = False
 
     @classmethod
     def from_snapshot(cls, item: Mapping[str, Any]) -> RouteConfig:
@@ -138,6 +145,7 @@ class RouteConfig:
             enabled=bool(item.get("enabled", True)),
             target_model=item.get("target_model") or None,
             model_type=_text(item.get("model_type"), "CHAT"),
+            supports_vision=bool(item.get("supports_vision", False)),
         )
 
 
@@ -180,10 +188,11 @@ class GatewayConfig:
     nodes: Mapping[str, NodeConfig]
     routes: Mapping[str, RouteConfig]
     keys: Mapping[str, KeyConfig]
+    vision_route_id: str | None = None
 
     @classmethod
     def empty(cls) -> GatewayConfig:
-        return cls(pools={}, nodes={}, routes={}, keys={})
+        return cls(pools={}, nodes={}, routes={}, keys={}, vision_route_id=None)
 
     @classmethod
     def from_snapshot(cls, snapshot: Mapping[str, Any] | None) -> GatewayConfig:
@@ -212,7 +221,23 @@ class GatewayConfig:
             for item in data.get("keys", [])
             if item.get("key_digest")
         }
-        return cls(pools=pools, nodes=nodes, routes=routes, keys=keys)
+        raw_vision = data.get("vision_route_id")
+        vision_route_id = str(raw_vision).strip() if raw_vision else None
+        return cls(pools=pools, nodes=nodes, routes=routes, keys=keys, vision_route_id=vision_route_id)
+
+    def resolve_vision_route(self) -> RouteConfig | None:
+        if not self.vision_route_id:
+            return None
+        for route in self.routes.values():
+            if route.id != self.vision_route_id:
+                continue
+            if not route.enabled or route.model_type != "CHAT" or not route.supports_vision:
+                return None
+            pool = self.pools.get(route.pool_id)
+            if pool is None or not pool.enabled:
+                return None
+            return route
+        return None
 
     @property
     def empty_config(self) -> bool:
@@ -263,6 +288,8 @@ class ConfigLoader:
                     {column.name: getattr(row, column.name) for column in model.__table__.columns}
                     for row in rows
                 ]
+            vision = await session.get(GatewayVisionInput, "default")
+            snapshot["vision_route_id"] = vision.route_id if vision is not None else None
             return GatewayConfig.from_snapshot(snapshot)
 
 

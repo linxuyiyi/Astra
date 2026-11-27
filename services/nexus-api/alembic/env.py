@@ -1,6 +1,7 @@
 import asyncio
 from logging.config import fileConfig
 
+from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, pool, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -35,11 +36,13 @@ def do_run_migrations(connection) -> None:
     tables = set(inspect(connection).get_table_names())
     if "alembic_version" in tables:
         versions = connection.execute(text("SELECT version_num FROM alembic_version")).scalars().all()
-        if versions and versions != [CURRENT_REVISION]:
-            raise RuntimeError("不支持历史数据库升级；请使用新的空数据库执行初始化")
+        known_revisions = {rev.revision for rev in ScriptDirectory.from_config(config).walk_revisions()}
         if versions == [CURRENT_REVISION]:
             assert_current_schema(connection)
-        if not versions and tables - {"alembic_version"}:
+        elif versions:
+            if len(versions) != 1 or versions[0] not in known_revisions:
+                raise RuntimeError("不支持历史数据库升级；请使用新的空数据库执行初始化")
+        elif tables - {"alembic_version"}:
             raise RuntimeError("数据库已有未标记的表；请使用新的空数据库执行初始化")
     elif tables:
         raise RuntimeError("数据库已有未标记的表；请使用新的空数据库执行初始化")

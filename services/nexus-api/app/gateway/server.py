@@ -39,6 +39,7 @@ from app.gateway.config import (
     KeyConfig,
     NodeConfig,
     PoolConfig,
+    RouteConfig,
 )
 from app.gateway.errors import (
     CLIENT_DISCONNECTED,
@@ -62,6 +63,8 @@ from app.gateway.errors import (
     runtime_unavailable,
     unauthorized,
     upstream_protocol_error,
+    vision_bridge_failed,
+    vision_not_supported,
 )
 from app.gateway.health import (
     acquire_probe_capacity,
@@ -103,6 +106,17 @@ from app.gateway.scheduler import (
     read_node_schedule,
 )
 from app.gateway.security import CredentialCipher, CredentialError, gateway_key_digest
+from app.gateway.vision import (
+    MAX_VISION_IMAGES_PER_REQUEST,
+    VISION_CACHE_TTL_SECONDS,
+    build_vision_messages,
+    current_turn_has_image,
+    extract_image_urls,
+    extract_vision_text,
+    payload_has_images,
+    rewrite_payload_images,
+    vision_cache_key,
+)
 
 CHAT_PATH = "/v1/chat/completions"
 # 与控制面一致：探测租约 TTL，实例崩溃后自动过期。
@@ -800,6 +814,15 @@ class GatewayDataPlane:
                 raise key_concurrency_exceeded()
             self._counters["active"] += 1
 
+            rewritten_payload: dict[str, Any] | None = None
+            if path == CHAT_PATH and not route.supports_vision and payload_has_images(payload):
+                rewritten_payload = await self._bridge_vision_payload(
+                    config=config,
+                    payload=payload,
+                    key=key,
+                    request_headers=request.headers,
+                )
+
             tried: set[str] = set()
             for attempt in range(self._max_retries + 1):
                 node, node_lease, reasons = await self._pick_node(
@@ -815,10 +838,11 @@ class GatewayDataPlane:
                     headers = build_upstream_headers(request.headers, node, api_key)
                     if audio:
                         upstream_body, headers["content-type"] = audio.encode(actual_model)
-                    elif actual_model != model:
-                        upstream_payload = dict(payload)
+                    elif rewritten_payload is not None or actual_model != model:
+                        effective_payload = rewritten_payload if rewritten_payload is not None else payload
+                        upstream_payload = dict(effective_payload)
                         upstream_payload["model"] = actual_model
-                        upstream_body = json.dumps(upstream_payload).encode("utf-8")
+                        upstream_body = json.dumps(upstream_payload, ensure_ascii=False).encode("utf-8")
                     else:
                         upstream_body = body
                     upstream_request = self.proxy.build_request(
@@ -910,6 +934,183 @@ class GatewayDataPlane:
                     await self._safe_release(SCOPE_KEY, key.id, key_lease)
                     self._counters["active"] = max(0, self._counters["active"] - 1)
                 await self._persist(record, finished=True)
+
+    # ── 视觉桥接 ───────────────────────────────────────────────────────
+
+    async def _bridge_vision_payload(
+        self,
+        *,
+        config: GatewayConfig,
+        payload: Mapping[str, Any],
+        key: KeyConfig,
+        request_headers: Mapping[str, str],
+    ) -> dict[str, Any]:
+        """当纯文本路由收到图片消息时，自动调用默认视觉路由转译并按哈希缓存。"""
+
+        urls = extract_image_urls(payload)
+        if not urls:
+            return dict(payload)
+        if len(urls) > MAX_VISION_IMAGES_PER_REQUEST:
+            raise invalid_request(f"单次请求最多自动解析 {MAX_VISION_IMAGES_PER_REQUEST} 张图片")
+
+        vision_route = config.resolve_vision_route()
+        if vision_route is None:
+            if current_turn_has_image(payload):
+                raise vision_not_supported()
+            return rewrite_payload_images(
+                payload,
+                {},
+                omitted_placeholder="[历史图片已省略：当前模型不支持图片输入，且未配置默认视觉解析路由]",
+            )
+
+        vision_pool = config.pools[vision_route.pool_id]
+        vision_actual_model = vision_route.target_model or vision_route.model
+        descriptions: dict[str, str] = {}
+        for url in urls:
+            cache_key = vision_cache_key(vision_route.model, vision_route.target_model, url)
+            cached: str | None = None
+            try:
+                cached = await self.runtime.get_vision_cache(cache_key)
+            except Exception:  # noqa: BLE001 - 缓存不可用时降级为直接解析
+                cached = None
+            if cached is not None:
+                descriptions[url] = cached
+                continue
+            description = await self._call_internal_vision(
+                config=config,
+                vision_route=vision_route,
+                vision_pool=vision_pool,
+                actual_model=vision_actual_model,
+                key=key,
+                request_headers=request_headers,
+                image_url=url,
+            )
+            try:
+                await self.runtime.set_vision_cache(cache_key, description, VISION_CACHE_TTL_SECONDS)
+            except Exception:  # noqa: BLE001 - 写缓存失败不影响当前请求
+                pass
+            descriptions[url] = description
+
+        return rewrite_payload_images(payload, descriptions, vision_model=vision_route.model)
+
+    async def _call_internal_vision(
+        self,
+        *,
+        config: GatewayConfig,
+        vision_route: RouteConfig,
+        vision_pool: PoolConfig,
+        actual_model: str,
+        key: KeyConfig,
+        request_headers: Mapping[str, str],
+        image_url: str,
+    ) -> str:
+        """通过网关数据面调度默认视觉路由完成单图解析，并记录独立调用日志。"""
+
+        started = utcnow()
+        vision_record = RequestRecord(
+            id=uuid4().hex,
+            started_at=started,
+            gateway_instance_id=self.instance_id,
+            gateway_instance_started_at=self._started_at,
+            key_id=key.id,
+            owner_id=key.owner_id,
+            model=vision_route.model,
+            actual_model=actual_model,
+            pool_id=vision_pool.id,
+            streaming=False,
+        )
+        await self._persist(vision_record, finished=False)
+        body = json.dumps(
+            {
+                "model": actual_model,
+                "stream": False,
+                "messages": build_vision_messages(image_url),
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        tried: set[str] = set()
+        try:
+            for attempt in range(self._max_retries + 1):
+                node, node_lease, reasons = await self._pick_node(
+                    config=config, model=actual_model, pool=vision_pool, exclude=tried
+                )
+                if node is None:
+                    error = self._no_node_error(reasons)
+                    vision_record.status_code = error.status_code
+                    vision_record.error_code = error.code
+                    raise vision_bridge_failed(
+                        f"默认视觉解析路由 {vision_route.model} 当前无可用节点",
+                        status_code=503,
+                    )
+                vision_record.node_id = node.id
+                node_scope = node.runtime_scope
+                try:
+                    api_key = self._decode_node_key(node)
+                    headers = build_upstream_headers(request_headers, node, api_key)
+                    upstream_request = self.proxy.build_request(
+                        node, "POST", CHAT_PATH, headers=headers, content=body
+                    )
+                    if attempt > 0:
+                        vision_record.retry_count = attempt
+                    await self._persist(vision_record, finished=False)
+                    upstream = await self.proxy.send(upstream_request, stream=False)
+                    vision_record.ttfb_ms = elapsed_ms(started)
+                    vision_record.status_code = upstream.status_code
+                    node_failure = upstream.status_code >= 500 or upstream.status_code in {401, 403, 429}
+                    await self._complete_non_stream(
+                        vision_record, upstream, node_scope, node_failure=node_failure
+                    )
+                    await self._safe_release(SCOPE_NODE, node.id, node_lease)
+                    if not upstream.is_success:
+                        status_code = 503 if upstream.status_code in {429, 503} else 502
+                        msg = (
+                            f"默认视觉解析路由 {vision_route.model} 返回异常状态"
+                            f"（HTTP {upstream.status_code}）"
+                        )
+                        raise vision_bridge_failed(msg, status_code=status_code)
+                    try:
+                        parsed = upstream.json()
+                    except ValueError as exc:
+                        vision_record.status_code = 502
+                        vision_record.error_code = "UPSTREAM_PROTOCOL_ERROR"
+                        await self._record_node_failure(node_scope)
+                        raise vision_bridge_failed("默认视觉解析路由返回格式异常", status_code=502) from exc
+                    text = extract_vision_text(parsed)
+                    if not text:
+                        vision_record.status_code = 502
+                        vision_record.error_code = "UPSTREAM_PROTOCOL_ERROR"
+                        await self._record_node_failure(node_scope)
+                        raise vision_bridge_failed("默认视觉解析路由未返回有效识别内容", status_code=502)
+                    return text
+                except NotSentDownstream as exc:
+                    await self._safe_release(SCOPE_NODE, node.id, node_lease)
+                    await self._record_node_failure(node_scope)
+                    error = self.proxy.classify(exc)
+                    vision_record.error_code = error.code
+                    tried.add(node.id)
+                    if attempt < self._max_retries:
+                        continue
+                    vision_record.status_code = error.status_code
+                    raise vision_bridge_failed(
+                        f"无法连接默认视觉解析路由 {vision_route.model}",
+                        status_code=error.status_code,
+                    ) from exc
+                except GatewayDataPlaneError:
+                    await self._safe_release(SCOPE_NODE, node.id, node_lease)
+                    raise
+                except Exception as exc:
+                    await self._safe_release(SCOPE_NODE, node.id, node_lease)
+                    await self._record_node_failure(node_scope)
+                    error = self.proxy.classify(exc)
+                    vision_record.status_code = error.status_code
+                    vision_record.error_code = error.code
+                    raise vision_bridge_failed(
+                        f"调用默认视觉解析路由 {vision_route.model} 失败",
+                        status_code=error.status_code,
+                    ) from exc
+            raise vision_bridge_failed(f"无法完成图片自动解析（路由 {vision_route.model}）", status_code=502)
+        finally:
+            await self._persist(vision_record, finished=True)
 
     # ── 鉴权与路由 ─────────────────────────────────────────────────────
 

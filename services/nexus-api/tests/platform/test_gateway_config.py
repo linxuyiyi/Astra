@@ -9,7 +9,14 @@ from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.gateway.config import ConfigLoader, ConfigRefresher, GatewayConfig, GatewayConfigState
-from app.gateway.models import GatewayKey, GatewayNode, GatewayPool, GatewayRoute, utcnow
+from app.gateway.models import (
+    GatewayKey,
+    GatewayNode,
+    GatewayPool,
+    GatewayRoute,
+    GatewayVisionInput,
+    utcnow,
+)
 from app.gateway.proxy import GatewayProxy
 from app.gateway.runtime import InMemoryRuntimeStore
 from app.gateway.security import CredentialCipher, gateway_key_digest
@@ -21,7 +28,10 @@ ROUTE_ID = "gr_saved"
 MODEL = "saved-model"
 KEY = "agw_saved-key"
 REVOKED_KEY = "agw_revoked-key"
-CONFIG_TABLES = [model.__table__ for model in (GatewayPool, GatewayNode, GatewayRoute, GatewayKey)]
+CONFIG_TABLES = [
+    model.__table__
+    for model in (GatewayPool, GatewayNode, GatewayRoute, GatewayKey, GatewayVisionInput)
+]
 
 
 @pytest.fixture
@@ -61,7 +71,8 @@ async def save_configuration(factory):
                 max_concurrency=4,
             )
         )
-        session.add(GatewayRoute(id=ROUTE_ID, model=MODEL, pool_id=POOL_ID))
+        session.add(GatewayRoute(id=ROUTE_ID, model=MODEL, pool_id=POOL_ID, supports_vision=True))
+        session.add(GatewayVisionInput(id="default", route_id=ROUTE_ID))
         session.add(
             GatewayKey(
                 id="gk_saved",
@@ -96,6 +107,9 @@ async def test_loader_uses_saved_tables_without_any_publication(config_database)
     assert config.nodes[NODE_ID].base_url == "https://saved.example.com"
     assert config.nodes[NODE_ID].max_concurrency == 4
     assert config.routes[MODEL].pool_id == POOL_ID
+    assert config.routes[MODEL].supports_vision is True
+    assert config.vision_route_id == ROUTE_ID
+    assert config.resolve_vision_route() == config.routes[MODEL]
     assert config.keys[gateway_key_digest(KEY)].allowed_models == (MODEL,)
     assert config.keys[gateway_key_digest(KEY)].daily_token_limit == 500
     assert config.keys[gateway_key_digest(KEY)].expires_at > utcnow()

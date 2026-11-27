@@ -112,6 +112,7 @@ class GatewayRoute(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     model: Mapped[str] = mapped_column(String(200), unique=True, index=True)
     model_type: Mapped[str] = mapped_column(String(16), default="CHAT", server_default="CHAT")
+    supports_vision: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     pool_id: Mapped[str] = mapped_column(
         ForeignKey("t_nexus_gateway_pools.id", ondelete="RESTRICT"), index=True
     )
@@ -126,6 +127,17 @@ class GatewaySpeechInput(Base):
     """全平台语音输入只保存网关路由，不复制节点地址或凭据。"""
 
     __tablename__ = "t_nexus_gateway_speech_input"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    route_id: Mapped[str | None] = mapped_column(
+        ForeignKey("t_nexus_gateway_routes.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class GatewayVisionInput(Base):
+    """全平台图像理解只保存网关路由，不复制节点地址或凭据。"""
+
+    __tablename__ = "t_nexus_gateway_vision_input"
 
     id: Mapped[str] = mapped_column(String(16), primary_key=True)
     route_id: Mapped[str | None] = mapped_column(

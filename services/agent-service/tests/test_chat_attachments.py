@@ -174,3 +174,128 @@ def test_native_file_tools_are_bound_to_the_current_workspace(tmp_path):
             workspace_file_call(read(path), root)
     scoped = workspace_file_call(read("output.txt"), root)
     assert json.loads(scoped.input)["file_path"] == str(root / "output.txt")
+
+
+def test_read_attachment_routes_images_by_employee_vision_capability(tmp_path, monkeypatch):
+    import json
+
+    import chat_attachments
+    import httpx
+    from agentscope.app import create_app
+    from agentscope.app.message_bus import InMemoryMessageBus
+    from agentscope.app.storage import AsyncSQLAlchemyStorage, SessionConfig
+    from agentscope.app.workspace_manager import IsolationPolicy
+    from agentscope.message import Msg, TextBlock
+    from schedule_workspace import ScheduleWorkspaceManager
+
+    monkeypatch.setenv("NEXUS_INTERNAL_KEY", "test-vision-key")
+    original_client = httpx.AsyncClient
+    state = {"supports_vision": False, "fallback_configured": True, "fail_cap": False}
+    analyze_calls: list[dict] = []
+
+    def nexus_handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["x-nexus-internal-key"] == "test-vision-key"
+        if request.url.path == "/api/v1/internal/agent-vision-capability":
+            if state["fail_cap"]:
+                return httpx.Response(503, json={"detail": "down"})
+            return httpx.Response(
+                200,
+                json={
+                    "supports_vision": state["supports_vision"],
+                    "route_model": "qwen-vl" if state["supports_vision"] else "deepseek-chat",
+                    "vision_fallback_configured": state["fallback_configured"],
+                },
+            )
+        if request.url.path == "/api/v1/internal/vision/analyze":
+            body = json.loads(request.content)
+            analyze_calls.append(body)
+            return httpx.Response(
+                200,
+                json={
+                    "text": f"识别结果（问题={body.get('question') or '默认'}）：报错行 L42",
+                    "model": "qwen-vl-mini",
+                    "cached": False,
+                },
+            )
+        return httpx.Response(404)
+
+    monkeypatch.setattr(
+        chat_attachments.httpx,
+        "AsyncClient",
+        lambda **kw: original_client(transport=httpx.MockTransport(nexus_handler), **kw),
+    )
+
+    async def scenario():
+        storage = AsyncSQLAlchemyStorage(f"sqlite+aiosqlite:///{tmp_path / 'agent-vision.db'}")
+        manager = ScheduleWorkspaceManager(str(tmp_path / "ws"), isolation=IsolationPolicy.PER_SESSION)
+        bus = InMemoryMessageBus()
+        app = create_app(storage=storage, workspace_manager=manager, message_bus=bus)
+        async with app.router.lifespan_context(app):
+            session = await storage.upsert_session("nexus", "agent-1", SessionConfig(workspace_id="ws-1"))
+            att_id = "att_" + "1" * 32
+            msg = Msg(
+                id="msg_img_1",
+                name="user",
+                role="user",
+                content=[TextBlock(text="看看这张报错截图")],
+                metadata={
+                    "attachments": [
+                        {"id": att_id, "name": "error.png", "type": "image/png", "size": 123},
+                    ]
+                },
+            )
+            await storage.upsert_message("nexus", session.id, msg)
+            ws = await app.state.workspace_service.resolve("nexus", "agent-1", session.id)
+            att_dir = Path(ws.workdir) / "attachments"
+            att_dir.mkdir(parents=True, exist_ok=True)
+            img_buf = BytesIO()
+            Image.new("RGB", (640, 480), "blue").save(img_buf, "PNG")
+            (att_dir / att_id).write_bytes(img_buf.getvalue())
+
+            # 1) 纯文本员工 + 已配平台视觉路由 -> 返回纯文本解析，不返回 DataBlock，并透传 question
+            chunk_text = await chat_attachments.read_attachment(
+                storage, app.state.workspace_service, "http://nexus.test",
+                "nexus", "agent-1", session.id, "msg_img_1", att_id, 0, 1,
+                question="提取红色报错行号",
+            )
+            (block1,) = chunk_text.content
+            assert isinstance(block1, TextBlock)
+            assert "qwen-vl-mini" in block1.text
+            assert "报错行 L42" in block1.text
+            assert len(analyze_calls) == 1
+            assert analyze_calls[0]["question"] == "提取红色报错行号"
+            assert analyze_calls[0]["filename"] == "error.png"
+
+            # 2) 原生多模态员工 -> 直接返回 DataBlock，不额外调视觉解析接口
+            state["supports_vision"] = True
+            chunk_native = await chat_attachments.read_attachment(
+                storage, app.state.workspace_service, "http://nexus.test",
+                "nexus", "agent-1", session.id, "msg_img_1", att_id, 0, 1,
+            )
+            (block2,) = chunk_native.content
+            assert isinstance(block2, DataBlock)
+            assert block2.source.media_type == "image/jpeg"
+            assert len(analyze_calls) == 1
+
+            # 3) 纯文本员工且平台未配置视觉路由 -> 返回友好提示 TextBlock，不污染历史
+            state["supports_vision"] = False
+            state["fallback_configured"] = False
+            chunk_unconfigured = await chat_attachments.read_attachment(
+                storage, app.state.workspace_service, "http://nexus.test",
+                "nexus", "agent-1", session.id, "msg_img_1", att_id, 0, 1,
+            )
+            (block3,) = chunk_unconfigured.content
+            assert isinstance(block3, TextBlock)
+            assert "默认图像理解路由" in block3.text
+
+            # 4) 能力查询失败 -> 安全降级为 TextBlock，不把 DataBlock 放进历史
+            state["fail_cap"] = True
+            chunk_failed = await chat_attachments.read_attachment(
+                storage, app.state.workspace_service, "http://nexus.test",
+                "nexus", "agent-1", session.id, "msg_img_1", att_id, 0, 1,
+            )
+            (block4,) = chunk_failed.content
+            assert isinstance(block4, TextBlock)
+            assert "无法确认当前模型的图像识别能力" in block4.text
+
+    asyncio.run(scenario())

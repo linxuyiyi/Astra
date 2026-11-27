@@ -58,6 +58,7 @@ INSTANCE_KEY = "nexus:gateway:instance:{instance_id}"
 INSTANCE_REGISTRY_KEY = "nexus:gateway:instance_registry:{instance_id}"
 INSTANCES_SET = "nexus:gateway:instances"
 INSTANCE_REGISTRY_TTL_SECONDS = 7 * 86400
+VISION_CACHE_KEY = "nexus:gateway:vision_cache:{cache_key}"
 
 # 已吊销 Gateway Key 摘要的共享阻断集合：控制面先追加写入，数据面据此在读取请求体
 # 与调度之前阻断，无需等待配置刷新。集合只增不减（吊销不可逆），且没有 TTL——否则
@@ -475,6 +476,10 @@ class RuntimeStore(Protocol):
 
     async def revocation_state_ready(self) -> bool: ...
 
+    async def get_vision_cache(self, cache_key: str) -> str | None: ...
+
+    async def set_vision_cache(self, cache_key: str, value: str, ttl_seconds: int) -> None: ...
+
     async def close(self) -> None: ...
 
 
@@ -779,6 +784,15 @@ class RedisRuntimeStore:
         client = self._connection()
         return bool(await client.sismember(REVOKED_KEYS_KEY, REVOKED_READY_MEMBER))
 
+    async def get_vision_cache(self, cache_key: str) -> str | None:
+        client = self._connection()
+        value = await client.get(VISION_CACHE_KEY.format(cache_key=cache_key))
+        return str(value) if value is not None else None
+
+    async def set_vision_cache(self, cache_key: str, value: str, ttl_seconds: int) -> None:
+        client = self._connection()
+        await client.set(VISION_CACHE_KEY.format(cache_key=cache_key), value, ex=max(1, int(ttl_seconds)))
+
     async def close(self) -> None:
         if self._client is not None:
             await self._client.aclose()
@@ -801,6 +815,7 @@ class InMemoryRuntimeStore:
         # 就绪哨兵与摘要同在一个集合：嵌入式/测试场景默认已就绪（哨兵已入集合）；
         # 生产 Redis 实现必须由启动或后台从数据库同步后才写入哨兵，缺失时 fail closed。
         self._revoked: set[str] = {REVOKED_READY_MEMBER}
+        self._vision_cache: dict[str, tuple[str, float]] = {}
         self.available = available
 
     def set_available(self, available: bool) -> None:
@@ -1071,6 +1086,24 @@ class InMemoryRuntimeStore:
 
     async def revocation_state_ready(self) -> bool:
         return self.available and REVOKED_READY_MEMBER in self._revoked
+
+    async def get_vision_cache(self, cache_key: str) -> str | None:
+        self._require_available()
+        entry = self._vision_cache.get(cache_key)
+        if entry is None:
+            return None
+        value, expiry = entry
+        if expiry <= time.monotonic():
+            self._vision_cache.pop(cache_key, None)
+            return None
+        return value
+
+    async def set_vision_cache(self, cache_key: str, value: str, ttl_seconds: int) -> None:
+        self._require_available()
+        self._vision_cache[cache_key] = (value, time.monotonic() + max(1, int(ttl_seconds)))
+        if len(self._vision_cache) > 512:
+            oldest = next(iter(self._vision_cache))
+            self._vision_cache.pop(oldest, None)
 
     def clear_revocation_state(self) -> None:
         """模拟 Redis 整集合键被淘汰/清空：哨兵与摘要一并丢失（仅供测试与嵌入式场景）。"""

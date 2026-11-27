@@ -22,6 +22,7 @@ from app.api.maintenance_routes import router as maintenance_router
 from app.api.routes import router as platform_router
 from app.api.speech_routes import router as speech_router
 from app.api.task_tool_routes import router as task_tool_router
+from app.api.vision_routes import router as vision_router
 from app.api.worker_routes import router as worker_router
 from app.api.workspace_routes import router as workspace_router
 from app.gateway.security import CredentialError
@@ -59,6 +60,7 @@ def _include_platform(app: FastAPI) -> None:
     app.include_router(library_router)
     app.include_router(gateway_router)
     app.include_router(speech_router)
+    app.include_router(vision_router)
     app.include_router(task_tool_router)
     app.include_router(nebula_router)
     app.add_exception_handler(LibraryError, library_error_handler)

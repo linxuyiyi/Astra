@@ -88,9 +88,12 @@
             <span v-else class="route-same-muted">与请求一致</span>
           </template>
         </ElTableColumn>
-        <ElTableColumn label="模型类型" width="112" align="center">
+        <ElTableColumn label="模型类型" width="148" align="center">
           <template #default="{ row }">
-            <ElTag size="small" type="info" class="astra-tag--neutral">{{ modelTypeLabel(row.model_type) }}</ElTag>
+            <div class="route-type-tags">
+              <ElTag size="small" type="info" class="astra-tag--neutral">{{ modelTypeLabel(row.model_type) }}</ElTag>
+              <ElTag v-if="row.model_type === 'CHAT' && row.supports_vision" size="small" type="primary">视觉</ElTag>
+            </div>
           </template>
         </ElTableColumn>
         <ElTableColumn label="关联资源池" min-width="140" show-overflow-tooltip>
@@ -134,35 +137,67 @@
       />
     </div>
 
-    <section class="speech-strip" data-testid="speech-input-config">
-      <div class="speech-strip__row">
-        <div class="speech-strip__info">
-          <Mic :size="15" class="speech-strip__icon" />
-          <strong class="speech-strip__title">数字员工语音输入</strong>
-          <span class="speech-strip__hint">私聊与群聊共用的默认语音识别（ASR）路由</span>
+    <div class="platform-strips">
+      <section class="speech-strip" data-testid="speech-input-config">
+        <div class="speech-strip__row">
+          <div class="speech-strip__info">
+            <Mic :size="15" class="speech-strip__icon" />
+            <strong class="speech-strip__title">数字员工语音输入</strong>
+            <span class="speech-strip__hint">私聊与群聊共用的默认语音识别（ASR）路由</span>
+          </div>
+          <div class="speech-strip__controls">
+            <ElSelect
+              v-model="speechRouteId"
+              clearable
+              filterable
+              placeholder="选择已启用的 ASR 路由"
+              class="speech-strip__select"
+              :disabled="loading || savingSpeech"
+            >
+              <ElOption v-for="route in speechRoutes" :key="route.id" :value="route.id" :label="route.model" />
+            </ElSelect>
+            <ElButton :disabled="loading" :loading="savingSpeech" @click="saveSpeech">保存</ElButton>
+          </div>
         </div>
-        <div class="speech-strip__controls">
-          <ElSelect
-            v-model="speechRouteId"
-            clearable
-            filterable
-            placeholder="选择已启用的 ASR 路由"
-            class="speech-strip__select"
-            :disabled="loading || savingSpeech"
-          >
-            <ElOption v-for="route in speechRoutes" :key="route.id" :value="route.id" :label="route.model" />
-          </ElSelect>
-          <ElButton :disabled="loading" :loading="savingSpeech" @click="saveSpeech">保存</ElButton>
+        <ElAlert
+          v-if="speechRouteUnavailable"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="已保存的语音路由不可用，请重新选择已启用的 ASR 路由。"
+        />
+      </section>
+
+      <section class="speech-strip" data-testid="vision-input-config">
+        <div class="speech-strip__row">
+          <div class="speech-strip__info">
+            <Eye :size="15" class="speech-strip__icon" />
+            <strong class="speech-strip__title">数字员工默认图像理解</strong>
+            <span class="speech-strip__hint">主模型不支持原生识图时，自动调用此视觉路由解析图片（支持多模态小模型或视觉大模型）</span>
+          </div>
+          <div class="speech-strip__controls">
+            <ElSelect
+              v-model="visionRouteId"
+              clearable
+              filterable
+              placeholder="选择已启用的视觉对话路由"
+              class="speech-strip__select"
+              :disabled="loading || savingVision"
+            >
+              <ElOption v-for="route in visionRoutes" :key="route.id" :value="route.id" :label="route.model" />
+            </ElSelect>
+            <ElButton :disabled="loading" :loading="savingVision" @click="saveVision">保存</ElButton>
+          </div>
         </div>
-      </div>
-      <ElAlert
-        v-if="speechRouteUnavailable"
-        type="warning"
-        show-icon
-        :closable="false"
-        title="已保存的语音路由不可用，请重新选择已启用的 ASR 路由。"
-      />
-    </section>
+        <ElAlert
+          v-if="visionRouteUnavailable"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="已保存的图像理解路由不可用，请重新选择已启用且开启图像理解的对话路由。"
+        />
+      </section>
+    </div>
 
     <ElDrawer
       v-if="routeDrawerOpen"
@@ -217,6 +252,14 @@
         <ElFormItem label="描述" prop="description">
           <ElInput v-model="routeForm.description" type="textarea" :rows="2" placeholder="可选，例如：日常对话默认路由" />
         </ElFormItem>
+        <ElFormItem v-if="routeForm.model_type === 'CHAT'" label="支持图像理解（Vision）" prop="supports_vision">
+          <div>
+            <ElSwitch v-model="routeForm.supports_vision" data-testid="gateway-route-vision" />
+            <p class="route-field-hint">
+              开启表示该对话模型原生支持图片输入；未开启时碰到图片将自动通过平台默认图像理解路由转译。
+            </p>
+          </div>
+        </ElFormItem>
         <ElFormItem label="启用状态" prop="enabled">
           <ElSwitch v-model="routeForm.enabled" data-testid="gateway-route-enabled" />
         </ElFormItem>
@@ -236,7 +279,7 @@
 
 <script setup lang="ts">
 import { onBeforeRouteLeave, RouterLink } from 'vue-router'
-import { Mic, Plus, RefreshCw, Search } from 'lucide-vue-next'
+import { Eye, Mic, Plus, RefreshCw, Search } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   ElAlert,
@@ -283,10 +326,15 @@ const routeForm = reactive({
   id: '',
   model: '',
   model_type: 'CHAT' as 'CHAT' | 'EMBEDDING' | 'ASR',
+  supports_vision: false,
   target_model: '',
   pool_id: '',
   description: '',
   enabled: true,
+})
+
+watch(() => routeForm.model_type, (next) => {
+  if (next !== 'CHAT') routeForm.supports_vision = false
 })
 
 const poolModelOptions = computed(() => {
@@ -308,6 +356,16 @@ const speechRouteUnavailable = computed(() =>
   Boolean(speechRouteId.value && !speechRoutes.value.some((route) => route.id === speechRouteId.value)),
 )
 
+const visionRouteId = ref<string | undefined>()
+const savingVision = ref(false)
+const visionRoutes = computed(() => routes.value.filter((route) =>
+  route.enabled && route.model_type === 'CHAT' && route.supports_vision
+  && pools.value.some((pool) => pool.id === route.pool_id && pool.enabled),
+))
+const visionRouteUnavailable = computed(() =>
+  Boolean(visionRouteId.value && !visionRoutes.value.some((route) => route.id === visionRouteId.value)),
+)
+
 function modelTypeLabel(value: string): string {
   return ({ CHAT: '对话', EMBEDDING: '向量嵌入', ASR: '语音识别' } as Record<string, string>)[value] ?? value
 }
@@ -321,6 +379,18 @@ async function saveSpeech() {
     notify(errorMessage(reason, '语音输入配置保存失败'), 'error')
   } finally {
     savingSpeech.value = false
+  }
+}
+
+async function saveVision() {
+  savingVision.value = true
+  try {
+    await gatewayApi.saveVisionInput(visionRouteId.value || null)
+    notify('图像理解配置已保存')
+  } catch (reason) {
+    notify(errorMessage(reason, '图像理解配置保存失败'), 'error')
+  } finally {
+    savingVision.value = false
   }
 }
 
@@ -387,16 +457,18 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [poolList, routeList, nodeList, speech] = await Promise.all([
+    const [poolList, routeList, nodeList, speech, vision] = await Promise.all([
       gatewayApi.pools(),
       gatewayApi.routes(),
       gatewayApi.nodes(),
       gatewayApi.speechInput(),
+      gatewayApi.visionInput(),
     ])
     pools.value = poolList
     routes.value = routeList
     nodes.value = nodeList
     speechRouteId.value = speech.route_id ?? undefined
+    visionRouteId.value = vision.route_id ?? undefined
   } catch (reason) {
     error.value = errorMessage(reason, '路由加载失败')
   } finally {
@@ -432,6 +504,7 @@ function openRouteCreate() {
     id: '',
     model: '',
     model_type: 'CHAT',
+    supports_vision: false,
     target_model: '',
     pool_id: pools.value[0]?.id ?? '',
     description: '',
@@ -447,6 +520,7 @@ function openRouteEdit(route: GatewayRoute) {
     id: route.id,
     model: route.model,
     model_type: route.model_type,
+    supports_vision: Boolean(route.supports_vision),
     target_model: route.target_model ?? '',
     pool_id: route.pool_id,
     description: route.description,
@@ -466,6 +540,7 @@ async function submitRoute() {
     const body = {
       model: routeForm.model.trim(),
       model_type: routeForm.model_type,
+      supports_vision: routeForm.model_type === 'CHAT' ? routeForm.supports_vision : false,
       target_model: target ? target : null,
       pool_id: routeForm.pool_id,
       description: routeForm.description,
@@ -555,6 +630,9 @@ onMounted(load)
   color: var(--astra-accent-text); text-decoration: none; font-size: 13px;
 }
 .route-pool-link:hover { color: var(--astra-accent-hover); text-decoration: underline; }
+
+.route-type-tags { display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap; }
+.platform-strips { display: grid; gap: 10px; }
 
 .speech-strip {
   display: grid; gap: 10px;

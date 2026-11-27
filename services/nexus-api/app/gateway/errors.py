@@ -22,6 +22,8 @@ KEY_QUOTA_EXCEEDED = "KEY_QUOTA_EXCEEDED"
 INVALID_REQUEST = "INVALID_REQUEST"
 PAYLOAD_TOO_LARGE = "PAYLOAD_TOO_LARGE"
 MODEL_NOT_FOUND = "MODEL_NOT_FOUND"
+VISION_NOT_SUPPORTED = "VISION_NOT_SUPPORTED"
+VISION_BRIDGE_FAILED = "VISION_BRIDGE_FAILED"
 NO_ELIGIBLE_NODE = "NO_ELIGIBLE_NODE"
 POOL_SATURATED = "POOL_SATURATED"
 QUOTA_EXCEEDED = "QUOTA_EXCEEDED"
@@ -132,3 +134,17 @@ def upstream_protocol_error(message: str = "上游流式响应不符合 SSE 约�
 
 def upstream_error(code: str, message: str, status_code: int) -> GatewayDataPlaneError:
     return GatewayDataPlaneError(code, message, status_code, API_ERROR)
+
+
+def vision_not_supported(
+    message: str = "当前模型路由不支持图片输入，且未在 API 网关配置默认视觉解析路由",
+) -> GatewayDataPlaneError:
+    return GatewayDataPlaneError(VISION_NOT_SUPPORTED, message, 400, INVALID_REQUEST_ERROR)
+
+
+def vision_bridge_failed(
+    message: str = "默认视觉解析路由暂时不可用，无法自动解析图片",
+    *,
+    status_code: int = 502,
+) -> GatewayDataPlaneError:
+    return GatewayDataPlaneError(VISION_BRIDGE_FAILED, message, status_code, API_ERROR)

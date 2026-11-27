@@ -88,6 +88,7 @@ export interface GatewayRoute {
   id: string
   model: string
   model_type: GatewayModelType
+  supports_vision: boolean
   target_model: string | null
   pool_id: string
   description: string
@@ -99,6 +100,7 @@ export interface GatewayRoute {
 export interface GatewayRouteWrite {
   model?: string
   model_type?: GatewayModelType
+  supports_vision?: boolean
   target_model?: string | null
   pool_id?: string
   description?: string
@@ -442,6 +444,11 @@ export const gatewayApi = {
   speechInput: () => gatewayRequest<{ route_id: string | null }>('/api/gateway/speech-input'),
   saveSpeechInput: (route_id: string | null) =>
     gatewayRequest<{ route_id: string | null }>('/api/gateway/speech-input', {
+      method: 'PUT', body: { route_id },
+    }),
+  visionInput: () => gatewayRequest<{ route_id: string | null }>('/api/gateway/vision-input'),
+  saveVisionInput: (route_id: string | null) =>
+    gatewayRequest<{ route_id: string | null }>('/api/gateway/vision-input', {
       method: 'PUT', body: { route_id },
     }),
   // Pool

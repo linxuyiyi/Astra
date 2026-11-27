@@ -454,19 +454,27 @@ def main() -> None:
     )
 
     async def extra_agent_tools(user_id: str, agent_id: str, session_id: str):
-        async def read_chat_attachment(message_id: str, attachment_id: str, offset: int = 0, page: int = 1):
+        async def read_chat_attachment(
+            message_id: str,
+            attachment_id: str,
+            offset: int = 0,
+            page: int = 1,
+            question: str = "",
+        ):
             """按需读取当前会话中的附件。
 
             message_id: 附件引用所在的消息 ID。
             attachment_id: 附件引用中的附件 ID。
             offset: 文本的起始字符位置，初次使用 0，续读按返回的 offset。
-            page: PDF 的页码，从 1 开始。图片返回一张受限预览。
+            page: PDF 的页码，从 1 开始。
+            question: 读取图片附件时可选的关注问题或提取要求（例如“提取红色报错堆栈”或“核对第二列金额”）。当主模型不支持原生识图时，系统会自动调用平台视觉模型按此问题解析图片并返回文本，支持针对同一图片追问细节。
             """
             from chat_attachments import read_attachment
 
             return await read_attachment(
                 storage, app.state.workspace_service, nexus_api,
                 user_id, agent_id, session_id, message_id, attachment_id, offset, page,
+                question=question,
             )
 
         async def contact_employee(employee_name: str, message: str) -> str:

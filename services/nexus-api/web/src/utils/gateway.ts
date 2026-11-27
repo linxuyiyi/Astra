@@ -54,6 +54,9 @@ export const auditActionLabel = (value: string) =>
     'key.revoke': '吊销 API Key',
     'key.delete': '删除 API Key',
     'speech_input.update': '更新语音输入路由',
+    'speech-input.update': '更新语音输入路由',
+    'vision_input.update': '更新图像理解路由',
+    'vision-input.update': '更新图像理解路由',
   }[value] ?? fallback(value))
 
 export const auditResourceTypeLabel = (value: string) =>
@@ -63,6 +66,9 @@ export const auditResourceTypeLabel = (value: string) =>
     route: '模型路由',
     key: 'API Key',
     speech_input: '语音输入',
+    'speech-input': '语音输入',
+    vision_input: '图像理解',
+    'vision-input': '图像理解',
   }[value] ?? fallback(value))
 
 export const auditResultLabel = (value: string) => {

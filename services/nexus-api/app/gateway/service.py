@@ -42,6 +42,7 @@ from app.gateway.models import (
     GatewayPool,
     GatewayProbeRun,
     GatewayRoute,
+    GatewayVisionInput,
 )
 from app.gateway.probe import (
     PROBE_STRATEGIES,
@@ -510,6 +511,8 @@ class GatewayControlService:
             raise GatewayConflict("路由模型不能为空")
         if not payload.pool_id.strip():
             raise GatewayConflict("路由必须指定资源池")
+        if payload.supports_vision and payload.model_type != "CHAT":
+            raise GatewayConflict("只有对话类型（CHAT）路由支持开启图像理解能力")
         await self._ensure_pool(payload.pool_id)
         route = GatewayRoute(id=f"gr_{uuid4().hex[:12]}", **payload.model_dump())
         self._session.add(route)
@@ -535,6 +538,10 @@ class GatewayControlService:
         model_type = data.get("model_type", route.model_type)
         if model_type not in {"CHAT", "EMBEDDING", "ASR"}:
             raise GatewayConflict("路由模型类型不能为空")
+        if model_type != "CHAT":
+            if data.get("supports_vision") is True:
+                raise GatewayConflict("只有对话类型（CHAT）路由支持开启图像理解能力")
+            data["supports_vision"] = False
         pool_id = data.get("pool_id", route.pool_id)
         if not model or not model.strip():
             raise GatewayConflict("路由模型不能为空")
@@ -558,6 +565,9 @@ class GatewayControlService:
     async def delete_route(self, route_id: str, *, actor: str, actor_role: str) -> None:
         route = await self.get_route(route_id)
         before = self._route_dict(route)
+        vision_input = await self._session.get(GatewayVisionInput, "default")
+        if vision_input is not None and vision_input.route_id == route_id:
+            vision_input.route_id = None
         await self._session.delete(route)
         self._audit(
             actor=actor,
@@ -806,6 +816,7 @@ class GatewayControlService:
             "id": route.id,
             "model": route.model,
             "model_type": route.model_type,
+            "supports_vision": bool(route.supports_vision),
             "pool_id": route.pool_id,
             "target_model": route.target_model,
             "description": route.description,

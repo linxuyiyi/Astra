@@ -1841,6 +1841,68 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="员工还没有邮箱")
         return {"session_id": row["mailbox_session_id"]}
 
+    @app.get("/api/v1/internal/agent-vision-capability")
+    def agent_vision_capability(
+        request: Request, agent_id: str, connection=Depends(database)
+    ) -> dict[str, Any]:
+        require_internal(request)
+        row = (
+            connection.execute(
+                sql_text(
+                    """
+                    SELECT r.model AS route_model,
+                           r.model_type AS route_model_type,
+                           r.supports_vision AS route_supports_vision,
+                           r.enabled AS route_enabled,
+                           p.enabled AS pool_enabled
+                    FROM t_nexus_employees e
+                    LEFT JOIN t_nexus_gateway_routes r ON r.id = e.model_route_id
+                    LEFT JOIN t_nexus_gateway_pools p ON p.id = r.pool_id
+                    WHERE e.agentscope_agent_id = :p0
+                    """
+                ),
+                {"p0": agent_id},
+            )
+            .mappings()
+            .fetchone()
+        )
+        supports_vision = bool(
+            row
+            and row["route_model"]
+            and row["route_model_type"] == "CHAT"
+            and row["route_enabled"]
+            and row["pool_enabled"]
+            and row["route_supports_vision"]
+        )
+        vision_row = (
+            connection.execute(
+                sql_text(
+                    """
+                    SELECT r.model, r.model_type, r.enabled AS route_enabled,
+                           r.supports_vision, p.enabled AS pool_enabled
+                    FROM t_nexus_gateway_vision_input v
+                    JOIN t_nexus_gateway_routes r ON r.id = v.route_id
+                    JOIN t_nexus_gateway_pools p ON p.id = r.pool_id
+                    WHERE v.id = 'default'
+                    """
+                )
+            )
+            .mappings()
+            .fetchone()
+        )
+        vision_configured = bool(
+            vision_row
+            and vision_row["model_type"] == "CHAT"
+            and vision_row["route_enabled"]
+            and vision_row["supports_vision"]
+            and vision_row["pool_enabled"]
+        )
+        return {
+            "supports_vision": supports_vision,
+            "route_model": str(row["route_model"] or "") if row else "",
+            "vision_fallback_configured": vision_configured,
+        }
+
     @app.get("/api/v1/knowledge")
     async def knowledge(request: Request) -> dict[str, Any]:
         client = client_of(request)

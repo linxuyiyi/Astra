@@ -114,9 +114,57 @@ def test_all_revision_identifiers_fit_published_version_column():
     config = Config(str(SERVICE / "alembic.ini"))
     config.set_main_option("script_location", str(SERVICE / "alembic"))
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_current_head() == CURRENT_REVISION == "0001_init"
-    assert [r.revision for r in scripts.walk_revisions()] == [CURRENT_REVISION]
+    assert scripts.get_current_head() == CURRENT_REVISION == "0002_gateway_vision"
+    assert [r.revision for r in scripts.walk_revisions()] == ["0002_gateway_vision", "0001_init"]
     assert all(len(r.revision) <= VERSION.c.version_num.type.length for r in scripts.walk_revisions())
+
+
+def test_upgrade_from_0001_init_to_head_preserves_data_and_adds_vision_schema(tmp_path):
+    database = tmp_path / "upgrade-vision.db"
+    first = upgrade(database, "0001_init")
+    assert first.returncode == 0, first.stderr
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO t_nexus_settings (`key`, value) VALUES ('upgrade-keep', '保留数据')"
+        )
+        connection.execute(
+            "INSERT INTO t_nexus_gateway_routes "
+            "(id, model, model_type, pool_id, target_model, description, enabled, created_at, updated_at) "
+            "VALUES ('gr_old', 'deepseek-chat', 'CHAT', 'gp_default', NULL, '', 1, "
+            "'2026-11-27 00:00:00', '2026-11-27 00:00:00')"
+        )
+        connection.commit()
+
+    second = upgrade(database, "head")
+    assert second.returncode == 0, second.stderr
+    engine = create_engine(f"sqlite:///{database}")
+    try:
+        with engine.connect() as connection:
+            assert (
+                connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+                == CURRENT_REVISION
+            )
+            assert not compare_metadata(MigrationContext.configure(connection), metadata())
+            assert (
+                connection.execute(
+                    text("SELECT value FROM t_nexus_settings WHERE `key` = 'upgrade-keep'")
+                ).scalar()
+                == "保留数据"
+            )
+            assert (
+                connection.execute(
+                    text("SELECT supports_vision FROM t_nexus_gateway_routes WHERE id = 'gr_old'")
+                ).scalar()
+                == 0
+            )
+            assert (
+                connection.execute(
+                    text("SELECT COUNT(*) FROM t_nexus_gateway_vision_input")
+                ).scalar()
+                == 0
+            )
+    finally:
+        engine.dispose()
 
 
 def test_fresh_schema_has_worker_git_fields_without_repository_registry(tmp_path):

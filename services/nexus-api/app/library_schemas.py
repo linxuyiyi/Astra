@@ -18,7 +18,7 @@ class LibraryORMModel(BaseModel):
 class KnowledgeSpaceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     description: str = Field(default="", max_length=2000)
-    parent_id: str | None = None
+    parent_id: str | None = Field(default=None, max_length=64)
     sort_order: int = 0
     access_scope: str = Field(default="public", max_length=160)
 
@@ -26,7 +26,7 @@ class KnowledgeSpaceCreate(BaseModel):
 class KnowledgeSpacePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     description: str | None = Field(default=None, max_length=2000)
-    parent_id: str | None = None
+    parent_id: str | None = Field(default=None, max_length=64)
     sort_order: int | None = None
     status: Literal["active", "inactive"] | None = None
     access_scope: str | None = Field(default=None, max_length=160)
@@ -62,16 +62,16 @@ class ExperienceEvidenceWrite(BaseModel):
     content: str | None = None
     uri: str | None = None
     result: str | None = Field(default=None, max_length=64)
-    task_id: str | None = None
+    task_id: str | None = Field(default=None, max_length=64)
     message_id: str | None = Field(default=None, max_length=160)
     part_id: str | None = Field(default=None, max_length=160)
     file_path: str | None = None
     diff_hash: str | None = Field(default=None, max_length=64)
-    source_system: str | None = None
+    source_system: str | None = Field(default=None, max_length=32)
     native_session_id: str | None = Field(default=None, max_length=160)
     source_digest: str | None = Field(default=None, max_length=64)
     review_job_id: str | None = Field(default=None, max_length=64)
-    validation_status: str = "unverified"
+    validation_status: str = Field(default="unverified", max_length=16)
 
 
 class ExperienceEvidenceRead(LibraryORMModel):
@@ -95,7 +95,7 @@ class ExperienceEvidenceRead(LibraryORMModel):
 
 
 class KnowledgeCreate(BaseModel):
-    space_id: str | None = None
+    space_id: str | None = Field(default=None, max_length=64)
     title: str = Field(min_length=1, max_length=240)
     type: KnowledgeType = "document"
     summary: str = Field(default="", max_length=4000)
@@ -104,7 +104,7 @@ class KnowledgeCreate(BaseModel):
     tags: list[str] = Field(default_factory=list, max_length=50)
     source_type: str | None = Field(default=None, max_length=64)
     source_ref: str | None = Field(default=None, max_length=240)
-    source_task_id: str | None = None
+    source_task_id: str | None = Field(default=None, max_length=64)
 
     @field_validator("tags")
     @classmethod
@@ -113,7 +113,7 @@ class KnowledgeCreate(BaseModel):
 
 
 class KnowledgePatch(BaseModel):
-    space_id: str | None = None
+    space_id: str | None = Field(default=None, max_length=64)
     title: str | None = Field(default=None, min_length=1, max_length=240)
     type: KnowledgeType | None = None
     summary: str | None = Field(default=None, max_length=4000)
@@ -132,16 +132,16 @@ class KnowledgePatch(BaseModel):
 
 
 class SpaceMoveWrite(BaseModel):
-    target_parent_id: str | None = None
+    target_parent_id: str | None = Field(default=None, max_length=64)
 
 
 class KnowledgeMoveWrite(BaseModel):
-    space_id: str
+    space_id: str = Field(min_length=1, max_length=64)
 
 
 class KnowledgeBatchMoveWrite(BaseModel):
     knowledge_ids: list[str] = Field(min_length=1)
-    space_id: str
+    space_id: str = Field(min_length=1, max_length=64)
 
 
 class KnowledgeBatchIds(BaseModel):
@@ -150,7 +150,7 @@ class KnowledgeBatchIds(BaseModel):
 
 class KnowledgeBatchPublishWrite(BaseModel):
     knowledge_ids: list[str] = Field(min_length=1)
-    space_id: str
+    space_id: str = Field(min_length=1, max_length=64)
     verification_status: VerificationStatus = "verified"
 
 
@@ -165,7 +165,7 @@ class KnowledgeUsageRead(LibraryORMModel):
 
 
 class KnowledgePublishWrite(BaseModel):
-    space_id: str
+    space_id: str = Field(min_length=1, max_length=64)
     title: str | None = Field(default=None, min_length=1, max_length=240)
     summary: str | None = Field(default=None, max_length=4000)
     content_md: str | None = Field(default=None, min_length=1)
@@ -189,11 +189,11 @@ class KnowledgeListItem(LibraryORMModel):
     space_id: str | None
     space_name: str | None = None
     title: str
-    type: KnowledgeType
+    type: str
     summary: str
-    status: KnowledgeStatus
+    status: str
     sync_status: str = "not_synced"
-    verification_status: VerificationStatus
+    verification_status: str
     tags: list[str]
     source_type: str | None = None
     source_task_id: str | None
@@ -251,7 +251,7 @@ class LibraryStats(BaseModel):
 class KnowledgeFeedbackWrite(BaseModel):
     feedback_type: FeedbackType
     comment: str | None = Field(default=None, max_length=4000)
-    task_id: str | None = None
+    task_id: str | None = Field(default=None, max_length=64)
 
 
 class KnowledgeFeedbackResult(BaseModel):
@@ -324,8 +324,8 @@ class LibrarySubmitExperienceInput(BaseModel):
     content_md: str = Field(min_length=1)
     experience_type: str | None = Field(default=None, max_length=64)
     scope: dict[str, Any] = Field(default_factory=dict)
-    source_employee_id: str | None = None
-    source_task_id: str | None = None
+    source_employee_id: str | None = Field(default=None, max_length=64)
+    source_task_id: str | None = Field(default=None, max_length=64)
     evidence: list[ExperienceEvidenceWrite] = Field(default_factory=list, max_length=100)
     tags: list[str] = Field(default_factory=list, max_length=50)
     experience_data: dict[str, Any] = Field(default_factory=dict)
@@ -345,7 +345,7 @@ class LibraryFeedbackInput(BaseModel):
 class LibraryResourceFeedbackResult(BaseModel):
     id: int
     resource_id: str
-    feedback_type: FeedbackType
+    feedback_type: str
 
 
 class LibraryServiceStatus(BaseModel):

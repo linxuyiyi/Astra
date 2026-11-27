@@ -39,9 +39,9 @@ class PoolRead(BaseModel):
 class NodeCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     base_url: str = Field(min_length=1, max_length=512)
-    pool_id: str | None = None
+    pool_id: str | None = Field(default=None, max_length=64)
     api_key: str | None = None
-    auth_type: str = AUTH_BEARER
+    auth_type: str = Field(default=AUTH_BEARER, max_length=16)
     auth_header: str = Field(default="Authorization", min_length=1, max_length=64)
     connect_timeout_seconds: float | None = Field(default=None, gt=0, le=60)
     request_timeout_seconds: float | None = Field(default=None, gt=0, le=600)
@@ -53,20 +53,20 @@ class NodeCreate(BaseModel):
     max_concurrency: int = Field(default=0, ge=0)
     hourly_token_limit: int | None = Field(default=None, ge=0)
     daily_token_limit: int | None = Field(default=None, ge=0)
-    quota_policy: str = "STOP"
+    quota_policy: str = Field(default="STOP", max_length=16)
     # 新节点必须显式启用并探测通过后才能进入调度：默认安全态为 DISABLED/DRAINING，
     # 避免缺省 ACTIVE 绕过「显式 ACTIVE 创建需 HEALTHY」的限制。
-    config_state: str = CONFIG_DISABLED
-    scheduling_state: str = SCHEDULING_DRAINING
+    config_state: str = Field(default=CONFIG_DISABLED, max_length=16)
+    scheduling_state: str = Field(default=SCHEDULING_DRAINING, max_length=16)
     sort_order: int = 0
 
 
 class NodePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     base_url: str | None = Field(default=None, min_length=1, max_length=512)
-    pool_id: str | None = None
+    pool_id: str | None = Field(default=None, max_length=64)
     api_key: str | None = None
-    auth_type: str | None = None
+    auth_type: str | None = Field(default=None, max_length=16)
     auth_header: str | None = Field(default=None, min_length=1, max_length=64)
     connect_timeout_seconds: float | None = Field(default=None, gt=0, le=60)
     request_timeout_seconds: float | None = Field(default=None, gt=0, le=600)
@@ -78,9 +78,9 @@ class NodePatch(BaseModel):
     max_concurrency: int | None = Field(default=None, ge=0)
     hourly_token_limit: int | None = Field(default=None, ge=0)
     daily_token_limit: int | None = Field(default=None, ge=0)
-    quota_policy: str | None = None
-    config_state: str | None = None
-    scheduling_state: str | None = None
+    quota_policy: str | None = Field(default=None, max_length=16)
+    config_state: str | None = Field(default=None, max_length=16)
+    scheduling_state: str | None = Field(default=None, max_length=16)
     sort_order: int | None = None
 
 
@@ -121,7 +121,7 @@ class RouteCreate(BaseModel):
     model: str = Field(min_length=1, max_length=200)
     model_type: Literal["CHAT", "EMBEDDING", "ASR"] = "CHAT"
     supports_vision: bool = False
-    pool_id: str
+    pool_id: str = Field(max_length=64)
     target_model: str | None = Field(default=None, max_length=200)
     description: str = ""
     enabled: bool = True
@@ -131,7 +131,7 @@ class RoutePatch(BaseModel):
     model: str | None = Field(default=None, min_length=1, max_length=200)
     model_type: Literal["CHAT", "EMBEDDING", "ASR"] | None = None
     supports_vision: bool | None = None
-    pool_id: str | None = None
+    pool_id: str | None = Field(default=None, max_length=64)
     target_model: str | None = Field(default=None, max_length=200)
     description: str | None = None
     enabled: bool | None = None
@@ -142,7 +142,7 @@ class RouteRead(BaseModel):
 
     id: str
     model: str
-    model_type: Literal["CHAT", "EMBEDDING", "ASR"]
+    model_type: str
     supports_vision: bool = False
     pool_id: str
     target_model: str | None = None
@@ -156,13 +156,21 @@ class SpeechInputConfig(BaseModel):
     route_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
+class SpeechInputRead(BaseModel):
+    route_id: str | None = None
+
+
 class VisionInputConfig(BaseModel):
     route_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
+class VisionInputRead(BaseModel):
+    route_id: str | None = None
+
+
 class GatewayKeyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
-    owner_id: str | None = None
+    owner_id: str | None = Field(default=None, max_length=120)
     allowed_models: list[str] = Field(default_factory=list)
     max_concurrency: int = Field(default=0, ge=0)
     hourly_token_limit: int | None = Field(default=None, ge=0)
@@ -172,7 +180,7 @@ class GatewayKeyCreate(BaseModel):
 
 class GatewayKeyPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
-    owner_id: str | None = None
+    owner_id: str | None = Field(default=None, max_length=120)
     allowed_models: list[str] | None = None
     max_concurrency: int | None = Field(default=None, ge=0)
     hourly_token_limit: int | None = Field(default=None, ge=0)

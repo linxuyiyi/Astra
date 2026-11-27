@@ -19,17 +19,51 @@ from app.models import (
     TaskCategory,
 )
 from app.runtime.lifecycle import RuntimeService, RuntimeStateError
-from app.schemas import AcceptanceCriterion, TaskCreate
+from app.schemas import TaskCreate, TaskUpdate
 from app.services import TaskService
-from app.services import acceptance_criteria as normalize_criteria
 from app.state_machine import InvalidTransition
 from nexus_api.db_models import employees
 
 _CONCLUDED = {TaskStatus.SUCCEEDED.value, TaskStatus.CANCELED.value, TaskStatus.FAILED.value}
+_INTERVENE_REASON_MAX_LENGTH = 2000
+
+_FIELD_LABELS = {
+    "title": "任务标题（title）",
+    "description": "任务描述（description）",
+    "category_id": "任务分类（category_id）",
+    "external_task_id": "外部任务标识（external_task_id）",
+    "external_reference_id": "外部引用标识（external_reference_id）",
+    "origin_employee_id": "责任员工标识（origin_employee_id）",
+    "agent_worker_id": "执行 Worker 标识（agent_worker_id）",
+    "acceptance_criteria": "验收标准（acceptance_criteria）",
+}
 
 
 def _text(value: str | None) -> str:
     return (value or "").strip()
+
+
+def _validation_error_message(exc: ValidationError) -> str:
+    """将 Pydantic 校验错误转为数字员工可直接据此修正参数的中文提示。"""
+
+    messages: list[str] = []
+    for err in exc.errors():
+        loc = [str(part) for part in err.get("loc", ())]
+        if loc and loc[0] == "acceptance_criteria" and len(loc) >= 2:
+            label = f"第 {int(loc[1]) + 1} 条验收标准" if loc[1].isdigit() else "验收标准"
+        elif loc:
+            label = _FIELD_LABELS.get(loc[0], loc[0])
+        else:
+            label = "参数"
+        kind = err.get("type", "")
+        ctx = err.get("ctx") or {}
+        if kind == "string_too_long" and "max_length" in ctx:
+            messages.append(f"{label}不能超过 {ctx['max_length']} 个字符，请精简后重试")
+        elif kind == "string_too_short":
+            messages.append(f"{label}不能为空")
+        else:
+            messages.append(f"{label}无效：{err.get('msg', '格式不符合要求')}")
+    return "；".join(dict.fromkeys(messages)) or str(exc)
 
 
 _CONFLICT_MARKERS = ("端口冲突", "另一员工", "归属冲突", "workspace 与员工", "启动 workspace")
@@ -121,18 +155,18 @@ class TaskTools:
         try:
             payload = TaskCreate(
                 source=source,
-                external_task_id=external_task_id,
+                external_task_id=_text(external_task_id) or None,
                 task_type=kind,
                 category_id=category_id,
                 title=title.strip(),
                 description=description.strip(),
-                acceptance_criteria=[AcceptanceCriterion(content=item) for item in acceptance_criteria or []],
+                acceptance_criteria=[{"content": item} for item in acceptance_criteria or []],
                 agent_worker_id=assignee,
                 origin_employee_id=employee or None,
                 priority=level,
             )
         except ValidationError as exc:
-            return {"ok": False, "error": str(exc)}
+            return {"ok": False, "error": _validation_error_message(exc)}
         task = await TaskService(self.session).create(payload)
         return self._ok(task)
 
@@ -195,22 +229,36 @@ class TaskTools:
             return task
         if task.status in _CONCLUDED:
             return self._refuse(task, "已结束的任务不能修改")
-        if title:
-            task.title = title.strip()
-        if description:
-            task.description = description.strip()
+        updates: dict[str, Any] = {}
+        if title is not None:
+            updates["title"] = title
+        if description is not None:
+            updates["description"] = description
         if acceptance_criteria is not None:
-            by_content = {}
-            for item in task.acceptance_criteria:
-                by_content.setdefault(item["content"], []).append(item.get("id"))
+            by_content: dict[str, list[str | None]] = {}
+            for item in task.acceptance_criteria or []:
+                if isinstance(item, dict) and isinstance(item.get("content"), str):
+                    by_content.setdefault(item["content"].strip(), []).append(item.get("id"))
             items = []
-            for content in acceptance_criteria:
-                retained = by_content.get(content)
-                items.append({"id": retained.pop(0) if retained else None, "content": content})
-            task.acceptance_criteria = normalize_criteria(items)
-        await self.session.commit()
-        await self.session.refresh(task)
-        return self._ok(task)
+            for raw in acceptance_criteria:
+                key = raw.strip() if isinstance(raw, str) else ""
+                retained = by_content.get(key)
+                items.append(
+                    {"id": retained.pop(0) if retained else None, "content": raw}
+                )
+            updates["acceptance_criteria"] = items
+        if not updates:
+            return self._ok(task)
+        try:
+            payload = TaskUpdate(**updates)
+        except ValidationError as exc:
+            return self._refuse(task, _validation_error_message(exc))
+        try:
+            updated = await TaskService(self.session).update(task, payload)
+        except ValueError as exc:
+            return self._refuse(task, str(exc))
+        await self.session.refresh(updated)
+        return self._ok(updated)
 
     async def assign(self, task_id: str, agent_worker_id: str) -> dict[str, Any]:
         task = await self._task(task_id)
@@ -359,6 +407,14 @@ class TaskTools:
             return task
         if task.status in _CONCLUDED:
             return self._refuse(task, "已结束的任务不能请求人工处理")
+        clean_reason = _text(reason)
+        if not clean_reason:
+            return self._refuse(task, "人工介入原因不能为空")
+        if len(clean_reason) > _INTERVENE_REASON_MAX_LENGTH:
+            return self._refuse(
+                task,
+                f"人工介入原因不能超过 {_INTERVENE_REASON_MAX_LENGTH} 个字符，请精简后重试",
+            )
         if task.status == TaskStatus.RUNNING.value:
             outcome = await self._runtime(
                 task, lambda: RuntimeService(self.session).stop(task.id, cancel_task=False)
@@ -368,7 +424,7 @@ class TaskTools:
             task = await self.session.get(Task, task_id)
         elif task.status == TaskStatus.PENDING.value:
             return self._refuse(task, "任务尚未开始")
-        task.current_progress = reason.strip()
+        task.current_progress = clean_reason
         task.waiting_reason = "intervention"
         await self.session.commit()
         await self.session.refresh(task)

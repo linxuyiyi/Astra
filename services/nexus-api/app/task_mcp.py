@@ -61,6 +61,8 @@ def build_mcp_server() -> MCPServer:
         """为 employee_id 指定的数字员工创建工程任务，只检查员工是否存在。
 
         source 和 external_task_id 指向来源会话或群聊；同一来源允许创建多个任务。
+        字段长度限制：title 不超过 240 字，每条 acceptance_criteria 不超过 2000 字，
+        external_task_id 不超过 160 字；详细上下文与大段说明请写入 description。
 
         同一工作的补充指令应查询原任务并使用 nexus_task_input，不要重新创建。
         """
@@ -102,7 +104,10 @@ def build_mcp_server() -> MCPServer:
         description: str | None = None,
         acceptance_criteria: list[str] | None = None,
     ) -> dict[str, Any]:
-        """修改未结束任务的标题、说明或验收标准，不改变状态。"""
+        """修改未结束任务的标题、说明或验收标准，不改变状态。
+
+        字段长度限制：title 不超过 240 字，每条 acceptance_criteria 不超过 2000 字。
+        """
         return await _call(
             "update",
             task_id=task_id,

@@ -297,3 +297,74 @@ async def test_summary_is_registered_as_a_readonly_task_tool():
     tools = {t.name: t for t in await build_mcp_server().list_tools()}
     assert "nexus_task_summary" in tools
     assert set(tools["nexus_task_summary"].input_schema["properties"]) == {"task_id"}
+
+
+async def test_task_tools_create_and_update_validate_string_lengths_with_clear_errors(session):
+    from app.models import TaskCategory
+
+    session.add(TaskCategory(id="cat-len", name="长度校验分类", enabled=True, sort_order=1))
+    await session.commit()
+    tools = TaskTools(session)
+
+    # 创建时超长字段返回结构化 ok=False 与中文限长提示，不触发 DB 异常
+    too_long_title = await tools.create(
+        task_type="ISSUE",
+        category_id="cat-len",
+        title="标" * 241,
+        description="描述",
+        origin_employee_id="qa-owner",
+    )
+    assert too_long_title["ok"] is False
+    assert "240" in too_long_title["error"]
+
+    too_long_ext = await tools.create(
+        task_type="ISSUE",
+        category_id="cat-len",
+        title="正常标题",
+        description="描述",
+        origin_employee_id="qa-owner",
+        external_task_id="e" * 161,
+    )
+    assert too_long_ext["ok"] is False
+    assert "160" in too_long_ext["error"]
+
+    too_long_ac = await tools.create(
+        task_type="ISSUE",
+        category_id="cat-len",
+        title="正常标题",
+        description="描述",
+        acceptance_criteria=["验" * 2001],
+        origin_employee_id="qa-owner",
+    )
+    assert too_long_ac["ok"] is False
+    assert "2000" in too_long_ac["error"]
+
+    # 800 字验收标准可正常创建
+    created = await tools.create(
+        task_type="ISSUE",
+        category_id="cat-len",
+        title="正常标题",
+        description="描述",
+        acceptance_criteria=["验" * 800],
+        origin_employee_id="qa-owner",
+    )
+    assert created["ok"] is True
+    task_id = created["task_id"]
+
+    # 更新时同样校验标题、空描述与验收标准长度，不再绕过校验污染库
+    bad_update_ac = await tools.update(task_id, acceptance_criteria=["超" * 2001])
+    assert bad_update_ac["ok"] is False
+    assert "2000" in bad_update_ac["error"]
+
+    bad_update_title = await tools.update(task_id, title="标" * 241)
+    assert bad_update_title["ok"] is False
+    assert "240" in bad_update_title["error"]
+
+    bad_update_desc = await tools.update(task_id, description="   ")
+    assert bad_update_desc["ok"] is False
+    assert "不能为空" in bad_update_desc["error"]
+
+    # 原数据保持完好，未被污染
+    stored = await session.get(Task, task_id)
+    assert stored.title == "正常标题"
+    assert stored.acceptance_criteria == [{"id": "AC-01", "content": "验" * 800}]

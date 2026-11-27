@@ -1,9 +1,27 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.domain import ExecutionMode, Priority, TaskType
+
+TASK_TITLE_MAX_LENGTH = 240
+TASK_CRITERION_MAX_LENGTH = 2000
+TASK_EXTERNAL_ID_MAX_LENGTH = 160
+TASK_SHORT_ID_MAX_LENGTH = 64
+
+
+def _strip_required_str(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.strip()
+    return value
+
+
+def _strip_optional_str(value: Any) -> Any:
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return value
 
 
 class ORMModel(BaseModel):
@@ -20,16 +38,16 @@ class WorkerWrite(BaseModel):
     category_ids: list[str] = Field(default_factory=list)
     runtime_engine: Literal["opencode"] = "opencode"
     mode: ExecutionMode = ExecutionMode.LINUX_REMOTE
-    host: str | None = None
+    host: str | None = Field(default=None, max_length=255)
     port: int = Field(default=22, ge=1, le=65535)
     opencode_port: int | None = Field(default=None, ge=1, le=65535)
-    username: str | None = None
+    username: str | None = Field(default=None, max_length=120)
     ssh_password: str | None = Field(default=None, max_length=1024)
-    model_name: str | None = None
+    model_name: str | None = Field(default=None, max_length=255)
     workspace_root: str = "/opt/nexus/workspace"
     repository_url: str | None = None
     git_token: str | None = Field(default=None, max_length=4096)
-    branch: str | None = None
+    branch: str | None = Field(default=None, max_length=255)
     skill_refs: list[str] = Field(default_factory=list)
     mcp_refs: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -111,36 +129,81 @@ class TaskCategoryRead(ORMModel):
 
 
 class AcceptanceCriterion(BaseModel):
+    id: str | None = Field(default=None, max_length=TASK_SHORT_ID_MAX_LENGTH)
+    content: str = Field(min_length=1, max_length=TASK_CRITERION_MAX_LENGTH)
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def _clean_id(cls, value: Any) -> Any:
+        return _strip_optional_str(value)
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def _clean_content(cls, value: Any) -> Any:
+        return _strip_required_str(value)
+
+
+class AcceptanceCriterionRead(BaseModel):
+    """读模型只做投影输出，不施加写入长度校验。"""
+
     id: str | None = None
-    content: str = Field(min_length=1, max_length=500)
+    content: str = ""
 
 
 class TaskCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source: Literal["manual", "opencode", "private_chat", "group_chat", "nr_test_system"] = "manual"
-    external_task_id: str | None = None
-    origin_employee_id: str | None = None
-    external_reference_id: str | None = None
+    external_task_id: str | None = Field(default=None, max_length=TASK_EXTERNAL_ID_MAX_LENGTH)
+    origin_employee_id: str | None = Field(default=None, max_length=TASK_SHORT_ID_MAX_LENGTH)
+    external_reference_id: str | None = Field(default=None, max_length=TASK_EXTERNAL_ID_MAX_LENGTH)
     task_type: TaskType
-    category_id: str
-    title: str = Field(min_length=1, max_length=240)
+    category_id: str = Field(min_length=1, max_length=TASK_SHORT_ID_MAX_LENGTH)
+    title: str = Field(min_length=1, max_length=TASK_TITLE_MAX_LENGTH)
     description: str = Field(min_length=1)
     acceptance_criteria: list[AcceptanceCriterion] = Field(default_factory=list)
     attachments: list[dict[str, Any]] = Field(default_factory=list)
-    agent_worker_id: str | None = None
+    agent_worker_id: str | None = Field(default=None, max_length=TASK_SHORT_ID_MAX_LENGTH)
     priority: Priority = Priority.MEDIUM
+
+    @field_validator("category_id", "title", "description", mode="before")
+    @classmethod
+    def _clean_required(cls, value: Any) -> Any:
+        return _strip_required_str(value)
+
+    @field_validator(
+        "external_task_id",
+        "origin_employee_id",
+        "external_reference_id",
+        "agent_worker_id",
+        mode="before",
+    )
+    @classmethod
+    def _clean_optional(cls, value: Any) -> Any:
+        return _strip_optional_str(value)
 
 
 class TaskUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    title: str | None = Field(default=None, min_length=1, max_length=240)
+    title: str | None = Field(default=None, min_length=1, max_length=TASK_TITLE_MAX_LENGTH)
     description: str | None = Field(default=None, min_length=1)
     priority: Priority | None = None
     acceptance_criteria: list[AcceptanceCriterion] | None = None
-    agent_worker_id: str | None = None
-    origin_employee_id: str | None = None
+    agent_worker_id: str | None = Field(default=None, max_length=TASK_SHORT_ID_MAX_LENGTH)
+    origin_employee_id: str | None = Field(default=None, max_length=TASK_SHORT_ID_MAX_LENGTH)
+
+    @field_validator("title", "description", mode="before")
+    @classmethod
+    def _clean_non_empty(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        return _strip_required_str(value)
+
+    @field_validator("agent_worker_id", "origin_employee_id", mode="before")
+    @classmethod
+    def _clean_optional(cls, value: Any) -> Any:
+        return _strip_optional_str(value)
 
 
 class TaskRead(ORMModel):
@@ -153,7 +216,7 @@ class TaskRead(ORMModel):
     category_id: str | None
     title: str
     description: str
-    acceptance_criteria: list[AcceptanceCriterion]
+    acceptance_criteria: list[AcceptanceCriterionRead]
     attachments: list[dict[str, Any]]
     priority: str
     status: str

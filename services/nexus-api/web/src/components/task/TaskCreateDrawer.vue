@@ -115,7 +115,7 @@
             <span class="criterion-index">{{ String(index + 1).padStart(2, '0') }}</span>
             <ElInput
               v-model.trim="item.content"
-              maxlength="500"
+              maxlength="2000"
               :placeholder="`验收标准 ${index + 1}`"
             />
             <ElButton

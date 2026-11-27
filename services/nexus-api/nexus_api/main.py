@@ -136,7 +136,7 @@ class EmployeeBody(BaseModel):
     skills: list[str] = Field(default_factory=list)
     mcps: list[str] = Field(default_factory=list)
     tools: list[str] = Field(default_factory=list)
-    model_route_id: str = ""
+    model_route_id: str = Field(default="", max_length=64)
 
 
 class SkillFileBody(BaseModel):
@@ -167,23 +167,23 @@ class McpBody(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     description: str = ""
     url: str = ""
-    transport: str = MCP_TRANSPORT_HTTP
+    transport: str = Field(default=MCP_TRANSPORT_HTTP, max_length=32)
     headers: list[McpHeaderBody] = Field(default_factory=list)
-    auth_type: str = MCP_AUTH_NONE
-    auth_header: str = "Authorization"
+    auth_type: str = Field(default=MCP_AUTH_NONE, max_length=32)
+    auth_header: str = Field(default="Authorization", max_length=160)
     token: str | None = None
     timeout: float = 30
     enabled: bool = True
 
 
 class McpUpdateBody(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=64)
     description: str | None = None
     url: str | None = None
-    transport: str | None = None
+    transport: str | None = Field(default=None, max_length=32)
     headers: list[McpHeaderBody] | None = None
-    auth_type: str | None = None
-    auth_header: str | None = None
+    auth_type: str | None = Field(default=None, max_length=32)
+    auth_header: str | None = Field(default=None, max_length=160)
     token: str | None = None
     timeout: float | None = None
     enabled: bool | None = None
@@ -209,41 +209,41 @@ class ConversationBody(BaseModel):
 
 
 class ImBotBody(BaseModel):
-    employee_id: str
-    provider: str
-    bot_id: str
+    employee_id: str = Field(min_length=1, max_length=64)
+    provider: str = Field(min_length=1, max_length=32)
+    bot_id: str = Field(min_length=1, max_length=255)
 
 
 class ImEventBody(BaseModel):
-    provider: str
-    event_id: str
-    bot_id: str
-    sender_uid: str = ""
+    provider: str = Field(min_length=1, max_length=32)
+    event_id: str = Field(min_length=1, max_length=255)
+    bot_id: str = Field(min_length=1, max_length=255)
+    sender_uid: str = Field(default="", max_length=160)
     text: str = ""
-    external_key: str = ""
-    conversation_key: str = ""
+    external_key: str = Field(default="", max_length=255)
+    conversation_key: str = Field(default="", max_length=255)
 
 
 class ImGroupBody(BaseModel):
-    employee_id: str
-    external_key: str
-    session_id: str
+    employee_id: str = Field(min_length=1, max_length=64)
+    external_key: str = Field(min_length=1, max_length=255)
+    session_id: str = Field(min_length=1, max_length=255)
 
 
 class ImContactBody(BaseModel):
-    employee_id: str = ""
-    agent_id: str = ""
-    conversation_key: str
-    session_id: str
+    employee_id: str = Field(default="", max_length=64)
+    agent_id: str = Field(default="", max_length=255)
+    conversation_key: str = Field(min_length=1, max_length=255)
+    session_id: str = Field(min_length=1, max_length=255)
     body: str
 
 
 class ImAckBody(BaseModel):
-    delivery_id: str
+    delivery_id: str = Field(min_length=1, max_length=64)
 
 
 class ImRedeliverBody(BaseModel):
-    conversation_key: str
+    conversation_key: str = Field(min_length=1, max_length=255)
 
 
 def package_dir() -> Path:

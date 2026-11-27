@@ -11,7 +11,7 @@ from app.database import get_session
 from app.gateway.audio import AUDIO_PATH, MAX_AUDIO_BODY_BYTES, parse_audio_upload
 from app.gateway.errors import GatewayDataPlaneError, payload_too_large
 from app.gateway.models import GatewayAuditEvent, GatewayPool, GatewayRoute, GatewaySpeechInput
-from app.gateway.schemas import SpeechInputConfig
+from app.gateway.schemas import SpeechInputConfig, SpeechInputRead
 from nexus_api.auth import require_user
 from nexus_api.model_route import ModelRouteError, gateway_api_key, gateway_base_url
 
@@ -34,13 +34,13 @@ async def speech_route(session: AsyncSession, route_id: str | None) -> GatewayRo
     return route
 
 
-@router.get("/api/gateway/speech-input", response_model=SpeechInputConfig)
+@router.get("/api/gateway/speech-input", response_model=SpeechInputRead)
 async def get_speech_input(session: AsyncSession = Depends(get_session)):
     config = await session.get(GatewaySpeechInput, "default")
-    return SpeechInputConfig(route_id=config.route_id if config else None)
+    return SpeechInputRead(route_id=config.route_id if config else None)
 
 
-@router.put("/api/gateway/speech-input", response_model=SpeechInputConfig)
+@router.put("/api/gateway/speech-input", response_model=SpeechInputRead)
 async def set_speech_input(
     body: SpeechInputConfig,
     user: str = Depends(speech_user),

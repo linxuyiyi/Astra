@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.gateway.models import GatewayAuditEvent, GatewayPool, GatewayRoute, GatewayVisionInput
-from app.gateway.schemas import VisionInputConfig
+from app.gateway.schemas import VisionInputConfig, VisionInputRead
 from app.gateway.vision import build_vision_messages, extract_vision_text, vision_cache_key
 from nexus_api.auth import require_internal, require_user
 from nexus_api.model_route import ModelRouteError, gateway_api_key, gateway_base_url
@@ -67,13 +67,13 @@ class VisionAnalyzeBody(BaseModel):
     sha256: str = Field(default="", max_length=64)
 
 
-@router.get("/api/gateway/vision-input", response_model=VisionInputConfig)
+@router.get("/api/gateway/vision-input", response_model=VisionInputRead)
 async def get_vision_input(session: AsyncSession = Depends(get_session)):
     config = await session.get(GatewayVisionInput, "default")
-    return VisionInputConfig(route_id=config.route_id if config else None)
+    return VisionInputRead(route_id=config.route_id if config else None)
 
 
-@router.put("/api/gateway/vision-input", response_model=VisionInputConfig)
+@router.put("/api/gateway/vision-input", response_model=VisionInputRead)
 async def set_vision_input(
     body: VisionInputConfig,
     user: str = Depends(vision_user),

@@ -161,3 +161,67 @@ def test_worker_crud_uses_flat_config_and_releases_historical_references():
         assert client.delete(f"/api/workers/{worker_id}").status_code == 200
         assert client.get(f"/api/tasks/{task['id']}").json()["agent_worker_id"] is None
         assert client.get(f"/api/workers/{worker_id}").status_code == 404
+
+
+def test_task_center_reads_oversized_legacy_criteria_without_500_and_enforces_write_bounds():
+    with TestClient(app) as client:
+        # 800 字验收标准在放宽后的上限（2000 字）内应正常创建与读取
+        long_valid = "验" * 800
+        created = client.post(
+            "/api/tasks",
+            json=task_payload(acceptance_criteria=[{"content": long_valid}]),
+        )
+        assert created.status_code == 201, created.text
+        task_id = created.json()["id"]
+        assert created.json()["acceptance_criteria"][0]["content"] == long_valid
+
+        # 模拟库中已存在超过 2000 字或空串的历史验收标准：任务中心列表与详情绝不能 500
+        oversized = "超" * 2500
+
+        async def poison_legacy_row() -> None:
+            async with SessionLocal() as session:
+                row = await session.get(Task, task_id)
+                row.acceptance_criteria = [
+                    {"id": "AC-01", "content": oversized},
+                    {"id": "AC-02", "content": ""},
+                ]
+                await session.commit()
+
+        asyncio.run(poison_legacy_row())
+
+        listed = client.get("/api/tasks", params={"limit": 50})
+        assert listed.status_code == 200, listed.text
+        matched = next(item for item in listed.json() if item["id"] == task_id)
+        assert matched["acceptance_criteria"] == [
+            {"id": "AC-01", "content": oversized},
+            {"id": "AC-02", "content": ""},
+        ]
+        detail = client.get(f"/api/tasks/{task_id}")
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["acceptance_criteria"][0]["content"] == oversized
+
+        # 写入侧对所有 VARCHAR 字段与验收标准上限返回 422，而非落库触发 MySQL 1406 / 500
+        assert client.post("/api/tasks", json=task_payload(title="标" * 241)).status_code == 422
+        assert client.post("/api/tasks", json=task_payload(title="   ")).status_code == 422
+        assert client.post("/api/tasks", json=task_payload(description="   ")).status_code == 422
+        assert (
+            client.post("/api/tasks", json=task_payload(external_task_id="x" * 161)).status_code == 422
+        )
+        assert (
+            client.post("/api/tasks", json=task_payload(external_reference_id="r" * 161)).status_code
+            == 422
+        )
+        assert (
+            client.post(
+                "/api/tasks",
+                json=task_payload(acceptance_criteria=[{"content": "长" * 2001}]),
+            ).status_code
+            == 422
+        )
+        assert (
+            client.post(
+                "/api/tasks",
+                json=task_payload(acceptance_criteria=[{"content": "   "}]),
+            ).status_code
+            == 422
+        )

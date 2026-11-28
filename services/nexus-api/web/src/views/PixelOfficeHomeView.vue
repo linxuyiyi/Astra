@@ -940,6 +940,50 @@ select:focus-visible {
   outline-offset: 2px;
 }
 
+@media (min-width: 2240px) {
+  .office-dock {
+    height: 48px;
+    bottom: 18px;
+    gap: 8px;
+    padding: 0 12px;
+    border-radius: 14px;
+  }
+  .office-dock button {
+    height: 34px;
+    padding: 0 11px;
+    font-size: 13px;
+  }
+  .dock-icon {
+    width: 34px;
+  }
+  .employee-select {
+    height: 34px;
+    padding: 0 10px;
+  }
+  .employee-select select {
+    max-width: 210px;
+    font-size: 13px;
+  }
+  .connection {
+    height: 26px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+  .office-guide {
+    bottom: 78px;
+  }
+  .office-menu {
+    width: 280px;
+    bottom: 76px;
+    padding: 10px;
+    border-radius: 14px;
+  }
+  .office-menu a {
+    height: 36px;
+    font-size: 13.5px;
+  }
+}
+
 @media (max-width: 759px) {
   .office-dock {
     gap: 3px;

@@ -205,7 +205,7 @@
       data-testid="gateway-route-drawer"
       :model-value="true"
       :title="routeForm.id ? '编辑模型路由' : '新增模型路由'"
-      size="min(500px, 100%)"
+      size="var(--astra-drawer-sm)"
       :close-on-click-modal="false"
       :before-close="() => requestRouteClose()"
     >

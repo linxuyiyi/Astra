@@ -95,6 +95,63 @@
   --astra-shadow-float: 0 12px 32px rgba(9, 9, 11, 0.10), 0 2px 6px rgba(9, 9, 11, 0.04);
   --nexus-table-max-height: calc(100vh - 280px);
   --nexus-table-max-height-dense: calc(100vh - 340px);
+
+  /* ── 响应式工作台壳层与抽屉尺寸基准（唯一事实源） ── */
+  --astra-shell-max-width: 1560px;
+  --astra-shell-padding-x: 24px;
+  --astra-shell-padding-top: 14px;
+  --astra-shell-padding-bottom: 16px;
+  --astra-topbar-height: 52px;
+  --astra-sidebar-width: 212px;
+  --astra-content-padding: 16px;
+  --astra-select-width: 160px;
+  --astra-keyword-width: 240px;
+  --astra-drawer-sm: min(500px, 100%);
+  --astra-drawer-md: min(680px, 100%);
+  --astra-drawer-lg: min(880px, 100%);
+  --astra-drawer-xl: min(1020px, 100%);
+}
+
+/* 准宽屏过渡档（1920×1080 / 2K 125% 缩放等效 2048×1152） */
+@media (min-width: 1920px) {
+  :root {
+    --astra-shell-max-width: 1840px;
+    --astra-shell-padding-x: 28px;
+    --astra-shell-padding-top: 16px;
+    --astra-shell-padding-bottom: 18px;
+    --astra-topbar-height: 54px;
+    --astra-sidebar-width: 232px;
+    --astra-content-padding: 18px;
+    --astra-select-width: 176px;
+    --astra-keyword-width: 272px;
+    --astra-drawer-sm: min(560px, 100%);
+    --astra-drawer-md: min(740px, 100%);
+    --astra-drawer-lg: min(980px, 100%);
+    --astra-drawer-xl: min(1160px, 100%);
+  }
+}
+
+/* 2K 高清宽屏专属档（2560×1440） */
+@media (min-width: 2240px) {
+  :root {
+    --astra-shell-max-width: 2280px;
+    --astra-shell-padding-x: 32px;
+    --astra-shell-padding-top: 18px;
+    --astra-shell-padding-bottom: 20px;
+    --astra-topbar-height: 56px;
+    --astra-sidebar-width: 248px;
+    --astra-content-padding: 22px;
+    --astra-content-gap: 18px;
+    --astra-select-width: 192px;
+    --astra-keyword-width: 312px;
+    --astra-font-title: 24px;
+    --astra-font-section: 19px;
+    --astra-font-kpi: 30px;
+    --astra-drawer-sm: min(620px, 100%);
+    --astra-drawer-md: min(820px, 100%);
+    --astra-drawer-lg: min(1160px, 100%);
+    --astra-drawer-xl: min(1380px, 100%);
+  }
 }
 
 /* Element Plus theme mapped onto Astra brand tokens.

@@ -325,7 +325,7 @@ onMounted(async () => {
 
 .pp-editor { flex: 1; display: flex; }
 .pp-editor :deep(.el-textarea__inner) {
-  flex: 1; height: 100% !important; min-height: 440px;
+  flex: 1; height: 100% !important; min-height: 440px; max-height: none;
   border: 0; border-radius: 0; box-shadow: none !important;
   padding: 14px 16px;
   font-family: var(--astra-font-mono);
@@ -350,6 +350,13 @@ onMounted(async () => {
   white-space: pre-wrap; word-break: break-word;
 }
 .pp-empty { flex: 1; display: grid; place-items: center; padding: 24px; }
+
+@media (min-width: 2240px) {
+  .pp-workbench { gap: 18px; }
+  .pp-employee-select { width: 220px; }
+  .pp-editor :deep(.el-textarea__inner) { padding: 18px 20px; font-size: 13.5px; }
+  .pp-preview-pane, .pp-preview-content { padding: 18px 20px; }
+}
 
 @media (max-width: 1060px) {
   .pp-workbench { grid-template-columns: 1fr; }

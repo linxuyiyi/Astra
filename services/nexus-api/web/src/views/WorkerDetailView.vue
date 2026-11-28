@@ -226,7 +226,7 @@
       v-if="worker"
       v-model="editing"
       title="编辑 Worker 配置"
-      size="min(680px, 100%)"
+      size="var(--astra-drawer-md)"
       :close-on-click-modal="false"
       destroy-on-close
     >
@@ -747,6 +747,17 @@ onUnmounted(() => {
 
 :global(.worker-dropdown-danger:not(.is-disabled)) {
   color: var(--astra-danger) !important;
+}
+
+@media (min-width: 2240px) {
+  .worker-info-grid {
+    gap: 20px;
+  }
+  .worker-kv {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 20px;
+    padding: 16px 20px;
+  }
 }
 
 @media (max-width: 1120px) {

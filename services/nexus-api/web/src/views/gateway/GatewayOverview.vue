@@ -314,7 +314,7 @@
         v-else
         :data="visibleRows"
         row-key="node_id"
-        max-height="340"
+        :max-height="nodeTableMaxHeight"
         :empty-text="tableEmpty"
       >
         <ElTableColumn label="节点 / 资源池" min-width="190">
@@ -536,6 +536,9 @@ const groupBy = ref<'none' | 'model' | 'node'>('none')
 const seriesKey = ref('all')
 const nodeFilter = ref<'all' | 'abnormal' | 'healthy'>('all')
 const eventFilter = ref<'all' | 'runtime' | 'config'>('all')
+const viewportHeight = ref(typeof window === 'undefined' ? 900 : window.innerHeight)
+const nodeTableMaxHeight = computed(() => (viewportHeight.value >= 1200 ? 480 : 340))
+function onWindowResize() { viewportHeight.value = window.innerHeight }
 
 let timer = 0
 
@@ -1055,10 +1058,12 @@ watch(statsWindow, () => {
 watch(groupBy, () => { void load(true) })
 
 onMounted(() => {
+  window.addEventListener('resize', onWindowResize, { passive: true })
   void load(false)
   timer = window.setInterval(() => { void load(true) }, 30_000)
 })
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', onWindowResize)
   window.clearInterval(timer)
   loadSeq += 1
   activeLoad?.abort()
@@ -1297,6 +1302,24 @@ onBeforeUnmount(() => {
 .ov-event-list time { color: var(--astra-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ov-muted-empty { margin: 14px 0; color: var(--astra-text-muted); font-size: 13px; text-align: center; }
 
+@media (min-width: 1920px) {
+  .ov-main-grid { grid-template-columns: minmax(0, 1.9fr) minmax(380px, 1fr); gap: 16px; }
+  .ov-bottom-grid { grid-template-columns: minmax(0, 1.4fr) minmax(360px, 1fr); gap: 16px; }
+}
+@media (min-width: 2240px) {
+  .ov-page { gap: 18px; }
+  .ov-kpis { gap: 16px; }
+  .ov-kpi { padding: 18px 20px; gap: 10px; }
+  .ov-kpi__label { font-size: 12.5px; }
+  .ov-kpi__value { font-size: 32px; line-height: 38px; }
+  .ov-kpi__foot { font-size: 12.5px; }
+  .ov-main-grid { grid-template-columns: minmax(0, 2fr) minmax(430px, 1fr); gap: 18px; }
+  .ov-bottom-grid { grid-template-columns: minmax(0, 1.45fr) minmax(410px, 1fr); gap: 18px; }
+  .ov-chart-empty { height: 320px; }
+  .ov-event-list { max-height: 340px; }
+  .ov-select-sm { width: 118px; }
+  .ov-select-md { width: 176px; }
+}
 @media (max-width: 1240px) {
   .ov-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ov-main-grid, .ov-bottom-grid { grid-template-columns: 1fr; }

@@ -5,7 +5,7 @@
     data-testid="knowledge-editor-drawer"
     :model-value="true"
     :title="editing ? '编辑知识' : '新建知识'"
-    size="min(960px, 100%)"
+    size="var(--astra-drawer-xl)"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :before-close="requestClose"
@@ -319,6 +319,15 @@ async function readMarkdown(event: Event) {
 .ke-error { margin-top: 4px; }
 .ke-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
 .ke-footer__note { color: var(--astra-text-muted); font-size: 12px; }
+
+@media (min-width: 2240px) and (min-height: 1180px) {
+  .ke-md__panes,
+  .ke-md__input :deep(.el-textarea__inner),
+  .ke-md__preview {
+    min-height: 520px;
+    max-height: 64vh;
+  }
+}
 
 @media (max-width: 760px) {
   .ke-row { grid-template-columns: 1fr; }

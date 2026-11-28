@@ -261,4 +261,9 @@ onBeforeUnmount(() => chart?.dispose())
 .gateway-trend { width: 100%; height: 210px; }
 .gateway-trend--tall { height: 248px; }
 .gateway-trend--compact { height: 180px; }
+@media (min-width: 2240px) and (min-height: 1180px) {
+  .gateway-trend { height: 260px; }
+  .gateway-trend--tall { height: 320px; }
+  .gateway-trend--compact { height: 220px; }
+}
 </style>

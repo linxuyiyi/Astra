@@ -527,6 +527,8 @@ function normalizeSpaces(nodes: KnowledgeSpace[]): KnowledgeSpace[] {
 .move-knowledge-card label{display:grid;grid-template-rows:var(--astra-control-height) auto;gap:2px;margin-top:14px;color:var(--astra-text-secondary);font-size:var(--astra-font-body);line-height:var(--astra-control-height)}
 .move-knowledge-card select{height:var(--astra-control-height);padding:0 9px;color:var(--astra-text-primary);border:1px solid var(--astra-border);border-radius:8px;background:#fff;font:inherit}
 .delete-blocked{display:grid;gap:8px}.delete-blocked p{margin:0;color:var(--astra-text-secondary);line-height:1.6}.delete-blocked p strong{color:var(--astra-text-primary)}
+@media(min-width:1920px){.library-aside{--el-aside-width:260px;width:260px;flex:0 0 260px;max-width:280px}.library-service-reason{max-width:440px}}
+@media(min-width:2240px){.library-aside{--el-aside-width:300px;width:300px;flex:0 0 300px;max-width:320px}.library-service-reason{max-width:560px}}
 @media(max-width:1100px){.library-aside{--el-aside-width:220px;width:220px;flex:0 0 220px}}
 @media(max-width:780px){.digital-library-card :deep(> .el-card__body){overflow:auto}.library-workspace{min-height:420px}.library-aside{flex:none;height:300px;--el-aside-width:auto;width:auto}.library-content{min-height:420px}.library-service-reason{max-width:100%}}
 </style>

@@ -893,6 +893,13 @@ onMounted(() => {
 .gateway-node-cell strong { color: var(--astra-text-primary); font-size: var(--astra-font-helper); }
 .gateway-node-cell span { color: var(--astra-text-muted); font-size: var(--astra-font-micro); }
 .gateway-node-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 12px; }
+@media (min-width: 2240px) {
+  .gateway-node-page { gap: 18px; }
+  .gateway-node-metrics { gap: 18px; }
+  .gateway-node-grid { gap: 18px; }
+  .gateway-node-pool-fact { max-width: 360px; }
+  .gateway-node-snapshot { max-height: 320px; }
+}
 @media (max-width: 1280px) {
   .gateway-node-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .gateway-node-grid { grid-template-columns: 1fr; }

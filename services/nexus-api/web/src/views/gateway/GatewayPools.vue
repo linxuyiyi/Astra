@@ -147,7 +147,7 @@
       data-testid="gateway-pool-drawer"
       :model-value="true"
       :title="poolForm.id ? '编辑资源池' : '新增资源池'"
-      size="min(460px, 100%)"
+      size="var(--astra-drawer-sm)"
       :close-on-click-modal="false"
       :before-close="() => requestPoolClose()"
     >
@@ -497,6 +497,12 @@ onMounted(load)
 .gateway-model-dist__bar { height: 6px; overflow: hidden; border-radius: 999px; background: var(--astra-bg-elevated); }
 .gateway-model-dist__bar i { display: block; height: 100%; border-radius: 999px; background: #52525b; }
 .gateway-model-dist b { color: var(--astra-text-secondary); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
+
+@media (min-width: 2240px) {
+  .pool-model-chip { max-width: 260px; }
+  .gateway-model-dist { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 32px; }
+  .gateway-model-dist li { grid-template-columns: minmax(120px, 210px) minmax(60px, 1fr) 60px; }
+}
 
 @media (max-width: 960px) {
   .gateway-model-dist { grid-template-columns: 1fr; }

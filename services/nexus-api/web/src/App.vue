@@ -202,6 +202,14 @@ onBeforeUnmount(() => {
 }
 .top-nav__item[aria-current='page'] svg { color: var(--astra-text-primary); }
 .env-text { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 2240px) {
+  .brand-mark { width: 26px; height: 26px; border-radius: 8px; }
+  .brand-mark svg { width: 16px; height: 16px; }
+  .top-nav { gap: 4px; }
+  .top-nav__item { height: 34px; padding: 0 12px; gap: 7px; font-size: 13.5px; }
+  .top-nav__sep { margin: 0 8px; }
+  .env-text { max-width: 340px; }
+}
 @media (max-width: 1060px) {
   .env-text { max-width: 120px; }
   .top-nav__item { padding: 0 8px; }

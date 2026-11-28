@@ -14,6 +14,7 @@
       </div>
 
       <div
+        ref="gridRef"
         class="month-cal__grid"
         :style="{ '--month-weeks': String(weekCount) }"
         role="grid"
@@ -102,7 +103,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { useResizeObserver } from '@vueuse/core';
+import { computed, ref } from 'vue';
 import { Plus, Repeat } from 'lucide-vue-next';
 import type { EmployeeSchedule } from '@/api';
 import {
@@ -127,8 +129,20 @@ const emit = defineEmits<{
   'hover-schedule': [scheduleId: string];
 }>();
 
+const gridRef = ref<HTMLElement | null>(null);
+const gridHeight = ref(0);
+useResizeObserver(gridRef, entries => {
+  gridHeight.value = entries[0]?.contentRect.height ?? 0;
+});
+
 const weekCount = computed(() => Math.max(4, Math.ceil(props.cells.length / 7)));
-const maxVisiblePerCell = computed(() => (weekCount.value >= 6 ? 3 : 4));
+const maxVisiblePerCell = computed(() => {
+  const base = weekCount.value >= 6 ? 3 : 4;
+  if (!gridHeight.value) return base;
+  const cellHeight = gridHeight.value / weekCount.value;
+  if (cellHeight < 165) return base;
+  return Math.min(7, Math.max(base, Math.floor((cellHeight - 48) / 28)));
+});
 
 function dayItems(ymd: string): CalendarDaySchedule[] {
   return props.dayMap.get(ymd) ?? [];
@@ -461,6 +475,41 @@ function handlePillClick(ymd: string, schedule: EmployeeSchedule) {
 
 .month-cell__more:hover {
   background: var(--astra-accent-soft);
+}
+
+@media (min-width: 2240px) {
+  .month-cal__weekday {
+    padding: 9px 12px;
+    font-size: 12.5px;
+  }
+  .month-cal__grid {
+    grid-template-rows: repeat(var(--month-weeks, 5), minmax(136px, 1fr));
+  }
+  .month-cell {
+    padding: 7px 8px 8px;
+    gap: 4px;
+  }
+  .month-cell__date {
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    font-size: 12.5px;
+  }
+  .month-cell__events {
+    gap: 4px;
+  }
+  .cal-pill {
+    height: 24px;
+    padding: 0 7px 0 6px;
+    gap: 5px;
+    font-size: 12px;
+  }
+  .cal-pill__time {
+    font-size: 11px;
+  }
+  .month-cell__more {
+    font-size: 11.5px;
+  }
 }
 
 @media (max-width: 960px) {

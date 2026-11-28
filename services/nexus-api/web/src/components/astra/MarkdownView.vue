@@ -320,6 +320,14 @@ onBeforeUnmount(() => window.clearTimeout(copyTimer))
 .md-prose :deep(> :first-child) { margin-top: 0 !important; }
 .md-prose :deep(> :last-child) { margin-bottom: 0 !important; }
 
+@media (min-width: 2240px) {
+  .md-view--with-toc .md-view__layout { grid-template-columns: minmax(0, 1fr) 224px; gap: 28px; }
+  .md-prose { font-size: 15px; line-height: 1.8; }
+  .md-view--compact .md-prose { font-size: 14px; line-height: 1.7; }
+  .md-prose :deep(table) { font-size: 13.5px; }
+  .md-view__fm-chip { max-width: 360px; }
+}
+
 @media (max-width: 820px) {
   .md-view--with-toc .md-view__layout { grid-template-columns: minmax(0, 1fr); }
   .md-toc { display: none; }

@@ -407,6 +407,34 @@ function formatTime(value: string) {
   color: var(--astra-text-primary);
 }
 
+@media (min-width: 2240px) {
+  .employee-workbench {
+    top: 18px;
+    right: 18px;
+    bottom: 76px;
+    width: clamp(460px, 20.5vw, 540px);
+    border-radius: 16px;
+  }
+  .panel-header {
+    padding: 20px 22px 16px;
+  }
+  .panel-content {
+    padding: 18px 22px 22px;
+  }
+  .employee-title h1 {
+    font-size: 19px;
+  }
+  .metric-card {
+    padding: 12px 14px;
+  }
+  .metric-card__value {
+    font-size: 22px;
+  }
+  .panel-footer {
+    padding: 11px 22px;
+  }
+}
+
 /* ── 工卡头部 ─────────────────────────────────────────────────── */
 .panel-header {
   padding: 16px 18px 14px;

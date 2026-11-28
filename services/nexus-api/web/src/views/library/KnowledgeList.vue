@@ -315,4 +315,8 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('zh-CN', { month: 
 .knowledge-num { color: var(--astra-text-secondary); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .knowledge-ref { color: var(--astra-text-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .empty-actions { display: flex; justify-content: center; gap: 8px; }
+@media (min-width: 2240px) {
+  .knowledge-list { padding: 14px 18px; gap: 10px; }
+  .knowledge-space-text, .knowledge-tag-pill { max-width: 220px; }
+}
 </style>

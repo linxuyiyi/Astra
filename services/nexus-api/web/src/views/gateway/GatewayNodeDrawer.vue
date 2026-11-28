@@ -5,7 +5,7 @@
     data-testid="gateway-node-drawer"
     :model-value="true"
     :title="node ? '编辑上游节点' : '新增上游节点'"
-    size="min(580px, 100%)"
+    size="var(--astra-drawer-md)"
     :close-on-click-modal="false"
     :before-close="() => requestClose()"
   >

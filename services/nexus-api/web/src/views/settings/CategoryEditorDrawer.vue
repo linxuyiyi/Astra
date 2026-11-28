@@ -5,7 +5,7 @@
     data-testid="category-editor-drawer"
     :model-value="true"
     :title="isEdit ? '编辑任务分类' : '新增任务分类'"
-    size="min(680px, 100%)"
+    size="var(--astra-drawer-md)"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :before-close="requestClose"

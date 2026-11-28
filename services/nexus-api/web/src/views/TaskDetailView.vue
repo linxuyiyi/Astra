@@ -1770,6 +1770,68 @@ iframe {
   color: var(--astra-text-muted);
 }
 
+@media (min-width: 1920px) {
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 28px;
+    max-width: 1520px;
+    margin-inline: auto;
+  }
+  .review-list {
+    max-width: 1240px;
+    margin-inline: auto;
+  }
+  .ctx-item__val {
+    max-width: 240px;
+  }
+  .ctx-item__branch {
+    max-width: 200px;
+  }
+}
+
+@media (min-width: 2240px) {
+  .task-title {
+    font-size: 21px;
+  }
+  .task-pane--scroll {
+    padding: 24px 28px;
+  }
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr) 396px;
+    gap: 32px;
+    max-width: 1780px;
+    margin-inline: auto;
+  }
+  .doc-card {
+    padding: 20px 24px;
+  }
+  .meta-card {
+    padding: 16px 18px;
+  }
+  .meta-row {
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 10px;
+    font-size: 13.5px;
+  }
+  .review-list {
+    max-width: 1480px;
+    margin-inline: auto;
+    gap: 16px;
+  }
+  .review-card {
+    padding: 20px 22px;
+  }
+  .ctx-item__val {
+    max-width: 300px;
+  }
+  .ctx-item__branch {
+    max-width: 240px;
+  }
+  .attachment-chip {
+    max-width: 360px;
+  }
+}
+
 @media (max-width: 980px) {
   .detail-grid {
     grid-template-columns: minmax(0, 1fr);

@@ -5,7 +5,7 @@
     data-testid="knowledge-detail-dialog"
     :model-value="true"
     :show-close="false"
-    size="min(1020px, 100%)"
+    size="var(--astra-drawer-xl)"
     :before-close="() => requestClose()"
   >
     <template #header>

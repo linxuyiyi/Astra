@@ -4,7 +4,7 @@
     :before-close="requestClose"
     append-to-body
     :title="employee ? `编辑数字员工 · ${employee.name}` : '新建数字员工'"
-    size="min(680px, 100%)"
+    size="var(--astra-drawer-md)"
     :close-on-click-modal="false"
   >
     <el-form ref="formRef" :disabled="saving" :model="form" :rules="rules" label-position="top" scroll-to-error @submit.prevent="submit">
@@ -479,6 +479,10 @@ async function submit() {
   font-family: var(--astra-font-mono); font-size: 12.5px; line-height: 1.6;
 }
 .inst-box__preview { max-height: 220px; overflow-y: auto; padding: 12px 14px; }
+
+@media (min-width: 2240px) {
+  .inst-box__preview { max-height: 360px; }
+}
 
 @media (max-width: 640px) {
   .pair { grid-template-columns: 1fr; }

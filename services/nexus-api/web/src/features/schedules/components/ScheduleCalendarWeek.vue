@@ -780,4 +780,51 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+@media (min-width: 2240px) {
+  .week-cal__gutter-head,
+  .week-cal__strip-gutter,
+  .week-cal__axis {
+    width: 68px;
+  }
+  .week-axis-label {
+    padding-right: 10px;
+    font-size: 11.5px;
+  }
+  .week-day-head {
+    padding: 8px 11px 9px;
+  }
+  .week-day-head__dow {
+    font-size: 12px;
+  }
+  .week-day-head__num {
+    min-width: 26px;
+    height: 26px;
+    font-size: 14px;
+  }
+  .week-cal__strip {
+    max-height: 132px;
+  }
+  .strip-pill {
+    height: 23px;
+    padding: 0 7px;
+    font-size: 11.5px;
+  }
+  .week-event {
+    padding: 4px 7px;
+  }
+  .week-event.is-compact:hover {
+    min-width: 180px;
+    max-width: 300px;
+  }
+  .week-event__time {
+    font-size: 11px;
+  }
+  .week-event__title {
+    font-size: 12px;
+  }
+  .week-event__emp {
+    font-size: 11px;
+  }
+}
 </style>

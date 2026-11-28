@@ -60,6 +60,28 @@ export function taskReason(task: NebulaTask): string {
 }
 export const OFFICE_ROOM_SIZE = 12;
 const NAMEPLATE_HEIGHT = 44;
+export const OFFICE_WIDE_BREAKPOINT = 2240;
+
+export function officeWorkbenchWidth(width: number): number {
+  if (width < 760) return 0;
+  if (width >= OFFICE_WIDE_BREAKPOINT) {
+    return Math.min(540, Math.max(460, width * 0.205));
+  }
+  return Math.min(440, Math.max(365, width * 0.315));
+}
+
+export function officeWallLayout(width: number, wallHeight: number) {
+  const aspectScaled = width > 1920;
+  const wallScale = aspectScaled ? wallHeight / 196 : width / 1480;
+  const contentWidth = aspectScaled ? 1480 * wallScale : width;
+  const offsetX = aspectScaled ? (width - contentWidth) / 2 : 0;
+  return {
+    aspectScaled,
+    wallScale,
+    contentWidth,
+    offsetX,
+  };
+}
 
 export function stationPositions(
   count: number,
@@ -78,7 +100,7 @@ export function stationPositions(
   });
 }
 
-/** 始终按整页工位布局；桌面工作台适配宽度，手机浮层不改变视角。 */
+/** 始终按整页工位布局；桌面工作台适配宽度，2K 宽屏允许等比清晰放大，手机浮层不改变视角。 */
 export function officeCamera(
   width: number,
   height: number,
@@ -86,14 +108,16 @@ export function officeCamera(
   workbenchOpen = false,
 ) {
   const mobile = width < 760;
+  const wide = width >= OFFICE_WIDE_BREAKPOINT;
   const wallHeight = mobile
     ? 112
-    : Math.min(196, Math.max(112, height * 0.218));
-  const panelWidth =
-    workbenchOpen && !mobile ? Math.min(440, Math.max(365, width * 0.315)) : 0;
+    : wide
+      ? Math.min(256, Math.max(196, height * 0.178))
+      : Math.min(196, Math.max(112, height * 0.218));
+  const panelWidth = workbenchOpen ? officeWorkbenchWidth(width) : 0;
   const visibleWidth = width - panelWidth;
-  const floorTop = wallHeight + 28;
-  const floorBottom = height - 96;
+  const floorTop = wallHeight + (wide ? 34 : 28);
+  const floorBottom = height - (wide ? 108 : 96);
   const floorHeight = Math.max(60, floorBottom - floorTop);
   const positions = stationPositions(count, width);
   const xs = positions.map((station) => station.x);
@@ -102,12 +126,13 @@ export function officeCamera(
   const maxX = count ? Math.max(...xs) : 740;
   const minY = count ? Math.min(...ys) : 400;
   const maxY = count ? Math.max(...ys) : 400;
+  const maxScale = mobile ? 0.6 : wide ? 1.0 : Math.min(0.78, width / 2000);
   // 预留地毯、气泡及姓名牌；姓名牌保留44px屏幕高度，不跟着像素素材缩小。
   const scale = Math.max(
     0.08,
     Math.min(
-      mobile ? 0.6 : Math.min(0.78, width / 2000),
-      (visibleWidth - (mobile ? 32 : 112)) / (maxX - minX + 350),
+      maxScale,
+      (visibleWidth - (mobile ? 32 : wide ? 144 : 112)) / (maxX - minX + 350),
       (floorHeight - NAMEPLATE_HEIGHT) / (maxY - minY + 310),
     ),
   );

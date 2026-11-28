@@ -145,7 +145,7 @@
       data-testid="gateway-key-drawer"
       :model-value="true"
       :title="form.id ? '编辑 API Key' : '新增 API Key'"
-      size="min(500px, 100%)"
+      size="var(--astra-drawer-sm)"
       :close-on-click-modal="false"
       :before-close="() => requestClose()"
     >

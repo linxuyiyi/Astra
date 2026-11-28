@@ -875,3 +875,69 @@
 }
 .nc-mentions :is(.nc-person, .nc-monogram) { width: 28px; height: 28px; }
 .nc-mentions button[aria-selected="true"] { background: var(--nc-wash); }
+
+@media (min-width: 1920px) {
+  .nc-conversation {
+    --nc-width: 54rem;
+  }
+  .nc-message[data-kind="system"] .nc-message-content,
+  .nc-message[data-kind="system"][data-system-card] .nc-message-content {
+    max-width: min(100%, 44rem);
+  }
+}
+
+@media (min-width: 2240px) {
+  .nc-conversation {
+    --nc-width: 60rem;
+    --nc-avatar: 30px;
+    --nc-gutter: 12px;
+    --nc-control: 36px;
+  }
+  .nc-page {
+    gap: 18px;
+    padding: 24px 0 36px;
+  }
+  .nc-message[data-kind="self"] {
+    max-width: 72%;
+  }
+  .nc-message[data-kind="self"] .nc-message-content {
+    padding: 10px 16px;
+  }
+  .nc-message[data-kind="system"] .nc-message-content,
+  .nc-message[data-kind="system"][data-system-card] .nc-message-content {
+    max-width: min(100%, 48rem);
+  }
+  .nc-prose {
+    font-size: 15.5px;
+    line-height: 1.66;
+  }
+  .nc-prose table {
+    font-size: 14px;
+  }
+  .nc-prose pre,
+  .nc-tool-detail pre,
+  .nc-file-preview pre {
+    font-size: 13px;
+  }
+  .nc-prose img {
+    max-height: 30rem;
+  }
+  .nc-image-link img {
+    max-height: 20rem;
+  }
+  .nc-note p,
+  .nc-tool-detail pre,
+  .nc-file-preview {
+    max-height: 24rem;
+  }
+  .nc-bottom {
+    padding: 8px 0 20px;
+  }
+  .nc-composer {
+    padding: 12px 16px 10px;
+    border-radius: 18px;
+  }
+  .nc-composer textarea {
+    font-size: 15px;
+  }
+}

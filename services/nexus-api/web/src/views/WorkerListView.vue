@@ -58,7 +58,7 @@
       <span v-if="lastUpdated" class="last-updated">上次更新 {{ lastUpdated }}</span>
       <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50]" :total="total" layout="total, sizes, prev, pager, next" aria-label="Worker 分页" />
     </div>
-    <el-drawer v-model="creating" title="新增 Worker" size="min(680px, 100%)" :close-on-click-modal="false" destroy-on-close>
+    <el-drawer v-model="creating" title="新增 Worker" size="var(--astra-drawer-md)" :close-on-click-modal="false" destroy-on-close>
       <WorkerConfig @saved="configurationSaved" />
     </el-drawer>
   </section>

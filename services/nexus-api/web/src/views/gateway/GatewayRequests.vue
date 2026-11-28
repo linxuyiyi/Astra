@@ -363,4 +363,16 @@ onMounted(() => {
 }
 .log-routed-tag { max-width: 100%; font-family: var(--astra-font-mono); font-size: 11px; padding: 0 6px; height: 20px; line-height: 18px; }
 .log-routed-tag :deep(.el-tag__content) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (min-width: 2240px) {
+  .log-filter .admin-page__select { width: 160px; }
+  .log-filter__status { width: 132px; }
+  .log-filter .admin-page__keyword { width: 240px; }
+  .log-filter__range { --el-date-editor-datetimerange-width: 340px; }
+  .log-detail-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px 24px;
+    padding: 14px 20px;
+  }
+}
 </style>

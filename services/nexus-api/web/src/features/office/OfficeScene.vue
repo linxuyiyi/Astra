@@ -75,7 +75,7 @@
         </button>
       </div>
     </div>
-    <div class="wall-board" :style="{ height: `${camera.wallHeight}px` }">
+    <div class="wall-board" :style="wallBoardStyle">
       <RouterLink to="/tasks?status=PENDING" class="board-column queue"
         ><span
           >待分发 <b>{{ snapshot?.totals.tasksQueued ?? "—" }}</b></span
@@ -118,6 +118,7 @@ import type { NebulaEmployee, NebulaSnapshot } from "../nebula/types";
 import {
   employeeState,
   officeCamera,
+  officeWallLayout,
   stationPositions,
   STATE_TEXT,
 } from "./model";
@@ -168,6 +169,22 @@ const camera = computed(() =>
     !!props.selectedId,
   ),
 );
+const wallLayout = computed(() =>
+  officeWallLayout(width.value, camera.value.wallHeight),
+);
+const wallBoardStyle = computed(() => {
+  if (!wallLayout.value.aspectScaled) {
+    return { height: `${camera.value.wallHeight}px` };
+  }
+  const { offsetX, wallScale } = wallLayout.value;
+  return {
+    left: `${offsetX + 460 * wallScale}px`,
+    width: `${610 * wallScale}px`,
+    height: `${camera.value.wallHeight}px`,
+    paddingTop: `${56 * wallScale}px`,
+    paddingBottom: `${44 * wallScale}px`,
+  };
+});
 const worldStyle = computed(() => ({
   "--label-scale": camera.value.labelScale,
   "--scene-scale": camera.value.scale,
@@ -232,11 +249,13 @@ function drawBackdrop() {
     if (image?.complete && image.naturalWidth) g.drawImage(image, x, y, iw, ih);
   };
   rect(0, 0, w, h, "#eceef2");
-  const scale = w / 1480;
+  const floorScale = w > 1920 ? Math.min(1.25, w / 1480) : w / 1480;
+  const floorWidth = w / floorScale;
+  const floorHeightLogical = h / floorScale;
   g.save();
-  g.scale(scale, scale);
-  for (let y = 0, row = 0; y < h / scale; y += 40, row++) {
-    for (let x = -112; x < 1592; x += 112) {
+  g.scale(floorScale, floorScale);
+  for (let y = 0, row = 0; y < floorHeightLogical; y += 40, row++) {
+    for (let x = -112; x < floorWidth + 112; x += 112) {
       const xx = x + (row % 2) * 56;
       rect(
         xx,
@@ -253,11 +272,11 @@ function drawBackdrop() {
       rect(xx + 20, y + 27, 54, 1, "#f4f6f9");
     }
   }
-  const floorY = camera.value.wallHeight / scale;
+  const floorY = camera.value.wallHeight / floorScale;
   sprite("bookshelf", 45, floorY + 25, 120, 148);
-  sprite("plant1", 1336, floorY + 85, 57, 91);
-  sprite("cabinet", 1315, floorY + 215, 98, 80);
-  const bottomY = h / scale;
+  sprite("plant1", floorWidth - 144, floorY + 85, 57, 91);
+  sprite("cabinet", floorWidth - 165, floorY + 215, 98, 80);
+  const bottomY = floorHeightLogical;
   if (h > 480 && w > 700) {
     g.save();
     g.translate(98, bottomY - 160);
@@ -266,20 +285,58 @@ function drawBackdrop() {
     g.restore();
     sprite("coffee", 155, bottomY - 120, 66, 49);
     sprite("plant3", 45, bottomY - 100, 56, 89);
-    sprite("plant2", 1340, bottomY - 110, 47, 78);
+    sprite("plant2", floorWidth - 140, bottomY - 110, 47, 78);
   }
   g.restore();
-  // 固定墙面不跟随工位聚焦，完整品牌和计划看板始终可见。
+  // 固定墙面不跟随工位聚焦；宽屏按墙高与 1480×196 基准等比居中，避免 Logo 和看板被横向拉扁。
+  const drawWallWindow = (x: number, seed: number) => {
+    rect(x, 25, 136, 133, "#3f3f46");
+    rect(x + 5, 30, 126, 121, "#dbeafe");
+    rect(x + 5, 32, 126, 53, "#eff6ff");
+    rect(x + 5, 87, 126, 62, "#c7ddf7");
+    for (let k = 0; k < 6; k++) {
+      const ht = 19 + ((k * 9 + seed * 6) % 33);
+      rect(x + 9 + k * 19, 148 - ht, 15, ht, k % 2 ? "#94a3b8" : "#cbd5e1");
+    }
+    rect(x + 67, 30, 4, 119, "#52525b");
+    rect(x + 5, 87, 126, 3, "#52525b");
+  };
+  const { aspectScaled, wallScale, offsetX } = wallLayout.value;
   g.save();
-  g.scale(w / 1480, camera.value.wallHeight / 196);
-  rect(0, 0, 1480, 196, "#f4f5f7");
-  rect(0, 0, 1480, 8, "#18181b");
-  rect(0, 8, 1480, 3, "#d4d4d8");
-  rect(0, 182, 1480, 7, "#c7cbd3");
-  rect(0, 190, 1480, 6, "#e4e6ec");
-  for (let x = 0; x < 1480; x += 72) {
-    rect(x + 1, 14, 2, 166, "#e2e5ec99");
-    rect(x + 6, 15, 1, 162, "#ffffffaa");
+  if (aspectScaled) {
+    const wallWidthLogical = w / wallScale;
+    const offsetLogical = offsetX / wallScale;
+    g.scale(wallScale, wallScale);
+    rect(0, 0, wallWidthLogical, 196, "#f4f5f7");
+    rect(0, 0, wallWidthLogical, 8, "#18181b");
+    rect(0, 8, wallWidthLogical, 3, "#d4d4d8");
+    rect(0, 182, wallWidthLogical, 7, "#c7cbd3");
+    rect(0, 190, wallWidthLogical, 6, "#e4e6ec");
+    const startPanel = offsetLogical % 72;
+    for (let x = startPanel - 72; x < wallWidthLogical; x += 72) {
+      rect(x + 1, 14, 2, 166, "#e2e5ec99");
+      rect(x + 6, 15, 1, 162, "#ffffffaa");
+    }
+    // 超宽两侧墙面对称补一扇像素窗，避免 2K 边墙空洞
+    if (offsetLogical >= 180) {
+      drawWallWindow((offsetLogical - 136) / 2, 2);
+      drawWallWindow(
+        wallWidthLogical - offsetLogical + (offsetLogical - 136) / 2,
+        3,
+      );
+    }
+    g.translate(offsetLogical, 0);
+  } else {
+    g.scale(w / 1480, camera.value.wallHeight / 196);
+    rect(0, 0, 1480, 196, "#f4f5f7");
+    rect(0, 0, 1480, 8, "#18181b");
+    rect(0, 8, 1480, 3, "#d4d4d8");
+    rect(0, 182, 1480, 7, "#c7cbd3");
+    rect(0, 190, 1480, 6, "#e4e6ec");
+    for (let x = 0; x < 1480; x += 72) {
+      rect(x + 1, 14, 2, 166, "#e2e5ec99");
+      rect(x + 6, 15, 1, 162, "#ffffffaa");
+    }
   }
   rect(37, 25, 364, 140, "#d4d8e0");
   rect(43, 22, 354, 137, "#e4e4e7");
@@ -299,17 +356,7 @@ function drawBackdrop() {
   rect(454, 28, 10, 11, "#18181b");
   text(470, 39, "工作计划  /  WORK BOARD", "#09090b", 13, 700);
   for (let i = 0; i < 2; i++) {
-    const x = 1120 + i * 153;
-    rect(x, 25, 136, 133, "#3f3f46");
-    rect(x + 5, 30, 126, 121, "#dbeafe");
-    rect(x + 5, 32, 126, 53, "#eff6ff");
-    rect(x + 5, 87, 126, 62, "#c7ddf7");
-    for (let k = 0; k < 6; k++) {
-      const ht = 19 + ((k * 9 + i * 6) % 33);
-      rect(x + 9 + k * 19, 148 - ht, 15, ht, k % 2 ? "#94a3b8" : "#cbd5e1");
-    }
-    rect(x + 67, 30, 4, 119, "#52525b");
-    rect(x + 5, 87, 126, 3, "#52525b");
+    drawWallWindow(1120 + i * 153, i);
   }
   g.restore();
   if (w < 760) {
@@ -607,6 +654,36 @@ onBeforeUnmount(() => {
   }
   .robot {
     animation: none !important;
+  }
+}
+@media (min-width: 2240px) {
+  .nameplate {
+    padding: 6px 12px;
+    border-radius: 8px;
+  }
+  .nameplate b {
+    font-size: 13px;
+  }
+  .nameplate small {
+    font-size: 10.5px;
+  }
+  .wall-board {
+    gap: 14px;
+  }
+  .board-column {
+    padding: 10px 12px;
+    border-left-width: 4px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .board-column span {
+    font-size: 14px;
+  }
+  .board-column small {
+    margin-top: 8px;
+    font-size: 12.5px;
+    line-height: 1.5;
   }
 }
 @media (max-width: 759px) {

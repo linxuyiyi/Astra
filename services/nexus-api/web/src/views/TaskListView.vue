@@ -513,4 +513,10 @@ onUnmounted(() => request?.abort())
   font-size: var(--astra-font-helper);
   font-variant-numeric: tabular-nums;
 }
+
+@media (min-width: 2240px) {
+  .meta-chip {
+    max-width: 240px;
+  }
+}
 </style>

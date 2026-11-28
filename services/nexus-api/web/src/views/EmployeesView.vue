@@ -153,7 +153,7 @@
     </div>
 
     <!-- 查看档案详情 Drawer（工作指令 Markdown 渲染） -->
-    <ElDrawer v-model="viewDrawerOpen" title="数字员工档案" size="min(740px, 100%)" :close-on-click-modal="true">
+    <ElDrawer v-model="viewDrawerOpen" title="数字员工档案" size="var(--astra-drawer-lg)" :close-on-click-modal="true">
       <div v-if="viewing" class="view-profile">
         <div class="view-hero">
           <EmployeeAvatar :avatar="viewing.avatar" :size="58" :disabled="!viewing.enabled" />

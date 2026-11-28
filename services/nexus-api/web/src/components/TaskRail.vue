@@ -594,4 +594,24 @@ function openExternal(id: string) {
 .task-rail__history :deep(.el-collapse-item__content) {
   padding: 4px 0 0;
 }
+
+@media (min-width: 2240px) {
+  .task-rail {
+    gap: 16px;
+  }
+  .task-rail__list {
+    gap: 9px;
+  }
+  .task-rail__card {
+    padding: 12px 14px;
+    gap: 6px;
+  }
+  .task-rail__title {
+    font-size: 13.5px;
+  }
+  .task-rail__line {
+    font-size: 12.5px;
+    -webkit-line-clamp: 3;
+  }
+}
 </style>

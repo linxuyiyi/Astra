@@ -186,7 +186,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  padding: var(--astra-content-padding);
   overflow: auto;
 }
 .content-shell > .el-card__body:has(> .admin-page--fill),
@@ -231,7 +231,7 @@
    的标题栏，子页只负责工具栏、表格与分页。 */
 .admin-card {
   --admin-page-bg: var(--astra-bg-panel);
-  --el-card-padding: 16px;
+  --el-card-padding: var(--astra-content-padding);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -296,9 +296,9 @@
 
 .admin-page__search { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
 
-.admin-page__select { flex: none; width: 160px; }
+.admin-page__select { flex: none; width: var(--astra-select-width); }
 
-.admin-page__keyword { flex: none; width: 240px; }
+.admin-page__keyword { flex: none; width: var(--astra-keyword-width); }
 
 .admin-page__footer {
   display: flex;
@@ -338,7 +338,7 @@
   box-shadow: var(--astra-shadow-panel);
 }
 .admin-sidebar {
-  --el-aside-width: 212px;
+  --el-aside-width: var(--astra-sidebar-width);
   padding: 0 10px 16px;
   overflow: auto;
   border-right: 1px solid var(--astra-border);
@@ -409,4 +409,15 @@
   gap: 8px;
   color: var(--astra-text-primary);
   font-weight: 600;
+}
+
+@media (min-width: 2240px) {
+  .page > .astra-page { padding: 20px 24px; gap: 16px; }
+  .admin-sidebar { padding: 0 12px 20px; }
+  .admin-sidebar__title { height: 61px; margin: 0 -12px 10px; padding: 0 18px; font-size: 13.5px; }
+  .admin-menu { --el-menu-item-height: 36px; }
+  .admin-menu .el-menu-item { padding: 0 12px !important; font-size: 13.5px; }
+  .admin-menu .el-menu-item-group__title { padding: 14px 12px 6px; font-size: 11.5px; }
+  .admin-workspace .content-shell > .el-card__header { padding: 14px 22px; }
+  .admin-page--fill { gap: 14px; }
 }

@@ -716,4 +716,42 @@ function handleCommand(schedule: EmployeeSchedule, cmd: string) {
 .day-inspector__note svg {
   flex: none;
 }
+
+@media (min-width: 2240px) {
+  .day-inspector__head {
+    padding: 14px 16px 12px;
+  }
+  .day-inspector__date {
+    font-size: 17px;
+  }
+  .day-inspector__body {
+    padding: 14px 16px;
+    gap: 16px;
+  }
+  .agenda-card__top {
+    padding: 11px 12px 10px;
+    gap: 5px;
+  }
+  .agenda-card__times {
+    font-size: 12.5px;
+  }
+  .agenda-card__title {
+    font-size: 13.5px;
+  }
+  .agenda-card__meta {
+    font-size: 12px;
+  }
+  .agenda-card__excerpt {
+    font-size: 12px;
+    -webkit-line-clamp: 3;
+  }
+  .hf-time-chip {
+    padding: 2px 6px;
+    font-size: 11px;
+  }
+  .day-inspector__note {
+    padding: 9px 14px;
+    font-size: 11.5px;
+  }
+}
 </style>

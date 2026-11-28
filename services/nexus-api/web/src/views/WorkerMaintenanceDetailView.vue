@@ -1333,6 +1333,29 @@ onUnmounted(() => {
   to { transform: rotate(360deg); }
 }
 
+@media (min-width: 2240px) {
+  .op-detail-page {
+    gap: 18px;
+  }
+  .op-summary-grid {
+    gap: 16px;
+  }
+  .op-step {
+    grid-template-columns: 20px minmax(140px, 240px) minmax(0, 1fr) 80px;
+    gap: 12px;
+  }
+  .op-terminal__body {
+    min-height: 480px;
+    max-height: 68vh;
+    font-size: 13px;
+  }
+  .term-line {
+    grid-template-columns: 44px 128px 72px minmax(120px, 220px) minmax(0, 1fr);
+    gap: 12px;
+    padding: 5px 18px;
+  }
+}
+
 @media (max-width: 1120px) {
   .op-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

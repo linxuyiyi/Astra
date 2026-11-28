@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   employeeState,
   officeCamera,
+  officeWallLayout,
+  officeWorkbenchWidth,
   stationPositions,
   taskReason,
 } from "../src/features/office/model.ts";
@@ -101,4 +103,31 @@ test("human issues retain actual reason and unavailable connection is visible", 
     } as NebulaTask),
     /连接异常/,
   );
+});
+test("2K widescreen (2560x1440) scales stations cleanly, centers the wall without distortion, and avoids workbench overlap", () => {
+  const [w, h] = [2560, 1440];
+  const panelWidth = officeWorkbenchWidth(w);
+  assert.ok(panelWidth >= 460 && panelWidth <= 540);
+  for (const count of [1, 3, 4, 6, 7, 9, 12]) {
+    const stations = stationPositions(count, w);
+    const overview = officeCamera(w, h, count, false);
+    assert.ok(overview.scale > 0.78 && overview.scale <= 1.0);
+    const wall = officeWallLayout(w, overview.wallHeight);
+    assert.equal(wall.aspectScaled, true);
+    assert.ok(wall.offsetX > 200);
+    assert.ok(Math.abs(wall.contentWidth / overview.wallHeight - 1480 / 196) < 0.01);
+    for (const open of [false, true]) {
+      const view = officeCamera(w, h, count, open);
+      const right = w - (open ? panelWidth : 0);
+      const bottom = h - 108;
+      assert.ok(view.scale <= overview.scale);
+      for (const station of stations) {
+        const x = view.x + station.x * view.scale;
+        const y = view.y + station.y * view.scale;
+        assert.ok(x - 175 * view.scale >= 0 && x + 175 * view.scale <= right);
+        assert.ok(y - 160 * view.scale >= view.wallHeight);
+        assert.ok(y + 140 * view.scale + 44 <= bottom);
+      }
+    }
+  }
 });

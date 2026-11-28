@@ -300,3 +300,14 @@
 .nexus-scroll-dialog > .el-dialog__header,
 .nexus-scroll-dialog > .el-dialog__footer { flex-shrink: 0; }
 .el-form-item__content { min-width: 0; }
+
+/* 2K 高清屏（2560×1440）：表格行高、弹窗/抽屉内边距与长文本编辑区呼吸感增强 */
+@media (min-width: 2240px) {
+  .el-table--small .el-table__cell { padding: 11px 0; }
+  .el-drawer__header { padding: 18px 24px 14px; margin-bottom: 0; }
+  .el-drawer__body { padding: 18px 24px; }
+  .el-drawer__footer { padding: 14px 24px; }
+}
+@media (min-width: 2240px) and (min-height: 1180px) {
+  .el-textarea__inner { max-height: max(380px, 56vh); }
+}

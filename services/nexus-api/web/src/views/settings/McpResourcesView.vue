@@ -129,7 +129,7 @@
       />
     </div>
 
-    <ElDrawer v-model="editorOpen" :title="editing ? '编辑 MCP' : '新增 MCP'" size="min(660px, 100%)" :close-on-click-modal="false" :before-close="closeEditor">
+    <ElDrawer v-model="editorOpen" :title="editing ? '编辑 MCP' : '新增 MCP'" size="var(--astra-drawer-md)" :close-on-click-modal="false" :before-close="closeEditor">
       <ElForm label-position="top" :disabled="saving" @submit.prevent="submitMcp">
         <div class="section-cap">基础与连接</div>
         <div class="pair">
@@ -226,7 +226,7 @@
       </template>
     </ElDrawer>
 
-    <ElDrawer v-model="detailOpen" :title="viewing?.name || 'MCP 详情'" size="min(640px, 100%)">
+    <ElDrawer v-model="detailOpen" :title="viewing?.name || 'MCP 详情'" size="var(--astra-drawer-md)">
       <div v-if="viewing" class="detail">
         <div class="detail-meta-strip">
           <div class="detail-meta-strip__tags">
@@ -763,4 +763,8 @@ onMounted(load);
 .detail-desc { white-space: pre-wrap; word-break: break-word; }
 .detail-block { display: flex; flex-direction: column; gap: 6px; }
 .detail-block h4 { margin: 0; color: var(--astra-text-secondary); font-size: 13px; font-weight: 600; }
+
+@media (min-width: 2240px) {
+  .emp-chip { max-width: 180px; }
+}
 </style>

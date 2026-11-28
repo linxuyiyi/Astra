@@ -386,7 +386,7 @@
       v-model="formOpen"
       append-to-body
       :title="editing ? `编辑日程 · ${editing.data.name}` : '新建日程'"
-      size="min(660px, 100%)"
+      size="var(--astra-drawer-md)"
       :close-on-click-modal="false"
       :before-close="closeForm"
     >
@@ -566,7 +566,7 @@
       v-model="historyOpen"
       append-to-body
       :title="selected ? `执行记录 · ${selected.data.name}` : '执行记录'"
-      size="min(780px, 96vw)"
+      size="var(--astra-drawer-lg)"
     >
       <div v-if="selected" class="detail-stack">
         <div class="detail-hero">
@@ -2298,6 +2298,47 @@ onBeforeUnmount(() => {
 
 .detail-footer__spacer {
   flex: 1;
+}
+
+@media (min-width: 1920px) {
+  .calendar-workspace {
+    grid-template-columns: minmax(0, 1fr) 376px;
+    gap: 14px;
+  }
+  .cal-filter-select {
+    width: 164px;
+  }
+  .cal-filter-status {
+    width: 128px;
+  }
+  .cal-filter-keyword {
+    width: 216px;
+  }
+}
+
+@media (min-width: 2240px) {
+  .calendar-workspace {
+    grid-template-columns: minmax(0, 1fr) 436px;
+    gap: 16px;
+  }
+  .calendar-nav__title {
+    font-size: 16.5px;
+  }
+  .cal-filter-select {
+    width: 184px;
+  }
+  .cal-filter-status {
+    width: 140px;
+  }
+  .cal-filter-keyword {
+    width: 256px;
+  }
+  .detail-card__body--scroll {
+    max-height: 360px;
+  }
+  .prompt-box__preview {
+    max-height: 340px;
+  }
 }
 
 @media (max-width: 1120px) {

@@ -156,7 +156,7 @@
     <ElDrawer
       v-model="editorOpen"
       :title="editing ? `编辑技能 · ${editing.name}` : '新增技能'"
-      size="min(920px, 100%)"
+      size="var(--astra-drawer-lg)"
       :close-on-click-modal="false"
       :before-close="closeEditor"
     >
@@ -223,7 +223,7 @@
     </ElDrawer>
 
     <!-- 详情抽屉（完整 Markdown 渲染 + Frontmatter 拆解 + 附带文件阅读） -->
-    <ElDrawer v-model="detailOpen" class="skill-detail-drawer" :title="viewing?.name || '技能详情'" size="min(880px, 100%)">
+    <ElDrawer v-model="detailOpen" class="skill-detail-drawer" :title="viewing?.name || '技能详情'" size="var(--astra-drawer-lg)">
       <div v-if="viewing" class="detail">
         <div class="detail-meta-strip">
           <div class="detail-meta-strip__tags">
@@ -781,4 +781,17 @@ onMounted(load);
 .version-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--astra-border); border-radius: 8px; }
 .version-row__info { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
 .version-row__note { color: var(--astra-text-primary); font-size: 13px; }
+
+@media (min-width: 2240px) {
+  .emp-chip { max-width: 180px; }
+}
+@media (min-width: 2240px) and (min-height: 1180px) {
+  .skill-md-box__panes,
+  .code-editor :deep(textarea),
+  .skill-md-box__preview {
+    min-height: 480px;
+    max-height: 62vh;
+  }
+  .file-code { max-height: 480px; }
+}
 </style>

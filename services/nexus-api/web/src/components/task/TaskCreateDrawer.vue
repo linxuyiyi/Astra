@@ -5,7 +5,7 @@
     data-testid="task-create-modal"
     :model-value="true"
     :title="task ? '编辑任务' : '创建任务'"
-    size="min(680px, 100%)"
+    size="var(--astra-drawer-md)"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :before-close="requestClose"
@@ -644,6 +644,12 @@ async function submit() {
   justify-content: space-between;
   gap: 12px;
   width: 100%;
+}
+
+@media (min-width: 2240px) {
+  .md-editor__preview {
+    max-height: 380px;
+  }
 }
 
 @media (max-width: 640px) {
